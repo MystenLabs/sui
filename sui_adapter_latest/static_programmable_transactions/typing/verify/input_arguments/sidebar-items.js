@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_valid_pure_type","is_valid_receiving","verify"]};

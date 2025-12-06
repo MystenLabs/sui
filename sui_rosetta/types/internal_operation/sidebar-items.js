@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_GAS_COINS"],"enum":["InternalOperation"],"struct":["PayCoin","PaySui","Stake","TransactionObjectData","WithdrawStake"],"trait":["TryConstructTransaction"]};

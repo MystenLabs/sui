@@ -1,0 +1,1001 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `sui-execution/latest/sui-move-natives/src/object_runtime/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="sui_move_natives_latest" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0 (1159e78c4 2025-09-14)" data-channel="1.90.0" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../../../static.files/storage-68b7e25d.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">sui_move_natives_latest/object_runtime/</div>mod.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Mysten Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>accumulator;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">mod </span>fingerprint;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>object_store;
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span><span class="kw">crate</span>::object_runtime::object_store::{CacheMetadata, ChildObjectEffectV1};
+<a href=#9 id=9 data-nosnippet>9</a>
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span><span class="self">self</span>::object_store::{ChildObjectEffectV0, ChildObjectEffects, ObjectResult};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span><span class="kw">super</span>::get_object_id;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>better_any::{Tid, TidAble};
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>indexmap::map::IndexMap;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>indexmap::set::IndexSet;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>move_binary_format::errors::{PartialVMError, PartialVMResult};
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>move_core_types::{
+<a href=#17 id=17 data-nosnippet>17</a>    account_address::AccountAddress,
+<a href=#18 id=18 data-nosnippet>18</a>    annotated_value::{MoveTypeLayout, MoveValue},
+<a href=#19 id=19 data-nosnippet>19</a>    annotated_visitor <span class="kw">as </span>AV,
+<a href=#20 id=20 data-nosnippet>20</a>    effects::Op,
+<a href=#21 id=21 data-nosnippet>21</a>    language_storage::StructTag,
+<a href=#22 id=22 data-nosnippet>22</a>    runtime_value <span class="kw">as </span>R,
+<a href=#23 id=23 data-nosnippet>23</a>    vm_status::StatusCode,
+<a href=#24 id=24 data-nosnippet>24</a>};
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>move_vm_runtime::native_extensions::NativeExtensionMarker;
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>move_vm_types::values::{GlobalValue, Value};
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>object_store::{ActiveChildObject, ChildObjectStore};
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>std::{
+<a href=#29 id=29 data-nosnippet>29</a>    collections::{BTreeMap, BTreeSet},
+<a href=#30 id=30 data-nosnippet>30</a>    sync::Arc,
+<a href=#31 id=31 data-nosnippet>31</a>};
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>sui_protocol_config::{LimitThresholdCrossed, ProtocolConfig, check_limit_by_meter};
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>sui_types::{
+<a href=#34 id=34 data-nosnippet>34</a>    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+<a href=#35 id=35 data-nosnippet>35</a>    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+<a href=#36 id=36 data-nosnippet>36</a>    SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID,
+<a href=#37 id=37 data-nosnippet>37</a>    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, TypeTag,
+<a href=#38 id=38 data-nosnippet>38</a>    base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
+<a href=#39 id=39 data-nosnippet>39</a>    committee::EpochId,
+<a href=#40 id=40 data-nosnippet>40</a>    error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
+<a href=#41 id=41 data-nosnippet>41</a>    execution::DynamicallyLoadedObjectMetadata,
+<a href=#42 id=42 data-nosnippet>42</a>    id::UID,
+<a href=#43 id=43 data-nosnippet>43</a>    metrics::LimitsMetrics,
+<a href=#44 id=44 data-nosnippet>44</a>    object::{MoveObject, Owner},
+<a href=#45 id=45 data-nosnippet>45</a>    storage::ChildObjectResolver,
+<a href=#46 id=46 data-nosnippet>46</a>};
+<a href=#47 id=47 data-nosnippet>47</a><span class="kw">use </span>tracing::error;
+<a href=#48 id=48 data-nosnippet>48</a>
+<a href=#49 id=49 data-nosnippet>49</a><span class="kw">pub use </span>accumulator::<span class="kw-2">*</span>;
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a><span class="kw">pub enum </span>ObjectEvent {
+<a href=#52 id=52 data-nosnippet>52</a>    <span class="doccomment">/// Transfer to a new address or object. Or make it shared or immutable.
+<a href=#53 id=53 data-nosnippet>53</a>    </span>Transfer(Owner, MoveObject),
+<a href=#54 id=54 data-nosnippet>54</a>    <span class="doccomment">/// An object ID is deleted
+<a href=#55 id=55 data-nosnippet>55</a>    </span>DeleteObjectID(ObjectID),
+<a href=#56 id=56 data-nosnippet>56</a>}
+<a href=#57 id=57 data-nosnippet>57</a>
+<a href=#58 id=58 data-nosnippet>58</a><span class="kw">type </span>Set&lt;K&gt; = IndexSet&lt;K&gt;;
+<a href=#59 id=59 data-nosnippet>59</a>
+<a href=#60 id=60 data-nosnippet>60</a><span class="attr">#[derive(Default)]
+<a href=#61 id=61 data-nosnippet>61</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>TestInventories {
+<a href=#62 id=62 data-nosnippet>62</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) objects: BTreeMap&lt;ObjectID, Value&gt;,
+<a href=#63 id=63 data-nosnippet>63</a>    <span class="comment">// address inventories. Most recent objects are at the back of the set
+<a href=#64 id=64 data-nosnippet>64</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) address_inventories: BTreeMap&lt;SuiAddress, BTreeMap&lt;MoveObjectType, Set&lt;ObjectID&gt;&gt;&gt;,
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="comment">// global inventories.Most recent objects are at the back of the set
+<a href=#66 id=66 data-nosnippet>66</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) shared_inventory: BTreeMap&lt;MoveObjectType, Set&lt;ObjectID&gt;&gt;,
+<a href=#67 id=67 data-nosnippet>67</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) immutable_inventory: BTreeMap&lt;MoveObjectType, Set&lt;ObjectID&gt;&gt;,
+<a href=#68 id=68 data-nosnippet>68</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) taken_immutable_values: BTreeMap&lt;MoveObjectType, BTreeMap&lt;ObjectID, Value&gt;&gt;,
+<a href=#69 id=69 data-nosnippet>69</a>    <span class="comment">// object has been taken from the inventory
+<a href=#70 id=70 data-nosnippet>70</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) taken: BTreeMap&lt;ObjectID, Owner&gt;,
+<a href=#71 id=71 data-nosnippet>71</a>    <span class="comment">// allocated receiving tickets
+<a href=#72 id=72 data-nosnippet>72</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) allocated_tickets: BTreeMap&lt;ObjectID, (DynamicallyLoadedObjectMetadata, Value)&gt;,
+<a href=#73 id=73 data-nosnippet>73</a>}
+<a href=#74 id=74 data-nosnippet>74</a>
+<a href=#75 id=75 data-nosnippet>75</a><span class="kw">pub struct </span>LoadedRuntimeObject {
+<a href=#76 id=76 data-nosnippet>76</a>    <span class="kw">pub </span>version: SequenceNumber,
+<a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">pub </span>is_modified: bool,
+<a href=#78 id=78 data-nosnippet>78</a>}
+<a href=#79 id=79 data-nosnippet>79</a>
+<a href=#80 id=80 data-nosnippet>80</a><span class="kw">pub struct </span>RuntimeResults {
+<a href=#81 id=81 data-nosnippet>81</a>    <span class="kw">pub </span>writes: IndexMap&lt;ObjectID, (Owner, MoveObjectType, Value)&gt;,
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">pub </span>user_events: Vec&lt;(StructTag, Value)&gt;,
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="kw">pub </span>accumulator_events: Vec&lt;MoveAccumulatorEvent&gt;,
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="comment">// Loaded child objects, their loaded version/digest and whether they were modified.
+<a href=#85 id=85 data-nosnippet>85</a>    </span><span class="kw">pub </span>loaded_child_objects: BTreeMap&lt;ObjectID, LoadedRuntimeObject&gt;,
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="kw">pub </span>created_object_ids: Set&lt;ObjectID&gt;,
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">pub </span>deleted_object_ids: Set&lt;ObjectID&gt;,
+<a href=#88 id=88 data-nosnippet>88</a>    <span class="kw">pub </span>settlement_input_sui: u64,
+<a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">pub </span>settlement_output_sui: u64,
+<a href=#90 id=90 data-nosnippet>90</a>}
+<a href=#91 id=91 data-nosnippet>91</a>
+<a href=#92 id=92 data-nosnippet>92</a><span class="attr">#[derive(Default)]
+<a href=#93 id=93 data-nosnippet>93</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>ObjectRuntimeState {
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) input_objects: BTreeMap&lt;ObjectID, Owner&gt;,
+<a href=#95 id=95 data-nosnippet>95</a>    <span class="comment">// new ids from object::new. This does not contain any new-and-subsequently-deleted ids
+<a href=#96 id=96 data-nosnippet>96</a>    </span>new_ids: Set&lt;ObjectID&gt;,
+<a href=#97 id=97 data-nosnippet>97</a>    <span class="comment">// contains all ids generated in the txn including any new-and-subsequently-deleted ids
+<a href=#98 id=98 data-nosnippet>98</a>    </span>generated_ids: Set&lt;ObjectID&gt;,
+<a href=#99 id=99 data-nosnippet>99</a>    <span class="comment">// ids passed to object::delete
+<a href=#100 id=100 data-nosnippet>100</a>    </span>deleted_ids: Set&lt;ObjectID&gt;,
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="comment">// transfers to a new owner (shared, immutable, object, or account address)
+<a href=#102 id=102 data-nosnippet>102</a>    // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
+<a href=#103 id=103 data-nosnippet>103</a>    </span>transfers: IndexMap&lt;ObjectID, (Owner, MoveObjectType, Value)&gt;,
+<a href=#104 id=104 data-nosnippet>104</a>    events: Vec&lt;(StructTag, Value)&gt;,
+<a href=#105 id=105 data-nosnippet>105</a>    accumulator_events: Vec&lt;MoveAccumulatorEvent&gt;,
+<a href=#106 id=106 data-nosnippet>106</a>    <span class="comment">// total size of events emitted so far
+<a href=#107 id=107 data-nosnippet>107</a>    </span>total_events_size: u64,
+<a href=#108 id=108 data-nosnippet>108</a>    received: IndexMap&lt;ObjectID, DynamicallyLoadedObjectMetadata&gt;,
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="comment">// Used to track SUI conservation in settlement transactions. Settlement transactions
+<a href=#110 id=110 data-nosnippet>110</a>    // gather up withdraws and deposits from other transactions, and record them to accumulator
+<a href=#111 id=111 data-nosnippet>111</a>    // fields. The settlement transaction records the total amount of SUI being disbursed here,
+<a href=#112 id=112 data-nosnippet>112</a>    // so that we can verify that the amount stored in the fields at the end of the transaction
+<a href=#113 id=113 data-nosnippet>113</a>    // is correct.
+<a href=#114 id=114 data-nosnippet>114</a>    </span>settlement_input_sui: u64,
+<a href=#115 id=115 data-nosnippet>115</a>    settlement_output_sui: u64,
+<a href=#116 id=116 data-nosnippet>116</a>    accumulator_merge_totals: BTreeMap&lt;(AccountAddress, TypeTag), u128&gt;,
+<a href=#117 id=117 data-nosnippet>117</a>    accumulator_split_totals: BTreeMap&lt;(AccountAddress, TypeTag), u128&gt;,
+<a href=#118 id=118 data-nosnippet>118</a>}
+<a href=#119 id=119 data-nosnippet>119</a>
+<a href=#120 id=120 data-nosnippet>120</a><span class="attr">#[derive(Tid)]
+<a href=#121 id=121 data-nosnippet>121</a></span><span class="kw">pub struct </span>ObjectRuntime&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#122 id=122 data-nosnippet>122</a>    child_object_store: ChildObjectStore&lt;<span class="lifetime">'a</span>&gt;,
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="comment">// inventories for test scenario
+<a href=#124 id=124 data-nosnippet>124</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) test_inventories: TestInventories,
+<a href=#125 id=125 data-nosnippet>125</a>    <span class="comment">// the internal state
+<a href=#126 id=126 data-nosnippet>126</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) state: ObjectRuntimeState,
+<a href=#127 id=127 data-nosnippet>127</a>    <span class="comment">// whether or not this TX is gas metered
+<a href=#128 id=128 data-nosnippet>128</a>    </span>is_metered: bool,
+<a href=#129 id=129 data-nosnippet>129</a>
+<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) protocol_config: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ProtocolConfig,
+<a href=#131 id=131 data-nosnippet>131</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) metrics: Arc&lt;LimitsMetrics&gt;,
+<a href=#132 id=132 data-nosnippet>132</a>}
+<a href=#133 id=133 data-nosnippet>133</a>
+<a href=#134 id=134 data-nosnippet>134</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; NativeExtensionMarker&lt;<span class="lifetime">'a</span>&gt; <span class="kw">for </span>ObjectRuntime&lt;<span class="lifetime">'a</span>&gt; {}
+<a href=#135 id=135 data-nosnippet>135</a>
+<a href=#136 id=136 data-nosnippet>136</a><span class="kw">pub enum </span>TransferResult {
+<a href=#137 id=137 data-nosnippet>137</a>    New,
+<a href=#138 id=138 data-nosnippet>138</a>    SameOwner,
+<a href=#139 id=139 data-nosnippet>139</a>    OwnerChanged,
+<a href=#140 id=140 data-nosnippet>140</a>}
+<a href=#141 id=141 data-nosnippet>141</a>
+<a href=#142 id=142 data-nosnippet>142</a><span class="kw">pub struct </span>InputObject {
+<a href=#143 id=143 data-nosnippet>143</a>    <span class="kw">pub </span>contained_uids: BTreeSet&lt;ObjectID&gt;,
+<a href=#144 id=144 data-nosnippet>144</a>    <span class="kw">pub </span>version: SequenceNumber,
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="kw">pub </span>owner: Owner,
+<a href=#146 id=146 data-nosnippet>146</a>}
+<a href=#147 id=147 data-nosnippet>147</a>
+<a href=#148 id=148 data-nosnippet>148</a><span class="kw">impl </span>TestInventories {
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#150 id=150 data-nosnippet>150</a>        <span class="self">Self</span>::default()
+<a href=#151 id=151 data-nosnippet>151</a>    }
+<a href=#152 id=152 data-nosnippet>152</a>}
+<a href=#153 id=153 data-nosnippet>153</a>
+<a href=#154 id=154 data-nosnippet>154</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; ObjectRuntime&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#155 id=155 data-nosnippet>155</a>    <span class="kw">pub fn </span>new(
+<a href=#156 id=156 data-nosnippet>156</a>        object_resolver: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw">dyn </span>ChildObjectResolver,
+<a href=#157 id=157 data-nosnippet>157</a>        input_objects: BTreeMap&lt;ObjectID, InputObject&gt;,
+<a href=#158 id=158 data-nosnippet>158</a>        is_metered: bool,
+<a href=#159 id=159 data-nosnippet>159</a>        protocol_config: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ProtocolConfig,
+<a href=#160 id=160 data-nosnippet>160</a>        metrics: Arc&lt;LimitsMetrics&gt;,
+<a href=#161 id=161 data-nosnippet>161</a>        epoch_id: EpochId,
+<a href=#162 id=162 data-nosnippet>162</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#163 id=163 data-nosnippet>163</a>        <span class="kw">let </span><span class="kw-2">mut </span>input_object_owners = BTreeMap::new();
+<a href=#164 id=164 data-nosnippet>164</a>        <span class="kw">let </span><span class="kw-2">mut </span>root_version = BTreeMap::new();
+<a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">let </span><span class="kw-2">mut </span>wrapped_object_containers = BTreeMap::new();
+<a href=#166 id=166 data-nosnippet>166</a>        <span class="kw">for </span>(id, input_object) <span class="kw">in </span>input_objects {
+<a href=#167 id=167 data-nosnippet>167</a>            <span class="kw">let </span>InputObject {
+<a href=#168 id=168 data-nosnippet>168</a>                contained_uids,
+<a href=#169 id=169 data-nosnippet>169</a>                version,
+<a href=#170 id=170 data-nosnippet>170</a>                owner,
+<a href=#171 id=171 data-nosnippet>171</a>            } = input_object;
+<a href=#172 id=172 data-nosnippet>172</a>            input_object_owners.insert(id, owner);
+<a href=#173 id=173 data-nosnippet>173</a>            <span class="macro">debug_assert!</span>(contained_uids.contains(<span class="kw-2">&amp;</span>id));
+<a href=#174 id=174 data-nosnippet>174</a>            <span class="kw">for </span>contained_uid <span class="kw">in </span>contained_uids {
+<a href=#175 id=175 data-nosnippet>175</a>                root_version.insert(contained_uid, version);
+<a href=#176 id=176 data-nosnippet>176</a>                <span class="kw">if </span>contained_uid != id {
+<a href=#177 id=177 data-nosnippet>177</a>                    <span class="kw">let </span>prev = wrapped_object_containers.insert(contained_uid, id);
+<a href=#178 id=178 data-nosnippet>178</a>                    <span class="macro">debug_assert!</span>(prev.is_none());
+<a href=#179 id=179 data-nosnippet>179</a>                }
+<a href=#180 id=180 data-nosnippet>180</a>            }
+<a href=#181 id=181 data-nosnippet>181</a>        }
+<a href=#182 id=182 data-nosnippet>182</a>        <span class="self">Self </span>{
+<a href=#183 id=183 data-nosnippet>183</a>            child_object_store: ChildObjectStore::new(
+<a href=#184 id=184 data-nosnippet>184</a>                object_resolver,
+<a href=#185 id=185 data-nosnippet>185</a>                root_version,
+<a href=#186 id=186 data-nosnippet>186</a>                wrapped_object_containers,
+<a href=#187 id=187 data-nosnippet>187</a>                is_metered,
+<a href=#188 id=188 data-nosnippet>188</a>                protocol_config,
+<a href=#189 id=189 data-nosnippet>189</a>                metrics.clone(),
+<a href=#190 id=190 data-nosnippet>190</a>                epoch_id,
+<a href=#191 id=191 data-nosnippet>191</a>            ),
+<a href=#192 id=192 data-nosnippet>192</a>            test_inventories: TestInventories::new(),
+<a href=#193 id=193 data-nosnippet>193</a>            state: ObjectRuntimeState {
+<a href=#194 id=194 data-nosnippet>194</a>                input_objects: input_object_owners,
+<a href=#195 id=195 data-nosnippet>195</a>                new_ids: Set::new(),
+<a href=#196 id=196 data-nosnippet>196</a>                generated_ids: Set::new(),
+<a href=#197 id=197 data-nosnippet>197</a>                deleted_ids: Set::new(),
+<a href=#198 id=198 data-nosnippet>198</a>                transfers: IndexMap::new(),
+<a href=#199 id=199 data-nosnippet>199</a>                events: <span class="macro">vec!</span>[],
+<a href=#200 id=200 data-nosnippet>200</a>                accumulator_events: <span class="macro">vec!</span>[],
+<a href=#201 id=201 data-nosnippet>201</a>                total_events_size: <span class="number">0</span>,
+<a href=#202 id=202 data-nosnippet>202</a>                received: IndexMap::new(),
+<a href=#203 id=203 data-nosnippet>203</a>                settlement_input_sui: <span class="number">0</span>,
+<a href=#204 id=204 data-nosnippet>204</a>                settlement_output_sui: <span class="number">0</span>,
+<a href=#205 id=205 data-nosnippet>205</a>                accumulator_merge_totals: BTreeMap::new(),
+<a href=#206 id=206 data-nosnippet>206</a>                accumulator_split_totals: BTreeMap::new(),
+<a href=#207 id=207 data-nosnippet>207</a>            },
+<a href=#208 id=208 data-nosnippet>208</a>            is_metered,
+<a href=#209 id=209 data-nosnippet>209</a>            protocol_config,
+<a href=#210 id=210 data-nosnippet>210</a>            metrics,
+<a href=#211 id=211 data-nosnippet>211</a>        }
+<a href=#212 id=212 data-nosnippet>212</a>    }
+<a href=#213 id=213 data-nosnippet>213</a>
+<a href=#214 id=214 data-nosnippet>214</a>    <span class="kw">pub fn </span>new_id(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: ObjectID) -&gt; PartialVMResult&lt;()&gt; {
+<a href=#215 id=215 data-nosnippet>215</a>        <span class="comment">// If metered, we use the metered limit (non system tx limit) as the hard limit
+<a href=#216 id=216 data-nosnippet>216</a>        // This macro takes care of that
+<a href=#217 id=217 data-nosnippet>217</a>        </span><span class="kw">if let </span>LimitThresholdCrossed::Hard(<span class="kw">_</span>, lim) = <span class="macro">check_limit_by_meter!</span>(
+<a href=#218 id=218 data-nosnippet>218</a>            <span class="self">self</span>.is_metered,
+<a href=#219 id=219 data-nosnippet>219</a>            <span class="self">self</span>.state.new_ids.len(),
+<a href=#220 id=220 data-nosnippet>220</a>            <span class="self">self</span>.protocol_config.max_num_new_move_object_ids(),
+<a href=#221 id=221 data-nosnippet>221</a>            <span class="self">self</span>.protocol_config.max_num_new_move_object_ids_system_tx(),
+<a href=#222 id=222 data-nosnippet>222</a>            <span class="self">self</span>.metrics.excessive_new_move_object_ids
+<a href=#223 id=223 data-nosnippet>223</a>        ) {
+<a href=#224 id=224 data-nosnippet>224</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+<a href=#225 id=225 data-nosnippet>225</a>                .with_message(<span class="macro">format!</span>(<span class="string">"Creating more than {} IDs is not allowed"</span>, lim))
+<a href=#226 id=226 data-nosnippet>226</a>                .with_sub_status(
+<a href=#227 id=227 data-nosnippet>227</a>                    VMMemoryLimitExceededSubStatusCode::NEW_ID_COUNT_LIMIT_EXCEEDED <span class="kw">as </span>u64,
+<a href=#228 id=228 data-nosnippet>228</a>                ));
+<a href=#229 id=229 data-nosnippet>229</a>        };
+<a href=#230 id=230 data-nosnippet>230</a>
+<a href=#231 id=231 data-nosnippet>231</a>        <span class="comment">// remove from deleted_ids for the case in dynamic fields where the Field object was deleted
+<a href=#232 id=232 data-nosnippet>232</a>        // and then re-added in a single transaction. In that case, we also skip adding it
+<a href=#233 id=233 data-nosnippet>233</a>        // to new_ids.
+<a href=#234 id=234 data-nosnippet>234</a>        </span><span class="kw">let </span>was_present = <span class="self">self</span>.state.deleted_ids.shift_remove(<span class="kw-2">&amp;</span>id);
+<a href=#235 id=235 data-nosnippet>235</a>        <span class="kw">if </span>!was_present {
+<a href=#236 id=236 data-nosnippet>236</a>            <span class="comment">// mark the id as new
+<a href=#237 id=237 data-nosnippet>237</a>            </span><span class="self">self</span>.state.generated_ids.insert(id);
+<a href=#238 id=238 data-nosnippet>238</a>            <span class="self">self</span>.state.new_ids.insert(id);
+<a href=#239 id=239 data-nosnippet>239</a>        }
+<a href=#240 id=240 data-nosnippet>240</a>        <span class="prelude-val">Ok</span>(())
+<a href=#241 id=241 data-nosnippet>241</a>    }
+<a href=#242 id=242 data-nosnippet>242</a>
+<a href=#243 id=243 data-nosnippet>243</a>    <span class="kw">pub fn </span>delete_id(<span class="kw-2">&amp;mut </span><span class="self">self</span>, id: ObjectID) -&gt; PartialVMResult&lt;()&gt; {
+<a href=#244 id=244 data-nosnippet>244</a>        <span class="comment">// This is defensive because `self.state.deleted_ids` may not indeed
+<a href=#245 id=245 data-nosnippet>245</a>        // be called based on the `was_new` flag
+<a href=#246 id=246 data-nosnippet>246</a>        // Metered transactions don't have limits for now
+<a href=#247 id=247 data-nosnippet>247</a>
+<a href=#248 id=248 data-nosnippet>248</a>        </span><span class="kw">if let </span>LimitThresholdCrossed::Hard(<span class="kw">_</span>, lim) = <span class="macro">check_limit_by_meter!</span>(
+<a href=#249 id=249 data-nosnippet>249</a>            <span class="self">self</span>.is_metered,
+<a href=#250 id=250 data-nosnippet>250</a>            <span class="self">self</span>.state.deleted_ids.len(),
+<a href=#251 id=251 data-nosnippet>251</a>            <span class="self">self</span>.protocol_config.max_num_deleted_move_object_ids(),
+<a href=#252 id=252 data-nosnippet>252</a>            <span class="self">self</span>.protocol_config
+<a href=#253 id=253 data-nosnippet>253</a>                .max_num_deleted_move_object_ids_system_tx(),
+<a href=#254 id=254 data-nosnippet>254</a>            <span class="self">self</span>.metrics.excessive_deleted_move_object_ids
+<a href=#255 id=255 data-nosnippet>255</a>        ) {
+<a href=#256 id=256 data-nosnippet>256</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+<a href=#257 id=257 data-nosnippet>257</a>                .with_message(<span class="macro">format!</span>(<span class="string">"Deleting more than {} IDs is not allowed"</span>, lim))
+<a href=#258 id=258 data-nosnippet>258</a>                .with_sub_status(
+<a href=#259 id=259 data-nosnippet>259</a>                    VMMemoryLimitExceededSubStatusCode::DELETED_ID_COUNT_LIMIT_EXCEEDED <span class="kw">as </span>u64,
+<a href=#260 id=260 data-nosnippet>260</a>                ));
+<a href=#261 id=261 data-nosnippet>261</a>        };
+<a href=#262 id=262 data-nosnippet>262</a>
+<a href=#263 id=263 data-nosnippet>263</a>        <span class="kw">let </span>was_new = <span class="self">self</span>.state.new_ids.shift_remove(<span class="kw-2">&amp;</span>id);
+<a href=#264 id=264 data-nosnippet>264</a>        <span class="kw">if </span>!was_new {
+<a href=#265 id=265 data-nosnippet>265</a>            <span class="self">self</span>.state.deleted_ids.insert(id);
+<a href=#266 id=266 data-nosnippet>266</a>        }
+<a href=#267 id=267 data-nosnippet>267</a>        <span class="prelude-val">Ok</span>(())
+<a href=#268 id=268 data-nosnippet>268</a>    }
+<a href=#269 id=269 data-nosnippet>269</a>
+<a href=#270 id=270 data-nosnippet>270</a>    <span class="doccomment">/// In the new PTB adapter, this function is also used for persisting owners at the end
+<a href=#271 id=271 data-nosnippet>271</a>    /// of the transaction. In which case, we don't check the transfer limits.
+<a href=#272 id=272 data-nosnippet>272</a>    </span><span class="kw">pub fn </span>transfer(
+<a href=#273 id=273 data-nosnippet>273</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#274 id=274 data-nosnippet>274</a>        owner: Owner,
+<a href=#275 id=275 data-nosnippet>275</a>        ty: MoveObjectType,
+<a href=#276 id=276 data-nosnippet>276</a>        obj: Value,
+<a href=#277 id=277 data-nosnippet>277</a>        end_of_transaction: bool,
+<a href=#278 id=278 data-nosnippet>278</a>    ) -&gt; PartialVMResult&lt;TransferResult&gt; {
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="kw">let </span>id: ObjectID = get_object_id(obj.copy_value()<span class="question-mark">?</span>)<span class="question-mark">?
+<a href=#280 id=280 data-nosnippet>280</a>            </span>.value_as::&lt;AccountAddress&gt;()<span class="question-mark">?
+<a href=#281 id=281 data-nosnippet>281</a>            </span>.into();
+<a href=#282 id=282 data-nosnippet>282</a>        <span class="comment">// - An object is new if it is contained in the new ids or if it is one of the objects
+<a href=#283 id=283 data-nosnippet>283</a>        //   created during genesis (the system state object or clock).
+<a href=#284 id=284 data-nosnippet>284</a>        // - Otherwise, check the input objects for the previous owner
+<a href=#285 id=285 data-nosnippet>285</a>        // - If it was not in the input objects, it must have been wrapped or must have been a
+<a href=#286 id=286 data-nosnippet>286</a>        //   child object
+<a href=#287 id=287 data-nosnippet>287</a>        </span><span class="kw">let </span>is_framework_obj = [
+<a href=#288 id=288 data-nosnippet>288</a>            SUI_SYSTEM_STATE_OBJECT_ID,
+<a href=#289 id=289 data-nosnippet>289</a>            SUI_CLOCK_OBJECT_ID,
+<a href=#290 id=290 data-nosnippet>290</a>            SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+<a href=#291 id=291 data-nosnippet>291</a>            SUI_RANDOMNESS_STATE_OBJECT_ID,
+<a href=#292 id=292 data-nosnippet>292</a>            SUI_DENY_LIST_OBJECT_ID,
+<a href=#293 id=293 data-nosnippet>293</a>            SUI_BRIDGE_OBJECT_ID,
+<a href=#294 id=294 data-nosnippet>294</a>            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+<a href=#295 id=295 data-nosnippet>295</a>            SUI_COIN_REGISTRY_OBJECT_ID,
+<a href=#296 id=296 data-nosnippet>296</a>            SUI_DISPLAY_REGISTRY_OBJECT_ID,
+<a href=#297 id=297 data-nosnippet>297</a>            SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+<a href=#298 id=298 data-nosnippet>298</a>        ]
+<a href=#299 id=299 data-nosnippet>299</a>        .contains(<span class="kw-2">&amp;</span>id);
+<a href=#300 id=300 data-nosnippet>300</a>        <span class="kw">let </span>transfer_result = <span class="kw">if </span><span class="self">self</span>.state.new_ids.contains(<span class="kw-2">&amp;</span>id) {
+<a href=#301 id=301 data-nosnippet>301</a>            TransferResult::New
+<a href=#302 id=302 data-nosnippet>302</a>        } <span class="kw">else if let </span><span class="prelude-val">Some</span>(prev_owner) = <span class="self">self</span>.state.input_objects.get(<span class="kw-2">&amp;</span>id) {
+<a href=#303 id=303 data-nosnippet>303</a>            <span class="kw">match </span>(<span class="kw-2">&amp;</span>owner, prev_owner) {
+<a href=#304 id=304 data-nosnippet>304</a>                <span class="comment">// don't use == for dummy values in Shared or ConsensusAddressOwner
+<a href=#305 id=305 data-nosnippet>305</a>                </span>(Owner::Shared { .. }, Owner::Shared { .. }) =&gt; TransferResult::SameOwner,
+<a href=#306 id=306 data-nosnippet>306</a>                (
+<a href=#307 id=307 data-nosnippet>307</a>                    Owner::ConsensusAddressOwner {
+<a href=#308 id=308 data-nosnippet>308</a>                        owner: new_owner, ..
+<a href=#309 id=309 data-nosnippet>309</a>                    },
+<a href=#310 id=310 data-nosnippet>310</a>                    Owner::ConsensusAddressOwner {
+<a href=#311 id=311 data-nosnippet>311</a>                        owner: old_owner, ..
+<a href=#312 id=312 data-nosnippet>312</a>                    },
+<a href=#313 id=313 data-nosnippet>313</a>                ) <span class="kw">if </span>new_owner == old_owner =&gt; TransferResult::SameOwner,
+<a href=#314 id=314 data-nosnippet>314</a>                (new, old) <span class="kw">if </span>new == old =&gt; TransferResult::SameOwner,
+<a href=#315 id=315 data-nosnippet>315</a>                <span class="kw">_ </span>=&gt; TransferResult::OwnerChanged,
+<a href=#316 id=316 data-nosnippet>316</a>            }
+<a href=#317 id=317 data-nosnippet>317</a>        } <span class="kw">else if </span>is_framework_obj {
+<a href=#318 id=318 data-nosnippet>318</a>            <span class="comment">// framework objects are always created when they are transferred, but the id is
+<a href=#319 id=319 data-nosnippet>319</a>            // hard-coded so it is not yet in new_ids or generated_ids
+<a href=#320 id=320 data-nosnippet>320</a>            </span><span class="self">self</span>.state.new_ids.insert(id);
+<a href=#321 id=321 data-nosnippet>321</a>            <span class="self">self</span>.state.generated_ids.insert(id);
+<a href=#322 id=322 data-nosnippet>322</a>            TransferResult::New
+<a href=#323 id=323 data-nosnippet>323</a>        } <span class="kw">else </span>{
+<a href=#324 id=324 data-nosnippet>324</a>            TransferResult::OwnerChanged
+<a href=#325 id=325 data-nosnippet>325</a>        };
+<a href=#326 id=326 data-nosnippet>326</a>        <span class="comment">// assert!(end of transaction ==&gt; same owner)
+<a href=#327 id=327 data-nosnippet>327</a>        </span><span class="kw">if </span>end_of_transaction &amp;&amp; !<span class="macro">matches!</span>(transfer_result, TransferResult::SameOwner) {
+<a href=#328 id=328 data-nosnippet>328</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(
+<a href=#329 id=329 data-nosnippet>329</a>                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+<a href=#330 id=330 data-nosnippet>330</a>                    .with_message(<span class="macro">format!</span>(<span class="string">"Untransferred object {} had its owner change"</span>, id)),
+<a href=#331 id=331 data-nosnippet>331</a>            );
+<a href=#332 id=332 data-nosnippet>332</a>        }
+<a href=#333 id=333 data-nosnippet>333</a>
+<a href=#334 id=334 data-nosnippet>334</a>        <span class="comment">// Metered transactions don't have limits for now
+<a href=#335 id=335 data-nosnippet>335</a>
+<a href=#336 id=336 data-nosnippet>336</a>        </span><span class="kw">if let </span>LimitThresholdCrossed::Hard(<span class="kw">_</span>, lim) = <span class="macro">check_limit_by_meter!</span>(
+<a href=#337 id=337 data-nosnippet>337</a>            <span class="comment">// TODO: is this not redundant? Metered TX implies framework obj cannot be transferred
+<a href=#338 id=338 data-nosnippet>338</a>            // We have higher limits for unmetered transactions and framework obj
+<a href=#339 id=339 data-nosnippet>339</a>            // We don't check the limit for objects whose owner is persisted at the end of the
+<a href=#340 id=340 data-nosnippet>340</a>            // transaction
+<a href=#341 id=341 data-nosnippet>341</a>            </span><span class="self">self</span>.is_metered &amp;&amp; !is_framework_obj &amp;&amp; !end_of_transaction,
+<a href=#342 id=342 data-nosnippet>342</a>            <span class="self">self</span>.state.transfers.len(),
+<a href=#343 id=343 data-nosnippet>343</a>            <span class="self">self</span>.protocol_config.max_num_transferred_move_object_ids(),
+<a href=#344 id=344 data-nosnippet>344</a>            <span class="self">self</span>.protocol_config
+<a href=#345 id=345 data-nosnippet>345</a>                .max_num_transferred_move_object_ids_system_tx(),
+<a href=#346 id=346 data-nosnippet>346</a>            <span class="self">self</span>.metrics.excessive_transferred_move_object_ids
+<a href=#347 id=347 data-nosnippet>347</a>        ) {
+<a href=#348 id=348 data-nosnippet>348</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+<a href=#349 id=349 data-nosnippet>349</a>                .with_message(<span class="macro">format!</span>(<span class="string">"Transferring more than {} IDs is not allowed"</span>, lim))
+<a href=#350 id=350 data-nosnippet>350</a>                .with_sub_status(
+<a href=#351 id=351 data-nosnippet>351</a>                    VMMemoryLimitExceededSubStatusCode::TRANSFER_ID_COUNT_LIMIT_EXCEEDED <span class="kw">as </span>u64,
+<a href=#352 id=352 data-nosnippet>352</a>                ));
+<a href=#353 id=353 data-nosnippet>353</a>        };
+<a href=#354 id=354 data-nosnippet>354</a>
+<a href=#355 id=355 data-nosnippet>355</a>        <span class="self">self</span>.state.transfers.insert(id, (owner, ty, obj));
+<a href=#356 id=356 data-nosnippet>356</a>        <span class="prelude-val">Ok</span>(transfer_result)
+<a href=#357 id=357 data-nosnippet>357</a>    }
+<a href=#358 id=358 data-nosnippet>358</a>
+<a href=#359 id=359 data-nosnippet>359</a>    <span class="kw">pub fn </span>emit_event(<span class="kw-2">&amp;mut </span><span class="self">self</span>, tag: StructTag, event: Value) -&gt; PartialVMResult&lt;()&gt; {
+<a href=#360 id=360 data-nosnippet>360</a>        <span class="kw">if </span><span class="self">self</span>.state.events.len() &gt;= (<span class="self">self</span>.protocol_config.max_num_event_emit() <span class="kw">as </span>usize) {
+<a href=#361 id=361 data-nosnippet>361</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(max_event_error(<span class="self">self</span>.protocol_config.max_num_event_emit()));
+<a href=#362 id=362 data-nosnippet>362</a>        }
+<a href=#363 id=363 data-nosnippet>363</a>        <span class="self">self</span>.state.events.push((tag, event));
+<a href=#364 id=364 data-nosnippet>364</a>        <span class="prelude-val">Ok</span>(())
+<a href=#365 id=365 data-nosnippet>365</a>    }
+<a href=#366 id=366 data-nosnippet>366</a>
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="kw">pub fn </span>take_user_events(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Vec&lt;(StructTag, Value)&gt; {
+<a href=#368 id=368 data-nosnippet>368</a>        std::mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.state.events)
+<a href=#369 id=369 data-nosnippet>369</a>    }
+<a href=#370 id=370 data-nosnippet>370</a>
+<a href=#371 id=371 data-nosnippet>371</a>    <span class="kw">pub fn </span>emit_accumulator_event(
+<a href=#372 id=372 data-nosnippet>372</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#373 id=373 data-nosnippet>373</a>        accumulator_id: ObjectID,
+<a href=#374 id=374 data-nosnippet>374</a>        action: MoveAccumulatorAction,
+<a href=#375 id=375 data-nosnippet>375</a>        target_addr: AccountAddress,
+<a href=#376 id=376 data-nosnippet>376</a>        target_ty: TypeTag,
+<a href=#377 id=377 data-nosnippet>377</a>        value: MoveAccumulatorValue,
+<a href=#378 id=378 data-nosnippet>378</a>    ) -&gt; PartialVMResult&lt;()&gt; {
+<a href=#379 id=379 data-nosnippet>379</a>        <span class="kw">if let </span>MoveAccumulatorValue::U64(amount) = value {
+<a href=#380 id=380 data-nosnippet>380</a>            <span class="kw">let </span>key = (target_addr, target_ty.clone());
+<a href=#381 id=381 data-nosnippet>381</a>
+<a href=#382 id=382 data-nosnippet>382</a>            <span class="kw">match </span>action {
+<a href=#383 id=383 data-nosnippet>383</a>                MoveAccumulatorAction::Merge =&gt; {
+<a href=#384 id=384 data-nosnippet>384</a>                    <span class="kw">let </span>current = <span class="self">self
+<a href=#385 id=385 data-nosnippet>385</a>                        </span>.state
+<a href=#386 id=386 data-nosnippet>386</a>                        .accumulator_merge_totals
+<a href=#387 id=387 data-nosnippet>387</a>                        .get(<span class="kw-2">&amp;</span>key)
+<a href=#388 id=388 data-nosnippet>388</a>                        .copied()
+<a href=#389 id=389 data-nosnippet>389</a>                        .unwrap_or(<span class="number">0</span>);
+<a href=#390 id=390 data-nosnippet>390</a>                    <span class="kw">let </span>new_total = current + amount <span class="kw">as </span>u128;
+<a href=#391 id=391 data-nosnippet>391</a>                    <span class="kw">if </span>new_total &gt; u64::MAX <span class="kw">as </span>u128 {
+<a href=#392 id=392 data-nosnippet>392</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
+<a href=#393 id=393 data-nosnippet>393</a>                            .with_message(<span class="macro">format!</span>(
+<a href=#394 id=394 data-nosnippet>394</a>                                <span class="string">"accumulator merge overflow: total merges {} exceed u64::MAX"</span>,
+<a href=#395 id=395 data-nosnippet>395</a>                                new_total
+<a href=#396 id=396 data-nosnippet>396</a>                            )));
+<a href=#397 id=397 data-nosnippet>397</a>                    }
+<a href=#398 id=398 data-nosnippet>398</a>                    <span class="self">self</span>.state.accumulator_merge_totals.insert(key, new_total);
+<a href=#399 id=399 data-nosnippet>399</a>                }
+<a href=#400 id=400 data-nosnippet>400</a>                MoveAccumulatorAction::Split =&gt; {
+<a href=#401 id=401 data-nosnippet>401</a>                    <span class="kw">let </span>current = <span class="self">self
+<a href=#402 id=402 data-nosnippet>402</a>                        </span>.state
+<a href=#403 id=403 data-nosnippet>403</a>                        .accumulator_split_totals
+<a href=#404 id=404 data-nosnippet>404</a>                        .get(<span class="kw-2">&amp;</span>key)
+<a href=#405 id=405 data-nosnippet>405</a>                        .copied()
+<a href=#406 id=406 data-nosnippet>406</a>                        .unwrap_or(<span class="number">0</span>);
+<a href=#407 id=407 data-nosnippet>407</a>                    <span class="kw">let </span>new_total = current + amount <span class="kw">as </span>u128;
+<a href=#408 id=408 data-nosnippet>408</a>                    <span class="kw">if </span>new_total &gt; u64::MAX <span class="kw">as </span>u128 {
+<a href=#409 id=409 data-nosnippet>409</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(PartialVMError::new(StatusCode::ARITHMETIC_ERROR)
+<a href=#410 id=410 data-nosnippet>410</a>                            .with_message(<span class="macro">format!</span>(
+<a href=#411 id=411 data-nosnippet>411</a>                                <span class="string">"accumulator split overflow: total splits {} exceed u64::MAX"</span>,
+<a href=#412 id=412 data-nosnippet>412</a>                                new_total
+<a href=#413 id=413 data-nosnippet>413</a>                            )));
+<a href=#414 id=414 data-nosnippet>414</a>                    }
+<a href=#415 id=415 data-nosnippet>415</a>                    <span class="self">self</span>.state.accumulator_split_totals.insert(key, new_total);
+<a href=#416 id=416 data-nosnippet>416</a>                }
+<a href=#417 id=417 data-nosnippet>417</a>            }
+<a href=#418 id=418 data-nosnippet>418</a>        }
+<a href=#419 id=419 data-nosnippet>419</a>
+<a href=#420 id=420 data-nosnippet>420</a>        <span class="kw">let </span>event = MoveAccumulatorEvent {
+<a href=#421 id=421 data-nosnippet>421</a>            accumulator_id,
+<a href=#422 id=422 data-nosnippet>422</a>            action,
+<a href=#423 id=423 data-nosnippet>423</a>            target_addr,
+<a href=#424 id=424 data-nosnippet>424</a>            target_ty,
+<a href=#425 id=425 data-nosnippet>425</a>            value,
+<a href=#426 id=426 data-nosnippet>426</a>        };
+<a href=#427 id=427 data-nosnippet>427</a>        <span class="self">self</span>.state.accumulator_events.push(event);
+<a href=#428 id=428 data-nosnippet>428</a>        <span class="prelude-val">Ok</span>(())
+<a href=#429 id=429 data-nosnippet>429</a>    }
+<a href=#430 id=430 data-nosnippet>430</a>
+<a href=#431 id=431 data-nosnippet>431</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>child_object_exists(
+<a href=#432 id=432 data-nosnippet>432</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#433 id=433 data-nosnippet>433</a>        parent: ObjectID,
+<a href=#434 id=434 data-nosnippet>434</a>        child: ObjectID,
+<a href=#435 id=435 data-nosnippet>435</a>    ) -&gt; PartialVMResult&lt;CacheMetadata&lt;bool&gt;&gt; {
+<a href=#436 id=436 data-nosnippet>436</a>        <span class="self">self</span>.child_object_store.object_exists(parent, child)
+<a href=#437 id=437 data-nosnippet>437</a>    }
+<a href=#438 id=438 data-nosnippet>438</a>
+<a href=#439 id=439 data-nosnippet>439</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>child_object_exists_and_has_type(
+<a href=#440 id=440 data-nosnippet>440</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#441 id=441 data-nosnippet>441</a>        parent: ObjectID,
+<a href=#442 id=442 data-nosnippet>442</a>        child: ObjectID,
+<a href=#443 id=443 data-nosnippet>443</a>        child_type: <span class="kw-2">&amp;</span>MoveObjectType,
+<a href=#444 id=444 data-nosnippet>444</a>    ) -&gt; PartialVMResult&lt;CacheMetadata&lt;bool&gt;&gt; {
+<a href=#445 id=445 data-nosnippet>445</a>        <span class="self">self</span>.child_object_store
+<a href=#446 id=446 data-nosnippet>446</a>            .object_exists_and_has_type(parent, child, child_type)
+<a href=#447 id=447 data-nosnippet>447</a>    }
+<a href=#448 id=448 data-nosnippet>448</a>
+<a href=#449 id=449 data-nosnippet>449</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>receive_object(
+<a href=#450 id=450 data-nosnippet>450</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#451 id=451 data-nosnippet>451</a>        parent: ObjectID,
+<a href=#452 id=452 data-nosnippet>452</a>        child: ObjectID,
+<a href=#453 id=453 data-nosnippet>453</a>        child_version: SequenceNumber,
+<a href=#454 id=454 data-nosnippet>454</a>        child_layout: <span class="kw-2">&amp;</span>R::MoveTypeLayout,
+<a href=#455 id=455 data-nosnippet>455</a>        child_fully_annotated_layout: <span class="kw-2">&amp;</span>MoveTypeLayout,
+<a href=#456 id=456 data-nosnippet>456</a>        child_move_type: MoveObjectType,
+<a href=#457 id=457 data-nosnippet>457</a>    ) -&gt; PartialVMResult&lt;<span class="prelude-ty">Option</span>&lt;ObjectResult&lt;CacheMetadata&lt;Value&gt;&gt;&gt;&gt; {
+<a href=#458 id=458 data-nosnippet>458</a>        <span class="kw">let </span><span class="prelude-val">Some</span>((value, obj_meta)) = <span class="self">self</span>.child_object_store.receive_object(
+<a href=#459 id=459 data-nosnippet>459</a>            parent,
+<a href=#460 id=460 data-nosnippet>460</a>            child,
+<a href=#461 id=461 data-nosnippet>461</a>            child_version,
+<a href=#462 id=462 data-nosnippet>462</a>            child_layout,
+<a href=#463 id=463 data-nosnippet>463</a>            child_fully_annotated_layout,
+<a href=#464 id=464 data-nosnippet>464</a>            child_move_type,
+<a href=#465 id=465 data-nosnippet>465</a>        )<span class="question-mark">?
+<a href=#466 id=466 data-nosnippet>466</a>        </span><span class="kw">else </span>{
+<a href=#467 id=467 data-nosnippet>467</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+<a href=#468 id=468 data-nosnippet>468</a>        };
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="comment">// NB: It is important that the object only be added to the received set after it has been
+<a href=#470 id=470 data-nosnippet>470</a>        // fully authenticated and loaded.
+<a href=#471 id=471 data-nosnippet>471</a>        </span><span class="kw">if </span><span class="self">self</span>.state.received.insert(child, obj_meta).is_some() {
+<a href=#472 id=472 data-nosnippet>472</a>            <span class="comment">// We should never hit this -- it means that we have received the same object twice which
+<a href=#473 id=473 data-nosnippet>473</a>            // means we have a duplicated a receiving ticket somehow.
+<a href=#474 id=474 data-nosnippet>474</a>            </span><span class="kw">return </span><span class="prelude-val">Err</span>(
+<a href=#475 id=475 data-nosnippet>475</a>                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(<span class="macro">format!</span>(
+<a href=#476 id=476 data-nosnippet>476</a>                    <span class="string">"Object {child} at version {child_version} already received. This can only happen \
+<a href=#477 id=477 data-nosnippet>477</a>                    if multiple `Receiving` arguments exist for the same object in the transaction which is impossible."
+<a href=#478 id=478 data-nosnippet>478</a>                </span>)),
+<a href=#479 id=479 data-nosnippet>479</a>            );
+<a href=#480 id=480 data-nosnippet>480</a>        }
+<a href=#481 id=481 data-nosnippet>481</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(value))
+<a href=#482 id=482 data-nosnippet>482</a>    }
+<a href=#483 id=483 data-nosnippet>483</a>
+<a href=#484 id=484 data-nosnippet>484</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_or_fetch_child_object(
+<a href=#485 id=485 data-nosnippet>485</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#486 id=486 data-nosnippet>486</a>        parent: ObjectID,
+<a href=#487 id=487 data-nosnippet>487</a>        child: ObjectID,
+<a href=#488 id=488 data-nosnippet>488</a>        child_layout: <span class="kw-2">&amp;</span>R::MoveTypeLayout,
+<a href=#489 id=489 data-nosnippet>489</a>        child_fully_annotated_layout: <span class="kw-2">&amp;</span>MoveTypeLayout,
+<a href=#490 id=490 data-nosnippet>490</a>        child_move_type: MoveObjectType,
+<a href=#491 id=491 data-nosnippet>491</a>    ) -&gt; PartialVMResult&lt;ObjectResult&lt;CacheMetadata&lt;<span class="kw-2">&amp;mut </span>GlobalValue&gt;&gt;&gt; {
+<a href=#492 id=492 data-nosnippet>492</a>        <span class="kw">let </span>res = <span class="self">self</span>.child_object_store.get_or_fetch_object(
+<a href=#493 id=493 data-nosnippet>493</a>            parent,
+<a href=#494 id=494 data-nosnippet>494</a>            child,
+<a href=#495 id=495 data-nosnippet>495</a>            child_layout,
+<a href=#496 id=496 data-nosnippet>496</a>            child_fully_annotated_layout,
+<a href=#497 id=497 data-nosnippet>497</a>            child_move_type,
+<a href=#498 id=498 data-nosnippet>498</a>        )<span class="question-mark">?</span>;
+<a href=#499 id=499 data-nosnippet>499</a>        <span class="prelude-val">Ok</span>(<span class="kw">match </span>res {
+<a href=#500 id=500 data-nosnippet>500</a>            ObjectResult::MismatchedType =&gt; ObjectResult::MismatchedType,
+<a href=#501 id=501 data-nosnippet>501</a>            ObjectResult::Loaded((cache_info, child_object)) =&gt; {
+<a href=#502 id=502 data-nosnippet>502</a>                ObjectResult::Loaded((cache_info, <span class="kw-2">&amp;mut </span>child_object.value))
+<a href=#503 id=503 data-nosnippet>503</a>            }
+<a href=#504 id=504 data-nosnippet>504</a>        })
+<a href=#505 id=505 data-nosnippet>505</a>    }
+<a href=#506 id=506 data-nosnippet>506</a>
+<a href=#507 id=507 data-nosnippet>507</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>add_child_object(
+<a href=#508 id=508 data-nosnippet>508</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#509 id=509 data-nosnippet>509</a>        parent: ObjectID,
+<a href=#510 id=510 data-nosnippet>510</a>        child: ObjectID,
+<a href=#511 id=511 data-nosnippet>511</a>        child_move_type: MoveObjectType,
+<a href=#512 id=512 data-nosnippet>512</a>        child_value: Value,
+<a href=#513 id=513 data-nosnippet>513</a>    ) -&gt; PartialVMResult&lt;()&gt; {
+<a href=#514 id=514 data-nosnippet>514</a>        <span class="self">self</span>.child_object_store
+<a href=#515 id=515 data-nosnippet>515</a>            .add_object(parent, child, child_move_type, child_value)
+<a href=#516 id=516 data-nosnippet>516</a>    }
+<a href=#517 id=517 data-nosnippet>517</a>
+<a href=#518 id=518 data-nosnippet>518</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>config_setting_unsequenced_read(
+<a href=#519 id=519 data-nosnippet>519</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#520 id=520 data-nosnippet>520</a>        config_id: ObjectID,
+<a href=#521 id=521 data-nosnippet>521</a>        name_df_id: ObjectID,
+<a href=#522 id=522 data-nosnippet>522</a>        field_setting_layout: <span class="kw-2">&amp;</span>R::MoveTypeLayout,
+<a href=#523 id=523 data-nosnippet>523</a>        field_setting_object_type: <span class="kw-2">&amp;</span>MoveObjectType,
+<a href=#524 id=524 data-nosnippet>524</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;Value&gt; {
+<a href=#525 id=525 data-nosnippet>525</a>        <span class="kw">match </span><span class="self">self</span>.child_object_store.config_setting_unsequenced_read(
+<a href=#526 id=526 data-nosnippet>526</a>            config_id,
+<a href=#527 id=527 data-nosnippet>527</a>            name_df_id,
+<a href=#528 id=528 data-nosnippet>528</a>            field_setting_layout,
+<a href=#529 id=529 data-nosnippet>529</a>            field_setting_object_type,
+<a href=#530 id=530 data-nosnippet>530</a>        ) {
+<a href=#531 id=531 data-nosnippet>531</a>            <span class="prelude-val">Err</span>(e) =&gt; {
+<a href=#532 id=532 data-nosnippet>532</a>                <span class="macro">error!</span>(
+<a href=#533 id=533 data-nosnippet>533</a>                    <span class="string">"Failed to read config setting.
+<a href=#534 id=534 data-nosnippet>534</a>                    config_id: {config_id},
+<a href=#535 id=535 data-nosnippet>535</a>                    name_df_id: {name_df_id},
+<a href=#536 id=536 data-nosnippet>536</a>                    field_setting_object_type:  {field_setting_object_type:?},
+<a href=#537 id=537 data-nosnippet>537</a>                    error: {e}"
+<a href=#538 id=538 data-nosnippet>538</a>                </span>);
+<a href=#539 id=539 data-nosnippet>539</a>                <span class="prelude-val">None
+<a href=#540 id=540 data-nosnippet>540</a>            </span>}
+<a href=#541 id=541 data-nosnippet>541</a>            <span class="prelude-val">Ok</span>(ObjectResult::MismatchedType) | <span class="prelude-val">Ok</span>(ObjectResult::Loaded(<span class="prelude-val">None</span>)) =&gt; <span class="prelude-val">None</span>,
+<a href=#542 id=542 data-nosnippet>542</a>            <span class="prelude-val">Ok</span>(ObjectResult::Loaded(<span class="prelude-val">Some</span>(value))) =&gt; <span class="prelude-val">Some</span>(value),
+<a href=#543 id=543 data-nosnippet>543</a>        }
+<a href=#544 id=544 data-nosnippet>544</a>    }
+<a href=#545 id=545 data-nosnippet>545</a>
+<a href=#546 id=546 data-nosnippet>546</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>config_setting_cache_update(
+<a href=#547 id=547 data-nosnippet>547</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#548 id=548 data-nosnippet>548</a>        config_id: ObjectID,
+<a href=#549 id=549 data-nosnippet>549</a>        name_df_id: ObjectID,
+<a href=#550 id=550 data-nosnippet>550</a>        setting_value_object_type: MoveObjectType,
+<a href=#551 id=551 data-nosnippet>551</a>        value: <span class="prelude-ty">Option</span>&lt;Value&gt;,
+<a href=#552 id=552 data-nosnippet>552</a>    ) {
+<a href=#553 id=553 data-nosnippet>553</a>        <span class="self">self</span>.child_object_store.config_setting_cache_update(
+<a href=#554 id=554 data-nosnippet>554</a>            config_id,
+<a href=#555 id=555 data-nosnippet>555</a>            name_df_id,
+<a href=#556 id=556 data-nosnippet>556</a>            setting_value_object_type,
+<a href=#557 id=557 data-nosnippet>557</a>            value,
+<a href=#558 id=558 data-nosnippet>558</a>        )
+<a href=#559 id=559 data-nosnippet>559</a>    }
+<a href=#560 id=560 data-nosnippet>560</a>
+<a href=#561 id=561 data-nosnippet>561</a>    <span class="comment">// returns None if a child object is still borrowed
+<a href=#562 id=562 data-nosnippet>562</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>take_state(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; ObjectRuntimeState {
+<a href=#563 id=563 data-nosnippet>563</a>        std::mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.state)
+<a href=#564 id=564 data-nosnippet>564</a>    }
+<a href=#565 id=565 data-nosnippet>565</a>
+<a href=#566 id=566 data-nosnippet>566</a>    <span class="kw">pub fn </span>is_deleted(<span class="kw-2">&amp;</span><span class="self">self</span>, id: <span class="kw-2">&amp;</span>ObjectID) -&gt; bool {
+<a href=#567 id=567 data-nosnippet>567</a>        <span class="self">self</span>.state.deleted_ids.contains(id)
+<a href=#568 id=568 data-nosnippet>568</a>    }
+<a href=#569 id=569 data-nosnippet>569</a>
+<a href=#570 id=570 data-nosnippet>570</a>    <span class="kw">pub fn </span>is_transferred(<span class="kw-2">&amp;</span><span class="self">self</span>, id: <span class="kw-2">&amp;</span>ObjectID) -&gt; <span class="prelude-ty">Option</span>&lt;Owner&gt; {
+<a href=#571 id=571 data-nosnippet>571</a>        <span class="self">self</span>.state
+<a href=#572 id=572 data-nosnippet>572</a>            .transfers
+<a href=#573 id=573 data-nosnippet>573</a>            .get(id)
+<a href=#574 id=574 data-nosnippet>574</a>            .map(|(owner, <span class="kw">_</span>, <span class="kw">_</span>)| owner.clone())
+<a href=#575 id=575 data-nosnippet>575</a>    }
+<a href=#576 id=576 data-nosnippet>576</a>
+<a href=#577 id=577 data-nosnippet>577</a>    <span class="kw">pub fn </span>finish(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;RuntimeResults, ExecutionError&gt; {
+<a href=#578 id=578 data-nosnippet>578</a>        <span class="kw">let </span>loaded_child_objects = <span class="self">self</span>.loaded_runtime_objects();
+<a href=#579 id=579 data-nosnippet>579</a>        <span class="kw">let </span>child_effects = <span class="self">self</span>.child_object_store.take_effects().map_err(|e| {
+<a href=#580 id=580 data-nosnippet>580</a>            ExecutionError::invariant_violation(<span class="macro">format!</span>(<span class="string">"Failed to take child object effects: {e}"</span>))
+<a href=#581 id=581 data-nosnippet>581</a>        })<span class="question-mark">?</span>;
+<a href=#582 id=582 data-nosnippet>582</a>        <span class="self">self</span>.state.finish(loaded_child_objects, child_effects)
+<a href=#583 id=583 data-nosnippet>583</a>    }
+<a href=#584 id=584 data-nosnippet>584</a>
+<a href=#585 id=585 data-nosnippet>585</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>all_active_child_objects(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = ActiveChildObject&lt;<span class="lifetime">'_</span>&gt;&gt; {
+<a href=#586 id=586 data-nosnippet>586</a>        <span class="self">self</span>.child_object_store.all_active_objects()
+<a href=#587 id=587 data-nosnippet>587</a>    }
+<a href=#588 id=588 data-nosnippet>588</a>
+<a href=#589 id=589 data-nosnippet>589</a>    <span class="kw">pub fn </span>loaded_runtime_objects(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;ObjectID, DynamicallyLoadedObjectMetadata&gt; {
+<a href=#590 id=590 data-nosnippet>590</a>        <span class="comment">// The loaded child objects, and the received objects, should be disjoint. If they are not,
+<a href=#591 id=591 data-nosnippet>591</a>        // this is an error since it could lead to incorrect transaction dependency computations.
+<a href=#592 id=592 data-nosnippet>592</a>        </span><span class="macro">debug_assert!</span>(
+<a href=#593 id=593 data-nosnippet>593</a>            <span class="self">self</span>.child_object_store
+<a href=#594 id=594 data-nosnippet>594</a>                .cached_objects()
+<a href=#595 id=595 data-nosnippet>595</a>                .keys()
+<a href=#596 id=596 data-nosnippet>596</a>                .all(|id| !<span class="self">self</span>.state.received.contains_key(id))
+<a href=#597 id=597 data-nosnippet>597</a>        );
+<a href=#598 id=598 data-nosnippet>598</a>        <span class="self">self</span>.child_object_store
+<a href=#599 id=599 data-nosnippet>599</a>            .cached_objects()
+<a href=#600 id=600 data-nosnippet>600</a>            .iter()
+<a href=#601 id=601 data-nosnippet>601</a>            .filter_map(|(id, obj_opt)| {
+<a href=#602 id=602 data-nosnippet>602</a>                obj_opt.as_ref().map(|obj| {
+<a href=#603 id=603 data-nosnippet>603</a>                    (
+<a href=#604 id=604 data-nosnippet>604</a>                        <span class="kw-2">*</span>id,
+<a href=#605 id=605 data-nosnippet>605</a>                        DynamicallyLoadedObjectMetadata {
+<a href=#606 id=606 data-nosnippet>606</a>                            version: obj.version(),
+<a href=#607 id=607 data-nosnippet>607</a>                            digest: obj.digest(),
+<a href=#608 id=608 data-nosnippet>608</a>                            storage_rebate: obj.storage_rebate,
+<a href=#609 id=609 data-nosnippet>609</a>                            owner: obj.owner.clone(),
+<a href=#610 id=610 data-nosnippet>610</a>                            previous_transaction: obj.previous_transaction,
+<a href=#611 id=611 data-nosnippet>611</a>                        },
+<a href=#612 id=612 data-nosnippet>612</a>                    )
+<a href=#613 id=613 data-nosnippet>613</a>                })
+<a href=#614 id=614 data-nosnippet>614</a>            })
+<a href=#615 id=615 data-nosnippet>615</a>            .chain(
+<a href=#616 id=616 data-nosnippet>616</a>                <span class="self">self</span>.state
+<a href=#617 id=617 data-nosnippet>617</a>                    .received
+<a href=#618 id=618 data-nosnippet>618</a>                    .iter()
+<a href=#619 id=619 data-nosnippet>619</a>                    .map(|(id, meta)| (<span class="kw-2">*</span>id, meta.clone())),
+<a href=#620 id=620 data-nosnippet>620</a>            )
+<a href=#621 id=621 data-nosnippet>621</a>            .collect()
+<a href=#622 id=622 data-nosnippet>622</a>    }
+<a href=#623 id=623 data-nosnippet>623</a>
+<a href=#624 id=624 data-nosnippet>624</a>    <span class="doccomment">/// A map from wrapped objects to the object that wraps them at the beginning of the
+<a href=#625 id=625 data-nosnippet>625</a>    /// transaction.
+<a href=#626 id=626 data-nosnippet>626</a>    </span><span class="kw">pub fn </span>wrapped_object_containers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;ObjectID, ObjectID&gt; {
+<a href=#627 id=627 data-nosnippet>627</a>        <span class="self">self</span>.child_object_store.wrapped_object_containers().clone()
+<a href=#628 id=628 data-nosnippet>628</a>    }
+<a href=#629 id=629 data-nosnippet>629</a>
+<a href=#630 id=630 data-nosnippet>630</a>    <span class="kw">pub fn </span>record_settlement_sui_conservation(<span class="kw-2">&amp;mut </span><span class="self">self</span>, input_sui: u64, output_sui: u64) {
+<a href=#631 id=631 data-nosnippet>631</a>        <span class="self">self</span>.state.settlement_input_sui += input_sui;
+<a href=#632 id=632 data-nosnippet>632</a>        <span class="self">self</span>.state.settlement_output_sui += output_sui;
+<a href=#633 id=633 data-nosnippet>633</a>    }
+<a href=#634 id=634 data-nosnippet>634</a>
+<a href=#635 id=635 data-nosnippet>635</a>    <span class="doccomment">/// Return the set of all object IDs that were created during this transaction, including any
+<a href=#636 id=636 data-nosnippet>636</a>    /// object IDs that were created and then deleted during the transaction.
+<a href=#637 id=637 data-nosnippet>637</a>    </span><span class="kw">pub fn </span>generated_object_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeSet&lt;ObjectID&gt; {
+<a href=#638 id=638 data-nosnippet>638</a>        <span class="self">self</span>.state.generated_ids.iter().cloned().collect()
+<a href=#639 id=639 data-nosnippet>639</a>    }
+<a href=#640 id=640 data-nosnippet>640</a>}
+<a href=#641 id=641 data-nosnippet>641</a>
+<a href=#642 id=642 data-nosnippet>642</a><span class="kw">pub fn </span>max_event_error(max_events: u64) -&gt; PartialVMError {
+<a href=#643 id=643 data-nosnippet>643</a>    PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
+<a href=#644 id=644 data-nosnippet>644</a>        .with_message(<span class="macro">format!</span>(
+<a href=#645 id=645 data-nosnippet>645</a>            <span class="string">"Emitting more than {} events is not allowed"</span>,
+<a href=#646 id=646 data-nosnippet>646</a>            max_events
+<a href=#647 id=647 data-nosnippet>647</a>        ))
+<a href=#648 id=648 data-nosnippet>648</a>        .with_sub_status(VMMemoryLimitExceededSubStatusCode::EVENT_COUNT_LIMIT_EXCEEDED <span class="kw">as </span>u64)
+<a href=#649 id=649 data-nosnippet>649</a>}
+<a href=#650 id=650 data-nosnippet>650</a>
+<a href=#651 id=651 data-nosnippet>651</a><span class="kw">impl </span>ObjectRuntimeState {
+<a href=#652 id=652 data-nosnippet>652</a>    <span class="doccomment">/// Update `state_view` with the effects of successfully executing a transaction:
+<a href=#653 id=653 data-nosnippet>653</a>    /// - Given the effects `Op&lt;Value&gt;` of child objects, processes the changes in terms of
+<a href=#654 id=654 data-nosnippet>654</a>    ///   object writes/deletes
+<a href=#655 id=655 data-nosnippet>655</a>    /// - Process `transfers` and `input_objects` to determine whether the type of change
+<a href=#656 id=656 data-nosnippet>656</a>    ///   (WriteKind) to the object
+<a href=#657 id=657 data-nosnippet>657</a>    /// - Process `deleted_ids` with previously determined information to determine the
+<a href=#658 id=658 data-nosnippet>658</a>    ///   DeleteKind
+<a href=#659 id=659 data-nosnippet>659</a>    /// - Passes through user events
+<a href=#660 id=660 data-nosnippet>660</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>finish(
+<a href=#661 id=661 data-nosnippet>661</a>        <span class="kw-2">mut </span><span class="self">self</span>,
+<a href=#662 id=662 data-nosnippet>662</a>        loaded_child_objects: BTreeMap&lt;ObjectID, DynamicallyLoadedObjectMetadata&gt;,
+<a href=#663 id=663 data-nosnippet>663</a>        child_object_effects: ChildObjectEffects,
+<a href=#664 id=664 data-nosnippet>664</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;RuntimeResults, ExecutionError&gt; {
+<a href=#665 id=665 data-nosnippet>665</a>        <span class="kw">let </span><span class="kw-2">mut </span>loaded_child_objects: BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = loaded_child_objects
+<a href=#666 id=666 data-nosnippet>666</a>            .into_iter()
+<a href=#667 id=667 data-nosnippet>667</a>            .map(|(id, metadata)| {
+<a href=#668 id=668 data-nosnippet>668</a>                (
+<a href=#669 id=669 data-nosnippet>669</a>                    id,
+<a href=#670 id=670 data-nosnippet>670</a>                    LoadedRuntimeObject {
+<a href=#671 id=671 data-nosnippet>671</a>                        version: metadata.version,
+<a href=#672 id=672 data-nosnippet>672</a>                        is_modified: <span class="bool-val">false</span>,
+<a href=#673 id=673 data-nosnippet>673</a>                    },
+<a href=#674 id=674 data-nosnippet>674</a>                )
+<a href=#675 id=675 data-nosnippet>675</a>            })
+<a href=#676 id=676 data-nosnippet>676</a>            .collect();
+<a href=#677 id=677 data-nosnippet>677</a>        <span class="self">self</span>.apply_child_object_effects(<span class="kw-2">&amp;mut </span>loaded_child_objects, child_object_effects);
+<a href=#678 id=678 data-nosnippet>678</a>        <span class="kw">let </span>ObjectRuntimeState {
+<a href=#679 id=679 data-nosnippet>679</a>            input_objects: <span class="kw">_</span>,
+<a href=#680 id=680 data-nosnippet>680</a>            new_ids,
+<a href=#681 id=681 data-nosnippet>681</a>            generated_ids,
+<a href=#682 id=682 data-nosnippet>682</a>            deleted_ids,
+<a href=#683 id=683 data-nosnippet>683</a>            transfers,
+<a href=#684 id=684 data-nosnippet>684</a>            events: user_events,
+<a href=#685 id=685 data-nosnippet>685</a>            total_events_size: <span class="kw">_</span>,
+<a href=#686 id=686 data-nosnippet>686</a>            received,
+<a href=#687 id=687 data-nosnippet>687</a>            accumulator_events,
+<a href=#688 id=688 data-nosnippet>688</a>            settlement_input_sui,
+<a href=#689 id=689 data-nosnippet>689</a>            settlement_output_sui,
+<a href=#690 id=690 data-nosnippet>690</a>            accumulator_merge_totals: <span class="kw">_</span>,
+<a href=#691 id=691 data-nosnippet>691</a>            accumulator_split_totals: <span class="kw">_</span>,
+<a href=#692 id=692 data-nosnippet>692</a>        } = <span class="self">self</span>;
+<a href=#693 id=693 data-nosnippet>693</a>
+<a href=#694 id=694 data-nosnippet>694</a>        <span class="comment">// The set of new ids is a subset of the generated ids.
+<a href=#695 id=695 data-nosnippet>695</a>        </span><span class="macro">debug_assert!</span>(new_ids.is_subset(<span class="kw-2">&amp;</span>generated_ids));
+<a href=#696 id=696 data-nosnippet>696</a>
+<a href=#697 id=697 data-nosnippet>697</a>        <span class="comment">// Check new owners from transfers, reports an error on cycles.
+<a href=#698 id=698 data-nosnippet>698</a>        // TODO can we have cycles in the new system?
+<a href=#699 id=699 data-nosnippet>699</a>        </span>check_circular_ownership(
+<a href=#700 id=700 data-nosnippet>700</a>            transfers
+<a href=#701 id=701 data-nosnippet>701</a>                .iter()
+<a href=#702 id=702 data-nosnippet>702</a>                .map(|(id, (owner, <span class="kw">_</span>, <span class="kw">_</span>))| (<span class="kw-2">*</span>id, owner.clone())),
+<a href=#703 id=703 data-nosnippet>703</a>        )<span class="question-mark">?</span>;
+<a href=#704 id=704 data-nosnippet>704</a>        <span class="comment">// For both written_objects and deleted_ids, we need to mark the loaded child object as modified.
+<a href=#705 id=705 data-nosnippet>705</a>        // These may not be covered in the child object effects if they are taken out in one PT command and then
+<a href=#706 id=706 data-nosnippet>706</a>        // transferred/deleted in a different command. Marking them as modified will allow us properly determine their
+<a href=#707 id=707 data-nosnippet>707</a>        // mutation category in effects.
+<a href=#708 id=708 data-nosnippet>708</a>        // TODO: This could get error-prone quickly: what if we forgot to mark an object as modified? There may be a cleaner
+<a href=#709 id=709 data-nosnippet>709</a>        // sulution.
+<a href=#710 id=710 data-nosnippet>710</a>        </span><span class="kw">let </span>written_objects: IndexMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt; = transfers
+<a href=#711 id=711 data-nosnippet>711</a>            .into_iter()
+<a href=#712 id=712 data-nosnippet>712</a>            .map(|(id, (owner, type_, value))| {
+<a href=#713 id=713 data-nosnippet>713</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(loaded_child) = loaded_child_objects.get_mut(<span class="kw-2">&amp;</span>id) {
+<a href=#714 id=714 data-nosnippet>714</a>                    loaded_child.is_modified = <span class="bool-val">true</span>;
+<a href=#715 id=715 data-nosnippet>715</a>                }
+<a href=#716 id=716 data-nosnippet>716</a>                (id, (owner, type_, value))
+<a href=#717 id=717 data-nosnippet>717</a>            })
+<a href=#718 id=718 data-nosnippet>718</a>            .collect();
+<a href=#719 id=719 data-nosnippet>719</a>        <span class="kw">for </span>deleted_id <span class="kw">in </span><span class="kw-2">&amp;</span>deleted_ids {
+<a href=#720 id=720 data-nosnippet>720</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(loaded_child) = loaded_child_objects.get_mut(deleted_id) {
+<a href=#721 id=721 data-nosnippet>721</a>                loaded_child.is_modified = <span class="bool-val">true</span>;
+<a href=#722 id=722 data-nosnippet>722</a>            }
+<a href=#723 id=723 data-nosnippet>723</a>        }
+<a href=#724 id=724 data-nosnippet>724</a>
+<a href=#725 id=725 data-nosnippet>725</a>        <span class="comment">// Any received objects are viewed as modified. They had to be loaded in order to be
+<a href=#726 id=726 data-nosnippet>726</a>        // received so they must be in the loaded_child_objects map otherwise it's an invariant
+<a href=#727 id=727 data-nosnippet>727</a>        // violation.
+<a href=#728 id=728 data-nosnippet>728</a>        </span><span class="kw">for </span>(received_object, <span class="kw">_</span>) <span class="kw">in </span>received.into_iter() {
+<a href=#729 id=729 data-nosnippet>729</a>            <span class="kw">match </span>loaded_child_objects.get_mut(<span class="kw-2">&amp;</span>received_object) {
+<a href=#730 id=730 data-nosnippet>730</a>                <span class="prelude-val">Some</span>(loaded_child) =&gt; {
+<a href=#731 id=731 data-nosnippet>731</a>                    loaded_child.is_modified = <span class="bool-val">true</span>;
+<a href=#732 id=732 data-nosnippet>732</a>                }
+<a href=#733 id=733 data-nosnippet>733</a>                <span class="prelude-val">None </span>=&gt; {
+<a href=#734 id=734 data-nosnippet>734</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(ExecutionError::invariant_violation(<span class="macro">format!</span>(
+<a href=#735 id=735 data-nosnippet>735</a>                        <span class="string">"Failed to find received UID {received_object} in loaded child objects."
+<a href=#736 id=736 data-nosnippet>736</a>                    </span>)));
+<a href=#737 id=737 data-nosnippet>737</a>                }
+<a href=#738 id=738 data-nosnippet>738</a>            }
+<a href=#739 id=739 data-nosnippet>739</a>        }
+<a href=#740 id=740 data-nosnippet>740</a>
+<a href=#741 id=741 data-nosnippet>741</a>        <span class="prelude-val">Ok</span>(RuntimeResults {
+<a href=#742 id=742 data-nosnippet>742</a>            writes: written_objects,
+<a href=#743 id=743 data-nosnippet>743</a>            user_events,
+<a href=#744 id=744 data-nosnippet>744</a>            accumulator_events,
+<a href=#745 id=745 data-nosnippet>745</a>            loaded_child_objects,
+<a href=#746 id=746 data-nosnippet>746</a>            created_object_ids: new_ids,
+<a href=#747 id=747 data-nosnippet>747</a>            deleted_object_ids: deleted_ids,
+<a href=#748 id=748 data-nosnippet>748</a>            settlement_input_sui,
+<a href=#749 id=749 data-nosnippet>749</a>            settlement_output_sui,
+<a href=#750 id=750 data-nosnippet>750</a>        })
+<a href=#751 id=751 data-nosnippet>751</a>    }
+<a href=#752 id=752 data-nosnippet>752</a>
+<a href=#753 id=753 data-nosnippet>753</a>    <span class="kw">pub fn </span>events(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[(StructTag, Value)] {
+<a href=#754 id=754 data-nosnippet>754</a>        <span class="kw-2">&amp;</span><span class="self">self</span>.events
+<a href=#755 id=755 data-nosnippet>755</a>    }
+<a href=#756 id=756 data-nosnippet>756</a>
+<a href=#757 id=757 data-nosnippet>757</a>    <span class="kw">pub fn </span>total_events_size(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+<a href=#758 id=758 data-nosnippet>758</a>        <span class="self">self</span>.total_events_size
+<a href=#759 id=759 data-nosnippet>759</a>    }
+<a href=#760 id=760 data-nosnippet>760</a>
+<a href=#761 id=761 data-nosnippet>761</a>    <span class="kw">pub fn </span>incr_total_events_size(<span class="kw-2">&amp;mut </span><span class="self">self</span>, size: u64) {
+<a href=#762 id=762 data-nosnippet>762</a>        <span class="self">self</span>.total_events_size += size;
+<a href=#763 id=763 data-nosnippet>763</a>    }
+<a href=#764 id=764 data-nosnippet>764</a>
+<a href=#765 id=765 data-nosnippet>765</a>    <span class="kw">fn </span>apply_child_object_effects(
+<a href=#766 id=766 data-nosnippet>766</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#767 id=767 data-nosnippet>767</a>        loaded_child_objects: <span class="kw-2">&amp;mut </span>BTreeMap&lt;ObjectID, LoadedRuntimeObject&gt;,
+<a href=#768 id=768 data-nosnippet>768</a>        child_object_effects: ChildObjectEffects,
+<a href=#769 id=769 data-nosnippet>769</a>    ) {
+<a href=#770 id=770 data-nosnippet>770</a>        <span class="kw">match </span>child_object_effects {
+<a href=#771 id=771 data-nosnippet>771</a>            ChildObjectEffects::V0(child_object_effects) =&gt; {
+<a href=#772 id=772 data-nosnippet>772</a>                <span class="self">self</span>.apply_child_object_effects_v0(loaded_child_objects, child_object_effects)
+<a href=#773 id=773 data-nosnippet>773</a>            }
+<a href=#774 id=774 data-nosnippet>774</a>            ChildObjectEffects::V1(child_object_effects) =&gt; {
+<a href=#775 id=775 data-nosnippet>775</a>                <span class="self">self</span>.apply_child_object_effects_v1(loaded_child_objects, child_object_effects)
+<a href=#776 id=776 data-nosnippet>776</a>            }
+<a href=#777 id=777 data-nosnippet>777</a>        }
+<a href=#778 id=778 data-nosnippet>778</a>    }
+<a href=#779 id=779 data-nosnippet>779</a>
+<a href=#780 id=780 data-nosnippet>780</a>    <span class="kw">fn </span>apply_child_object_effects_v0(
+<a href=#781 id=781 data-nosnippet>781</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#782 id=782 data-nosnippet>782</a>        loaded_child_objects: <span class="kw-2">&amp;mut </span>BTreeMap&lt;ObjectID, LoadedRuntimeObject&gt;,
+<a href=#783 id=783 data-nosnippet>783</a>        child_object_effects: BTreeMap&lt;ObjectID, ChildObjectEffectV0&gt;,
+<a href=#784 id=784 data-nosnippet>784</a>    ) {
+<a href=#785 id=785 data-nosnippet>785</a>        <span class="kw">for </span>(child, child_object_effect) <span class="kw">in </span>child_object_effects {
+<a href=#786 id=786 data-nosnippet>786</a>            <span class="kw">let </span>ChildObjectEffectV0 {
+<a href=#787 id=787 data-nosnippet>787</a>                owner: parent,
+<a href=#788 id=788 data-nosnippet>788</a>                ty,
+<a href=#789 id=789 data-nosnippet>789</a>                effect,
+<a href=#790 id=790 data-nosnippet>790</a>            } = child_object_effect;
+<a href=#791 id=791 data-nosnippet>791</a>
+<a href=#792 id=792 data-nosnippet>792</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(loaded_child) = loaded_child_objects.get_mut(<span class="kw-2">&amp;</span>child) {
+<a href=#793 id=793 data-nosnippet>793</a>                loaded_child.is_modified = <span class="bool-val">true</span>;
+<a href=#794 id=794 data-nosnippet>794</a>            }
+<a href=#795 id=795 data-nosnippet>795</a>
+<a href=#796 id=796 data-nosnippet>796</a>            <span class="kw">match </span>effect {
+<a href=#797 id=797 data-nosnippet>797</a>                <span class="comment">// was modified, so mark it as mutated and transferred
+<a href=#798 id=798 data-nosnippet>798</a>                </span>Op::Modify(v) =&gt; {
+<a href=#799 id=799 data-nosnippet>799</a>                    <span class="macro">debug_assert!</span>(!<span class="self">self</span>.transfers.contains_key(<span class="kw-2">&amp;</span>child));
+<a href=#800 id=800 data-nosnippet>800</a>                    <span class="macro">debug_assert!</span>(!<span class="self">self</span>.new_ids.contains(<span class="kw-2">&amp;</span>child));
+<a href=#801 id=801 data-nosnippet>801</a>                    <span class="macro">debug_assert!</span>(loaded_child_objects.contains_key(<span class="kw-2">&amp;</span>child));
+<a href=#802 id=802 data-nosnippet>802</a>                    <span class="self">self</span>.transfers
+<a href=#803 id=803 data-nosnippet>803</a>                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
+<a href=#804 id=804 data-nosnippet>804</a>                }
+<a href=#805 id=805 data-nosnippet>805</a>
+<a href=#806 id=806 data-nosnippet>806</a>                Op::New(v) =&gt; {
+<a href=#807 id=807 data-nosnippet>807</a>                    <span class="macro">debug_assert!</span>(!<span class="self">self</span>.transfers.contains_key(<span class="kw-2">&amp;</span>child));
+<a href=#808 id=808 data-nosnippet>808</a>                    <span class="self">self</span>.transfers
+<a href=#809 id=809 data-nosnippet>809</a>                        .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
+<a href=#810 id=810 data-nosnippet>810</a>                }
+<a href=#811 id=811 data-nosnippet>811</a>
+<a href=#812 id=812 data-nosnippet>812</a>                Op::Delete =&gt; {
+<a href=#813 id=813 data-nosnippet>813</a>                    <span class="comment">// was transferred so not actually deleted
+<a href=#814 id=814 data-nosnippet>814</a>                    </span><span class="kw">if </span><span class="self">self</span>.transfers.contains_key(<span class="kw-2">&amp;</span>child) {
+<a href=#815 id=815 data-nosnippet>815</a>                        <span class="macro">debug_assert!</span>(!<span class="self">self</span>.deleted_ids.contains(<span class="kw-2">&amp;</span>child));
+<a href=#816 id=816 data-nosnippet>816</a>                    }
+<a href=#817 id=817 data-nosnippet>817</a>                    <span class="comment">// ID was deleted too was deleted so mark as deleted
+<a href=#818 id=818 data-nosnippet>818</a>                    </span><span class="kw">if </span><span class="self">self</span>.deleted_ids.contains(<span class="kw-2">&amp;</span>child) {
+<a href=#819 id=819 data-nosnippet>819</a>                        <span class="macro">debug_assert!</span>(!<span class="self">self</span>.transfers.contains_key(<span class="kw-2">&amp;</span>child));
+<a href=#820 id=820 data-nosnippet>820</a>                        <span class="macro">debug_assert!</span>(!<span class="self">self</span>.new_ids.contains(<span class="kw-2">&amp;</span>child));
+<a href=#821 id=821 data-nosnippet>821</a>                    }
+<a href=#822 id=822 data-nosnippet>822</a>                }
+<a href=#823 id=823 data-nosnippet>823</a>            }
+<a href=#824 id=824 data-nosnippet>824</a>        }
+<a href=#825 id=825 data-nosnippet>825</a>    }
+<a href=#826 id=826 data-nosnippet>826</a>
+<a href=#827 id=827 data-nosnippet>827</a>    <span class="kw">fn </span>apply_child_object_effects_v1(
+<a href=#828 id=828 data-nosnippet>828</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#829 id=829 data-nosnippet>829</a>        loaded_child_objects: <span class="kw-2">&amp;mut </span>BTreeMap&lt;ObjectID, LoadedRuntimeObject&gt;,
+<a href=#830 id=830 data-nosnippet>830</a>        child_object_effects: BTreeMap&lt;ObjectID, ChildObjectEffectV1&gt;,
+<a href=#831 id=831 data-nosnippet>831</a>    ) {
+<a href=#832 id=832 data-nosnippet>832</a>        <span class="kw">for </span>(child, child_object_effect) <span class="kw">in </span>child_object_effects {
+<a href=#833 id=833 data-nosnippet>833</a>            <span class="kw">let </span>ChildObjectEffectV1 {
+<a href=#834 id=834 data-nosnippet>834</a>                owner: parent,
+<a href=#835 id=835 data-nosnippet>835</a>                ty,
+<a href=#836 id=836 data-nosnippet>836</a>                final_value,
+<a href=#837 id=837 data-nosnippet>837</a>                object_changed,
+<a href=#838 id=838 data-nosnippet>838</a>            } = child_object_effect;
+<a href=#839 id=839 data-nosnippet>839</a>
+<a href=#840 id=840 data-nosnippet>840</a>            <span class="kw">if </span>object_changed {
+<a href=#841 id=841 data-nosnippet>841</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(loaded_child) = loaded_child_objects.get_mut(<span class="kw-2">&amp;</span>child) {
+<a href=#842 id=842 data-nosnippet>842</a>                    loaded_child.is_modified = <span class="bool-val">true</span>;
+<a href=#843 id=843 data-nosnippet>843</a>                }
+<a href=#844 id=844 data-nosnippet>844</a>
+<a href=#845 id=845 data-nosnippet>845</a>                <span class="kw">match </span>final_value {
+<a href=#846 id=846 data-nosnippet>846</a>                    <span class="prelude-val">None </span>=&gt; {
+<a href=#847 id=847 data-nosnippet>847</a>                        <span class="comment">// Value was changed and is no longer present, it may have been wrapped,
+<a href=#848 id=848 data-nosnippet>848</a>                        // transferred, or deleted.
+<a href=#849 id=849 data-nosnippet>849</a>
+<a href=#850 id=850 data-nosnippet>850</a>                        // If it was transferred, it should not have been deleted
+<a href=#851 id=851 data-nosnippet>851</a>                        // transferred ==&gt; !deleted
+<a href=#852 id=852 data-nosnippet>852</a>                        </span><span class="macro">debug_assert!</span>(
+<a href=#853 id=853 data-nosnippet>853</a>                            !<span class="self">self</span>.transfers.contains_key(<span class="kw-2">&amp;</span>child)
+<a href=#854 id=854 data-nosnippet>854</a>                                || !<span class="self">self</span>.deleted_ids.contains(<span class="kw-2">&amp;</span>child)
+<a href=#855 id=855 data-nosnippet>855</a>                        );
+<a href=#856 id=856 data-nosnippet>856</a>                        <span class="comment">// If it was deleted, it should not have been transferred. Additionally,
+<a href=#857 id=857 data-nosnippet>857</a>                        // if it was deleted, it should no longer be marked as new.
+<a href=#858 id=858 data-nosnippet>858</a>                        // deleted ==&gt; !transferred and !new
+<a href=#859 id=859 data-nosnippet>859</a>                        </span><span class="macro">debug_assert!</span>(
+<a href=#860 id=860 data-nosnippet>860</a>                            !<span class="self">self</span>.deleted_ids.contains(<span class="kw-2">&amp;</span>child)
+<a href=#861 id=861 data-nosnippet>861</a>                                || (!<span class="self">self</span>.transfers.contains_key(<span class="kw-2">&amp;</span>child)
+<a href=#862 id=862 data-nosnippet>862</a>                                    &amp;&amp; !<span class="self">self</span>.new_ids.contains(<span class="kw-2">&amp;</span>child))
+<a href=#863 id=863 data-nosnippet>863</a>                        );
+<a href=#864 id=864 data-nosnippet>864</a>                    }
+<a href=#865 id=865 data-nosnippet>865</a>                    <span class="prelude-val">Some</span>(v) =&gt; {
+<a href=#866 id=866 data-nosnippet>866</a>                        <span class="comment">// Value was changed (or the owner was changed)
+<a href=#867 id=867 data-nosnippet>867</a>
+<a href=#868 id=868 data-nosnippet>868</a>                        // It is still a dynamic field so it should not be transferred or deleted
+<a href=#869 id=869 data-nosnippet>869</a>                        </span><span class="macro">debug_assert!</span>(
+<a href=#870 id=870 data-nosnippet>870</a>                            !<span class="self">self</span>.transfers.contains_key(<span class="kw-2">&amp;</span>child)
+<a href=#871 id=871 data-nosnippet>871</a>                                &amp;&amp; !<span class="self">self</span>.deleted_ids.contains(<span class="kw-2">&amp;</span>child)
+<a href=#872 id=872 data-nosnippet>872</a>                        );
+<a href=#873 id=873 data-nosnippet>873</a>                        <span class="comment">// If it was loaded, it must have been new. But keep in mind if it was not
+<a href=#874 id=874 data-nosnippet>874</a>                        // loaded, it is not necessarily new since it could have been
+<a href=#875 id=875 data-nosnippet>875</a>                        // input/wrapped/received
+<a href=#876 id=876 data-nosnippet>876</a>                        // loaded ==&gt; !new
+<a href=#877 id=877 data-nosnippet>877</a>                        </span><span class="macro">debug_assert!</span>(
+<a href=#878 id=878 data-nosnippet>878</a>                            !loaded_child_objects.contains_key(<span class="kw-2">&amp;</span>child)
+<a href=#879 id=879 data-nosnippet>879</a>                                || !<span class="self">self</span>.new_ids.contains(<span class="kw-2">&amp;</span>child)
+<a href=#880 id=880 data-nosnippet>880</a>                        );
+<a href=#881 id=881 data-nosnippet>881</a>                        <span class="comment">// Mark the mutation of the new value and/or parent.
+<a href=#882 id=882 data-nosnippet>882</a>                        </span><span class="self">self</span>.transfers
+<a href=#883 id=883 data-nosnippet>883</a>                            .insert(child, (Owner::ObjectOwner(parent.into()), ty, v));
+<a href=#884 id=884 data-nosnippet>884</a>                    }
+<a href=#885 id=885 data-nosnippet>885</a>                }
+<a href=#886 id=886 data-nosnippet>886</a>            } <span class="kw">else </span>{
+<a href=#887 id=887 data-nosnippet>887</a>                <span class="comment">// The object was not changed.
+<a href=#888 id=888 data-nosnippet>888</a>                // If it was created,
+<a href=#889 id=889 data-nosnippet>889</a>                //   it must now have been moved elsewhere (wrapped or transferred).
+<a href=#890 id=890 data-nosnippet>890</a>                // If it was deleted or transferred,
+<a href=#891 id=891 data-nosnippet>891</a>                //   it must have been an input/received/wrapped object.
+<a href=#892 id=892 data-nosnippet>892</a>                // In either case, the value must now have been moved elsewhere, giving us:
+<a href=#893 id=893 data-nosnippet>893</a>                // (new or deleted or transferred or received) ==&gt; no value
+<a href=#894 id=894 data-nosnippet>894</a>                // which is equivalent to:
+<a href=#895 id=895 data-nosnippet>895</a>                // has value ==&gt; (!deleted and !transferred and !input)
+<a href=#896 id=896 data-nosnippet>896</a>                // If the value is still there, it must have been loaded.
+<a href=#897 id=897 data-nosnippet>897</a>                // Combining these to give us the check:
+<a href=#898 id=898 data-nosnippet>898</a>                // has value ==&gt; (loaded and !deleted and !transferred and !input and !received)
+<a href=#899 id=899 data-nosnippet>899</a>                // which is equivalent to:
+<a href=#900 id=900 data-nosnippet>900</a>                // !(no value) ==&gt; (loaded and !deleted and !transferred and !input and !received)
+<a href=#901 id=901 data-nosnippet>901</a>                </span><span class="macro">debug_assert!</span>(
+<a href=#902 id=902 data-nosnippet>902</a>                    final_value.is_none()
+<a href=#903 id=903 data-nosnippet>903</a>                        || (loaded_child_objects.contains_key(<span class="kw-2">&amp;</span>child)
+<a href=#904 id=904 data-nosnippet>904</a>                            &amp;&amp; !<span class="self">self</span>.deleted_ids.contains(<span class="kw-2">&amp;</span>child)
+<a href=#905 id=905 data-nosnippet>905</a>                            &amp;&amp; !<span class="self">self</span>.transfers.contains_key(<span class="kw-2">&amp;</span>child)
+<a href=#906 id=906 data-nosnippet>906</a>                            &amp;&amp; !<span class="self">self</span>.input_objects.contains_key(<span class="kw-2">&amp;</span>child)
+<a href=#907 id=907 data-nosnippet>907</a>                            &amp;&amp; !<span class="self">self</span>.received.contains_key(<span class="kw-2">&amp;</span>child))
+<a href=#908 id=908 data-nosnippet>908</a>                );
+<a href=#909 id=909 data-nosnippet>909</a>                <span class="comment">// In any case, if it was not changed, it should not be marked as modified
+<a href=#910 id=910 data-nosnippet>910</a>                </span><span class="macro">debug_assert!</span>(
+<a href=#911 id=911 data-nosnippet>911</a>                    loaded_child_objects
+<a href=#912 id=912 data-nosnippet>912</a>                        .get(<span class="kw-2">&amp;</span>child)
+<a href=#913 id=913 data-nosnippet>913</a>                        .is_none_or(|loaded_child| !loaded_child.is_modified)
+<a href=#914 id=914 data-nosnippet>914</a>                );
+<a href=#915 id=915 data-nosnippet>915</a>            }
+<a href=#916 id=916 data-nosnippet>916</a>        }
+<a href=#917 id=917 data-nosnippet>917</a>    }
+<a href=#918 id=918 data-nosnippet>918</a>}
+<a href=#919 id=919 data-nosnippet>919</a>
+<a href=#920 id=920 data-nosnippet>920</a><span class="kw">fn </span>check_circular_ownership(
+<a href=#921 id=921 data-nosnippet>921</a>    transfers: <span class="kw">impl </span>IntoIterator&lt;Item = (ObjectID, Owner)&gt;,
+<a href=#922 id=922 data-nosnippet>922</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(), ExecutionError&gt; {
+<a href=#923 id=923 data-nosnippet>923</a>    <span class="kw">let </span><span class="kw-2">mut </span>object_owner_map = BTreeMap::new();
+<a href=#924 id=924 data-nosnippet>924</a>    <span class="kw">for </span>(id, recipient) <span class="kw">in </span>transfers {
+<a href=#925 id=925 data-nosnippet>925</a>        object_owner_map.remove(<span class="kw-2">&amp;</span>id);
+<a href=#926 id=926 data-nosnippet>926</a>        <span class="kw">match </span>recipient {
+<a href=#927 id=927 data-nosnippet>927</a>            Owner::AddressOwner(<span class="kw">_</span>)
+<a href=#928 id=928 data-nosnippet>928</a>            | Owner::Shared { .. }
+<a href=#929 id=929 data-nosnippet>929</a>            | Owner::Immutable
+<a href=#930 id=930 data-nosnippet>930</a>            | Owner::ConsensusAddressOwner { .. } =&gt; (),
+<a href=#931 id=931 data-nosnippet>931</a>            Owner::ObjectOwner(new_owner) =&gt; {
+<a href=#932 id=932 data-nosnippet>932</a>                <span class="kw">let </span>new_owner: ObjectID = new_owner.into();
+<a href=#933 id=933 data-nosnippet>933</a>                <span class="kw">let </span><span class="kw-2">mut </span>cur = new_owner;
+<a href=#934 id=934 data-nosnippet>934</a>                <span class="kw">loop </span>{
+<a href=#935 id=935 data-nosnippet>935</a>                    <span class="kw">if </span>cur == id {
+<a href=#936 id=936 data-nosnippet>936</a>                        <span class="kw">return </span><span class="prelude-val">Err</span>(ExecutionError::from_kind(
+<a href=#937 id=937 data-nosnippet>937</a>                            ExecutionErrorKind::CircularObjectOwnership { object: cur },
+<a href=#938 id=938 data-nosnippet>938</a>                        ));
+<a href=#939 id=939 data-nosnippet>939</a>                    }
+<a href=#940 id=940 data-nosnippet>940</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(parent) = object_owner_map.get(<span class="kw-2">&amp;</span>cur) {
+<a href=#941 id=941 data-nosnippet>941</a>                        cur = <span class="kw-2">*</span>parent;
+<a href=#942 id=942 data-nosnippet>942</a>                    } <span class="kw">else </span>{
+<a href=#943 id=943 data-nosnippet>943</a>                        <span class="kw">break</span>;
+<a href=#944 id=944 data-nosnippet>944</a>                    }
+<a href=#945 id=945 data-nosnippet>945</a>                }
+<a href=#946 id=946 data-nosnippet>946</a>                object_owner_map.insert(id, new_owner);
+<a href=#947 id=947 data-nosnippet>947</a>            }
+<a href=#948 id=948 data-nosnippet>948</a>        }
+<a href=#949 id=949 data-nosnippet>949</a>    }
+<a href=#950 id=950 data-nosnippet>950</a>    <span class="prelude-val">Ok</span>(())
+<a href=#951 id=951 data-nosnippet>951</a>}
+<a href=#952 id=952 data-nosnippet>952</a>
+<a href=#953 id=953 data-nosnippet>953</a><span class="doccomment">/// WARNING! This function assumes that the bcs bytes have already been validated,
+<a href=#954 id=954 data-nosnippet>954</a>/// and it will give an invariant violation otherwise.
+<a href=#955 id=955 data-nosnippet>955</a>/// In short, we are relying on the invariant that the bytes are valid for objects
+<a href=#956 id=956 data-nosnippet>956</a>/// in storage.  We do not need this invariant for dev-inspect, as the programmable
+<a href=#957 id=957 data-nosnippet>957</a>/// transaction execution will validate the bytes before we get to this point.
+<a href=#958 id=958 data-nosnippet>958</a></span><span class="kw">pub fn </span>get_all_uids(
+<a href=#959 id=959 data-nosnippet>959</a>    fully_annotated_layout: <span class="kw-2">&amp;</span>MoveTypeLayout,
+<a href=#960 id=960 data-nosnippet>960</a>    bcs_bytes: <span class="kw-2">&amp;</span>[u8],
+<a href=#961 id=961 data-nosnippet>961</a>) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeSet&lt;ObjectID&gt;, <span class="comment">/* invariant violation */ </span>String&gt; {
+<a href=#962 id=962 data-nosnippet>962</a>    <span class="kw">let </span><span class="kw-2">mut </span>ids = BTreeSet::new();
+<a href=#963 id=963 data-nosnippet>963</a>    <span class="kw">struct </span>UIDTraversal&lt;<span class="lifetime">'i</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'i </span><span class="kw-2">mut </span>BTreeSet&lt;ObjectID&gt;);
+<a href=#964 id=964 data-nosnippet>964</a>    <span class="kw">struct </span>UIDCollector&lt;<span class="lifetime">'i</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'i </span><span class="kw-2">mut </span>BTreeSet&lt;ObjectID&gt;);
+<a href=#965 id=965 data-nosnippet>965</a>
+<a href=#966 id=966 data-nosnippet>966</a>    <span class="kw">impl</span>&lt;<span class="lifetime">'b</span>, <span class="lifetime">'l</span>&gt; AV::Traversal&lt;<span class="lifetime">'b</span>, <span class="lifetime">'l</span>&gt; <span class="kw">for </span>UIDTraversal&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#967 id=967 data-nosnippet>967</a>        <span class="kw">type </span>Error = AV::Error;
+<a href=#968 id=968 data-nosnippet>968</a>
+<a href=#969 id=969 data-nosnippet>969</a>        <span class="kw">fn </span>traverse_struct(
+<a href=#970 id=970 data-nosnippet>970</a>            <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#971 id=971 data-nosnippet>971</a>            driver: <span class="kw-2">&amp;mut </span>AV::StructDriver&lt;<span class="lifetime">'_</span>, <span class="lifetime">'b</span>, <span class="lifetime">'l</span>&gt;,
+<a href=#972 id=972 data-nosnippet>972</a>        ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="self">Self</span>::Error&gt; {
+<a href=#973 id=973 data-nosnippet>973</a>            <span class="kw">if </span>driver.struct_layout().type_ == UID::type_() {
+<a href=#974 id=974 data-nosnippet>974</a>                <span class="kw">while </span>driver.next_field(<span class="kw-2">&amp;mut </span>UIDCollector(<span class="self">self</span>.<span class="number">0</span>))<span class="question-mark">?</span>.is_some() {}
+<a href=#975 id=975 data-nosnippet>975</a>            } <span class="kw">else </span>{
+<a href=#976 id=976 data-nosnippet>976</a>                <span class="kw">while </span>driver.next_field(<span class="self">self</span>)<span class="question-mark">?</span>.is_some() {}
+<a href=#977 id=977 data-nosnippet>977</a>            }
+<a href=#978 id=978 data-nosnippet>978</a>            <span class="prelude-val">Ok</span>(())
+<a href=#979 id=979 data-nosnippet>979</a>        }
+<a href=#980 id=980 data-nosnippet>980</a>    }
+<a href=#981 id=981 data-nosnippet>981</a>
+<a href=#982 id=982 data-nosnippet>982</a>    <span class="kw">impl</span>&lt;<span class="lifetime">'b</span>, <span class="lifetime">'l</span>&gt; AV::Traversal&lt;<span class="lifetime">'b</span>, <span class="lifetime">'l</span>&gt; <span class="kw">for </span>UIDCollector&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#983 id=983 data-nosnippet>983</a>        <span class="kw">type </span>Error = AV::Error;
+<a href=#984 id=984 data-nosnippet>984</a>        <span class="kw">fn </span>traverse_address(
+<a href=#985 id=985 data-nosnippet>985</a>            <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#986 id=986 data-nosnippet>986</a>            _driver: <span class="kw-2">&amp;</span>AV::ValueDriver&lt;<span class="lifetime">'_</span>, <span class="lifetime">'b</span>, <span class="lifetime">'l</span>&gt;,
+<a href=#987 id=987 data-nosnippet>987</a>            value: AccountAddress,
+<a href=#988 id=988 data-nosnippet>988</a>        ) -&gt; <span class="prelude-ty">Result</span>&lt;(), <span class="self">Self</span>::Error&gt; {
+<a href=#989 id=989 data-nosnippet>989</a>            <span class="self">self</span>.<span class="number">0</span>.insert(value.into());
+<a href=#990 id=990 data-nosnippet>990</a>            <span class="prelude-val">Ok</span>(())
+<a href=#991 id=991 data-nosnippet>991</a>        }
+<a href=#992 id=992 data-nosnippet>992</a>    }
+<a href=#993 id=993 data-nosnippet>993</a>
+<a href=#994 id=994 data-nosnippet>994</a>    MoveValue::visit_deserialize(
+<a href=#995 id=995 data-nosnippet>995</a>        bcs_bytes,
+<a href=#996 id=996 data-nosnippet>996</a>        fully_annotated_layout,
+<a href=#997 id=997 data-nosnippet>997</a>        <span class="kw-2">&amp;mut </span>UIDTraversal(<span class="kw-2">&amp;mut </span>ids),
+<a href=#998 id=998 data-nosnippet>998</a>    )
+<a href=#999 id=999 data-nosnippet>999</a>    .map_err(|e| <span class="macro">format!</span>(<span class="string">"Failed to deserialize. {e}"</span>))<span class="question-mark">?</span>;
+<a href=#1000 id=1000 data-nosnippet>1000</a>    <span class="prelude-val">Ok</span>(ids)
+<a href=#1001 id=1001 data-nosnippet>1001</a>}</code></pre></div></section></main></body></html>

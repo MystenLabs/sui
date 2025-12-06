@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Accessor","Atom","Fields","Value"],"struct":["Enum","Slice","Struct","Vector"],"trait":["Store"]};
