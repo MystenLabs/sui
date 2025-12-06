@@ -32,15 +32,17 @@ pub fn build_sui_transaction(
 ) -> BridgeResult<TransactionData> {
     // TODO: Check chain id?
     match action.data() {
-        BridgeAction::EthToSuiBridgeAction(_) => build_token_bridge_approve_transaction(
-            client_address,
-            gas_object_ref,
-            action,
-            true,
-            bridge_object_arg,
-            sui_token_type_tags,
-            rgp,
-        ),
+        BridgeAction::EthToSuiBridgeAction(_) | BridgeAction::EthToSuiTokenTransferV2(_) => {
+            build_token_bridge_approve_transaction(
+                client_address,
+                gas_object_ref,
+                action,
+                true,
+                bridge_object_arg,
+                sui_token_type_tags,
+                rgp,
+            )
+        }
         BridgeAction::SuiToEthBridgeAction(_) => build_token_bridge_approve_transaction(
             client_address,
             gas_object_ref,
@@ -50,15 +52,17 @@ pub fn build_sui_transaction(
             sui_token_type_tags,
             rgp,
         ),
-        BridgeAction::SuiToEthTokenTransfer(_) => build_token_bridge_approve_transaction(
-            client_address,
-            gas_object_ref,
-            action,
-            false,
-            bridge_object_arg,
-            sui_token_type_tags,
-            rgp,
-        ),
+        BridgeAction::SuiToEthTokenTransfer(_) | BridgeAction::SuiToEthTokenTransferV2(_) => {
+            build_token_bridge_approve_transaction(
+                client_address,
+                gas_object_ref,
+                action,
+                false,
+                bridge_object_arg,
+                sui_token_type_tags,
+                rgp,
+            )
+        }
         BridgeAction::BlocklistCommitteeAction(_) => build_committee_blocklist_approve_transaction(
             client_address,
             gas_object_ref,
@@ -117,77 +121,133 @@ fn build_token_bridge_approve_transaction(
     let (bridge_action, sigs) = action.into_inner().into_data_and_sig();
     let mut builder = ProgrammableTransactionBuilder::new();
 
-    let (source_chain, seq_num, sender, target_chain, target, token_type, amount) =
-        match bridge_action {
-            BridgeAction::SuiToEthBridgeAction(a) => {
-                let bridge_event = a.sui_bridge_event;
-                (
-                    bridge_event.sui_chain_id,
-                    bridge_event.nonce,
-                    bridge_event.sui_address.to_vec(),
-                    bridge_event.eth_chain_id,
-                    bridge_event.eth_address.to_fixed_bytes().to_vec(),
-                    bridge_event.token_id,
-                    bridge_event.amount_sui_adjusted,
-                )
-            }
-            BridgeAction::SuiToEthTokenTransfer(a) => (
-                a.sui_chain_id,
-                a.nonce,
-                a.sui_address.to_vec(),
-                a.eth_chain_id,
-                a.eth_address.to_fixed_bytes().to_vec(),
-                a.token_id,
-                a.amount_adjusted,
-            ),
-            BridgeAction::EthToSuiBridgeAction(a) => {
-                let bridge_event = a.eth_bridge_event;
-                (
-                    bridge_event.eth_chain_id,
-                    bridge_event.nonce,
-                    bridge_event.eth_address.to_fixed_bytes().to_vec(),
-                    bridge_event.sui_chain_id,
-                    bridge_event.sui_address.to_vec(),
-                    bridge_event.token_id,
-                    bridge_event.sui_adjusted_amount,
-                )
-            }
-            _ => unreachable!(),
-        };
+    let (
+        source_chain_id,
+        seq_num_value,
+        sender_bytes,
+        target_chain_id,
+        target_bytes,
+        token_type,
+        amount_value,
+        timestamp_ms,
+    ) = match bridge_action {
+        BridgeAction::SuiToEthBridgeAction(a) => {
+            let bridge_event = a.sui_bridge_event;
+            (
+                bridge_event.sui_chain_id,
+                bridge_event.nonce,
+                bridge_event.sui_address.to_vec(),
+                bridge_event.eth_chain_id,
+                bridge_event.eth_address.to_fixed_bytes().to_vec(),
+                bridge_event.token_id,
+                bridge_event.amount_sui_adjusted,
+                None,
+            )
+        }
+        BridgeAction::SuiToEthTokenTransfer(a) => (
+            a.sui_chain_id,
+            a.nonce,
+            a.sui_address.to_vec(),
+            a.eth_chain_id,
+            a.eth_address.to_fixed_bytes().to_vec(),
+            a.token_id,
+            a.amount_adjusted,
+            None,
+        ),
+        BridgeAction::SuiToEthTokenTransferV2(a) => (
+            a.sui_chain_id,
+            a.nonce,
+            a.sui_address.to_vec(),
+            a.eth_chain_id,
+            a.eth_address.to_fixed_bytes().to_vec(),
+            a.token_id,
+            a.amount_adjusted,
+            Some(a.timestamp_ms),
+        ),
+        BridgeAction::EthToSuiBridgeAction(a) => {
+            let bridge_event = a.eth_bridge_event;
+            (
+                bridge_event.eth_chain_id,
+                bridge_event.nonce,
+                bridge_event.eth_address.to_fixed_bytes().to_vec(),
+                bridge_event.sui_chain_id,
+                bridge_event.sui_address.to_vec(),
+                bridge_event.token_id,
+                bridge_event.sui_adjusted_amount,
+                None,
+            )
+        }
+        BridgeAction::EthToSuiTokenTransferV2(a) => {
+            let bridge_event = a.eth_bridge_event;
+            // Convert seconds to milliseconds for Sui
+            let timestamp_ms = bridge_event.timestamp_seconds * 1000;
+            (
+                bridge_event.eth_chain_id,
+                bridge_event.nonce,
+                bridge_event.eth_address.to_fixed_bytes().to_vec(),
+                bridge_event.sui_chain_id,
+                bridge_event.sui_address.to_vec(),
+                bridge_event.token_id,
+                bridge_event.sui_adjusted_amount,
+                Some(timestamp_ms),
+            )
+        }
+        _ => unreachable!(),
+    };
 
-    let source_chain = builder.pure(source_chain as u8).unwrap();
-    let seq_num = builder.pure(seq_num).unwrap();
-    let sender = builder.pure(sender.clone()).map_err(|e| {
+    let source_chain = builder.pure(source_chain_id as u8).unwrap();
+    let seq_num = builder.pure(seq_num_value).unwrap();
+    let sender = builder.pure(sender_bytes.clone()).map_err(|e| {
         BridgeError::BridgeSerializationError(format!(
             "Failed to serialize sender: {:?}. Err: {:?}",
-            sender, e
+            sender_bytes, e
         ))
     })?;
-    let target_chain = builder.pure(target_chain as u8).unwrap();
-    let target = builder.pure(target.clone()).map_err(|e| {
+    let target_chain = builder.pure(target_chain_id as u8).unwrap();
+    let target = builder.pure(target_bytes.clone()).map_err(|e| {
         BridgeError::BridgeSerializationError(format!(
             "Failed to serialize target: {:?}. Err: {:?}",
-            target, e
+            target_bytes, e
         ))
     })?;
     let arg_token_type = builder.pure(token_type).unwrap();
-    let amount = builder.pure(amount).unwrap();
+    let amount = builder.pure(amount_value).unwrap();
+    let timestamp = timestamp_ms.map(|ts| builder.pure(ts).unwrap());
 
-    let arg_msg = builder.programmable_move_call(
-        BRIDGE_PACKAGE_ID,
-        ident_str!("message").to_owned(),
-        ident_str!("create_token_bridge_message").to_owned(),
-        vec![],
-        vec![
-            source_chain,
-            seq_num,
-            sender,
-            target_chain,
-            target,
-            arg_token_type,
-            amount,
-        ],
-    );
+    let arg_msg = if let Some(timestamp) = timestamp {
+        builder.programmable_move_call(
+            BRIDGE_PACKAGE_ID,
+            ident_str!("message").to_owned(),
+            ident_str!("create_token_bridge_message_v2").to_owned(),
+            vec![],
+            vec![
+                source_chain,
+                seq_num,
+                sender,
+                target_chain,
+                target,
+                arg_token_type,
+                amount,
+                timestamp,
+            ],
+        )
+    } else {
+        builder.programmable_move_call(
+            BRIDGE_PACKAGE_ID,
+            ident_str!("message").to_owned(),
+            ident_str!("create_token_bridge_message").to_owned(),
+            vec![],
+            vec![
+                source_chain,
+                seq_num,
+                sender,
+                target_chain,
+                target,
+                arg_token_type,
+                amount,
+            ],
+        )
+    };
 
     // Unwrap: these should not fail
     let arg_bridge = builder.obj(bridge_object_arg).unwrap();

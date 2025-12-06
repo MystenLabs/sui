@@ -240,6 +240,30 @@ module bridge::bridge_env {
     }
 
     //
+    // Clock utilities for V2 limiter bypass testing
+    //
+
+    /// Get the current clock timestamp in milliseconds
+    public fun clock_timestamp_ms(env: &BridgeEnv): u64 {
+        env.clock.timestamp_ms()
+    }
+
+    /// Set the clock to a specific timestamp (in milliseconds)
+    public fun set_clock_timestamp_ms(env: &mut BridgeEnv, timestamp_ms: u64) {
+        env.clock.set_for_testing(timestamp_ms);
+    }
+
+    /// Advance the clock by the given number of milliseconds
+    public fun advance_clock_ms(env: &mut BridgeEnv, duration_ms: u64) {
+        env.clock.increment_for_testing(duration_ms);
+    }
+
+    /// Advance the clock by the given number of hours
+    public fun advance_clock_hours(env: &mut BridgeEnv, hours: u64) {
+        env.clock.increment_for_testing(hours * 3600 * 1000);
+    }
+
+    //
     // Add a set of validators to the chain.
     // Call only once in a test scenario.
     public fun setup_validators(env: &mut BridgeEnv, validators_info: vector<ValidatorInfo>) {
@@ -570,6 +594,61 @@ module bridge::bridge_env {
             address::to_bytes(target_address),
             token_type,
             amount,
+        );
+        let signatures = env.sign_message(message);
+
+        // run approval
+        bridge.approve_token_transfer(message, signatures);
+
+        // verify approval events
+        let approved_events = event::events_by_type<TokenTransferApproved>();
+        let already_approved_events = event::events_by_type<TokenTransferAlreadyApproved>();
+        assert!(approved_events.length() == 1 ||
+            already_approved_events.length() == 1);
+        let key = if (approved_events.length() == 1) {
+            approved_events[0].transfer_approve_key()
+        } else {
+            already_approved_events[0].transfer_already_approved_key()
+        };
+        let (sc, mt, sn) = key.unpack_message();
+        assert!(source_chain == sc);
+        assert!(mt == message_types::token());
+        assert!(sn == seq_num);
+
+        // tear down
+        test_scenario::return_shared(bridge);
+        seq_num
+    }
+
+    /// Bridge the `amount` of the given `Token` from the `source_chain` using V2 message format.
+    /// The `deposit_timestamp_ms` is the timestamp when the deposit occurred on the source chain.
+    /// This timestamp is used to determine whether the limiter can be bypassed (after 48 hours).
+    public fun bridge_to_sui_v2<Token>(
+        env: &mut BridgeEnv,
+        source_chain: u8,
+        source_address: vector<u8>,
+        target_address: address,
+        amount: u64,
+        deposit_timestamp_ms: u64,
+    ): u64 {
+        let token_type = env.token_type<Token>();
+
+        // setup
+        let scenario = &mut env.scenario;
+        scenario.next_tx(@0x0);
+        let mut bridge = scenario.take_shared<Bridge>();
+
+        // sign message
+        let seq_num = bridge.get_seq_num_inc_for(message_types::token());
+        let message = message::create_token_bridge_message_v2(
+            source_chain,
+            seq_num,
+            source_address,
+            env.chain_id,
+            address::to_bytes(target_address),
+            token_type,
+            amount,
+            deposit_timestamp_ms,
         );
         let signatures = env.sign_message(message);
 

@@ -516,6 +516,29 @@ pub struct MoveTypeTokenTransferPayload {
     pub amount: u64,
 }
 
+/// Rust version of the Move message::TokenTransferPayloadV2 type (includes timestamp).
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct MoveTypeTokenTransferPayloadV2 {
+    pub sender_address: Vec<u8>,
+    pub target_chain: u8,
+    pub target_address: Vec<u8>,
+    pub token_type: u8,
+    pub amount: u64,
+    pub timestamp_ms: u64,
+}
+
+impl From<MoveTypeTokenTransferPayloadV2> for MoveTypeTokenTransferPayload {
+    fn from(v2: MoveTypeTokenTransferPayloadV2) -> Self {
+        Self {
+            sender_address: v2.sender_address,
+            target_chain: v2.target_chain,
+            target_address: v2.target_address,
+            token_type: v2.token_type,
+            amount: v2.amount,
+        }
+    }
+}
+
 /// Rust version of the Move message::ParsedTokenTransferMessage type.
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct MoveTypeParsedTokenTransferMessage {
