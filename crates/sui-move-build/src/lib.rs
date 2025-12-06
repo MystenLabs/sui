@@ -106,7 +106,7 @@ impl BuildConfig {
         let config = MoveBuildConfig {
             default_flavor: Some(move_compiler::editions::Flavor::Sui),
             lock_file: Some(install_dir.join("Move.lock")),
-            install_dir: Some(install_dir),
+            // TODO dvx-1889 there should probably be an install dir here
             silence_warnings: true,
             lint_flag: move_package_alt_compilation::lint_flag::LintFlag::LEVEL_NONE,
             ..MoveBuildConfig::default()
@@ -242,7 +242,13 @@ impl BuildConfig {
             .publication()
             .map(|p| ObjectID::from_address(p.addresses.published_at.0));
 
-        root_pkg.save_lockfile_to_disk()?;
+        // TODO: dvx-1889
+        let out_dir = self
+            .config
+            .install_dir
+            .unwrap_or(root_pkg.package_path().to_path_buf());
+        eprintln!("out dir: {:?}");
+        root_pkg.save_lockfile_to_disk(&out_dir)?;
 
         Ok(CompiledPackage {
             package,

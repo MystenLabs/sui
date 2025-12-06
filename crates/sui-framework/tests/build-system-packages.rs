@@ -7,11 +7,7 @@ use move_compiler::editions::{Edition, Flavor};
 use move_package_alt_compilation::{
     build_config::BuildConfig as MoveBuildConfig, lint_flag::LintFlag,
 };
-use std::{
-    collections::BTreeMap,
-    env, fs,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, env, fs, path::Path};
 use sui_move_build::BuildConfig;
 use sui_package_alt::mainnet_environment;
 
@@ -90,7 +86,7 @@ async fn build_packages(
     let config = MoveBuildConfig {
         generate_docs: true,
         warnings_are_errors: true,
-        install_dir: Some(PathBuf::from(".")),
+        install_dir: Some(out_dir.to_path_buf()),
         lint_flag: LintFlag::LEVEL_DEFAULT,
         default_edition: Some(Edition::E2024_BETA),
         default_flavor: Some(Flavor::Sui),
@@ -137,6 +133,7 @@ async fn build_packages_with_move_config(
     .build_async(stdlib_path)
     .await
     .unwrap();
+    panic!("nope");
     let framework_pkg = BuildConfig {
         config: config.clone(),
         run_bytecode_verifier: true,
