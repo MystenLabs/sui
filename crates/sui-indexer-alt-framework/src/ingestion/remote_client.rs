@@ -59,12 +59,12 @@ impl RemoteIngestionClient {
     }
 
     /// Fetch the bytes for a checkpoint by its sequence number.
-    /// The response is the serialized representation of a checkpoint, as raw bytes.
+    /// The response is the zstd-compressed protobuf representation of a checkpoint.
     pub async fn checkpoint(&self, checkpoint: u64) -> reqwest::Result<reqwest::Response> {
         // SAFETY: The path being joined is statically known to be valid.
         let url = self
             .url
-            .join(&format!("/{checkpoint}.chk"))
+            .join(&format!("/{checkpoint}.binpb.zst"))
             .expect("Unexpected invalid URL");
 
         self.client.get(url).send().await
@@ -160,7 +160,7 @@ pub(crate) mod tests {
 
     pub(crate) async fn respond_with(server: &MockServer, response: impl Respond + 'static) {
         Mock::given(method("GET"))
-            .and(path_regex(r"/\d+.chk"))
+            .and(path_regex(r"/\d+\.binpb\.zst"))
             .respond_with(response)
             .mount(server)
             .await;
@@ -196,12 +196,14 @@ pub(crate) mod tests {
             let mut times = times.lock().unwrap();
             *times += 1;
             match (*times, r.url.path()) {
-                // The first request will trigger a redirect to 0.chk no matter what the original
+                // The first request will trigger a redirect to 0.binpb.zst no matter what the original
                 // request was for -- triggering a request error.
-                (1, _) => status(StatusCode::MOVED_PERMANENTLY).append_header("Location", "/0.chk"),
+                (1, _) => {
+                    status(StatusCode::MOVED_PERMANENTLY).append_header("Location", "/0.binpb.zst")
+                }
 
                 // Set-up checkpoint 0 as an infinite redirect loop.
-                (_, "/0.chk") => {
+                (_, "/0.binpb.zst") => {
                     status(StatusCode::MOVED_PERMANENTLY).append_header("Location", r.url.as_str())
                 }
 
