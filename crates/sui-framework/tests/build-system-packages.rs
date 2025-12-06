@@ -90,7 +90,7 @@ async fn build_packages(
     let config = MoveBuildConfig {
         generate_docs: true,
         warnings_are_errors: true,
-        install_dir: Some(PathBuf::from(".")),
+        install_dir: Some(out_dir.to_path_buf()),
         lint_flag: LintFlag::LEVEL_DEFAULT,
         default_edition: Some(Edition::E2024_BETA),
         default_flavor: Some(Flavor::Sui),

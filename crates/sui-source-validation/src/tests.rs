@@ -1002,18 +1002,21 @@ async fn write_published_toml(
     let chain_id = get_testnet_chain_identifier().to_string();
     let env = Environment::new(env_name, chain_id.clone());
     let mut root_pkg = RootPackage::<SuiFlavor>::load(pkg_path, env.clone(), vec![]).await?;
-    root_pkg.write_publish_data(move_package_alt::schema::Publication {
-        chain_id,
-        addresses: PublishAddresses {
-            published_at: PublishedID(published_at.into()),
-            original_id: OriginalID(original_id.into()),
+    root_pkg.write_publish_data(
+        move_package_alt::schema::Publication {
+            chain_id,
+            addresses: PublishAddresses {
+                published_at: PublishedID(published_at.into()),
+                original_id: OriginalID(original_id.into()),
+            },
+            version,
+            metadata: PublishedMetadata {
+                toolchain_version: Some(CURRENT_COMPILER_VERSION.to_string()),
+                build_config: Some(BuildParams::default()),
+                upgrade_capability: None,
+            },
         },
-        version,
-        metadata: PublishedMetadata {
-            toolchain_version: Some(CURRENT_COMPILER_VERSION.to_string()),
-            build_config: Some(BuildParams::default()),
-            upgrade_capability: None,
-        },
-    })?;
+        pkg_path,
+    )?;
     Ok(())
 }

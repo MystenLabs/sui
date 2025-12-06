@@ -61,7 +61,7 @@ impl Build {
             println!();
         }
 
-        root_pkg.save_lockfile_to_disk()?;
+        root_pkg.save_lockfile_to_disk(&path)?;
         Ok(())
     }
 }

@@ -41,7 +41,8 @@ pub struct PackageConfig {
     /// The directory to write all output files into (e.g. updated lockfiles, etc)
     /// Note that in the case of ephemeral loads, `self.load_type.ephemeral_file` may also be
     /// written
-    output_path: PathBuf,
+    // TODO: dvx-1889
+    // output_path: PathBuf,
 
     /// The modes to load for
     modes: Vec<ModeName>,
@@ -84,7 +85,8 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     input_path: PackagePath,
 
     /// The path to the output directory for the root package
-    output_path: OutputPath,
+    // TODO: dvx-1889
+    // output_path: OutputPath,
 
     /// The ephemeral file
     ephemeral_file: Option<EphemeralPubfilePath>,
@@ -111,7 +113,8 @@ impl PackageConfig {
             input_path: path.as_ref().to_path_buf(),
             chain_id: env.id,
             load_type: LoadType::Persistent { env: env.name },
-            output_path: path.as_ref().to_path_buf(),
+            // TODO: dvx-1889: this should be a separate path
+            // output_path: path.as_ref().to_path_buf(),
             modes,
             force_repin: false,
             ignore_digests: false,
@@ -189,7 +192,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 build_env,
                 ephemeral_file,
             },
-            output_path: root.as_ref().to_path_buf(),
+            // output_path: root.as_ref().to_path_buf(),
             modes,
             force_repin: false,
             ignore_digests: false,
@@ -252,7 +255,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let mutex = input_path.lock()?;
 
         let ephemeral_file = config.load_type.ephemeral_file().cloned();
-        let output_path = OutputPath::new(config.output_path.clone())?;
+        // let output_path = OutputPath::new(config.output_path.clone())?;
 
         debug!(
             "creating RootPackage (CWD: {:?})\n{config:#?}",
@@ -296,7 +299,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             environment: env,
             unfiltered_graph,
             filtered_graph,
-            output_path,
+            // output_path,
             ephemeral_file,
             input_path,
             mutex,
@@ -357,10 +360,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ///
     /// Before overwriting the lockfile, this function also extracts any publication information
     /// from the legacy lockfile and writes it into the pubfile
-    pub fn save_lockfile_to_disk(&mut self) -> PackageResult<()> {
+    // TODO: dvx-1889 remove out_dir argument
+    pub fn save_lockfile_to_disk(&mut self, out_dir: &Path) -> PackageResult<()> {
         // migrate any pubs from the legacy lockfile to the modern pubfile before we clobber the
         // legacy lockfile.
         let legacy_pubs = self.input_path.read_legacy_lockfile(&self.mutex)?;
+        let mut output_path = OutputPath::new(out_dir.to_path_buf())?;
         if let Some(pubs) = &legacy_pubs
             && !pubs.is_empty()
         {
@@ -372,7 +377,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             let mut legacy_pubs: ParsedPublishedFile<F> = pubs.clone().into();
             // if the same publication exists in both, we keep the modern one
             legacy_pubs.published.extend(old_pubfile.published);
-            self.output_path.write_pubfile(&legacy_pubs, &self.mutex)?;
+            // TODO dvx-1890: mtx should be for output path, not input path
+            output_path.write_pubfile(&legacy_pubs, &self.mutex)?;
         }
 
         let mut lockfile: ParsedLockfile = if legacy_pubs.is_some() {
@@ -389,15 +395,21 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             self.environment.name.clone(),
             self.unfiltered_graph.to_pins()?,
         );
-        self.output_path.write_lockfile(&lockfile, &self.mutex)?;
+        output_path.write_lockfile(&lockfile, &self.mutex)?;
 
         Ok(())
     }
 
     /// Record metadata for a publication for the root package in either its `Published.toml` or
     /// its ephemeral pubfile (depending on how it was loaded)
-    pub fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
+    // TODO: dvx-1889 remove out_dir argument
+    pub fn write_publish_data(
+        &mut self,
+        publish_data: Publication<F>,
+        out_dir: &Path,
+    ) -> PackageResult<()> {
         let root_dep = self.package_info().package().dep_for_self().clone().into();
+        let mut output_path = OutputPath::new(out_dir.to_path_buf())?;
         if let Some(ephemeral_file) = &mut self.ephemeral_file {
             let mut pubs = ephemeral_file
                 .read_pubfile::<F>()?
@@ -427,7 +439,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
             pubfile
                 .published
                 .insert(self.environment.name.clone(), publish_data);
-            self.output_path.write_pubfile(&pubfile, &self.mutex)?;
+            // TODO dvx-1890: lock should be for output path, not input
+            output_path.write_pubfile(&pubfile, &self.mutex)?;
         }
 
         Ok(())
@@ -519,6 +532,7 @@ fn localpubs_to_publications<F: MoveFlavor>(
 mod tests {
     use insta::assert_snapshot;
     use std::{fs, io::Write, path::PathBuf};
+    use tempfile::tempdir;
     use test_log::test;
 
     use super::*;
@@ -713,9 +727,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .await
             .unwrap();
 
-        root.save_lockfile_to_disk().unwrap();
-        let lockfile = root
-            .output_path
+        let output = tempfile::tempdir().unwrap();
+        root.save_lockfile_to_disk(output.path()).unwrap();
+        let lockfile = OutputPath::new(output.path().to_path_buf())
+            .unwrap()
             .dump_lockfile(&root.mutex)
             .await
             .render_as_toml();
@@ -776,9 +791,10 @@ pkg_b = { local = "../pkg_b" }"#,
                 .await
                 .unwrap();
 
-        root_pkg.save_lockfile_to_disk().unwrap();
+        let out_path = tempfile::tempdir().unwrap();
+        root_pkg.save_lockfile_to_disk(out_path.path()).unwrap();
 
-        let sha = dep_sha(&root_pkg, &env.name, "a").await;
+        let sha = dep_sha(&root_pkg, &env.name, "a", out_path.path()).await;
         assert_eq!(sha, commit.sha());
     }
 
@@ -798,9 +814,10 @@ pkg_b = { local = "../pkg_b" }"#,
                 .await
                 .unwrap();
 
-        root_pkg.save_lockfile_to_disk().unwrap();
+        let out_dir = tempfile::tempdir().unwrap();
+        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
 
-        let sha = dep_sha(&root_pkg, &env.name, "a").await;
+        let sha = dep_sha(&root_pkg, &env.name, "a", out_dir.path()).await;
         assert_eq!(sha, commit.sha());
     }
 
@@ -822,7 +839,9 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().unwrap();
+
+        let out_dir = tempfile::tempdir().unwrap();
+        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
         drop(root_pkg); // release the fs lock
 
         // change the branch
@@ -836,10 +855,10 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().unwrap();
+        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
 
         // sha should still be for commit 1
-        let sha = dep_sha(&root_pkg, &env.name, "a").await;
+        let sha = dep_sha(&root_pkg, &env.name, "a", out_dir.path()).await;
         assert_eq!(sha, commit1.sha());
     }
 
@@ -861,7 +880,8 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().unwrap();
+        let out_dir = tempfile::tempdir().unwrap();
+        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
         drop(root_pkg); // release FS lock
 
         // change the branch
@@ -875,10 +895,10 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().unwrap();
+        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
 
         // since we repinned, sha should be for commit 2
-        let sha = dep_sha(&root_pkg, &env.name, "a").await;
+        let sha = dep_sha(&root_pkg, &env.name, "a", out_dir.path()).await;
         assert_eq!(sha, commit2.sha());
     }
 
@@ -901,7 +921,8 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().unwrap();
+        let out_dir = tempfile::tempdir().unwrap();
+        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
         drop(root_pkg); // release FS lock
 
         // change the branch so we will notice a repin
@@ -916,10 +937,10 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().unwrap();
+        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
 
         // since the manifest changed, we should have repinned, so the sha should be for commit 2
-        let sha = dep_sha(&root_pkg, &env.name, "a").await;
+        let sha = dep_sha(&root_pkg, &env.name, "a", out_dir.path()).await;
         assert_eq!(sha, commit2.sha());
     }
 
@@ -948,7 +969,8 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().unwrap();
+        let out_dir = tempdir().unwrap();
+        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
         drop(root_pkg); // release package lock
 
         // change the branch so that we will notice a repin
@@ -963,11 +985,11 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk().unwrap();
+        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
 
         // since the dependency's manifest changed, we should have repinned, so the sha should be
         // for commit 2
-        let sha = dep_sha(&root_pkg, &env.name, "git_dep").await;
+        let sha = dep_sha(&root_pkg, &env.name, "git_dep", out_dir.path()).await;
         assert_eq!(sha, commit2.sha());
     }
 
@@ -977,8 +999,10 @@ pkg_b = { local = "../pkg_b" }"#,
         root: &RootPackage<Vanilla>,
         env: &EnvironmentName,
         id: impl AsRef<str>,
+        out_dir: &Path,
     ) -> String {
-        let pin = &root.output_path.dump_lockfile(&root.mutex).await.pinned[env][id.as_ref()];
+        let output_path = OutputPath::new(out_dir.to_path_buf()).unwrap();
+        let pin = &output_path.dump_lockfile(&root.mutex).await.pinned[env][id.as_ref()];
         let LockfileDependencyInfo::Git(git) = &pin.source else {
             panic!("expected git dep");
         };
@@ -1438,15 +1462,19 @@ pkg_b = { local = "../pkg_b" }"#,
             std::fs::read_to_string(scenario.path_for("root/Published.toml")).unwrap();
 
         // publish
-        root.write_publish_data(Publication {
-            version: 0,
-            chain_id: "localnet".into(),
-            addresses: PublishAddresses {
-                original_id: OriginalID::from(1),
-                published_at: PublishedID::from(2),
+        let out_dir = tempdir().unwrap();
+        root.write_publish_data(
+            Publication {
+                version: 0,
+                chain_id: "localnet".into(),
+                addresses: PublishAddresses {
+                    original_id: OriginalID::from(1),
+                    published_at: PublishedID::from(2),
+                },
+                metadata: vanilla::PublishedMetadata::default(),
             },
-            metadata: vanilla::PublishedMetadata::default(),
-        })
+            out_dir.path(),
+        )
         .unwrap();
 
         // check

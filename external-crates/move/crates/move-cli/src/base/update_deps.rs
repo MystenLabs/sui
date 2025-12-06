@@ -39,7 +39,11 @@ impl UpdateDeps {
             .collect::<Vec<_>>();
 
         let mut root_package = RootPackage::<F>::load_force_repin(&path, env, modes).await?;
-        root_package.save_lockfile_to_disk()?;
+        let out_dir = build_config
+            .install_dir
+            .clone()
+            .unwrap_or(path.to_path_buf());
+        root_package.save_lockfile_to_disk(&out_dir)?;
         Ok(())
     }
 }
