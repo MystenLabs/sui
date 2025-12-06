@@ -267,9 +267,12 @@ impl BufferedEventStream {
         }
     }
 
+    pub fn increment_event_count(&mut self) {
+        self.event_count += 1;
+    }
+
     pub fn push(&mut self, event: TraceEvent) {
         self.sender.send(event).unwrap();
-        self.event_count += 1;
     }
 
     pub fn finish(self) -> Vec<u8> {
@@ -285,6 +288,10 @@ impl MoveTrace {
             version: TRACE_VERSION,
             buf: BufferedEventStream::new(),
         }
+    }
+
+    pub fn increment_event_count(&mut self) {
+        self.buf.increment_event_count();
     }
 
     pub fn push_event(&mut self, event: TraceEvent) {
@@ -393,11 +400,15 @@ impl MoveTraceBuilder {
         self.push_event(TraceEvent::Effect(Box::new(effect)));
     }
 
-    // All events pushed to the trace are first pushed, and then the tracer is notified of the
-    // event.
+    // All events are first sent to the event API. If the event specifies that the event should be
+    // kept then it is also pushed to the trace to be saved.
     pub fn push_event(&mut self, event: TraceEvent) {
-        self.trace.push_event(event.clone());
-        self.tracer.notify(&event, Writer(&mut self.trace));
+        // Even if the event is not kept, we still increment the event count so that the trace
+        // reflects the number of events that were processed.
+        self.trace.increment_event_count();
+        if self.tracer.notify(&event, Writer(&mut self.trace)) {
+            self.trace.push_event(event);
+        }
     }
 }
 
