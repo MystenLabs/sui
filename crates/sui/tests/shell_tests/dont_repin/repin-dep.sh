@@ -6,4 +6,4 @@
 # so it should cause repinning
 echo '[dependencies]' >> locked_dep_path/Move.toml
 echo 'another_dep = { local = "../another_dep" }' >> locked_dep_path/Move.toml
-sui move build
+sui move --client.config $CONFIG build
