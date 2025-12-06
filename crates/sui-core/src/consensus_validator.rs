@@ -684,7 +684,8 @@ mod tests {
             gas_object.clone(),
             vec![owned_object.clone()],
         )
-        .await;
+        .await
+        .into_tx();
         let tx_digest = *transaction.digest();
         let cert = VerifiedExecutableTransaction::new_from_quorum_execution(transaction.clone(), 0);
         let (executed_effects, _) = state
