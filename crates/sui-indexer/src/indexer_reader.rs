@@ -774,6 +774,16 @@ impl IndexerReader {
                     "ToAddress filter is not supported, please use FromOrToAddress instead.".into()
                 ))
             }
+            Some(TransactionFilter::TransactionStatus(_)) => {
+                return Err(IndexerError::NotSupportedError(
+                    "TransactionStatus filter is not supported by the indexer yet. Use the JSON-RPC API directly.".into()
+                ))
+            }
+            Some(TransactionFilter::MinGasCost(_)) => {
+                return Err(IndexerError::NotSupportedError(
+                    "MinGasCost filter is not supported by the indexer yet. Use the JSON-RPC API directly.".into()
+                ))
+            }
             None => {
                 // apply no filter
                 ("transactions".to_owned(), "1 = 1".into())
