@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-    base_types::{random_object_ref, SuiAddress},
+    base_types::{SuiAddress, random_object_ref},
     digests::{ChainIdentifier, CheckpointDigest},
     error::UserInputError,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -59,7 +59,7 @@ fn test_address_balance_payment_requires_accumulators_enabled() {
 
     let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match dbg!(result.unwrap_err()).into_inner() {
+    match result.unwrap_err().into_inner() {
         SuiErrorKind::UserInputError {
             error: UserInputError::MissingGasPayment,
         } => {}

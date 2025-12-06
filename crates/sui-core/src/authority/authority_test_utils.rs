@@ -7,7 +7,6 @@ use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
 use sui_types::base_types::FullObjectRef;
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair};
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::utils::to_sender_signed_transaction;
 
 use super::shared_object_version_manager::AssignedVersions;
