@@ -1816,10 +1816,12 @@ dependencies = [
 name = "language-benchmarks"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "criterion",
  "move-binary-format",
  "move-compiler",
  "move-core-types",
+ "move-package",
  "move-stdlib",
  "move-vm-runtime",
  "once_cell",

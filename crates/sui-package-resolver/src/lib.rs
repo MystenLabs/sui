@@ -1931,6 +1931,7 @@ mod tests {
     /// A type that refers to types a different package.
     #[tokio::test]
     async fn test_cross_package_layout() {
+        // Use this to benchmark cross-package resolution performance, and calls.
         let (_, cache) = package_cache([
             (1, build_package("a0"), a0_types()),
             (1, build_package("b0"), b0_types()),
