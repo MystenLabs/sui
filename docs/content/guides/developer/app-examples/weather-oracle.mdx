@@ -98,7 +98,7 @@ fun init(otw: WEATHER, ctx: &mut TxContext) {
 - The first struct, `AdminCap`, is a capability.
 - The second struct, `WEATHER`, is a one-time witness that ensures only a single instance of this `Weather` ever exists. See [One Time Witness](https://move-book.com/programmability/one-time-witness.html) in The Move Book for more information.
 - The `WeatherOracle` struct works as a registry and stores the `geoname_id`s of the `CityWeatherOracle`s as dynamic fields. See [The Move Book](https://move-book.com/programmability/dynamic-fields.html) to learn more about dynamic fields.
-- The `init` function creates and sends the `Publisher` and `AdminCap` objects to the sender. Also, it creates a [shared object](concepts/object-ownership/shared.mdx) for all the `CityWeatherOracle`s. See [Module Initializer](https://move-book.com/programmability/module-initializer.html) in The Move Book for more information.
+- The `init` function creates and sends the `Publisher` and `AdminCap` objects to the sender. Also, it creates a [shared object](/guides/developer/objects/object-ownership/shared) for all the `CityWeatherOracle`s. See [Module Initializer](https://move-book.com/programmability/module-initializer.html) in The Move Book for more information.
 
 So far, you've set up the data structures within the module.
 Now, create a function that initializes a `CityWeatherOracle` and adds it as dynamic fields to the `WeatherOracle` object:

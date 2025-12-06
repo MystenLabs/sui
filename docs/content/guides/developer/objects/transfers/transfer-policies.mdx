@@ -4,36 +4,33 @@ description: Learn about transfer policies on Sui.
 keywords: [ transfer, policy, transferpolicy, transfer receipt, transfer request, transferrequest ]
 ---
 
-A [`TransferPolicy`](/references/framework/sui_sui/transfer_policy) on Sui is a customizable primitive that enables the owner of a type to create custom rules that define how the type can be transferred. You can use a `TransferPolicy` within a Sui Kiosk marketplace or any other system that integrates the `TransferPolicy` primitive. You can set any number of rules, such as paying a royalty or commission, and all must be satisfied in a single transaction for the transfer to succeed.
+A [`TransferPolicy`](https://docs.sui.io/references/framework/sui_sui/transfer_policy) on Sui is a customizable primitive that enables the owner of a type to create custom rules that define how the type can be transferred. You can set any number of rules, such as paying a royalty or commission, and all must be satisfied in a single transaction for the transfer to succeed. A `TransferPolicy` can be used within a Sui Kiosk marketplace or any other system that integrates the `TransferPolicy` primitive. 
 
 In a kiosk, creating and sharing a `TransferPolicy<T>` makes the type `T` tradable in that kiosk. On every kiosk purchase, the `TransferPolicy` must confirm the `TransferRequest`, or the transaction fails.
 
-## Transfer policies for kiosks 
-
-When a kiosk purchase occurs, the system creates a `TransferRequest` _hot potato_, and only the matching `TransferPolicy` can confirm it to unblock the transaction.
-
-A kiosk can trade an item of type `T` only if the `TransferPolicy` for `T` exists and the buyer can access it. A purchase issues a `TransferRequest` that must be resolved in a matching `TransferPolicy`. If no policy exists or the buyer can't access it, the transaction fails.
-
-This system gives you maximum freedom and flexibility. By removing transfer policy logic from the trading primitive, only you can set policies, and you control all enforcement as long as the primitive is used.
-
 ## `TransferPolicy` rules 
 
-By default, a single `TransferPolicy` enforces nothing and requires no user action. It confirms `TransferRequests` and therefore unblocks a transaction. However, the system allows setting _rules_. A rule is a way to request an additional action from the user before the request can be confirmed.
+By default, a single `TransferPolicy` enforces nothing and requires no user action. It confirms `TransferRequests` and therefore unblocks a transaction. However, the system allows setting rules. A rule is a way to request an additional action from the user before the request can be confirmed.
 
-The rule logic is straightforward: someone can publish a new rule module, such as a "fixed fee," and add it to the `TransferPolicy`. After the rule is added, `TransferRequest` needs to collect a `TransferReceipt` marking that the requirement specified in the rule was completed.
-
-### Example rule 
-
-To implement VAT fees on every merchant transaction, you must introduce a rule.
+The rule logic enables someone to publish a new rule module, such as a fixed fee and add it to the `TransferPolicy`. After the rule is added, `TransferRequest` needs to collect a `TransferReceipt` marking that the requirement specified in the rule was completed.
 
 A rule needs to provide 4 main components:
 
 1. A `RuleWitness` struct, which uniquely identifies the rule.
+
 1. A `config` type which is stored in the `TransferPolicy` and is used to configure the rule.
+
 1. A set function which adds the rule to the `TransferPolicy`. The `TransferPolicyCap` holder must perform this action.
+
 1. An actionable function which adds the receipt into the `TransferRequest` and potentially adds to the `TransferPolicy` balance if the functionality involves some monetary transaction.
 
-```
+The `TransferPolicy` module allows removing any rule at any time, as guaranteed by the constraints on the rule's configuration. 
+
+### Example
+
+To demonstrate, consider the following example that implements [value-added tax (VAT) fees](https://en.wikipedia.org/wiki/Value-added_tax) on every merchant transaction by introducing a rule.
+
+```move
 module examples::dummy_rule {
     use sui::coin::Coin;
     use sui::sui::SUI;
@@ -81,19 +78,27 @@ module examples::dummy_rule {
 }
 ```
 
-The `TransferPolicy` module allows removing any rule at any time, as guaranteed by the constraints on the rule's configuration. This example module has no configuration and accepts a `Coin<SUI>` of any value.
+### Use multiple transfer policies
 
-### Royalty rules
+You can create multiple policies for different purposes. For example, a default VAT policy requires everyone to use it. However, travelers leaving the country can claim a VAT refund without altering the default policy.
 
-To implement a percentage-based fee, such as royalties, a rule module must know the item's purchase price. The `TransferRequest` provides information that supports this and similar scenarios:
+To achieve this, you can issue a second `TransferPolicy` for the same type and wrap it in a custom object to implement the logic. For instance, a `TaxFreePolicy` object can bypass VAT. This object stores another `TransferPolicy`, accessible only if the buyer presents a valid `Passport` object. The inner policy might contain no rules, so the buyer pays no fees.
+
+This example module has no configuration and accepts a `Coin<SUI>` of any value.
+
+## Royalty rules
+
+To implement a percentage-based fee, such as royalties, a rule module must know the item's purchase price. The `TransferRequest` provides the following information that supports this and similar scenarios:
 
 - Item ID
-- Amount paid (SUI)
-- From ID: The object that was used for selling, such as the kiosk
 
-The `sui::transfer_policy` module provides public functions to access these fields: `paid()`, `item()`, and `from()`.
+- Amount paid in SUI
 
-```
+- The object ID that was used for selling, such as a kiosk
+
+The `sui::transfer_policy` module provides public functions to access the fields `paid()`, `item()`, and `from()`.
+
+```move
 module examples::royalty_rule {
     // skipping dependencies
     const MAX_BP: u16 = 10_000;
@@ -136,11 +141,11 @@ module examples::royalty_rule {
 }
 ```
 
-#### Time-based rules
+## Time-based rules
 
 Rules apply to more than just payments and fees. Some rules might permit trading only before or after a specific time. Because rules are not standardized, you can encode logic with any object.
 
-```
+```move
 module examples::time_rule {
     // skipping some dependencies
     use sui::clock::{Self, Clock};
@@ -170,13 +175,13 @@ module examples::time_rule {
 }
 ```
 
-### `TransferRequest` receipts
+## `TransferRequest` receipts
 
 The `TransferRequest` includes a field called `receipts`, which is a `VecSet` of `TypeName`. When the `confirm_request` call runs, the system compares the receipts against `TransferPolicy.rules`. If receipts do not match rules, the system rejects the request and the transaction fails.
 
 In the following example, both the rules and receipts are empty, so they match trivially and the request is confirmed:
 
-```
+```move
 module sui::transfer_policy {
     // ... skipped ...
 
@@ -206,15 +211,15 @@ module sui::transfer_policy {
 
 ## Witness policy
 
-There are two ways to authorize an action: 
+There are 2 ways to authorize an action: 
 
 1. Static, by using a witness pattern.
-1. Dynamic, via a capability pattern. 
 
+1. Dynamic, through a capability pattern. 
 
-Adding type parameters lets you create a generic rule that varies not just by configuration, but also by its type.
+Adding type parameters lets you create a generic rule that varies not just by configuration, but also by its type:
 
-```
+```move
 module examples::witness_rule {
     // skipping dependencies
 
@@ -248,7 +253,7 @@ module examples::witness_rule {
 
 The `witness_rule` is generic and you can use it to require a custom witness depending on the settings. It is a way to link custom marketplace or trading logic to the `TransferPolicy`. With a slight modification, the rule can be turned into a generic capability requirement for any object, even a `TransferPolicy` for a different type or a `TransferRequest`. 
 
-```
+```move
 module examples::capability_rule {
     // skipping dependencies
 
@@ -273,8 +278,10 @@ module examples::capability_rule {
 }
 ```
 
-## Using multiple transfer policies
+## Policies for kiosks 
 
-You can create multiple policies for different purposes. For example, a default VAT policy requires everyone to use it. However, travelers leaving the country can claim a VAT refund without altering the default policy.
+When a kiosk purchase occurs, the system creates a `TransferRequest` hot potato, and only the matching `TransferPolicy` can confirm it to unblock the transaction.
 
-To achieve this, you can issue a second `TransferPolicy` for the same type and wrap it in a custom object to implement the logic. For instance, a `TaxFreePolicy` object can bypass VAT. This object stores another `TransferPolicy`, accessible only if the buyer presents a valid `Passport` object. The inner policy might contain no rules, so the buyer pays no fees.
+A kiosk can trade an item of type `T` only if the `TransferPolicy` for `T` exists and the buyer can access it. A purchase issues a `TransferRequest` that must be resolved in a matching `TransferPolicy`. If no policy exists or the buyer can't access it, the transaction fails.
+
+This system gives you maximum freedom and flexibility. By removing transfer policy logic from the trading primitive, only you can set policies, and you control all enforcement as long as the primitive is used.

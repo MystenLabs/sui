@@ -10,7 +10,7 @@ Epoch values are included in the metadata of all [transactions](/concepts/transa
 
 ## Equivocation
 
-On Sui, [object versioning](/concepts/versioning.mdx) ensures that each [object](/concepts/object-model.mdx) is referenced by a unique (`ObjectId`, `SequenceNumber`) pair, where `SequenceNumber` refers to the object's version. Only a single transaction can modify an object at a specific version. After a transaction modifies an object, the version is incremented. Only the latest version can be used in subsequent transactions. Object versioning tracks the state of objects across transactions and epochs.
+On Sui, [object versioning](/guides/developer/objects/versioning.mdx) ensures that each [object](/guides/developer/objects/object-model.mdx) is referenced by a unique (`ObjectId`, `SequenceNumber`) pair, where `SequenceNumber` refers to the object's version. Only a single transaction can modify an object at a specific version. After a transaction modifies an object, the version is incremented. Only the latest version can be used in subsequent transactions. Object versioning tracks the state of objects across transactions and epochs.
 
 _Equivocation_ occurs when an owned object pair (`ObjectId`, `SequenceNumber`) is used concurrently in multiple non-finalized transactions. Any object used in multiple transactions can become a source of equivocation if not managed correctly.
 

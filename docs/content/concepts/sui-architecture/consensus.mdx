@@ -30,7 +30,7 @@ A validator can handle 2 types of write requests: transactions and certificates.
 
 ### Transactions
 
-When a validator receives a transaction from a client, it first performs transaction validity checks to verify the sender's signature. If the checks pass, the validator locks all [owned-objects](/concepts/object-ownership/address-owned.mdx) and signs the transaction bytes, then returns the signature to the client. The client repeats this process with multiple validators until it has collected signatures on its transaction from a quorum, thereby forming a certificate.
+When a validator receives a transaction from a client, it first performs transaction validity checks to verify the sender's signature. If the checks pass, the validator locks all [owned-objects](/guides/developer/objects/object-ownership/address-owned.mdx) and signs the transaction bytes, then returns the signature to the client. The client repeats this process with multiple validators until it has collected signatures on its transaction from a quorum, thereby forming a certificate.
 
 The process of collecting validator signatures on a transaction into a certificate and the process of submitting certificates can be performed in parallel. The client can simultaneously multicast transactions and certificates to an arbitrary number of validators. Alternatively, a client can outsource either or both of these tasks to a third-party service provider. This provider must be trusted for liveness, as it can refuse to form a certificate, but not for safety, as it cannot change the effects of the transaction and does not need the user's secret key.
 

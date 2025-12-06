@@ -19,7 +19,7 @@ There are three main sections to this guide:
 
 ## What the guide teaches
 
-- **Shared objects:** The guide teaches you how to use [shared objects](../../../concepts/object-ownership/shared.mdx), in this case to act as the escrow between two Sui users wanting to trade. Shared objects are a unique concept to Sui. Any transaction and any signer can modify it, given the changes meet the requirements set forth by the package that defined the type.
+- **Shared objects:** The guide teaches you how to use [shared objects](/guides/developer/objects/object-ownership/shared.mdx), in this case to act as the escrow between two Sui users wanting to trade. Shared objects are a unique concept to Sui. Any transaction and any signer can modify it, given the changes meet the requirements set forth by the package that defined the type.
 - **Composability:** The guide teaches you how to design your Move code in a way that enables full composability. In this app, the Move code that handles trading is completely unaware of the code that defines the objects it is trading and vice versa.
 
 The guide also shows how to build an app that:
@@ -131,7 +131,7 @@ Together, they ensure that a lock and key cannot have existed before the lock op
 :::tip Additional resources
 
 - [Move Package](https://move-book.com/concepts/packages.html) defined in The Move Book.
-- Concepts: [Wrapped Objects](../../../concepts/versioning.mdx#wrapped-objects)
+- Concepts: [Wrapped Objects](/guides/developer/objects/versioning.mdx#wrapped-objects)
 
 :::
 
@@ -272,9 +272,9 @@ Finally, you need to add a function to allow the first party to complete the tra
 :::tip Additional resources
 
 - [Full source code](https://github.com/MystenLabs/sui/blob/705ee1ed3ce8cfadc4597c6facb6769d7dfb5896/examples/trading/contracts/escrow/sources/shared.move)
-- Concepts: [Shared Objects](../../../concepts/object-ownership/shared)
+- Concepts: [Shared Objects](/guides/developer/objects/object-ownership/shared)
 - Concepts: [Shared Object Deletion](https://blog.sui.io/ephemeral-shared-objects/)
-- Concepts: [PTBs](../../../concepts/transactions/prog-txn-blocks)
+- Concepts: [PTBs](/concepts/transactions/prog-txn-blocks)
 
 :::
 

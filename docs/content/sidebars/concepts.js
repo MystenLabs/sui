@@ -62,45 +62,6 @@ const concepts = [
 	},
 	{
 		type: 'category',
-		label: 'Object Model',
-		link: {
-			type: 'doc',
-			id: 'concepts/object-model',
-		},
-		items: [
-			{
-				type: 'category',
-				label: 'Object Ownership',
-				link: {
-					type: 'doc',
-					id: 'concepts/object-ownership',
-				},
-				items: [
-					'concepts/object-ownership/address-owned',
-					'concepts/object-ownership/immutable',
-					'concepts/object-ownership/party',
-					'concepts/object-ownership/shared',
-					'concepts/object-ownership/wrapped',
-				],
-			},
-			{
-				type: 'category',
-				label: 'Transfers',
-				link: {
-					type: 'doc',
-					id: 'concepts/transfers',
-				},
-				items: [
-					'concepts/transfers/custom-rules',
-					'concepts/transfers/transfer-policies',
-					'concepts/transfers/transfer-to-object',
-				],
-			},
-			'concepts/versioning',
-		],
-	},
-	{
-		type: 'category',
 		label: 'Move',
 		link: {
 			type: 'doc',

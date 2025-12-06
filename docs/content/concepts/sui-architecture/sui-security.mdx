@@ -4,13 +4,13 @@ description: Assets on Sui, including coins and tokens, are types of objects, an
 keywords: [ security, security guarantees, asset security, asset owners, object security, security architecture ]
 ---
 
-Sui is designed to provide high security guarantees to asset owners. Assets on Sui, including coins and tokens, are types of [_objects_](/concepts/object-model.mdx), and can only be used by their owners unless otherwise defined according to predefined logic in a smart contract. Every smart contract can be audited, and the network can process them correctly even if some [validators](/concepts/sui-architecture/consensus.mdx) do not follow the protocol correctly. This is known as _fault tolerance_.
+Sui is designed to provide high security guarantees to asset owners. Assets on Sui, including coins and tokens, are types of [_objects_](/guides/developer/objects/object-model.mdx), and can only be used by their owners unless otherwise defined according to predefined logic in a smart contract. Every smart contract can be audited, and the network can process them correctly even if some [validators](/concepts/sui-architecture/consensus.mdx) do not follow the protocol correctly. This is known as _fault tolerance_.
 
 Sui's security features guarantee certain properties for objects:
 
 1. Only the owner of an object can authorize a [transaction](/concepts/transactions.mdx) that operates on the object. Authorization is performed through the use of a private signature key that is known only to the object owner.
 
-1. Everyone can operate on [shared](/concepts/object-ownership/shared.mdx) objects or [immutable](/concepts/object-ownership/immutable.mdx) objects, but additional access control logic can be implemented by a smart contract.
+1. Everyone can operate on [shared](/guides/developer/objects/object-ownership/shared.mdx) objects or [immutable](/guides/developer/objects/object-ownership/immutable.mdx) objects, but additional access control logic can be implemented by a smart contract.
 
 1. Transactions operate on objects according to predefined rules set by the smart contract creator that defined the object type.
 
