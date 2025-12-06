@@ -343,35 +343,42 @@ impl TrafficController {
     /// Handle check with dry-run mode considered
     pub async fn check(&self, client: &Option<IpAddr>, proxied_client: &Option<IpAddr>) -> bool {
         let policy_config = { self.policy_config.read().await.clone() };
-        let check_with_dry_run_maybe = |allowed| -> bool {
-            match (allowed, policy_config.dry_run) {
-                // request allowed
-                (true, _) => true,
-                // request blocked while in dry-run mode
-                (false, true) => {
-                    debug!("Dry run mode: Blocked request from client {:?}", client);
-                    self.metrics.num_dry_run_blocked_requests.inc();
-                    true
-                }
-                // request blocked
-                (false, false) => {
-                    debug!("Blocked request from client {:?}", client);
-                    self.metrics.requests_blocked_at_protocol.inc();
-                    false
-                }
+
+        let allowed = match &self.acl {
+            Acl::Allowlist(allowlist) => {
+                client.is_none() || allowlist.contains(&client.unwrap())
+            }
+            Acl::Blocklists(blocklists) => {
+                self.check_blocklists(blocklists, client, proxied_client).await
             }
         };
 
-        match &self.acl {
-            Acl::Allowlist(allowlist) => {
-                let allowed = client.is_none() || allowlist.contains(&client.unwrap());
-                check_with_dry_run_maybe(allowed)
+        match (allowed, policy_config.dry_run) {
+            // request allowed
+            (true, _) => true,
+            // request blocked while in dry-run mode
+            (false, true) => {
+                debug!("Dry run mode: Blocked request from client {:?}", client);
+                self.metrics.num_dry_run_blocked_requests.inc();
+
+                // Track per-IP blocked requests (only for IPs in blocklist to bound cardinality)
+                if let Some(ip) = client {
+                    if let Acl::Blocklists(ref blocklists) = self.acl {
+                        if blocklists.clients.contains_key(ip) {
+                            self.metrics.blocked_requests_by_ip
+                                .with_label_values(&[&ip.to_string()])
+                                .inc();
+                        }
+                    }
+                }
+
+                true
             }
-            Acl::Blocklists(blocklists) => {
-                let allowed = self
-                    .check_blocklists(blocklists, client, proxied_client)
-                    .await;
-                check_with_dry_run_maybe(allowed)
+            // request blocked
+            (false, false) => {
+                debug!("Blocked request from client {:?}", client);
+                self.metrics.requests_blocked_at_protocol.inc();
+                false
             }
         }
     }
@@ -476,6 +483,13 @@ async fn run_tally_loop(
                 metrics.tallies.inc();
                 match received {
                     Some(tally) => {
+                        // Track tallies by method
+                        if let Some(ref method) = tally.method {
+                            metrics.tally_by_method
+                                .with_label_values(&[method])
+                                .inc();
+                        }
+
                         // TODO: spawn a task to handle tallying concurrently
                         if let Err(err) = handle_spam_tally(
                             spam_policy.clone(),

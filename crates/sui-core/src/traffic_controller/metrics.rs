@@ -19,6 +19,8 @@ pub struct TrafficControllerMetrics {
     pub tally_handled: IntCounter,
     pub error_tally_handled: IntCounter,
     pub tally_error_types: IntCounterVec,
+    pub blocked_requests_by_ip: IntCounterVec,
+    pub tally_by_method: IntCounterVec,
     pub deadmans_switch_enabled: IntGauge,
     pub highest_direct_spam_rate: IntGauge,
     pub highest_proxied_spam_rate: IntGauge,
@@ -100,6 +102,20 @@ impl TrafficControllerMetrics {
                 "traffic_control_tally_error_types",
                 "Number of tally errors, grouped by error type",
                 &["error_type"],
+                registry
+            )
+            .unwrap(),
+            blocked_requests_by_ip: register_int_counter_vec_with_registry!(
+                "traffic_control_blocked_requests_by_ip",
+                "Dry run blocked requests by source IP (only tracks IPs in blocklist)",
+                &["ip"],
+                registry
+            )
+            .unwrap(),
+            tally_by_method: register_int_counter_vec_with_registry!(
+                "traffic_control_tally_by_method",
+                "Number of tallies grouped by RPC method",
+                &["method"],
                 registry
             )
             .unwrap(),
