@@ -36,10 +36,12 @@ use serde::{Deserialize, Serialize};
 use sui_macros::fail_point_arg;
 use sui_network::default_mysten_network_config;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
-use sui_types::base_types::ConciseableName;
+use sui_types::base_types::{ConciseableName, SequenceNumber};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::ExecutionTimeObservationKey;
-use sui_types::messages_checkpoint::{CheckpointArtifacts, CheckpointCommitment};
+use sui_types::messages_checkpoint::{
+    CheckpointArtifacts, CheckpointCommitment, VersionedFullCheckpointContents,
+};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use tokio::sync::{mpsc, watch};
 use typed_store::rocks::{DBOptions, ReadWriteOptions, default_db_options};
@@ -141,7 +143,11 @@ pub struct CheckpointStoreTables {
     /// efficient reads of full checkpoints. Entries from this table are deleted after state
     /// accumulation has completed.
     #[default_options_override_fn = "full_checkpoint_content_table_default_config"]
+    // TODO: Once the switch to `full_checkpoint_content_v2` is fully active on mainnet,
+    // deprecate this table (and remove when possible).
     full_checkpoint_content: DBMap<CheckpointSequenceNumber, FullCheckpointContents>,
+    #[default_options_override_fn = "full_checkpoint_content_table_default_config"]
+    full_checkpoint_content_v2: DBMap<CheckpointSequenceNumber, VersionedFullCheckpointContents>,
 
     /// Stores certified checkpoints
     pub(crate) certified_checkpoints: DBMap<CheckpointSequenceNumber, TrustedCheckpoint>,
@@ -579,8 +585,8 @@ impl CheckpointStore {
     pub fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         seq: CheckpointSequenceNumber,
-    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
-        self.tables.full_checkpoint_content.get(&seq)
+    ) -> Result<Option<VersionedFullCheckpointContents>, TypedStoreError> {
+        self.tables.full_checkpoint_content_v2.get(&seq)
     }
 
     fn prune_local_summaries(&self) -> SuiResult {
@@ -936,14 +942,14 @@ impl CheckpointStore {
         checkpoint: &VerifiedCheckpoint,
         full_contents: VerifiedCheckpointContents,
     ) -> Result<(), TypedStoreError> {
-        let mut batch = self.tables.full_checkpoint_content.batch();
+        let mut batch = self.tables.full_checkpoint_content_v2.batch();
         batch.insert_batch(
             &self.tables.checkpoint_sequence_by_contents_digest,
             [(&checkpoint.content_digest, checkpoint.sequence_number())],
         )?;
         let full_contents = full_contents.into_inner();
         batch.insert_batch(
-            &self.tables.full_checkpoint_content,
+            &self.tables.full_checkpoint_content_v2,
             [(checkpoint.sequence_number(), &full_contents)],
         )?;
 
@@ -962,7 +968,8 @@ impl CheckpointStore {
         &self,
         seq: CheckpointSequenceNumber,
     ) -> Result<(), TypedStoreError> {
-        self.tables.full_checkpoint_content.remove(&seq)
+        self.tables.full_checkpoint_content.remove(&seq)?;
+        self.tables.full_checkpoint_content_v2.remove(&seq)
     }
 
     pub fn get_epoch_last_checkpoint(
@@ -1847,8 +1854,15 @@ impl CheckpointBuilder {
     fn split_checkpoint_chunks(
         &self,
         effects_and_transaction_sizes: Vec<(TransactionEffects, usize)>,
-        signatures: Vec<Vec<GenericSignature>>,
-    ) -> CheckpointBuilderResult<Vec<Vec<(TransactionEffects, Vec<GenericSignature>)>>> {
+        signatures: Vec<Vec<(GenericSignature, Option<SequenceNumber>)>>,
+    ) -> CheckpointBuilderResult<
+        Vec<
+            Vec<(
+                TransactionEffects,
+                Vec<(GenericSignature, Option<SequenceNumber>)>,
+            )>,
+        >,
+    > {
         let _guard = monitored_scope("CheckpointBuilder::split_checkpoint_chunks");
         let mut chunks = Vec::new();
         let mut chunk = Vec::new();
@@ -1861,9 +1875,14 @@ impl CheckpointBuilder {
             // The size calculation here is intended to estimate the size of the
             // FullCheckpointContents struct. If this code is modified, that struct
             // should also be updated accordingly.
-            let size = transaction_size
-                + bcs::serialized_size(&effects)?
-                + bcs::serialized_size(&signatures)?;
+            let signatures_size = if self.epoch_store.protocol_config().address_aliases() {
+                bcs::serialized_size(&signatures)?
+            } else {
+                let signatures: Vec<&GenericSignature> =
+                    signatures.iter().map(|(s, _)| s).collect();
+                bcs::serialized_size(&signatures)?
+            };
+            let size = transaction_size + bcs::serialized_size(&effects)? + signatures_size;
             if chunk.len() == self.max_transactions_per_checkpoint
                 || (chunk_size + size) > self.max_checkpoint_size_bytes
             {
@@ -2165,10 +2184,17 @@ impl CheckpointBuilder {
 
                 None
             };
-            let contents = CheckpointContents::new_with_digests_and_signatures(
-                effects.iter().map(TransactionEffects::execution_digests),
-                signatures,
-            );
+            let contents = if self.epoch_store.protocol_config().address_aliases() {
+                CheckpointContents::new_v2(&effects, signatures)
+            } else {
+                CheckpointContents::new_with_digests_and_signatures(
+                    effects.iter().map(TransactionEffects::execution_digests),
+                    signatures
+                        .into_iter()
+                        .map(|sigs| sigs.into_iter().map(|(s, _)| s).collect())
+                        .collect(),
+                )
+            };
 
             let num_txns = contents.size() as u64;
 
@@ -2260,7 +2286,7 @@ impl CheckpointBuilder {
         epoch_total_gas_cost: &GasCostSummary,
         epoch_start_timestamp_ms: CheckpointTimestamp,
         checkpoint_effects: &mut Vec<TransactionEffects>,
-        signatures: &mut Vec<Vec<GenericSignature>>,
+        signatures: &mut Vec<Vec<(GenericSignature, Option<SequenceNumber>)>>,
         checkpoint: CheckpointSequenceNumber,
         end_of_epoch_observation_keys: Vec<ExecutionTimeObservationKey>,
         // This may be less than `checkpoint - 1` if the end-of-epoch PendingCheckpoint produced
@@ -3565,7 +3591,7 @@ mod tests {
             let signature = Signature::Ed25519SuiSignature(Default::default()).into();
             state
                 .epoch_store_for_testing()
-                .test_insert_user_signature(digest, vec![signature]);
+                .test_insert_user_signature(digest, vec![(signature, None)]);
         }
 
         let (output, mut result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);

@@ -144,6 +144,10 @@ CheckpointContents:
       V1:
         NEWTYPE:
           TYPENAME: CheckpointContentsV1
+    1:
+      V2:
+        NEWTYPE:
+          TYPENAME: CheckpointContentsV2
 CheckpointContentsDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
@@ -156,6 +160,11 @@ CheckpointContentsV1:
         SEQ:
           SEQ:
             TYPENAME: GenericSignature
+CheckpointContentsV2:
+  STRUCT:
+    - transactions:
+        SEQ:
+          TYPENAME: CheckpointTransactionContents
 CheckpointData:
   STRUCT:
     - checkpoint_summary:
@@ -204,6 +213,16 @@ CheckpointTransaction:
     - output_objects:
         SEQ:
           TYPENAME: Object
+CheckpointTransactionContents:
+  STRUCT:
+    - digest:
+        TYPENAME: ExecutionDigests
+    - user_signatures:
+        SEQ:
+          TUPLE:
+            - TYPENAME: GenericSignature
+            - OPTION:
+                TYPENAME: SequenceNumber
 Command:
   ENUM:
     0:
@@ -476,6 +495,8 @@ EndOfEpochTransactionKind:
       CoinRegistryCreate: UNIT
     10:
       DisplayRegistryCreate: UNIT
+    11:
+      AddressAliasStateCreate: UNIT
 Event:
   STRUCT:
     - package_id:

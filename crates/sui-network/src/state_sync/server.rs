@@ -8,6 +8,7 @@ use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
+use sui_types::messages_checkpoint::VersionedFullCheckpointContents;
 use sui_types::{
     digests::{CheckpointContentsDigest, CheckpointDigest},
     messages_checkpoint::{
@@ -124,6 +125,16 @@ where
         &self,
         request: Request<CheckpointContentsDigest>,
     ) -> Result<Response<Option<FullCheckpointContents>>, Status> {
+        let contents = self
+            .store
+            .get_full_checkpoint_contents(None, request.inner());
+        Ok(Response::new(contents.map(|v| v.into_v1())))
+    }
+
+    async fn get_checkpoint_contents_v2(
+        &self,
+        request: Request<CheckpointContentsDigest>,
+    ) -> Result<Response<Option<VersionedFullCheckpointContents>>, Status> {
         let contents = self
             .store
             .get_full_checkpoint_contents(None, request.inner());

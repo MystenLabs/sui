@@ -17,6 +17,7 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::executable_transaction::VerifiedExecutableTransactionWithAliases;
 use sui_types::storage::{
     ObjectKey, transaction_non_shared_input_object_keys, transaction_receiving_object_keys,
 };
@@ -90,6 +91,25 @@ impl From<VerifiedExecutableTransaction> for Schedulable<VerifiedExecutableTrans
     }
 }
 
+impl From<Schedulable<VerifiedExecutableTransactionWithAliases>>
+    for Schedulable<VerifiedExecutableTransaction>
+{
+    fn from(schedulable: Schedulable<VerifiedExecutableTransactionWithAliases>) -> Self {
+        match schedulable {
+            Schedulable::Transaction(tx) => Schedulable::Transaction(tx.into_tx()),
+            Schedulable::RandomnessStateUpdate(epoch, round) => {
+                Schedulable::RandomnessStateUpdate(epoch, round)
+            }
+            Schedulable::AccumulatorSettlement(epoch, checkpoint_height) => {
+                Schedulable::AccumulatorSettlement(epoch, checkpoint_height)
+            }
+            Schedulable::ConsensusCommitPrologue(epoch, round, sub_dag_index) => {
+                Schedulable::ConsensusCommitPrologue(epoch, round, sub_dag_index)
+            }
+        }
+    }
+}
+
 // AsTx is like Deref, in that it allows us to use either refs or values in Schedulable.
 // Deref does not work because it conflicts with the impl of Deref for VerifiedExecutableTransaction.
 pub trait AsTx {
@@ -105,6 +125,18 @@ impl AsTx for VerifiedExecutableTransaction {
 impl AsTx for &'_ VerifiedExecutableTransaction {
     fn as_tx(&self) -> &VerifiedExecutableTransaction {
         self
+    }
+}
+
+impl AsTx for VerifiedExecutableTransactionWithAliases {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction {
+        self.tx()
+    }
+}
+
+impl AsTx for &'_ VerifiedExecutableTransactionWithAliases {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction {
+        self.tx()
     }
 }
 

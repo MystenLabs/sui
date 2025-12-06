@@ -647,6 +647,9 @@ mod checked {
                         EndOfEpochTransactionKind::DisplayRegistryCreate => {
                             panic!("EndOfEpochTransactionKind::DisplayRegistryCreate should not exist in v1");
                         }
+                        EndOfEpochTransactionKind::AddressAliasStateCreate => {
+                            panic!("EndOfEpochTransactionKind::AddressAliasStateCreate should not exist in v1");
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")

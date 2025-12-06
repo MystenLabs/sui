@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
+use crate::{
+    authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
+    checkpoints::CheckpointServiceNotify,
+    consensus_adapter::ConsensusOverloadChecker,
+};
 use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
@@ -11,19 +14,17 @@ use prometheus::{
     IntCounter, IntCounterVec, Registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry,
 };
+use std::sync::Arc;
+use sui_macros::fail_point_arg;
+#[cfg(msim)]
+use sui_types::base_types::AuthorityName;
 use sui_types::{
     error::{SuiError, SuiErrorKind, SuiResult},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
-    transaction::Transaction,
+    transaction::{TransactionDataAPI, TransactionWithAliases, WithAliases},
 };
 use tap::TapFallible;
 use tracing::{debug, info, instrument, warn};
-
-use crate::{
-    authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
-    checkpoints::CheckpointServiceNotify,
-    consensus_adapter::ConsensusOverloadChecker,
-};
 
 /// Allows verifying the validity of transactions
 #[derive(Clone)]
@@ -103,7 +104,8 @@ impl SuiTxValidator {
                 | ConsensusTransactionKind::CapabilityNotificationV2(_)
                 | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
 
-                ConsensusTransactionKind::UserTransaction(_tx) => {
+                ConsensusTransactionKind::UserTransaction(_)
+                | ConsensusTransactionKind::UserTransactionV2(_) => {
                     if !epoch_store.protocol_config().mysticeti_fastpath() {
                         return Err(SuiErrorKind::UnexpectedMessage(
                             "ConsensusTransactionKind::UserTransaction is unsupported".to_string(),
@@ -170,11 +172,20 @@ impl SuiTxValidator {
 
         let mut result = Vec::new();
         for (i, tx) in txs.into_iter().enumerate() {
-            let ConsensusTransactionKind::UserTransaction(tx) = tx else {
-                continue;
+            let tx = match tx {
+                ConsensusTransactionKind::UserTransaction(tx) => {
+                    let no_aliases_allowed = tx
+                        .intent_message()
+                        .value
+                        .required_signers()
+                        .map(|s| (s, None));
+                    WithAliases::new(*tx, no_aliases_allowed)
+                }
+                ConsensusTransactionKind::UserTransactionV2(tx) => *tx,
+                _ => continue,
             };
 
-            let tx_digest = *tx.digest();
+            let tx_digest = *tx.tx().digest();
             if let Err(error) = self.vote_transaction(&epoch_store, tx) {
                 debug!(?tx_digest, "Voting to reject transaction: {error}");
                 self.metrics
@@ -199,12 +210,14 @@ impl SuiTxValidator {
         result
     }
 
-    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx.digest()))]
+    #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx.tx().digest()))]
     fn vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx: Box<Transaction>,
+        tx: TransactionWithAliases,
     ) -> SuiResult<()> {
+        let (tx, aliases) = tx.into_inner();
+
         // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
         // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
         tx.validity_check(&epoch_store.tx_validity_check_context())?;
@@ -215,10 +228,25 @@ impl SuiTxValidator {
             self.authority_state.check_system_overload_at_signing(),
         )?;
 
-        let tx = epoch_store.verify_transaction(*tx)?;
+        #[allow(unused_mut)]
+        let mut fail_point_always_report_aliases_changed = false;
+        fail_point_arg!(
+            "consensus-validator-always-report-aliases-changed",
+            |for_validators: Vec<AuthorityName>| {
+                if for_validators.contains(&self.authority_state.name) {
+                    // always report aliases changed in simtests
+                    fail_point_always_report_aliases_changed = true;
+                }
+            }
+        );
+
+        let verified_tx = epoch_store.verify_transaction_with_current_aliases(tx)?;
+        if *verified_tx.aliases() != aliases || fail_point_always_report_aliases_changed {
+            return Err(SuiErrorKind::AliasesChanged.into());
+        }
 
         self.authority_state
-            .handle_vote_transaction(epoch_store, tx)?;
+            .handle_vote_transaction(epoch_store, verified_tx.into_tx())?;
 
         Ok(())
     }
@@ -467,9 +495,9 @@ mod tests {
         let serialized_transactions: Vec<_> = transactions
             .into_iter()
             .map(|t| {
-                bcs::to_bytes(&ConsensusTransaction::new_user_transaction_message(
+                bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
                     &state.name,
-                    t.inner().clone(),
+                    t.into(),
                 ))
                 .unwrap()
             })

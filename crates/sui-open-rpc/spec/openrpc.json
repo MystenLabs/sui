@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "104",
+              "maxSupportedProtocolVersion": "105",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1303,6 +1303,7 @@
                 "additional_borrow_checks": false,
                 "additional_consensus_digest_indirect_state": false,
                 "additional_multisig_checks": false,
+                "address_aliases": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_private_accumulator_entrypoints": false,
@@ -5896,7 +5897,6 @@
         "$ref": "#/components/schemas/Digest"
       },
       "ConsensusDeterminedVersionAssignments": {
-        "description": "Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.",
         "oneOf": [
           {
             "type": "object",
@@ -9022,7 +9022,8 @@
               "StoreExecutionTimeObservations",
               "AccumulatorRootCreate",
               "CoinRegistryCreate",
-              "DisplayRegistryCreate"
+              "DisplayRegistryCreate",
+              "AddressAliasStateCreate"
             ]
           },
           {

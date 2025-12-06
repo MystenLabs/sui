@@ -146,6 +146,16 @@ type Address implements IAddressable {
 }
 
 """
+System transaction for creating the alias state.
+"""
+type AddressAliasStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
 Object is exclusively owned by a single address, and is mutable.
 """
 type AddressOwner {
@@ -1056,7 +1066,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction | DisplayRegistryCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction | DisplayRegistryCreateTransaction | AddressAliasStateCreateTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""

@@ -308,7 +308,10 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
     );
     let tx = Transaction::from_data_and_signer(tx_data, vec![&denied_keypair, &env.keypair]);
     let epoch_store = env.authority.load_epoch_store_one_call_per_task();
-    let verified = epoch_store.verify_transaction(tx).unwrap();
+    let verified = epoch_store
+        .verify_transaction_require_no_aliases(tx)
+        .unwrap()
+        .into_tx();
 
     let err = env
         .authority

@@ -50,8 +50,8 @@ use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
 use sui_types::{
-    MOVE_STDLIB_PACKAGE_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
-    SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    MOVE_STDLIB_PACKAGE_ID, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
     base_types::{FullObjectRef, dbg_addr},
     crypto::{AccountKeyPair, AuthorityKeyPair},
     crypto::{Signature, get_key_pair},
@@ -1481,7 +1481,10 @@ async fn test_handle_sponsored_transaction() {
     );
     let dual_signed_tx =
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
-    let dual_signed_tx = epoch_store.verify_transaction(dual_signed_tx).unwrap();
+    let dual_signed_tx = epoch_store
+        .verify_transaction_require_no_aliases(dual_signed_tx)
+        .unwrap()
+        .into_tx();
 
     authority_state
         .handle_transaction(&epoch_store, dual_signed_tx.clone())
@@ -1530,7 +1533,10 @@ async fn test_handle_sponsored_transaction() {
     );
     let dual_signed_tx =
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &wrong_owner_key]);
-    let dual_signed_tx = epoch_store.verify_transaction(dual_signed_tx).unwrap();
+    let dual_signed_tx = epoch_store
+        .verify_transaction_require_no_aliases(dual_signed_tx)
+        .unwrap()
+        .into_tx();
     let error = authority_state
         .handle_transaction(&epoch_store, dual_signed_tx.clone())
         .await
@@ -1559,7 +1565,10 @@ async fn test_handle_sponsored_transaction() {
     );
     let dual_signed_tx =
         to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &third_party_key]);
-    let dual_signed_tx = epoch_store.verify_transaction(dual_signed_tx).unwrap();
+    let dual_signed_tx = epoch_store
+        .verify_transaction_require_no_aliases(dual_signed_tx)
+        .unwrap()
+        .into_tx();
     let error = authority_state
         .handle_transaction(&epoch_store, dual_signed_tx.clone())
         .await
@@ -1666,7 +1675,10 @@ async fn test_objected_owned_gas() {
     );
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
         .await;
@@ -1864,7 +1876,10 @@ async fn test_publish_non_existing_dependent_module() {
         rgp,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
 
     let err = authority
         .handle_transaction(&epoch_store, transaction)
@@ -2264,7 +2279,10 @@ async fn test_missing_package() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
         .await;
@@ -2312,7 +2330,10 @@ async fn test_type_argument_dependencies() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(data, &s1_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
     authority_state
         .handle_transaction(&epoch_store, transaction)
         .await
@@ -2338,7 +2359,10 @@ async fn test_type_argument_dependencies() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(data, &s2_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
     authority_state
         .handle_transaction(&epoch_store, transaction)
         .await
@@ -2364,7 +2388,10 @@ async fn test_type_argument_dependencies() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(data, &s3_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
     let result = authority_state
         .handle_transaction(&epoch_store, transaction)
         .await;
@@ -3030,7 +3057,10 @@ async fn test_invalid_mutable_clock_parameter() {
     .unwrap();
 
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
 
     let Err(e) = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -3043,54 +3073,6 @@ async fn test_invalid_mutable_clock_parameter() {
         UserInputError::try_from(e).unwrap(),
         UserInputError::ImmutableParameterExpectedError {
             object_id: SUI_CLOCK_OBJECT_ID
-        }
-    );
-}
-
-#[tokio::test]
-async fn test_invalid_authenticator_state_parameter() {
-    // User transactions that take the singleton AuthenticatorState object at `0x7` by mutable
-    // reference will fail to sign, to prevent transactions bottlenecking on it.
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_id = ObjectID::random();
-    let (authority_state, package_object_ref) =
-        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
-    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
-    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-    let gas_ref = gas_object.compute_object_reference();
-    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-
-    let tx_data = TransactionData::new_move_call(
-        sender,
-        package_object_ref.0,
-        ident_str!("object_basics").to_owned(),
-        ident_str!("use_auth_state").to_owned(),
-        /* type_args */ vec![],
-        gas_ref,
-        vec![CallArg::Object(ObjectArg::SharedObject {
-            id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-            initial_shared_version: SequenceNumber::from(1),
-            mutability: SharedObjectMutability::Mutable,
-        })],
-        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-        rgp,
-    )
-    .unwrap();
-    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
-
-    let Err(e) = authority_state
-        .handle_transaction(&epoch_store, transaction)
-        .await
-    else {
-        panic!(
-            "Expected handling transaction to fail due to mutable AuthenticatorState parameter."
-        );
-    };
-    assert_eq!(
-        UserInputError::try_from(e).unwrap(),
-        UserInputError::InaccessibleSystemObject {
-            object_id: SUI_AUTHENTICATOR_STATE_OBJECT_ID
         }
     );
 }
@@ -3132,7 +3114,10 @@ async fn test_invalid_randomness_parameter() {
     )
     .unwrap();
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
 
     let Err(e) = authority_state
         .handle_transaction(&epoch_store, transaction)
@@ -3224,7 +3209,10 @@ async fn test_valid_immutable_clock_parameter() {
     .unwrap();
 
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
     authority_state
         .handle_transaction(&epoch_store, transaction)
         .await
@@ -3284,7 +3272,10 @@ async fn test_transfer_sui_no_amount() {
 
     // Make sure transaction handling works as usual.
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
+    let transaction = epoch_store
+        .verify_transaction_require_no_aliases(transaction)
+        .unwrap()
+        .into_tx();
     authority_state
         .handle_transaction(&epoch_store, transaction.clone())
         .await
@@ -4910,7 +4901,10 @@ async fn make_test_transaction(
     for authority in authorities {
         let epoch_store = authority.load_epoch_store_one_call_per_task();
         let transaction = transaction.clone();
-        let transaction = epoch_store.verify_transaction(transaction).unwrap();
+        let transaction = epoch_store
+            .verify_transaction_require_no_aliases(transaction)
+            .unwrap()
+            .into_tx();
         let response = authority
             .handle_transaction(&epoch_store, transaction.clone())
             .await

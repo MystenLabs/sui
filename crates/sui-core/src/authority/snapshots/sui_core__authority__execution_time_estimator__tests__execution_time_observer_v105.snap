@@ -1,0 +1,158 @@
+---
+source: crates/sui-core/src/authority/execution_time_estimator.rs
+expression: snapshot_data
+---
+protocol_version: 105
+consensus_observations:
+  - - MakeMoveVec
+    - observations:
+        - - 10
+          - secs: 0
+            nanos: 12000000
+        - - 7
+          - secs: 0
+            nanos: 28000000
+        - - 5
+          - secs: 0
+            nanos: 19000000
+        - - 1
+          - secs: 0
+            nanos: 25000000
+      stake_weighted_median:
+        secs: 0
+        nanos: 25000000
+  - - MergeCoins
+    - observations:
+        - - 6
+          - secs: 0
+            nanos: 63000000
+        - - 1
+          - secs: 0
+            nanos: 21000000
+        - - 2
+          - secs: 0
+            nanos: 32000000
+        - - 7
+          - secs: 0
+            nanos: 0
+      stake_weighted_median:
+        secs: 0
+        nanos: 32000000
+  - - SplitCoins
+    - observations:
+        - - 0
+          - ~
+        - - 3
+          - secs: 0
+            nanos: 55000000
+        - - 6
+          - secs: 0
+            nanos: 54000000
+        - - 10
+          - secs: 0
+            nanos: 41000000
+      stake_weighted_median:
+        secs: 0
+        nanos: 54000000
+  - - TransferObjects
+    - observations:
+        - - 7
+          - secs: 0
+            nanos: 30000000
+        - - 2
+          - secs: 0
+            nanos: 95000000
+        - - 4
+          - secs: 0
+            nanos: 37000000
+        - - 5
+          - secs: 0
+            nanos: 42000000
+      stake_weighted_median:
+        secs: 0
+        nanos: 42000000
+  - - Upgrade
+    - observations:
+        - - 0
+          - ~
+        - - 6
+          - secs: 0
+            nanos: 364000000
+        - - 6
+          - secs: 0
+            nanos: 981000000
+        - - 4
+          - secs: 0
+            nanos: 587000000
+      stake_weighted_median:
+        secs: 0
+        nanos: 587000000
+  - - MoveEntryPoint:
+        package: "0x0000000000000000000000000000000000000000000000000000000000000001"
+        module: coin
+        function: transfer
+        type_arguments: []
+    - observations:
+        - - 7
+          - secs: 0
+            nanos: 404000000
+        - - 6
+          - secs: 0
+            nanos: 162000000
+        - - 9
+          - secs: 0
+            nanos: 268000000
+        - - 6
+          - secs: 0
+            nanos: 80000000
+      stake_weighted_median:
+        secs: 0
+        nanos: 268000000
+  - - MoveEntryPoint:
+        package: "0x0000000000000000000000000000000000000000000000000000000000000002"
+        module: nft
+        function: mint
+        type_arguments: []
+    - observations:
+        - - 0
+          - ~
+        - - 6
+          - secs: 0
+            nanos: 357000000
+        - - 2
+          - secs: 0
+            nanos: 142000000
+        - - 8
+          - secs: 0
+            nanos: 499000000
+      stake_weighted_median:
+        secs: 0
+        nanos: 357000000
+transaction_estimates:
+  - - coin_transfer_call
+    - secs: 0
+      nanos: 268000000
+  - - mixed_move_calls
+    - secs: 0
+      nanos: 625000000
+  - - native_commands_with_observations
+    - secs: 0
+      nanos: 306000000
+  - - transfer_objects_5_items
+    - secs: 0
+      nanos: 252000000
+  - - split_coins_3_amounts
+    - secs: 0
+      nanos: 216000000
+  - - merge_coins_2_sources
+    - secs: 0
+      nanos: 96000000
+  - - make_move_vec_2_elements
+    - secs: 0
+      nanos: 75000000
+  - - mixed_commands
+    - secs: 0
+      nanos: 235000000
+  - - upgrade_package
+    - secs: 0
+      nanos: 587000000

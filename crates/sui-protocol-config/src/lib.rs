@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 104;
+const MAX_PROTOCOL_VERSION: u64 = 105;
 
 // Record history of protocol version allocations here:
 //
@@ -278,6 +278,7 @@ const MAX_PROTOCOL_VERSION: u64 = 104;
 // Version 103: Framework update: internal Coin methods
 // Version 104: Framework update: CoinRegistry follow up for Coin methods
 //              Enable all non-zero PCRs parsing for nitro attestation native function in Devnet and Testnet.
+// Version 105: Framework update: address aliases
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -898,6 +899,10 @@ struct FeatureFlags {
     // If true, include cancelled randomness txns in the consensus commit prologue.
     #[serde(skip_serializing_if = "is_false")]
     include_cancelled_randomness_txns_in_prologue: bool,
+
+    // Enables address aliases.
+    #[serde(skip_serializing_if = "is_false")]
+    address_aliases: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2416,6 +2421,18 @@ impl ProtocolConfig {
     pub fn include_cancelled_randomness_txns_in_prologue(&self) -> bool {
         self.feature_flags
             .include_cancelled_randomness_txns_in_prologue
+    }
+
+    pub fn address_aliases(&self) -> bool {
+        let address_aliases = self.feature_flags.address_aliases;
+        assert!(
+            !address_aliases || self.mysticeti_fastpath(),
+            "Address aliases requires Mysticeti fastpath to be enabled"
+        );
+        if address_aliases {
+            // TODO: when flag for disabling CertifiedTransaction is added, add assertion for it here.
+        }
+        address_aliases
     }
 }
 
@@ -4306,6 +4323,7 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .include_cancelled_randomness_txns_in_prologue = true;
                 }
+                105 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4568,6 +4586,10 @@ impl ProtocolConfig {
 
     pub fn set_correct_gas_payment_limit_check_for_testing(&mut self, val: bool) {
         self.feature_flags.correct_gas_payment_limit_check = val;
+    }
+
+    pub fn set_address_aliases_for_testing(&mut self, val: bool) {
+        self.feature_flags.address_aliases = val;
     }
 
     pub fn set_consensus_round_prober_probe_accepted_rounds(&mut self, val: bool) {

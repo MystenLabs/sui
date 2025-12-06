@@ -491,6 +491,7 @@ pub enum EndOfEpochTransactionKind {
     AccumulatorRootCreate,
     CoinRegistryCreate,
     DisplayRegistryCreate,
+    AddressAliasStateCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -550,6 +551,10 @@ impl EndOfEpochTransactionKind {
         Self::DenyListStateCreate
     }
 
+    pub fn new_address_alias_state_create() -> Self {
+        Self::AddressAliasStateCreate
+    }
+
     pub fn new_bridge_create(chain_identifier: ChainIdentifier) -> Self {
         Self::BridgeStateCreate(chain_identifier)
     }
@@ -606,6 +611,7 @@ impl EndOfEpochTransactionKind {
             Self::AccumulatorRootCreate => vec![],
             Self::CoinRegistryCreate => vec![],
             Self::DisplayRegistryCreate => vec![],
+            Self::AddressAliasStateCreate => vec![],
         }
     }
 
@@ -643,6 +649,7 @@ impl EndOfEpochTransactionKind {
             Self::AccumulatorRootCreate => Either::Right(iter::empty()),
             Self::CoinRegistryCreate => Either::Right(iter::empty()),
             Self::DisplayRegistryCreate => Either::Right(iter::empty()),
+            Self::AddressAliasStateCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -717,6 +724,13 @@ impl EndOfEpochTransactionKind {
                 if !config.enable_display_registry() {
                     return Err(UserInputError::Unsupported(
                         "display registry not enabled".to_string(),
+                    ));
+                }
+            }
+            Self::AddressAliasStateCreate => {
+                if !config.address_aliases() {
+                    return Err(UserInputError::Unsupported(
+                        "address aliases not enabled".to_string(),
                     ));
                 }
             }
@@ -2323,7 +2337,7 @@ pub trait TransactionDataAPI {
     fn into_kind(self) -> TransactionKind;
 
     /// Transaction signer and Gas owner
-    fn signers(&self) -> NonEmpty<SuiAddress>;
+    fn required_signers(&self) -> NonEmpty<SuiAddress>;
 
     fn gas_data(&self) -> &GasData;
 
@@ -2420,7 +2434,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     /// Transaction signer and Gas owner
-    fn signers(&self) -> NonEmpty<SuiAddress> {
+    fn required_signers(&self) -> NonEmpty<SuiAddress> {
         let mut signers = nonempty![self.sender];
         if self.gas_owner() != self.sender {
             signers.push(self.gas_owner());
@@ -3446,6 +3460,7 @@ impl Transaction {
             current_epoch,
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
+            vec![],
         )
     }
 
@@ -3470,6 +3485,7 @@ impl SignedTransaction {
             committee.epoch(),
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
+            vec![],
         )?;
 
         self.auth_sig().verify_secure(
@@ -3516,6 +3532,7 @@ impl CertifiedTransaction {
             committee.epoch(),
             verify_params,
             zklogin_inputs_cache,
+            vec![],
         )?;
         self.auth_sig().verify_secure(
             self.data(),
@@ -3548,6 +3565,140 @@ impl CertifiedTransaction {
 
 pub type VerifiedCertificate = VerifiedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WithAliases<T>(
+    T,
+    #[serde(with = "nonempty_as_vec")] NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
+);
+
+impl<T> WithAliases<T> {
+    pub fn new(tx: T, aliases: NonEmpty<(SuiAddress, Option<SequenceNumber>)>) -> Self {
+        Self(tx, aliases)
+    }
+
+    pub fn tx(&self) -> &T {
+        &self.0
+    }
+
+    pub fn aliases(&self) -> &NonEmpty<(SuiAddress, Option<SequenceNumber>)> {
+        &self.1
+    }
+
+    pub fn into_tx(self) -> T {
+        self.0
+    }
+
+    pub fn into_aliases(self) -> NonEmpty<(SuiAddress, Option<SequenceNumber>)> {
+        self.1
+    }
+
+    pub fn into_inner(self) -> (T, NonEmpty<(SuiAddress, Option<SequenceNumber>)>) {
+        (self.0, self.1)
+    }
+}
+
+impl<T: Message, S> WithAliases<VerifiedEnvelope<T, S>> {
+    /// Analogous to VerifiedEnvelope::serializable.
+    pub fn serializable(self) -> WithAliases<TrustedEnvelope<T, S>> {
+        WithAliases(self.0.serializable(), self.1)
+    }
+}
+
+impl<S> WithAliases<Envelope<SenderSignedData, S>> {
+    pub fn no_aliases(tx: Envelope<SenderSignedData, S>) -> Self {
+        let no_aliases = tx
+            .intent_message()
+            .value
+            .required_signers()
+            .map(|s| (s, None));
+        Self::new(tx, no_aliases)
+    }
+}
+
+impl<S> WithAliases<VerifiedEnvelope<SenderSignedData, S>> {
+    pub fn no_aliases(tx: VerifiedEnvelope<SenderSignedData, S>) -> Self {
+        let no_aliases = tx
+            .intent_message()
+            .value
+            .required_signers()
+            .map(|s| (s, None));
+        Self::new(tx, no_aliases)
+    }
+}
+
+pub type TransactionWithAliases = WithAliases<Transaction>;
+pub type VerifiedTransactionWithAliases = WithAliases<VerifiedTransaction>;
+pub type TrustedTransactionWithAliases = WithAliases<TrustedTransaction>;
+
+impl<T: Message, S> From<WithAliases<VerifiedEnvelope<T, S>>> for WithAliases<Envelope<T, S>> {
+    fn from(value: WithAliases<VerifiedEnvelope<T, S>>) -> Self {
+        Self(value.0.into(), value.1)
+    }
+}
+
+impl<T: Message, S> From<WithAliases<TrustedEnvelope<T, S>>>
+    for WithAliases<VerifiedEnvelope<T, S>>
+{
+    fn from(value: WithAliases<TrustedEnvelope<T, S>>) -> Self {
+        Self(value.0.into(), value.1)
+    }
+}
+
+mod nonempty_as_vec {
+    use super::*;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S, T>(value: &NonEmpty<T>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        let vec: Vec<&T> = value.iter().collect();
+        vec.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<NonEmpty<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de> + Clone,
+    {
+        use serde::de::{SeqAccess, Visitor};
+        use std::fmt;
+        use std::marker::PhantomData;
+
+        struct NonEmptyVisitor<T>(PhantomData<T>);
+
+        impl<'de, T> Visitor<'de> for NonEmptyVisitor<T>
+        where
+            T: Deserialize<'de> + Clone,
+        {
+            type Value = NonEmpty<T>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("a non-empty sequence")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let head = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::custom("empty vector"))?;
+
+                let mut tail = Vec::new();
+                while let Some(elem) = seq.next_element()? {
+                    tail.push(elem);
+                }
+
+                Ok(NonEmpty { head, tail })
+            }
+        }
+
+        deserializer.deserialize_seq(NonEmptyVisitor(PhantomData))
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord, Hash)]
 pub enum InputObjectKind {
@@ -4257,7 +4408,7 @@ impl TransactionKey {
     pub fn unwrap_digest(&self) -> &TransactionDigest {
         match self {
             TransactionKey::Digest(d) => d,
-            _ => panic!("called expect_digest on a non-Digest TransactionKey: {self:?}"),
+            _ => panic!("called unwrap_digest on a non-Digest TransactionKey: {self:?}"),
         }
     }
 
