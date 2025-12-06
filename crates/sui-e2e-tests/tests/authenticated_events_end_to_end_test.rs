@@ -29,6 +29,16 @@ async fn setup_test_cluster_with_auth_events() -> TestCluster {
     TestClusterBuilder::new().build().await
 }
 
+async fn setup_test_cluster_with_auth_events_disabled() -> TestCluster {
+    let _guard: sui_protocol_config::OverrideGuard =
+        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.disable_authenticated_event_streams_for_testing();
+            cfg
+        });
+
+    TestClusterBuilder::new().build().await
+}
+
 async fn publish_auth_event_package(test_cluster: &TestCluster) -> ObjectID {
     let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("tests/data/auth_event");
@@ -189,7 +199,7 @@ async fn authenticated_events_multiple_events_test() {
 
 #[sim_test]
 async fn authenticated_events_disabled_test() {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = setup_test_cluster_with_auth_events_disabled().await;
     let package_id = publish_auth_event_package(&test_cluster).await;
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
 
