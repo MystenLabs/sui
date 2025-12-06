@@ -18,8 +18,10 @@ use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::FutureExt;
 use futures::future::{Either, join_all, select};
 use itertools::{Itertools, izip};
+use moka::sync::SegmentedCache as MokaCache;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_common::assert_reachable;
+use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_common::{debug_fatal, fatal};
@@ -426,6 +428,9 @@ pub struct AuthorityPerEpochStore {
 
     /// A cache that tracks submitted transactions to prevent DoS through excessive resubmissions.
     pub(crate) submitted_transaction_cache: SubmittedTransactionCache,
+
+    /// A cache which tracks recently finalized transactions.
+    pub(crate) finalized_transactions_cache: MokaCache<TransactionDigest, ()>,
 
     /// Waiters for settlement transactions. Used by execution scheduler to wait for
     /// settlement transaction keys to resolve to transactions.
@@ -1141,6 +1146,11 @@ impl AuthorityPerEpochStore {
         let submitted_transaction_cache =
             SubmittedTransactionCache::new(None, submitted_transaction_cache_metrics);
 
+        let finalized_transactions_cache = MokaCache::builder(8)
+            .max_capacity(randomize_cache_capacity_in_tests(100_000))
+            .eviction_policy(moka::policy::EvictionPolicy::lru())
+            .build();
+
         let s = Arc::new(Self {
             name,
             committee: committee.clone(),
@@ -1183,6 +1193,7 @@ impl AuthorityPerEpochStore {
             consensus_tx_status_cache,
             tx_reject_reason_cache,
             submitted_transaction_cache,
+            finalized_transactions_cache,
             settlement_registrations: Default::default(),
         });
 
@@ -3641,6 +3652,18 @@ impl AuthorityPerEpochStore {
         } else {
             None
         }
+    }
+
+    /// Caches recent finalized transactions, to avoid revoting them.
+    pub(crate) fn cache_recently_finalized_transaction(&self, tx_digest: TransactionDigest) {
+        self.finalized_transactions_cache.insert(tx_digest, ());
+    }
+
+    /// If true, transaction is recently finalized and should not be voted on.
+    /// If false, the transaction may never be finalized, or has been finalized
+    /// but the info has been evicted from the cache.
+    pub(crate) fn is_recently_finalized(&self, tx_digest: &TransactionDigest) -> bool {
+        self.finalized_transactions_cache.contains_key(tx_digest)
     }
 
     /// Only used by admin API

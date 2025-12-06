@@ -1940,7 +1940,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             // TODO: consider only messages within 1~3 rounds of the leader?
             self.last_consensus_stats.stats.inc_num_messages(author);
 
-            // Set the "ping" transaction status for this block. This is ncecessary as there might be some ping requests waiting for the ping transaction to be certified.
+            // Set the "ping" transaction status for this block. This is necessary as there might be some ping requests waiting for the ping transaction to be certified.
             self.epoch_store.set_consensus_tx_status(
                 ConsensusPosition::ping(epoch, block),
                 ConsensusTxStatus::Finalized,
@@ -2212,9 +2212,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             };
 
             let key = verified_transaction.0.key();
+
+            if let Some(tx_digest) = key.user_transaction_digest() {
+                self.epoch_store
+                    .cache_recently_finalized_transaction(tx_digest);
+            }
+
             let in_set = !processed_set.insert(key.clone());
             let in_cache = self.processed_cache.put(key.clone(), ()).is_some();
-
             if in_set || in_cache {
                 self.metrics.skipped_consensus_txns_cache_hit.inc();
                 continue;
@@ -2596,6 +2601,18 @@ impl From<SerializableSequencedConsensusTransactionKind> for SequencedConsensusT
 pub enum SequencedConsensusTransactionKey {
     External(ConsensusTransactionKey),
     System(TransactionDigest),
+}
+
+impl SequencedConsensusTransactionKey {
+    pub fn user_transaction_digest(&self) -> Option<TransactionDigest> {
+        match self {
+            SequencedConsensusTransactionKey::External(key) => match key {
+                ConsensusTransactionKey::Certificate(digest) => Some(*digest),
+                _ => None,
+            },
+            SequencedConsensusTransactionKey::System(_) => None,
+        }
+    }
 }
 
 impl SequencedConsensusTransactionKind {
