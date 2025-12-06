@@ -4637,6 +4637,10 @@ impl ProtocolConfig {
         self.feature_flags.create_root_accumulator_object = true;
     }
 
+    pub fn disable_create_root_accumulator_object_for_testing(&mut self) {
+        self.feature_flags.create_root_accumulator_object = false;
+    }
+
     pub fn enable_address_balance_gas_payments_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = true;
         self.feature_flags.allow_private_accumulator_entrypoints = true;
