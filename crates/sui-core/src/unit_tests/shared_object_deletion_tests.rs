@@ -36,7 +36,6 @@ use crate::{
     move_call,
 };
 use move_core_types::ident_str;
-use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
@@ -59,15 +58,7 @@ impl TestRunner {
         telemetry_subscribers::init_for_testing();
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
 
-        let mut protocol_config =
-            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_per_object_congestion_control_mode_for_testing(
-            PerObjectCongestionControlMode::None,
-        );
-        let authority_state = TestAuthorityBuilder::new()
-            .with_protocol_config(protocol_config)
-            .build()
-            .await;
+        let authority_state = TestAuthorityBuilder::new().build().await;
 
         let mut gas_object_ids = vec![];
         for _ in 0..20 {

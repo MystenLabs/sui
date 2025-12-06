@@ -20,7 +20,7 @@ use crate::test_utils::{make_transfer_object_move_transaction, make_transfer_obj
 use crate::unit_test_utils::{
     init_local_authorities, init_local_authorities_with_overload_thresholds,
 };
-use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::ProtocolConfig;
 
 use sui_types::error::{SuiError, SuiErrorKind};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -298,9 +298,6 @@ async fn test_execution_with_dependencies() {
     // Disable randomness, it can't be constructed with fake authorities in this test anyway.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_random_beacon_for_testing(false);
-        config.set_per_object_congestion_control_mode_for_testing(
-            PerObjectCongestionControlMode::None,
-        );
         config
     });
 
@@ -494,9 +491,6 @@ async fn test_per_object_overload() {
     // Disable randomness, it can't be constructed with fake authorities in this test anyway.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_random_beacon_for_testing(false);
-        config.set_per_object_congestion_control_mode_for_testing(
-            PerObjectCongestionControlMode::None,
-        );
         config
     });
 
@@ -635,9 +629,6 @@ async fn test_txn_age_overload() {
     // Disable randomness, it can't be constructed with fake authorities in this test anyway.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_random_beacon_for_testing(false);
-        config.set_per_object_congestion_control_mode_for_testing(
-            PerObjectCongestionControlMode::None,
-        );
         config
     });
 
@@ -782,13 +773,8 @@ async fn test_authority_txn_signing_pushback() {
         max_load_shedding_percentage: 0,
         ..Default::default()
     };
-    let mut protocol_config =
-        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config
-        .set_per_object_congestion_control_mode_for_testing(PerObjectCongestionControlMode::None);
     let authority_state = TestAuthorityBuilder::new()
         .with_authority_overload_config(overload_config)
-        .with_protocol_config(protocol_config)
         .build()
         .await;
     authority_state
@@ -919,13 +905,8 @@ async fn test_authority_txn_execution_pushback() {
         max_load_shedding_percentage: 0,
         ..Default::default()
     };
-    let mut protocol_config =
-        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config
-        .set_per_object_congestion_control_mode_for_testing(PerObjectCongestionControlMode::None);
     let authority_state = TestAuthorityBuilder::new()
         .with_authority_overload_config(overload_config)
-        .with_protocol_config(protocol_config)
         .build()
         .await;
     authority_state

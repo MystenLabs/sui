@@ -415,7 +415,7 @@ pub struct AuthorityPerEpochStore {
     randomness_reporter: OnceCell<RandomnessReporter>,
 
     /// Manages recording execution time observations and generating estimates.
-    pub(crate) execution_time_estimator: tokio::sync::Mutex<Option<ExecutionTimeEstimator>>,
+    pub(crate) execution_time_estimator: tokio::sync::Mutex<ExecutionTimeEstimator>,
     tx_local_execution_time: OnceCell<mpsc::Sender<LocalExecutionTimeData>>,
     pub(crate) tx_object_debts: OnceCell<mpsc::Sender<Vec<ObjectID>>>,
     // Saved at end of epoch for propagating observations to the next.
@@ -1107,7 +1107,7 @@ impl AuthorityPerEpochStore {
             if let PerObjectCongestionControlMode::ExecutionTimeEstimate(protocol_params) =
                 protocol_config.per_object_congestion_control_mode()
             {
-                Some(ExecutionTimeEstimator::new(
+                ExecutionTimeEstimator::new(
                     committee.clone(),
                     protocol_params,
                     // Load observations stored at end of previous epoch.
@@ -1126,9 +1126,11 @@ impl AuthorityPerEpochStore {
                             })
                         },
                     )),
-                ))
+                )
             } else {
-                None
+                fatal!(
+                    "support for congestion control modes other than PerObjectCongestionControlMode::ExecutionTimeEstimate has been removed"
+                );
             };
 
         let consensus_tx_status_cache = if protocol_config.mysticeti_fastpath() {
@@ -2381,7 +2383,6 @@ impl AuthorityPerEpochStore {
 
     pub(crate) fn should_defer(
         &self,
-        tx_cost: Option<u64>,
         cert: &VerifiedExecutableTransaction,
         commit_info: &ConsensusCommitInfo,
         dkg_failed: bool,
@@ -2410,7 +2411,6 @@ impl AuthorityPerEpochStore {
         // Defer transaction if it uses shared objects that are congested.
         if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
             .should_defer_due_to_object_congestion(
-                tx_cost,
                 cert,
                 previously_deferred_tx_digests,
                 commit_info,
@@ -3668,11 +3668,13 @@ impl AuthorityPerEpochStore {
 
     /// Only used by admin API
     pub async fn get_estimated_tx_cost(&self, tx: &TransactionData) -> Option<u64> {
-        self.execution_time_estimator
-            .lock()
-            .await
-            .as_ref()
-            .map(|estimator| estimator.get_estimate(tx).as_micros() as u64)
+        Some(
+            self.execution_time_estimator
+                .lock()
+                .await
+                .get_estimate(tx)
+                .as_micros() as u64,
+        )
     }
 
     pub async fn get_consensus_tx_cost_estimates(
@@ -3681,9 +3683,7 @@ impl AuthorityPerEpochStore {
         self.execution_time_estimator
             .lock()
             .await
-            .as_ref()
-            .map(|estimator| estimator.get_observations())
-            .unwrap_or_default()
+            .get_observations()
     }
 
     /// Whether this node is a validator in this epoch.
