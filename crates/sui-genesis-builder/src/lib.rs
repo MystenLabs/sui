@@ -1139,8 +1139,7 @@ pub fn generate_genesis_system_object(
             )?;
         }
 
-        if protocol_config.enable_accumulators() && protocol_config.create_root_accumulator_object()
-        {
+        if protocol_config.create_root_accumulator_object() {
             builder.move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),
                 ident_str!("accumulator").to_owned(),
