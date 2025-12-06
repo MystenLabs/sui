@@ -398,13 +398,14 @@ mod tests {
             assert_eq!(counts.len(), 10);
             for (i, count) in counts.iter().enumerate() {
                 assert_eq!(count.cp_sequence_number, i as i64);
-                assert_eq!(count.count, 2);
+                assert_eq!(count.count, 3); // 2 user transactions + 1 settlement transaction
             }
         }
 
         // Check that ingestion metrics were updated.
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 10);
-        assert_eq!(ingestion_metrics.total_ingested_transactions.get(), 20);
+        // 10 checkpoints, 2 user transactions + 1 settlement transaction per checkpoint
+        assert_eq!(ingestion_metrics.total_ingested_transactions.get(), 30);
         assert_eq!(ingestion_metrics.latest_ingested_checkpoint.get(), 9);
 
         macro_rules! assert_pipeline_metric {
@@ -431,8 +432,9 @@ mod tests {
         // The watermark checkpoint is inclusive, but the transaction is exclusive
         assert_pipeline_metric!(watermark_checkpoint, 9);
         assert_pipeline_metric!(watermark_checkpoint_in_db, 9);
-        assert_pipeline_metric!(watermark_transaction, 20);
-        assert_pipeline_metric!(watermark_transaction_in_db, 20);
+        // 10 checkpoints, 2 user transactions + 1 settlement transaction per checkpoint
+        assert_pipeline_metric!(watermark_transaction, 30);
+        assert_pipeline_metric!(watermark_transaction_in_db, 30);
     }
 
     #[test]

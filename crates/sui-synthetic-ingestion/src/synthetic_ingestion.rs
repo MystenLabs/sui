@@ -150,7 +150,11 @@ mod tests {
                 checkpoint_data.checkpoint_summary.sequence_number,
                 checkpoint
             );
-            assert_eq!(checkpoint_data.transactions.len(), checkpoint_size as usize);
+            // there is one additional transaction (the settlement transaction)
+            assert_eq!(
+                checkpoint_data.transactions.len(),
+                1 + checkpoint_size as usize
+            );
         }
     }
 }

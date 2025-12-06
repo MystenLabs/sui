@@ -101,7 +101,7 @@ mod tests {
             .process_checkpoint(&Arc::new(checkpoint_data))
             .await?
             .collect();
-        assert_eq!(transaction_entries.len(), 1);
+        assert_eq!(transaction_entries.len(), 2); // checkpoint builder adds settlement transaction
         let db_txn = transaction_entries.first().unwrap();
 
         // Check that the transaction was stored correctly.
