@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::execution_scheduler::balance_withdraw_scheduler::ScheduleResult;
-use crate::execution_scheduler::balance_withdraw_scheduler::{
-    BalanceSettlement, ScheduleStatus, TxBalanceWithdraw, mock_balance_read::MockBalanceRead,
+use crate::execution_scheduler::balance_withdraw_scheduler::mock_balance_read::MockBalanceRead;
+
+use super::{
+    BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
     scheduler::BalanceWithdrawScheduler,
 };
 use futures::StreamExt;

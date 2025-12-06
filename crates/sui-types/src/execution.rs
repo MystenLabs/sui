@@ -341,6 +341,7 @@ impl ExecutionTiming {
 pub type ResultWithTimings<R, E> = Result<(R, Vec<ExecutionTiming>), (E, Vec<ExecutionTiming>)>;
 
 /// Captures the output of executing a transaction in the execution driver.
+#[derive(Debug)]
 pub enum ExecutionOutput<T> {
     /// The expected typical path - transaction executed successfully.
     Success(T),

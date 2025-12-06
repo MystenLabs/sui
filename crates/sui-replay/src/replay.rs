@@ -783,7 +783,7 @@ impl LocalExec {
             &checked_input_objects,
             &HashSet::new(),
             // TODO(address-balances): Support balance withdraw status for replay
-            &BalanceWithdrawStatus::NoWithdraw,
+            &BalanceWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -860,7 +860,7 @@ impl LocalExec {
             &checked_input_objects,
             &HashSet::new(),
             // TODO(address-balances): Support balance withdraw status for replay
-            &BalanceWithdrawStatus::NoWithdraw,
+            &BalanceWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -976,7 +976,7 @@ impl LocalExec {
             &input_objects,
             &HashSet::new(),
             // TODO(address-balances): Support balance withdraw status for replay
-            &BalanceWithdrawStatus::NoWithdraw,
+            &BalanceWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),

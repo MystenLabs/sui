@@ -27,7 +27,7 @@ use sui_types::{
 use tokio::sync::mpsc::{self, unbounded_channel};
 use tokio::time::timeout;
 
-use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
+use super::BalanceSettlement;
 use crate::{
     authority::{
         AuthorityState, ExecutionEnv, shared_object_version_manager::Schedulable,
@@ -158,7 +158,7 @@ impl TestEnv {
             let cert = self.receive_certificate().await.unwrap();
             results.insert(
                 *cert.certificate.digest(),
-                cert.execution_env.withdraw_status,
+                cert.execution_env.balance_withdraw_status,
             );
         }
         assert_eq!(results, expected_results);
@@ -214,15 +214,15 @@ async fn test_withdraw_schedule_e2e() {
         .expect_withdraw_results(BTreeMap::from([
             (
                 *transactions[0].digest(),
-                BalanceWithdrawStatus::SufficientBalance,
+                BalanceWithdrawStatus::MaybeSufficient,
             ),
             (
                 *transactions[1].digest(),
-                BalanceWithdrawStatus::SufficientBalance,
+                BalanceWithdrawStatus::MaybeSufficient,
             ),
             (
                 *transactions[2].digest(),
-                BalanceWithdrawStatus::InsufficientBalance,
+                BalanceWithdrawStatus::Insufficient,
             ),
         ]))
         .await;
@@ -237,11 +237,11 @@ async fn test_withdraw_schedule_e2e() {
         .expect_withdraw_results(BTreeMap::from([
             (
                 *transactions[0].digest(),
-                BalanceWithdrawStatus::SufficientBalance,
+                BalanceWithdrawStatus::MaybeSufficient,
             ),
             (
                 *transactions[1].digest(),
-                BalanceWithdrawStatus::InsufficientBalance,
+                BalanceWithdrawStatus::Insufficient,
             ),
         ]))
         .await;
@@ -255,7 +255,7 @@ async fn test_withdraw_schedule_e2e() {
     test_env
         .expect_withdraw_results(BTreeMap::from([(
             *transactions[0].digest(),
-            BalanceWithdrawStatus::InsufficientBalance,
+            BalanceWithdrawStatus::Insufficient,
         )]))
         .await;
 }
