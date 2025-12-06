@@ -1,0 +1,63 @@
+{
+  "exporter": "speedscope@1.15.2",
+  "name": "saved_traces/0x1__errors__fail_in_native.json.zst",
+  "activeProfileIndex": 0,
+  "$schema": "https://www.speedscope.app/file-format-schema.json",
+  "shared": {
+    "frames": [
+      {
+        "name": "fail_in_native",
+        "file": ""
+      },
+      {
+        "name": "internal_sub_string_for_testing",
+        "file": ""
+      },
+      {
+        "name": "internal_sub_string",
+        "file": ""
+      }
+    ]
+  },
+  "profiles": [
+    {
+      "type": "evented",
+      "name": "saved_traces/0x1__errors__fail_in_native.json.zst",
+      "unit": "none",
+      "startValue": 0,
+      "endValue": 4632,
+      "events": [
+        {
+          "type": "O",
+          "frame": 0,
+          "at": 0
+        },
+        {
+          "type": "O",
+          "frame": 1,
+          "at": 20
+        },
+        {
+          "type": "O",
+          "frame": 2,
+          "at": 4632
+        },
+        {
+          "type": "C",
+          "frame": 2,
+          "at": 4632
+        },
+        {
+          "type": "C",
+          "frame": 1,
+          "at": 4632
+        },
+        {
+          "type": "C",
+          "frame": 0,
+          "at": 4632
+        }
+      ]
+    }
+  ]
+}

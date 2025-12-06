@@ -43,3 +43,7 @@ External Command `wc -l f21.diff.lcov.info`:
 26 f21.diff.lcov.info
 Command `profile -i saved_traces/0x1__calls__test_complex_nested_calls.json.zst -o gas_profiles`:
 Saving gas profile to: gas_profiles/gas_profile_0x1__calls__test_complex_nested_calls.json
+Command `profile -i saved_traces/0x1__errors__fail_in_native.json.zst -o gas_profiles`:
+Saving gas profile to: gas_profiles/gas_profile_0x1__errors__fail_in_native.json
+Command `profile -i saved_traces/0x1__errors__aborter.json.zst -o gas_profiles`:
+Saving gas profile to: gas_profiles/gas_profile_0x1__errors__aborter.json
