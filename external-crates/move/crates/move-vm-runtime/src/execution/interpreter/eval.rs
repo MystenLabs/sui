@@ -96,7 +96,6 @@ pub(super) fn run(
             let _ = state.debug_print_stack_trace(run_context.vtables, &mut buf);
             buf
         });
-        continue;
     }
 
     // When we are done, grab the operand stack as the return type.
