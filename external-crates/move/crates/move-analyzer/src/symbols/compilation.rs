@@ -1085,12 +1085,9 @@ fn load_root_pkg<F: MoveFlavor>(
     let mut root_pkg =
         RootPackage::<F>::load_sync(path.to_path_buf(), env, build_config.mode_set())?;
 
-    root_pkg.save_lockfile_to_disk(
-        &build_config
-            .install_dir
-            .clone()
-            .unwrap_or(root_pkg.package_path().to_path_buf()),
-    )?;
+    // TODO dvx-1889 this is inconsistent with where we save the lockfile elsewhere
+    let out_path = root_pkg.package_path().to_path_buf();
+    root_pkg.save_lockfile_to_disk(&out_path)?;
 
     Ok(root_pkg)
 }

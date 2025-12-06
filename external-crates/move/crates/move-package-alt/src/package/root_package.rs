@@ -791,10 +791,11 @@ pkg_b = { local = "../pkg_b" }"#,
                 .await
                 .unwrap();
 
-        let out_path = tempfile::tempdir().unwrap();
-        root_pkg.save_lockfile_to_disk(out_path.path()).unwrap();
+        root_pkg
+            .save_lockfile_to_disk(&project.path_for("root"))
+            .unwrap();
 
-        let sha = dep_sha(&root_pkg, &env.name, "a", out_path.path()).await;
+        let sha = dep_sha(&root_pkg, &env.name, "a", &project.path_for("root")).await;
         assert_eq!(sha, commit.sha());
     }
 
@@ -814,10 +815,11 @@ pkg_b = { local = "../pkg_b" }"#,
                 .await
                 .unwrap();
 
-        let out_dir = tempfile::tempdir().unwrap();
-        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
+        root_pkg
+            .save_lockfile_to_disk(&project.path_for("root"))
+            .unwrap();
 
-        let sha = dep_sha(&root_pkg, &env.name, "a", out_dir.path()).await;
+        let sha = dep_sha(&root_pkg, &env.name, "a", &project.path_for("root")).await;
         assert_eq!(sha, commit.sha());
     }
 
@@ -840,8 +842,9 @@ pkg_b = { local = "../pkg_b" }"#,
                 .await
                 .unwrap();
 
-        let out_dir = tempfile::tempdir().unwrap();
-        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
+        root_pkg
+            .save_lockfile_to_disk(&project.path_for("root"))
+            .unwrap();
         drop(root_pkg); // release the fs lock
 
         // change the branch
@@ -855,10 +858,12 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
+        root_pkg
+            .save_lockfile_to_disk(&project.path_for("root"))
+            .unwrap();
 
         // sha should still be for commit 1
-        let sha = dep_sha(&root_pkg, &env.name, "a", out_dir.path()).await;
+        let sha = dep_sha(&root_pkg, &env.name, "a", &project.path_for("root")).await;
         assert_eq!(sha, commit1.sha());
     }
 
@@ -880,8 +885,9 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        let out_dir = tempfile::tempdir().unwrap();
-        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
+        root_pkg
+            .save_lockfile_to_disk(&project.path_for("root"))
+            .unwrap();
         drop(root_pkg); // release FS lock
 
         // change the branch
@@ -895,10 +901,12 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
+        root_pkg
+            .save_lockfile_to_disk(&project.path_for("root"))
+            .unwrap();
 
         // since we repinned, sha should be for commit 2
-        let sha = dep_sha(&root_pkg, &env.name, "a", out_dir.path()).await;
+        let sha = dep_sha(&root_pkg, &env.name, "a", &project.path_for("root")).await;
         assert_eq!(sha, commit2.sha());
     }
 
@@ -921,8 +929,9 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        let out_dir = tempfile::tempdir().unwrap();
-        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
+        root_pkg
+            .save_lockfile_to_disk(&project.path_for("root"))
+            .unwrap();
         drop(root_pkg); // release FS lock
 
         // change the branch so we will notice a repin
@@ -937,10 +946,12 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
+        root_pkg
+            .save_lockfile_to_disk(&project.path_for("root"))
+            .unwrap();
 
         // since the manifest changed, we should have repinned, so the sha should be for commit 2
-        let sha = dep_sha(&root_pkg, &env.name, "a", out_dir.path()).await;
+        let sha = dep_sha(&root_pkg, &env.name, "a", &project.path_for("root")).await;
         assert_eq!(sha, commit2.sha());
     }
 
@@ -969,8 +980,9 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        let out_dir = tempdir().unwrap();
-        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
+        root_pkg
+            .save_lockfile_to_disk(&project.path_for("root"))
+            .unwrap();
         drop(root_pkg); // release package lock
 
         // change the branch so that we will notice a repin
@@ -985,11 +997,13 @@ pkg_b = { local = "../pkg_b" }"#,
             RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
                 .await
                 .unwrap();
-        root_pkg.save_lockfile_to_disk(out_dir.path()).unwrap();
+        root_pkg
+            .save_lockfile_to_disk(&project.path_for("root"))
+            .unwrap();
 
         // since the dependency's manifest changed, we should have repinned, so the sha should be
         // for commit 2
-        let sha = dep_sha(&root_pkg, &env.name, "git_dep", out_dir.path()).await;
+        let sha = dep_sha(&root_pkg, &env.name, "git_dep", &project.path_for("root")).await;
         assert_eq!(sha, commit2.sha());
     }
 
