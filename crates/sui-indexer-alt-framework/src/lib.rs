@@ -163,6 +163,12 @@ pub(crate) struct Task {
     reader_interval: Duration,
 }
 
+#[derive(Default)]
+struct AddPipelineResult {
+    next_checkpoint: u64,
+    has_watermark_record: bool,
+}
+
 impl TaskArgs {
     pub fn tasked(task: String, reader_interval_ms: u64) -> Self {
         Self {
@@ -287,7 +293,7 @@ impl<S: Store> Indexer<S> {
     where
         H: concurrent::Handler<Store = S> + Send + Sync + 'static,
     {
-        let Some(next_checkpoint) = self.add_pipeline::<H>().await? else {
+        let Some(add_pipeline_result) = self.add_pipeline::<H>().await? else {
             return Ok(());
         };
 
@@ -352,7 +358,7 @@ impl<S: Store> Indexer<S> {
     /// calculated above.
     ///
     /// Returns `Ok(None)` if the pipeline is disabled.
-    async fn add_pipeline<P: Processor + 'static>(&mut self) -> Result<Option<u64>> {
+    async fn add_pipeline<P: Processor + 'static>(&mut self) -> Result<Option<AddPipelineResult>> {
         ensure!(
             self.added_pipelines.insert(P::NAME),
             "Pipeline {:?} already added",
@@ -387,7 +393,10 @@ impl<S: Store> Indexer<S> {
 
         self.first_ingestion_checkpoint = next_checkpoint.min(self.first_ingestion_checkpoint);
 
-        Ok(Some(next_checkpoint))
+        Ok(Some(AddPipelineResult {
+            next_checkpoint,
+            has_watermark_record: watermark.is_some(),
+        }))
     }
 }
 
