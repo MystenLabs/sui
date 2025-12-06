@@ -1001,7 +1001,8 @@ async fn write_published_toml(
     let env_name = Chain::Testnet.as_str().to_string();
     let chain_id = get_testnet_chain_identifier().to_string();
     let env = Environment::new(env_name, chain_id.clone());
-    let mut root_pkg = RootPackage::<SuiFlavor>::load(pkg_path, env.clone(), vec![]).await?;
+    let mut root_pkg =
+        RootPackage::<SuiFlavor>::load(pkg_path.as_ref(), env.clone(), vec![]).await?;
     root_pkg.write_publish_data(
         move_package_alt::schema::Publication {
             chain_id,
@@ -1016,7 +1017,7 @@ async fn write_published_toml(
                 upgrade_capability: None,
             },
         },
-        pkg_path,
+        pkg_path.as_ref(),
     )?;
     Ok(())
 }
