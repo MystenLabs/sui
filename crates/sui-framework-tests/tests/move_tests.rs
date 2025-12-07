@@ -37,6 +37,7 @@ pub(crate) async fn build(path: &Path) -> datatest_stable::Result<()> {
     // TODO dvx-1889: this is kind of hacky - we intentionally unclobber the lockfile because we
     // don't want them to change. Update this when we properly implement install_dir
     let lockfile_copy = tempfile::NamedTempFile::new().unwrap();
+    assert!(path.join("Move.lock").exists());
     std::fs::copy(path.join("Move.lock"), &lockfile_copy).unwrap();
 
     let mut config = BuildConfig::new_for_testing();
