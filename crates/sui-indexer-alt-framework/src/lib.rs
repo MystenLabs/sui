@@ -357,15 +357,13 @@ impl<S: Store> Indexer<S> {
         let pipeline_task =
             pipeline_task::<S>(P::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
 
-        let watermark = conn
-            .committer_watermark(&pipeline_task)
+        let checkpoint_hi_inclusive = conn
+            .init_watermark(&pipeline_task, self.default_next_checkpoint)
             .await
-            .with_context(|| format!("Failed to get watermark for {pipeline_task}"))?;
+            .with_context(|| format!("Failed to init watermark for {pipeline_task}"))?;
 
-        let next_checkpoint = watermark
-            .as_ref()
-            .map(|w| w.checkpoint_hi_inclusive + 1)
-            .unwrap_or(self.default_next_checkpoint);
+        let next_checkpoint =
+            checkpoint_hi_inclusive.map_or(self.default_next_checkpoint, |c| c + 1);
 
         self.first_ingestion_checkpoint = next_checkpoint.min(self.first_ingestion_checkpoint);
 
@@ -432,6 +430,7 @@ mod tests {
 
     use async_trait::async_trait;
     use clap::Parser;
+    use sui_indexer_alt_framework_store_traits::PrunerWatermark;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tokio::sync::watch;
 
@@ -583,6 +582,62 @@ mod tests {
     test_pipeline!(MockHandler, "test_processor");
     test_pipeline!(SequentialHandler, "sequential_handler");
     test_pipeline!(MockCheckpointSequenceNumberHandler, "test");
+
+    async fn test_init_watermark(
+        first_checkpoint: Option<u64>,
+        is_concurrent: bool,
+    ) -> (Option<CommitterWatermark>, Option<PrunerWatermark>) {
+        let registry = Registry::new();
+        let store = MockStore::default();
+
+        test_pipeline!(A, "pipeline_name");
+
+        let mut conn = store.connect().await.unwrap();
+
+        let indexer_args = IndexerArgs {
+            first_checkpoint,
+            ..IndexerArgs::default()
+        };
+        let temp_dir = tempfile::tempdir().unwrap();
+        let client_args = ClientArgs {
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let ingestion_config = IngestionConfig::default();
+
+        let mut indexer = Indexer::new(
+            store.clone(),
+            indexer_args,
+            client_args,
+            ingestion_config,
+            None,
+            &registry,
+        )
+        .await
+        .unwrap();
+
+        if is_concurrent {
+            indexer
+                .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
+                .await
+                .unwrap();
+        } else {
+            indexer
+                .sequential_pipeline::<A>(A, SequentialConfig::default())
+                .await
+                .unwrap();
+        }
+
+        (
+            conn.committer_watermark(A::NAME).await.unwrap(),
+            conn.pruner_watermark(A::NAME, Duration::ZERO)
+                .await
+                .unwrap(),
+        )
+    }
 
     #[test]
     fn test_arg_parsing() {
@@ -1634,6 +1689,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_init_watermark_concurrent_no_first_checkpoint() {
+        let (committer_watermark, pruner_watermark) = test_init_watermark(None, true).await;
+        // Indexer will not init the watermark, pipeline tasks will write commit watermarks as normal.
+        assert_eq!(committer_watermark, None);
+        assert_eq!(pruner_watermark, None);
+    }
+
+    #[tokio::test]
+    async fn test_init_watermark_concurrent_first_checkpoint_0() {
+        let (committer_watermark, pruner_watermark) = test_init_watermark(Some(0), true).await;
+        // Indexer will not init the watermark, pipeline tasks will write commit watermarks as normal.
+        assert_eq!(committer_watermark, None);
+        assert_eq!(pruner_watermark, None);
+    }
+
+    #[tokio::test]
+    async fn test_init_watermark_concurrent_first_checkpoint_1() {
+        let (committer_watermark, pruner_watermark) = test_init_watermark(Some(1), true).await;
+
+        let committer_watermark = committer_watermark.unwrap();
+        assert_eq!(committer_watermark.checkpoint_hi_inclusive, 0);
+
+        let pruner_watermark = pruner_watermark.unwrap();
+        assert_eq!(pruner_watermark.reader_lo, 1);
+        assert_eq!(pruner_watermark.pruner_hi, 1);
+    }
+
+    #[tokio::test]
+    async fn test_init_watermark_sequential() {
+        let (committer_watermark, pruner_watermark) = test_init_watermark(Some(1), false).await;
+
+        let committer_watermark = committer_watermark.unwrap();
+        assert_eq!(committer_watermark.checkpoint_hi_inclusive, 0);
+
+        let pruner_watermark = pruner_watermark.unwrap();
+        assert_eq!(pruner_watermark.reader_lo, 1);
+        assert_eq!(pruner_watermark.pruner_hi, 1);
+    }
+
+    #[tokio::test]
     async fn test_multiple_sequential_pipelines_next_checkpoint() {
         let registry = Registry::new();
         let store = MockStore::default();
@@ -1947,7 +2042,7 @@ mod tests {
         assert_eq!(main_pipeline_watermark.reader_lo, 5);
         let tasked_pipeline_watermark = store.watermark("test@task").unwrap();
         assert_eq!(tasked_pipeline_watermark.checkpoint_hi_inclusive, 25);
-        assert_eq!(tasked_pipeline_watermark.reader_lo, 0);
+        assert_eq!(tasked_pipeline_watermark.reader_lo, 9);
     }
 
     /// During a run, the tasked pipeline will stop sending checkpoints below the main pipeline's

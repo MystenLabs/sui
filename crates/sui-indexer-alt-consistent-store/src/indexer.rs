@@ -116,6 +116,7 @@ impl<S: Schema + Send + Sync + 'static> Indexer<S> {
             H::NAME
         );
 
+        // TODO: Refactor consistent store indexer to use `init_watermark` instead of wrapping `sequential_pipeline`.
         self.sync
             .register_pipeline(H::NAME)
             .with_context(|| format!("Failed to add pipeline {:?} to synchronizer", H::NAME))?;

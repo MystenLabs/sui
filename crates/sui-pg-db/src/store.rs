@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::prelude::*;
@@ -22,6 +22,47 @@ pub use sui_indexer_alt_framework_store_traits::Store;
 
 #[async_trait]
 impl store::Connection for Connection<'_> {
+    async fn init_watermark(
+        &mut self,
+        pipeline_task: &str,
+        default_next_checkpoint: u64,
+    ) -> anyhow::Result<Option<u64>> {
+        let Some(checkpoint_hi_inclusive) = default_next_checkpoint.checked_sub(1) else {
+            // Do not create a watermark record with checkpoint_hi_inclusive = -1.
+            return Ok(self
+                .committer_watermark(pipeline_task)
+                .await?
+                .map(|w| w.checkpoint_hi_inclusive));
+        };
+
+        let stored_watermark = StoredWatermark {
+            pipeline: pipeline_task.to_string(),
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive: checkpoint_hi_inclusive as i64,
+            tx_hi: 0,
+            timestamp_ms_hi_inclusive: 0,
+            reader_lo: default_next_checkpoint as i64,
+            pruner_timestamp: Utc::now().naive_utc(),
+            pruner_hi: default_next_checkpoint as i64,
+        };
+
+        use diesel::pg::upsert::excluded;
+        let checkpoint_hi_inclusive: i64 = diesel::insert_into(watermarks::table)
+            .values(&stored_watermark)
+            // There is an existing entry, so only write the new `hi` values
+            .on_conflict(watermarks::pipeline)
+            // Use `do_update` instead of `do_nothing` to return the existing row with `returning`.
+            .do_update()
+            // When using `do_update`, at least one change needs to be set, so set the pipeline to itself (nothing changes).
+            // `excluded` is a virtual table containing the existing row that there was a conflict with.
+            .set(watermarks::pipeline.eq(excluded(watermarks::pipeline)))
+            .returning(watermarks::checkpoint_hi_inclusive)
+            .get_result(self)
+            .await?;
+
+        Ok(Some(checkpoint_hi_inclusive as u64))
+    }
+
     async fn committer_watermark(
         &mut self,
         pipeline_task: &str,

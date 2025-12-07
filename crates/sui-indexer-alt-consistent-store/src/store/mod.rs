@@ -159,6 +159,13 @@ impl<S: Send + Sync + 'static> store::TransactionalStore for Store<S> {
 
 #[async_trait::async_trait]
 impl<S: Send + Sync> store::Connection for Connection<'_, S> {
+    async fn init_watermark(&mut self, pipeline_task: &str, _: u64) -> anyhow::Result<Option<u64>> {
+        Ok(self
+            .committer_watermark(pipeline_task)
+            .await?
+            .map(|w| w.checkpoint_hi_inclusive))
+    }
+
     async fn committer_watermark(
         &mut self,
         pipeline_task: &str,
@@ -169,15 +176,6 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
             .db
             .commit_watermark(pipeline_task)?
             .map(Into::into))
-    }
-
-    async fn set_committer_watermark(
-        &mut self,
-        pipeline_task: &str,
-        watermark: CommitterWatermark,
-    ) -> anyhow::Result<bool> {
-        self.watermark = Some((pipeline_task.to_string(), watermark.into()));
-        Ok(true)
     }
 
     async fn reader_watermark(
@@ -193,6 +191,15 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
         _delay: Duration,
     ) -> anyhow::Result<Option<store::PrunerWatermark>> {
         Ok(None)
+    }
+
+    async fn set_committer_watermark(
+        &mut self,
+        pipeline_task: &str,
+        watermark: CommitterWatermark,
+    ) -> anyhow::Result<bool> {
+        self.watermark = Some((pipeline_task.to_string(), watermark.into()));
+        Ok(true)
     }
 
     async fn set_reader_watermark(
