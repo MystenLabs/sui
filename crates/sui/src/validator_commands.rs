@@ -459,7 +459,7 @@ impl SuiValidatorCommand {
             SuiValidatorCommand::LeaveCommittee { tx_args } => {
                 // Only an active validator can leave committee.
                 let _status =
-                    check_status(context, HashSet::from([ValidatorStatus::Active])).await?;
+                    check_status(context, HashSet::from([ValidatorStatus::Active]), tx_args.sender).await?;
                 let gas_budget = tx_args.gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let (response, serialized_unsigned_transaction) = call_0x5(
                     context,
@@ -1340,7 +1340,7 @@ async fn update_metadata(
             if !network_address.is_loosely_valid_tcp_addr() {
                 bail!("Network address must be a TCP address");
             }
-            let _status = check_status(context, HashSet::from([Pending, Active])).await?;
+            let _status = check_status(context, HashSet::from([Pending, Active]), sender).await?;
             let args = vec![CallArg::Pure(bcs::to_bytes(&network_address).unwrap())];
             call_0x5(
                 context,
@@ -1356,7 +1356,7 @@ async fn update_metadata(
             primary_address.to_anemo_address().map_err(|_| {
                 anyhow!("Invalid primary address, it must look like `/[ip4,ip6,dns]/.../udp/port`")
             })?;
-            let _status = check_status(context, HashSet::from([Pending, Active])).await?;
+            let _status = check_status(context, HashSet::from([Pending, Active]), sender).await?;
             let args = vec![CallArg::Pure(bcs::to_bytes(&primary_address).unwrap())];
             call_0x5(
                 context,
@@ -1373,7 +1373,7 @@ async fn update_metadata(
                 anyhow!("Invalid worker address, it must look like `/[ip4,ip6,dns]/.../udp/port`")
             })?;
             // Only an active validator can leave committee.
-            let _status = check_status(context, HashSet::from([Pending, Active])).await?;
+            let _status = check_status(context, HashSet::from([Pending, Active]), sender).await?;
             let args = vec![CallArg::Pure(bcs::to_bytes(&worker_address).unwrap())];
             call_0x5(
                 context,
@@ -1389,7 +1389,7 @@ async fn update_metadata(
             p2p_address.to_anemo_address().map_err(|_| {
                 anyhow!("Invalid p2p address, it must look like `/[ip4,ip6,dns]/.../udp/port`")
             })?;
-            let _status = check_status(context, HashSet::from([Pending, Active])).await?;
+            let _status = check_status(context, HashSet::from([Pending, Active]), sender).await?;
             let args = vec![CallArg::Pure(bcs::to_bytes(&p2p_address).unwrap())];
             call_0x5(
                 context,
@@ -1402,7 +1402,7 @@ async fn update_metadata(
             .await
         }
         MetadataUpdate::NetworkPubKey { file } => {
-            let _status = check_status(context, HashSet::from([Pending, Active])).await?;
+            let _status = check_status(context, HashSet::from([Pending, Active]), sender).await?;
             let network_pub_key: NetworkPublicKey =
                 read_network_keypair_from_file(file)?.public().clone();
             let args = vec![CallArg::Pure(
@@ -1419,7 +1419,7 @@ async fn update_metadata(
             .await
         }
         MetadataUpdate::WorkerPubKey { file } => {
-            let _status = check_status(context, HashSet::from([Pending, Active])).await?;
+            let _status = check_status(context, HashSet::from([Pending, Active]), sender).await?;
             let worker_pub_key: NetworkPublicKey =
                 read_network_keypair_from_file(file)?.public().clone();
             let args = vec![CallArg::Pure(
@@ -1436,7 +1436,7 @@ async fn update_metadata(
             .await
         }
         MetadataUpdate::ProtocolPubKey { file } => {
-            let _status = check_status(context, HashSet::from([Pending, Active])).await?;
+            let _status = check_status(context, HashSet::from([Pending, Active]), sender).await?;
             let sui_address = context.active_address()?;
             let protocol_key_pair: AuthorityKeyPair = read_authority_keypair_from_file(file)?;
             let protocol_pub_key: AuthorityPublicKey = protocol_key_pair.public().clone();
@@ -1466,9 +1466,10 @@ async fn update_metadata(
 async fn check_status(
     context: &mut WalletContext,
     allowed_status: HashSet<ValidatorStatus>,
+    sender: Option<SuiAddress>,
 ) -> Result<ValidatorStatus> {
     let sui_client = context.get_client().await?;
-    let validator_address = context.active_address()?;
+    let validator_address = sender.unwrap_or(context.active_address()?);
     let summary = get_validator_summary(&sui_client, validator_address).await?;
     if summary.is_none() {
         bail!("{validator_address} is not a Validator.");
