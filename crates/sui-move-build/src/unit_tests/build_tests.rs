@@ -17,10 +17,16 @@ async fn generate_struct_layouts() {
         .join("sui-framework")
         .join("packages")
         .join("sui-framework");
+    // TODO dvx-1889: lockfile_copy is an ugly workaround to the fact that there's not a way to
+    // save the lockfile somewhere else, so we need to restore it to avoid running afoul of the
+    // changed-files test.
+    let lockfile_copy = tempfile::NamedTempFile::new().unwrap();
+    std::fs::copy(path.join("Move.lock"), &lockfile_copy).unwrap();
     let pkg = BuildConfig::new_for_testing()
         .build_async(&path)
         .await
         .unwrap();
+    std::fs::copy(&lockfile_copy, path.join("Move.lock")).unwrap();
     let registry = pkg.generate_struct_layouts();
     // check for a couple of types that aren't likely to go away
     assert!(registry.contains_key(
