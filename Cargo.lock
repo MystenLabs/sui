@@ -15597,6 +15597,7 @@ name = "sui-move"
 version = "1.63.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "better_any",
  "bin-version",
  "clap",
@@ -15621,16 +15622,19 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
+ "sui-json-rpc-types",
  "sui-macros",
  "sui-move-build",
  "sui-move-natives-latest",
  "sui-package-management",
  "sui-protocol-config",
+ "sui-sdk",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
  "tikv-jemalloc-ctl",
  "tokio",
+ "toml 0.7.4",
  "tracing",
  "walkdir",
 ]

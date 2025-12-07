@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::fork::ForkStateLoader;
 use clap::Parser;
 use move_cli::base::{
     self,
@@ -21,6 +22,7 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{SuiAddress, TxContext},
     digests::TransactionDigest,
+    fork_test_support::set_fork_loaded_objects,
     gas_model::tables::initial_cost_schedule_for_unit_tests,
     in_memory_storage::InMemoryStorage,
     metrics::LimitsMetrics,
@@ -34,6 +36,14 @@ const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000;
 pub struct Test {
     #[clap(flatten)]
     pub test: test::Test,
+
+    /// RPC endpoint URL to fetch object data from
+    #[clap(long)]
+    pub fork_rpc_url: Option<String>,
+
+    /// File containing object IDs to load (one per line)
+    #[clap(long)]
+    pub object_id_file: Option<String>,
 }
 
 impl Test {
@@ -60,6 +70,8 @@ impl Test {
             Some(unit_test_config),
             compute_coverage,
             save_disassembly,
+            self.fork_rpc_url,
+            self.object_id_file,
         )
     }
 }
@@ -82,9 +94,50 @@ pub fn run_move_unit_tests(
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
     save_disassembly: bool,
+    fork_rpc_url: Option<String>,
+    object_id_file: Option<String>,
 ) -> anyhow::Result<UnitTestResult> {
     // bind the extension hook if it has not yet been done
     Lazy::force(&SET_EXTENSION_HOOK);
+
+    // Load fork state if parameters are provided
+    if let (Some(rpc_url), Some(id_file)) = (fork_rpc_url, object_id_file) {
+        let loader = ForkStateLoader::new(rpc_url);
+
+        // Check if we're already in a Tokio runtime
+        let storage = if tokio::runtime::Handle::try_current().is_ok() {
+            // We're in a runtime, use block_in_place to avoid nested runtime error
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(loader.load_objects_from_file(id_file))
+            })?
+        } else {
+            // Not in a runtime, create a new one
+            let runtime = tokio::runtime::Runtime::new()?;
+            runtime.block_on(loader.load_objects_from_file(id_file))?
+        };
+
+        // Store the fork-loaded objects for later inventory population (thread-safe)
+        {
+            let mut fork_objects = Vec::new();
+            for (obj_id, obj) in storage.objects() {
+                if let Some(move_obj) = obj.data.try_as_move() {
+                    // Store object metadata including BCS bytes and version for later deserialization
+                    fork_objects.push((
+                        *obj_id,
+                        move_obj.type_().clone(),
+                        obj.owner.clone(),
+                        obj.version(),  // Add version!
+                        move_obj.contents().to_vec(),
+                    ));
+                    
+                    // Debug: Print information about loaded objects
+                    println!("Stored fork object: {} (type: {}, owner: {:?}, version: {})", 
+                        obj_id, move_obj.type_(), obj.owner, obj.version());
+                }
+            }
+            set_fork_loaded_objects(fork_objects);
+        }
+    }
 
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));

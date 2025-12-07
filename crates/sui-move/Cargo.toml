@@ -8,11 +8,13 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
+bcs.workspace = true
 clap.workspace = true
 colored.workspace = true
 once_cell.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
+toml.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 bin-version.workspace = true
@@ -37,6 +39,8 @@ sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 sui-package-management.workspace = true
+sui-sdk.workspace = true
+sui-json-rpc-types.workspace = true
 better_any = "0.1.1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
