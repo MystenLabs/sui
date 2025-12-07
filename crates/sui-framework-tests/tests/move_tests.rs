@@ -37,8 +37,13 @@ pub(crate) async fn build(path: &Path) -> datatest_stable::Result<()> {
     // TODO dvx-1889: this is kind of hacky - we intentionally unclobber the lockfile because we
     // don't want them to change. Update this when we properly implement install_dir
     let lockfile_copy = tempfile::NamedTempFile::new().unwrap();
-    assert!(path.join("Move.lock").exists());
-    std::fs::copy(path.join("Move.lock"), &lockfile_copy).unwrap();
+    let lockfile_path = path.join("Move.lock");
+    let copied = if lockfile_path.exists() {
+        std::fs::copy(&lockfile_path, &lockfile_copy).unwrap();
+        true
+    } else {
+        false
+    };
 
     let mut config = BuildConfig::new_for_testing();
     config.run_bytecode_verifier = true;
@@ -52,7 +57,9 @@ pub(crate) async fn build(path: &Path) -> datatest_stable::Result<()> {
         .await
         .unwrap_or_else(|e| panic!("Building package {}.\nWith error {e}", path.display()));
 
-    std::fs::copy(lockfile_copy, path.join("Move.lock")).unwrap();
+    if copied {
+        std::fs::copy(lockfile_copy, &lockfile_path).unwrap();
+    }
 
     Ok(())
 }

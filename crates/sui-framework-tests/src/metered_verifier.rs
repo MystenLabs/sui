@@ -22,9 +22,17 @@ fn build(path: &Path) -> anyhow::Result<CompiledPackage> {
     // TODO dvx-1889: lockfile_copy is ugly but is here to work around the changed files test until
     // we fix up the lockfile location flag
     let lockfile_copy = tempfile::NamedTempFile::new().unwrap();
-    std::fs::copy(path.join("Move.lock"), &lockfile_copy).unwrap();
+    let lockfile_path = path.join("Move.lock");
+    let copied = if lockfile_path.exists() {
+        std::fs::copy(path.join("Move.lock"), &lockfile_copy).unwrap();
+        true
+    } else {
+        false
+    };
     let result = config.build(path);
-    std::fs::copy(lockfile_copy, path.join("Move.lock")).unwrap();
+    if copied {
+        std::fs::copy(lockfile_copy, path.join("Move.lock")).unwrap();
+    }
     result
 }
 
