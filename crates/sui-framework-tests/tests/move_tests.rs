@@ -34,6 +34,11 @@ pub(crate) async fn build(path: &Path) -> datatest_stable::Result<()> {
         return Ok(());
     }
 
+    // TODO dvx-1889: this is kind of hacky - we intentionally unclobber the lockfile because we
+    // don't want them to change. Update this when we properly implement install_dir
+    let lockfile_copy = tempfile::NamedTempFile::new().unwrap();
+    std::fs::copy(path.join("Move.lock"), &lockfile_copy).unwrap();
+
     let mut config = BuildConfig::new_for_testing();
     config.run_bytecode_verifier = true;
     config.print_diags_to_stderr = true;
@@ -45,6 +50,8 @@ pub(crate) async fn build(path: &Path) -> datatest_stable::Result<()> {
         .build_async(path)
         .await
         .unwrap_or_else(|e| panic!("Building package {}.\nWith error {e}", path.display()));
+
+    std::fs::copy(lockfile_copy, path.join("Move.lock")).unwrap();
 
     Ok(())
 }

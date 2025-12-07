@@ -19,7 +19,13 @@ use sui_verifier::meter::SuiVerifierMeter;
 fn build(path: &Path) -> anyhow::Result<CompiledPackage> {
     let mut config = sui_move_build::BuildConfig::new_for_testing();
     config.config.warnings_are_errors = true;
-    config.build(path)
+    // TODO dvx-1889: lockfile_copy is ugly but is here to work around the changed files test until
+    // we fix up the lockfile location flag
+    let lockfile_copy = tempfile::NamedTempFile::new().unwrap();
+    std::fs::copy(path.join("Move.lock"), &lockfile_copy).unwrap();
+    let result = config.build(path);
+    std::fs::copy(lockfile_copy, path.join("Move.lock")).unwrap();
+    result
 }
 
 #[test]

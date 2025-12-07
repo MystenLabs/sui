@@ -14628,6 +14628,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
+ "tempfile",
  "tokio",
 ]
 

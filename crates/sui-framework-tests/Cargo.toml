@@ -40,3 +40,4 @@ msim.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+tempfile.workspace = true
