@@ -927,6 +927,9 @@ impl<'a> PTBBuilder<'a> {
 
                 let chain_id = self.reader.get_chain_identifier().await.ok();
                 let build_config = MoveBuildConfig::default();
+                // Save the initial current directory
+                let initial_dir = std::env::current_dir()
+                    .map_err(|e| err!(pkg_loc, "Failed to get current directory: {e}"))?;
                 let build_config = resolve_lock_file_path(build_config.clone(), Some(package_path))
                     .map_err(|e| err!(pkg_loc, "{e}"))?;
                 let previous_id = if let Some(ref chain_id) = chain_id {
@@ -960,6 +963,10 @@ impl<'a> PTBBuilder<'a> {
                 .await
                 .map_err(|e| err!(pkg_loc, "{e}"))?;
 
+                // Restore the initial directory so subsequent commands are not affected
+                std::env::set_current_dir(initial_dir)
+                    .map_err(|e| err!(pkg_loc, "Failed to restore initial directory: {e}"))?;
+
                 let compiled_modules = compiled_package.get_package_bytes(false);
 
                 let res = self.ptb.publish_upgradeable(
@@ -970,7 +977,9 @@ impl<'a> PTBBuilder<'a> {
             }
             // Update this command to not do as many things. It should result in a single command.
             ParsedPTBCommand::Upgrade(sp!(path_loc, package_path), mut arg) => {
-                let package_path = Path::new(&package_path);
+                let package_path = Path::new(&package_path)
+                    .canonicalize()
+                    .map_err(|e| err!(path_loc, "Failed to canonicalize package path: {e}"))?;
                 if !package_path.exists() {
                     error!(
                         path_loc,
@@ -978,6 +987,9 @@ impl<'a> PTBBuilder<'a> {
                         package_path.display()
                     );
                 }
+                // Save the initial current directory
+                let initial_dir = std::env::current_dir()
+                    .map_err(|e| err!(path_loc, "Failed to get current directory: {e}"))?;
 
                 if let sp!(loc, PTBArg::Identifier(id)) = arg {
                     arg = self
@@ -1004,11 +1016,12 @@ impl<'a> PTBBuilder<'a> {
                 let chain_id = self.reader.get_chain_identifier().await.ok();
                 let build_config = MoveBuildConfig::default();
 
-                let build_config = resolve_lock_file_path(build_config.clone(), Some(package_path))
-                    .map_err(|e| err!(path_loc, "{e}"))?;
+                let build_config =
+                    resolve_lock_file_path(build_config.clone(), Some(&package_path))
+                        .map_err(|e| err!(path_loc, "{e}"))?;
                 let previous_id = if let Some(ref chain_id) = chain_id {
                     sui_package_management::set_package_id(
-                        package_path,
+                        &package_path,
                         build_config.install_dir.clone(),
                         chain_id,
                         AccountAddress::ZERO,
@@ -1017,10 +1030,23 @@ impl<'a> PTBBuilder<'a> {
                 } else {
                     None
                 };
+
+                let (upgrade_policy, compiled_package) = upgrade_package(
+                    self.reader,
+                    build_config.clone(),
+                    &package_path,
+                    ObjectID::from_address(upgrade_cap_id.into_inner()),
+                    false, /* with_unpublished_dependencies */
+                    true,  /* skip_dependency_verification */
+                    None,
+                )
+                .await
+                .map_err(|e| err!(path_loc, "{e}"))?;
+
                 // Restore original ID, then check result.
                 if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
                     let _ = sui_package_management::set_package_id(
-                        package_path,
+                        &package_path,
                         build_config.install_dir.clone(),
                         &chain_id,
                         previous_id,
@@ -1028,17 +1054,9 @@ impl<'a> PTBBuilder<'a> {
                     .map_err(|e| err!(path_loc, "{e}"))?;
                 }
 
-                let (upgrade_policy, compiled_package) = upgrade_package(
-                    self.reader,
-                    build_config.clone(),
-                    package_path,
-                    ObjectID::from_address(upgrade_cap_id.into_inner()),
-                    false, /* with_unpublished_dependencies */
-                    false, /* skip_dependency_verification */
-                    None,
-                )
-                .await
-                .map_err(|e| err!(path_loc, "{e}"))?;
+                // Restore the initial directory so subsequent commands are not affected
+                std::env::set_current_dir(initial_dir)
+                    .map_err(|e| err!(path_loc, "Failed to restore initial directory: {e}"))?;
 
                 let package_digest = compiled_package.get_package_digest(false);
                 let package_id = compiled_package
