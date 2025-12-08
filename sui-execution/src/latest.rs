@@ -403,14 +403,15 @@ fn compare_effects(
     // Probably want to only log this when they differ, but set to always log for now just for you
     // to play with.
     // if !ok {
-    if true {
+    let t1 = format!("{:#?}", normal_effects.2);
+    let t2 = format!("{:#?}", new_effects.2);
+    let s = TextDiff::from_lines(&t1, &t2).unified_diff().to_string();
+    if s.len() > 0 {
         tracing::warn!(
             "{} TransactionEffects differ",
             normal_effects.2.transaction_digest()
         );
-        let t1 = format!("{:#?}", normal_effects.2);
-        let t2 = format!("{:#?}", new_effects.2);
-        let s = TextDiff::from_lines(&t1, &t2).unified_diff().to_string();
+
         let data = format!(
             "---\nDIGEST: {}\n>>\n{}\n<<<\n{:#?}\n{:#?}\n",
             normal_effects.2.transaction_digest(),
