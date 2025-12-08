@@ -26,8 +26,8 @@ use once_cell::sync::Lazy;
 use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Result;
-use move_package::compilation::compiled_package::CompiledPackage;
 use move_package::BuildConfig;
+use move_package::compilation::compiled_package::CompiledPackage;
 
 const BENCH_FUNCTION_PREFIX: &str = "bench_";
 
@@ -137,12 +137,7 @@ pub fn run_cross_module_tests<M: Measurement + 'static>(c: &mut Criterion<M>, pa
         .map(|m| m.unit.module.clone())
         .collect::<Vec<_>>();
     let mut move_vm = create_vm();
-    execute(
-        c,
-        &mut move_vm,
-        modules,
-        "cross_module/a1/sources/m.move",
-    );
+    execute(c, &mut move_vm, modules, "cross_module/a1/sources/m.move");
 }
 
 // execute a given function in the Bench module
