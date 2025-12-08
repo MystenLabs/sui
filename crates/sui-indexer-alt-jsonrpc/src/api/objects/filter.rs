@@ -12,6 +12,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::serde_as;
+use sui_indexer_alt_reader::consistent_reader::proto::owner::OwnerKind;
 use sui_indexer_alt_schema::objects::StoredObjInfo;
 use sui_indexer_alt_schema::objects::StoredOwnerKind;
 use sui_indexer_alt_schema::schema::obj_info;
@@ -88,6 +89,8 @@ pub(crate) struct ObjectCursor {
 
 pub(crate) type Cursor = BcsCursor<ObjectCursor>;
 pub(crate) type ObjectIDs = PageResponse<ObjectID, String>;
+
+pub(crate) type CursorV2 = BcsCursor<Vec<u8>>;
 
 impl SuiObjectDataFilter {
     /// Whether this is a compound filter (which is implemented using sequential scan), or a simple
@@ -471,22 +474,6 @@ async fn by_type_indices(
     cursor: Option<String>,
     limit: Option<usize>,
 ) -> Result<ObjectIDs, RpcError<Error>> {
-    use obj_info::dsl as o;
-
-    let (candidates, newer) = diesel::alias!(obj_info as candidates, obj_info as newer);
-
-    macro_rules! candidates {
-        ($($field:ident),*) => {
-            candidates.fields(($(o::$field),*))
-        };
-    }
-
-    macro_rules! newer {
-        ($($field:ident),*) => {
-            newer.fields(($(o::$field),*))
-        };
-    }
-
     let config = &ctx.config().objects;
     let page: Page<Cursor> = Page::from_params(
         config.default_page_size,
@@ -496,82 +483,68 @@ async fn by_type_indices(
         None,
     )?;
 
-    let mut query = candidates
-        .select(candidates!(object_id, cp_sequence_number))
-        .left_join(
-            newer.on(candidates!(object_id)
-                .eq(newer!(object_id))
-                .and(candidates!(cp_sequence_number).lt(newer!(cp_sequence_number)))),
+    // Convert StoredOwnerKind to OwnerKind
+    let owner_kind = match kind {
+        StoredOwnerKind::Address => OwnerKind::Address,
+        StoredOwnerKind::Object => OwnerKind::Object,
+        StoredOwnerKind::Shared | StoredOwnerKind::Immutable => {
+            return Ok(PageResponse {
+                data: vec![],
+                next_cursor: None,
+                has_next_page: false,
+            });
+        }
+    };
+
+    // Convert filter to type string - consistent store handles prefix matching
+    let object_type = filter.as_ref().map(|f| match f {
+        SuiObjectDataFilter::Package(p) => p.to_string(),
+        SuiObjectDataFilter::MoveModule { package, module } => format!("{package}::{module}"),
+        SuiObjectDataFilter::StructType(tag) => {
+            tag.to_canonical_string(/* with_prefix */ true)
+        }
+        SuiObjectDataFilter::MatchNone(_) => unreachable!(), // handled by caller
+    });
+
+    let results = ctx
+        .consistent_reader()
+        .list_owned_objects(
+            None, // checkpoint - use latest
+            owner_kind,
+            Some(owner.to_string()),
+            object_type,
+            Some((page.limit + 1) as u32),
+            // TODO: just c.0.clone() after BcsCursor(edge.token)
+            page.cursor.as_ref().map(|c| c.0.object_id.clone()),
+            None,
+            true,
         )
-        .filter(newer!(object_id).is_null())
-        .filter(candidates!(owner_kind).eq(kind))
-        .filter(candidates!(owner_id).eq(owner.to_inner()))
-        .order_by(candidates!(cp_sequence_number).desc())
-        .then_order_by(candidates!(object_id).desc())
-        .limit(page.limit + 1)
-        .into_boxed();
-
-    if let Some(c) = page.cursor {
-        query = query.filter(sql!(as Bool,
-            "(candidates.cp_sequence_number, candidates.object_id) < ({BigInt}, {Bytea})",
-            c.cp_sequence_number as i64,
-            c.object_id.clone(),
-        ));
-    }
-
-    let filter = filter.as_ref();
-    if let Some(package) = filter.and_then(|f| f.package()) {
-        query = query.filter(candidates!(package).eq(package.into_bytes()));
-    }
-
-    if let Some(module) = filter.and_then(|f| f.module()) {
-        query = query.filter(candidates!(module).eq(module));
-    }
-
-    if let Some(name) = filter.and_then(|f| f.name()) {
-        query = query.filter(candidates!(name).eq(name));
-    }
-
-    if let Some(type_params) = filter.and_then(|f| f.type_params()) {
-        let bytes = bcs::to_bytes(type_params).context("Failed to serialize type params")?;
-        query = query.filter(candidates!(instantiation).eq(bytes));
-    }
-
-    let mut results: Vec<(Vec<u8>, i64)> = ctx
-        .pg_reader()
-        .connect()
         .await
-        .context("Failed to connect to the database")?
-        .results(query)
-        .await
-        .context("Failed to fetch object info")?;
+        .context("Failed to list owned objects")?;
 
-    let has_next_page = results.len() > page.limit as usize;
-    if has_next_page {
-        results.truncate(page.limit as usize);
-    }
+    let obj_ids = results
+        .results
+        .iter()
+        .map(|obj_ref| obj_ref.value.0)
+        .collect::<Vec<_>>();
 
     let next_cursor = results
+        .results
         .last()
-        .map(|(o, c)| {
+        // TODO: use BcsCursor(edge.token.clone()).encode()
+        .map(|edge| {
             BcsCursor(ObjectCursor {
-                object_id: o.clone(),
-                cp_sequence_number: *c as u64,
+                object_id: edge.token.clone(),
+                cp_sequence_number: edge.value.1.into(),
             })
             .encode()
         })
         .transpose()
-        .context("Failed to encode next cursor")?;
-
-    let data: Vec<ObjectID> = results
-        .into_iter()
-        .map(|(o, _)| ObjectID::from_bytes(o))
-        .collect::<Result<Vec<_>, _>>()
-        .context("Failed to deserialize Object IDs")?;
+        .context("Failed to encode cursor")?;
 
     Ok(PageResponse {
-        data,
+        data: obj_ids,
         next_cursor,
-        has_next_page,
+        has_next_page: results.has_next_page,
     })
 }
