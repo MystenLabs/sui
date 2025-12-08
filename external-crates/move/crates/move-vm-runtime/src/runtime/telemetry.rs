@@ -100,9 +100,6 @@ pub(crate) struct TelemetryContext {
     pub(crate) total_time: AtomicU64,
     /// Total Transaction Count
     pub(crate) total_count: AtomicU64,
-    /// Total number of packages that were compiled, but later thrown away since they were already
-    /// cached when we went to insert them into it (i.e., redundant compilations)
-    pub(crate) redundant_compilations: AtomicU64,
 }
 
 /// Transaction Telemetry Information
@@ -120,7 +117,6 @@ pub(crate) struct TransactionTelemetryContext {
     pub execution_time: Option<Duration>,
     pub interpreter_time: Option<Duration>,
     pub total_time: Duration,
-    pub redundant_compilations: u64,
     // TODO(vm-rewrite): Add value sizes, type sizes, etc?
 }
 
@@ -182,7 +178,6 @@ impl TelemetryContext {
             jit_count: AtomicU64::new(0),
             total_time: AtomicU64::new(0),
             total_count: AtomicU64::new(0),
-            redundant_compilations: AtomicU64::new(0),
         }
     }
 
@@ -226,7 +221,6 @@ impl TelemetryContext {
             execution_time,
             interpreter_time,
             total_time,
-            redundant_compilations,
         } = transaction;
 
         update_duration_field!(load_time, load_count, total_load_time, load_count);
@@ -244,8 +238,6 @@ impl TelemetryContext {
         let total_millis = total_time.as_millis() as u64;
         self.total_time.fetch_add(total_millis, Ordering::Release);
         self.total_count.fetch_add(1, Ordering::Release);
-        self.redundant_compilations
-            .fetch_add(redundant_compilations, Ordering::Release);
     }
 
     /// Generate a runtime telemetry report from the telemetry data.
@@ -323,7 +315,6 @@ impl TransactionTelemetryContext {
             execution_time: None,
             interpreter_time: None,
             total_time: Duration::new(0, 0),
-            redundant_compilations: 0,
         }
     }
 
@@ -399,10 +390,6 @@ impl TransactionTelemetryContext {
 
     pub(crate) fn record_total_time(&mut self, total_time: Duration) {
         self.total_time += total_time;
-    }
-
-    pub(crate) fn record_redundant_compilation(&mut self) {
-        self.redundant_compilations += 1;
     }
 }
 
