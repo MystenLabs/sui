@@ -92,11 +92,6 @@ impl Display for Pretty<'_, DryRunTransactionBlockResponse> {
         }
         writeln!(
             f,
-            "Dry run completed, execution status: {}",
-            response.effects.status()
-        )?;
-        writeln!(
-            f,
             "Estimated gas cost (includes a small buffer): {} MIST",
             estimate_gas_budget_from_gas_cost(
                 response.effects.gas_cost_summary(),
