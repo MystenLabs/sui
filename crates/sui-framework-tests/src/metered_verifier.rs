@@ -18,7 +18,7 @@ use crate::setup_examples;
 fn build(path: &Path) -> anyhow::Result<CompiledPackage> {
     let mut config = sui_move_build::BuildConfig::new_for_testing();
     config.config.warnings_are_errors = true;
-    config.build(&path)
+    config.build(path)
 }
 
 #[test]
