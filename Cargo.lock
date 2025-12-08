@@ -14575,6 +14575,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "fs_extra",
  "move-binary-format",
  "move-compiler",
  "move-core-types",

@@ -22,6 +22,7 @@ move-core-types.workspace = true
 anyhow.workspace = true
 bcs.workspace = true
 regex.workspace = true
+fs_extra.workspace = true
 tempfile.workspace = true
 
 move-binary-format.workspace = true
