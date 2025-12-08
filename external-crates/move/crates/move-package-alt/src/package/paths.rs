@@ -268,6 +268,7 @@ impl OutputPath {
         file: &ParsedLockfile,
         _mtx: &PackageSystemLock,
     ) -> FileResult<()> {
+        assert!(!self.0.to_string_lossy().contains("sui-framework/packages/"));
         render_file(&self.lockfile_path(), file)
     }
 
