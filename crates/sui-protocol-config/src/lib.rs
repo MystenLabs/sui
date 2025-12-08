@@ -279,6 +279,7 @@ const MAX_PROTOCOL_VERSION: u64 = 105;
 // Version 104: Framework update: CoinRegistry follow up for Coin methods
 //              Enable all non-zero PCRs parsing for nitro attestation native function in Devnet and Testnet.
 // Version 105: Framework update: address aliases
+//              Enable address balances on devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4320,7 +4321,13 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .include_cancelled_randomness_txns_in_prologue = true;
                 }
-                105 => {}
+                105 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_accumulators = true;
+                        cfg.feature_flags.enable_address_balance_gas_payments = true;
+                        cfg.feature_flags.enable_authenticated_event_streams = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4622,8 +4629,17 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators = true;
     }
 
+    pub fn disable_accumulators_for_testing(&mut self) {
+        self.feature_flags.enable_accumulators = false;
+        self.feature_flags.enable_address_balance_gas_payments = false;
+    }
+
     pub fn create_root_accumulator_object_for_testing(&mut self) {
         self.feature_flags.create_root_accumulator_object = true;
+    }
+
+    pub fn disable_create_root_accumulator_object_for_testing(&mut self) {
+        self.feature_flags.create_root_accumulator_object = false;
     }
 
     pub fn enable_address_balance_gas_payments_for_testing(&mut self) {
@@ -4632,11 +4648,19 @@ impl ProtocolConfig {
         self.feature_flags.enable_address_balance_gas_payments = true;
     }
 
+    pub fn disable_address_balance_gas_payments_for_testing(&mut self) {
+        self.feature_flags.enable_address_balance_gas_payments = false;
+    }
+
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
         self.enable_accumulators_for_testing();
         self.feature_flags.enable_authenticated_event_streams = true;
         self.feature_flags
             .include_checkpoint_artifacts_digest_in_summary = true;
+    }
+
+    pub fn disable_authenticated_event_streams_for_testing(&mut self) {
+        self.feature_flags.enable_authenticated_event_streams = false;
     }
 
     pub fn enable_non_exclusive_writes_for_testing(&mut self) {

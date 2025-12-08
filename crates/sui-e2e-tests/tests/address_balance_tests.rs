@@ -99,12 +99,17 @@ fn create_transaction_with_expiration(
 #[sim_test]
 async fn test_accumulators_root_created() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut cfg| {
-        if version >= ProtocolVersion::MAX {
+        if version == ProtocolVersion::MAX - 1 {
+            cfg.disable_accumulators_for_testing();
+            cfg.disable_create_root_accumulator_object_for_testing();
+        } else if version == ProtocolVersion::MAX {
+            // accumulators are enabled for devnet/tests, so we need to disable them to run
+            // this test
+            cfg.disable_accumulators_for_testing();
             cfg.create_root_accumulator_object_for_testing();
             // for some reason all 4 nodes are not reliably submitting capability messages
             cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
-        }
-        if version == ProtocolVersion::MAX_ALLOWED {
+        } else if version == ProtocolVersion::MAX_ALLOWED {
             cfg.enable_accumulators_for_testing();
         }
         cfg
@@ -112,12 +117,17 @@ async fn test_accumulators_root_created() {
 
     let test_cluster = TestClusterBuilder::new()
         .with_num_validators(1)
+        // We start at MAX - 1 to be sure the root object isn't created in genesis, and then
+        // immediately reconfigure.
+        .with_protocol_version(ProtocolVersion::MAX - 1)
         .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
-            ProtocolVersion::MAX.as_u64(),
+            ProtocolVersion::MAX.as_u64() - 1,
             ProtocolVersion::MAX_ALLOWED.as_u64(),
         ))
         .build()
         .await;
+
+    test_cluster.trigger_reconfiguration().await;
 
     // accumulator root is not created yet.
     test_cluster.fullnode_handle.sui_node.with(|node| {
@@ -170,12 +180,17 @@ async fn test_accumulators_root_created() {
 #[sim_test]
 async fn test_accumulators_disabled() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|version, mut cfg| {
-        if version >= ProtocolVersion::MAX {
+        if version == ProtocolVersion::MAX - 1 {
+            cfg.disable_accumulators_for_testing();
+            cfg.disable_create_root_accumulator_object_for_testing();
+        } else if version == ProtocolVersion::MAX {
+            // accumulators are enabled for devnet/tests, so we need to disable them to run
+            // this test
+            cfg.disable_accumulators_for_testing();
             cfg.create_root_accumulator_object_for_testing();
             // for some reason all 4 nodes are not reliably submitting capability messages
             cfg.set_buffer_stake_for_protocol_upgrade_bps_for_testing(0);
-        }
-        if version == ProtocolVersion::MAX_ALLOWED {
+        } else if version == ProtocolVersion::MAX_ALLOWED {
             cfg.enable_accumulators_for_testing();
         }
         cfg
@@ -183,12 +198,16 @@ async fn test_accumulators_disabled() {
 
     let mut test_cluster = TestClusterBuilder::new()
         .with_num_validators(1)
+        // We start at MAX - 1 to be sure the root object isn't created in genesis, and then
+        // immediately reconfigure.
+        .with_protocol_version(ProtocolVersion::MAX - 1)
         .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
-            ProtocolVersion::MAX.as_u64(),
+            ProtocolVersion::MAX.as_u64() - 1,
             ProtocolVersion::MAX_ALLOWED.as_u64(),
         ))
         .build()
         .await;
+    test_cluster.trigger_reconfiguration().await;
     let rgp = test_cluster.get_reference_gas_price().await;
 
     let (sender, gas) = get_sender_and_one_gas(&mut test_cluster.wallet).await;

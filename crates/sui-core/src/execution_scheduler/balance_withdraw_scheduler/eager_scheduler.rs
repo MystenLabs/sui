@@ -140,6 +140,15 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
     async fn settle_balances(&self, settlement: BalanceSettlement) {
         let next_accumulator_version = settlement.next_accumulator_version;
         let mut inner_state = self.inner_state.lock();
+        if next_accumulator_version <= inner_state.accumulator_version {
+            // This accumulator version is already settled.
+            // There is no need to settle the balances.
+            debug!(
+                next_accumulator_version =? next_accumulator_version.value(),
+                "Skipping settlement since it is already settled",
+            );
+            return;
+        }
         assert_eq!(
             next_accumulator_version,
             inner_state.accumulator_version.next()

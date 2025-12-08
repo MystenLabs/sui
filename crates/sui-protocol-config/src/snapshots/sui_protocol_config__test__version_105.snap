@@ -109,7 +109,10 @@ feature_flags:
   enable_party_transfer: true
   allow_unbounded_system_objects: true
   type_tags_in_object_runtime: true
+  enable_accumulators: true
   create_root_accumulator_object: true
+  enable_authenticated_event_streams: true
+  enable_address_balance_gas_payments: true
   enable_ptb_execution_v2: true
   better_adapter_type_resolution_errors: true
   record_time_estimate_processed: true

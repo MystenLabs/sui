@@ -112,6 +112,17 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
     async fn settle_balances(&self, settlement: BalanceSettlement) {
         let cur_accumulator_version = *self.accumulator_version_receiver.borrow();
         let next_version = cur_accumulator_version.next();
+
+        if settlement.next_accumulator_version < next_version {
+            // This accumulator version is already settled.
+            // There is no need to settle the balances.
+            debug!(
+                next_accumulator_version =? settlement.next_accumulator_version.value(),
+                "Skipping settlement since it is already settled",
+            );
+            return;
+        }
+
         debug!(
             settled_accumulator_version =? cur_accumulator_version.value(),
             next_accumulator_version =? next_version.value(),
