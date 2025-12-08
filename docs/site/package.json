@@ -18,10 +18,8 @@
     "typecheck": "tsc",
     "fire:deploy-dev": "firebase deploy --only hosting:dev",
     "ampli": "ampli",
-    "pull-amplitude": "ampli pull web"
   },
   "dependencies": {
-    "@amplitude/analytics-browser": "^2.5.3",
     "@docusaurus/plugin-content-docs": "3.8.1",
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.0",
