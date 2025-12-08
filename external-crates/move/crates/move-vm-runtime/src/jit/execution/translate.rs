@@ -275,6 +275,7 @@ fn modules(
         .map(|m| (m.compiled_module.self_id(), m))
         .collect();
 
+    // Model a DFS over the module dependency graph to load modules in dependency order.
     let mut state: BTreeMap<ModuleId, State> = BTreeMap::new();
 
     for root_id in input_modules.keys() {
@@ -320,7 +321,12 @@ fn modules(
                     state.insert(cur_id, State::Visited);
                 }
                 State::NotVisited => {
-                    state.insert(cur_id.clone(), State::Visiting);
+                    if state.insert(cur_id.clone(), State::Visiting).is_some() {
+                        return Err(make_invariant_violation!(format!(
+                            "Module {} added to load queue as unvisited twice",
+                            cur_id
+                        )));
+                    }
                     stack.push(cur_id.clone());
 
                     let input_module = input_modules.get(&cur_id).ok_or_else(|| {
@@ -356,93 +362,6 @@ fn modules(
 
     Ok(())
 }
-
-/* Recursive Implementation -- Commented out for fear of the Rust stack
-fn modules(
-    package_context: &mut PackageContext<'_>,
-    pkg_module_ids: &BTreeSet<ModuleId>,
-    package_modules: &Vec<input::Module>,
-) -> PartialVMResult<()> {
-    fn load_modules_rec(
-        package_context: &mut PackageContext<'_>,
-        pkg_module_ids: &BTreeSet<ModuleId>,
-        input_modules: &BTreeMap<ModuleId, &input::Module>,
-        seen: &mut Vec<ModuleId>,
-        module_id: &ModuleId,
-    ) -> PartialVMResult<()> {
-        if seen.contains(module_id) {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!(
-                        "Cycle detected when loading module for package: {}",
-                        module_id
-                    ),
-                ),
-            );
-        }
-
-        let key = package_context
-            .interner
-            .intern_ident_str(module_id.name())?;
-        if package_context.loaded_modules.contains_key(&key) {
-            return Ok(());
-        }
-
-        seen.push(module_id.clone());
-
-        let input_module = input_modules.get(module_id).ok_or_else(|| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message(format!("Module {} not found in initial modules", module_id))
-        })?;
-        for dep in input_module
-            .compiled_module
-            .immediate_dependencies()
-            .iter()
-            .filter(|dep| pkg_module_ids.contains(dep) && *dep != module_id)
-        {
-            // This check is not strictly necessary, but avoids creating some callstack frames.
-            let key = package_context.interner.intern_ident_str(dep.name())?;
-            if package_context.loaded_modules.contains_key(&key) {
-                continue;
-            } else {
-                load_modules_rec(package_context, pkg_module_ids, input_modules, seen, dep)?;
-            }
-        }
-        let loaded_module = module(package_context, package_context.version_id, input_module)?;
-
-        let key = package_context
-            .interner
-            .intern_ident_str(loaded_module.id.name())?;
-        if package_context.loaded_modules.insert(key, loaded_module).is_some() {
-            return Err(make_invariant_violation!(format!(
-                "Module {} already loaded in package context",
-                cur_id
-            )));
-        }
-
-        seen.pop();
-
-        Ok(())
-    }
-
-    let initial_modules = package_modules
-        .iter()
-        .map(|m| (m.compiled_module.self_id(), m))
-        .collect::<BTreeMap<_, _>>();
-
-    for mid in initial_modules.keys().cloned() {
-        load_modules_rec(
-            package_context,
-            pkg_module_ids,
-            &initial_modules,
-            &mut vec![],
-            &mid,
-        )?;
-    }
-
-    Ok(())
-}
-*/
 
 // -------------------------------------------------------------------------------------------------
 // Module Translation
