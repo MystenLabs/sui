@@ -45,6 +45,7 @@ tokio = { workspace = true, features = ["full"] }
 toml.workspace = true
 tracing.workspace = true
 zstd.workspace = true
+indicatif.workspace = true
 
 [features]
 tracing = [

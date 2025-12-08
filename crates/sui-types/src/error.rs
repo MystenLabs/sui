@@ -727,6 +727,11 @@ pub enum SuiErrorKind {
 
     #[error("Invalid request: {0}")]
     InvalidRequest(String),
+
+    #[error(
+        "The current set of aliases for a required signer changed after the transaction was submitted"
+    )]
+    AliasesChanged,
 }
 
 #[repr(u64)]

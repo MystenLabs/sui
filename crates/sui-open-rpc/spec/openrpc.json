@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.62.0"
+    "version": "1.63.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "104",
+              "maxSupportedProtocolVersion": "105",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1303,6 +1303,7 @@
                 "additional_borrow_checks": false,
                 "additional_consensus_digest_indirect_state": false,
                 "additional_multisig_checks": false,
+                "address_aliases": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_private_accumulator_entrypoints": false,
@@ -1355,6 +1356,7 @@
                 "enable_nitro_attestation_all_nonzero_pcrs_parsing": false,
                 "enable_nitro_attestation_upgraded_parsing": false,
                 "enable_non_exclusive_writes": false,
+                "enable_object_funds_withdraw": false,
                 "enable_party_transfer": false,
                 "enable_poseidon": false,
                 "enable_ptb_execution_v2": false,
@@ -1365,6 +1367,7 @@
                 "generate_df_type_layouts": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
+                "include_cancelled_randomness_txns_in_prologue": false,
                 "include_checkpoint_artifacts_digest_in_summary": false,
                 "include_consensus_digest_in_prologue": false,
                 "loaded_child_object_format": false,
@@ -5895,7 +5898,6 @@
         "$ref": "#/components/schemas/Digest"
       },
       "ConsensusDeterminedVersionAssignments": {
-        "description": "Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.",
         "oneOf": [
           {
             "type": "object",
@@ -9021,7 +9023,8 @@
               "StoreExecutionTimeObservations",
               "AccumulatorRootCreate",
               "CoinRegistryCreate",
-              "DisplayRegistryCreate"
+              "DisplayRegistryCreate",
+              "AddressAliasStateCreate"
             ]
           },
           {

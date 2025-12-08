@@ -560,9 +560,9 @@ pub enum SuiClientCommands {
         #[clap(flatten)]
         build_config: MoveBuildConfig,
 
-        /// Verify package compatibility locally before publishing.
+        /// Skip verifying package compatibility locally before publishing.
         #[clap(long)]
-        verify_compatibility: bool,
+        skip_verify_compatibility: bool,
 
         /// Upgrade the package without checking whether dependency source code compiles to the on-chain
         /// bytecode
@@ -855,7 +855,7 @@ impl SuiClientCommands {
                 build_config,
                 skip_dependency_verification,
                 verify_deps,
-                verify_compatibility,
+                skip_verify_compatibility,
                 with_unpublished_dependencies,
                 payment,
                 gas_data,
@@ -919,18 +919,9 @@ impl SuiClientCommands {
                     compiled_package.get_package_digest(with_unpublished_dependencies);
                 let dep_ids = compiled_package.get_published_dependencies_ids();
 
-                if verify_compatibility {
+                if !skip_verify_compatibility {
                     let protocol_version =
                         read_api.get_protocol_config(None).await?.protocol_version;
-
-                    ensure!(
-                        ProtocolVersion::MAX >= protocol_version,
-                        "On-chain protocol version ({}) is ahead of the latest \
-                        known version ({}) in the CLI. Please update the CLI to the latest version \
-                        if you want to use --verify-compatibility flag",
-                        protocol_version.as_u64(),
-                        ProtocolVersion::MAX.as_u64()
-                    );
 
                     let protocol_config = ProtocolConfig::get_for_version(
                         protocol_version,

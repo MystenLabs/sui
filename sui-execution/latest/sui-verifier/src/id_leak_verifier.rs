@@ -106,6 +106,11 @@ const SUI_COIN_REGISTRY_CREATE: FunctionIdent = (
     ident_str!("coin_registry"),
     ident_str!("create"),
 );
+const SUI_ALIAS_CREATE: FunctionIdent = (
+    SUI_FRAMEWORK_ADDRESS,
+    ident_str!("address_alias"),
+    ident_str!("create"),
+);
 const FRESH_ID_FUNCTIONS: &[FunctionIdent] = &[
     OBJECT_NEW,
     OBJECT_NEW_UID_FROM_HASH,
@@ -121,6 +126,7 @@ const FUNCTIONS_TO_SKIP: &[FunctionIdent] = &[
     SUI_BRIDGE_CREATE,
     SUI_ACCUMULATOR_CREATE,
     SUI_COIN_REGISTRY_CREATE,
+    SUI_ALIAS_CREATE,
 ];
 
 impl AbstractValue {

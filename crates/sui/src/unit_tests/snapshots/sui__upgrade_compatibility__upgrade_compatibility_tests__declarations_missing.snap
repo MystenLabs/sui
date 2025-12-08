@@ -50,4 +50,4 @@ error[Compatibility E01006]: module missing
   = Add missing module 'missing_module' back to the package.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'. Use --skip-verify-compatibility to bypass this check locally.

@@ -15,7 +15,6 @@ module a::m {
         let Foo { id } = f;
         transfer(id);
     }
-
 }
 
 module sui::object {

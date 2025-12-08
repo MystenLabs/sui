@@ -1766,7 +1766,10 @@ async fn test_handle_soft_bundle_certificates() {
         let committee = authority.clone_committee_for_testing();
         let mut sigs = vec![];
 
-        let transaction = epoch_store.verify_transaction(transaction).unwrap();
+        let transaction = epoch_store
+            .verify_transaction_require_no_aliases(transaction)
+            .unwrap()
+            .into_tx();
         let response = authority
             .handle_transaction(&epoch_store, transaction.clone())
             .await
@@ -1923,7 +1926,10 @@ async fn test_handle_soft_bundle_certificates_errors() {
         let committee = authority.clone_committee_for_testing();
         let mut sigs = vec![];
 
-        let transaction = epoch_store.verify_transaction(transaction).unwrap();
+        let transaction = epoch_store
+            .verify_transaction_require_no_aliases(transaction)
+            .unwrap()
+            .into_tx();
         let response = authority
             .handle_transaction(&epoch_store, transaction.clone())
             .await
@@ -2472,9 +2478,11 @@ async fn test_shared_object_v2_denied() {
 
         // This should succeed
         let epoch_store = authority.load_epoch_store_one_call_per_task();
-        let verified_tx = epoch_store.verify_transaction(transaction).unwrap();
+        let verified_tx = epoch_store
+            .verify_transaction_require_no_aliases(transaction)
+            .unwrap();
         let response = authority
-            .handle_transaction(&epoch_store, verified_tx)
+            .handle_transaction(&epoch_store, verified_tx.into_tx())
             .await;
 
         assert!(

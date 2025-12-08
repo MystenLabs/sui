@@ -29,6 +29,7 @@ accumulator.json
 accumulator_metadata.json
 accumulator_settlement.json
 address.json
+address_alias.json
 authenticator_state.json
 bag.json
 balance.json
@@ -68,6 +69,7 @@ party.json
 pay.json
 poseidon.json
 priority_queue.json
+protocol_config.json
 prover.json
 random.json
 sui.json

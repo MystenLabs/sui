@@ -31,10 +31,10 @@ use std::{
 };
 use sui_protocol_config::{LimitThresholdCrossed, ProtocolConfig, check_limit_by_meter};
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID,
-    SUI_CLOCK_OBJECT_ID, SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
-    SUI_DISPLAY_REGISTRY_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
-    TypeTag,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+    SUI_COIN_REGISTRY_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID, SUI_DISPLAY_REGISTRY_OBJECT_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID, TypeTag,
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
     error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
@@ -294,6 +294,7 @@ impl<'a> ObjectRuntime<'a> {
             SUI_ACCUMULATOR_ROOT_OBJECT_ID,
             SUI_COIN_REGISTRY_OBJECT_ID,
             SUI_DISPLAY_REGISTRY_OBJECT_ID,
+            SUI_ADDRESS_ALIAS_STATE_OBJECT_ID,
         ]
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains(&id) {

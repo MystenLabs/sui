@@ -27,6 +27,7 @@ accumulator.yaml
 accumulator_metadata.yaml
 accumulator_settlement.yaml
 address.yaml
+address_alias.yaml
 authenticator_state.yaml
 bag.yaml
 balance.yaml
@@ -66,6 +67,7 @@ party.yaml
 pay.yaml
 poseidon.yaml
 priority_queue.yaml
+protocol_config.yaml
 prover.yaml
 random.yaml
 sui.yaml

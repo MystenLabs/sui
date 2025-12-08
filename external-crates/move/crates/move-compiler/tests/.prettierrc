@@ -2,5 +2,15 @@
     "autoGroupImports": "module",
     "printWidth": 100,
     "useModuleLabel": false,
-    "tabWidth": 4
+    "tabWidth": 4,
+    "overrides": [
+        {
+            "files": "linter/move_2024/*.move",
+            "options": {
+                "parser": "move",
+                "tabWidth": 4,
+                "useModuleLabel": true
+            }
+        }
+    ]
 }

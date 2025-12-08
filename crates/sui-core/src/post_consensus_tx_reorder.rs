@@ -4,14 +4,15 @@
 use mysten_metrics::monitored_scope;
 use sui_protocol_config::ConsensusTransactionOrdering;
 use sui_types::{
-    executable_transaction::VerifiedExecutableTransaction, transaction::TransactionDataAPI as _,
+    executable_transaction::VerifiedExecutableTransactionWithAliases,
+    transaction::TransactionDataAPI as _,
 };
 
 pub struct PostConsensusTxReorder {}
 
 impl PostConsensusTxReorder {
     pub fn reorder(
-        transactions: &mut [VerifiedExecutableTransaction],
+        transactions: &mut [VerifiedExecutableTransactionWithAliases],
         kind: ConsensusTransactionOrdering,
     ) {
         match kind {
@@ -20,11 +21,11 @@ impl PostConsensusTxReorder {
         }
     }
 
-    fn order_by_gas_price(transactions: &mut [VerifiedExecutableTransaction]) {
+    fn order_by_gas_price(transactions: &mut [VerifiedExecutableTransactionWithAliases]) {
         let _scope = monitored_scope("ConsensusCommitHandler::order_by_gas_price");
         transactions.sort_by_key(|tx| {
             // Reverse order, so that transactions with higher gas price are put to the beginning.
-            std::cmp::Reverse(tx.transaction_data().gas_price())
+            std::cmp::Reverse(tx.tx().transaction_data().gas_price())
         });
     }
 }

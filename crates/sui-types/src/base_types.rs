@@ -1226,7 +1226,7 @@ impl From<&TxContext> for MoveLegacyTxContext {
 // This struct is not related to Move and can evolve as needed/required.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TxContext {
-    /// Signer/sender of the transaction
+    /// Sender of the transaction
     sender: AccountAddress,
     /// Digest of the current transaction
     digest: Vec<u8>,

@@ -1005,3 +1005,84 @@ async fn test_package_resolver_finds_newly_published_package() {
 
     graphql_cluster.stopped().await;
 }
+
+#[tokio::test]
+async fn test_simulate_transaction_balance_changes() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    // Create a transfer transaction that will cause balance changes
+    let recipient = SuiAddress::random_for_testing_only();
+    let transfer_amount = 1_000_000u64;
+
+    let signed_tx = make_transfer_sui_transaction(
+        &validator_cluster.wallet,
+        Some(recipient),
+        Some(transfer_amount),
+    )
+    .await;
+    let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
+                    effects {
+                        status
+                        balanceChanges {
+                            nodes {
+                                coinType {
+                                    repr
+                                }
+                                amount
+                            }
+                        }
+                    }
+                    error
+                }
+            }
+        "#,
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    // Verify balance changes are populated from execution context
+    let balance_changes = result
+        .pointer("/data/simulateTransaction/effects/balanceChanges/nodes")
+        .expect("balanceChanges should be present")
+        .as_array()
+        .unwrap();
+
+    // Should have balance changes for both sender and recipient
+    assert_eq!(balance_changes.len(), 2, "Should have 2 balance changes");
+
+    // Verify structure matches expected format
+    insta::assert_json_snapshot!(result.pointer("/data/simulateTransaction/effects/balanceChanges"), @r#"
+    {
+      "nodes": [
+        {
+          "coinType": {
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+          },
+          "amount": "-3976000"
+        },
+        {
+          "coinType": {
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+          },
+          "amount": "1000000"
+        }
+      ]
+    }
+    "#);
+
+    graphql_cluster.stopped().await;
+}

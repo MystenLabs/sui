@@ -82,6 +82,7 @@ pub mod event;
 mod funds_accumulator;
 mod object;
 pub mod object_runtime;
+mod protocol_config;
 mod random;
 pub mod test_scenario;
 mod test_utils;
@@ -1244,6 +1245,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "poseidon",
             "poseidon_bn254_internal",
             make_native!(poseidon::poseidon_bn254_internal),
+        ),
+        (
+            "protocol_config",
+            "is_feature_enabled",
+            make_native!(protocol_config::is_feature_enabled),
         ),
         (
             "vdf",
