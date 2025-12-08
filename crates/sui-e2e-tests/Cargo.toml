@@ -34,7 +34,6 @@ prost.workspace = true
 tokio-stream.workspace = true
 
 move-binary-format.workspace = true
-move-package.workspace = true
 telemetry-subscribers.workspace = true
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true

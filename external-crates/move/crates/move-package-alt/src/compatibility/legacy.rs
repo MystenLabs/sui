@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::{
     flavor::MoveFlavor,
     package::EnvironmentName,
-    schema::{Environment, Publication, PublishAddresses},
+    schema::{Environment, ParsedPublishedFile, Publication, PublishAddresses},
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde::{Deserialize, Serialize};
@@ -23,8 +23,11 @@ pub struct LegacyData {
     /// things after parsing
     pub legacy_name: String,
 
-    /// The `legacy_name` transformed into a normalized name from the parser.
-    /// This is helpful for `rename-from` validation.
+    /// In the modern world, package names must be identifiers, the entries in the `dependencies`
+    /// table must also be identifiers, and these should match. Therefore in the modern world we
+    /// associate identifiers with edges. In the legacy world, these things need not be
+    /// identifiers, but we still parse into the modern format, so we must manufacture identifiers;
+    /// this is an identifier computed from the legacy_name.
     pub normalized_legacy_name: Identifier,
 
     /// These addresses should store all addresses that were part of the package.
@@ -66,6 +69,24 @@ impl<F: MoveFlavor> From<LegacyEnvironment> for Publication<F> {
             addresses: value.addresses,
             version: value.version,
             metadata: F::PublishedMetadata::default(),
+        }
+    }
+}
+
+impl<F: MoveFlavor> From<Publication<F>> for LegacyEnvironment {
+    fn from(value: Publication<F>) -> Self {
+        Self {
+            chain_id: value.chain_id,
+            addresses: value.addresses,
+            version: value.version,
+        }
+    }
+}
+
+impl<F: MoveFlavor> From<BTreeMap<EnvironmentName, LegacyEnvironment>> for ParsedPublishedFile<F> {
+    fn from(value: BTreeMap<EnvironmentName, LegacyEnvironment>) -> Self {
+        Self {
+            published: value.into_iter().map(|(k, v)| (k, v.into())).collect(),
         }
     }
 }

@@ -969,7 +969,8 @@ async fn setup_test_package(context: &mut WalletContext) -> ObjectID {
     let txn = context
         .sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
-                .publish(move_test_code_path)
+                .publish_async(move_test_code_path)
+                .await
                 .build(),
         )
         .await;

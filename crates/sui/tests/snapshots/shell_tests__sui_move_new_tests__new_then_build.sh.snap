@@ -8,8 +8,8 @@ description: tests/shell_tests/sui_move_new_tests/new_then_build.sh
 
 # tests that sui move new followed by sui move build succeeds
 
-sui move new example
-cd example && sui move build
+sui move --client.config $CONFIG new example
+cd example && sui move --client.config $CONFIG build
 
 ----- results -----
 success: true
@@ -17,8 +17,6 @@ exit_code: 0
 ----- stdout -----
 
 ----- stderr -----
-INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY SuiSystem
-INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
 BUILDING example

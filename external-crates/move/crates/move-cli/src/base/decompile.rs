@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
-use move_package::BuildConfig;
+use move_package_alt_compilation::build_config::BuildConfig;
 
 use clap::*;
 use std::path::{Path, PathBuf};

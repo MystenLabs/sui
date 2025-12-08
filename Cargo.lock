@@ -5284,6 +5284,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs4"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8640e34b88f7652208ce9e88b1a37a2ae95227d84abec377ccd3c5cfeb141ed4"
+dependencies = [
+ "rustix 1.0.7",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "fs_extra"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7850,6 +7860,7 @@ dependencies = [
  "codespan-reporting",
  "crossbeam",
  "dunce",
+ "futures",
  "im",
  "itertools 0.10.5",
  "json_comments",
@@ -7859,7 +7870,8 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-ir-types",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-symbol-pool",
  "once_cell",
  "serde",
@@ -7869,6 +7881,7 @@ dependencies = [
  "strum_macros 0.27.1",
  "sysinfo",
  "tempfile",
+ "tokio",
  "url",
  "vfs",
 ]
@@ -8008,6 +8021,7 @@ dependencies = [
  "clap",
  "codespan-reporting",
  "colored",
+ "indoc",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-utils",
@@ -8022,7 +8036,8 @@ dependencies = [
  "move-docgen",
  "move-ir-types",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
@@ -8033,12 +8048,17 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
+ "path-clean",
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
  "similar",
  "tempfile",
+ "tokio",
  "toml_edit 0.22.24",
+ "tracing",
+ "tracing-subscriber",
+ "treeline",
  "walkdir",
 ]
 
@@ -8364,15 +8384,19 @@ dependencies = [
  "bimap",
  "clap",
  "codespan-reporting",
+ "colored",
  "derive-where",
+ "fs4",
  "futures",
  "heck 0.3.3",
+ "indexmap 2.8.0",
  "indoc",
  "itertools 0.10.5",
  "jsonrpc",
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
+ "move-symbol-pool",
  "named-lock",
  "once_cell",
  "path-clean",
@@ -8392,6 +8416,34 @@ dependencies = [
  "tracing-subscriber",
  "walkdir",
  "whoami",
+]
+
+[[package]]
+name = "move-package-alt-compilation"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "colored",
+ "dunce",
+ "move-binary-format",
+ "move-bytecode-source-map",
+ "move-bytecode-utils",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-disassembler",
+ "move-docgen",
+ "move-model-2",
+ "move-package-alt",
+ "move-symbol-pool",
+ "once_cell",
+ "petgraph 0.8.1",
+ "serde",
+ "serde_yaml 0.8.26",
+ "toml_edit 0.22.24",
+ "tracing",
+ "vfs",
 ]
 
 [[package]]
@@ -8449,11 +8501,13 @@ dependencies = [
  "move-ir-types",
  "move-model",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stackless-bytecode",
  "move-symbol-pool",
  "move-vm-runtime",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -8467,10 +8521,12 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stdlib-natives",
  "move-vm-runtime",
  "sha2 0.9.9",
+ "tokio",
  "walkdir",
 ]
 
@@ -13433,7 +13489,8 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-ir-types",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-symbol-pool",
  "move-trace-format",
  "move-vm-config",
@@ -13472,6 +13529,7 @@ dependencies = [
  "sui-macros",
  "sui-move",
  "sui-move-build",
+ "sui-package-alt",
  "sui-package-management",
  "sui-pg-db",
  "sui-protocol-config",
@@ -13494,6 +13552,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.13",
  "toml 0.7.4",
+ "toml_edit 0.19.10",
  "tower 0.5.2",
  "tower-http",
  "tracing",
@@ -13762,6 +13821,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-keys",
  "sui-macros",
+ "sui-move-build",
  "sui-network",
  "sui-protocol-config",
  "sui-sdk",
@@ -14356,7 +14416,6 @@ dependencies = [
  "jsonrpsee",
  "move-binary-format",
  "move-core-types",
- "move-package",
  "mysten-common",
  "mysten-metrics",
  "p256",
@@ -14516,17 +14575,20 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "fs_extra",
  "move-binary-format",
  "move-compiler",
  "move-core-types",
- "move-package",
+ "move-package-alt-compilation",
  "once_cell",
  "regex",
  "serde",
  "sui-config",
  "sui-move-build",
+ "sui-package-alt",
  "sui-types",
  "tempfile",
+ "tokio",
  "tracing",
 ]
 
@@ -14537,7 +14599,6 @@ dependencies = [
  "anyhow",
  "bcs",
  "bin-version",
- "move-package",
  "serde",
  "serde_json",
  "sui-framework",
@@ -14551,12 +14612,15 @@ dependencies = [
 name = "sui-framework-tests"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "datatest-stable",
+ "fs_extra",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
  "move-cli",
- "move-package",
+ "move-package-alt-compilation",
  "move-unit-test",
+ "msim",
  "prometheus",
  "sui-adapter-latest",
  "sui-config",
@@ -14566,6 +14630,8 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -15279,6 +15345,7 @@ dependencies = [
  "sui-move-build",
  "sui-types",
  "test-fuzz",
+ "tokio",
 ]
 
 [[package]]
@@ -15309,7 +15376,6 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
- "move-package",
  "mysten-metrics",
  "once_cell",
  "prometheus",
@@ -15371,7 +15437,6 @@ dependencies = [
  "hyper 1.5.2",
  "jsonrpsee",
  "move-core-types",
- "move-package",
  "prometheus",
  "rand 0.8.5",
  "reqwest 0.12.9",
@@ -15602,6 +15667,7 @@ dependencies = [
  "clap",
  "colored",
  "futures",
+ "indoc",
  "insta",
  "jsonrpsee",
  "move-binary-format",
@@ -15611,7 +15677,8 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-ir-types",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-unit-test",
  "move-vm-runtime",
  "mysten-metrics",
@@ -15621,16 +15688,19 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
+ "sui-config",
  "sui-macros",
  "sui-move-build",
  "sui-move-natives-latest",
- "sui-package-management",
+ "sui-package-alt",
  "sui-protocol-config",
+ "sui-sdk",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
  "tikv-jemalloc-ctl",
  "tokio",
+ "toml 0.7.4",
  "tracing",
  "walkdir",
 ]
@@ -15641,6 +15711,8 @@ version = "1.63.0"
 dependencies = [
  "anyhow",
  "fastcrypto",
+ "fs_extra",
+ "futures",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
@@ -15648,15 +15720,18 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-ir-types",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-symbol-pool",
  "mysten-common",
  "serde-reflection",
- "sui-package-management",
+ "sui-package-alt",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
  "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]
@@ -15668,6 +15743,7 @@ dependencies = [
  "move-analyzer",
  "move-compiler",
  "sui-move-build",
+ "sui-package-alt",
  "sui-package-management",
  "tikv-jemalloc-ctl",
  "tikv-jemallocator",
@@ -15943,11 +16019,25 @@ dependencies = [
 name = "sui-package-alt"
 version = "1.63.0"
 dependencies = [
+ "anyhow",
+ "bin-version",
+ "clap",
+ "indexmap 2.8.0",
+ "move-compiler",
  "move-core-types",
  "move-package-alt",
+ "move-package-alt-compilation",
  "serde",
+ "shared-crypto",
+ "sui-config",
+ "sui-json-rpc-types",
+ "sui-keys",
  "sui-package-management",
+ "sui-sdk",
  "tempfile",
+ "tokio",
+ "toml 0.7.4",
+ "tracing",
 ]
 
 [[package]]
@@ -16186,7 +16276,8 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-ir-types",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-trace-format",
  "prometheus",
  "serde",
@@ -16199,6 +16290,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-move",
  "sui-move-build",
+ "sui-package-alt",
  "sui-package-management",
  "sui-types",
  "tabled",
@@ -16498,7 +16590,8 @@ dependencies = [
  "bcs",
  "fastcrypto",
  "lru 0.10.0",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "msim",
  "mysten-network",
  "rand 0.8.5",
@@ -16523,7 +16616,6 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
- "move-package",
  "move-symbol-pool",
  "once_cell",
  "prometheus",
@@ -16581,19 +16673,28 @@ version = "1.63.0"
 dependencies = [
  "anyhow",
  "colored",
+ "datatest-stable",
  "expect-test",
  "flate2",
+ "fs_extra",
  "futures",
+ "insta",
+ "insta-cmd",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-symbol-pool",
+ "msim",
  "rand 0.8.5",
+ "serde",
+ "sui-config",
  "sui-json-rpc-types",
  "sui-move-build",
+ "sui-package-alt",
  "sui-package-management",
  "sui-sdk",
  "sui-test-transaction-builder",
@@ -16603,6 +16704,7 @@ dependencies = [
  "test-cluster",
  "thiserror 1.0.69",
  "tokio",
+ "toml 0.7.4",
  "tracing",
  "ureq",
 ]
@@ -16681,7 +16783,6 @@ dependencies = [
  "indexmap 2.8.0",
  "move-binary-format",
  "move-core-types",
- "move-package",
  "mysten-common",
  "prometheus",
  "rand 0.8.5",
@@ -17046,8 +17147,9 @@ dependencies = [
  "move-binary-format",
  "move-command-line-common",
  "move-compiler",
- "move-package",
+ "msim",
  "sui-move-build",
+ "tokio",
 ]
 
 [[package]]

@@ -8,12 +8,13 @@ use move_binary_format::{
     compatibility::{self, Compatibility, InclusionCheck},
     normalized,
 };
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::BuildConfig;
 
 pub const TEST_DIR: &str = "tests";
 
-fn run_test(path: &Path) -> datatest_stable::Result<()> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+#[cfg_attr(not(msim), tokio::main)]
+#[cfg_attr(msim, msim::main)]
+async fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let mut pathbuf = path.to_path_buf();
     pathbuf.pop();
     pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(pathbuf);
@@ -21,10 +22,10 @@ fn run_test(path: &Path) -> datatest_stable::Result<()> {
     let upgraded_path = pathbuf.join("upgraded");
 
     let pool = &mut normalized::RcPool::new();
-    let base = compile(&base_path)?;
+    let base = compile(&base_path).await?;
     let base_normalized = normalize(pool, &base);
 
-    let upgraded = compile(&upgraded_path)?;
+    let upgraded = compile(&upgraded_path).await?;
     let upgraded_normalized = normalize(pool, &upgraded);
 
     check_all_compatibilities(
@@ -34,9 +35,10 @@ fn run_test(path: &Path) -> datatest_stable::Result<()> {
     )
 }
 
-fn compile(path: &Path) -> anyhow::Result<Vec<CompiledModule>> {
+async fn compile(path: &Path) -> anyhow::Result<Vec<CompiledModule>> {
     Ok(BuildConfig::new_for_testing()
-        .build(path)
+        .build_async(path)
+        .await
         .unwrap()
         .into_modules())
 }

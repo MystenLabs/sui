@@ -10,6 +10,7 @@ use crate::{
 use anyhow::{Result, anyhow, bail};
 use clap::{Parser, ValueEnum};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use move_package_alt::schema::EnvironmentName;
 use serde::Deserialize;
 use similar::{ChangeTag, TextDiff};
 use std::{
@@ -81,6 +82,10 @@ pub enum Command {
         /// RPC of the fullnode used to fetch the package
         #[arg(short = 'n', long = "node", default_value = "mainnet")]
         node: Node,
+
+        /// Environment to use to rebuild the package
+        #[arg(short = 'e', long = "build-env", default_value = "mainnet")]
+        env: EnvironmentName,
     },
 
     /// Extract a package from cache to a file

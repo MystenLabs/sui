@@ -7,7 +7,7 @@ description: tests/shell_tests/summaries/summary_address_remapping.sh
 # SPDX-License-Identifier: Apache-2.0
 
 # Test to make sure we properly randomize addresses across packages.
-sui move summary --path data/overlapping_summaries
+sui move --client.config $CONFIG summary --path data/overlapping_summaries
 ls -1 data/overlapping_summaries/package_summaries/
 cat data/overlapping_summaries/package_summaries/child_pkg/a.json
 cat data/overlapping_summaries/package_summaries/other_child/a.json
@@ -18,10 +18,10 @@ cat data/overlapping_summaries/package_summaries/address_mapping.json
 success: true
 exit_code: 0
 ----- stdout -----
-INCLUDING DEPENDENCY child_pkg
-INCLUDING DEPENDENCY other_child
-INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY other_child
+INCLUDING DEPENDENCY child_pkg
 BUILDING overlapping_summaries
 
 Summary generation successful. Summaries stored in 'package_summaries'
@@ -201,11 +201,10 @@ sui
   },
   "enums": {}
 }{
-  "child_pkg": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "child_pkg": "0x0000000000000000000000000000000000000000000000000000000000001004",
   "other_child": "0x000000000000000000000000000000000000000000000000000000000000000c",
   "overlapping_summaries": "0x0000000000000000000000000000000000000000000000000000000000000000",
   "std": "0x0000000000000000000000000000000000000000000000000000000000000001",
   "sui": "0x0000000000000000000000000000000000000000000000000000000000000002"
 }
 ----- stderr -----
-[note] Dependencies on Bridge, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.

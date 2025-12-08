@@ -15,6 +15,7 @@ bcs.workspace = true
 clap.workspace = true
 codespan-reporting.workspace = true
 colored.workspace = true
+indoc.workspace = true
 serde_yaml.workspace = true
 similar.workspace = true
 tempfile.workspace = true
@@ -22,6 +23,8 @@ toml_edit.workspace = true
 walkdir.workspace = true
 serde_json.workspace = true
 serde.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 move-bytecode-source-map.workspace = true
 move-bytecode-verifier.workspace = true
@@ -42,12 +45,16 @@ move-vm-profiler.workspace = true
 move-vm-test-utils.workspace = true
 move-vm-config.workspace = true
 move-binary-format.workspace = true
-move-package.workspace = true
+move-package-alt.workspace = true
+move-package-alt-compilation.workspace = true
 move-symbol-pool.workspace = true
 move-unit-test.workspace = true
 move-bytecode-viewer.workspace = true
 move-model-2.workspace = true
 move-trace-format.workspace = true
+treeline.workspace = true
+tokio.workspace = true
+path-clean.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true

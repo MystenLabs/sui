@@ -794,7 +794,7 @@ dependencies = [
  "crossterm_winapi",
  "mio 1.0.3",
  "parking_lot 0.12.3",
- "rustix",
+ "rustix 0.38.44",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -1140,6 +1140,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fs4"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8640e34b88f7652208ce9e88b1a37a2ae95227d84abec377ccd3c5cfeb141ed4"
+dependencies = [
+ "rustix 1.0.8",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1857,6 +1867,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
 
 [[package]]
+name = "linux-raw-sys"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
+
+[[package]]
 name = "litemap"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2015,6 +2031,7 @@ dependencies = [
  "crossbeam",
  "datatest-stable",
  "dunce",
+ "futures",
  "im",
  "itertools 0.10.5",
  "json_comments",
@@ -2024,7 +2041,8 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-ir-types",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-symbol-pool",
  "once_cell",
  "serde",
@@ -2034,6 +2052,7 @@ dependencies = [
  "strum_macros 0.27.1",
  "sysinfo",
  "tempfile",
+ "tokio",
  "url",
  "vfs",
 ]
@@ -2183,6 +2202,7 @@ dependencies = [
  "codespan-reporting",
  "colored",
  "datatest-stable",
+ "indoc",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-utils",
@@ -2197,7 +2217,8 @@ dependencies = [
  "move-docgen",
  "move-ir-types",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
@@ -2208,12 +2229,17 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
+ "path-clean",
  "serde",
  "serde_json",
  "serde_yaml",
  "similar",
  "tempfile",
+ "tokio",
  "toml_edit 0.22.24",
+ "tracing",
+ "tracing-subscriber",
+ "treeline",
  "walkdir",
 ]
 
@@ -2425,13 +2451,15 @@ dependencies = [
  "move-docgen",
  "move-ir-types",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-symbol-pool",
  "num",
  "once_cell",
  "regex",
  "serde",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -2595,10 +2623,13 @@ dependencies = [
  "bimap",
  "clap 4.5.28",
  "codespan-reporting",
+ "colored",
  "datatest-stable",
  "derive-where",
+ "fs4",
  "futures",
  "heck 0.3.3",
+ "indexmap 2.8.0",
  "indoc",
  "insta",
  "itertools 0.10.5",
@@ -2606,6 +2637,7 @@ dependencies = [
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
+ "move-symbol-pool",
  "named-lock",
  "once_cell",
  "path-clean",
@@ -2718,12 +2750,14 @@ dependencies = [
  "move-ir-types",
  "move-model",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stackless-bytecode",
  "move-stdlib",
  "move-symbol-pool",
  "move-vm-runtime",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]
@@ -2740,12 +2774,14 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stdlib-natives",
  "move-unit-test",
  "move-vm-runtime",
  "sha2",
  "tempfile",
+ "tokio",
  "walkdir",
 ]
 
@@ -3910,7 +3946,20 @@ dependencies = [
  "bitflags 2.8.0",
  "errno",
  "libc",
- "linux-raw-sys",
+ "linux-raw-sys 0.4.15",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "rustix"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11181fbabf243db407ef8df94a6ce0b2f9a733bd8be4ad02b4eda9602296cac8"
+dependencies = [
+ "bitflags 2.8.0",
+ "errno",
+ "libc",
+ "linux-raw-sys 0.9.4",
  "windows-sys 0.59.0",
 ]
 
@@ -4352,7 +4401,7 @@ dependencies = [
  "fastrand",
  "getrandom 0.3.1",
  "once_cell",
- "rustix",
+ "rustix 0.38.44",
  "windows-sys 0.59.0",
 ]
 

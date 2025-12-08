@@ -2,9 +2,3 @@
 name = "foo"
 edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 
-[dependencies]
-
-[addresses]
-
-[dev-addresses]
-std = "0x1"

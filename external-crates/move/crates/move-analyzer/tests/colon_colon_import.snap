@@ -5,6 +5,7 @@ source: crates/move-analyzer/tests/ide_testsuite.rs
 -- test 0 -------------------
 use line: 7, use_col: 9
 Unit '0xCAFE'
+Unit '0xCAFE2'
 Unit 'Import'
 Unit 'SamePkgAddr'
 Module 'Self'
@@ -90,6 +91,7 @@ Struct 'AnotherDepStruct'
 -- test 0 -------------------
 use line: 22, use_col: 9
 Unit '0xCAFE'
+Unit '0xCAFE2'
 Unit 'Import'
 Unit 'SamePkgAddr'
 Module 'Self'

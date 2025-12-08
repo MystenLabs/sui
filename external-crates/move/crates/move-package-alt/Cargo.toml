@@ -13,14 +13,17 @@ append-only-vec.workspace = true
 bimap.workspace = true
 clap.workspace = true
 codespan-reporting.workspace = true
+colored.workspace = true
 derive-where.workspace = true
 futures.workspace = true
+indexmap.workspace = true
 indoc.workspace = true
 itertools.workspace = true
 jsonrpc.workspace = true
 move-command-line-common.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
+move-symbol-pool.workspace = true
 named-lock.workspace = true
 once_cell.workspace = true
 path-clean.workspace = true
@@ -41,6 +44,7 @@ tracing-subscriber.workspace = true
 heck.workspace = true
 walkdir.workspace = true
 whoami.workspace = true
+fs4.workspace = true
 
 [dev-dependencies]
 aquamarine.workspace = true
@@ -55,7 +59,3 @@ path = "src/mocks/mock-resolver.rs"
 [[bin]]
 name = "mock-resolver-2"
 path = "src/mocks/mock-resolver-2.rs"
-
-[[test]]
-name = "test_runner"
-harness = false

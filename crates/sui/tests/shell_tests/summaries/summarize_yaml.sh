@@ -1,7 +1,7 @@
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-sui move summary --path data/move_package -o yaml
+sui move --client.config $CONFIG summary --path data/move_package -o yaml
 ls -1 data/move_package/package_summaries | LC_ALL=C sort -f
 ls -1 data/move_package/package_summaries/move_package | LC_ALL=C sort -f
 ls -1 data/move_package/package_summaries/sui | LC_ALL=C sort -f

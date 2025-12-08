@@ -1,7 +1,8 @@
 [package]
-name = "Examples"
+name = "examples"
 version = "0.0.1"
 edition = "2024.beta"
+implicit-dependencies = false
 
-[addresses]
-examples = "0x0"
+[dependencies]
+sui = { local = "../system-packages/sui-framework" } # relative to the tempdir where the test runs and has all system pkgs

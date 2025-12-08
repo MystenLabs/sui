@@ -9,6 +9,7 @@ mod resolve;
 pub use resolve::{ResolvedDependency, ResolverError};
 
 mod pin;
+pub use pin::Pinned;
 pub use pin::PinnedDependencyInfo;
 
 mod fetch;
@@ -16,7 +17,7 @@ pub use fetch::{FetchError, FetchedDependency};
 
 use crate::{
     errors::FileHandle,
-    schema::{EnvironmentName, PackageName, PublishAddresses},
+    schema::{EnvironmentName, ModeName, PackageName, PublishAddresses},
 };
 
 // TODO(refactor): instead of `Dependency<DepInfo>`, we should just have `DependencyContext`, and
@@ -31,6 +32,12 @@ use crate::{
 /// dependency, etc). The `DepInfo` type encapsulates these invariants.
 #[derive(Debug, Clone)]
 struct Dependency<DepInfo> {
+    /// The name given to this dependency in the manifest. For modern manifests, this is the same
+    /// as the name used for the package in the source code, while for legacy manifests this name
+    /// may be different (it is still normalized to be a valid identifier but does not correspond
+    /// to the named address).
+    name: PackageName,
+
     dep_info: DepInfo,
 
     /// The environment in the dependency's namespace to use. For example, given
@@ -49,6 +56,9 @@ struct Dependency<DepInfo> {
     /// Does the original manifest override the published address?
     addresses: Option<PublishAddresses>,
 
+    /// The `modes` field for the dependency
+    modes: Option<Vec<ModeName>>,
+
     /// What manifest or lockfile does this dependency come from?
     containing_file: FileHandle,
 }
@@ -57,12 +67,14 @@ impl<T> Dependency<T> {
     /// Apply `f` to `self.dep_info`, keeping the remaining fields unchanged
     pub fn map<U, F: FnOnce(T) -> U>(self, f: F) -> Dependency<U> {
         Dependency {
+            name: self.name,
             dep_info: f(self.dep_info),
             use_environment: self.use_environment,
             is_override: self.is_override,
             addresses: self.addresses,
             containing_file: self.containing_file,
             rename_from: self.rename_from,
+            modes: self.modes,
         }
     }
 

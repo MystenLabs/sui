@@ -2,7 +2,8 @@
 name = "Sui"
 version = "0.0.1"
 published-at = "0x2"
-edition = "development"
+edition = "2024"
+implicit-dependencies = false
 
 [addresses]
 sui = "0x2"

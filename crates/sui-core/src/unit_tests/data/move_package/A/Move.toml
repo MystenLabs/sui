@@ -2,6 +2,7 @@
 name = "A"
 version = "0.0.1"
 edition = "2024.beta"
+implicit-dependencies = false
 
 [addresses]
 a = "0xa1"

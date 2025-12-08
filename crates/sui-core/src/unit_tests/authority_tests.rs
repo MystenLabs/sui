@@ -4434,7 +4434,8 @@ pub async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<Authority
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
     let modules: Vec<_> = BuildConfig::new_for_testing()
-        .build(&path)
+        .build_async(&path)
+        .await
         .unwrap()
         .get_modules()
         .cloned()
@@ -4455,7 +4456,8 @@ pub async fn publish_aborts(state: Arc<AuthorityState>) -> (Arc<AuthorityState>,
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/aborts");
     let modules: Vec<_> = BuildConfig::new_for_testing()
-        .build(&path)
+        .build_async(&path)
+        .await
         .unwrap()
         .get_modules()
         .cloned()
@@ -4489,7 +4491,8 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
     let modules: Vec<_> = BuildConfig::new_for_testing()
-        .build(&path)
+        .build_async(&path)
+        .await
         .unwrap()
         .get_modules()
         .cloned()
