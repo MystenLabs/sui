@@ -260,7 +260,7 @@ impl<'extensions> MoveVM<'extensions> {
         self.virtual_tables.get_type_layout(ty).map_err(|e| {
             Self::convert_to_external_resolution_error(
                 e,
-                format!("Failed to resolve type layotu for {ty}",),
+                format!("Failed to resolve type layout for {ty}",),
             )
         })
     }

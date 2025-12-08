@@ -72,7 +72,7 @@ fn input(
         }) => {
             let obj = env.read_object(&id)?;
             let Some(ty) = obj.type_() else {
-                invariant_violation!("Object {:?} has does not have a Move type", id);
+                invariant_violation!("Object {:?} does not have a Move type", id);
             };
             let tag: StructTag = ty.clone().into();
             let ty = env.load_type_from_struct(&tag)?;
