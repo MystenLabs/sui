@@ -15710,6 +15710,7 @@ version = "1.63.0"
 dependencies = [
  "anyhow",
  "fastcrypto",
+ "fs_extra",
  "futures",
  "move-binary-format",
  "move-bytecode-utils",
