@@ -4659,6 +4659,10 @@ impl ProtocolConfig {
             .include_checkpoint_artifacts_digest_in_summary = true;
     }
 
+    pub fn disable_authenticated_event_streams_for_testing(&mut self) {
+        self.feature_flags.enable_authenticated_event_streams = false;
+    }
+
     pub fn enable_non_exclusive_writes_for_testing(&mut self) {
         self.feature_flags.enable_non_exclusive_writes = true;
     }
