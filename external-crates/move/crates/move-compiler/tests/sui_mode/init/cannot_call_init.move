@@ -1,6 +1,7 @@
 // cannot directly call init
 module a::m {
     use sui::tx_context;
+
     fun init(_ctx: &mut tx_context::TxContext) {
         abort 0
     }

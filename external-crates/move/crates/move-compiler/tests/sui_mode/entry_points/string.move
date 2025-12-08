@@ -1,9 +1,9 @@
 // valid, ASCII and UTF strings is allowed
 
 module a::m {
-    use sui::tx_context;
     use std::ascii;
     use std::string;
+    use sui::tx_context;
 
     public entry fun yes_ascii<T>(
         _: ascii::String,

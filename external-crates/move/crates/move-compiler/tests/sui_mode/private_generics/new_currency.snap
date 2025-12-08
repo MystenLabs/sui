@@ -6,10 +6,10 @@ info:
   lint: false
 ---
 error[Sui E02010]: invalid coin creation call
-   ┌─ tests/sui_mode/private_generics/new_currency.move:17:5
+   ┌─ tests/sui_mode/private_generics/new_currency.move:17:9
    │
-17 │     coin_registry::new_currency<External>();
-   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │     │                           │
-   │     │                           The type 'a::other::External' is not declared in the current module
-   │     Invalid coin creation. The function 'sui::coin_registry::new_currency' must be called with a type defined in the current module
+17 │         coin_registry::new_currency<External>();
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │                           │
+   │         │                           The type 'a::other::External' is not declared in the current module
+   │         Invalid coin creation. The function 'sui::coin_registry::new_currency' must be called with a type defined in the current module

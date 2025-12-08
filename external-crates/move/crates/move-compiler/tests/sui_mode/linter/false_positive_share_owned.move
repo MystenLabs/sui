@@ -1,10 +1,10 @@
 // object has store but is never created externally
 module a::has_store {
-    use sui::transfer;
     use sui::object::UID;
+    use sui::transfer;
 
     struct Obj has key, store {
-        id: UID
+        id: UID,
     }
 
     public fun arg_object(o: Obj) {
@@ -15,15 +15,15 @@ module a::has_store {
 
 // object is created locally, but the analysis cannot determine that currently
 module a::cannot_determine_to_be_new {
-    use sui::transfer;
     use sui::object::UID;
+    use sui::transfer;
 
     struct Obj has key {
-        id: UID
+        id: UID,
     }
 
     struct Obj2 has key {
-        id: UID
+        id: UID,
     }
 
     // we do not do interprodedural analysis here
@@ -45,6 +45,7 @@ module a::cannot_determine_to_be_new {
 
 module sui::tx_context {
     struct TxContext has drop {}
+
     public fun sender(_: &TxContext): address {
         @0
     }
@@ -52,12 +53,15 @@ module sui::tx_context {
 
 module sui::object {
     const ZERO: u64 = 0;
+
     struct UID has store {
         id: address,
     }
+
     public fun delete(_: UID) {
         abort ZERO
     }
+
     public fun new(_: &mut sui::tx_context::TxContext): UID {
         abort ZERO
     }
@@ -65,12 +69,15 @@ module sui::object {
 
 module sui::transfer {
     const ZERO: u64 = 0;
+
     public fun transfer<T: key>(_: T, _: address) {
         abort ZERO
     }
+
     public fun share_object<T: key>(_: T) {
         abort ZERO
     }
+
     public fun public_share_object<T: key>(_: T) {
         abort ZERO
     }

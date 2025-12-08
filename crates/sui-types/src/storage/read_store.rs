@@ -13,7 +13,8 @@ use crate::dynamic_field::DynamicFieldType;
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::full_checkpoint_content::{Checkpoint, ExecutedTransaction, ObjectSet};
 use crate::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
+    CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint,
+    VersionedFullCheckpointContents,
 };
 use crate::object::Object;
 use crate::storage::ObjectKey;
@@ -161,7 +162,7 @@ pub trait ReadStore: ObjectStore {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents>;
+    ) -> Option<VersionedFullCheckpointContents>;
 
     // Fetch all checkpoint data
     fn get_checkpoint_data(
@@ -369,7 +370,7 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Option<VersionedFullCheckpointContents> {
         (*self).get_full_checkpoint_contents(sequence_number, digest)
     }
 
@@ -487,7 +488,7 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Option<VersionedFullCheckpointContents> {
         (**self).get_full_checkpoint_contents(sequence_number, digest)
     }
 
@@ -605,7 +606,7 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Option<VersionedFullCheckpointContents> {
         (**self).get_full_checkpoint_contents(sequence_number, digest)
     }
 

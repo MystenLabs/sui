@@ -65,6 +65,9 @@ Address.objects
 Address.transactions
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
+AddressAliasStateCreateTransaction._
+  => {}
+
 AddressOwner.address
   => {}
 

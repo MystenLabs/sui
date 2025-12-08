@@ -5,8 +5,7 @@ module a::m {
 
     struct M has drop { value: u64 }
 
-    fun init(_otw: M, _ctx: &mut tx_context::TxContext) {
-    }
+    fun init(_otw: M, _ctx: &mut tx_context::TxContext) {}
 }
 
 module sui::tx_context {

@@ -37,6 +37,7 @@ accumulator.yaml
 accumulator_metadata.yaml
 accumulator_settlement.yaml
 address.yaml
+address_alias.yaml
 authenticator_state.yaml
 bag.yaml
 balance.yaml

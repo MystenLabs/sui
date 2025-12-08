@@ -1,11 +1,11 @@
 // object has store, might be transferred elsewhere
 module a::has_store {
+    use sui::object::UID;
     use sui::transfer;
     use sui::tx_context::TxContext;
-    use sui::object::UID;
 
     struct Obj has key, store {
-        id: UID
+        id: UID,
     }
 
     public fun make_obj(ctx: &mut TxContext): Obj {
@@ -20,12 +20,12 @@ module a::has_store {
 
 // object does not have store and is transferred
 module a::is_transferred {
+    use sui::object::UID;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
-    use sui::object::UID;
 
     struct Obj has key {
-        id: UID
+        id: UID,
     }
 
     public fun make_obj(ctx: &mut TxContext): Obj {
@@ -45,6 +45,7 @@ module a::is_transferred {
 
 module sui::tx_context {
     struct TxContext has drop {}
+
     public fun sender(_: &TxContext): address {
         @0
     }
@@ -52,12 +53,15 @@ module sui::tx_context {
 
 module sui::object {
     const ZERO: u64 = 0;
+
     struct UID has store {
         id: address,
     }
+
     public fun delete(_: UID) {
         abort ZERO
     }
+
     public fun new(_: &mut sui::tx_context::TxContext): UID {
         abort ZERO
     }
@@ -65,12 +69,15 @@ module sui::object {
 
 module sui::transfer {
     const ZERO: u64 = 0;
+
     public fun transfer<T: key>(_: T, _: address) {
         abort ZERO
     }
+
     public fun share_object<T: key>(_: T) {
         abort ZERO
     }
+
     public fun public_share_object<T: key>(_: T) {
         abort ZERO
     }

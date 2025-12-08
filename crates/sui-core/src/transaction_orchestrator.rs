@@ -293,8 +293,9 @@ where
     ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), QuorumDriverError> {
         let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
         let verified_transaction = epoch_store
-            .verify_transaction(request.transaction.clone())
-            .map_err(QuorumDriverError::InvalidUserSignature)?;
+            .verify_transaction_with_current_aliases(request.transaction.clone())
+            .map_err(QuorumDriverError::InvalidUserSignature)?
+            .into_tx();
         let tx_digest = *verified_transaction.digest();
 
         // Early validation check against local state before submission to catch non-retriable errors

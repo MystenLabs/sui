@@ -2875,7 +2875,7 @@ impl ReadStore for SuiTestAdapter {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
+    ) -> Option<sui_types::messages_checkpoint::VersionedFullCheckpointContents> {
         self.executor
             .get_full_checkpoint_contents(sequence_number, digest)
     }

@@ -6,7 +6,7 @@ module a::m {
 
     struct S has key { id: object::UID }
 
-    public entry fun yes(_: &mut Receiving<S>) { }
+    public entry fun yes(_: &mut Receiving<S>) {}
 }
 
 module sui::object {
@@ -17,6 +17,6 @@ module sui::object {
 
 module sui::transfer {
     struct Receiving<phantom T: key> has drop {
-        id: address
+        id: address,
     }
 }
