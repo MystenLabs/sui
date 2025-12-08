@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+use fs_extra::dir::CopyOptions;
 use move_compiler::editions::Edition;
 
 use crate::BuildConfig;
@@ -10,17 +11,27 @@ use crate::BuildConfig;
 #[tokio::test]
 async fn generate_struct_layouts() {
     // build the Sui framework and generate struct layouts to make sure nothing crashes
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+    let packages_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
         .to_path_buf()
         .join("sui-framework")
-        .join("packages")
-        .join("sui-framework");
+        .join("packages");
+
+    // TODO dvx-1889: this might be unnecessary if we can run without regenerating lockfiles
+    let tempdir = tempfile::tempdir().unwrap();
+    fs_extra::dir::copy(
+        &packages_path,
+        &tempdir,
+        &CopyOptions::new().content_only(true),
+    )
+    .unwrap();
+
     let pkg = BuildConfig::new_for_testing()
-        .build_async(&path)
+        .build_async(&tempdir.path().join("sui-framework"))
         .await
         .unwrap();
+
     let registry = pkg.generate_struct_layouts();
     // check for a couple of types that aren't likely to go away
     assert!(registry.contains_key(

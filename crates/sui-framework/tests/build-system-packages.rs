@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use fs_extra::dir::CopyOptions;
 use move_binary_format::{CompiledModule, file_format::Visibility};
 use move_compiler::editions::{Edition, Flavor};
 use move_package_alt_compilation::{
@@ -37,6 +38,14 @@ async fn build_system_packages() {
     std::fs::create_dir_all(out_dir.join(DOCS_DIR)).unwrap();
 
     let packages_path = Path::new(CRATE_ROOT).join("packages");
+    let indir = tempfile::tempdir().unwrap();
+    fs_extra::dir::copy(
+        packages_path,
+        indir.path(),
+        &CopyOptions::new().content_only(true),
+    )
+    .unwrap();
+    let packages_path = indir.path();
 
     let bridge_path = packages_path.join("bridge");
     let deepbook_path = packages_path.join("deepbook");

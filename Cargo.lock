@@ -14575,6 +14575,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "fs_extra",
  "move-binary-format",
  "move-compiler",
  "move-core-types",
@@ -14613,6 +14614,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
+ "fs_extra",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
  "move-cli",
@@ -14628,6 +14630,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
+ "tempfile",
  "tokio",
 ]
 
@@ -15708,6 +15711,7 @@ version = "1.63.0"
 dependencies = [
  "anyhow",
  "fastcrypto",
+ "fs_extra",
  "futures",
  "move-binary-format",
  "move-bytecode-utils",

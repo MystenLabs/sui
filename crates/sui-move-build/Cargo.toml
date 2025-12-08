@@ -33,3 +33,6 @@ move-ir-types.workspace = true
 move-package-alt.workspace = true
 move-package-alt-compilation.workspace = true
 move-symbol-pool.workspace = true
+
+[dev-dependencies]
+fs_extra.workspace = true

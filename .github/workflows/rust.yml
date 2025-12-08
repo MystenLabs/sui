@@ -103,9 +103,8 @@ jobs:
         run: |
           cargo nextest run --profile ci -E '!package(sui-bridge) and !package(sui-bridge-indexer)'
       # Ensure there are no uncommitted changes in the repo after running tests
-      # TODO: pkg-alt DISABLED THIS SINCE IT IS FAILING DUE TO UNCOMMITTED CHANGES
-      # - run: scripts/changed-files.sh
-        # shell: bash
+      - run: scripts/changed-files.sh
+        shell: bash
 
   test-extra:
     needs: [diff, rustfmt, clippy]
