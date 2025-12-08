@@ -28,7 +28,10 @@ use move_binary_format::{
         FunctionHandleIndex, SignatureIndex, SignatureToken, StructFieldInformation, TableIndex,
     },
 };
-use move_core_types::{identifier::Identifier, resolver::IntraPackageName, vm_status::StatusCode};
+use move_core_types::{
+    identifier::Identifier, language_storage::ModuleId, resolver::IntraPackageName,
+    vm_status::StatusCode,
+};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 // -------------------------------------------------------------------------------------------------
@@ -185,7 +188,7 @@ pub fn package(
 ) -> PartialVMResult<Package> {
     let version_id = verified_package.version_id;
     let original_id = verified_package.original_id;
-    let (module_ids_in_pkg, mut package_modules): (BTreeSet<_>, Vec<_>) =
+    let (module_ids_in_pkg, package_modules): (BTreeSet<_>, Vec<_>) =
         verified_package.modules.into_iter().unzip();
 
     let type_origin_table = verified_package
@@ -222,50 +225,7 @@ pub fn package(
         type_origin_table,
     };
 
-    // Load modules in dependency order within the package. Needed for both static call
-    // resolution and type caching.
-    while let Some(mut input_module) = package_modules.pop() {
-        let immediate_dependencies = input_module
-            .compiled_module
-            .immediate_dependencies()
-            .into_iter()
-            .filter(|dep| {
-                module_ids_in_pkg.contains(dep) && dep != &input_module.compiled_module.self_id()
-            });
-
-        // If we haven't processed the immediate dependencies yet, push the module back onto
-        // the front and process other modules first.
-        let mut all_deps_loaded = true;
-        for dep in immediate_dependencies {
-            let key = interner.intern_ident_str(dep.name())?;
-            if !package_context.loaded_modules.contains_key(&key) {
-                all_deps_loaded = false;
-                break;
-            }
-        }
-        if !all_deps_loaded {
-            package_modules.insert(0, input_module);
-            continue;
-        }
-
-        let loaded_module = module(&mut package_context, version_id, &mut input_module)?;
-
-        let key = interner.intern_ident_str(loaded_module.id.name())?;
-        if package_context
-            .loaded_modules
-            .insert(key, loaded_module)
-            .is_some()
-        {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!(
-                        "Duplicate module loaded in package {}",
-                        package_context.version_id
-                    ),
-                ),
-            );
-        }
-    }
+    modules(&mut package_context, &module_ids_in_pkg, &package_modules)?;
 
     let PackageContext {
         version_id,
@@ -290,13 +250,129 @@ pub fn package(
     })
 }
 
+fn modules(
+    package_context: &mut PackageContext<'_>,
+    pkg_module_ids: &BTreeSet<ModuleId>,
+    package_modules: &[input::Module],
+) -> PartialVMResult<()> {
+    use std::collections::BTreeMap;
+
+    macro_rules! make_invariant_violation {
+        ($msg:expr) => {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message($msg)
+        };
+    }
+
+    #[derive(Copy, Clone, Eq, PartialEq)]
+    enum State {
+        NotVisited,
+        Visiting,
+        Visited,
+    }
+
+    let input_modules: BTreeMap<ModuleId, &input::Module> = package_modules
+        .iter()
+        .map(|m| (m.compiled_module.self_id(), m))
+        .collect();
+
+    // Model a DFS over the module dependency graph to load modules in dependency order.
+    let mut state: BTreeMap<ModuleId, State> = BTreeMap::new();
+
+    for root_id in input_modules.keys() {
+        let root_key = package_context.interner.intern_ident_str(root_id.name())?;
+
+        // Skip if we already fully processed this module.
+        if matches!(state.get(root_id), Some(State::Visited)) {
+            debug_assert!(package_context.loaded_modules.contains_key(&root_key));
+            continue;
+        }
+
+        let mut stack: Vec<ModuleId> = Vec::new();
+        stack.push(root_id.clone());
+
+        while let Some(cur_id) = stack.pop() {
+            let cur_state = *state.get(&cur_id).unwrap_or(&State::NotVisited);
+            let cur_key = package_context.interner.intern_ident_str(cur_id.name())?;
+
+            match cur_state {
+                State::Visited => {
+                    debug_assert!(package_context.loaded_modules.contains_key(&cur_key));
+                    continue;
+                }
+                State::Visiting => {
+                    // all deps done, now load if needed
+                    if !package_context.loaded_modules.contains_key(&cur_key) {
+                        let input_module = input_modules.get(&cur_id).ok_or_else(|| {
+                            make_invariant_violation!(format!(
+                                "Module {} not found in initial modules",
+                                cur_id
+                            ))
+                        })?;
+                        let loaded_module =
+                            module(package_context, package_context.version_id, input_module)?;
+                        if package_context
+                            .loaded_modules
+                            .insert(cur_key, loaded_module)
+                            .is_some()
+                        {
+                            return Err(make_invariant_violation!(format!(
+                                "Module {} already loaded in package context",
+                                cur_id
+                            )));
+                        }
+                    }
+                    state.insert(cur_id, State::Visited);
+                }
+                State::NotVisited => {
+                    if state.insert(cur_id.clone(), State::Visiting).is_some() {
+                        return Err(make_invariant_violation!(format!(
+                            "Module {} added to load queue as unvisited twice",
+                            cur_id
+                        )));
+                    }
+                    stack.push(cur_id.clone());
+
+                    let input_module = input_modules.get(&cur_id).ok_or_else(|| {
+                        make_invariant_violation!(format!(
+                            "Module {} not found in initial modules",
+                            cur_id
+                        ))
+                    })?;
+
+                    for dep in input_module
+                        .compiled_module
+                        .immediate_dependencies()
+                        .iter()
+                        .filter(|dep| pkg_module_ids.contains(dep) && *dep != &cur_id)
+                    {
+                        match state.get(dep).copied().unwrap_or(State::NotVisited) {
+                            State::Visited => { /* nothing */ }
+                            State::Visiting => {
+                                return Err(make_invariant_violation!(format!(
+                                    "Cycle detected when loading module for package: {}",
+                                    dep
+                                )));
+                            }
+                            State::NotVisited => {
+                                stack.push(dep.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 // -------------------------------------------------------------------------------------------------
 // Module Translation
 
 fn module(
     context: &mut PackageContext<'_>,
     version_id: VersionId,
-    module: &mut input::Module,
+    module: &input::Module,
 ) -> PartialVMResult<Module> {
     let self_id = module.compiled_module.self_id();
     dbg_println!("Loading module: {}", self_id);
