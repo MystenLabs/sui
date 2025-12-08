@@ -1699,8 +1699,6 @@ async fn test_handle_soft_bundle_certificates() {
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
     protocol_config.set_enable_soft_bundle_for_testing(true);
     protocol_config.set_max_soft_bundle_size_for_testing(10);
-    protocol_config
-        .set_per_object_congestion_control_mode_for_testing(PerObjectCongestionControlMode::None);
 
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)

@@ -980,10 +980,10 @@ pub struct ExecutionTimeEstimateParams {
 #[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum PerObjectCongestionControlMode {
     #[default]
-    None, // No congestion control.
-    TotalGasBudget,        // Use txn gas budget as execution cost.
-    TotalTxCount,          // Use total txn count as execution cost.
-    TotalGasBudgetWithCap, // Use txn gas budget as execution cost with a cap.
+    None, // Deprecated.
+    TotalGasBudget,                                     // Deprecated.
+    TotalTxCount,                                       // Deprecated.
+    TotalGasBudgetWithCap,                              // Deprecated.
     ExecutionTimeEstimate(ExecutionTimeEstimateParams), // Use execution time estimate as execution cost.
 }
 
@@ -1676,14 +1676,10 @@ pub struct ProtocolConfig {
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
 
-    /// If >0, congestion control will allow the configured maximum accumulated cost per object
-    /// to be exceeded by at most the given amount. Only one limit-exceeding transaction per
-    /// object will be allowed, unless bursting is configured below.
+    /// DEPRECATED. Do not use.
     max_txn_cost_overage_per_object_in_commit: Option<u64>,
 
-    /// If >0, congestion control will allow transactions in total cost equaling the
-    /// configured amount to exceed the configured maximum accumulated cost per object.
-    /// As above, up to one transaction per object exceeding the burst limit will be allowed.
+    /// DEPRECATED. Do not use.
     allowed_txn_cost_overage_burst_per_object_in_commit: Option<u64>,
 
     /// Minimum interval of commit timestamps between consecutive checkpoints.
@@ -1715,13 +1711,10 @@ pub struct ProtocolConfig {
     /// is disabled.
     consensus_gc_depth: Option<u32>,
 
-    /// Used to calculate the max transaction cost when using TotalGasBudgetWithCap as shard
-    /// object congestion control strategy. Basically the max transaction cost is calculated as
-    /// (num of input object + num of commands) * this factor.
+    /// DEPRECATED. Do not use.
     gas_budget_based_txn_cost_cap_factor: Option<u64>,
 
-    /// Adds an absolute cap on the maximum transaction cost when using TotalGasBudgetWithCap at
-    /// the given multiple of the per-commit budget.
+    /// DEPRECATED. Do not use.
     gas_budget_based_txn_cost_absolute_cap_commit_count: Option<u64>,
 
     /// SIP-45: K in the formula `amplification_factor = max(0, gas_price / reference_gas_price - K)`.

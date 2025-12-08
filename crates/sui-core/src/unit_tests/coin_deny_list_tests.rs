@@ -9,7 +9,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use std::sync::Arc;
-use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr};
 use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
@@ -426,8 +426,6 @@ async fn new_authority_and_publish(path: &str) -> TestEnv {
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
     protocol_config.enable_accumulators_for_testing();
-    protocol_config
-        .set_per_object_congestion_control_mode_for_testing(PerObjectCongestionControlMode::None);
 
     let authority = TestAuthorityBuilder::new()
         .with_starting_objects(&[gas_object])

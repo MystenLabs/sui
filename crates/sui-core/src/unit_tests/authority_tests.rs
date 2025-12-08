@@ -29,9 +29,12 @@ use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockEffectsV1, SuiTypeTag,
 };
-use sui_macros::sim_test;
+use sui_macros::{register_fail_point_arg, sim_test};
 use sui_move_build::BuildConfig;
-use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{
+    Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
+    ProtocolVersion,
+};
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
@@ -60,6 +63,7 @@ use sui_types::{
 use sui_types::{SUI_CLOCK_OBJECT_SHARED_VERSION, digests::Digest};
 use sui_types::{dynamic_field::DynamicFieldType, messages_consensus::ConsensusTransaction};
 
+use crate::authority::shared_object_congestion_tracker::SharedObjectCongestionTracker;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::CheckpointServiceNotify;
@@ -6089,266 +6093,6 @@ fn create_shared_objects(num: u32) -> Vec<Object> {
     objects
 }
 
-async fn test_consensus_handler_per_object_congestion_control(
-    mode: PerObjectCongestionControlMode,
-) {
-    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
-
-    // In this test, we tests transactions that operate on 2 shared objects. The idea is that
-    // one of them is more expensive to operate on than the other. And we want to test that
-    // the system will defer transactions that operate on the more expensive object and allow
-    // transactions that operate on the cheaper object to go through.
-    //
-    // We will create 2 batches of commits. So here, we create gas objects for each of them separately.
-    let shared_objects = create_shared_objects(2);
-
-    let non_congested_tx_count = match mode {
-        PerObjectCongestionControlMode::None => unreachable!(),
-        PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => unreachable!(),
-        PerObjectCongestionControlMode::TotalGasBudget => 5,
-        PerObjectCongestionControlMode::TotalTxCount => 2,
-        PerObjectCongestionControlMode::TotalGasBudgetWithCap => 5,
-    };
-    let gas_objects_commit_1 = create_gas_objects(5 + non_congested_tx_count, sender);
-    let gas_objects_commit_2 = create_gas_objects(non_congested_tx_count, sender);
-
-    // Create the cluster with controlled per object congestion control.
-    let mut protocol_config =
-        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-    protocol_config.set_per_object_congestion_control_mode_for_testing(mode);
-
-    match mode {
-        PerObjectCongestionControlMode::None => unreachable!(),
-        PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => unreachable!(),
-        PerObjectCongestionControlMode::TotalGasBudget => {
-            protocol_config
-                .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(200_000_000);
-            protocol_config
-                .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
-                    200_000_000,
-                );
-        }
-        PerObjectCongestionControlMode::TotalTxCount => {
-            protocol_config
-                .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(2);
-            protocol_config
-                .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(2);
-        }
-        PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
-            protocol_config
-                .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(200_000_000);
-            protocol_config
-                .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(
-                    200_000_000,
-                );
-            protocol_config.set_gas_budget_based_txn_cost_cap_factor_for_testing(100_000_000);
-        }
-    }
-    protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(1000); // Set to a large number so that we don't hit this limit.
-    protocol_config.set_max_txn_cost_overage_per_object_in_commit_for_testing(0);
-    protocol_config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(0);
-    let authority = TestAuthorityBuilder::new()
-        .with_reference_gas_price(1000)
-        .with_protocol_config(protocol_config)
-        .build()
-        .await;
-    let mut genesis_objects = gas_objects_commit_1.clone();
-    genesis_objects.extend(gas_objects_commit_2.clone());
-    genesis_objects.extend(shared_objects.clone());
-    authority.insert_genesis_objects(&genesis_objects).await;
-
-    let test_setup = consensus_test_utils::setup_consensus_handler_for_testing(&authority).await;
-    let mut consensus_handler = test_setup.consensus_handler;
-    let captured_transactions = test_setup.captured_transactions;
-
-    // Create first batch of commits. Here, we create 5 transactions that operate on the first
-    // shared object with very high gas budget. And `non_congested_tx_count` transactions that
-    // operate on the second shared object with low gas budget (so that there won't be any
-    // congestion on the second object).
-    //
-    // For transaction operates on the expensive object, we use gas price from 1000 to 5000,
-    // and for transaction operates on the cheaper object, we use gas price of 1000.
-    let mut certificates: Vec<VerifiedCertificate> = vec![];
-    for (index, gas_object) in gas_objects_commit_1.iter().enumerate() {
-        let certificate = make_test_transaction(
-            &sender,
-            &keypair,
-            &[],
-            &[(
-                if index < 5 {
-                    shared_objects[0].id()
-                } else {
-                    shared_objects[1].id()
-                },
-                OBJECT_START_VERSION,
-                true,
-            )],
-            &gas_object.compute_object_reference(),
-            &[&authority],
-            12345,
-            if index < 5 {
-                Some(1000 * (index + 1) as u64)
-            } else {
-                Some(1000)
-            },
-            if index < 5 {
-                Some(100_000_000)
-            } else {
-                Some(10_000_000)
-            },
-        )
-        .await;
-        certificates.push(certificate);
-    }
-
-    // We shuffle the transactions so that transactions in the list do not have any order in terms of gas price.
-    certificates.shuffle(&mut rand::thread_rng());
-
-    // Sends the first batch of transactions using the consensus handler directly.
-    // We should expect that 2 transactions operate on the expensive object should go through,
-    // and all transactions operate on the cheaper object should go through.
-    // We also check that the scheduled transactions on the expensive object have the highest gas price.
-    let scheduled_txns = process_certificates_through_consensus_handler(
-        &mut consensus_handler,
-        &authority,
-        &certificates,
-        1,
-        &captured_transactions,
-    )
-    .await;
-
-    assert_eq!(scheduled_txns.0.len(), 2 + non_congested_tx_count as usize);
-    for schedulable in scheduled_txns.0.iter() {
-        if let Some(cert) = schedulable.as_tx() {
-            assert!(
-                cert.data().transaction_data().gas_price() >= 4000
-                    || cert
-                        .data()
-                        .transaction_data()
-                        .shared_input_objects()
-                        .iter()
-                        .any(|obj| { obj.id() == shared_objects[1].id() })
-            );
-        }
-    }
-
-    // Checks that deferral keys are formed correctly.
-    let epoch_store = authority.epoch_store_for_testing();
-    let commit_round = if epoch_store.randomness_state_enabled() {
-        epoch_store.get_highest_pending_checkpoint_height() / 2
-    } else {
-        epoch_store.get_highest_pending_checkpoint_height()
-    };
-    let deferred_txns = epoch_store.get_all_deferred_transactions_for_test();
-    assert_eq!(deferred_txns.len(), 1);
-    assert_eq!(deferred_txns[0].1.len(), 3);
-    let deferral_key = deferred_txns[0].0;
-    match deferral_key {
-        DeferralKey::ConsensusRound {
-            future_round,
-            deferred_from_round,
-        } => {
-            assert_eq!(future_round, commit_round + 1);
-            assert_eq!(deferred_from_round, commit_round);
-        }
-        DeferralKey::Randomness {
-            deferred_from_round,
-        } => {
-            panic!(
-                "Expected ConsensusRound, got RandomnessDkg: {:?}",
-                deferred_from_round
-            );
-        }
-    }
-
-    // Create second batch of commits. Here, we create another `non_congested_tx_count` transactions that operate
-    // on the cheap object.
-    let mut new_certificates: Vec<VerifiedCertificate> = vec![];
-    for gas_object in gas_objects_commit_2.iter() {
-        let certificate = make_test_transaction(
-            &sender,
-            &keypair,
-            &[],
-            &[(shared_objects[1].id(), OBJECT_START_VERSION, true)],
-            &gas_object.compute_object_reference(),
-            &[&authority],
-            12345,
-            Some(1000),
-            Some(10_000_000),
-        )
-        .await;
-        new_certificates.push(certificate);
-    }
-
-    // Sends the second batch of transactions. We should expect that another 2 transactions operate on the expensive object,
-    // which are deferred from the previous round, should go through, and all the new transactions oeprate on the cheaper
-    // object should go through.
-    let scheduled_txns = process_certificates_through_consensus_handler(
-        &mut consensus_handler,
-        &authority,
-        &new_certificates,
-        2,
-        &captured_transactions,
-    )
-    .await;
-    assert_eq!(scheduled_txns.0.len(), 2 + non_congested_tx_count as usize);
-    for schedulable in scheduled_txns.0.iter() {
-        if let Some(cert) = schedulable.as_tx() {
-            assert!(
-                cert.data().transaction_data().gas_price() >= 2000
-                    || cert
-                        .data()
-                        .transaction_data()
-                        .shared_input_objects()
-                        .iter()
-                        .any(|obj| { obj.id() == shared_objects[1].id() })
-            );
-        }
-    }
-
-    let deferred_txns = authority
-        .epoch_store_for_testing()
-        .get_all_deferred_transactions_for_test();
-    assert_eq!(deferred_txns.len(), 1);
-    assert_eq!(deferred_txns[0].1.len(), 1);
-    let deferral_key = deferred_txns[0].0;
-    match deferral_key {
-        DeferralKey::ConsensusRound {
-            future_round,
-            deferred_from_round,
-        } => {
-            assert_eq!(future_round, commit_round + 2);
-            assert_eq!(deferred_from_round, commit_round);
-        }
-        DeferralKey::Randomness {
-            deferred_from_round,
-        } => {
-            panic!(
-                "Expected ConsensusRound, got RandomnessDkg: {:?}",
-                deferred_from_round
-            );
-        }
-    }
-
-    // Sends the last batch with no new transaction. The last deferred transactions should go through.
-    let scheduled_txns = process_certificates_through_consensus_handler(
-        &mut consensus_handler,
-        &authority,
-        &[],
-        3,
-        &captured_transactions,
-    )
-    .await;
-    // The last deferred transaction should go through
-    assert_eq!(scheduled_txns.0.len(), 1);
-    assert!(
-        authority
-            .epoch_store_for_testing()
-            .get_all_deferred_transactions_for_test()
-            .is_empty()
-    );
-}
-
 // Helper to process certificates through consensus handler directly
 async fn process_certificates_through_consensus_handler_impl<C>(
     consensus_handler: &mut ConsensusHandler<C>,
@@ -6456,28 +6200,268 @@ where
     .await
 }
 
+// Tests that per-object congestion control using ExecutionTimeEstimate mode works correctly:
+// - One shared object is heavily congested, limiting throughput per round
+// - Transactions on non-congested objects go through without deferral
+// - Deferral keys are formed correctly
+// - All transactions eventually get scheduled across multiple rounds
 #[sim_test]
-async fn test_consensus_handler_per_object_congestion_control_using_budget() {
-    test_consensus_handler_per_object_congestion_control(
-        PerObjectCongestionControlMode::TotalGasBudget,
-    )
-    .await;
-}
+async fn test_consensus_handler_per_object_congestion_control() {
+    telemetry_subscribers::init_for_testing();
 
-#[sim_test]
-async fn test_consensus_handler_per_object_congestion_control_using_tx_count() {
-    test_consensus_handler_per_object_congestion_control(
-        PerObjectCongestionControlMode::TotalTxCount,
-    )
-    .await;
-}
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
-#[sim_test]
-async fn test_consensus_handler_per_object_congestion_control_using_budget_with_cap() {
-    test_consensus_handler_per_object_congestion_control(
-        PerObjectCongestionControlMode::TotalGasBudgetWithCap,
+    // Create 2 shared objects: one will be heavily congested (obj 0), one will not (obj 1).
+    // We create 5 transactions on the congested object and 2 on the non-congested object.
+    let shared_objects = create_shared_objects(2);
+    let non_congested_tx_count = 2u32;
+    let gas_objects_commit_1 = create_gas_objects(5 + non_congested_tx_count, sender);
+    let gas_objects_commit_2 = create_gas_objects(non_congested_tx_count, sender);
+
+    // Create protocol config with ExecutionTimeEstimate mode.
+    // With 100% target_utilization and 200ms commit period, budget = 200,000us per commit.
+    // We use a failpoint to seed a very high initial accumulated cost, leaving room for
+    // only ~2 transactions (~1000us each for unknown commands) per commit on the congested object.
+    let execution_time_params = ExecutionTimeEstimateParams {
+        target_utilization: 100,
+        allowed_txn_cost_overage_burst_limit_us: 0,
+        max_estimate_us: u64::MAX,
+        randomness_scalar: 100,
+        stored_observations_num_included_checkpoints: 10,
+        stored_observations_limit: u64::MAX,
+        stake_weighted_median_threshold: 0,
+        default_none_duration_for_new_keys: false,
+        observations_chunk_size: None,
+    };
+
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config.set_per_object_congestion_control_mode_for_testing(
+        PerObjectCongestionControlMode::ExecutionTimeEstimate(execution_time_params),
+    );
+    protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(1000);
+
+    let authority = TestAuthorityBuilder::new()
+        .with_protocol_config(protocol_config)
+        .build()
+        .await;
+    let mut genesis_objects = gas_objects_commit_1.clone();
+    genesis_objects.extend(gas_objects_commit_2.clone());
+    genesis_objects.extend(shared_objects.clone());
+    authority.insert_genesis_objects(&genesis_objects).await;
+
+    // Register failpoint to seed initial congestion on shared_objects[0].
+    // This gives obj 0 a high initial accumulated cost that limits throughput,
+    // while obj 1 has no initial cost and won't be congested.
+    // Use 198,000 to leave ~2000us budget for ~2 transactions.
+    let shared_obj_0_id = shared_objects[0].id();
+    register_fail_point_arg("initial_congestion_tracker", move || {
+        Some(SharedObjectCongestionTracker::new(
+            [(shared_obj_0_id, 198_000)],
+            execution_time_params,
+            false,
+        ))
+    });
+
+    let test_setup = consensus_test_utils::setup_consensus_handler_for_testing(&authority).await;
+    let mut consensus_handler = test_setup.consensus_handler;
+    let captured_transactions = test_setup.captured_transactions;
+
+    // Create first batch of transactions:
+    // - 5 transactions on congested object (shared_objects[0])
+    // - 2 transactions on non-congested object (shared_objects[1])
+    let mut certificates: Vec<VerifiedCertificate> = vec![];
+    for (index, gas_object) in gas_objects_commit_1.iter().enumerate() {
+        let certificate = make_test_transaction(
+            &sender,
+            &keypair,
+            &[],
+            &[(
+                if index < 5 {
+                    shared_objects[0].id()
+                } else {
+                    shared_objects[1].id()
+                },
+                OBJECT_START_VERSION,
+                true,
+            )],
+            &gas_object.compute_object_reference(),
+            &[&authority],
+            12345,
+            None,
+            Some(10_000_000),
+        )
+        .await;
+        certificates.push(certificate);
+    }
+
+    // Shuffle to ensure ordering doesn't depend on input order
+    certificates.shuffle(&mut rand::thread_rng());
+
+    // Process first batch through consensus handler.
+    // Due to congestion on obj 0, only some transactions should go through.
+    // All transactions on the non-congested object should go through.
+    let scheduled_txns = process_certificates_through_consensus_handler(
+        &mut consensus_handler,
+        &authority,
+        &certificates,
+        1,
+        &captured_transactions,
     )
     .await;
+
+    // Count scheduled transactions by object
+    let mut scheduled_on_congested = 0;
+    let mut scheduled_on_non_congested = 0;
+    for schedulable in scheduled_txns.0.iter() {
+        if let Some(cert) = schedulable.as_tx() {
+            let tx_data = cert.data().transaction_data();
+            let touches_congested_obj = tx_data
+                .shared_input_objects()
+                .iter()
+                .any(|obj| obj.id() == shared_objects[0].id());
+            if touches_congested_obj {
+                scheduled_on_congested += 1;
+            } else {
+                scheduled_on_non_congested += 1;
+            }
+        }
+    }
+
+    // Verify some but not all transactions on the congested object were scheduled
+    assert!(
+        scheduled_on_congested > 0 && scheduled_on_congested < 5,
+        "Expected some but not all congested txns to be scheduled, got {}",
+        scheduled_on_congested
+    );
+
+    // Verify all transactions on the non-congested object were scheduled
+    assert_eq!(
+        scheduled_on_non_congested, non_congested_tx_count as usize,
+        "Expected all non-congested txns to be scheduled"
+    );
+
+    // Verify deferral keys are formed correctly
+    let epoch_store = authority.epoch_store_for_testing();
+    let commit_round = if epoch_store.randomness_state_enabled() {
+        epoch_store.get_highest_pending_checkpoint_height() / 2
+    } else {
+        epoch_store.get_highest_pending_checkpoint_height()
+    };
+    let deferred_txns = epoch_store.get_all_deferred_transactions_for_test();
+    assert_eq!(deferred_txns.len(), 1, "Expected 1 deferral key");
+    let num_deferred = deferred_txns[0].1.len();
+    assert_eq!(
+        num_deferred,
+        5 - scheduled_on_congested,
+        "Expected {} deferred transactions",
+        5 - scheduled_on_congested
+    );
+    let deferral_key = deferred_txns[0].0;
+    match deferral_key {
+        DeferralKey::ConsensusRound {
+            future_round,
+            deferred_from_round,
+        } => {
+            assert_eq!(future_round, commit_round + 1);
+            assert_eq!(deferred_from_round, commit_round);
+        }
+        DeferralKey::Randomness {
+            deferred_from_round,
+        } => {
+            panic!(
+                "Expected ConsensusRound, got Randomness: {:?}",
+                deferred_from_round
+            );
+        }
+    }
+
+    // Create second batch: more transactions on the non-congested object
+    let mut new_certificates: Vec<VerifiedCertificate> = vec![];
+    for gas_object in gas_objects_commit_2.iter() {
+        let certificate = make_test_transaction(
+            &sender,
+            &keypair,
+            &[],
+            &[(shared_objects[1].id(), OBJECT_START_VERSION, true)],
+            &gas_object.compute_object_reference(),
+            &[&authority],
+            12345,
+            None,
+            Some(10_000_000),
+        )
+        .await;
+        new_certificates.push(certificate);
+    }
+
+    // Process second batch. Some deferred transactions should go through,
+    // plus all new transactions on non-congested object.
+    let scheduled_txns = process_certificates_through_consensus_handler(
+        &mut consensus_handler,
+        &authority,
+        &new_certificates,
+        2,
+        &captured_transactions,
+    )
+    .await;
+
+    // Count scheduled transactions in this round
+    let mut scheduled_on_congested_r2 = 0;
+    let mut scheduled_on_non_congested_r2 = 0;
+    for schedulable in scheduled_txns.0.iter() {
+        if let Some(cert) = schedulable.as_tx() {
+            let tx_data = cert.data().transaction_data();
+            let touches_congested_obj = tx_data
+                .shared_input_objects()
+                .iter()
+                .any(|obj| obj.id() == shared_objects[0].id());
+            if touches_congested_obj {
+                scheduled_on_congested_r2 += 1;
+            } else {
+                scheduled_on_non_congested_r2 += 1;
+            }
+        }
+    }
+
+    // Verify new non-congested transactions were scheduled
+    assert_eq!(
+        scheduled_on_non_congested_r2, non_congested_tx_count as usize,
+        "Expected all new non-congested txns to be scheduled"
+    );
+
+    // Verify some deferred transactions were scheduled
+    assert!(
+        scheduled_on_congested_r2 > 0,
+        "Expected some deferred txns to be scheduled"
+    );
+
+    // Continue processing until all transactions are done
+    let mut round = 3;
+    while !authority
+        .epoch_store_for_testing()
+        .get_all_deferred_transactions_for_test()
+        .is_empty()
+        && round <= 10
+    {
+        process_certificates_through_consensus_handler(
+            &mut consensus_handler,
+            &authority,
+            &[],
+            round,
+            &captured_transactions,
+        )
+        .await;
+        round += 1;
+    }
+
+    // All transactions should now be processed (none deferred)
+    assert!(
+        authority
+            .epoch_store_for_testing()
+            .get_all_deferred_transactions_for_test()
+            .is_empty(),
+        "All transactions should eventually be scheduled"
+    );
 }
 
 // Tests congestion control triggered transaction cancellation in consensus handler:
@@ -6509,18 +6493,30 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     ];
 
     // Create the cluster with controlled per object congestion control and cancellation.
+    // Use ExecutionTimeEstimate mode with parameters that cause controlled congestion.
+    // We use a failpoint to seed initial accumulated cost for shared_objects[0], which
+    // combined with budget limits ensures only ~1 transaction fits per commit.
+    // - target_utilization: 100% gives budget = 200,000us (200ms commit period)
+    // - Initial accumulated cost of 199,999us leaves room for only ~1 transaction
+    // - max_deferral_rounds: 2 means transactions deferred for 3+ rounds get cancelled
+    let execution_time_params = ExecutionTimeEstimateParams {
+        target_utilization: 100,
+        allowed_txn_cost_overage_burst_limit_us: 0,
+        max_estimate_us: u64::MAX,
+        randomness_scalar: 100,
+        stored_observations_num_included_checkpoints: 10,
+        stored_observations_limit: u64::MAX,
+        stake_weighted_median_threshold: 0,
+        default_none_duration_for_new_keys: false,
+        observations_chunk_size: None,
+    };
+
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
     protocol_config.set_per_object_congestion_control_mode_for_testing(
-        PerObjectCongestionControlMode::TotalGasBudget,
+        PerObjectCongestionControlMode::ExecutionTimeEstimate(execution_time_params),
     );
-    protocol_config
-        .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(100_000_000);
-    protocol_config
-        .set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(100_000_000);
     protocol_config.set_max_deferral_rounds_for_congestion_control_for_testing(2);
-    protocol_config.set_max_txn_cost_overage_per_object_in_commit_for_testing(0);
-    protocol_config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(0);
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)
@@ -6531,6 +6527,19 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     genesis_objects.extend(shared_objects.clone());
     genesis_objects.extend(owned_objects_cancelled_txn.clone());
     authority.insert_genesis_objects(&genesis_objects).await;
+
+    // Register failpoint to seed initial congestion tracker with very high accumulated cost
+    // for shared_objects[0]. This causes immediate congestion, ensuring transactions are
+    // deferred and the low gas price transaction eventually gets cancelled after exceeding
+    // max_deferral_rounds.
+    let shared_obj_0_id = shared_objects[0].id();
+    register_fail_point_arg("initial_congestion_tracker", move || {
+        Some(SharedObjectCongestionTracker::new(
+            [(shared_obj_0_id, 10_000_000)],
+            execution_time_params,
+            false,
+        ))
+    });
 
     let test_setup = consensus_test_utils::setup_consensus_handler_for_testing(&authority).await;
     let mut consensus_handler = test_setup.consensus_handler;
@@ -6556,8 +6565,9 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     }
 
     // Create another transaction that operates on shared_objects[0] and shared_objects[1].
-    // Due to its lower gas price, it'll be deferred for 3 rounds and then cancelled.
-    // shared_objects[0] will be considered as congested object.
+    // Due to its lower gas price, it'll be deferred while higher gas price transactions go through.
+    // After exceeding max_deferral_rounds (2), it will be cancelled with shared_objects[0] as the
+    // congested object.
     let cancelled_txn = make_test_transaction(
         &sender,
         &keypair,
@@ -6578,84 +6588,61 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     // We shuffle the transactions so that transactions in the list do not have any order in terms of gas price.
     certificates.shuffle(&mut rand::thread_rng());
 
-    // Sends all transactions to consensus. Expect first 2 rounds with 1 user transaction per round going through.
-    let (scheduled_txns, _) = process_certificates_through_consensus_handler_with_prologue(
-        &mut consensus_handler,
-        &authority,
-        &certificates,
-        1,
-        &captured_transactions,
-    )
-    .await;
-    assert_eq!(scheduled_txns.len(), 2); // 1 user transaction + 1 prologue
-    // Note that consensus handler also generates consensus commit prologue transaction, and it must be the first one.
-    assert!(matches!(
-        scheduled_txns[0]
-            .as_tx()
-            .unwrap()
-            .data()
-            .transaction_data()
-            .kind(),
-        TransactionKind::ConsensusCommitPrologueV4(..)
-    ));
-    assert!(
-        scheduled_txns[1]
-            .as_tx()
-            .unwrap()
-            .data()
-            .transaction_data()
-            .gas_price()
-            == 2000
-    );
+    // Process consensus rounds until all transactions are scheduled (including cancelled ones).
+    // With max_deferral_rounds=2, the low gas price transaction will be cancelled after being
+    // deferred for 3 rounds.
+    let mut all_scheduled_txns = vec![];
+    let mut final_assigned_versions = None;
+    let mut round = 1;
+    while round <= 10 {
+        let (scheduled_txns, assigned_versions) =
+            process_certificates_through_consensus_handler_with_prologue(
+                &mut consensus_handler,
+                &authority,
+                if round == 1 { &certificates } else { &[] },
+                round,
+                &captured_transactions,
+            )
+            .await;
 
-    let (scheduled_txns, _) = process_certificates_through_consensus_handler_with_prologue(
-        &mut consensus_handler,
-        &authority,
-        &[],
-        2,
-        &captured_transactions,
-    )
-    .await;
-    assert_eq!(scheduled_txns.len(), 2);
-    assert!(matches!(
-        scheduled_txns[0]
-            .as_tx()
-            .unwrap()
-            .data()
-            .transaction_data()
-            .kind(),
-        TransactionKind::ConsensusCommitPrologueV4(..)
-    ));
-    assert!(
-        scheduled_txns[1]
-            .as_tx()
-            .unwrap()
-            .data()
-            .transaction_data()
-            .gas_price()
-            == 2000
-    );
+        // First transaction should always be ConsensusCommitPrologueV4
+        assert!(matches!(
+            scheduled_txns[0]
+                .as_tx()
+                .unwrap()
+                .data()
+                .transaction_data()
+                .kind(),
+            TransactionKind::ConsensusCommitPrologueV4(..)
+        ));
 
-    // Run consensus round 3. 2 user transactions will come out with 1 transaction being cancelled.
-    let (scheduled_txns, assigned_versions) =
-        process_certificates_through_consensus_handler_with_prologue(
-            &mut consensus_handler,
-            &authority,
-            &[],
-            3,
-            &captured_transactions,
-        )
-        .await;
-    assert_eq!(scheduled_txns.len(), 3); // 3 = 2 user transactions + 1 consensus commit prologue transaction.
+        all_scheduled_txns.extend(scheduled_txns);
+        final_assigned_versions = Some(assigned_versions);
+
+        if authority
+            .epoch_store_for_testing()
+            .get_all_deferred_transactions_for_test()
+            .is_empty()
+        {
+            break;
+        }
+        round += 1;
+    }
+
+    // All transactions should eventually be processed (none deferred)
     assert!(
         authority
             .epoch_store_for_testing()
             .get_all_deferred_transactions_for_test()
-            .is_empty()
+            .is_empty(),
+        "All transactions should eventually be scheduled"
     );
 
+    let assigned_versions = final_assigned_versions
+        .expect("Should have processed at least one round")
+        .into_map();
+
     // Check cancelled transaction shared locks.
-    let assigned_versions = assigned_versions.into_map();
     let shared_object_version = assigned_versions.get(&cancelled_txn.key()).unwrap().clone();
     assert_eq!(
         vec![
@@ -6711,54 +6698,72 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     assert_eq!(cancelled_objects, vec![shared_objects[0].id()]);
     assert_eq!(cancellation_reason, SequenceNumber::CONGESTED);
 
-    // Consensus commit prologue contains cancelled txn shared object version assignment.
-    if let TransactionKind::ConsensusCommitPrologueV4(prologue_txn) = scheduled_txns[0]
-        .as_tx()
-        .unwrap()
-        .data()
-        .transaction_data()
-        .kind()
-    {
-        match &prologue_txn.consensus_determined_version_assignments {
-            ConsensusDeterminedVersionAssignments::CancelledTransactions(assignment) => {
-                assert_eq!(
-                    assignment,
-                    &vec![(
-                        *cancelled_txn.digest(),
-                        vec![
-                            (shared_objects[0].id(), SequenceNumber::CONGESTED),
-                            (shared_objects[1].id(), SequenceNumber::CANCELLED_READ)
-                        ]
-                    )]
-                )
+    // Find the consensus commit prologue from the round where the cancelled transaction was processed.
+    // This prologue should contain the cancelled transaction's shared object version assignment.
+    let prologue_with_cancellation = all_scheduled_txns
+        .iter()
+        .find_map(|schedulable| {
+            if let Some(cert) = schedulable.as_tx()
+                && let TransactionKind::ConsensusCommitPrologueV4(prologue_txn) =
+                    cert.data().transaction_data().kind()
+            {
+                // Check if this prologue contains the cancelled transaction's version assignment
+                match &prologue_txn.consensus_determined_version_assignments {
+                    ConsensusDeterminedVersionAssignments::CancelledTransactions(assignments)
+                        if assignments
+                            .iter()
+                            .any(|(digest, _)| digest == cancelled_txn.digest()) =>
+                    {
+                        return Some(prologue_txn.clone());
+                    }
+                    ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(assignments)
+                        if assignments
+                            .iter()
+                            .any(|(digest, _)| digest == cancelled_txn.digest()) =>
+                    {
+                        return Some(prologue_txn.clone());
+                    }
+                    _ => {}
+                }
             }
-            ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(assignment) => {
-                assert_eq!(
-                    assignment,
-                    &vec![(
-                        *cancelled_txn.digest(),
-                        vec![
+            None
+        })
+        .expect("Should find a prologue with the cancelled transaction's version assignment");
+
+    // Verify the cancellation assignment is correct.
+    match &prologue_with_cancellation.consensus_determined_version_assignments {
+        ConsensusDeterminedVersionAssignments::CancelledTransactions(assignment) => {
+            assert!(assignment.iter().any(|(digest, versions)| {
+                digest == cancelled_txn.digest()
+                    && *versions
+                        == vec![
+                            (shared_objects[0].id(), SequenceNumber::CONGESTED),
+                            (shared_objects[1].id(), SequenceNumber::CANCELLED_READ),
+                        ]
+            }));
+        }
+        ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(assignment) => {
+            assert!(assignment.iter().any(|(digest, versions)| {
+                digest == cancelled_txn.digest()
+                    && *versions
+                        == vec![
                             (
                                 (
                                     shared_objects[0].id(),
-                                    shared_objects[0].owner().start_version().unwrap()
+                                    shared_objects[0].owner().start_version().unwrap(),
                                 ),
-                                SequenceNumber::CONGESTED
+                                SequenceNumber::CONGESTED,
                             ),
                             (
                                 (
                                     shared_objects[1].id(),
-                                    shared_objects[1].owner().start_version().unwrap()
+                                    shared_objects[1].owner().start_version().unwrap(),
                                 ),
-                                SequenceNumber::CANCELLED_READ
+                                SequenceNumber::CANCELLED_READ,
                             ),
                         ]
-                    )]
-                )
-            }
+            }));
         }
-    } else {
-        panic!("First scheduled transaction must be a ConsensusCommitPrologueV4 transaction.");
     }
 }
 
