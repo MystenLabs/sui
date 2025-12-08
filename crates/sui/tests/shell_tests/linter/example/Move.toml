@@ -5,5 +5,5 @@ edition = "2024.beta"
 implicit-dependencies = false
 
 [dependencies]
-sui = { local = "sui-framework/packages/sui-framework" }
-std = { local = "sui-framework/packages/move-stdlib" }
+sui = { local = "../sui-framework" }
+std = { local = "../move-stdlib" }
