@@ -117,7 +117,7 @@ jobs:
       with:
         channel-id: '#ext-mysten-release-notes'
         slack-message: |
-          <@U03LRLPR1QX> and <@U04A8V9E203>, please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.
+          <@U03LRLPR1QX> and <@U097GDYSX24>, please review release notes for upcoming `v${{ needs.get-list-of-prs.outputs.sui_version }}` release.
           *PR* <https://github.com/MystenLabs/sui/pull/${{ matrix.pr }}|${{ matrix.pr }}> by <@${{ env.slack_id }}>
           *Release Notes:*
           ${{ steps.read-notes.outputs.release_notes }}
