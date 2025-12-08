@@ -1,0 +1,35 @@
+{
+  "exporter": "speedscope@1.15.2",
+  "name": "saved_traces/0x1__errors__aborter.json.zst",
+  "activeProfileIndex": 0,
+  "$schema": "https://www.speedscope.app/file-format-schema.json",
+  "shared": {
+    "frames": [
+      {
+        "name": "aborter",
+        "file": ""
+      }
+    ]
+  },
+  "profiles": [
+    {
+      "type": "evented",
+      "name": "saved_traces/0x1__errors__aborter.json.zst",
+      "unit": "none",
+      "startValue": 0,
+      "endValue": 4,
+      "events": [
+        {
+          "type": "O",
+          "frame": 0,
+          "at": 0
+        },
+        {
+          "type": "C",
+          "frame": 0,
+          "at": 4
+        }
+      ]
+    }
+  ]
+}
