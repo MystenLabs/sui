@@ -4325,6 +4325,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_accumulators = true;
                         cfg.feature_flags.enable_address_balance_gas_payments = true;
+                        cfg.feature_flags.enable_authenticated_event_streams = true;
                     }
                 }
                 // Use this template when making changes:
