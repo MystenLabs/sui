@@ -6,14 +6,12 @@ use std::path::Path;
 use move_cli::base::test::UnitTestResult;
 use move_package_alt_compilation::lint_flag::LintFlag;
 use move_unit_test::UnitTestingConfig;
+use sui_framework_tests::setup_examples;
 use sui_move::unit_test::run_move_unit_tests;
 use sui_move_build::BuildConfig;
 
-pub(crate) const EXAMPLES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples");
-pub(crate) const FRAMEWORK: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../crates/sui-framework/packages"
-);
+pub(crate) const EXAMPLES: &str = "../../examples";
+pub(crate) const FRAMEWORK: &str = "../sui-framework/packages";
 
 #[cfg(not(msim))]
 const DIRS_TO_EXCLUDE: &[&str] = &[];
@@ -27,6 +25,7 @@ const DIRS_TO_EXCLUDE: &[&str] = &["nft-rental", "usdc_usage"];
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub(crate) async fn build(path: &Path) -> datatest_stable::Result<()> {
+    println!("{path:?}");
     let Some(path) = path.parent() else {
         panic!("No parent for Move.toml file at: {}", path.display());
     };
@@ -36,14 +35,8 @@ pub(crate) async fn build(path: &Path) -> datatest_stable::Result<()> {
 
     // TODO dvx-1889: this is kind of hacky - we intentionally unclobber the lockfile because we
     // don't want them to change. Update this when we properly implement install_dir
-    let lockfile_copy = tempfile::NamedTempFile::new().unwrap();
-    let lockfile_path = path.join("Move.lock");
-    let copied = if lockfile_path.exists() {
-        std::fs::copy(&lockfile_path, &lockfile_copy).unwrap();
-        true
-    } else {
-        false
-    };
+    let tempdir = setup_examples();
+    let path = tempdir.path().join("crates/sui-framework").join(path);
 
     let mut config = BuildConfig::new_for_testing();
     config.run_bytecode_verifier = true;
@@ -53,13 +46,9 @@ pub(crate) async fn build(path: &Path) -> datatest_stable::Result<()> {
     config.config.lint_flag = LintFlag::LEVEL_DEFAULT;
 
     config
-        .build_async(path)
+        .build_async(&path)
         .await
         .unwrap_or_else(|e| panic!("Building package {}.\nWith error {e}", path.display()));
-
-    if copied {
-        std::fs::copy(lockfile_copy, &lockfile_path).unwrap();
-    }
 
     Ok(())
 }
