@@ -58,7 +58,7 @@ pub mod checked {
 
     /// Version aware enum for gas status.
     #[enum_dispatch(SuiGasStatusAPI)]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub enum SuiGasStatus {
         // V1 does not exists any longer as it was a pre mainnet version.
         // So we start the enum from V2

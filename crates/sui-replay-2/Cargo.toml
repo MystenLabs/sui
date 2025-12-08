@@ -52,6 +52,9 @@ tabled.workspace = true
 [build-dependencies]
 cynic-codegen.workspace = true
 
+[dev-dependencies]
+tempfile.workspace = true
+
 [features]
 tracing = [
     "sui-types/tracing",
