@@ -37,7 +37,7 @@ use sui_types::global_state_hash::GlobalStateHash;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 pub type SnapshotChecksums = (DigestByBucketAndPartition, GlobalStateHash);
 pub type DigestByBucketAndPartition = BTreeMap<u32, BTreeMap<u32, [u8; 32]>>;
@@ -665,35 +665,48 @@ pub async fn download_bytes(
     part_num: &u32,
     max_timeout_secs: Option<u64>,
 ) -> (Bytes, [u8; 32]) {
-    let max_timeout = Duration::from_secs(max_timeout_secs.unwrap_or(60));
-    let mut timeout = Duration::from_secs(2);
-    timeout += timeout / 2;
-    timeout = std::cmp::min(max_timeout, timeout);
+    const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300); // 5 minutes for large files
+    const INITIAL_BACKOFF: Duration = Duration::from_secs(3);
+
+    let backoff_cap = Duration::from_secs(max_timeout_secs.unwrap_or(60));
+    let mut backoff = INITIAL_BACKOFF;
     let mut attempts = 0usize;
     let file_path = file_metadata.file_path(&epoch_dir);
     let bytes = loop {
-        match remote_object_store.get_bytes(&file_path).await {
-            Ok(bytes) => {
+        debug!(
+            "Downloading obj file: {:?} (attempt {}, timeout {:?})",
+            file_path, attempts, DOWNLOAD_TIMEOUT
+        );
+
+        match tokio::time::timeout(DOWNLOAD_TIMEOUT, remote_object_store.get_bytes(&file_path))
+            .await
+        {
+            Ok(Ok(bytes)) => {
                 break bytes;
             }
-            Err(err) => {
+            Ok(Err(err)) => {
                 error!(
-                    "Obj {} .get failed (attempt {}): {}",
-                    file_metadata.file_path(&epoch_dir),
-                    attempts,
-                    err,
+                    "Failed to download {}: {} (attempt {})",
+                    file_path, err, attempts,
                 );
-                if timeout > max_timeout {
-                    panic!("Failed to get obj file after {} attempts", attempts);
-                } else {
-                    attempts += 1;
-                    tokio::time::sleep(timeout).await;
-                    timeout += timeout / 2;
-                    continue;
-                }
+            }
+            Err(_) => {
+                error!(
+                    "Download timed out for {} after {:?} (attempt {})",
+                    file_path, DOWNLOAD_TIMEOUT, attempts,
+                );
             }
         }
+
+        attempts += 1;
+        debug!("Retrying {} in {:?}...", file_path, backoff);
+        tokio::time::sleep(backoff).await;
+
+        // Exponential backoff with 1.5x multiplier, capped at backoff_cap
+        backoff += backoff / 2;
+        backoff = std::cmp::min(backoff, backoff_cap);
     };
+
     let sha3_digest = sha3_digests.lock().await;
     let bucket_map = sha3_digest
         .get(bucket)
