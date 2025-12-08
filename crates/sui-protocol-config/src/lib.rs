@@ -4346,6 +4346,14 @@ impl ProtocolConfig {
             // in the quarantine output.
         }
 
+        // Assert that all feature flags for which we no longer support the old behavior are enabled.
+        assert!(cfg.ignore_execution_time_observations_after_certs_closed());
+        assert!(cfg.record_time_estimate_processed());
+        assert!(cfg.prepend_prologue_tx_in_consensus_commit_in_checkpoints());
+        assert!(cfg.consensus_checkpoint_signature_key_includes_digest());
+        assert!(cfg.authority_capabilities_v2());
+        assert!(cfg.cancel_for_failed_dkg_early());
+
         cfg
     }
 

@@ -344,7 +344,7 @@ async fn submit_checkpoint_signature_to_consensus_adapter() {
     });
 
     let t2 = tokio::spawn(async move {
-        let transactions = vec![ConsensusTransaction::new_checkpoint_signature_message(
+        let transactions = vec![ConsensusTransaction::new_checkpoint_signature_message_v2(
             CheckpointSignatureMessage {
                 summary: signed_checkpoint_summary,
             },

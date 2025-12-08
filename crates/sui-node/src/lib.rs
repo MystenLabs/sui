@@ -140,9 +140,7 @@ use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages_consensus::{
-    AuthorityCapabilitiesV1, ConsensusTransaction, check_total_jwk_size,
-};
+use sui_types::messages_consensus::{ConsensusTransaction, check_total_jwk_size};
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -1819,28 +1817,16 @@ impl SuiNode {
                 }
 
                 let binary_config = config.binary_config(None);
-                let transaction = if config.authority_capabilities_v2() {
-                    ConsensusTransaction::new_capability_notification_v2(
-                        AuthorityCapabilitiesV2::new(
-                            self.state.name,
-                            cur_epoch_store.get_chain_identifier().chain(),
-                            supported_protocol_versions,
-                            self.state
-                                .get_available_system_packages(&binary_config)
-                                .await,
-                        ),
-                    )
-                } else {
-                    ConsensusTransaction::new_capability_notification(AuthorityCapabilitiesV1::new(
+                let transaction = ConsensusTransaction::new_capability_notification_v2(
+                    AuthorityCapabilitiesV2::new(
                         self.state.name,
-                        self.config
-                            .supported_protocol_versions
-                            .expect("Supported versions should be populated"),
+                        cur_epoch_store.get_chain_identifier().chain(),
+                        supported_protocol_versions,
                         self.state
                             .get_available_system_packages(&binary_config)
                             .await,
-                    ))
-                };
+                    ),
+                );
                 info!(?transaction, "submitting capabilities to consensus");
                 components.consensus_adapter.submit(
                     transaction,

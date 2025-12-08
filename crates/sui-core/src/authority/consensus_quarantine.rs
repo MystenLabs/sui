@@ -43,7 +43,7 @@ use crate::{
         shared_object_congestion_tracker::CongestionPerObjectDebt,
     },
     checkpoints::{CheckpointHeight, PendingCheckpoint},
-    consensus_handler::{SequencedConsensusTransactionKey, VerifiedSequencedConsensusTransaction},
+    consensus_handler::SequencedConsensusTransactionKey,
     epoch::{
         randomness::{VersionedProcessedMessage, VersionedUsedProcessedMessages},
         reconfiguration::ReconfigState,
@@ -64,11 +64,6 @@ pub(crate) struct ConsensusCommitOutput {
 
     // transaction scheduling state
     next_shared_object_versions: Option<HashMap<ConsensusObjectSequenceKey, SequenceNumber>>,
-
-    // TODO: If we delay committing consensus output until after all deferrals have been loaded,
-    // we can move deferred_txns to the ConsensusOutputCache and save disk bandwidth.
-    deferred_txns: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>,
-    // TODO(commit-handler-rewrite): remove the original once we no longer need to support the old consensus handler
     deferred_txns_v2: Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>,
     // deferred txns that have been loaded and can be removed
     deleted_deferred_txns: BTreeSet<DeferralKey>,
@@ -111,7 +106,7 @@ impl ConsensusCommitOutput {
     }
 
     pub fn has_deferred_transactions(&self) -> bool {
-        !self.deferred_txns.is_empty() || !self.deferred_txns_v2.is_empty()
+        !self.deferred_txns_v2.is_empty()
     }
 
     fn get_randomness_last_round_timestamp(&self) -> Option<TimestampMs> {

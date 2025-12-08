@@ -25,7 +25,6 @@ use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_common::{debug_fatal, fatal};
-use mysten_metrics::monitored_scope;
 use nonempty::NonEmpty;
 use parking_lot::RwLock;
 use parking_lot::{Mutex, RwLockReadGuard, RwLockWriteGuard};
@@ -61,7 +60,7 @@ use sui_types::messages_checkpoint::{
 use sui_types::messages_consensus::{
     AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, AuthorityIndex, ConsensusPosition,
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, TimestampMs,
-    VersionedDkgConfirmation, check_total_jwk_size,
+    VersionedDkgConfirmation,
 };
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{BackingPackageStore, InputKey, ObjectStore};
@@ -109,10 +108,7 @@ use crate::authority::shared_object_version_manager::{
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint,
 };
-use crate::consensus_handler::{
-    ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
-    SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
-};
+use crate::consensus_handler::{ConsensusCommitInfo, SequencedConsensusTransactionKey};
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{
     RandomnessManager, RandomnessReporter, SINGLETON_KEY, VersionedProcessedMessage,
@@ -2860,18 +2856,7 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub fn get_capabilities_v1(&self) -> SuiResult<Vec<AuthorityCapabilitiesV1>> {
-        assert!(!self.protocol_config.authority_capabilities_v2());
-        Ok(self
-            .tables()?
-            .authority_capabilities
-            .safe_iter()
-            .map(|item| item.map(|(_, v)| v))
-            .collect::<Result<Vec<_>, _>>()?)
-    }
-
     pub fn get_capabilities_v2(&self) -> SuiResult<Vec<AuthorityCapabilitiesV2>> {
-        assert!(self.protocol_config.authority_capabilities_v2());
         Ok(self
             .tables()?
             .authority_capabilities_v2
@@ -3120,143 +3105,6 @@ impl AuthorityPerEpochStore {
                     tx,
                 ))
             })
-    }
-
-    /// Verifies transaction signatures and other data
-    /// Important: This function can potentially be called in parallel and you can not rely on order of transactions to perform verification
-    /// If this function return an error, transaction is skipped and is not passed to handle_consensus_transaction
-    /// This function returns unit error and is responsible for emitting log messages for internal errors
-    pub(crate) fn verify_consensus_transaction(
-        &self,
-        transaction: SequencedConsensusTransaction,
-    ) -> Option<VerifiedSequencedConsensusTransaction> {
-        let _scope = monitored_scope("VerifyConsensusTransaction");
-
-        // Signatures are verified as part of the consensus payload verification in SuiTxValidator
-        match &transaction.transaction {
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::CertifiedTransaction(_certificate),
-                ..
-            }) => {}
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind:
-                    ConsensusTransactionKind::UserTransaction(_)
-                    | ConsensusTransactionKind::UserTransactionV2(_),
-                ..
-            }) => {}
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind:
-                    ConsensusTransactionKind::CheckpointSignature(data)
-                    | ConsensusTransactionKind::CheckpointSignatureV2(data),
-                ..
-            }) => {
-                if transaction.sender_authority() != data.summary.auth_sig().authority {
-                    warn!(
-                        "CheckpointSignature authority {} does not match its author from consensus {}",
-                        data.summary.auth_sig().authority,
-                        transaction.certificate_author_index
-                    );
-                    return None;
-                }
-            }
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::EndOfPublish(authority),
-                ..
-            }) => {
-                if &transaction.sender_authority() != authority {
-                    warn!(
-                        "EndOfPublish authority {} does not match its author from consensus {}",
-                        authority, transaction.certificate_author_index
-                    );
-                    return None;
-                }
-            }
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind:
-                    ConsensusTransactionKind::CapabilityNotification(AuthorityCapabilitiesV1 {
-                        authority,
-                        ..
-                    }),
-                ..
-            })
-            | SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind:
-                    ConsensusTransactionKind::CapabilityNotificationV2(AuthorityCapabilitiesV2 {
-                        authority,
-                        ..
-                    }),
-                ..
-            }) => {
-                if transaction.sender_authority() != *authority {
-                    warn!(
-                        "CapabilityNotification authority {} does not match its author from consensus {}",
-                        authority, transaction.certificate_author_index
-                    );
-                    return None;
-                }
-            }
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::NewJWKFetched(authority, id, jwk),
-                ..
-            }) => {
-                if transaction.sender_authority() != *authority {
-                    warn!(
-                        "NewJWKFetched authority {} does not match its author from consensus {}",
-                        authority, transaction.certificate_author_index,
-                    );
-                    return None;
-                }
-                if !check_total_jwk_size(id, jwk) {
-                    warn!(
-                        "{:?} sent jwk that exceeded max size",
-                        transaction.sender_authority().concise()
-                    );
-                    return None;
-                }
-            }
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::RandomnessStateUpdate(_round, _bytes),
-                ..
-            }) => {}
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, _bytes),
-                ..
-            }) => {
-                if transaction.sender_authority() != *authority {
-                    warn!(
-                        "RandomnessDkgMessage authority {} does not match its author from consensus {}",
-                        authority, transaction.certificate_author_index
-                    );
-                    return None;
-                }
-            }
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::RandomnessDkgConfirmation(authority, _bytes),
-                ..
-            }) => {
-                if transaction.sender_authority() != *authority {
-                    warn!(
-                        "RandomnessDkgConfirmation authority {} does not match its author from consensus {}",
-                        authority, transaction.certificate_author_index
-                    );
-                    return None;
-                }
-            }
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::ExecutionTimeObservation(msg),
-                ..
-            }) => {
-                if transaction.sender_authority() != msg.authority {
-                    warn!(
-                        "ExecutionTimeObservation authority {} does not match its author from consensus {}",
-                        msg.authority, transaction.certificate_author_index
-                    );
-                    return None;
-                }
-            }
-            SequencedConsensusTransactionKind::System(_) => {}
-        }
-        Some(VerifiedSequencedConsensusTransaction(transaction))
     }
 
     fn db_batch(&self) -> SuiResult<DBBatch> {

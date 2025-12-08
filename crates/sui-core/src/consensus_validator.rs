@@ -71,16 +71,6 @@ impl SuiTxValidator {
                     ckpt_batch.push(&signature.summary);
                 }
                 ConsensusTransactionKind::CheckpointSignatureV2(signature) => {
-                    if !epoch_store
-                        .protocol_config()
-                        .consensus_checkpoint_signature_key_includes_digest()
-                    {
-                        return Err(SuiErrorKind::UnexpectedMessage(
-                            "ConsensusTransactionKind::CheckpointSignatureV2 is unsupported"
-                                .to_string(),
-                        )
-                        .into());
-                    }
                     ckpt_messages.push(signature.as_ref());
                     ckpt_batch.push(&signature.summary);
                 }

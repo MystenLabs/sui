@@ -43,9 +43,10 @@ use sui_types::{
     },
     messages_checkpoint::CheckpointSignatureMessage,
     messages_consensus::{
-        AuthorityCapabilitiesV2, AuthorityIndex, ConsensusDeterminedVersionAssignments,
-        ConsensusPosition, ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
-        ExecutionTimeObservation,
+        AuthorityCapabilitiesV1, AuthorityCapabilitiesV2, AuthorityIndex,
+        ConsensusDeterminedVersionAssignments, ConsensusPosition, ConsensusTransaction,
+        ConsensusTransactionKey, ConsensusTransactionKind, ExecutionTimeObservation,
+        check_total_jwk_size,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
@@ -765,14 +766,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         consensus_commit: impl ConsensusCommitAPI,
     ) {
         let protocol_config = self.epoch_store.protocol_config();
-
-        // Assert all protocol config settings for which we don't support old behavior.
-        assert!(protocol_config.ignore_execution_time_observations_after_certs_closed());
-        assert!(protocol_config.record_time_estimate_processed());
-        assert!(protocol_config.prepend_prologue_tx_in_consensus_commit_in_checkpoints());
-        assert!(protocol_config.consensus_checkpoint_signature_key_includes_digest());
-        assert!(protocol_config.authority_capabilities_v2());
-        assert!(protocol_config.cancel_for_failed_dkg_early());
 
         // This may block until one of two conditions happens:
         // - Number of uncommitted transactions in the writeback cache goes below the
@@ -2215,10 +2208,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 transaction,
             };
 
-            let Some(verified_transaction) = self
-                .epoch_store
-                .verify_consensus_transaction(sequenced_transaction)
-            else {
+            let Some(verified_transaction) = sequenced_transaction.verify() else {
                 continue;
             };
 
@@ -2798,6 +2788,139 @@ impl SequencedConsensusTransaction {
             consensus_index: Default::default(),
             transaction: SequencedConsensusTransactionKind::External(transaction),
         }
+    }
+
+    /// Verifies transaction signatures and other data
+    /// Important: This function can potentially be called in parallel and you can not rely on order of transactions to perform verification
+    /// If this function return an error, transaction is skipped and is not passed to handle_consensus_transaction
+    /// This function returns unit error and is responsible for emitting log messages for internal errors
+    pub fn verify(self) -> Option<VerifiedSequencedConsensusTransaction> {
+        let _scope = monitored_scope("VerifyConsensusTransaction");
+
+        match &self.transaction {
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::CertifiedTransaction(_certificate),
+                ..
+            }) => {}
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind:
+                    ConsensusTransactionKind::UserTransaction(_)
+                    | ConsensusTransactionKind::UserTransactionV2(_),
+                ..
+            }) => {}
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind:
+                    ConsensusTransactionKind::CheckpointSignature(data)
+                    | ConsensusTransactionKind::CheckpointSignatureV2(data),
+                ..
+            }) => {
+                if self.sender_authority() != data.summary.auth_sig().authority {
+                    warn!(
+                        "CheckpointSignature authority {} does not match its author from consensus {}",
+                        data.summary.auth_sig().authority,
+                        self.certificate_author_index
+                    );
+                    return None;
+                }
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::EndOfPublish(authority),
+                ..
+            }) => {
+                if &self.sender_authority() != authority {
+                    warn!(
+                        "EndOfPublish authority {} does not match its author from consensus {}",
+                        authority, self.certificate_author_index
+                    );
+                    return None;
+                }
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind:
+                    ConsensusTransactionKind::CapabilityNotification(AuthorityCapabilitiesV1 {
+                        authority,
+                        ..
+                    }),
+                ..
+            })
+            | SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind:
+                    ConsensusTransactionKind::CapabilityNotificationV2(AuthorityCapabilitiesV2 {
+                        authority,
+                        ..
+                    }),
+                ..
+            }) => {
+                if self.sender_authority() != *authority {
+                    warn!(
+                        "CapabilityNotification authority {} does not match its author from consensus {}",
+                        authority, self.certificate_author_index
+                    );
+                    return None;
+                }
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::NewJWKFetched(authority, id, jwk),
+                ..
+            }) => {
+                if self.sender_authority() != *authority {
+                    warn!(
+                        "NewJWKFetched authority {} does not match its author from consensus {}",
+                        authority, self.certificate_author_index,
+                    );
+                    return None;
+                }
+                if !check_total_jwk_size(id, jwk) {
+                    warn!(
+                        "{:?} sent jwk that exceeded max size",
+                        self.sender_authority().concise()
+                    );
+                    return None;
+                }
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::RandomnessStateUpdate(_round, _bytes),
+                ..
+            }) => {}
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::RandomnessDkgMessage(authority, _bytes),
+                ..
+            }) => {
+                if self.sender_authority() != *authority {
+                    warn!(
+                        "RandomnessDkgMessage authority {} does not match its author from consensus {}",
+                        authority, self.certificate_author_index
+                    );
+                    return None;
+                }
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::RandomnessDkgConfirmation(authority, _bytes),
+                ..
+            }) => {
+                if self.sender_authority() != *authority {
+                    warn!(
+                        "RandomnessDkgConfirmation authority {} does not match its author from consensus {}",
+                        authority, self.certificate_author_index
+                    );
+                    return None;
+                }
+            }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::ExecutionTimeObservation(msg),
+                ..
+            }) => {
+                if self.sender_authority() != msg.authority {
+                    warn!(
+                        "ExecutionTimeObservation authority {} does not match its author from consensus {}",
+                        msg.authority, self.certificate_author_index
+                    );
+                    return None;
+                }
+            }
+            SequencedConsensusTransactionKind::System(_) => {}
+        }
+        Some(VerifiedSequencedConsensusTransaction(self))
     }
 }
 
