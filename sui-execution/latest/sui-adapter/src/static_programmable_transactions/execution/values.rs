@@ -54,7 +54,7 @@ impl Locals {
         let values = values.into_iter();
         let n = values.len();
         assert_invariant!(n <= u16::MAX as usize, "Locals size exceeds u16::MAX");
-        // TODO(vm-rewrite): Look into not allocation invalid memory slots ahead of time. For now
+        // TODO(vm-rewrite): Look into not allocating invalid memory slots ahead of time. For now
         // we do this for ease, but we should be able to optimize this further.
         let mut heap = VMBaseHeap::new();
         let mut locations = BTreeMap::new();
