@@ -10,7 +10,7 @@ Use the [Sagat web interface](https://sagat.mystenlabs.com/) for [signing transa
 
 ## What is multisig?
 
-[Multisig](/guides/developer/cryptography/multisig) is a type of authentication that requires multiple signatures from different parties before a transaction can be executed. Several addresses can be invited to a multisig group, and all invited parties must accept for the multisig to be created.
+[Multisig](/guides/developer/cryptography/multisig) is a type of authentication that requires multiple signatures from different parties before a transaction can be executed. Several addresses can be invited to a multisig group. On Sagat, all invited parties must accept for the multisig to be created.
 
 Each multisig can have a different voting threshold. For example, in a multisig that contains 3 users, only 2 of the users might need to sign the proposed transaction for it to be approved. In other scenarios, all users might be required to sign the transaction, and if one rejects it, the proposed transaction is canceled. Each threshold can configure different weights per user, enabling endless combinations, such as 5 out of 6 with just 2 addresses.
 
@@ -18,27 +18,35 @@ Learn how to use the [TypeScript SDK for multisig](https://sdk.mystenlabs.com/ty
 
 ## Risks 
 
-Sagat relies on the Sui infrastructure for its API layer, meaning you do not have full confidentiality of what you are signing. 
+Sagat relies on Mysten Labs infrastructure for its API layer, meaning you do not have full confidentiality of what you are signing. 
 
-The application's frontend is also hosted through Sui services, which you must rely on to be secure. Always validate a transaction's preview in a secondary location, such as through your wallet, not just from the web interface.
+The application's frontend is also hosted through Mysten Labs services, which you must rely on to be secure. Always validate a transaction's preview in a secondary location, such as through your wallet, not just from the web interface.
 
 ### Mitigate risks by self-hosting Sagat
 
 To take control and use Sagat in a trustless manner, you can self-host it. To do so, first download the GitHub repository:
+
 ```
 $ git clone https://github.com/MystenLabs/sagat/tree/main
 ```
 
 Then, build the SDK and spin up the frontend and the API using the command:
+
 ```
 $ bun run dev
 ```
+
+:::tip
+
+Building the SDK is optional, as it can accept a custom URL. 
+
+:::
 
 This runs the bun server in dev mode, so all changes made are reflected as you are developing.
 
 ## Using the Sagat web interface 
 
-Through the Sagat [web interface](https://sagat.mystenlabs.com/) you can use the signature analyzer and transaction signer tools to:
+Use Sagat [web interface](https://sagat.mystenlabs.com/) to:
 
 - Create multisigs within the browser. The browser validates each multisig and displays a real-time preview. 
 
@@ -58,9 +66,15 @@ Each of these tasks can be executed [programmatically](#using-sagat-programmatic
 
 ### Connecting a wallet 
 
-First, connect your [Slush](https://slush.app/) or [Suilet](https://suiet.app/) wallet to the Sagat web interface:
+First, connect a wallet, such as [Slush](https://slush.app/) or [Suilet](https://suiet.app/),  to the Sagat web interface:
 
 ![Sagat connect Slush](./images/sagat-1.png "Screenshot showing how to connect Slush wallet to Sagat.")
+
+:::info 
+
+Any address that supports ed25519, secp256r1 and secp256k1 are supported. ZkLogin is not supported.
+
+:::
 
 Connecting a wallet to the Sagat web interface registers the wallet's keys with the service. Multisigs can only contain keys that have been registered with Sagat. Keys can also be registered [programmatically](#register-public-keys).
 
@@ -70,7 +84,7 @@ The message "No wallets found. Install a wallet (ex. Slush Wallet) to continue."
 
 :::
 
-Unlock your wallet and approve the initial transaction. The Sagat web interface prompts you to generate a second transaction used to authenticate your wallet. 
+Unlock your wallet and approve the initial transaction. The Sagat web interface prompts you to generate a second transaction used to authenticate your wallet, as this helps with confidentiality. 
 
 ![Sagat authenticate Slush](./images/sagat-2.png "Screenshot showing how to authenticate transaction in Slush.")
 
@@ -132,6 +146,8 @@ From the Sagat dashboard, you can see several details and options regarding prop
 
 - An overview of the assets owned by the multisig. 
 
+Only members of the committee can query proposals from the API.
+
 ![Sagat dashboard](./images/sagat-9.png "Screenshot showing Sagat dashboard.")
 
 ### Add external proposers 
@@ -158,7 +174,7 @@ If the Sagat web interface is set to **Test Mode**, you can only use signatures 
 
 :::
 
-### Sign and share transactions 
+### Sign transactions 
 
 The [transaction signer tool](https://sagat.mystenlabs.com/tools/sign) can be used to preview and sign transactions using the Slush wallet you connected to the web interface.
 
@@ -170,7 +186,6 @@ If the Sagat web interface is set to **Test Mode**, you can preview or sign tran
 
 :::
 
-Once a transaction has been signed, you can share a link to the transaction to others who can view and sign it. 
 
 ## Using Sagat programmatically
 
