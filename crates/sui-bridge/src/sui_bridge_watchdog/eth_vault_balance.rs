@@ -1,14 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::EthERC20;
-use crate::metered_eth_provider::MeteredEthHttpProvider;
 use crate::sui_bridge_watchdog::Observable;
+use crate::{abi::EthERC20::EthERC20Instance, utils::EthProvider};
+use alloy::primitives::{Address as EthAddress, U256};
 use async_trait::async_trait;
-use ethers::providers::Provider;
-use ethers::types::{Address as EthAddress, U256};
 use prometheus::IntGauge;
-use std::sync::Arc;
 use tokio::time::Duration;
 use tracing::{error, info};
 
@@ -21,7 +18,7 @@ pub enum VaultAsset {
 }
 
 pub struct EthereumVaultBalance {
-    coin_contract: EthERC20<Provider<MeteredEthHttpProvider>>,
+    coin_contract: EthERC20Instance<EthProvider>,
     asset: VaultAsset,
     decimals: u8,
     vault_address: EthAddress,
@@ -30,13 +27,13 @@ pub struct EthereumVaultBalance {
 
 impl EthereumVaultBalance {
     pub async fn new(
-        provider: Arc<Provider<MeteredEthHttpProvider>>,
+        provider: EthProvider,
         vault_address: EthAddress,
         coin_address: EthAddress, // for now this only support one coin which is WETH
         asset: VaultAsset,
         metric: IntGauge,
     ) -> anyhow::Result<Self> {
-        let coin_contract = EthERC20::new(coin_address, provider);
+        let coin_contract = EthERC20Instance::new(coin_address, provider);
         let decimals = coin_contract
             .decimals()
             .call()
@@ -58,12 +55,9 @@ impl Observable for EthereumVaultBalance {
         "EthereumVaultBalance"
     }
     async fn observe_and_report(&self) {
-        let balance: Result<
-            U256,
-            ethers::contract::ContractError<Provider<MeteredEthHttpProvider>>,
-        > = self
+        let balance: Result<U256, alloy::contract::Error> = self
             .coin_contract
-            .balance_of(self.vault_address)
+            .balanceOf(self.vault_address)
             .call()
             .await;
         match balance {
@@ -95,7 +89,7 @@ impl Observable for EthereumVaultBalance {
                     // so we don't need to do anything.
                     Some(_) => balance,
                 };
-                self.metric.set(normalized_balance.as_u128() as i64);
+                self.metric.set(normalized_balance.to::<i64>());
 
                 info!("{:?} Vault Balance: {:?}", self.asset, normalized_balance,);
             }

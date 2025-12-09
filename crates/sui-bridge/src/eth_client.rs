@@ -1,28 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
-use std::sync::Arc;
-
-use crate::abi::EthBridgeEvent;
-use crate::error::{BridgeError, BridgeResult};
-use crate::metered_eth_provider::{MeteredEthHttpProvider, new_metered_eth_provider};
-use crate::metrics::BridgeMetrics;
-use crate::types::{BridgeAction, EthLog, RawEthLog};
-use ethers::providers::{JsonRpcClient, Middleware, Provider};
-use ethers::types::TxHash;
-use ethers::types::{Block, Filter};
+use crate::{
+    abi::EthBridgeEvent,
+    error::{BridgeError, BridgeResult},
+    metered_eth_provider::new_metered_eth_provider,
+    metrics::BridgeMetrics,
+    types::{BridgeAction, EthLog, RawEthLog},
+    utils::EthProvider,
+};
+use alloy::{
+    primitives::{Address as EthAddress, TxHash},
+    providers::Provider,
+    rpc::types::{Block, Filter, Log},
+};
+use std::{collections::HashSet, sync::Arc};
 use tap::TapFallible;
 
 #[cfg(test)]
-use crate::eth_mock_provider::EthMockProvider;
-use ethers::types::Address as EthAddress;
-pub struct EthClient<P> {
-    provider: Provider<P>,
+use crate::eth_mock_provider::EthMockService;
+
+pub struct EthClient {
+    provider: EthProvider,
     contract_addresses: HashSet<EthAddress>,
 }
 
-impl EthClient<MeteredEthHttpProvider> {
+impl EthClient {
     pub async fn new(
         provider_url: &str,
         contract_addresses: HashSet<EthAddress>,
@@ -37,15 +40,18 @@ impl EthClient<MeteredEthHttpProvider> {
         Ok(self_)
     }
 
-    pub fn provider(&self) -> Arc<Provider<MeteredEthHttpProvider>> {
-        Arc::new(self.provider.clone())
+    pub fn provider(&self) -> EthProvider {
+        self.provider.clone()
     }
 }
 
 #[cfg(test)]
-impl EthClient<EthMockProvider> {
-    pub fn new_mocked(provider: EthMockProvider, contract_addresses: HashSet<EthAddress>) -> Self {
-        let provider = Provider::new(provider);
+impl EthClient {
+    pub fn new_mocked(
+        mock_service: EthMockService,
+        contract_addresses: HashSet<EthAddress>,
+    ) -> Self {
+        let provider = mock_service.as_provider();
         Self {
             provider,
             contract_addresses,
@@ -53,13 +59,10 @@ impl EthClient<EthMockProvider> {
     }
 }
 
-impl<P> EthClient<P>
-where
-    P: JsonRpcClient,
-{
+impl EthClient {
     pub async fn get_chain_id(&self) -> Result<u64, anyhow::Error> {
-        let chain_id = self.provider.get_chainid().await?;
-        Ok(chain_id.as_u64())
+        let chain_id = self.provider.get_chain_id().await?;
+        Ok(chain_id)
     }
 
     // TODO assert chain identifier
@@ -91,21 +94,21 @@ where
         ))?;
         // TODO: save the latest finalized block id so we don't have to query it every time
         let last_finalized_block_id = self.get_last_finalized_block_id().await?;
-        if receipt_block_num.as_u64() > last_finalized_block_id {
+        if receipt_block_num > last_finalized_block_id {
             return Err(BridgeError::TxNotFinalized);
         }
         let log = receipt
-            .logs
+            .logs()
             .get(event_idx as usize)
             .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
 
         // Ignore events emitted from unrecognized contracts
-        if !self.contract_addresses.contains(&log.address) {
+        if !self.contract_addresses.contains(&log.address()) {
             return Err(BridgeError::BridgeEventInUnrecognizedEthContract);
         }
 
         let eth_log = EthLog {
-            block_number: receipt_block_num.as_u64(),
+            block_number: receipt_block_num,
             tx_hash,
             log_index_in_tx: event_idx,
             log: log.clone(),
@@ -118,24 +121,21 @@ where
     }
 
     pub async fn get_last_finalized_block_id(&self) -> BridgeResult<u64> {
-        let block: Result<Option<Block<ethers::types::TxHash>>, ethers::prelude::ProviderError> =
-            self.provider
-                .request("eth_getBlockByNumber", ("finalized", false))
-                .await;
-        let block = block?.ok_or(BridgeError::TransientProviderError(
+        let block: Option<Block> = self
+            .provider
+            .raw_request("eth_getBlockByNumber".into(), ("finalized", false))
+            .await?;
+        let block = block.ok_or(BridgeError::TransientProviderError(
             "Provider fails to return last finalized block".into(),
         ))?;
-        let number = block.number.ok_or(BridgeError::TransientProviderError(
-            "Provider returns block without number".into(),
-        ))?;
-        Ok(number.as_u64())
+        Ok(block.number())
     }
 
     // Note: query may fail if range is too big. Callsite is responsible
     // for chunking the query.
     pub async fn get_events_in_range(
         &self,
-        address: ethers::types::Address,
+        address: alloy::primitives::Address,
         start_block: u64,
         end_block: u64,
     ) -> BridgeResult<Vec<EthLog>> {
@@ -158,7 +158,7 @@ where
             })?;
 
         // Safeguard check that all events are emitted from requested contract address
-        if logs.iter().any(|log| log.address != address) {
+        if logs.iter().any(|log| log.address() != address) {
             return Err(BridgeError::ProviderError(format!(
                 "Provider returns logs from different contract address (expected: {:?}): {:?}",
                 address, logs
@@ -186,7 +186,7 @@ where
     // for chunking the query.
     pub async fn get_raw_events_in_range(
         &self,
-        addresses: Vec<ethers::types::Address>,
+        addresses: Vec<EthAddress>,
         start_block: u64,
         end_block: u64,
     ) -> BridgeResult<Vec<RawEthLog>> {
@@ -209,11 +209,11 @@ where
         // Safeguard check that all events are emitted from requested contract addresses
         logs.into_iter().map(
             |log| {
-                if !addresses.contains(&log.address) {
+                if !addresses.contains(&log.address()) {
                     return Err(BridgeError::ProviderError(format!("Provider returns logs from different contract address (expected: {:?}): {:?}", addresses, log)));
                 }
                 Ok(RawEthLog {
-                block_number: log.block_number.ok_or(BridgeError::ProviderError("Provider returns log without block_number".into()))?.as_u64(),
+                block_number: log.block_number.ok_or(BridgeError::ProviderError("Provider returns log without block_number".into()))?,
                 tx_hash: log.transaction_hash.ok_or(BridgeError::ProviderError("Provider returns log without transaction_hash".into()))?,
                 log,
             })}
@@ -223,13 +223,10 @@ where
     /// This function converts a `Log` to `EthLog`, to make sure the `block_num`, `tx_hash` and `log_index_in_tx`
     /// are available for downstream.
     // It's frustratingly ugly because of the nulliability of many fields in `Log`.
-    async fn get_log_tx_details(&self, log: ethers::types::Log) -> BridgeResult<EthLog> {
-        let block_number = log
-            .block_number
-            .ok_or(BridgeError::ProviderError(
-                "Provider returns log without block_number".into(),
-            ))?
-            .as_u64();
+    async fn get_log_tx_details(&self, log: Log) -> BridgeResult<EthLog> {
+        let block_number = log.block_number.ok_or(BridgeError::ProviderError(
+            "Provider returns log without block_number".into(),
+        ))?;
         let tx_hash = log.transaction_hash.ok_or(BridgeError::ProviderError(
             "Provider returns log without transaction_hash".into(),
         ))?;
@@ -254,7 +251,7 @@ where
         let receipt_block_num = receipt.block_number.ok_or(BridgeError::ProviderError(
             "Provider returns log without block_number".into(),
         ))?;
-        if receipt_block_num.as_u64() != block_number {
+        if receipt_block_num != block_number {
             return Err(BridgeError::ProviderError(format!(
                 "Provider returns receipt with different block number from log. Receipt: {:?}, Log: {:?}",
                 receipt, log
@@ -263,11 +260,11 @@ where
 
         // Find the log index in the transaction
         let mut log_index_in_tx = None;
-        for (idx, receipt_log) in receipt.logs.iter().enumerate() {
+        for (idx, receipt_log) in receipt.logs().iter().enumerate() {
             // match log index (in the block)
             if receipt_log.log_index == Some(log_index) {
                 // make sure the topics and data match
-                if receipt_log.topics != log.topics || receipt_log.data != log.data {
+                if receipt_log.topics() != log.topics() || receipt_log.data() != log.data() {
                     return Err(BridgeError::ProviderError(format!(
                         "Provider returns receipt with different log from log. Receipt: {:?}, Log: {:?}",
                         receipt, log
@@ -292,23 +289,25 @@ where
 
 #[cfg(test)]
 mod tests {
-    use ethers::types::{Address as EthAddress, Log, TransactionReceipt, U64};
+    use alloy::rpc::types::TransactionReceipt;
     use prometheus::Registry;
 
     use super::*;
-    use crate::test_utils::{get_test_log_and_action, mock_last_finalized_block};
+    use crate::test_utils::{
+        get_test_log_and_action, make_transaction_receipt, mock_last_finalized_block,
+    };
 
     #[tokio::test]
     async fn test_get_finalized_bridge_action_maybe() {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
         mysten_metrics::init_metrics(&registry);
-        let mock_provider = EthMockProvider::new();
-        mock_last_finalized_block(&mock_provider, 777);
+        let mock_service = EthMockService::new();
+        mock_last_finalized_block(&mock_service, 777);
 
         let client = EthClient::new_mocked(
-            mock_provider.clone(),
-            HashSet::from_iter(vec![EthAddress::zero()]),
+            mock_service.clone(),
+            HashSet::from_iter(vec![EthAddress::default()]),
         );
         let result = client.get_last_finalized_block_id().await.unwrap();
         assert_eq!(result, 777);
@@ -316,20 +315,21 @@ mod tests {
         let eth_tx_hash = TxHash::random();
         let log = Log {
             transaction_hash: Some(eth_tx_hash),
-            block_number: Some(U64::from(778)),
+            block_number: Some(778),
             ..Default::default()
         };
-        let (good_log, bridge_action) = get_test_log_and_action(EthAddress::zero(), eth_tx_hash, 1);
+        let (good_log, bridge_action) =
+            get_test_log_and_action(EthAddress::default(), eth_tx_hash, 1);
         // Mocks `eth_getTransactionReceipt` to return `log` and `good_log` in order
-        mock_provider
+        mock_service
             .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
                 "eth_getTransactionReceipt",
                 [log.transaction_hash.unwrap()],
-                TransactionReceipt {
-                    block_number: log.block_number,
-                    logs: vec![log, good_log],
-                    ..Default::default()
-                },
+                make_transaction_receipt(
+                    EthAddress::default(),
+                    log.block_number,
+                    vec![log, good_log],
+                ),
             )
             .unwrap();
 
@@ -343,7 +343,7 @@ mod tests {
         };
 
         // 778 is now finalized
-        mock_last_finalized_block(&mock_provider, 778);
+        mock_last_finalized_block(&mock_service, 778);
 
         let error = client
             .get_finalized_bridge_action_maybe(eth_tx_hash, 2)
@@ -377,11 +377,11 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
         mysten_metrics::init_metrics(&registry);
-        let mock_provider = EthMockProvider::new();
-        mock_last_finalized_block(&mock_provider, 777);
+        let mock_service = EthMockService::new();
+        mock_last_finalized_block(&mock_service, 777);
 
         let client = EthClient::new_mocked(
-            mock_provider.clone(),
+            mock_service.clone(),
             HashSet::from_iter(vec![
                 EthAddress::repeat_byte(5),
                 EthAddress::repeat_byte(6),
@@ -395,15 +395,11 @@ mod tests {
         // Event emitted from a different contract address
         let (log, _bridge_action) =
             get_test_log_and_action(EthAddress::repeat_byte(4), eth_tx_hash, 0);
-        mock_provider
+        mock_service
             .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
                 "eth_getTransactionReceipt",
                 [log.transaction_hash.unwrap()],
-                TransactionReceipt {
-                    block_number: log.block_number,
-                    logs: vec![log],
-                    ..Default::default()
-                },
+                make_transaction_receipt(EthAddress::default(), log.block_number, vec![log]),
             )
             .unwrap();
 
@@ -419,15 +415,11 @@ mod tests {
         // Ok if emitted from the right contract
         let (log, bridge_action) =
             get_test_log_and_action(EthAddress::repeat_byte(6), eth_tx_hash, 0);
-        mock_provider
+        mock_service
             .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
                 "eth_getTransactionReceipt",
                 [log.transaction_hash.unwrap()],
-                TransactionReceipt {
-                    block_number: log.block_number,
-                    logs: vec![log],
-                    ..Default::default()
-                },
+                make_transaction_receipt(EthAddress::default(), log.block_number, vec![log]),
             )
             .unwrap();
         let action = client

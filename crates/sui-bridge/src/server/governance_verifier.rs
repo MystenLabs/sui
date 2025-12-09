@@ -16,7 +16,7 @@ impl GovernanceVerifier {
         // TOOD(audit-blocking): verify chain ids
         let mut approved_goverance_actions = HashMap::new();
         for action in approved_actions {
-            if !action.is_governace_action() {
+            if !action.is_governance_action() {
                 return Err(BridgeError::ActionIsNotGovernanceAction(action));
             }
             approved_goverance_actions.insert(action.digest(), action);
@@ -28,7 +28,7 @@ impl GovernanceVerifier {
 
     pub async fn verify(&self, key: BridgeAction) -> BridgeResult<BridgeAction> {
         // TODO: an optimization would be to check the current nonce on chain and err for older ones
-        if !key.is_governace_action() {
+        if !key.is_governance_action() {
             return Err(BridgeError::ActionIsNotGovernanceAction(key));
         }
         if let Some(approved_action) = self.approved_goverance_actions.get(&key.digest()) {

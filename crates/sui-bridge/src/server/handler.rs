@@ -6,10 +6,9 @@ use crate::error::{BridgeError, BridgeResult};
 use crate::eth_client::EthClient;
 use crate::sui_client::{SuiClient, SuiClientInner};
 use crate::types::{BridgeAction, SignedBridgeAction};
+use alloy::primitives::TxHash;
 use async_trait::async_trait;
 use axum::Json;
-use ethers::providers::JsonRpcClient;
-use ethers::types::TxHash;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_types::digests::TransactionDigest;
@@ -53,22 +52,21 @@ pub trait BridgeRequestHandlerTrait {
     ) -> Result<Json<SignedBridgeAction>, BridgeError>;
 }
 
-pub struct BridgeRequestHandler<SC, EP> {
+pub struct BridgeRequestHandler<SC> {
     signer: Arc<BridgeAuthorityKeyPair>,
     sui_client: Arc<SuiClient<SC>>,
-    eth_client: Arc<EthClient<EP>>,
+    eth_client: Arc<EthClient>,
     governance_verifier: GovernanceVerifier,
 }
 
-impl<SC, EP> BridgeRequestHandler<SC, EP>
+impl<SC> BridgeRequestHandler<SC>
 where
     SC: SuiClientInner + Send + Sync + 'static,
-    EP: JsonRpcClient + Send + Sync + 'static,
 {
     pub fn new(
         signer: BridgeAuthorityKeyPair,
         sui_client: Arc<SuiClient<SC>>,
-        eth_client: Arc<EthClient<EP>>,
+        eth_client: Arc<EthClient>,
         approved_governance_actions: Vec<BridgeAction>,
     ) -> Self {
         let signer = Arc::new(signer);
@@ -124,10 +122,9 @@ where
 }
 
 #[async_trait]
-impl<SC, EP> BridgeRequestHandlerTrait for BridgeRequestHandler<SC, EP>
+impl<SC> BridgeRequestHandlerTrait for BridgeRequestHandler<SC>
 where
     SC: SuiClientInner + Send + Sync + 'static,
-    EP: JsonRpcClient + Send + Sync + 'static,
 {
     async fn handle_eth_tx_hash(
         &self,
@@ -167,7 +164,7 @@ where
         &self,
         action: BridgeAction,
     ) -> Result<Json<SignedBridgeAction>, BridgeError> {
-        if !action.is_governace_action() {
+        if !action.is_governance_action() {
             return Err(BridgeError::ActionIsNotGovernanceAction(action));
         }
         let bridge_action = self.governance_verifier.verify(action).await?;
@@ -181,15 +178,16 @@ mod tests {
 
     use super::*;
     use crate::{
-        eth_mock_provider::EthMockProvider,
+        eth_mock_provider::EthMockService,
         events::{MoveTokenDepositedEvent, SuiToEthTokenBridgeV1, init_all_struct_tags},
         sui_mock_client::SuiMockClient,
         test_utils::{
-            get_test_log_and_action, get_test_sui_to_eth_bridge_action, mock_last_finalized_block,
+            get_test_log_and_action, get_test_sui_to_eth_bridge_action, make_transaction_receipt,
+            mock_last_finalized_block,
         },
         types::{EmergencyAction, EmergencyActionType, LimitUpdateAction},
     };
-    use ethers::types::{Address as EthAddress, TransactionReceipt};
+    use alloy::{primitives::Address as EthAddress, rpc::types::TransactionReceipt};
     use sui_json_rpc_types::{BcsEvent, SuiEvent};
     use sui_types::bridge::{BridgeChainId, TOKEN_ID_USDC};
     use sui_types::{base_types::SuiAddress, crypto::get_key_pair};
@@ -197,15 +195,15 @@ mod tests {
     fn test_handler(
         approved_actions: Vec<BridgeAction>,
     ) -> (
-        BridgeRequestHandler<SuiMockClient, EthMockProvider>,
+        BridgeRequestHandler<SuiMockClient>,
         SuiMockClient,
-        EthMockProvider,
+        EthMockService,
         EthAddress,
     ) {
         let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
         let sui_client_mock = SuiMockClient::default();
 
-        let eth_mock_provider = EthMockProvider::default();
+        let eth_mock_provider = EthMockService::default();
         let contract_address = EthAddress::random();
         let eth_client = EthClient::new_mocked(
             eth_mock_provider.clone(),
@@ -253,7 +251,7 @@ mod tests {
             source_chain: BridgeChainId::SuiCustom as u8,
             sender_address: SuiAddress::random_for_testing_only().to_vec(),
             target_chain: BridgeChainId::EthCustom as u8,
-            target_address: EthAddress::random().as_bytes().to_vec(),
+            target_address: EthAddress::random().to_vec(),
             token_type: TOKEN_ID_USDC,
             amount_sui_adjusted: 12345,
         };
@@ -297,14 +295,14 @@ mod tests {
             .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
                 "eth_getTransactionReceipt",
                 [log.transaction_hash.unwrap()],
-                TransactionReceipt {
-                    block_number: log.block_number,
-                    logs: vec![log.clone()],
-                    ..Default::default()
-                },
+                make_transaction_receipt(
+                    EthAddress::default(),
+                    log.block_number,
+                    vec![log.clone()],
+                ),
             )
             .unwrap();
-        mock_last_finalized_block(&eth_mock_provider, log.block_number.unwrap().as_u64());
+        mock_last_finalized_block(&eth_mock_provider, log.block_number.unwrap());
 
         handler
             .verify_eth((eth_tx_hash, eth_event_idx))

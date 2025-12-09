@@ -234,99 +234,99 @@ where
 
         match event {
             EthBridgeEvent::EthBridgeCommitteeEvents(event) => match event {
-                EthBridgeCommitteeEvents::BlocklistUpdatedFilter(event) => {
-                    bump_eth_counter!(if event.is_blocklisted {
+                EthBridgeCommitteeEvents::BlocklistUpdated(event) => {
+                    bump_eth_counter!(if event.isBlocklisted {
                         "validator_blocklisted"
                     } else {
                         "validator_unblocklisted"
                     });
                 }
-                EthBridgeCommitteeEvents::InitializedFilter(_) => {
+                EthBridgeCommitteeEvents::Initialized(_) => {
                     bump_eth_counter!("committee_contract_initialized");
                 }
-                EthBridgeCommitteeEvents::UpgradedFilter(_) => {
+                EthBridgeCommitteeEvents::Upgraded(_) => {
                     bump_eth_counter!("committee_contract_upgraded");
                 }
-                EthBridgeCommitteeEvents::BlocklistUpdatedV2Filter(e) => {
-                    bump_eth_counter!(if e.is_blocklisted {
+                EthBridgeCommitteeEvents::BlocklistUpdatedV2(e) => {
+                    bump_eth_counter!(if e.isBlocklisted {
                         "validator_blocklisted"
                     } else {
                         "validator_unblocklisted"
                     });
                 }
-                EthBridgeCommitteeEvents::ContractUpgradedFilter(_) => {
+                EthBridgeCommitteeEvents::ContractUpgraded(_) => {
                     bump_eth_counter!("committee_contract_upgraded");
                 }
             },
             EthBridgeEvent::EthBridgeLimiterEvents(event) => match event {
-                EthBridgeLimiterEvents::InitializedFilter(_) => {
+                EthBridgeLimiterEvents::Initialized(_) => {
                     bump_eth_counter!("limiter_contract_initialized");
                 }
-                EthBridgeLimiterEvents::UpgradedFilter(_) => {
+                EthBridgeLimiterEvents::Upgraded(_) => {
                     bump_eth_counter!("limiter_contract_upgraded");
                 }
-                EthBridgeLimiterEvents::OwnershipTransferredFilter(_) => {
+                EthBridgeLimiterEvents::OwnershipTransferred(_) => {
                     bump_eth_counter!("limiter_contract_ownership_transferred");
                 }
-                EthBridgeLimiterEvents::LimitUpdatedFilter(_) => {
+                EthBridgeLimiterEvents::LimitUpdated(_) => {
                     bump_eth_counter!("limit_updated");
                 }
                 // This event is deprecated but we keep it for ABI compatibility
                 // TODO: We can safely update abi and remove it once the testnet bridge contract is upgraded
-                EthBridgeLimiterEvents::HourlyTransferAmountUpdatedFilter(_) => (),
-                EthBridgeLimiterEvents::ContractUpgradedFilter(_) => {
+                EthBridgeLimiterEvents::HourlyTransferAmountUpdated(_) => (),
+                EthBridgeLimiterEvents::ContractUpgraded(_) => {
                     bump_eth_counter!("limiter_contract_upgraded");
                 }
-                EthBridgeLimiterEvents::LimitUpdatedV2Filter(_) => {
+                EthBridgeLimiterEvents::LimitUpdatedV2(_) => {
                     bump_eth_counter!("limit_updated");
                 }
             },
             EthBridgeEvent::EthBridgeConfigEvents(event) => match event {
-                EthBridgeConfigEvents::InitializedFilter(_) => {
+                EthBridgeConfigEvents::Initialized(_) => {
                     bump_eth_counter!("config_contract_initialized");
                 }
-                EthBridgeConfigEvents::UpgradedFilter(_) => {
+                EthBridgeConfigEvents::Upgraded(_) => {
                     bump_eth_counter!("config_contract_upgraded");
                 }
-                EthBridgeConfigEvents::TokenAddedFilter(_) => {
+                EthBridgeConfigEvents::TokenAdded(_) => {
                     bump_eth_counter!("new_token_added");
                 }
-                EthBridgeConfigEvents::TokenPriceUpdatedFilter(_) => {
+                EthBridgeConfigEvents::TokenPriceUpdated(_) => {
                     bump_eth_counter!("update_token_price");
                 }
-                EthBridgeConfigEvents::ContractUpgradedFilter(_) => {
+                EthBridgeConfigEvents::ContractUpgraded(_) => {
                     bump_eth_counter!("config_contract_upgraded");
                 }
-                EthBridgeConfigEvents::TokenPriceUpdatedV2Filter(_) => {
+                EthBridgeConfigEvents::TokenPriceUpdatedV2(_) => {
                     bump_eth_counter!("update_token_price");
                 }
-                EthBridgeConfigEvents::TokensAddedV2Filter(_) => {
+                EthBridgeConfigEvents::TokensAddedV2(_) => {
                     bump_eth_counter!("new_token_added");
                 }
             },
             EthBridgeEvent::EthCommitteeUpgradeableContractEvents(event) => match event {
-                EthCommitteeUpgradeableContractEvents::InitializedFilter(_) => {
+                EthCommitteeUpgradeableContractEvents::Initialized(_) => {
                     bump_eth_counter!("upgradeable_contract_initialized");
                 }
-                EthCommitteeUpgradeableContractEvents::UpgradedFilter(_) => {
+                EthCommitteeUpgradeableContractEvents::Upgraded(_) => {
                     bump_eth_counter!("upgradeable_contract_upgraded");
                 }
             },
             EthBridgeEvent::EthSuiBridgeEvents(event) => match event {
-                EthSuiBridgeEvents::TokensClaimedFilter(_) => (),
-                EthSuiBridgeEvents::TokensDepositedFilter(_) => (),
-                EthSuiBridgeEvents::PausedFilter(_) => bump_eth_counter!("bridge_paused"),
-                EthSuiBridgeEvents::UnpausedFilter(_) => bump_eth_counter!("bridge_unpaused"),
-                EthSuiBridgeEvents::UpgradedFilter(_) => {
+                EthSuiBridgeEvents::TokensClaimed(_) => (),
+                EthSuiBridgeEvents::TokensDeposited(_) => (),
+                EthSuiBridgeEvents::Paused(_) => bump_eth_counter!("bridge_paused"),
+                EthSuiBridgeEvents::Unpaused(_) => bump_eth_counter!("bridge_unpaused"),
+                EthSuiBridgeEvents::Upgraded(_) => {
                     bump_eth_counter!("bridge_contract_upgraded")
                 }
-                EthSuiBridgeEvents::InitializedFilter(_) => {
+                EthSuiBridgeEvents::Initialized(_) => {
                     bump_eth_counter!("bridge_contract_initialized")
                 }
-                EthSuiBridgeEvents::ContractUpgradedFilter(_) => {
+                EthSuiBridgeEvents::ContractUpgraded(_) => {
                     bump_eth_counter!("bridge_contract_upgraded")
                 }
-                EthSuiBridgeEvents::EmergencyOperationFilter(e) => {
+                EthSuiBridgeEvents::EmergencyOperation(e) => {
                     if e.paused {
                         bump_eth_counter!("bridge_paused")
                     } else {

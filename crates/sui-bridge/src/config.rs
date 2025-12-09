@@ -5,15 +5,14 @@ use crate::abi::EthBridgeConfig;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::error::BridgeError;
 use crate::eth_client::EthClient;
-use crate::metered_eth_provider::MeteredEthHttpProvider;
 use crate::metered_eth_provider::new_metered_eth_provider;
 use crate::metrics::BridgeMetrics;
 use crate::sui_client::SuiBridgeClient;
 use crate::types::{BridgeAction, is_route_valid};
 use crate::utils::get_eth_contract_addresses;
+use alloy::primitives::Address as EthAddress;
+use alloy::providers::Provider;
 use anyhow::anyhow;
-use ethers::providers::Middleware;
-use ethers::types::Address as EthAddress;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -197,7 +196,7 @@ impl BridgeNodeConfig {
 
         // Validate approved actions that must be governace actions
         for action in &self.approved_governance_actions {
-            if !action.is_governace_action() {
+            if !action.is_governance_action() {
                 anyhow::bail!(format!(
                     "{:?}",
                     BridgeError::ActionIsNotGovernanceAction(action.clone())
@@ -255,15 +254,11 @@ impl BridgeNodeConfig {
     async fn prepare_for_eth(
         &self,
         metrics: Arc<BridgeMetrics>,
-    ) -> anyhow::Result<(Arc<EthClient<MeteredEthHttpProvider>>, Vec<EthAddress>)> {
+    ) -> anyhow::Result<(Arc<EthClient>, Vec<EthAddress>)> {
         info!("Creating Ethereum client provider");
         let bridge_proxy_address = EthAddress::from_str(&self.eth.eth_bridge_proxy_address)?;
-        let provider = Arc::new(
-            new_metered_eth_provider(&self.eth.eth_rpc_url, metrics.clone())
-                .unwrap()
-                .interval(std::time::Duration::from_millis(2000)),
-        );
-        let chain_id = provider.get_chainid().await?;
+        let provider = new_metered_eth_provider(&self.eth.eth_rpc_url, metrics.clone()).unwrap();
+        let chain_id = provider.get_chain_id().await?;
         let (
             committee_address,
             limiter_address,
@@ -273,7 +268,7 @@ impl BridgeNodeConfig {
             _usdt_address,
             _wbtc_address,
             _lbtc_address,
-        ) = get_eth_contract_addresses(bridge_proxy_address, &provider).await?;
+        ) = get_eth_contract_addresses(bridge_proxy_address, provider.clone()).await?;
         let config = EthBridgeConfig::new(config_address, provider.clone());
 
         if self.run_client && self.eth.eth_contracts_start_block_fallback.is_none() {
@@ -284,7 +279,7 @@ impl BridgeNodeConfig {
 
         // If bridge chain id is Eth Mainent or Sepolia, we expect to see chain
         // identifier to match accordingly.
-        let bridge_chain_id: u8 = config.chain_id().call().await?;
+        let bridge_chain_id: u8 = config.chainID().call().await?;
         if self.eth.eth_bridge_chain_id != bridge_chain_id {
             return Err(anyhow!(
                 "Bridge chain id mismatch: expected {}, but connected to {}",
@@ -292,26 +287,22 @@ impl BridgeNodeConfig {
                 bridge_chain_id
             ));
         }
-        if bridge_chain_id == BridgeChainId::EthMainnet as u8 && chain_id.as_u64() != 1 {
-            anyhow::bail!(
-                "Expected Eth chain id 1, but connected to {}",
-                chain_id.as_u64()
-            );
+        if bridge_chain_id == BridgeChainId::EthMainnet as u8 && chain_id != 1 {
+            anyhow::bail!("Expected Eth chain id 1, but connected to {}", chain_id);
         }
-        if bridge_chain_id == BridgeChainId::EthSepolia as u8 && chain_id.as_u64() != 11155111 {
+        if bridge_chain_id == BridgeChainId::EthSepolia as u8 && chain_id != 11155111 {
             anyhow::bail!(
                 "Expected Eth chain id 11155111, but connected to {}",
-                chain_id.as_u64()
+                chain_id
             );
         }
         info!(
             "Connected to Eth chain: {}, Bridge chain id: {}",
-            chain_id.as_u64(),
-            bridge_chain_id,
+            chain_id, bridge_chain_id,
         );
 
         let eth_client = Arc::new(
-            EthClient::<MeteredEthHttpProvider>::new(
+            EthClient::new(
                 &self.eth.eth_rpc_url,
                 HashSet::from_iter(vec![
                     bridge_proxy_address,
@@ -416,7 +407,7 @@ pub struct BridgeServerConfig {
     pub eth_bridge_proxy_address: EthAddress,
     pub metrics_port: u16,
     pub sui_client: Arc<SuiBridgeClient>,
-    pub eth_client: Arc<EthClient<MeteredEthHttpProvider>>,
+    pub eth_client: Arc<EthClient>,
     /// A list of approved governance actions. Action in this list will be signed when requested by client.
     pub approved_governance_actions: Vec<BridgeAction>,
 }
@@ -427,7 +418,7 @@ pub struct BridgeClientConfig {
     pub gas_object_ref: ObjectRef,
     pub metrics_port: u16,
     pub sui_client: Arc<SuiBridgeClient>,
-    pub eth_client: Arc<EthClient<MeteredEthHttpProvider>>,
+    pub eth_client: Arc<EthClient>,
     pub db_path: PathBuf,
     pub eth_contracts: Vec<EthAddress>,
     // See `BridgeNodeConfig` for the explanation of following two fields.
