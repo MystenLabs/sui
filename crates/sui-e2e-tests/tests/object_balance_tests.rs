@@ -28,6 +28,7 @@ async fn test_object_balance_withdraw_stress() {
         .test_transaction_builder_with_sender(sender)
         .await
         .publish_examples("object_balance")
+        .await
         .build();
     let response = test_cluster.sign_and_execute_transaction(&publish_tx).await;
     let package_id = response.get_new_package_obj().unwrap().0;

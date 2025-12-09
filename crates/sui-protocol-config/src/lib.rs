@@ -4330,6 +4330,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_accumulators = true;
                         cfg.feature_flags.enable_address_balance_gas_payments = true;
                         cfg.feature_flags.enable_authenticated_event_streams = true;
+                        cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
                 }
                 // Use this template when making changes:

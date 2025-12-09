@@ -62,6 +62,7 @@ impl TestEnv {
         let rgp = epoch_store.reference_gas_price();
         let tx = TestTransactionBuilder::new(sender, gas, rgp)
             .publish_examples("object_balance")
+            .await
             .build();
         let cert = VerifiedExecutableTransaction::new_for_testing(tx, &keypair);
         let (effects, ..) = authority
