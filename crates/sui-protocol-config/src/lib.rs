@@ -908,6 +908,10 @@ struct FeatureFlags {
     // If true, enable object funds withdraw.
     #[serde(skip_serializing_if = "is_false")]
     enable_object_funds_withdraw: bool,
+
+    // If true, uses a new rounding mechanism for gas calculations, replacing the step-based one
+    #[serde(skip_serializing_if = "is_false")]
+    gas_rounding_halve_digits: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2435,6 +2439,10 @@ impl ProtocolConfig {
 
     pub fn enable_object_funds_withdraw(&self) -> bool {
         self.feature_flags.enable_object_funds_withdraw
+    }
+
+    pub fn gas_rounding_halve_digits(&self) -> bool {
+        self.feature_flags.gas_rounding_halve_digits
     }
 }
 
@@ -4332,6 +4340,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_authenticated_event_streams = true;
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
+                    cfg.feature_flags.gas_rounding_halve_digits = true;
                 }
                 // Use this template when making changes:
                 //
