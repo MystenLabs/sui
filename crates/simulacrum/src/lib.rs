@@ -26,7 +26,10 @@ use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
-use sui_types::crypto::{AccountKeyPair, AuthoritySignature, get_account_key_pair};
+use sui_types::crypto::{
+    AccountKeyPair, AuthoritySignature, SuiKeyPair, SuiSignatureInner, ToFromBytes,
+    get_account_key_pair, get_key_pair,
+};
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
@@ -34,7 +37,7 @@ use sui_types::object::{Object, Owner};
 use sui_types::storage::ObjectKey;
 use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::transaction::EndOfEpochTransactionKind;
+use sui_types::transaction::{EndOfEpochTransactionKind, TransactionDataAPI};
 use sui_types::{
     base_types::{EpochId, SuiAddress},
     committee::Committee,
@@ -51,8 +54,10 @@ use self::epoch_state::EpochState;
 pub use self::store::SimulatorStore;
 pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
+use shared_crypto::intent::{Intent, IntentMessage};
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
+use sui_types::signature::GenericSignature;
 use sui_types::{
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -302,6 +307,66 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let transaction = VerifiedTransaction::new_unchecked(transaction);
         self.execute_transaction_impl(transaction)
+    }
+
+    /// Execute a transaction while impersonating a specific sender.
+    ///
+    /// This method allows executing transactions as any account without requiring the private
+    /// keys for that account. This is useful for testing scenarios where you want to simulate
+    /// transactions from accounts you don't control.
+    ///
+    /// # Arguments
+    /// * `transaction_data` - The transaction data to execute
+    ///
+    /// # Returns
+    /// The transaction effects and optional execution error
+    ///
+    /// # Example
+    /// ```
+    /// use simulacrum::Simulacrum;
+    /// use sui_types::base_types::SuiAddress;
+    /// use sui_types::transaction::{TransactionData, TransactionKind};
+    /// use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    ///
+    /// # fn main() -> anyhow::Result<()> {
+    /// let mut sim = Simulacrum::new();
+    /// let impersonated_address = SuiAddress::random_for_testing_only();
+    ///
+    /// // Create transaction data
+    /// let pt = ProgrammableTransactionBuilder::new().finish();
+    /// let kind = TransactionKind::ProgrammableTransaction(pt);
+    /// let gas_data = sui_types::transaction::GasData {
+    ///     payment: vec![],
+    ///     owner: impersonated_address,
+    ///     price: sim.reference_gas_price(),
+    ///     budget: 1_000_000,
+    /// };
+    /// let tx_data = TransactionData::new_with_gas_data(kind, impersonated_address, gas_data);
+    ///
+    /// // Execute as the impersonated address without needing their private key
+    /// let (effects, _) = sim.execute_transaction_impersonating(tx_data)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn execute_transaction_impersonating(
+        &mut self,
+        transaction_data: TransactionData,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        use sui_types::crypto::Ed25519SuiSignature;
+        use sui_types::crypto::Signature;
+        use sui_types::transaction::SenderSignedData;
+
+        // Create dummy signatures for each required signer
+        let pk = SuiKeyPair::Ed25519(get_key_pair().1);
+        let sig = pk.sign(transaction_data.sender().as_ref());
+        // Create sender signed data with dummy signatures
+        let sender_signed_data = SenderSignedData::new(transaction_data, vec![sig.into()]);
+
+        // Create transaction and mark it as verified without checking signatures
+        let transaction = Transaction::new(sender_signed_data);
+        let verified_transaction = VerifiedTransaction::new_unchecked(transaction);
+
+        self.execute_transaction_impl(verified_transaction)
     }
 
     /// Creates the next Checkpoint using the Transactions enqueued since the last checkpoint was
