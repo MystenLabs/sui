@@ -15,7 +15,7 @@ use crate::object::rpc_visitor as RV;
 /// we'll conservitively cap this to ~80% of that.
 const MAX_DEPTH: usize = 80;
 
-pub struct ProtoVisitorBuilder {
+pub struct ProtoVisitor {
     /// Budget to spend on visiting.
     bound: usize,
 }
@@ -24,8 +24,6 @@ pub struct ProtoWriter<'b> {
     bound: &'b mut usize,
     depth: usize,
 }
-
-pub type ProtoVisitor<'b> = RV::RpcVisitor<ProtoWriter<'b>>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -42,7 +40,7 @@ pub enum Error {
     UnexpectedType,
 }
 
-impl ProtoVisitorBuilder {
+impl ProtoVisitor {
     pub fn new(bound: usize) -> Self {
         Self { bound }
     }
@@ -220,13 +218,13 @@ pub(crate) mod tests {
 
         let bytes = serialize(value.clone());
 
-        let deser = ProtoVisitorBuilder::new(bound)
+        let deser = ProtoVisitor::new(bound)
             .deserialize_value(&bytes, &type_layout)
             .unwrap();
 
         assert_eq!(expected, proto_value_to_json_value(deser));
 
-        ProtoVisitorBuilder::new(bound - 1)
+        ProtoVisitor::new(bound - 1)
             .deserialize_value(&bytes, &type_layout)
             .unwrap_err();
     }
@@ -249,7 +247,7 @@ pub(crate) mod tests {
         let bound = required_budget(&expected);
         let bytes = serialize(value.clone());
 
-        let deser = ProtoVisitorBuilder::new(bound)
+        let deser = ProtoVisitor::new(bound)
             .deserialize_value(&bytes, &layout)
             .unwrap();
 
@@ -261,7 +259,7 @@ pub(crate) mod tests {
 
         let bytes = serialize(value.clone());
 
-        let err = ProtoVisitorBuilder::new(bound)
+        let err = ProtoVisitor::new(bound)
             .deserialize_value(&bytes, &layout)
             .unwrap_err();
 

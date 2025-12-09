@@ -46,7 +46,7 @@ impl RpcService {
             .ok()
             .flatten()?;
 
-        sui_types::proto_value::ProtoVisitorBuilder::new(self.config.max_json_move_value_size())
+        sui_types::proto_value::ProtoVisitor::new(self.config.max_json_move_value_size())
             .deserialize_value(contents, &layout)
             .map_err(|e| tracing::debug!("unable to convert move value to JSON: {e}"))
             .ok()
