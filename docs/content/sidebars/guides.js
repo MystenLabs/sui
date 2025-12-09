@@ -45,7 +45,6 @@ const guides = [
 			id: 'guides/developer/sui-101',
 		},
 		items: [
-			'guides/developer/sui-101/object-ownership',
 			'guides/developer/sui-101/using-events',
 			'guides/developer/sui-101/local-network',
 			'guides/developer/sui-101/connect',
@@ -67,6 +66,42 @@ const guides = [
 					'guides/developer/sui-101/simulating-refs',
 				],
 			},
+		],
+	},
+	{
+		type: 'category',
+		label: 'Objects',
+		items: [
+			'guides/developer/objects/object-model',
+			{
+				type: 'category',
+				label: 'Object Ownership',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/objects/object-ownership',
+				},
+				items: [
+					'guides/developer/objects/object-ownership/address-owned',
+					'guides/developer/objects/object-ownership/immutable',
+					'guides/developer/objects/object-ownership/party',
+					'guides/developer/objects/object-ownership/shared',
+					'guides/developer/objects/object-ownership/wrapped',
+				],
+			},
+			{
+				type: 'category',
+				label: 'Transfers',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/objects/transfers',
+				},
+				items: [
+					'guides/developer/objects/transfers/custom-rules',
+					'guides/developer/objects/transfers/transfer-policies',
+					'guides/developer/objects/transfers/transfer-to-object',
+				],
+			},
+			'guides/developer/objects/versioning',
 		],
 	},
 	{

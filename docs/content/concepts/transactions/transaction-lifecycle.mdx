@@ -10,7 +10,7 @@ At a high level, the following diagram outlines the life cycle of a transaction 
 
 The following steps align with those in the diagram:
 
-1. A user with a private key creates and signs a user transaction to either mutate objects they own, [shared objects](/concepts/object-ownership/shared.mdx), or create new objects.
+1. A user with a private key creates and signs a user transaction to either mutate objects they own, [shared objects](/guides/developer/objects/object-ownership/shared.mdx), or create new objects.
 
 1. Sui sends the transaction to each [validator](/guides/operator/validator-index.mdx), often through a [full node](/guides/operator/sui-full-node.mdx). Validators perform a series of validity and safety checks, sign it, and return the signed transaction to the client.
 
@@ -110,7 +110,7 @@ The network round trip of sending a transaction and receiving a validator signat
 
 After the supermajority of validators have executed the transaction and an effects certificate exists, the effects of the transaction (transfers, newly minted objects, and so on) have been implemented. At this point, the network can process transactions that depend on those effects.
 
-For transactions that involve owned objects only, this happens before consensus in under 1/2 a second. If a transaction includes shared objects, it happens shortly after consensus, which can take a few seconds. At this point, the transaction reached settlement finality because now you can process more transactions on the same input objects. See [Object Ownership](/concepts/object-ownership.mdx) for more information.
+For transactions that involve owned objects only, this happens before consensus in under 1/2 a second. If a transaction includes shared objects, it happens shortly after consensus, which can take a few seconds. At this point, the transaction reached settlement finality because now you can process more transactions on the same input objects. See [Object Ownership](/guides/developer/objects/object-ownership.mdx) for more information.
 
 ## Epoch change
 

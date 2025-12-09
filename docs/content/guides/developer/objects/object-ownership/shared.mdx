@@ -4,13 +4,36 @@ description: Anyone can access shared objects on the Sui network, so care must b
 keywords: [ shared objects, sharing objects, objects that are shared, public objects, accessing shared objects, accessing public objects ]
 ---
 
-Use the `sui::transfer::share_object` function to create a shared object, making it publicly accessible on the network. Extended functionality and accessibility of shared objects requires additional effort by securing access, if needed.
+A shared object is a public, mutable object that is accessible to anyone on the network. They are designed such that multiple users or smart contracts can interact with the same object concurrently.
+
+## Create shared objects
+
+Use the [`sui::transfer::share_object`](/references/framework/sui_sui/transfer#sui_transfer_share_object) function to create a shared object, making it publicly accessible on the network. Extended functionality and accessibility of shared objects requires additional effort by securing access, if needed.
 
 Shared objects require the `key` ability.
 
-## Usage example
+```move
+public struct Donut has key { id: UID }
 
-The following example creates a shop to sell digital donuts. Everyone needs access to the shop to purchase donuts from it, so the example creates the shop as a shared object using `sui::transfer::share_object`.
+fun init(ctx: &mut TxContext) {
+    transfer::transfer(ShopOwnerCap {
+        id: object::new(ctx)
+    }, ctx.sender());
+
+    transfer::share_object(DonutShop {
+        id: object::new(ctx),
+        price: 1000,
+        balance: balance::zero()
+    })
+```
+
+## When to use shared objects
+
+Shared objects are ideal for things like marketplaces, games, or other scenarios where global state needs to be accessed or modified by multiple parties.
+
+## Interact with shared objects 
+
+The following example creates a shop to sell digital donuts. Everyone needs access to the shop to purchase donuts from it, so the example creates the shop as a shared object using [`sui::transfer::share_object`](/references/framework/sui_sui/transfer#sui_transfer_share_object).
 
 ```move
 module examples::donuts;
