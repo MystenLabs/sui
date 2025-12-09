@@ -7,11 +7,7 @@ publish = false
 edition = "2024"
 
 [dependencies]
-ethers = "2.0"
-reqwest = {version = "0.11", default-features = false, features = [
-  "json",
-  "rustls-tls",
-]}
+alloy = { version = "1.1.3", features = ["json-rpc", "rand", "sol-types"] }
 tokio = { workspace = true, features = ["full"] }
 sui-types.workspace = true
 sui-authority-aggregation.workspace = true
@@ -57,6 +53,9 @@ test-cluster = { workspace = true, optional = true }
 sui-sdk-types.workspace = true
 sui-rpc.workspace = true
 tonic.workspace = true
+tower.workspace = true
+thiserror.workspace = true
+reqwest.workspace = true
 
 [dev-dependencies]
 sui-config.workspace = true

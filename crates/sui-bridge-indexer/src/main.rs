@@ -148,7 +148,7 @@ async fn start_watchdog(
 ) -> Result<()> {
     let watchdog_metrics = WatchdogMetrics::new(registry);
     let eth_provider =
-        Arc::new(new_metered_eth_provider(&config.eth_rpc_url, bridge_metrics.clone()).unwrap());
+        new_metered_eth_provider(&config.eth_rpc_url, bridge_metrics.clone()).unwrap();
     let (
         _committee_address,
         _limiter_address,

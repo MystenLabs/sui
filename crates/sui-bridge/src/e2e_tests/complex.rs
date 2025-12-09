@@ -9,7 +9,7 @@ use crate::e2e_tests::test_utils::{
 use crate::sui_transaction_builder::build_sui_transaction;
 use crate::types::{BridgeAction, EmergencyAction};
 use crate::types::{BridgeActionStatus, EmergencyActionType};
-use ethers::types::Address as EthAddress;
+use alloy::primitives::Address as EthAddress;
 use std::sync::Arc;
 use sui_json_rpc_types::SuiExecutionStatus;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
