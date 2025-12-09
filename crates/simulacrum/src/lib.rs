@@ -126,9 +126,10 @@ impl Simulacrum {
     }
 }
 
-impl<R> Simulacrum<R>
+impl<R, S> Simulacrum<R, S>
 where
     R: rand::RngCore + rand::CryptoRng,
+    S: store::SimulatorStore,
 {
     /// Create a new Simulacrum instance using the provided `rng`.
     ///
@@ -195,34 +196,24 @@ where
         Self::new_with_network_config_in_mem(&config, rng)
     }
 
-    /// Create a new Simulacrum instance with a specific genesis and store.
-    pub fn new_from_genesis_and_custom_store(
-        genesis: &genesis::Genesis,
+    pub fn new_with_protocol_version_and_chain_override_and_store(
         mut rng: R,
         protocol_version: ProtocolVersion,
         chain: Chain,
     ) -> Self {
-        let network_config = ConfigBuilder::new_with_temp_dir()
+        let config = ConfigBuilder::new_with_temp_dir()
             .rng(&mut rng)
+            .with_chain_start_timestamp_ms(1)
             .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
             .with_protocol_version(protocol_version)
             .with_chain_override(chain)
             .build();
-        let keystore = KeyStore::from_network_config(&network_config);
-        let checkpoint_builder = MockCheckpointBuilder::new(genesis.checkpoint());
-        let epoch_state = EpochState::new(genesis.sui_system_object());
-        let store = InMemoryStore::new(&genesis);
-        Self {
-            rng,
-            keystore,
-            genesis: genesis.clone(),
-            store,
-            checkpoint_builder,
-            epoch_state,
-            deny_config: TransactionDenyConfig::default(),
-            data_ingestion_path: None,
-            verifier_signing_config: VerifierSigningConfig::default(),
-        }
+        let store = Store::new(&config.genesis);
+        Self::new_with_network_config_store(&config, rng, store)
+    }
+
+    fn new_with_network_config_and_store(config: &NetworkConfig, rng: R, store: Store) -> Self {
+        Self::new_with_network_config_store(config, rng, store)
     }
 
     fn new_with_network_config_in_mem(config: &NetworkConfig, rng: R) -> Self {
@@ -1019,5 +1010,82 @@ mod tests {
         } else {
             assert_eq!(checkpoint.network_total_transactions, 2); // genesis + 1 user txn
         };
+    }
+
+    #[test]
+    fn test_impersonation() {
+        let mut sim = Simulacrum::new();
+
+        // Create a funded account with a known address and gas
+        let (sender, _key, gas_ref) = sim.funded_account(MIST_PER_SUI).unwrap();
+
+        // Create a recipient address that we want to send to
+        let recipient = SuiAddress::random_for_testing_only();
+
+        // Build a transaction that transfers SUI from sender to recipient
+        // We will execute this WITHOUT using the sender's private key
+        let transfer_amount = MIST_PER_SUI / 2;
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_sui(recipient, Some(transfer_amount));
+            builder.finish()
+        };
+
+        let kind = TransactionKind::ProgrammableTransaction(pt);
+        let gas_data = GasData {
+            payment: vec![gas_ref],
+            owner: sender,
+            price: sim.reference_gas_price(),
+            budget: MIST_PER_SUI / 4,
+        };
+        let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
+
+        // Execute the transaction while impersonating the sender
+        // This should work even though we don't have the sender's private key
+        let (effects, error) = sim
+            .execute_transaction_impersonating(tx_data)
+            .expect("impersonated transaction should execute");
+
+        // Verify the transaction succeeded
+        assert!(
+            error.is_none(),
+            "transaction should not have execution error"
+        );
+        assert!(
+            effects.status().is_ok(),
+            "transaction should have ok status"
+        );
+
+        // Verify the recipient received the funds
+        let recipient_balance = sim
+            .store()
+            .owned_objects(recipient)
+            .find(|obj| obj.is_gas_coin())
+            .and_then(|obj| GasCoin::try_from(&obj).ok())
+            .map(|coin| coin.value())
+            .expect("recipient should have a gas coin");
+
+        assert_eq!(
+            recipient_balance, transfer_amount,
+            "recipient should have received the transfer amount"
+        );
+
+        // Verify the gas coin was updated (reduced by transfer + gas)
+        let sender_balance = sim
+            .store()
+            .owned_objects(sender)
+            .find(|obj| obj.is_gas_coin())
+            .and_then(|obj| GasCoin::try_from(&obj).ok())
+            .map(|coin| coin.value())
+            .expect("sender should still have a gas coin");
+
+        let gas_used = effects.gas_cost_summary().net_gas_usage();
+        let expected_sender_balance =
+            (MIST_PER_SUI as i64 - transfer_amount as i64 - gas_used) as u64;
+
+        assert_eq!(
+            sender_balance, expected_sender_balance,
+            "sender balance should be reduced by transfer amount and gas"
+        );
     }
 }
