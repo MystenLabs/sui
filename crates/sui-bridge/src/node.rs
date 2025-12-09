@@ -1,9 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::WatchdogConfig;
+use crate::action_executor::BridgeActionExecutor;
+use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
+use crate::config::{BridgeClientConfig, BridgeNodeConfig, WatchdogConfig};
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
-use crate::metered_eth_provider::MeteredEthHttpProvider;
+use crate::eth_syncer::EthSyncer;
+use crate::events::init_all_struct_tags;
+use crate::metrics::BridgeMetrics;
+use crate::monitor::BridgeMonitor;
+use crate::orchestrator::BridgeOrchestrator;
+use crate::server::handler::BridgeRequestHandler;
+use crate::server::{BridgeNodePublicMetadata, run_server};
+use crate::storage::BridgeOrchestratorTables;
 use crate::sui_bridge_watchdog::eth_bridge_status::EthBridgeStatus;
 use crate::sui_bridge_watchdog::eth_vault_balance::{EthereumVaultBalance, VaultAsset};
 use crate::sui_bridge_watchdog::metrics::WatchdogMetrics;
@@ -11,42 +20,25 @@ use crate::sui_bridge_watchdog::sui_bridge_status::SuiBridgeStatus;
 use crate::sui_bridge_watchdog::total_supplies::TotalSupplies;
 use crate::sui_bridge_watchdog::{BridgeWatchDog, Observable};
 use crate::sui_client::SuiBridgeClient;
+use crate::sui_syncer::SuiSyncer;
 use crate::types::BridgeCommittee;
 use crate::utils::{
-    get_committee_voting_power_by_name, get_eth_contract_addresses, get_validator_names_by_pub_keys,
+    EthProvider, get_committee_voting_power_by_name, get_eth_contract_addresses,
+    get_validator_names_by_pub_keys,
 };
-use crate::{
-    action_executor::BridgeActionExecutor,
-    client::bridge_authority_aggregator::BridgeAuthorityAggregator,
-    config::{BridgeClientConfig, BridgeNodeConfig},
-    eth_syncer::EthSyncer,
-    events::init_all_struct_tags,
-    metrics::BridgeMetrics,
-    monitor::BridgeMonitor,
-    orchestrator::BridgeOrchestrator,
-    server::{BridgeNodePublicMetadata, handler::BridgeRequestHandler, run_server},
-    storage::BridgeOrchestratorTables,
-    sui_syncer::SuiSyncer,
-};
+use alloy::primitives::Address as EthAddress;
 use arc_swap::ArcSwap;
-use ethers::providers::Provider;
-use ethers::types::Address as EthAddress;
 use mysten_metrics::spawn_logged_monitored_task;
-use std::collections::BTreeMap;
-use std::{
-    collections::HashMap,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc,
-    time::Duration,
+use std::collections::{BTreeMap, HashMap};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Arc;
+use std::time::Duration;
+use sui_types::Identifier;
+use sui_types::bridge::{
+    BRIDGE_COMMITTEE_MODULE_NAME, BRIDGE_LIMITER_MODULE_NAME, BRIDGE_MODULE_NAME,
+    BRIDGE_TREASURY_MODULE_NAME,
 };
-use sui_types::{
-    Identifier,
-    bridge::{
-        BRIDGE_COMMITTEE_MODULE_NAME, BRIDGE_LIMITER_MODULE_NAME, BRIDGE_MODULE_NAME,
-        BRIDGE_TREASURY_MODULE_NAME,
-    },
-    event::EventID,
-};
+use sui_types::event::EventID;
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -152,7 +144,7 @@ pub async fn run_bridge_node(
 async fn start_watchdog(
     watchdog_config: Option<WatchdogConfig>,
     registry: &prometheus::Registry,
-    eth_provider: Arc<Provider<MeteredEthHttpProvider>>,
+    eth_provider: EthProvider,
     eth_bridge_proxy_address: EthAddress,
     sui_client: Arc<SuiBridgeClient>,
 ) {
@@ -166,7 +158,7 @@ async fn start_watchdog(
         usdt_address,
         wbtc_address,
         lbtc_address,
-    ) = get_eth_contract_addresses(eth_bridge_proxy_address, &eth_provider)
+    ) = get_eth_contract_addresses(eth_bridge_proxy_address, eth_provider.clone())
         .await
         .unwrap_or_else(|e| panic!("get_eth_contract_addresses should not fail: {}", e));
 
@@ -494,7 +486,8 @@ fn get_eth_contracts_to_watch(
 
 #[cfg(test)]
 mod tests {
-    use ethers::types::Address as EthAddress;
+    use alloy::primitives::Address as EthAddress;
+    use alloy::primitives::U160;
     use prometheus::Registry;
 
     use super::*;
@@ -522,8 +515,8 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let temp_dir = tempfile::tempdir().unwrap();
         let eth_contracts = vec![
-            EthAddress::from_low_u64_be(1),
-            EthAddress::from_low_u64_be(2),
+            EthAddress::from(U160::from(1)),
+            EthAddress::from(U160::from(2)),
         ];
         let store = BridgeOrchestratorTables::new(temp_dir.path());
 
