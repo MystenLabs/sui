@@ -77,14 +77,20 @@ pub struct SignResponse {
 #[automock]
 #[async_trait]
 pub trait CommandRunner: Send + Sync + Debug {
-    async fn run(&self, command: &str, method: &str, args: JsonValue) -> Result<JsonValue, Error>;
+    async fn run(&self, command: &str, method: &str, params: JsonValue)
+    -> Result<JsonValue, Error>;
 }
 
 #[derive(Debug)]
 struct StdCommandRunner;
 #[async_trait]
 impl CommandRunner for StdCommandRunner {
-    async fn run(&self, command: &str, method: &str, args: JsonValue) -> Result<JsonValue, Error> {
+    async fn run(
+        &self,
+        command: &str,
+        method: &str,
+        params: JsonValue,
+    ) -> Result<JsonValue, Error> {
         let mut cmd = Command::new(command)
             .arg("call")
             .stdin(Stdio::piped())
@@ -96,7 +102,7 @@ impl CommandRunner for StdCommandRunner {
             cmd.stdin.take().expect("No stdin"),
         );
 
-        let res: JsonValue = endpoint.call(method, args).await?;
+        let res: JsonValue = endpoint.call(method, params).await?;
         if res.is_null() {
             return Err(anyhow!("Command returned null result"));
         }
@@ -176,9 +182,9 @@ impl External {
         &self,
         command: &str,
         method: &str,
-        args: JsonValue,
+        params: JsonValue,
     ) -> Result<JsonValue, Error> {
-        self.command_runner.run(command, method, args).await
+        self.command_runner.run(command, method, params).await
     }
 
     /// Add a Key ID from the given an external signer to the Sui CLI index
@@ -187,22 +193,75 @@ impl External {
         ext_signer: String,
         key_id: String,
     ) -> Result<StoredKey, Error> {
+        let key = match self.get_public_key(&ext_signer, &key_id).await {
+            Ok(key) => Ok(key),
+            Err(_) => self
+                .signer_available_keys(ext_signer.clone())
+                .await?
+                .into_iter()
+                .find(|k| k.key_id == key_id)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Key with id {} not found for external signer {}",
+                        key_id,
+                        ext_signer
+                    )
+                }),
+        }
+        .map_err(|e| {
+            anyhow!(
+                "Failed to get public key for external signer {} with key id {}: {}",
+                ext_signer,
+                key_id,
+                e
+            )
+        })?;
+
+        self.keys.insert((&key.public_key).into(), key.clone());
+        self.aliases.insert(
+            (&key.public_key).into(),
+            Alias {
+                alias: self.create_alias(None)?,
+                public_key_base64: key.public_key.encode_base64(),
+            },
+        );
+        self.save().await?;
+        Ok(key)
+    }
+
+    pub async fn add_first_unindexed_key(
+        &mut self,
+        ext_signer: String,
+    ) -> Result<StoredKey, Error> {
         let keys = self.signer_available_keys(ext_signer.clone()).await?;
 
         let key: StoredKey = keys
             .into_iter()
-            .find(|k| k.key_id == key_id)
-            .ok_or_else(|| {
-                anyhow!(
-                    "Key with id {} not found for external signer {}",
-                    key_id,
-                    ext_signer
-                )
-            })?;
+            .find(|k| !self.is_indexed(k))
+            .ok_or_else(|| anyhow!("No available key found for external signer {}", ext_signer))?;
 
         self.keys.insert((&key.public_key).into(), key.clone());
+        self.aliases.insert(
+            (&key.public_key).into(),
+            Alias {
+                alias: self.create_alias(None)?,
+                public_key_base64: key.public_key.encode_base64(),
+            },
+        );
         self.save().await?;
         Ok(key)
+    }
+
+    /// Get the public key for a given key ID from an external signer.
+    pub async fn get_public_key(&self, ext_signer: &str, key_id: &str) -> Result<StoredKey, Error> {
+        let result = self.exec(ext_signer, "public_key", json![key_id]).await?;
+        let public_key: ExternalKey = serde_json::from_value(result)
+            .map_err(|e| anyhow!("Failed to parse public key response: {}", e))?;
+        Ok(StoredKey {
+            public_key: public_key.public_key,
+            ext_signer: ext_signer.to_owned(),
+            key_id: public_key.key_id,
+        })
     }
 
     /// Return all Key IDs associated with an external signer, indexed or not
@@ -298,6 +357,8 @@ impl<'de> Deserialize<'de> for External {
 
 #[async_trait]
 impl AccountKeystore for External {
+    /// Generate a new key and add to the CLI, if generation is not supported function will fallback to adding
+    /// an existing key from the external signer.
     async fn generate(
         &mut self,
         alias: Option<String>,
@@ -307,19 +368,23 @@ impl AccountKeystore for External {
             return Err(anyhow!("Signer must be provided for external keys."));
         };
 
-        let res = self.exec(&ext_signer, "create_key", json![null]).await?;
-        let ExternalKey { key_id, public_key } = serde_json::from_value(res)
-            .map_err(|e| anyhow!("Failed to parse key response: {}", e))?;
-        let address: SuiAddress = (&public_key).into();
+        // Attempt to generate, fallback to adding an existing key.
+        let stored_key = match self.exec(&ext_signer, "create_key", json![null]).await {
+            Ok(res) => serde_json::from_value(res)
+                .map(|k: ExternalKey| StoredKey {
+                    public_key: k.public_key,
+                    ext_signer: ext_signer.clone(),
+                    key_id: k.key_id,
+                })
+                .map_err(|e| anyhow!("Failed to parse key response from external signer: {}", e)),
+            Err(_) => self.add_first_unindexed_key(ext_signer).await,
+        }
+        .map_err(|e| anyhow!("Failed to generate or add a key: {}", e))?;
 
-        self.keys.insert(
-            address,
-            StoredKey {
-                public_key: public_key.clone(),
-                ext_signer,
-                key_id: key_id.to_string(),
-            },
-        );
+        let address: SuiAddress = (&stored_key.public_key).into();
+        let public_key = stored_key.public_key.clone();
+
+        self.keys.insert(address, stored_key);
 
         self.aliases.insert(
             address,
@@ -329,11 +394,10 @@ impl AccountKeystore for External {
             },
         );
 
-        let scheme = public_key.scheme();
         Ok(GeneratedKey {
             address,
+            scheme: public_key.scheme(),
             public_key,
-            scheme,
         })
     }
 
@@ -727,17 +791,17 @@ mod tests {
             .returning(|_, _, _| Ok(JsonValue::Null));
 
         let external = External::new_for_test(Box::new(mock), None);
-        let args = json!(["arg1", "arg2"]);
+        let params = json!(["arg1", "arg2"]);
         assert!(
             external
-                .exec("sui-key-tool", "test_method", args)
+                .exec("sui-key-tool", "test_method", params)
                 .await
                 .is_ok()
         );
     }
 
     #[tokio::test]
-    async fn test_create_key_success() {
+    async fn test_generate_success() {
         let mut mock = MockCommandRunner::new();
         let key_id = "key-123";
         mock.expect_run()
@@ -789,7 +853,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_add_existing_key() {
+    async fn test_add_first_unindexed_key() {
         let mut mock = MockCommandRunner::new();
         let key_id = "key-123";
         mock.expect_run().returning(move |_, _, _| {
@@ -808,6 +872,76 @@ mod tests {
         let tmp_keystore = tmp_dir.path().join("external.keystore");
         let mut external = External::new_for_test(Box::new(mock), Some(tmp_keystore));
         external.save().await.unwrap();
+        let stored_key = external.add_first_unindexed_key("signer".to_string()).await;
+        assert!(stored_key.is_ok());
+        let stored_key = stored_key.unwrap();
+        assert_eq!(stored_key.key_id, key_id);
+        assert_eq!(stored_key.public_key.encode_base64(), PUBLIC_KEY);
+    }
+
+    #[tokio::test]
+    async fn test_generate_fallback_add_first_unindexed_key() {
+        let mut mock = MockCommandRunner::new();
+        let key_id = "key-123";
+        mock.expect_run().returning(move |_, method, params| {
+            if method == "create_key" && params == json![null] {
+                return Err(anyhow!(
+                    "Command failed with error: Unsupported action create_key"
+                ));
+            }
+            if method == "keys" && params == json![null] {
+                return Ok(json!({
+                    "keys": [
+                        {
+                            "key_id": key_id,
+                            "public_key": {
+                                "Ed25519": UNTAGGED_PUBLIC_KEY
+                            }
+                        }
+                    ]
+                }));
+            }
+            panic!("Unexpected method called: {}", method);
+        });
+
+        let tmp_dir = TempDir::new().unwrap();
+        let tmp_keystore = tmp_dir.path().join("external.keystore");
+        let mut external = External::new_for_test(Box::new(mock), Some(tmp_keystore));
+        external.save().await.unwrap();
+        let result = external
+            .generate(None, GenerateOptions::ExternalSigner("signer".to_string()))
+            .await;
+        assert!(result.is_ok());
+        let GeneratedKey {
+            address,
+            public_key,
+            scheme,
+        } = result.unwrap();
+        assert_eq!(scheme, ED25519);
+        assert_eq!(address, SuiAddress::from_str(ADDRESS).unwrap());
+        assert_eq!(public_key.encode_base64(), PUBLIC_KEY);
+    }
+
+    #[tokio::test]
+    async fn test_add_existing_key() {
+        let mut mock = MockCommandRunner::new();
+        let key_id = "key-123";
+        mock.expect_run().returning(move |_, method, _| {
+            if method != "public_key" {
+                panic!("Unexpected method called: {}", method);
+            }
+
+            Ok(json!({
+                "key_id": key_id,
+                "public_key": {
+                    "Ed25519": UNTAGGED_PUBLIC_KEY
+                }
+            }))
+        });
+        let tmp_dir = TempDir::new().unwrap();
+        let tmp_keystore = tmp_dir.path().join("external.keystore");
+        let mut external = External::new_for_test(Box::new(mock), Some(tmp_keystore));
+        external.save().await.unwrap();
         external
             .add_existing("signer".to_string(), key_id.to_string())
             .await
@@ -815,6 +949,50 @@ mod tests {
         let keys = external.keys;
         let key = keys.get(&SuiAddress::from_str(ADDRESS).expect("Invalid address format"));
         assert!(key.is_some());
+
+        let alias = external
+            .aliases
+            .get(&SuiAddress::from_str(ADDRESS).expect("Invalid address format"));
+        assert!(alias.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_add_existing_key_fallback_to_signer_available_keys() {
+        let mut mock = MockCommandRunner::new();
+        let key_id = "key-123";
+        mock.expect_run().returning(move |_, method, _| {
+            // Simulate lack of "public_key" method support
+            if method == "public_key" {
+                return Err(anyhow!(
+                    "Command failed with error: Unsupported action public_key"
+                ));
+            }
+            if method == "keys" {
+                return Ok(json!({
+                    "keys": [
+                        {
+                            "key_id": key_id,
+                            "public_key": {
+                                "Ed25519": UNTAGGED_PUBLIC_KEY
+                            }
+                        }
+                    ]
+                }));
+            }
+            panic!("Unexpected method called: {}", method);
+        });
+
+        let tmp_dir = TempDir::new().unwrap();
+        let tmp_keystore = tmp_dir.path().join("external.keystore");
+        let mut external = External::new_for_test(Box::new(mock), Some(tmp_keystore));
+        external.save().await.unwrap();
+        let result = external
+            .add_existing("signer".to_string(), key_id.to_string())
+            .await;
+        assert!(result.is_ok());
+        let stored_key = result.unwrap();
+        assert_eq!(stored_key.key_id, key_id);
+        assert_eq!(stored_key.public_key.encode_base64(), PUBLIC_KEY);
     }
 
     #[tokio::test]

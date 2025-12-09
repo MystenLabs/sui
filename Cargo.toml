@@ -674,6 +674,8 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7
 sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "fca0ea3a409a71f9be5235711d706507d8d390f3", features = [ "hash", "serde" ] }
 sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "fca0ea3a409a71f9be5235711d706507d8d390f3", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
 sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "fca0ea3a409a71f9be5235711d706507d8d390f3" }
+sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "fca0ea3a409a71f9be5235711d706507d8d390f3" }
+sui-graphql-client-build = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "fca0ea3a409a71f9be5235711d706507d8d390f3" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

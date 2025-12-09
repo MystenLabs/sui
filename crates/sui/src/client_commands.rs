@@ -769,12 +769,11 @@ impl SuiClientCommands {
             SuiClientCommands::Addresses { sort_by_alias } => {
                 let active_address = context.active_address()?;
                 let mut addresses: Vec<(String, SuiAddress)> = context
-                    .config
-                    .keystore
                     .addresses_with_alias()
                     .into_iter()
                     .map(|(address, alias)| (alias.alias.to_string(), *address))
                     .collect();
+
                 if sort_by_alias {
                     addresses.sort();
                 }
@@ -1705,7 +1704,7 @@ impl SuiClientCommands {
 
                 if let Some(address) = address {
                     let address = context.get_identity_address(Some(address))?;
-                    if !context.config.keystore.addresses().contains(&address) {
+                    if !context.get_addresses().contains(&address) {
                         return Err(anyhow!("Address {} not managed by wallet", address));
                     }
                     context.config.active_address = Some(address);
@@ -3235,9 +3234,11 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     } else {
         let mut signatures = vec![
             context
-                .config
-                .keystore
-                .sign_secure(&signer, &tx_data, Intent::sui_transaction())
+                .sign_secure(
+                    &KeyIdentity::Address(signer),
+                    &tx_data,
+                    Intent::sui_transaction(),
+                )
                 .await?
                 .into(),
         ];
@@ -3247,9 +3248,11 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         {
             signatures.push(
                 context
-                    .config
-                    .keystore
-                    .sign_secure(&gas_sponsor, &tx_data, Intent::sui_transaction())
+                    .sign_secure(
+                        &KeyIdentity::Address(gas_sponsor),
+                        &tx_data,
+                        Intent::sui_transaction(),
+                    )
                     .await?
                     .into(),
             );
