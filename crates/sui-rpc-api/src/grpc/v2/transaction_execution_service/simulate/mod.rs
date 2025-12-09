@@ -287,13 +287,11 @@ fn to_command_output(
         .ok()
         .flatten()
         .and_then(|layout| {
-            sui_types::proto_value::ProtoVisitorBuilder::new(
-                service.config.max_json_move_value_size(),
-            )
-            .deserialize_value(&bcs, &layout)
-            .map_err(|e| tracing::debug!("unable to convert to JSON: {e}"))
-            .ok()
-            .map(Box::new)
+            sui_types::proto_value::ProtoVisitor::new(service.config.max_json_move_value_size())
+                .deserialize_value(&bcs, &layout)
+                .map_err(|e| tracing::debug!("unable to convert to JSON: {e}"))
+                .ok()
+                .map(Box::new)
         });
 
     let mut message = CommandOutput::default();
