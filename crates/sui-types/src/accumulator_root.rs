@@ -327,26 +327,31 @@ pub fn update_account_balance_for_testing(account_object: &mut Object, balance_c
     move_object.set_contents_unsafe(new_field);
 }
 
-/// Check if a StructTag is Field<Key<Balance<T>>, U128>
-pub(crate) fn is_balance_accumulator_field(s: &StructTag) -> bool {
-    s.address == SUI_FRAMEWORK_ADDRESS
+pub(crate) fn accumulator_value_balance_type_maybe(s: &StructTag) -> Option<TypeTag> {
+    if s.address == SUI_FRAMEWORK_ADDRESS
         && s.module.as_ident_str() == DYNAMIC_FIELD_MODULE_NAME
         && s.name.as_ident_str() == DYNAMIC_FIELD_FIELD_STRUCT_NAME
         && s.type_params.len() == 2
-        && is_accumulator_key_balance(&s.type_params[0])
+        && let Some(key_type) = accumulator_key_type_maybe(&s.type_params[0])
         && is_accumulator_u128(&s.type_params[1])
+    {
+        Balance::maybe_get_balance_type_param(&key_type)
+    } else {
+        None
+    }
 }
 
 /// Check if a TypeTag is Key<Balance<T>>
-pub(crate) fn is_accumulator_key_balance(t: &TypeTag) -> bool {
-    if let TypeTag::Struct(s) = t {
-        s.address == SUI_FRAMEWORK_ADDRESS
-            && s.module.as_ident_str() == ACCUMULATOR_ROOT_MODULE
-            && s.name.as_ident_str() == ACCUMULATOR_KEY_TYPE
-            && s.type_params.len() == 1
-            && Balance::is_balance_type(&s.type_params[0])
+pub(crate) fn accumulator_key_type_maybe(t: &TypeTag) -> Option<TypeTag> {
+    if let TypeTag::Struct(s) = t
+        && s.address == SUI_FRAMEWORK_ADDRESS
+        && s.module.as_ident_str() == ACCUMULATOR_ROOT_MODULE
+        && s.name.as_ident_str() == ACCUMULATOR_KEY_TYPE
+        && s.type_params.len() == 1
+    {
+        Some(s.type_params[0].clone())
     } else {
-        false
+        None
     }
 }
 
@@ -364,48 +369,33 @@ pub(crate) fn is_accumulator_u128(t: &TypeTag) -> bool {
 
 // Check if this is a Field<OwnerKey, AccumulatorOwner> type
 pub(crate) fn is_balance_accumulator_owner_field(s: &StructTag) -> bool {
-    if s.address != SUI_FRAMEWORK_ADDRESS
-        || s.module.as_ident_str() != DYNAMIC_FIELD_MODULE_NAME
-        || s.name.as_ident_str() != DYNAMIC_FIELD_FIELD_STRUCT_NAME
-        || s.type_params.len() != 2
-    {
-        return false;
-    }
-
-    if !is_accumulator_owner_key(&s.type_params[0]) || !is_accumulator_owner(&s.type_params[1]) {
-        return false;
-    }
-
-    true
+    s.address == SUI_FRAMEWORK_ADDRESS
+        && s.module.as_ident_str() == DYNAMIC_FIELD_MODULE_NAME
+        && s.name.as_ident_str() == DYNAMIC_FIELD_FIELD_STRUCT_NAME
+        && s.type_params.len() == 2
+        && is_accumulator_owner_key(&s.type_params[0])
+        && is_accumulator_owner(&s.type_params[1])
 }
 
-pub(crate) fn is_balance_accumulator_metadata_field(s: &StructTag) -> bool {
-    if s.address != SUI_FRAMEWORK_ADDRESS
-        || s.module.as_ident_str() != DYNAMIC_FIELD_MODULE_NAME
-        || s.name.as_ident_str() != DYNAMIC_FIELD_FIELD_STRUCT_NAME
-        || s.type_params.len() != 2
+// If s is Field<MetadataKey<Balance<T>>, Metadata<Balance<T>>>, return Some(T)
+pub(crate) fn accumulator_metadata_balance_type_maybe(s: &StructTag) -> Option<TypeTag> {
+    if s.address == SUI_FRAMEWORK_ADDRESS
+        && s.module.as_ident_str() == DYNAMIC_FIELD_MODULE_NAME
+        && s.name.as_ident_str() == DYNAMIC_FIELD_FIELD_STRUCT_NAME
+        && s.type_params.len() == 2
+        && let Some(metadata_key_type) = accumulator_metadata_key_type_maybe(&s.type_params[0])
+        && let Some(metadata_type) = accumulator_metadata_type_maybe(&s.type_params[1])
+        && type_params_equal(&metadata_key_type, &metadata_type)
     {
-        return false;
+        Balance::maybe_get_balance_type_param(&metadata_key_type)
+    } else {
+        None
     }
+}
 
-    // Check that both are the correct types
-    if !is_accumulator_metadata_key(&s.type_params[0])
-        || !is_accumulator_metadata(&s.type_params[1])
-    {
-        return false;
-    }
-
-    // Extract the type parameters from MetadataKey and Metadata
-    if let (TypeTag::Struct(key_struct), TypeTag::Struct(metadata_struct)) =
-        (&s.type_params[0], &s.type_params[1])
-    {
-        // Both should have exactly one type parameter (Balance<T>)
-        if key_struct.type_params.len() == 1 && metadata_struct.type_params.len() == 1 {
-            // Check that both have the same Balance<T> type parameter
-            key_struct.type_params[0] == metadata_struct.type_params[0]
-        } else {
-            false
-        }
+fn type_params_equal(t1: &TypeTag, t2: &TypeTag) -> bool {
+    if let (TypeTag::Struct(s1), TypeTag::Struct(s2)) = (t1, t2) {
+        s1.type_params == s2.type_params
     } else {
         false
     }
@@ -433,43 +423,32 @@ pub(crate) fn is_accumulator_owner(t: &TypeTag) -> bool {
     }
 }
 
-pub(crate) fn is_accumulator_metadata_key(t: &TypeTag) -> bool {
-    if let TypeTag::Struct(s) = t {
-        s.address == SUI_FRAMEWORK_ADDRESS
-            && s.module.as_ident_str() == ACCUMULATOR_METADATA_MODULE
-            && s.name.as_ident_str() == ACCUMULATOR_METADATA_KEY_TYPE
-            && s.type_params.len() == 1
-    } else {
-        false
-    }
-}
-
-pub(crate) fn is_accumulator_metadata(t: &TypeTag) -> bool {
-    if let TypeTag::Struct(s) = t {
-        s.address == SUI_FRAMEWORK_ADDRESS
-            && s.module.as_ident_str() == ACCUMULATOR_METADATA_MODULE
-            && s.name.as_ident_str() == ACCUMULATOR_METADATA_TYPE
-            && s.type_params.len() == 1
-    } else {
-        false
-    }
-}
-
-/// Extract T from Field<Key<Balance<T>>, U128>
-pub(crate) fn extract_balance_type_from_field(s: &StructTag) -> Option<TypeTag> {
-    if s.type_params.len() != 2 {
-        return None;
-    }
-
-    if let TypeTag::Struct(key_struct) = &s.type_params[0]
-        && key_struct.type_params.len() == 1
-        && let TypeTag::Struct(balance_struct) = &key_struct.type_params[0]
-        && Balance::is_balance(balance_struct)
-        && balance_struct.type_params.len() == 1
+/// If `t` is MetadataKey<T>, return Some(T)
+pub(crate) fn accumulator_metadata_key_type_maybe(t: &TypeTag) -> Option<TypeTag> {
+    if let TypeTag::Struct(s) = t
+        && s.address == SUI_FRAMEWORK_ADDRESS
+        && s.module.as_ident_str() == ACCUMULATOR_METADATA_MODULE
+        && s.name.as_ident_str() == ACCUMULATOR_METADATA_KEY_TYPE
+        && s.type_params.len() == 1
     {
-        return Some(balance_struct.type_params[0].clone());
+        Some(s.type_params[0].clone())
+    } else {
+        None
     }
-    None
+}
+
+/// If `t` is Metadata<T>, return Some(T)
+pub(crate) fn accumulator_metadata_type_maybe(t: &TypeTag) -> Option<TypeTag> {
+    if let TypeTag::Struct(s) = t
+        && s.address == SUI_FRAMEWORK_ADDRESS
+        && s.module.as_ident_str() == ACCUMULATOR_METADATA_MODULE
+        && s.name.as_ident_str() == ACCUMULATOR_METADATA_TYPE
+        && s.type_params.len() == 1
+    {
+        Some(s.type_params[0].clone())
+    } else {
+        None
+    }
 }
 
 /// Rust representation of the Move EventStreamHead struct from accumulator_settlement module.

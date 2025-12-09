@@ -523,3 +523,602 @@ fn test_accumulator_owner_field_storage_savings() {
         "Round-trip conversion should preserve the type"
     );
 }
+
+// Below this point are a bunch of claude-written tests. They aren't terribly high value
+// but they are small and fast and do check actual edge cases.
+
+#[test]
+fn test_accumulator_field_wrong_value_type_not_u128() {
+    // Field<Key<Balance<SUI>>, SomeOtherType> should NOT be recognized
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+    let key_type = AccumulatorKey::get_type_tag(&[sui_balance]);
+
+    // Use a different value type (not U128)
+    let wrong_value_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "test".parse().unwrap(),
+        name: "NotU128".parse().unwrap(),
+        type_params: vec![],
+    }));
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, wrong_value_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_field());
+    assert!(move_type.balance_accumulator_field_type_maybe().is_none());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_accumulator_field_key_not_balance_type() {
+    // Field<Key<SomeOtherType>, U128> should NOT be recognized (Key type param isn't Balance<T>)
+    let not_balance = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "test".parse().unwrap(),
+        name: "NotBalance".parse().unwrap(),
+        type_params: vec![],
+    }));
+    let key_type = AccumulatorKey::get_type_tag(&[not_balance]);
+    let u128_type = U128::get_type_tag();
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, u128_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_field());
+    assert!(move_type.balance_accumulator_field_type_maybe().is_none());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_accumulator_field_wrong_key_module() {
+    // Key from wrong module should not be recognized
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+    let wrong_key_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "wrong_module".parse().unwrap(),
+        name: "Key".parse().unwrap(),
+        type_params: vec![sui_balance],
+    }));
+    let u128_type = U128::get_type_tag();
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(wrong_key_type, u128_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_accumulator_field_wrong_address() {
+    // Key from wrong address should not be recognized
+    use move_core_types::account_address::AccountAddress;
+
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+    let wrong_key_type = TypeTag::Struct(Box::new(StructTag {
+        address: AccountAddress::from_hex_literal("0x999").unwrap(),
+        module: "accumulator".parse().unwrap(),
+        name: "Key".parse().unwrap(),
+        type_params: vec![sui_balance],
+    }));
+    let u128_type = U128::get_type_tag();
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(wrong_key_type, u128_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_accumulator_field_key_with_no_type_params() {
+    // Key<> with no type params should not be recognized
+    let empty_key_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "accumulator".parse().unwrap(),
+        name: "Key".parse().unwrap(),
+        type_params: vec![],
+    }));
+    let u128_type = U128::get_type_tag();
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(empty_key_type, u128_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_accumulator_field_key_with_multiple_type_params() {
+    // Key<Balance<SUI>, ExtraParam> should not be recognized
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+    let extra_param = TypeTag::U64;
+    let key_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "accumulator".parse().unwrap(),
+        name: "Key".parse().unwrap(),
+        type_params: vec![sui_balance, extra_param],
+    }));
+    let u128_type = U128::get_type_tag();
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, u128_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_accumulator_field_non_struct_key() {
+    // Field<u64, U128> should not be recognized as accumulator field
+    let key_type = TypeTag::U64;
+    let u128_type = U128::get_type_tag();
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, u128_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_accumulator_field_with_nested_balance_type() {
+    // Balance<Balance<SUI>> - nested balance should still work correctly
+    let inner_balance = Balance::type_tag(GAS::type_tag());
+    let nested_balance = Balance::type_tag(inner_balance.clone());
+    let key_type = AccumulatorKey::get_type_tag(std::slice::from_ref(&nested_balance));
+    let u128_type = U128::get_type_tag();
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, u128_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    // Should recognize as accumulator field with Balance<Balance<SUI>> as the extracted type
+    assert!(move_type.is_balance_accumulator_field());
+    let extracted = move_type.balance_accumulator_field_type_maybe().unwrap();
+    // The extracted type should be Balance<SUI>, which is the inner type of Balance<Balance<SUI>>
+    assert_eq!(extracted, inner_balance);
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+// ============================================================================
+// Edge Case Tests for Metadata Field Recognition
+// ============================================================================
+
+#[test]
+fn test_metadata_field_mismatched_key_value_types() {
+    // Field<MetadataKey<Balance<SUI>>, Metadata<Balance<CustomToken>>> should NOT be recognized
+    // because the key and value have different type parameters
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+    let custom_token = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "test".parse().unwrap(),
+        name: "CustomToken".parse().unwrap(),
+        type_params: vec![],
+    }));
+    let custom_balance = Balance::type_tag(custom_token);
+
+    let key_type = MetadataKey::get_type_tag(std::slice::from_ref(&sui_balance));
+    let metadata_type = AccumulatorMetadata::get_type_tag(&[custom_balance]);
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, metadata_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    // Should NOT be recognized because type params don't match
+    assert!(!move_type.is_balance_accumulator_metadata_field());
+    assert!(
+        move_type
+            .balance_accumulator_metadata_field_type_maybe()
+            .is_none()
+    );
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_metadata_field_key_not_balance() {
+    // Field<MetadataKey<NotBalance>, Metadata<NotBalance>> should NOT be recognized
+    let not_balance = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "test".parse().unwrap(),
+        name: "NotBalance".parse().unwrap(),
+        type_params: vec![],
+    }));
+
+    let key_type = MetadataKey::get_type_tag(std::slice::from_ref(&not_balance));
+    let metadata_type = AccumulatorMetadata::get_type_tag(&[not_balance]);
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, metadata_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    // Should NOT be recognized because inner type is not Balance<T>
+    assert!(!move_type.is_balance_accumulator_metadata_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_metadata_field_wrong_key_module() {
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+
+    // MetadataKey from wrong module
+    let wrong_key_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "wrong_module".parse().unwrap(),
+        name: "MetadataKey".parse().unwrap(),
+        type_params: vec![sui_balance.clone()],
+    }));
+    let metadata_type = AccumulatorMetadata::get_type_tag(&[sui_balance]);
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(wrong_key_type, metadata_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_metadata_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_metadata_field_wrong_value_module() {
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+
+    let key_type = MetadataKey::get_type_tag(std::slice::from_ref(&sui_balance));
+    // Metadata from wrong module
+    let wrong_metadata_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "wrong_module".parse().unwrap(),
+        name: "Metadata".parse().unwrap(),
+        type_params: vec![sui_balance],
+    }));
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, wrong_metadata_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_metadata_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_metadata_field_key_no_type_params() {
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+
+    // MetadataKey with no type params
+    let key_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "accumulator_metadata".parse().unwrap(),
+        name: "MetadataKey".parse().unwrap(),
+        type_params: vec![],
+    }));
+    let metadata_type = AccumulatorMetadata::get_type_tag(&[sui_balance]);
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, metadata_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_metadata_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_metadata_field_value_no_type_params() {
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+
+    let key_type = MetadataKey::get_type_tag(std::slice::from_ref(&sui_balance));
+    // Metadata with no type params
+    let metadata_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "accumulator_metadata".parse().unwrap(),
+        name: "Metadata".parse().unwrap(),
+        type_params: vec![],
+    }));
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, metadata_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_metadata_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_metadata_field_non_struct_types() {
+    // Field<u64, u64> should not be recognized as metadata field
+    let key_type = TypeTag::U64;
+    let value_type = TypeTag::U64;
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, value_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_metadata_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+// ============================================================================
+// Edge Case Tests for Owner Field Recognition
+// ============================================================================
+
+#[test]
+fn test_owner_field_wrong_key_type() {
+    // Field<WrongKey, AccumulatorOwner> should NOT be recognized
+    let wrong_key = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "test".parse().unwrap(),
+        name: "WrongKey".parse().unwrap(),
+        type_params: vec![],
+    }));
+    let owner_type = AccumulatorOwner::get_type_tag();
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(wrong_key, owner_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_owner_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_owner_field_wrong_value_type() {
+    // Field<OwnerKey, WrongValue> should NOT be recognized
+    let key_type = OwnerKey::get_type_tag();
+    let wrong_value = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "test".parse().unwrap(),
+        name: "WrongValue".parse().unwrap(),
+        type_params: vec![],
+    }));
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, wrong_value);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_owner_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_owner_field_key_with_type_params() {
+    // OwnerKey with unexpected type params should not match
+    let key_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "accumulator_metadata".parse().unwrap(),
+        name: "OwnerKey".parse().unwrap(),
+        type_params: vec![TypeTag::U64], // OwnerKey should have no type params
+    }));
+    let owner_type = AccumulatorOwner::get_type_tag();
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, owner_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_owner_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_owner_field_value_with_type_params() {
+    // AccumulatorOwner with unexpected type params should not match
+    let key_type = OwnerKey::get_type_tag();
+    let owner_type = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "accumulator_metadata".parse().unwrap(),
+        name: "AccumulatorOwner".parse().unwrap(),
+        type_params: vec![TypeTag::U64], // AccumulatorOwner should have no type params
+    }));
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, owner_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_owner_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_owner_field_wrong_address() {
+    use move_core_types::account_address::AccountAddress;
+
+    // OwnerKey from wrong address
+    let key_type = TypeTag::Struct(Box::new(StructTag {
+        address: AccountAddress::from_hex_literal("0x999").unwrap(),
+        module: "accumulator_metadata".parse().unwrap(),
+        name: "OwnerKey".parse().unwrap(),
+        type_params: vec![],
+    }));
+    let owner_type = AccumulatorOwner::get_type_tag();
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, owner_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_owner_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+// ============================================================================
+// Edge Case Tests for Field Structure
+// ============================================================================
+
+#[test]
+fn test_not_a_field_struct() {
+    // A struct that's not a Field should not be recognized
+    let not_field = StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "test".parse().unwrap(),
+        name: "NotField".parse().unwrap(),
+        type_params: vec![],
+    };
+
+    let move_type = MoveObjectType::from(not_field.clone());
+
+    assert!(!move_type.is_balance_accumulator_field());
+    assert!(!move_type.is_balance_accumulator_metadata_field());
+    assert!(!move_type.is_balance_accumulator_owner_field());
+    assert_eq!(StructTag::from(move_type), not_field);
+}
+
+#[test]
+fn test_field_with_one_type_param() {
+    // Field<T> with only one type param should not be recognized
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+    let key_type = AccumulatorKey::get_type_tag(&[sui_balance]);
+
+    let field_type = StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "dynamic_field".parse().unwrap(),
+        name: "Field".parse().unwrap(),
+        type_params: vec![key_type], // Only one type param
+    };
+
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_field_with_three_type_params() {
+    // Field<K, V, Extra> with three type params should not be recognized
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+    let key_type = AccumulatorKey::get_type_tag(&[sui_balance]);
+    let u128_type = U128::get_type_tag();
+
+    let field_type = StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "dynamic_field".parse().unwrap(),
+        name: "Field".parse().unwrap(),
+        type_params: vec![key_type, u128_type, TypeTag::U64], // Three type params
+    };
+
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_field_from_wrong_module() {
+    // Field from wrong module should not be recognized
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+    let key_type = AccumulatorKey::get_type_tag(&[sui_balance]);
+    let u128_type = U128::get_type_tag();
+
+    let field_type = StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "wrong_module".parse().unwrap(),
+        name: "Field".parse().unwrap(),
+        type_params: vec![key_type, u128_type],
+    };
+
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(!move_type.is_balance_accumulator_field());
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+// ============================================================================
+// Tests for MoveObjectType::is() method
+// ============================================================================
+
+#[test]
+fn test_is_method_sui_balance_accumulator_field() {
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+    let key_type = AccumulatorKey::get_type_tag(&[sui_balance]);
+    let u128_type = U128::get_type_tag();
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, u128_type);
+
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    // is() should return true for the same struct tag
+    assert!(move_type.is(&field_type));
+
+    // is() should return false for a different struct tag
+    let different_field = DynamicFieldInfo::dynamic_field_type(TypeTag::U64, TypeTag::U64);
+    assert!(!move_type.is(&different_field));
+
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_is_method_non_sui_balance_accumulator_field() {
+    let custom_token = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: "test".parse().unwrap(),
+        name: "CustomToken".parse().unwrap(),
+        type_params: vec![],
+    }));
+    let custom_balance = Balance::type_tag(custom_token.clone());
+    let key_type = AccumulatorKey::get_type_tag(&[custom_balance]);
+    let u128_type = U128::get_type_tag();
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, u128_type);
+
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(move_type.is(&field_type));
+
+    // Should not match SUI accumulator field
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+    let sui_key_type = AccumulatorKey::get_type_tag(&[sui_balance]);
+    let sui_field_type = DynamicFieldInfo::dynamic_field_type(sui_key_type, U128::get_type_tag());
+    assert!(!move_type.is(&sui_field_type));
+
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_is_method_metadata_field() {
+    let sui_balance = Balance::type_tag(GAS::type_tag());
+    let key_type = MetadataKey::get_type_tag(std::slice::from_ref(&sui_balance));
+    let metadata_type = AccumulatorMetadata::get_type_tag(&[sui_balance]);
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, metadata_type);
+
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(move_type.is(&field_type));
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+#[test]
+fn test_is_method_owner_field() {
+    let key_type = OwnerKey::get_type_tag();
+    let owner_type = AccumulatorOwner::get_type_tag();
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, owner_type);
+
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(move_type.is(&field_type));
+    assert_eq!(StructTag::from(move_type), field_type);
+}
+
+// ============================================================================
+// Tests for complex/nested type parameters
+// ============================================================================
+
+#[test]
+fn test_balance_with_generic_type_param() {
+    // Balance<vector<u8>> as the inner token type
+    let vector_u8 = TypeTag::Vector(Box::new(TypeTag::U8));
+    let balance_of_vector = Balance::type_tag(vector_u8.clone());
+    let key_type = AccumulatorKey::get_type_tag(&[balance_of_vector]);
+    let u128_type = U128::get_type_tag();
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, u128_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(move_type.is_balance_accumulator_field());
+    let extracted = move_type.balance_accumulator_field_type_maybe().unwrap();
+    assert_eq!(extracted, vector_u8);
+
+    // Round-trip
+    let reconstructed: StructTag = move_type.into();
+    assert_eq!(reconstructed, field_type);
+}
+
+#[test]
+fn test_metadata_with_generic_type_param() {
+    // Metadata field with Balance<vector<u8>> as inner type
+    let vector_u8 = TypeTag::Vector(Box::new(TypeTag::U8));
+    let balance_of_vector = Balance::type_tag(vector_u8.clone());
+    let key_type = MetadataKey::get_type_tag(std::slice::from_ref(&balance_of_vector));
+    let metadata_type = AccumulatorMetadata::get_type_tag(&[balance_of_vector]);
+
+    let field_type = DynamicFieldInfo::dynamic_field_type(key_type, metadata_type);
+    let move_type = MoveObjectType::from(field_type.clone());
+
+    assert!(move_type.is_balance_accumulator_metadata_field());
+    let extracted = move_type
+        .balance_accumulator_metadata_field_type_maybe()
+        .unwrap();
+    assert_eq!(extracted, vector_u8);
+
+    // Round-trip
+    let reconstructed: StructTag = move_type.into();
+    assert_eq!(reconstructed, field_type);
+}

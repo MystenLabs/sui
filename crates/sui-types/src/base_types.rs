@@ -8,9 +8,8 @@ use crate::MoveTypeTagTraitGeneric;
 use crate::SUI_CLOCK_OBJECT_ID;
 use crate::SUI_FRAMEWORK_ADDRESS;
 use crate::SUI_SYSTEM_ADDRESS;
-use crate::accumulator_root::extract_balance_type_from_field;
-use crate::accumulator_root::is_balance_accumulator_field;
-use crate::accumulator_root::is_balance_accumulator_metadata_field;
+use crate::accumulator_root::accumulator_metadata_balance_type_maybe;
+use crate::accumulator_root::accumulator_value_balance_type_maybe;
 use crate::accumulator_root::is_balance_accumulator_owner_field;
 use crate::balance::Balance;
 use crate::coin::COIN_MODULE_NAME;
@@ -659,27 +658,24 @@ impl MoveObjectType {
             MoveObjectType_::Coin(inner) => {
                 Coin::is_coin(s) && s.type_params.len() == 1 && inner == &s.type_params[0]
             }
-            MoveObjectType_::SuiBalanceAccumulatorField => {
-                is_balance_accumulator_field(s)
-                    && extract_balance_type_from_field(s)
-                        .map(|t| GAS::is_gas_type(&t))
-                        .unwrap_or(false)
-            }
+            MoveObjectType_::SuiBalanceAccumulatorField => accumulator_value_balance_type_maybe(s)
+                .map(|t| GAS::is_gas_type(&t))
+                .unwrap_or(false),
             MoveObjectType_::BalanceAccumulatorField(inner) => {
-                is_balance_accumulator_field(s)
-                    && extract_balance_type_from_field(s)
-                        .map(|t| &t == inner)
-                        .unwrap_or(false)
+                accumulator_value_balance_type_maybe(s)
+                    .map(|t| &t == inner)
+                    .unwrap_or(false)
             }
             MoveObjectType_::BalanceAccumulatorOwnerField => is_balance_accumulator_owner_field(s),
             MoveObjectType_::SuiBalanceAccumulatorMetadataField => {
-                is_balance_accumulator_metadata_field(s)
+                accumulator_metadata_balance_type_maybe(s)
+                    .map(|t| GAS::is_gas_type(&t))
+                    .unwrap_or(false)
             }
             MoveObjectType_::BalanceAccumulatorMetadataField(inner) => {
-                is_balance_accumulator_metadata_field(s)
-                    && extract_balance_type_from_field(s)
-                        .map(|t| &t == inner)
-                        .unwrap_or(false)
+                accumulator_metadata_balance_type_maybe(s)
+                    .map(|t| &t == inner)
+                    .unwrap_or(false)
             }
             MoveObjectType_::Other(o) => s == o,
         }
@@ -759,27 +755,17 @@ impl From<StructTag> for MoveObjectType {
             MoveObjectType_::Coin(s.type_params.pop().unwrap())
         } else if StakedSui::is_staked_sui(&s) {
             MoveObjectType_::StakedSui
-        } else if is_balance_accumulator_field(&s) {
-            if let Some(balance_type) = extract_balance_type_from_field(&s) {
-                if GAS::is_gas_type(&balance_type) {
-                    MoveObjectType_::SuiBalanceAccumulatorField
-                } else {
-                    MoveObjectType_::BalanceAccumulatorField(balance_type)
-                }
+        } else if let Some(balance_type) = accumulator_value_balance_type_maybe(&s) {
+            if GAS::is_gas_type(&balance_type) {
+                MoveObjectType_::SuiBalanceAccumulatorField
             } else {
-                MoveObjectType_::Other(s)
+                MoveObjectType_::BalanceAccumulatorField(balance_type)
             }
-        } else if is_balance_accumulator_metadata_field(&s) {
-            // extract_balance_type_from_field works for metadata fields too
-            // since MetadataKey<Balance<T>> is the first type param
-            if let Some(balance_type) = extract_balance_type_from_field(&s) {
-                if GAS::is_gas_type(&balance_type) {
-                    MoveObjectType_::SuiBalanceAccumulatorMetadataField
-                } else {
-                    MoveObjectType_::BalanceAccumulatorMetadataField(balance_type)
-                }
+        } else if let Some(balance_type) = accumulator_metadata_balance_type_maybe(&s) {
+            if GAS::is_gas_type(&balance_type) {
+                MoveObjectType_::SuiBalanceAccumulatorMetadataField
             } else {
-                MoveObjectType_::Other(s)
+                MoveObjectType_::BalanceAccumulatorMetadataField(balance_type)
             }
         } else if is_balance_accumulator_owner_field(&s) {
             MoveObjectType_::BalanceAccumulatorOwnerField
