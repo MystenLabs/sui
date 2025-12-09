@@ -10,8 +10,7 @@ use sui_indexer_alt_reader::{displays::DisplayKey, pg_reader::PgReader};
 use sui_types::{
     TypeTag,
     display::DisplayVersionUpdatedEvent,
-    object::option_visitor as OV,
-    rpc_visitor::{Error as RpcVisitorError, RpcVisitor, Writer},
+    object::{option_visitor as OV, rpc_visitor as RV},
 };
 use tokio::join;
 
@@ -168,7 +167,7 @@ impl JsonVisitor {
         A::MoveValue::visit_deserialize(
             bytes,
             layout,
-            &mut RpcVisitor::new(JsonWriter {
+            &mut RV::RpcVisitor::new(JsonWriter {
                 size_budget: &mut self.size_budget,
                 depth_budget: self.depth_budget,
             }),
@@ -187,7 +186,7 @@ impl JsonWriter<'_> {
     }
 }
 
-impl Writer for JsonWriter<'_> {
+impl RV::Writer for JsonWriter<'_> {
     type Value = serde_json::Value;
     type Error = VisitorError;
 
@@ -273,8 +272,8 @@ impl From<OV::Error> for VisitorError {
     }
 }
 
-impl From<RpcVisitorError> for VisitorError {
-    fn from(RpcVisitorError: RpcVisitorError) -> Self {
+impl From<RV::Error> for VisitorError {
+    fn from(RV::Error: RV::Error) -> Self {
         VisitorError::UnexpectedType
     }
 }
