@@ -235,8 +235,8 @@ Response: {
           "value": {
             "contents": {
               "json": {
-                "balance": "400",
-                "id": "0x0f2d32a189efcae946d101c5509af627064de789464474f739a01d608a869ae3"
+                "id": "0x0f2d32a189efcae946d101c5509af627064de789464474f739a01d608a869ae3",
+                "balance": "400"
               }
             }
           }
@@ -245,8 +245,8 @@ Response: {
           "value": {
             "contents": {
               "json": {
-                "balance": "500",
-                "id": "0x7ee5219638e8523079f53a0a15b1cd5f922aad78baf3f6bc7668deb76f9e7a82"
+                "id": "0x7ee5219638e8523079f53a0a15b1cd5f922aad78baf3f6bc7668deb76f9e7a82",
+                "balance": "500"
               }
             }
           }
@@ -256,8 +256,8 @@ Response: {
             "value": {
               "contents": {
                 "json": {
-                  "balance": "400",
-                  "id": "0x0f2d32a189efcae946d101c5509af627064de789464474f739a01d608a869ae3"
+                  "id": "0x0f2d32a189efcae946d101c5509af627064de789464474f739a01d608a869ae3",
+                  "balance": "400"
                 }
               }
             }
@@ -266,8 +266,8 @@ Response: {
             "value": {
               "contents": {
                 "json": {
-                  "balance": "500",
-                  "id": "0x7ee5219638e8523079f53a0a15b1cd5f922aad78baf3f6bc7668deb76f9e7a82"
+                  "id": "0x7ee5219638e8523079f53a0a15b1cd5f922aad78baf3f6bc7668deb76f9e7a82",
+                  "balance": "500"
                 }
               }
             }
@@ -280,8 +280,8 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "balance": "400",
-              "id": "0x0f2d32a189efcae946d101c5509af627064de789464474f739a01d608a869ae3"
+              "id": "0x0f2d32a189efcae946d101c5509af627064de789464474f739a01d608a869ae3",
+              "balance": "400"
             }
           }
         }
@@ -290,8 +290,8 @@ Response: {
         "value": {
           "contents": {
             "json": {
-              "balance": "500",
-              "id": "0x7ee5219638e8523079f53a0a15b1cd5f922aad78baf3f6bc7668deb76f9e7a82"
+              "id": "0x7ee5219638e8523079f53a0a15b1cd5f922aad78baf3f6bc7668deb76f9e7a82",
+              "balance": "500"
             }
           }
         }
@@ -301,8 +301,8 @@ Response: {
           "value": {
             "contents": {
               "json": {
-                "balance": "400",
-                "id": "0x0f2d32a189efcae946d101c5509af627064de789464474f739a01d608a869ae3"
+                "id": "0x0f2d32a189efcae946d101c5509af627064de789464474f739a01d608a869ae3",
+                "balance": "400"
               }
             }
           }
@@ -311,8 +311,8 @@ Response: {
           "value": {
             "contents": {
               "json": {
-                "balance": "500",
-                "id": "0x7ee5219638e8523079f53a0a15b1cd5f922aad78baf3f6bc7668deb76f9e7a82"
+                "id": "0x7ee5219638e8523079f53a0a15b1cd5f922aad78baf3f6bc7668deb76f9e7a82",
+                "balance": "500"
               }
             }
           }
