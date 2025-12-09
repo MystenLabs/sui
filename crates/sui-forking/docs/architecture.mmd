@@ -1,0 +1,82 @@
+graph TB
+    subgraph "CLI Layer"
+        CLI["Sui CLI Extension<br/>• sui fork<br/>• sui move test --fork<br/>• sui fork advance-*"]
+    end
+
+    subgraph "Core Components"
+        subgraph "Coordinator Module"
+            Coord["Coordinator<br/>• Request orchestration<br/>• State management<br/>• Transaction interception"]
+            TxInterceptor["Transaction Interceptor<br/>• Analyze tx dependencies<br/>• Identify required objects<br/>• Pre-fetch validation"]
+            StateManager["State Manager<br/>• Track local checkpoint<br/>• Track epoch/clock<br/>• Sync state"]
+        end
+
+        subgraph "Data Store Module"
+            DataStore["Object Store<br/>• LRU cache<br/>• Object indexing<br/>• Lazy loading"]
+            GraphQLClient["GraphQL Client<br/>• Batch requests<br/>• Retry logic<br/>• Network abstraction"]
+            CacheManager["Cache Manager<br/>• Disk persistence<br/>• Memory cache<br/>• TTL management"]
+        end
+
+        subgraph "Network Module"
+            ForkingNetwork["Forking Network<br/>• Lock-step executor<br/>• No validators<br/>• Sequential tx processing"]
+            CheckpointManager["Checkpoint Manager<br/>• Create checkpoints<br/>• Advance manually<br/>• Track history"]
+            ClockManager["Clock Manager<br/>• Advance clock<br/>• Track timestamps"]
+            EpochManager["Epoch Manager<br/>• Advance epochs<br/>• Track epoch state"]
+        end
+
+        subgraph "RPC Server"
+            RPCServer["JSON-RPC Server<br/>• Port 8123 default<br/>• Sui-compatible API<br/>• Transaction submission"]
+            WebSocketServer["WebSocket Server<br/>• Event streaming<br/>• State updates"]
+        end
+    end
+
+    subgraph "External Dependencies"
+        ActualNetwork["Sui Network<br/>(Mainnet/Testnet/Devnet)"]
+        SimulacrumLib["simulacrum crate<br/>• Lock-step execution<br/>• State management"]
+        SuiTypes["sui-types crate<br/>• Transaction types<br/>• Object types"]
+        SuiSDK["sui-sdk crate<br/>• RPC client<br/>• Transaction builder"]
+    end
+
+    subgraph "Storage"
+        LocalDB["Local Database<br/>• RocksDB/SQLite<br/>• Object storage<br/>• Checkpoint data"]
+        ConfigFile["Config File<br/>• Network settings<br/>• Cache settings<br/>• Port configuration"]
+    end
+
+    %% CLI connections
+    CLI --> Coord
+    CLI --> RPCServer
+
+    %% Coordinator connections
+    Coord --> TxInterceptor
+    Coord --> StateManager
+    TxInterceptor --> DataStore
+    StateManager --> ForkingNetwork
+
+    %% Data Store connections
+    DataStore --> GraphQLClient
+    DataStore --> CacheManager
+    GraphQLClient --> ActualNetwork
+    CacheManager --> LocalDB
+
+    %% Network Module connections
+    ForkingNetwork --> CheckpointManager
+    ForkingNetwork --> ClockManager
+    ForkingNetwork --> EpochManager
+    ForkingNetwork --> SimulacrumLib
+
+    %% RPC connections
+    RPCServer --> Coord
+    WebSocketServer --> StateManager
+
+    %% External dependencies
+    Coord --> SuiTypes
+    Coord --> SuiSDK
+    ForkingNetwork --> SuiTypes
+
+    %% Configuration
+    Coord --> ConfigFile
+    CacheManager --> ConfigFile
+
+    style CLI fill:#e1f5fe
+    style ActualNetwork fill:#fff3e0
+    style LocalDB fill:#f3e5f5
+    style ConfigFile fill:#f3e5f5

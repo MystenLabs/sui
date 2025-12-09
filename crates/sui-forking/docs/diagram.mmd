@@ -1,0 +1,30 @@
+graph TB
+    subgraph "Sui Forking Tool"
+        Coordinator["Coordinator<br/>• Initializes local network<br/>• Intercepts transaction requests<br/>• Ensures object availability<br/>• Advances checkpoints"]
+        
+        DataStore["Data Store<br/>• Downloads objects via GraphQL RPC<br/>• Caches objects locally<br/>• Fetches on-demand"]
+        
+        Simulacrum["Simulacrum<br/>• Runs local Sui network<br/>• Lock-step mode execution<br/>• No validators<br/>• One transaction at a time"]
+    end
+    
+    subgraph "External"
+        Network["Actual Sui Network<br/>(Mainnet/Testnet/Devnet)"]
+        Developer["Developer"]
+    end
+    
+    Developer -->|"sui fork commands"| Coordinator
+    Coordinator <-->|"Coordinate execution"| Simulacrum
+    Coordinator <-->|"Request objects"| DataStore
+    DataStore <-->|"GraphQL RPC<br/>Download objects"| Network
+    
+    subgraph "Related Crates"
+        Replay["../sui-replay-2"]
+        SimCrate["../simulacrum/"]
+        Types["../sui-types"]
+        SDK["../sui-sdk"]
+    end
+    
+    DataStore -.->|"Similar to"| Replay
+    Simulacrum -.->|"Extends"| SimCrate
+    Coordinator -.->|"Uses"| Types
+    Coordinator -.->|"Uses"| SDK

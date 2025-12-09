@@ -49,7 +49,6 @@ pub(crate) async fn start_rpc(
         cancel.child_token(),
     )
     .await?;
-    // let mut rpc = RpcService::new(RpcArgs::default(), &registry, cancel.clone()).unwrap();
     rpc.add_module(read::Read {
         simulacrum: simulacrum.clone(),
         protocol_version,
