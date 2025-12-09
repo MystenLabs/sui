@@ -613,7 +613,8 @@ pub struct CheckpointTransactionContents {
     pub digest: ExecutionDigests,
 
     /// Each signature is paired with the version of the AddressAliases object
-    /// that was used to verify it.
+    /// that was used to verify it. Signatures always appear here in the same
+    /// order as the `required_signers` of the input `Transaction`.
     pub user_signatures: Vec<(GenericSignature, Option<SequenceNumber>)>,
 }
 
