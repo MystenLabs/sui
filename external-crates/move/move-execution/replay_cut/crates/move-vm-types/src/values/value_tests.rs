@@ -10,6 +10,7 @@ use move_core_types::{account_address::AccountAddress, runtime_value, u256::U256
 const SIZE_CONFIG: SizeConfig = SizeConfig {
     traverse_references: false,
     include_vector_size: false,
+    fine_grained_value_size: false,
 };
 
 #[test]
