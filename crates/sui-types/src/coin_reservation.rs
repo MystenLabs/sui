@@ -9,8 +9,8 @@
 //!
 //!    (ObjectID, SequenceNumber, ObjectDigest)
 //!
-//! The ObjectID points to an on-chain object which identifies the type of the address balance.
-//! (e.g. SUI, USDC, etc.).
+//! The ObjectID points to an accumulator object (i.e. a dynamic field of the accumulator root object).
+//! This identifies both the owner and type (e.g. SUI, USDC, etc) of the balance being spent.
 //!
 //! It is masked by XORing with the current chain identifier (i.e. genesis checkpoint digest).
 //! This prevents cross-chain replay, as an attacker would have to mine an address and currency
