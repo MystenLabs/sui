@@ -807,6 +807,123 @@ exports.returnNotests = (source) => {
     .replace(/\{\{plugin-removed-test\}\}\s*/gm, "");
 };
 
+exports.returnTests = (source, testName) => {
+  if (!testName) return source;
+
+  const testNames = testName.split(",").map((name) => name.trim());
+  const results = [];
+
+  for (const name of testNames) {
+    // Regex to match test blocks with the specified name
+    // Supports: test('name', ...), test("name", ...), it('name', ...), it("name", ...)
+    const testRegex = new RegExp(
+      `(?:test|it)\\s*\\(\\s*['"\`]([^'"\`]*${escapeRegex(name)}[^'"\`]*)['"\`]\\s*,\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>\\s*\\{`,
+      "g",
+    );
+
+    let match;
+    while ((match = testRegex.exec(source)) !== null) {
+      const startIndex = match.index;
+      const testBlock = extractTestBlock(source, startIndex);
+
+      if (testBlock) {
+        results.push(testBlock);
+      }
+    }
+  }
+
+  if (results.length === 0) {
+    return `// Test "${testName}" not found`;
+  }
+
+  return results.join("\n\n");
+};
+
+function extractTestBlock(content, startIndex) {
+  let braceCount = 0;
+  let inString = false;
+  let stringChar = "";
+  let escaped = false;
+  let blockStart = -1;
+  let blockEnd = -1;
+
+  for (let i = startIndex; i < content.length; i++) {
+    const char = content[i];
+
+    // Handle escape sequences
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+
+    // Handle strings
+    if (!inString && (char === '"' || char === "'" || char === "`")) {
+      inString = true;
+      stringChar = char;
+      continue;
+    }
+
+    if (inString && char === stringChar) {
+      inString = false;
+      stringChar = "";
+      continue;
+    }
+
+    // Only count braces outside of strings
+    if (!inString) {
+      if (char === "{") {
+        if (braceCount === 0) {
+          blockStart = i;
+        }
+        braceCount++;
+      } else if (char === "}") {
+        braceCount--;
+        if (braceCount === 0 && blockStart !== -1) {
+          blockEnd = i + 1;
+          break;
+        }
+      }
+    }
+  }
+
+  if (blockStart !== -1 && blockEnd !== -1) {
+    // Find the beginning of the test line
+    let lineStart = startIndex;
+    while (lineStart > 0 && content[lineStart - 1] !== "\n") {
+      lineStart--;
+    }
+
+    // Extract from the start of the line to the end of the block
+    let finalEnd = blockEnd;
+
+    // Include the closing semicolon and parenthesis if present
+    while (finalEnd < content.length && /[\s);]/.test(content[finalEnd])) {
+      if (content[finalEnd] === ";") {
+        finalEnd++;
+        break;
+      }
+      if (content[finalEnd] === ")") {
+        finalEnd++;
+        // Check for semicolon after closing paren
+        if (finalEnd < content.length && content[finalEnd] === ";") {
+          finalEnd++;
+        }
+        break;
+      }
+      finalEnd++;
+    }
+
+    return removeLeadingSpaces(content.substring(lineStart, finalEnd));
+  }
+
+  return null;
+}
+
 exports.highlightLine = (source, highlightTerm) => {
   const lines = source.split("\n");
   const matchingLines = lines

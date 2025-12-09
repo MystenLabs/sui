@@ -52,6 +52,7 @@ type Props = {
   module?: string;
   component?: string;
   dep?: string;
+  test?: string; // target test blocks
   highlight?: string;
   noComments?: boolean; // if included, remove ALL code comments
   noTests?: boolean; // if included, don't include tests
@@ -81,6 +82,7 @@ export default function ImportContent({
   module,
   dep,
   component,
+  test,
   highlight,
   style,
   org,
@@ -254,6 +256,10 @@ export default function ImportContent({
 
   if (dep) {
     out = utils.returnDeps(out, dep);
+  }
+
+  if (test) {
+    out = utils.returnTests(out, test);
   }
 
   out = out.replace(/^\s*\/\/\s*docs::\/?.*\r?$\n?/gm, ""); // remove all docs:: style comments
