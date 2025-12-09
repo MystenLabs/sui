@@ -20,7 +20,7 @@ use rand::rngs::OsRng;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
 use sui_framework_snapshot::load_bytecode_snapshot;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
@@ -173,6 +173,51 @@ where
             .with_accounts(account_configs)
             .build();
         Self::new_with_network_config_in_mem(&config, rng)
+    }
+
+    pub fn new_with_protocol_version_and_chain_override(
+        mut rng: R,
+        protocol_version: ProtocolVersion,
+        chain: Chain,
+    ) -> Self {
+        let config = ConfigBuilder::new_with_temp_dir()
+            .rng(&mut rng)
+            .with_chain_start_timestamp_ms(1)
+            .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
+            .with_protocol_version(protocol_version)
+            .with_chain_override(chain)
+            .build();
+        Self::new_with_network_config_in_mem(&config, rng)
+    }
+
+    /// Create a new Simulacrum instance with a specific genesis and store.
+    pub fn new_from_genesis_and_custom_store(
+        genesis: &genesis::Genesis,
+        mut rng: R,
+        protocol_version: ProtocolVersion,
+        chain: Chain,
+    ) -> Self {
+        let network_config = ConfigBuilder::new_with_temp_dir()
+            .rng(&mut rng)
+            .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
+            .with_protocol_version(protocol_version)
+            .with_chain_override(chain)
+            .build();
+        let keystore = KeyStore::from_network_config(&network_config);
+        let checkpoint_builder = MockCheckpointBuilder::new(genesis.checkpoint());
+        let epoch_state = EpochState::new(genesis.sui_system_object());
+        let store = InMemoryStore::new(&genesis);
+        Self {
+            rng,
+            keystore,
+            genesis: genesis.clone(),
+            store,
+            checkpoint_builder,
+            epoch_state,
+            deny_config: TransactionDenyConfig::default(),
+            data_ingestion_path: None,
+            verifier_signing_config: VerifierSigningConfig::default(),
+        }
     }
 
     fn new_with_network_config_in_mem(config: &NetworkConfig, rng: R) -> Self {

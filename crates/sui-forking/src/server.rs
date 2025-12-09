@@ -51,7 +51,14 @@ impl AppState {
         protocol_version: u64,
         protocol_config: ProtocolConfig,
     ) -> Self {
-        let mut simulacrum = Simulacrum::new_with_protocol_version(OsRng, protocol_version.into());
+        let genesis = get_genesis_for_chain(chain).await;
+        let mut simulacrum = Simulacrum::new_from_genesis_and_custom_store(
+            &genesis,
+            OsRng,
+            protocol_version.into(),
+            chain,
+        );
+
         simulacrum.set_data_ingestion_path(data_ingestion_path);
         let simulacrum = Arc::new(RwLock::new(simulacrum));
         let rpc = start_rpc(simulacrum.clone(), protocol_version, chain, database_url)
@@ -215,14 +222,17 @@ async fn execute_tx(
 
 /// Start the forking server
 pub async fn start_server(
+    chain: Chain,
+    checkpoint: Option<u64>,
     host: String,
     port: u16,
     data_ingestion_path: PathBuf,
     version: &'static str,
 ) -> Result<()> {
-    let client = GraphQLClient::new("https://graphql.mainnet.sui.io/graphql".to_string());
-    let protocol_version = client.fetch_protocol_version(0).await?;
-    let protocol_config = ProtocolConfig::get_for_version(protocol_version.into(), Mainnet);
+    let chain_str = chain.as_str();
+    let client = GraphQLClient::new(format!("https://graphql.{chain_str}.sui.io/graphql"));
+    let protocol_version = client.fetch_protocol_version(checkpoint).await?;
+    let protocol_config = ProtocolConfig::get_for_version(protocol_version.into(), chain);
     let data_ingestion_path_clone = data_ingestion_path.clone();
     let database_url =
         reqwest::Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")?;
@@ -237,7 +247,7 @@ pub async fn start_server(
         AppState::new(
             data_ingestion_path_clone.clone(),
             database_url,
-            Mainnet,
+            chain,
             protocol_version,
             protocol_config,
         )
@@ -286,6 +296,7 @@ async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> 
 
 use diesel::pg::PgConnection;
 use reqwest::Url;
+use sui_config::genesis::Genesis;
 
 fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Connect to the 'postgres' database (not your target database)
@@ -299,4 +310,28 @@ fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> 
     diesel::sql_query("CREATE DATABASE sui_indexer_alt").execute(&mut conn)?;
 
     Ok(())
+}
+
+async fn get_genesis_for_chain(chain: Chain) -> Genesis {
+    let url = match chain {
+        Chain::Mainnet => {
+            "https://github.com/MystenLabs/sui-genesis/raw/refs/heads/main/mainnet/genesis.blob"
+        }
+        Chain::Testnet => {
+            "https://github.com/MystenLabs/sui-genesis/raw/refs/heads/main/testnet/genesis.blob"
+        }
+        _ => {
+            panic!("Unsupported chain for genesis retrieval");
+        }
+    };
+
+    let response = reqwest::get(url)
+        .await
+        .expect("Failed to fetch genesis blob");
+    let bytes = response
+        .bytes()
+        .await
+        .expect("Failed to read genesis blob bytes");
+    let genesis: Genesis = bcs::from_bytes(&bytes).expect("Failed to deserialize genesis blob");
+    genesis
 }

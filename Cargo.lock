@@ -14498,7 +14498,7 @@ dependencies = [
 
 [[package]]
 name = "sui-forking"
-version = "1.61.0"
+version = "1.63.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14520,6 +14520,7 @@ dependencies = [
  "serde",
  "serde_json",
  "simulacrum",
+ "sui-config",
  "sui-indexer-alt",
  "sui-indexer-alt-consistent-store",
  "sui-indexer-alt-framework",

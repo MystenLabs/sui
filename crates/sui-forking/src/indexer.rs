@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use sui_indexer_alt::{config::IndexerConfig as IndexerAltConfig, setup_indexer};
 use sui_indexer_alt_framework::{
     IndexerArgs,
-    ingestion::{self, ClientArgs},
+    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
 };
 use sui_pg_db::DbArgs;
 use tokio::task::JoinHandle;
@@ -25,7 +25,10 @@ impl IndexerConfig {
     /// indexer configurations are set to their default values.
     pub fn new(database_url: Url, data_ingestion_path: PathBuf) -> Self {
         let client_args = ClientArgs {
-            local_ingestion_path: Some(data_ingestion_path),
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(data_ingestion_path),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -69,13 +72,11 @@ pub(crate) async fn start_indexer(
     .await?;
 
     let pipelines: Vec<_> = indexer.pipelines().collect();
-    // tokio::spawn(async move {
     let _ = indexer
         .run()
         .await
         .context("Failed to start indexer")
         .unwrap();
-    // });
 
     Ok(())
 }

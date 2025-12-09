@@ -1,5 +1,6 @@
 mod commands;
 mod consistent_store;
+mod forking_store;
 mod graphql;
 mod indexer;
 mod rpc;
@@ -8,7 +9,7 @@ mod server;
 mod types;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use tracing::info;
 
 use crate::commands::{Args, Commands};
@@ -22,6 +23,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use sui_indexer_alt_consistent_store::config::ServiceConfig;
 use sui_pg_db::DbArgs;
+use sui_types::supported_protocol_versions::Chain;
 
 // Define the `GIT_REVISION` const
 bin_version::git_revision!();
@@ -87,6 +89,14 @@ async fn main() -> Result<()> {
                 )
             };
             let graphql_endpoint = Network::from_str(&network)?;
+            let chain = match network.as_str() {
+                "mainnet" => Chain::Mainnet,
+                "testnet" => Chain::Testnet,
+                "devnet" => Chain::Unknown,
+                _ => {
+                    panic!("Unsupported network: {}", network);
+                }
+            };
 
             let mut seeds = vec![];
             for addr in accounts.accounts.iter() {
@@ -96,7 +106,7 @@ async fn main() -> Result<()> {
             info!("Downloaded seeds for {} accounts", accounts.accounts.len());
             info!("Starting forking server...");
             let data_ingestion_path = mysten_common::tempdir().unwrap().keep();
-            start_server(host, port, data_ingestion_path, VERSION).await?
+            start_server(chain, checkpoint, host, port, data_ingestion_path, VERSION).await?
         }
         Commands::AdvanceCheckpoint { server_url } => {
             send_command(&server_url, "advance-checkpoint", None).await?

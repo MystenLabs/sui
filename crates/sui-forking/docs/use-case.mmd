@@ -1,0 +1,45 @@
+sequenceDiagram
+    participant Dev as Developer
+    participant CLI as CLI
+    participant Coord as Coordinator
+    participant DS as Data Store
+    participant Sim as Simulacrum
+    participant Net as Sui Network
+    
+    Note over Dev,Net: Basic Fork and Test Workflow
+    
+    Dev->>CLI: sui fork --checkpoint 100 --network testnet
+    CLI->>Coord: Initialize fork at checkpoint 100
+    Coord->>DS: Request initial objects/packages
+    DS->>DS: Check cache
+    alt Objects not in cache
+        DS->>Net: Download via GraphQL RPC
+        Net-->>DS: Return objects
+    end
+    DS-->>Coord: Return objects
+    Coord->>Sim: Start local network with objects
+    Sim-->>Coord: Network ready on port 8123
+    Coord-->>Dev: Local fork ready
+    
+    Note over Dev,Net: Execute Transaction
+    Dev->>CLI: Execute transaction
+    CLI->>Coord: Transaction request
+    Coord->>DS: Check required objects
+    DS->>DS: Check cache
+    alt Missing objects
+        DS->>Net: Fetch missing objects
+        Net-->>DS: Return objects
+    end
+    DS-->>Coord: Objects ready
+    Coord->>Sim: Execute transaction
+    Sim->>Sim: Execute in lock-step mode
+    Sim->>Sim: Create checkpoint
+    Sim-->>Coord: Transaction result
+    Coord-->>Dev: Transaction completed
+    
+    Note over Dev,Net: Manual Checkpoint Advance
+    Dev->>CLI: sui fork advance-checkpoint
+    CLI->>Coord: Advance checkpoint
+    Coord->>Sim: Increment checkpoint
+    Sim-->>Coord: Checkpoint advanced
+    Coord-->>Dev: New checkpoint confirmed

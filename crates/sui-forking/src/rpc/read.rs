@@ -13,7 +13,7 @@ use sui_types::{
     digests::ChainIdentifier,
     quorum_driver_types::ExecuteTransactionRequestType,
     sui_serde::BigInt,
-    supported_protocol_versions::{Chain, ProtocolConfig},
+    supported_protocol_versions::{self, Chain, ProtocolConfig},
     transaction::{Transaction, TransactionData},
 };
 
@@ -40,7 +40,7 @@ pub trait ReadApi {
 pub(crate) struct Read {
     pub simulacrum: Arc<RwLock<Simulacrum>>,
     pub protocol_version: u64,
-    pub chain: sui_types::supported_protocol_versions::Chain,
+    pub chain: Chain,
 }
 
 impl Read {
