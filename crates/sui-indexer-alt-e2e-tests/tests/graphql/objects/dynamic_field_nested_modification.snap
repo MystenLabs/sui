@@ -76,8 +76,8 @@ Response: {
                     "version": 4,
                     "contents": {
                       "json": {
-                        "c": "0",
-                        "id": "0xea7894d5a6d99889e836c789b18a705f48238e260d56a5e3301a9f9936a3888d"
+                        "id": "0xea7894d5a6d99889e836c789b18a705f48238e260d56a5e3301a9f9936a3888d",
+                        "c": "0"
                       }
                     }
                   }
@@ -105,8 +105,8 @@ Response: {
                     "version": 5,
                     "contents": {
                       "json": {
-                        "c": "1",
-                        "id": "0xea7894d5a6d99889e836c789b18a705f48238e260d56a5e3301a9f9936a3888d"
+                        "id": "0xea7894d5a6d99889e836c789b18a705f48238e260d56a5e3301a9f9936a3888d",
+                        "c": "1"
                       }
                     }
                   }

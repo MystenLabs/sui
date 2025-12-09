@@ -36,8 +36,8 @@ Response: {
             "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::DenyCapV2<0x40024e8b584dc2d1b5e8b2800c7dc4286587845782f66097b7f79065569f215c::fake::FAKE>"
           },
           "json": {
-            "allow_global_pause": false,
-            "id": "0x5f67cd758747f2deb003590ea5aa0e00fa6e73934a222f66ba8f11c98f9b8357"
+            "id": "0x5f67cd758747f2deb003590ea5aa0e00fa6e73934a222f66ba8f11c98f9b8357",
+            "allow_global_pause": false
           }
         }
       }

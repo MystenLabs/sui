@@ -70,8 +70,8 @@ Response: {
           "asMoveObject": {
             "contents": {
               "json": {
-                "balance": "42",
-                "id": "0x0d3cdda4062f7fc8c47b50b6db0d053d8c4eaa841bc152a1b1ffdbe0915a180c"
+                "id": "0x0d3cdda4062f7fc8c47b50b6db0d053d8c4eaa841bc152a1b1ffdbe0915a180c",
+                "balance": "42"
               }
             }
           }
@@ -81,8 +81,8 @@ Response: {
           "asMoveObject": {
             "contents": {
               "json": {
-                "balance": "41",
-                "id": "0x0d3cdda4062f7fc8c47b50b6db0d053d8c4eaa841bc152a1b1ffdbe0915a180c"
+                "id": "0x0d3cdda4062f7fc8c47b50b6db0d053d8c4eaa841bc152a1b1ffdbe0915a180c",
+                "balance": "41"
               }
             }
           }
@@ -92,8 +92,8 @@ Response: {
           "asMoveObject": {
             "contents": {
               "json": {
-                "balance": "41",
-                "id": "0x0d3cdda4062f7fc8c47b50b6db0d053d8c4eaa841bc152a1b1ffdbe0915a180c"
+                "id": "0x0d3cdda4062f7fc8c47b50b6db0d053d8c4eaa841bc152a1b1ffdbe0915a180c",
+                "balance": "41"
               }
             }
           }
