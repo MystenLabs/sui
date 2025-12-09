@@ -287,6 +287,15 @@ impl CheckpointStoreTables {
                     watermarks_config.with_relocation_filter(|_, _| Decision::Remove),
                 ),
             ),
+            (
+                "full_checkpoint_content_v2",
+                config_u64.clone().with_config(apply_relocation_filter(
+                    override_dirty_keys_config.clone(),
+                    pruner_watermarks.checkpoint_id.clone(),
+                    |sequence_number: CheckpointSequenceNumber| sequence_number,
+                    true,
+                )),
+            ),
         ];
         Self::open_tables_read_write(
             path.to_path_buf(),
