@@ -324,35 +324,47 @@ fn compare_effects(
     normal_effects: &(InnerTemporaryStore, SuiGasStatus, TransactionEffects),
     new_effects: &(InnerTemporaryStore, SuiGasStatus, TransactionEffects),
 ) {
-    let ok = match (normal_effects.2.status(), new_effects.2.status()) {
-        // success => success
-        (ExecutionStatus::Success, ExecutionStatus::Success) => true,
-        // Invariant violation in new
-        (
-            _,
-            ExecutionStatus::Failure {
-                error: ExecutionFailureStatus::InvariantViolation,
-                ..
-            },
-        ) => false,
-        // failure => failure
-        (
-            ExecutionStatus::Failure { error: _, .. },
-            ExecutionStatus::Failure {
-                error: _other_error,
-                ..
-            },
-        ) => true,
-        // Ran out of gas in the new one
-        (
-            _,
-            ExecutionStatus::Failure {
-                error: ExecutionFailureStatus::InsufficientGas,
-                ..
-            },
-        ) => true,
-        _ => false,
-    };
+    if normal_effects.1.gas_used() != new_effects.1.gas_used() {
+        tracing::warn!(
+            "{} Gas used differ: normal={} new={}",
+            normal_effects.2.transaction_digest(),
+            normal_effects.1.gas_used(),
+            new_effects.1.gas_used()
+        );
+    }
+
+    let ok = normal_effects.2.status() == new_effects.2.status()
+        && normal_effects.2 == new_effects.2
+        && normal_effects.1.gas_used() == new_effects.1.gas_used();
+    //     match (normal_effects.2.status(), new_effects.2.status()) {
+    //     // success => success
+    //     (ExecutionStatus::Success, ExecutionStatus::Success) => true,
+    //     // Invariant violation in new
+    //     (
+    //         _,
+    //         ExecutionStatus::Failure {
+    //             error: ExecutionFailureStatus::InvariantViolation,
+    //             ..
+    //         },
+    //     ) => false,
+    //     // failure => failure
+    //     (
+    //         ExecutionStatus::Failure { error: _, .. },
+    //         ExecutionStatus::Failure {
+    //             error: _other_error,
+    //             ..
+    //         },
+    //     ) => true,
+    //     // Ran out of gas in the new one
+    //     (
+    //         _,
+    //         ExecutionStatus::Failure {
+    //             error: ExecutionFailureStatus::InsufficientGas,
+    //             ..
+    //         },
+    //     ) => true,
+    //     _ => false,
+    // };
 
     // If you want to log gas usage differences, uncomment this line
     // and add the gas row writing function from the other replay branch here: https://github.com/MystenLabs/sui/pull/24042/files#diff-2e9d962a08321605940b5a657135052fbcef87b5e360662bb527c96d9a615542
@@ -364,21 +376,29 @@ fn compare_effects(
 
     // Probably want to only log this when they differ, but set to always log for now just for you
     // to play with.
-    // if !ok {
-    if true {
+    if !ok {
+        // if true {
         tracing::warn!(
             "{} TransactionEffects differ",
             normal_effects.2.transaction_digest()
         );
-        let t1 = format!("{:#?}", normal_effects.2);
-        let t2 = format!("{:#?}", new_effects.2);
+        let t1 = format!(
+            "gas_used: {:#?}\neffects: {:#?}",
+            normal_effects.1.gas_used(),
+            normal_effects.2
+        );
+        let t2 = format!(
+            "gas_used: {:#?}\neffects: {:#?}",
+            new_effects.1.gas_used(),
+            new_effects.2
+        );
         let s = TextDiff::from_lines(&t1, &t2).unified_diff().to_string();
         let data = format!(
             "---\nDIGEST: {}\n>>\n{}\n<<<\n{:#?}\n{:#?}\n",
             normal_effects.2.transaction_digest(),
             s,
-            normal_effects.1.gas_usage_report(),
-            new_effects.1.gas_usage_report(),
+            normal_effects.2,
+            new_effects.2,
         );
         let output_file = format!("outputs/{}", normal_effects.2.transaction_digest());
 
