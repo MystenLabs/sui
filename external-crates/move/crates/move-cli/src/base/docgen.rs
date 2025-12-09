@@ -1,14 +1,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::reroot_path;
-use clap::*;
-use move_docgen::{DocgenFlags, DocgenOptions};
-use move_package::BuildConfig;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
+
+use clap::*;
+
+use crate::base::reroot_path;
+use move_docgen::{DocgenFlags, DocgenOptions};
+use move_package_alt::flavor::MoveFlavor;
+use move_package_alt_compilation::{build_config::BuildConfig, find_env};
 
 /// Generate Rust style documentation for Move packages
 #[derive(Parser)]
@@ -33,9 +36,16 @@ pub struct Docgen {
 
 impl Docgen {
     /// Calling the Docgen
-    pub fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
-        let model =
-            config.move_model_for_package(&reroot_path(path).unwrap(), &mut std::io::stdout())?;
+    pub async fn execute<F: MoveFlavor>(
+        self,
+        path: Option<&Path>,
+        config: BuildConfig,
+    ) -> anyhow::Result<()> {
+        let rerooted_path = reroot_path(path)?;
+        let env = find_env::<F>(&rerooted_path, &config)?;
+        let model = config
+            .move_model_from_path::<F, _>(&rerooted_path, env, &mut std::io::stdout())
+            .await?;
 
         let mut options = DocgenOptions {
             flags: self.flags,

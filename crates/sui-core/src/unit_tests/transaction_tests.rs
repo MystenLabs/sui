@@ -1699,8 +1699,6 @@ async fn test_handle_soft_bundle_certificates() {
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
     protocol_config.set_enable_soft_bundle_for_testing(true);
     protocol_config.set_max_soft_bundle_size_for_testing(10);
-    protocol_config
-        .set_per_object_congestion_control_mode_for_testing(PerObjectCongestionControlMode::None);
 
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
@@ -1768,7 +1766,10 @@ async fn test_handle_soft_bundle_certificates() {
         let committee = authority.clone_committee_for_testing();
         let mut sigs = vec![];
 
-        let transaction = epoch_store.verify_transaction(transaction).unwrap();
+        let transaction = epoch_store
+            .verify_transaction_require_no_aliases(transaction)
+            .unwrap()
+            .into_tx();
         let response = authority
             .handle_transaction(&epoch_store, transaction.clone())
             .await
@@ -1925,7 +1926,10 @@ async fn test_handle_soft_bundle_certificates_errors() {
         let committee = authority.clone_committee_for_testing();
         let mut sigs = vec![];
 
-        let transaction = epoch_store.verify_transaction(transaction).unwrap();
+        let transaction = epoch_store
+            .verify_transaction_require_no_aliases(transaction)
+            .unwrap()
+            .into_tx();
         let response = authority
             .handle_transaction(&epoch_store, transaction.clone())
             .await
@@ -2474,9 +2478,11 @@ async fn test_shared_object_v2_denied() {
 
         // This should succeed
         let epoch_store = authority.load_epoch_store_one_call_per_task();
-        let verified_tx = epoch_store.verify_transaction(transaction).unwrap();
+        let verified_tx = epoch_store
+            .verify_transaction_require_no_aliases(transaction)
+            .unwrap();
         let response = authority
-            .handle_transaction(&epoch_store, verified_tx)
+            .handle_transaction(&epoch_store, verified_tx.into_tx())
             .await;
 
         assert!(

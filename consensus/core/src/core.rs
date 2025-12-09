@@ -733,7 +733,7 @@ impl Core {
         // Update round tracker with our own highest accepted blocks
         self.round_tracker
             .write()
-            .update_from_accepted_block(&extended_block);
+            .update_from_verified_block(&extended_block);
 
         Some(extended_block)
     }

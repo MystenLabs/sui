@@ -29,6 +29,7 @@ accumulator.json
 accumulator_metadata.json
 accumulator_settlement.json
 address.json
+address_alias.json
 authenticator_state.json
 bag.json
 balance.json
@@ -68,6 +69,7 @@ party.json
 pay.json
 poseidon.json
 priority_queue.json
+protocol_config.json
 prover.json
 random.json
 sui.json
@@ -93,6 +95,7 @@ bool.json
 debug.json
 fixed_point32.json
 hash.json
+internal.json
 macros.json
 option.json
 string.json
@@ -124,6 +127,11 @@ vector.json
       {
         "module_name": "fixed_point32",
         "datatype_name": "FixedPoint32",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      },
+      {
+        "module_name": "internal",
+        "datatype_name": "Permit",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000001"
       },
       {

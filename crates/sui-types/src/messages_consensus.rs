@@ -13,7 +13,7 @@ use crate::messages_checkpoint::{
 use crate::supported_protocol_versions::{
     Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
 };
-use crate::transaction::{CertifiedTransaction, Transaction};
+use crate::transaction::{CertifiedTransaction, Transaction, TransactionWithAliases};
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Bytes;
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX, TransactionIndex};
@@ -126,7 +126,6 @@ pub struct ConsensusCommitPrologueV2 {
     pub consensus_commit_digest: ConsensusCommitDigest,
 }
 
-/// Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, JsonSchema)]
 pub enum ConsensusDeterminedVersionAssignments {
     // Cancelled transaction version assignment.
@@ -230,6 +229,9 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::ExecutionTimeObservation(..) => "ExecTimeOb".to_string(),
             ConsensusTransactionKind::UserTransaction(tx) => {
                 format!("User({})", tx.digest())
+            }
+            ConsensusTransactionKind::UserTransactionV2(tx) => {
+                format!("UserV2({})", tx.tx().digest())
             }
         }
     }
@@ -473,9 +475,29 @@ pub enum ConsensusTransactionKind {
     ExecutionTimeObservation(ExecutionTimeObservation),
     // V2: dedup by authority + sequence + digest
     CheckpointSignatureV2(Box<CheckpointSignatureMessage>),
+
+    // UserTransactionV2 commits to specific AddressAliases object versions that were used
+    // to verify the transaction.
+    UserTransactionV2(Box<TransactionWithAliases>),
 }
 
-impl ConsensusTransactionKind {}
+impl ConsensusTransactionKind {
+    pub fn as_user_transaction(&self) -> Option<&Transaction> {
+        match self {
+            ConsensusTransactionKind::UserTransaction(tx) => Some(tx),
+            ConsensusTransactionKind::UserTransactionV2(tx) => Some(tx.tx()),
+            _ => None,
+        }
+    }
+
+    pub fn into_user_transaction(self) -> Option<Transaction> {
+        match self {
+            ConsensusTransactionKind::UserTransaction(tx) => Some(*tx),
+            ConsensusTransactionKind::UserTransactionV2(tx) => Some(tx.into_tx()),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(clippy::large_enum_variant)]
@@ -590,6 +612,21 @@ impl ConsensusTransaction {
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::UserTransaction(Box::new(tx)),
+        }
+    }
+
+    pub fn new_user_transaction_v2_message(
+        authority: &AuthorityName,
+        tx: TransactionWithAliases,
+    ) -> Self {
+        let mut hasher = DefaultHasher::new();
+        let tx_digest = tx.tx().digest();
+        tx_digest.hash(&mut hasher);
+        authority.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::UserTransactionV2(Box::new(tx)),
         }
     }
 
@@ -766,6 +803,12 @@ impl ConsensusTransaction {
                 // between CertifiedTransaction and UserTransaction.
                 ConsensusTransactionKey::Certificate(*tx.digest())
             }
+            ConsensusTransactionKind::UserTransactionV2(tx) => {
+                // Use the same key format as ConsensusTransactionKind::CertifiedTransaction,
+                // because existing usages of ConsensusTransactionKey should not differentiate
+                // between CertifiedTransaction and UserTransactionV2.
+                ConsensusTransactionKey::Certificate(*tx.tx().digest())
+            }
             ConsensusTransactionKind::ExecutionTimeObservation(msg) => {
                 ConsensusTransactionKey::ExecutionTimeObservation(msg.authority, msg.generation)
             }
@@ -781,13 +824,18 @@ impl ConsensusTransaction {
     }
 
     pub fn is_mfp_transaction(&self) -> bool {
-        matches!(self.kind, ConsensusTransactionKind::UserTransaction(_))
+        matches!(
+            self.kind,
+            ConsensusTransactionKind::UserTransaction(_)
+                | ConsensusTransactionKind::UserTransactionV2(_)
+        )
     }
 
     pub fn is_user_transaction(&self) -> bool {
         matches!(
             self.kind,
             ConsensusTransactionKind::UserTransaction(_)
+                | ConsensusTransactionKind::UserTransactionV2(_)
                 | ConsensusTransactionKind::CertifiedTransaction(_)
         )
     }

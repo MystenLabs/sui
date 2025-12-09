@@ -6,8 +6,8 @@ use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use move_vm_runtime::{
     execution::{
-        values::{StructRef, Value},
         Type,
+        values::{StructRef, Value},
     },
     natives::functions::NativeResult,
     pop_arg,

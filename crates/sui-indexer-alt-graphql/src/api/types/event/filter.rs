@@ -157,6 +157,21 @@ impl EventFilter {
 
         true
     }
+
+    /// The active filters in EventFilter. Used to find the pipelines that are available to serve queries with these filters applied.
+    pub(crate) fn active_filters(&self) -> Vec<String> {
+        let mut filters = vec![];
+        if self.sender.is_some() {
+            filters.push("sender".to_string());
+        }
+        if self.module.is_some() {
+            filters.push("module".to_string());
+        }
+        if self.type_.is_some() {
+            filters.push("type".to_string());
+        }
+        filters
+    }
 }
 
 impl CheckpointBounds for EventFilter {

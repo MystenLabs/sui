@@ -5,8 +5,8 @@ use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
     execution::{
-        values::{self, Value, VectorRef},
         Type,
+        values::{self, Value, VectorRef},
     },
     natives::functions::NativeResult,
     pop_arg,

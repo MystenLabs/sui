@@ -2,8 +2,8 @@
 name = "PackageBasics"
 edition = "development"
 
-[addresses]
-std = "0x1"
-
 [dependencies]
-MoveStdlib = { local = "../../../../move-stdlib" }
+std = { local = "../../../../move-stdlib" }
+
+[addresses]
+package_basics = "0x0"

@@ -17,6 +17,7 @@ futures.workspace = true
 prometheus.workspace = true
 indexmap.workspace = true
 insta.workspace = true
+itertools.workspace = true
 jsonrpsee.workspace = true
 test-cluster.workspace = true
 rand.workspace = true
@@ -33,7 +34,6 @@ prost.workspace = true
 tokio-stream.workspace = true
 
 move-binary-format.workspace = true
-move-package.workspace = true
 telemetry-subscribers.workspace = true
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true

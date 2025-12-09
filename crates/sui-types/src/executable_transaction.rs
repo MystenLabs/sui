@@ -8,7 +8,7 @@ use crate::{committee::EpochId, crypto::AuthorityStrongQuorumSignInfo};
 
 use crate::message_envelope::{Envelope, TrustedEnvelope, VerifiedEnvelope};
 use crate::transaction::{
-    SenderSignedData, TransactionData, TransactionDataAPI, VerifiedTransaction,
+    SenderSignedData, TransactionData, TransactionDataAPI, VerifiedTransaction, WithAliases,
 };
 use serde::{Deserialize, Serialize};
 
@@ -65,6 +65,9 @@ impl CertificateProof {
 pub type ExecutableTransaction = Envelope<SenderSignedData, CertificateProof>;
 pub type VerifiedExecutableTransaction = VerifiedEnvelope<SenderSignedData, CertificateProof>;
 pub type TrustedExecutableTransaction = TrustedEnvelope<SenderSignedData, CertificateProof>;
+
+pub type VerifiedExecutableTransactionWithAliases = WithAliases<VerifiedExecutableTransaction>;
+pub type TrustedExecutableTransactionWithAliases = WithAliases<TrustedExecutableTransaction>;
 
 impl VerifiedExecutableTransaction {
     pub fn gas_budget(&self) -> u64 {

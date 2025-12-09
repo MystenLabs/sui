@@ -38,6 +38,5 @@ task 4, lines 69-72:
 // Invalid in v2
 //> test::m::heat(Input(1), Input(2));
 //> test::m::delete_a(Input(1));
-mutated: object(0,0), object(2,2)
-deleted: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 3400848, non_refundable_storage_fee: 34352
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } at command Some(1)

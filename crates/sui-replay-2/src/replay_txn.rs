@@ -13,16 +13,15 @@
 use crate::{
     artifacts::{Artifact, ArtifactManager, MoveCallInfo, ReplayCacheSummary},
     execution::{ReplayExecutor, execute_transaction_to_effects},
-    replay_interface::{
-        EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
-    },
-    summary_metrics::tx_metrics_reset,
     tracing::save_trace_output,
 };
 use anyhow::{Context, Error, Result, anyhow, bail};
 use move_trace_format::format::MoveTraceBuilder;
 use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 use std::time::Instant;
+use sui_data_store::{
+    EpochStore, ObjectKey, ObjectStore, ReadDataStore, TransactionStore, VersionQuery,
+};
 use sui_types::{TypeTag, base_types::SequenceNumber};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -40,7 +39,7 @@ use sui_types::{
     gas::SuiGasStatusAPI,
     transaction::{InputObjectKind, ObjectReadResult, ObjectReadResultKind},
 };
-use tracing::{debug, error, info, info_span, trace};
+use tracing::{debug, error, info_span, trace, warn};
 
 pub type ObjectVersion = u64;
 pub type PackageVersion = u64;
@@ -116,7 +115,6 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
 ) -> Result<u128> {
     let _span = info_span!("replay_tx", tx_digest = %tx_digest).entered();
     // load a `ReplayTransaction`
-    tx_metrics_reset();
     let replay_txn = match ReplayTransaction::load(
         tx_digest,
         data_store,
@@ -150,7 +148,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     }
 
     // Save results
-    info!(
+    debug!(
         tx_digest = %tx_digest,
         result = ?result,
         output_dir = %artifact_manager.base_path.display(),
@@ -193,7 +191,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
     if let sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb) =
         context_and_effects.txn_data.kind()
     {
-        info!(tx_digest = %tx_digest, "Extracting move call info for {} commands", ptb.commands.len());
+        debug!(tx_digest = %tx_digest, "Extracting move call info for {} commands", ptb.commands.len());
         match MoveCallInfo::from_transaction(ptb, &context_and_effects.object_cache) {
             Ok(move_call_info) => {
                 let successful_extractions = move_call_info
@@ -201,7 +199,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
                     .iter()
                     .filter(|s| s.is_some())
                     .count();
-                info!(tx_digest = %tx_digest, "Successfully extracted {} function signatures out of {} commands",
+                debug!(tx_digest = %tx_digest, "Successfully extracted {} function signatures out of {} commands",
                     successful_extractions, move_call_info.command_signatures.len());
 
                 artifact_manager
@@ -211,7 +209,7 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
                     .unwrap();
             }
             Err(e) => {
-                info!(tx_digest = %tx_digest, "Failed to extract move call info: {}", e);
+                warn!(tx_digest = %tx_digest, "Failed to extract move call info: {}", e);
             }
         }
     }

@@ -1,3 +1,5 @@
+# TODO: pkg-alt DVX-1610; this prints the dep warning as ./sources instead of
+# dep/sources, which is confusing
 [package]
 name = "Test"
 edition = "2024.beta"

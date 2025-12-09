@@ -6,14 +6,17 @@ use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
+use once_cell::sync::Lazy;
 use regex::Regex;
 use tracing::debug;
 
+use crate::compatibility::legacy_parser::{LegacyPackageMetadata, parse_package_info};
 use crate::package::layout::SourcePackageLayout;
 use crate::package::paths::PackagePath;
 use crate::schema::PackageName;
+use toml::value::Value as TV;
 
 pub type LegacyVersion = (u64, u64, u64);
 pub type LegacySubstitution = BTreeMap<String, LegacySubstOrRename>;
@@ -31,6 +34,9 @@ pub enum LegacySubstOrRename {
 
 /// The regex to detect `module <name>::<module_name>` on its different forms.
 const MODULE_REGEX: &str = r"\bmodule\s+([a-zA-Z_][\w]*)::([a-zA-Z_][\w]*)";
+
+// Compile regex once at program startup
+static MODULE_REGEX_COMPILED: Lazy<Regex> = Lazy::new(|| Regex::new(MODULE_REGEX).unwrap());
 
 /// This is a naive way to detect all module names that are part of the source code
 /// for a given package.
@@ -109,18 +115,15 @@ fn find_files(files: &mut Vec<PathBuf>, dir: &Path, extension: &str, max_depth: 
 // Consider supporting the legacy `address { module {} }` format.
 fn parse_module_names(contents: &str) -> Result<HashSet<String>> {
     let clean = strip_comments(contents);
-    let mut set = HashSet::new();
+
     // This matches `module a::b {}`, and `module a::b;` cases.
     // In both cases, the match is the 2nd group (so `match.get(1)`)
-    let regex = Regex::new(MODULE_REGEX).unwrap();
-
-    for cap in regex.captures_iter(&clean) {
-        set.insert(cap[1].to_string());
-    }
-
-    Ok(set
-        .into_iter()
-        .filter(|name| !is_address_like(name.as_str()))
+    Ok(MODULE_REGEX_COMPILED
+        .captures_iter(&clean)
+        .filter_map(|cap| {
+            let name = &cap[1];
+            (!is_address_like(name)).then(|| name.to_string())
+        })
         .collect())
 }
 
@@ -171,6 +174,28 @@ fn strip_comments(source: &str) -> String {
     }
 
     result
+}
+
+/// Return legacy package metadata; this is needed for tests in sui side
+pub fn parse_legacy_package_info(
+    package_path: &Path,
+) -> Result<LegacyPackageMetadata, anyhow::Error> {
+    let manifest_string = std::fs::read_to_string(package_path.join("Move.toml"))?;
+    let tv =
+        toml::from_str::<TV>(&manifest_string).context("Unable to parse Move package manifest")?;
+
+    match tv {
+        TV::Table(mut table) => {
+            let metadata = table
+                .remove("package")
+                .map(parse_package_info)
+                .transpose()
+                .context("Error parsing '[package]' section of manifest")?
+                .unwrap();
+            Ok(metadata)
+        }
+        _ => bail!("Expected a table from the manifest file"),
+    }
 }
 
 #[cfg(test)]

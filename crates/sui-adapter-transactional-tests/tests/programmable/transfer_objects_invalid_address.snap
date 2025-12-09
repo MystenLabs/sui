@@ -18,7 +18,7 @@ task 2, lines 29-33:
 //> TransferObjects([Result(0)], Input(0));
 // not an address
 Error: Transaction Effects Status: Invalid command argument at 1. The argument cannot be deserialized into a value of the specified type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidBCSBytes }, source: None, command: Some(1) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidBCSBytes }, source: Some("Function expects address but provided argument's value does not match"), command: Some(1) } }
 
 task 3, lines 34-39:
 //# programmable --sender A

@@ -126,7 +126,10 @@ async fn transfer_with_account(
         )
     };
     let epoch_store = state.epoch_store_for_testing();
-    let tx = epoch_store.verify_transaction(tx).unwrap();
+    let tx = epoch_store
+        .verify_transaction_require_no_aliases(tx)
+        .unwrap()
+        .into_tx();
     state.handle_transaction(&epoch_store, tx).await
 }
 
@@ -154,7 +157,10 @@ async fn handle_move_call_transaction(
     .unwrap();
     let epoch_store = state.epoch_store_for_testing();
     let tx = to_sender_signed_transaction(data, &account.1);
-    let tx = epoch_store.verify_transaction(tx).unwrap();
+    let tx = epoch_store
+        .verify_transaction_require_no_aliases(tx)
+        .unwrap()
+        .into_tx();
     state.handle_transaction(&epoch_store, tx).await
 }
 
@@ -255,7 +261,10 @@ async fn test_shared_object_transaction_disabled() {
         .call_staking(account.2[1], SuiAddress::default())
         .build_and_sign(&account.1);
     let epoch_store = state.epoch_store_for_testing();
-    let tx = epoch_store.verify_transaction(tx).unwrap();
+    let tx = epoch_store
+        .verify_transaction_require_no_aliases(tx)
+        .unwrap()
+        .into_tx();
     let result = state.handle_transaction(&epoch_store, tx).await;
     assert_denied(&result);
 }
@@ -277,7 +286,10 @@ async fn test_package_publish_disabled() {
         .publish(path)
         .build_and_sign(keypair);
     let epoch_store = state.epoch_store_for_testing();
-    let tx = epoch_store.verify_transaction(tx).unwrap();
+    let tx = epoch_store
+        .verify_transaction_require_no_aliases(tx)
+        .unwrap()
+        .into_tx();
     let result = state.handle_transaction(&epoch_store, tx).await;
     assert_denied(&result);
 }
@@ -466,7 +478,10 @@ async fn test_certificate_deny() {
         .build()
         .await;
     let epoch_store = state.epoch_store_for_testing();
-    let tx = epoch_store.verify_transaction(tx).unwrap();
+    let tx = epoch_store
+        .verify_transaction_require_no_aliases(tx)
+        .unwrap()
+        .into_tx();
     let signature = state
         .handle_transaction(&epoch_store, tx.clone())
         .await
@@ -540,7 +555,10 @@ async fn test_shared_object_transaction_disabled_dynamic_check() {
         .call_staking(account.2[1], SuiAddress::default())
         .build_and_sign(&account.1);
     let epoch_store = state.epoch_store_for_testing();
-    let tx = epoch_store.verify_transaction(tx).unwrap();
+    let tx = epoch_store
+        .verify_transaction_require_no_aliases(tx)
+        .unwrap()
+        .into_tx();
     let result = state.handle_transaction(&epoch_store, tx).await;
     assert_denied(&result);
 }
@@ -564,7 +582,10 @@ async fn test_package_publish_disabled_dynamic_check() {
         .publish(path)
         .build_and_sign(keypair);
     let epoch_store = state.epoch_store_for_testing();
-    let tx = epoch_store.verify_transaction(tx).unwrap();
+    let tx = epoch_store
+        .verify_transaction_require_no_aliases(tx)
+        .unwrap()
+        .into_tx();
     let result = state.handle_transaction(&epoch_store, tx).await;
     assert_denied(&result);
 }

@@ -3,6 +3,7 @@ name = "C"
 version = "0.0.1"
 published-at = "0xc1"
 edition = "2024.beta"
+implicit-dependencies = false
 
 [addresses]
 c = "0xc1"

@@ -17,7 +17,7 @@ use move_core_types::{
     language_storage::TypeTag,
     runtime_value::{MoveValue, serialize_values},
 };
-use move_package::compilation::compiled_package::CompiledPackage;
+use move_package_alt_compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::{
     dev_utils::{gas_schedule::CostTable, vm_arguments::ValueFrame},
     natives::functions::NativeFunctions,

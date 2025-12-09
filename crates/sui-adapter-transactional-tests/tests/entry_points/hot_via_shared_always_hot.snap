@@ -37,9 +37,8 @@ task 4, lines 56-62:
 //> test::m::reshare(Result(1));
 //> test::m::cool(Result(0));
 //> test::m::delete_a(Input(0));
-mutated: object(0,0), object(3,0)
-deleted: object(2,0)
-gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3408372, non_refundable_storage_fee: 34428
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } at command Some(4)
 
 task 5, lines 64-70:
 //# programmable --sender A --inputs object(2,1) object(3,0)
@@ -49,6 +48,5 @@ task 5, lines 64-70:
 //> test::m::cool(Result(1));
 //> test::m::reshare(Result(0));
 //> test::m::delete_a(Input(0));
-mutated: object(0,0), object(3,0)
-deleted: object(2,1)
-gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3408372, non_refundable_storage_fee: 34428
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction } at command Some(4)

@@ -13,32 +13,58 @@ error[E01003]: invalid modifier
   │
   = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
 
-error[E03004]: unbound type
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/unresolved_type_no_args.move:2:22
   │
 2 │     struct Mine { f: Q }
-  │                      ^ Unbound type 'Q' in current scope
+  │            ----      ^
+  │            │         │
+  │            │         Could not resolve the name 'Q'
+  │            │         Did you mean: 'Mine'
+  │            Similarly named defintion found here
 
-error[E03004]: unbound type
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/unresolved_type_no_args.move:3:16
   │
+2 │     struct Mine { f: Q }
+  │            ---- Similarly named defintion found here
 3 │     fun foo(_: S): G {
-  │                ^ Unbound type 'S' in current scope
+  │                ^
+  │                │
+  │                Could not resolve the name 'S'
+  │                Did you mean: 'Mine'
 
-error[E03004]: unbound type
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/unresolved_type_no_args.move:3:20
   │
+2 │     struct Mine { f: Q }
+  │            ---- Similarly named defintion found here
 3 │     fun foo(_: S): G {
-  │                    ^ Unbound type 'G' in current scope
+  │                    ^
+  │                    │
+  │                    Could not resolve the name 'G'
+  │                    Did you mean: 'Mine'
 
-error[E03004]: unbound type
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/unresolved_type_no_args.move:4:16
   │
+2 │     struct Mine { f: Q }
+  │            ---- Similarly named defintion found here
+3 │     fun foo(_: S): G {
 4 │         let _: R = (0: P);
-  │                ^ Unbound type 'R' in current scope
+  │                ^
+  │                │
+  │                Could not resolve the name 'R'
+  │                Did you mean: 'Mine'
 
-error[E03004]: unbound type
+error[E03006]: unexpected name in this position
   ┌─ tests/move_2024/naming/unresolved_type_no_args.move:4:24
   │
+2 │     struct Mine { f: Q }
+  │            ---- Similarly named defintion found here
+3 │     fun foo(_: S): G {
 4 │         let _: R = (0: P);
-  │                        ^ Unbound type 'P' in current scope
+  │                        ^
+  │                        │
+  │                        Could not resolve the name 'P'
+  │                        Did you mean: 'Mine'

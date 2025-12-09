@@ -2,7 +2,8 @@
 name = "B"
 version = "0.0.1"
 published-at = "0xb0"
-edition = "development"
+edition = "2024"
+implicit-dependencies = false
 
 [dependencies]
 A = { local = "../a0" }

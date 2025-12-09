@@ -12,7 +12,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::{
-    execution::values::Value, execution::Type, natives::functions::NativeResult, pop_arg,
+    execution::Type, execution::values::Value, natives::functions::NativeResult, pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;

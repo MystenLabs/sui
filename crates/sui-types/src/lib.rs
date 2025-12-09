@@ -28,6 +28,7 @@ pub mod error;
 pub mod accumulator_event;
 pub mod accumulator_metadata;
 pub mod accumulator_root;
+pub mod address_alias;
 pub mod authenticator_state;
 pub mod balance;
 pub mod balance_change;
@@ -140,6 +141,7 @@ built_in_ids! {
     SUI_DISPLAY_REGISTRY_ADDRESS / SUI_DISPLAY_REGISTRY_OBJECT_ID = 0xd;
     SUI_DENY_LIST_ADDRESS / SUI_DENY_LIST_OBJECT_ID = 0x403;
     SUI_ACCUMULATOR_ROOT_ADDRESS / SUI_ACCUMULATOR_ROOT_OBJECT_ID = 0xacc;
+    SUI_ADDRESS_ALIAS_STATE_ADDRESS / SUI_ADDRESS_ALIAS_STATE_OBJECT_ID = 0xa;
 }
 
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;

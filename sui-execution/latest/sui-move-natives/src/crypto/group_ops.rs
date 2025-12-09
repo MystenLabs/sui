@@ -15,8 +15,8 @@ use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
-        values::{Value, VectorRef},
         Type,
+        values::{Value, VectorRef},
     },
     natives::functions::NativeResult,
     pop_arg,

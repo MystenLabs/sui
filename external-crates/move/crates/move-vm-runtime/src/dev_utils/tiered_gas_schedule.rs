@@ -783,6 +783,7 @@ fn abstract_memory_size(v: impl ValueView) -> AbstractMemorySize {
     v.abstract_memory_size(&SizeConfig {
         include_vector_size: true,
         traverse_references: false,
+        fine_grained_value_size: true,
     })
 }
 
@@ -790,6 +791,7 @@ fn abstract_memory_size_with_traversal(v: impl ValueView) -> AbstractMemorySize 
     v.abstract_memory_size(&SizeConfig {
         include_vector_size: true,
         traverse_references: true,
+        fine_grained_value_size: true,
     })
 }
 

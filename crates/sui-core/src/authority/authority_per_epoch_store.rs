@@ -18,8 +18,10 @@ use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::FutureExt;
 use futures::future::{Either, join_all, select};
 use itertools::{Itertools, izip};
+use moka::sync::SegmentedCache as MokaCache;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_common::assert_reachable;
+use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_common::{debug_fatal, fatal};
@@ -47,7 +49,8 @@ use sui_types::dynamic_field::get_dynamic_field_from_store;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::executable_transaction::{
-    TrustedExecutableTransaction, VerifiedExecutableTransaction,
+    TrustedExecutableTransaction, TrustedExecutableTransactionWithAliases,
+    VerifiedExecutableTransaction, VerifiedExecutableTransactionWithAliases,
 };
 use sui_types::execution::{ExecutionTimeObservationKey, ExecutionTiming};
 use sui_types::global_state_hash::GlobalStateHash;
@@ -70,7 +73,7 @@ use sui_types::transaction::{
     AuthenticatorStateUpdate, CertifiedTransaction, InputObjectKind, ProgrammableTransaction,
     SenderSignedData, StoredExecutionTimeObservations, Transaction, TransactionData,
     TransactionDataAPI, TransactionKey, TransactionKind, TxValidityCheckContext,
-    VerifiedSignedTransaction, VerifiedTransaction,
+    VerifiedSignedTransaction, VerifiedTransaction, VerifiedTransactionWithAliases, WithAliases,
 };
 use tap::TapOptional;
 use tokio::sync::{OnceCell, mpsc, oneshot};
@@ -101,7 +104,7 @@ use crate::authority::execution_time_estimator::{
     EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY, EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY,
 };
 use crate::authority::shared_object_version_manager::{
-    AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
+    AsTx, AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
 };
 use crate::checkpoints::{
     BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint,
@@ -413,7 +416,7 @@ pub struct AuthorityPerEpochStore {
     randomness_reporter: OnceCell<RandomnessReporter>,
 
     /// Manages recording execution time observations and generating estimates.
-    pub(crate) execution_time_estimator: tokio::sync::Mutex<Option<ExecutionTimeEstimator>>,
+    pub(crate) execution_time_estimator: tokio::sync::Mutex<ExecutionTimeEstimator>,
     tx_local_execution_time: OnceCell<mpsc::Sender<LocalExecutionTimeData>>,
     pub(crate) tx_object_debts: OnceCell<mpsc::Sender<Vec<ObjectID>>>,
     // Saved at end of epoch for propagating observations to the next.
@@ -426,6 +429,9 @@ pub struct AuthorityPerEpochStore {
 
     /// A cache that tracks submitted transactions to prevent DoS through excessive resubmissions.
     pub(crate) submitted_transaction_cache: SubmittedTransactionCache,
+
+    /// A cache which tracks recently finalized transactions.
+    pub(crate) finalized_transactions_cache: MokaCache<TransactionDigest, ()>,
 
     /// Waiters for settlement transactions. Used by execution scheduler to wait for
     /// settlement transaction keys to resolve to transactions.
@@ -546,6 +552,8 @@ pub struct AuthorityEpochTables {
 
     /// Transactions that are being deferred until some future time
     deferred_transactions_v2: DBMap<DeferralKey, Vec<TrustedExecutableTransaction>>,
+    deferred_transactions_with_aliases_v2:
+        DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
 
     // Tables for recording state for RandomnessManager.
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
@@ -949,11 +957,30 @@ impl AuthorityEpochTables {
 
     fn get_all_deferred_transactions_v2(
         &self,
-    ) -> SuiResult<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransaction>>> {
+    ) -> SuiResult<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>>> {
         Ok(self
             .deferred_transactions_v2
             .safe_iter()
-            .map(|item| item.map(|(key, txs)| (key, txs.into_iter().map(Into::into).collect())))
+            // Load any old items from the deprecated table. These must all have no aliases.
+            .map(|item| {
+                item.map(|(key, txs)| {
+                    (
+                        key,
+                        txs.into_iter()
+                            .map(|tx| {
+                                VerifiedExecutableTransactionWithAliases::no_aliases(tx.into())
+                            })
+                            .collect(),
+                    )
+                })
+            })
+            .chain(
+                self.deferred_transactions_with_aliases_v2
+                    .safe_iter()
+                    .map(|item| {
+                        item.map(|(key, txs)| (key, txs.into_iter().map(Into::into).collect()))
+                    }),
+            )
             .collect::<Result<_, _>>()?)
     }
 }
@@ -1052,6 +1079,7 @@ impl AuthorityPerEpochStore {
 
         let signature_verifier = SignatureVerifier::new(
             committee.clone(),
+            object_store.clone(),
             signature_verifier_metrics,
             supported_providers,
             zklogin_env,
@@ -1060,6 +1088,7 @@ impl AuthorityPerEpochStore {
             protocol_config.accept_passkey_in_multisig(),
             protocol_config.zklogin_max_epoch_upper_bound_delta(),
             protocol_config.additional_multisig_checks(),
+            protocol_config.address_aliases(),
         );
 
         let authenticator_state_exists = epoch_start_configuration
@@ -1102,7 +1131,7 @@ impl AuthorityPerEpochStore {
             if let PerObjectCongestionControlMode::ExecutionTimeEstimate(protocol_params) =
                 protocol_config.per_object_congestion_control_mode()
             {
-                Some(ExecutionTimeEstimator::new(
+                ExecutionTimeEstimator::new(
                     committee.clone(),
                     protocol_params,
                     // Load observations stored at end of previous epoch.
@@ -1121,9 +1150,11 @@ impl AuthorityPerEpochStore {
                             })
                         },
                     )),
-                ))
+                )
             } else {
-                None
+                fatal!(
+                    "support for congestion control modes other than PerObjectCongestionControlMode::ExecutionTimeEstimate has been removed"
+                );
             };
 
         let consensus_tx_status_cache = if protocol_config.mysticeti_fastpath() {
@@ -1140,6 +1171,11 @@ impl AuthorityPerEpochStore {
 
         let submitted_transaction_cache =
             SubmittedTransactionCache::new(None, submitted_transaction_cache_metrics);
+
+        let finalized_transactions_cache = MokaCache::builder(8)
+            .max_capacity(randomize_cache_capacity_in_tests(100_000))
+            .eviction_policy(moka::policy::EvictionPolicy::lru())
+            .build();
 
         let s = Arc::new(Self {
             name,
@@ -1183,6 +1219,7 @@ impl AuthorityPerEpochStore {
             consensus_tx_status_cache,
             tx_reject_reason_cache,
             submitted_transaction_cache,
+            finalized_transactions_cache,
             settlement_registrations: Default::default(),
         });
 
@@ -1301,6 +1338,12 @@ impl AuthorityPerEpochStore {
 
     pub fn bridge_committee_initiated(&self) -> bool {
         self.epoch_start_configuration.bridge_committee_initiated()
+    }
+
+    pub fn address_alias_state_exists(&self) -> bool {
+        self.epoch_start_configuration
+            .address_alias_state_obj_initial_shared_version()
+            .is_some()
     }
 
     pub fn get_parent_path(&self) -> PathBuf {
@@ -2298,7 +2341,7 @@ impl AuthorityPerEpochStore {
     pub(crate) fn load_deferred_transactions_for_randomness_v2(
         &self,
         output: &mut ConsensusCommitOutput,
-    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>> {
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>> {
         let (min, max) = DeferralKey::full_range_for_randomness();
         self.load_deferred_transactions_v2(output, min, max)
     }
@@ -2307,7 +2350,7 @@ impl AuthorityPerEpochStore {
         &self,
         output: &mut ConsensusCommitOutput,
         consensus_round: u64,
-    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>> {
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>> {
         let (min, max) = DeferralKey::range_for_up_to_consensus_round(consensus_round);
         self.load_deferred_transactions_v2(output, min, max)
     }
@@ -2318,7 +2361,7 @@ impl AuthorityPerEpochStore {
         output: &mut ConsensusCommitOutput,
         min: DeferralKey,
         max: DeferralKey,
-    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)>> {
+    ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>> {
         debug!("Query epoch store to load deferred txn {:?} {:?}", min, max);
 
         let (keys, txns) = {
@@ -2347,7 +2390,7 @@ impl AuthorityPerEpochStore {
             let mut seen = HashSet::new();
             for deferred_txn_batch in &txns {
                 for txn in &deferred_txn_batch.1 {
-                    assert!(seen.insert(txn.digest()));
+                    assert!(seen.insert(txn.tx().digest()));
                 }
             }
         }
@@ -2359,7 +2402,7 @@ impl AuthorityPerEpochStore {
 
     pub fn get_all_deferred_transactions_for_test(
         &self,
-    ) -> Vec<(DeferralKey, Vec<VerifiedExecutableTransaction>)> {
+    ) -> Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)> {
         self.consensus_output_cache
             .deferred_transactions_v2
             .lock()
@@ -2370,7 +2413,6 @@ impl AuthorityPerEpochStore {
 
     pub(crate) fn should_defer(
         &self,
-        tx_cost: Option<u64>,
         cert: &VerifiedExecutableTransaction,
         commit_info: &ConsensusCommitInfo,
         dkg_failed: bool,
@@ -2399,7 +2441,6 @@ impl AuthorityPerEpochStore {
         // Defer transaction if it uses shared objects that are congested.
         if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
             .should_defer_due_to_object_congestion(
-                tx_cost,
                 cert,
                 previously_deferred_tx_digests,
                 commit_info,
@@ -2687,7 +2728,7 @@ impl AuthorityPerEpochStore {
         &self,
         transactions: &[VerifiedTransaction],
         digests: &[TransactionDigest],
-    ) -> Vec<Vec<GenericSignature>> {
+    ) -> Vec<Vec<(GenericSignature, Option<SequenceNumber>)>> {
         assert_eq!(transactions.len(), digests.len());
 
         fn is_signature_expected(transaction: &VerifiedTransaction) -> bool {
@@ -2716,7 +2757,10 @@ impl AuthorityPerEpochStore {
                         // available.
                         user_sigs.remove(d).expect("signature should be available")
                     } else {
-                        t.tx_signatures().to_vec()
+                        t.tx_signatures()
+                            .iter()
+                            .map(|s| (s.to_owned(), None))
+                            .collect()
                     }
                 })
                 .collect()
@@ -2916,7 +2960,7 @@ impl AuthorityPerEpochStore {
     pub fn test_insert_user_signature(
         &self,
         digest: TransactionDigest,
-        signatures: Vec<GenericSignature>,
+        signatures: Vec<(GenericSignature, Option<SequenceNumber>)>,
     ) {
         self.consensus_output_cache
             .user_signatures_for_checkpoints
@@ -2945,15 +2989,22 @@ impl AuthorityPerEpochStore {
 
     pub(crate) fn process_user_signatures<'a>(
         &self,
-        certificates: impl Iterator<Item = &'a Schedulable>,
+        txs: impl Iterator<Item = &'a Schedulable<VerifiedExecutableTransactionWithAliases>>,
     ) {
-        let sigs: Vec<_> = certificates
+        let sigs: Vec<_> = txs
             .filter_map(|s| match s {
-                Schedulable::Transaction(certificate) => {
-                    Some((*certificate.digest(), certificate.tx_signatures().to_vec()))
-                }
+                Schedulable::Transaction(tx) => Some((
+                    *tx.tx().digest(),
+                    tx.tx()
+                        .tx_signatures()
+                        .iter()
+                        .cloned()
+                        .zip(tx.aliases().iter().map(|(_, seq)| *seq))
+                        .collect(),
+                )),
                 Schedulable::RandomnessStateUpdate(_, _) => None,
                 Schedulable::AccumulatorSettlement(_, _) => None,
+                Schedulable::ConsensusCommitPrologue(_, _, _) => None,
             })
             .collect();
 
@@ -3046,10 +3097,29 @@ impl AuthorityPerEpochStore {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn verify_transaction(&self, tx: Transaction) -> SuiResult<VerifiedTransaction> {
+    pub fn verify_transaction_with_current_aliases(
+        &self,
+        tx: Transaction,
+    ) -> SuiResult<VerifiedTransactionWithAliases> {
         self.signature_verifier
-            .verify_tx(tx.data())
-            .map(|_| VerifiedTransaction::new_from_verified(tx))
+            .verify_tx_with_current_aliases(tx.data())
+            .map(|aliases_used| {
+                WithAliases::new(VerifiedTransaction::new_from_verified(tx), aliases_used)
+            })
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub fn verify_transaction_require_no_aliases(
+        &self,
+        tx: Transaction,
+    ) -> SuiResult<VerifiedTransactionWithAliases> {
+        self.signature_verifier
+            .verify_tx_require_no_aliases(tx.data())
+            .map(|_| {
+                VerifiedTransactionWithAliases::no_aliases(VerifiedTransaction::new_from_verified(
+                    tx,
+                ))
+            })
     }
 
     /// Verifies transaction signatures and other data
@@ -3069,7 +3139,9 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {}
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(_tx),
+                kind:
+                    ConsensusTransactionKind::UserTransaction(_)
+                    | ConsensusTransactionKind::UserTransactionV2(_),
                 ..
             }) => {}
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
@@ -3208,14 +3280,17 @@ impl AuthorityPerEpochStore {
     // Assigns shared object versions to transactions and updates the next shared object version state.
     // Shared object versions in cancelled transactions are assigned to special versions that will
     // cause the transactions to be cancelled in execution engine.
-    pub(crate) fn process_consensus_transaction_shared_object_versions<'a>(
+    pub(crate) fn process_consensus_transaction_shared_object_versions<'a, T>(
         &'a self,
         cache_reader: &dyn ObjectCacheRead,
-        non_randomness_transactions: impl Iterator<Item = &'a Schedulable> + Clone,
-        randomness_transactions: impl Iterator<Item = &'a Schedulable> + Clone,
+        non_randomness_transactions: impl Iterator<Item = &'a Schedulable<T>> + Clone,
+        randomness_transactions: impl Iterator<Item = &'a Schedulable<T>> + Clone,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         output: &mut ConsensusCommitOutput,
-    ) -> SuiResult<AssignedTxAndVersions> {
+    ) -> SuiResult<AssignedTxAndVersions>
+    where
+        T: 'a + AsTx,
+    {
         let all_certs = non_randomness_transactions.chain(randomness_transactions);
 
         let ConsensusSharedObjVerAssignment {
@@ -3642,13 +3717,27 @@ impl AuthorityPerEpochStore {
         }
     }
 
+    /// Caches recent finalized transactions, to avoid revoting them.
+    pub(crate) fn cache_recently_finalized_transaction(&self, tx_digest: TransactionDigest) {
+        self.finalized_transactions_cache.insert(tx_digest, ());
+    }
+
+    /// If true, transaction is recently finalized and should not be voted on.
+    /// If false, the transaction may never be finalized, or has been finalized
+    /// but the info has been evicted from the cache.
+    pub(crate) fn is_recently_finalized(&self, tx_digest: &TransactionDigest) -> bool {
+        self.finalized_transactions_cache.contains_key(tx_digest)
+    }
+
     /// Only used by admin API
     pub async fn get_estimated_tx_cost(&self, tx: &TransactionData) -> Option<u64> {
-        self.execution_time_estimator
-            .lock()
-            .await
-            .as_ref()
-            .map(|estimator| estimator.get_estimate(tx).as_micros() as u64)
+        Some(
+            self.execution_time_estimator
+                .lock()
+                .await
+                .get_estimate(tx)
+                .as_micros() as u64,
+        )
     }
 
     pub async fn get_consensus_tx_cost_estimates(
@@ -3657,9 +3746,7 @@ impl AuthorityPerEpochStore {
         self.execution_time_estimator
             .lock()
             .await
-            .as_ref()
-            .map(|estimator| estimator.get_observations())
-            .unwrap_or_default()
+            .get_observations()
     }
 
     /// Whether this node is a validator in this epoch.

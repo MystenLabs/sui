@@ -8,7 +8,7 @@ use move_core_types::{
     runtime_value::{MoveStructLayout, MoveTypeLayout},
 };
 use move_vm_runtime::{
-    execution::values::Value, execution::Type, natives::functions::NativeResult,
+    execution::Type, execution::values::Value, natives::functions::NativeResult,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;

@@ -3,7 +3,7 @@
 
 use crate::legacy_test_cost;
 use move_binary_format::errors::PartialVMResult;
-use move_vm_runtime::execution::{values::Value, Type};
+use move_vm_runtime::execution::{Type, values::Value};
 use move_vm_runtime::natives::functions::{NativeContext, NativeResult};
 use rand::Rng;
 use smallvec::smallvec;

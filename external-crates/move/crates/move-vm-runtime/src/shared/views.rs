@@ -9,20 +9,14 @@ use move_core_types::{
 // Abstract Memory Size
 // -------------------------------------------------------------------------------------------------
 
-/// The size in bytes for a non-string or address constant on the stack
-pub(crate) const CONST_SIZE: AbstractMemorySize = AbstractMemorySize::new(16);
-
-/// The size in bytes for a reference on the stack
-pub(crate) const REFERENCE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
-
-/// The size of a struct in bytes
-pub(crate) const STRUCT_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
-
 pub struct SizeConfig {
     /// If true, the reference values will be traversed recursively.
     pub traverse_references: bool,
     /// If true, the size of the vector will be included in the abstract memory size.
     pub include_vector_size: bool,
+    /// TODO(vm-rewrite): Can remove this flag as we don't need to protocol gate it
+    /// If true, use a more fine-grained size calculation for primitive values.
+    pub fine_grained_value_size: bool,
 }
 
 /// Trait that provides an abstract view into a Move type.
@@ -43,6 +37,19 @@ pub trait ValueView {
 
     /// Returns the abstract memory size of the value.
     fn abstract_memory_size(&self, config: &SizeConfig) -> AbstractMemorySize {
+        /// The size for primitives smaller than u128
+        const PRIMITIVE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
+        /// The size for u128
+        const U128_SIZE: AbstractMemorySize = AbstractMemorySize::new(16);
+        /// The size for u256
+        const U256_SIZE: AbstractMemorySize = AbstractMemorySize::new(32);
+
+        /// The size of a struct
+        const STRUCT_SIZE: AbstractMemorySize = AbstractMemorySize::new(2);
+
+        /// The size in bytes for a reference on the stack
+        const REFERENCE_SIZE: AbstractMemorySize = AbstractMemorySize::new(8);
+
         struct Acc<'b> {
             accumulated_size: AbstractMemorySize,
             config: &'b SizeConfig,
@@ -50,31 +57,31 @@ pub trait ValueView {
 
         impl ValueVisitor for Acc<'_> {
             fn visit_u8(&mut self, _depth: usize, _val: u8) {
-                self.accumulated_size += CONST_SIZE;
+                self.accumulated_size += PRIMITIVE_SIZE;
             }
 
             fn visit_u16(&mut self, _depth: usize, _val: u16) {
-                self.accumulated_size += CONST_SIZE;
+                self.accumulated_size += PRIMITIVE_SIZE;
             }
 
             fn visit_u32(&mut self, _depth: usize, _val: u32) {
-                self.accumulated_size += CONST_SIZE;
+                self.accumulated_size += PRIMITIVE_SIZE;
             }
 
             fn visit_u64(&mut self, _depth: usize, _val: u64) {
-                self.accumulated_size += CONST_SIZE;
+                self.accumulated_size += PRIMITIVE_SIZE;
             }
 
             fn visit_u128(&mut self, _depth: usize, _val: u128) {
-                self.accumulated_size += CONST_SIZE;
+                self.accumulated_size += U128_SIZE;
             }
 
             fn visit_u256(&mut self, _depth: usize, _val: move_core_types::u256::U256) {
-                self.accumulated_size += CONST_SIZE;
+                self.accumulated_size += U256_SIZE;
             }
 
             fn visit_bool(&mut self, _depth: usize, _val: bool) {
-                self.accumulated_size += CONST_SIZE;
+                self.accumulated_size += PRIMITIVE_SIZE;
             }
 
             fn visit_address(&mut self, _depth: usize, _val: AccountAddress) {

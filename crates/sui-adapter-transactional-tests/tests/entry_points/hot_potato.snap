@@ -29,8 +29,9 @@ task 3, lines 46-51:
 //> 1: test::m::b(Result(0));
 //> test::m::settle(Result(0));
 //> test::m::play(Result(1));
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(3) } }
+mutated: object(0,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
 task 4, lines 53-59:
 //# programmable --sender A --inputs @A object(2,1)

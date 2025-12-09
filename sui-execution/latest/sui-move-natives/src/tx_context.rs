@@ -4,7 +4,7 @@
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use move_vm_runtime::{
-    execution::{values::Value, Type},
+    execution::{Type, values::Value},
     natives::functions::NativeResult,
     pop_arg,
 };

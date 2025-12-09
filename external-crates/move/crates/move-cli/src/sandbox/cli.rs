@@ -13,7 +13,8 @@ use anyhow::Result;
 use clap::Parser;
 use move_core_types::parsing::values::ParsedValue;
 use move_core_types::{language_storage::TypeTag, runtime_value::MoveValue};
-use move_package::compilation::package_layout::CompiledPackageLayout;
+use move_package_alt::flavor::MoveFlavor;
+use move_package_alt_compilation::layout::CompiledPackageLayout;
 use move_vm_runtime::{dev_utils::gas_schedule::CostTable, shared::types::VersionId};
 use std::{
     fs,
@@ -157,7 +158,7 @@ pub struct StructLayoutOptions {
 }
 
 impl SandboxCommand {
-    pub fn handle_command(
+    pub async fn handle_command<F: MoveFlavor>(
         &self,
         natives: Vec<NativeFunctionRecord>,
         cost_table: &CostTable,
@@ -167,7 +168,8 @@ impl SandboxCommand {
         match self {
             SandboxCommand::Publish { at } => {
                 let context =
-                    PackageContext::new(&move_args.package_path, &move_args.build_config)?;
+                    PackageContext::new::<F>(&move_args.package_path, &move_args.build_config)
+                        .await?;
                 let state = context.prepare_state(storage_dir)?;
                 sandbox::commands::publish(
                     natives,
@@ -187,7 +189,8 @@ impl SandboxCommand {
                 dry_run,
             } => {
                 let context =
-                    PackageContext::new(&move_args.package_path, &move_args.build_config)?;
+                    PackageContext::new::<F>(&move_args.package_path, &move_args.build_config)
+                        .await?;
                 let state = context.prepare_state(storage_dir)?;
                 sandbox::commands::run(
                     natives,
@@ -216,8 +219,10 @@ impl SandboxCommand {
                 *track_cov,
             ),
             SandboxCommand::View { file } => {
-                let state = PackageContext::new(&move_args.package_path, &move_args.build_config)?
-                    .prepare_state(storage_dir)?;
+                let state =
+                    PackageContext::new::<F>(&move_args.package_path, &move_args.build_config)
+                        .await?
+                        .prepare_state(storage_dir)?;
                 sandbox::commands::view(&state, file)
             }
             SandboxCommand::Clean {} => {
@@ -242,8 +247,10 @@ impl SandboxCommand {
                 Ok(())
             }
             SandboxCommand::Generate { cmd } => {
-                let state = PackageContext::new(&move_args.package_path, &move_args.build_config)?
-                    .prepare_state(storage_dir)?;
+                let state =
+                    PackageContext::new::<F>(&move_args.package_path, &move_args.build_config)
+                        .await?
+                        .prepare_state(storage_dir)?;
                 handle_generate_commands(cmd, &state)
             }
         }

@@ -808,6 +808,7 @@ where
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn with_notifier(
         mut self,
         notifier: Arc<NotifyRead<TransactionDigest, QuorumDriverResult>>,

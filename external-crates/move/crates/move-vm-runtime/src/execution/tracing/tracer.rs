@@ -1659,8 +1659,6 @@ impl VMTracer<'_> {
             }
         }
 
-        // At this point the type stack and the operand stack should be in sync.
-        assert_eq!(self.type_stack.len(), machine.operand_stack.len());
         Some(())
     }
 }
@@ -1779,6 +1777,9 @@ impl<'a> VMTracer<'a> {
         } else if let Some(err) = err {
             self.trace
                 .effect(EF::ExecutionError(format!("{:?}", err.major_status())));
+        } else {
+            // At this point the type stack and the operand stack should be in sync.
+            assert_eq!(self.type_stack.len(), machine.operand_stack.value.len());
         }
     }
 }

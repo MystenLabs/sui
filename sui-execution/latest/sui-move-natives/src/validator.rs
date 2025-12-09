@@ -6,7 +6,7 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
 use move_vm_runtime::pop_arg;
 use move_vm_runtime::{
-    execution::values::Value, execution::Type, natives::functions::NativeResult,
+    execution::Type, execution::values::Value, natives::functions::NativeResult,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;

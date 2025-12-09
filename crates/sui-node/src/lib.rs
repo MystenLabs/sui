@@ -1019,6 +1019,7 @@ impl SuiNode {
                 prometheus_registry,
                 checkpoint_store,
                 chain_identifier,
+                config.state_snapshot_write_config.archive_interval_epochs,
             )?;
             Ok(Some(snapshot_uploader.start()))
         } else {
@@ -1731,9 +1732,8 @@ impl SuiNode {
     }
     */
 
-    /// Clone an AuthorityAggregator currently used in this node's
-    /// QuorumDriver, if the node is a fullnode. After reconfig,
-    /// QuorumDriver builds a new AuthorityAggregator. The caller
+    /// Clone an AuthorityAggregator currently used in this node, if the node is a fullnode.
+    /// After reconfig, Transaction Driver builds a new AuthorityAggregator. The caller
     /// of this function will mostly likely want to call this again
     /// to get a fresh one.
     pub fn clone_authority_aggregator(

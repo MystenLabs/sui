@@ -22,9 +22,9 @@ use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::EndOfEpochData;
-use sui_types::messages_checkpoint::FullCheckpointContents;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::messages_checkpoint::VerifiedCheckpointContents;
+use sui_types::messages_checkpoint::VersionedFullCheckpointContents;
 use sui_types::object::Object;
 use sui_types::storage::BalanceInfo;
 use sui_types::storage::BalanceIterator;
@@ -136,7 +136,7 @@ impl ReadStore for RocksDbStore {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Option<VersionedFullCheckpointContents> {
         #[cfg(debug_assertions)]
         if let Some(sequence_number) = sequence_number {
             // When sequence_number is provided as an optimization, we want to ensure that
@@ -201,10 +201,12 @@ impl ReadStore for RocksDbStore {
                         return None;
                     }
                 }
-                Some(FullCheckpointContents::from_contents_and_execution_data(
-                    contents,
-                    transactions.into_iter(),
-                ))
+                Some(
+                    VersionedFullCheckpointContents::from_contents_and_execution_data(
+                        contents,
+                        transactions.into_iter(),
+                    ),
+                )
             })
     }
 
@@ -471,7 +473,7 @@ impl ReadStore for RestReadStore {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Option<VersionedFullCheckpointContents> {
         self.rocks
             .get_full_checkpoint_contents(sequence_number, digest)
     }
@@ -543,7 +545,7 @@ impl<I> Iterator for BatchedEventIterator<'_, I>
 where
     I: Iterator<Item = Result<crate::rpc_index::EventIndexKey, TypedStoreError>>,
 {
-    type Item = Result<(u64, u32, u32, sui_types::event::Event), TypedStoreError>;
+    type Item = Result<(u64, u64, u32, u32, sui_types::event::Event), TypedStoreError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let key = match self.key_iter.next()? {
@@ -577,6 +579,7 @@ where
 
         Some(Ok((
             key.checkpoint_seq,
+            key.accumulator_version,
             key.transaction_idx,
             key.event_index,
             event,
@@ -728,20 +731,23 @@ impl RpcIndexes for RestReadStore {
         &self,
         stream_id: SuiAddress,
         start_checkpoint: u64,
+        start_accumulator_version: Option<u64>,
         start_transaction_idx: Option<u32>,
         start_event_idx: Option<u32>,
         end_checkpoint: u64,
         limit: u32,
     ) -> sui_types::storage::error::Result<
         Box<
-            dyn Iterator<Item = Result<(u64, u32, u32, sui_types::event::Event), TypedStoreError>>
-                + '_,
+            dyn Iterator<
+                    Item = Result<(u64, u64, u32, u32, sui_types::event::Event), TypedStoreError>,
+                > + '_,
         >,
     > {
         let index = self.index()?;
         let key_iter = index.event_iter(
             stream_id,
             start_checkpoint,
+            start_accumulator_version.unwrap_or(0),
             start_transaction_idx.unwrap_or(0),
             start_event_idx.unwrap_or(0),
             end_checkpoint,

@@ -5,7 +5,6 @@ use super::{
     WorkloadBuilderInfo, WorkloadParams,
     workload::{MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder},
 };
-use crate::ProgrammableTransactionBuilder;
 use crate::drivers::Interval;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
@@ -70,36 +69,37 @@ impl SlowTestPayload {
             .borrow()
             .reference_gas_price;
 
-        let mut builder = ProgrammableTransactionBuilder::new();
-        let args = vec![
+        let mut tx_builder = TestTransactionBuilder::new(self.sender, account.gas, gas_price);
+        {
+            let builder = tx_builder.ptb_builder_mut();
+            let args = vec![
+                builder
+                    .obj(ObjectArg::SharedObject {
+                        id: SUI_CLOCK_OBJECT_ID,
+                        initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                        mutability: SharedObjectMutability::Immutable,
+                    })
+                    .unwrap(),
+            ];
+            builder.programmable_move_call(
+                self.package_id,
+                Identifier::new("slow").unwrap(),
+                Identifier::new("bimodal").unwrap(),
+                vec![],
+                args,
+            );
+
+            // Add unused mutable shared object input to activate congestion control.
             builder
                 .obj(ObjectArg::SharedObject {
-                    id: SUI_CLOCK_OBJECT_ID,
-                    initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
-                    mutability: SharedObjectMutability::Immutable,
+                    id: self.shared_object_ref.0,
+                    initial_shared_version: self.shared_object_ref.1,
+                    mutability: SharedObjectMutability::Mutable,
                 })
-                .unwrap(),
-        ];
-        builder.programmable_move_call(
-            self.package_id,
-            Identifier::new("slow").unwrap(),
-            Identifier::new("bimodal").unwrap(),
-            vec![],
-            args,
-        );
+                .unwrap();
+        }
 
-        // Add unused mutable shared object input to activate congestion control.
-        builder
-            .obj(ObjectArg::SharedObject {
-                id: self.shared_object_ref.0,
-                initial_shared_version: self.shared_object_ref.1,
-                mutability: SharedObjectMutability::Mutable,
-            })
-            .unwrap();
-
-        TestTransactionBuilder::new(self.sender, account.gas, gas_price)
-            .programmable(builder.finish())
-            .build_and_sign(account.key())
+        tx_builder.build_and_sign(account.key())
     }
 }
 
@@ -214,7 +214,8 @@ impl Workload<dyn Payload> for SlowWorkload {
             protocol_config: _,
         } = system_state_observer.state.borrow().clone();
         let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
-            .publish(path)
+            .publish_async(path)
+            .await
             .build_and_sign(gas.2.as_ref());
         let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.unwrap();

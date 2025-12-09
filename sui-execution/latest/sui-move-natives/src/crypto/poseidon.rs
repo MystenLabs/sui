@@ -8,8 +8,8 @@ use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::{
     execution::{
-        values::{Value, VectorRef},
         Type,
+        values::{Value, VectorRef},
     },
     natives::functions::{NativeResult, PartialVMError},
     pop_arg,

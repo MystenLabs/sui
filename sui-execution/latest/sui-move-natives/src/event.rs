@@ -12,8 +12,8 @@ use move_core_types::{
 };
 use move_vm_runtime::{
     execution::{
-        values::{Value, Vector, VectorSpecialization},
         Type,
+        values::{Value, Vector, VectorSpecialization},
     },
     natives::functions::NativeResult,
 };

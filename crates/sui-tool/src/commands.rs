@@ -227,8 +227,7 @@ pub enum ToolCommand {
         /// skip downloading indexes dir
         #[clap(long = "skip-indexes")]
         skip_indexes: bool,
-        /// Number of parallel downloads to perform. Defaults to a reasonable
-        /// value based on number of available logical cores.
+        /// Number of parallel downloads to perform. Defaults to 50, max 200.
         #[clap(long = "num-parallel-downloads")]
         num_parallel_downloads: Option<usize>,
         /// Network to download snapshot for. Defaults to "mainnet".
@@ -293,8 +292,7 @@ pub enum ToolCommand {
         genesis: PathBuf,
         #[clap(long = "path")]
         path: PathBuf,
-        /// Number of parallel downloads to perform. Defaults to a reasonable
-        /// value based on number of available logical cores.
+        /// Number of parallel downloads to perform. Defaults to 50, max 200.
         #[clap(long = "num-parallel-downloads")]
         num_parallel_downloads: Option<usize>,
         /// Verification mode to employ.
@@ -691,11 +689,7 @@ impl ToolCommand {
                         .update_log("off")
                         .expect("Failed to update log level");
                 }
-                let num_parallel_downloads = num_parallel_downloads.unwrap_or_else(|| {
-                    num_cpus::get()
-                        .checked_sub(1)
-                        .expect("Failed to get number of CPUs")
-                });
+                let num_parallel_downloads = num_parallel_downloads.unwrap_or(50).min(200);
                 let snapshot_bucket =
                     snapshot_bucket.or_else(|| match (network, no_sign_request) {
                         (Chain::Mainnet, false) => Some(
@@ -846,11 +840,7 @@ impl ToolCommand {
                         .update_log("off")
                         .expect("Failed to update log level");
                 }
-                let num_parallel_downloads = num_parallel_downloads.unwrap_or_else(|| {
-                    num_cpus::get()
-                        .checked_sub(1)
-                        .expect("Failed to get number of CPUs")
-                });
+                let num_parallel_downloads = num_parallel_downloads.unwrap_or(50).min(200);
                 let snapshot_bucket =
                     snapshot_bucket.or_else(|| match (network, no_sign_request) {
                         (Chain::Mainnet, false) => Some(

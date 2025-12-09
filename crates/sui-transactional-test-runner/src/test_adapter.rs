@@ -62,13 +62,15 @@ use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionBlockResponse, SuiAccumulatorOperation, SuiExecutionStatus,
     SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents,
 };
-use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{
+    Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
+    ProtocolVersion,
+};
 use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::KeyPairWrapper;
-use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::crypto::{
@@ -101,7 +103,8 @@ use sui_types::{
     transaction::{Transaction, TransactionData, VerifiedTransaction},
 };
 use sui_types::{
-    SUI_FRAMEWORK_PACKAGE_ID, programmable_transaction_builder::ProgrammableTransactionBuilder,
+    SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
 };
 use sui_types::{SUI_SYSTEM_PACKAGE_ID, utils::to_sender_signed_transaction};
 use sui_types::{execution_status::ExecutionStatus, transaction::TransactionKind};
@@ -118,8 +121,6 @@ pub enum FakeID {
     Enumerated(u64, u64),
 }
 
-pub static ENABLE_PTB_V2: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-
 const DEFAULT_GAS_PRICE: u64 = 1_000;
 
 const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
@@ -131,6 +132,7 @@ const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     SUI_CLOCK_OBJECT_ID,
     SUI_DENY_LIST_OBJECT_ID,
     SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_COIN_REGISTRY_OBJECT_ID,
 ];
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [
@@ -283,6 +285,18 @@ impl AdapterInitConfig {
         if let Some(enable) = shared_object_deletion {
             protocol_config.set_shared_object_deletion_for_testing(enable);
         }
+        // Older protocol versions use deprecated congestion control modes. Override to use
+        // ExecutionTimeEstimate mode which is the only supported mode.
+        if !matches!(
+            protocol_config.per_object_congestion_control_mode(),
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
+        ) {
+            protocol_config.set_per_object_congestion_control_mode_for_testing(
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams::default(),
+                ),
+            );
+        }
         if let Some(mx_tx_gas_override) = max_gas {
             if simulator {
                 panic!("Cannot set max gas in simulator mode");
@@ -391,7 +405,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         let AdapterInitConfig {
             additional_mapping,
             account_names,
-            mut protocol_config,
+            protocol_config,
             is_simulator,
             num_custom_validator_accounts,
             reference_gas_price,
@@ -402,9 +416,6 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             Some((init_cmd, sui_args)) => AdapterInitConfig::from_args(init_cmd, sui_args),
             None => AdapterInitConfig::default(),
         };
-        let enabled_ptb_v2 = protocol_config.version == ProtocolVersion::max()
-            && ENABLE_PTB_V2.get().copied().unwrap_or(false);
-        protocol_config.set_enable_ptb_execution_v2_for_testing(enabled_ptb_v2);
 
         let (
             executor,
@@ -2895,7 +2906,7 @@ impl ReadStore for SuiTestAdapter {
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
+    ) -> Option<sui_types::messages_checkpoint::VersionedFullCheckpointContents> {
         self.executor
             .get_full_checkpoint_contents(sequence_number, digest)
     }

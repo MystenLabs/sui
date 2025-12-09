@@ -50,5 +50,5 @@ task 7, lines 43-45:
 //# programmable --sender A --inputs @A
 //> TransferObjects([Gas], Input(0));
 //> test::m1::t1<sui::coin::Coin<sui::sui::SUI>>(Gas)
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage }, source: None, command: Some(1) } }
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid taking of the Gas coin. It can only be used by-value with TransferObjects
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidGasCoinUsage }, source: None, command: Some(1) } }

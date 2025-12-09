@@ -956,6 +956,8 @@ pub struct TestClusterBuilder {
 
     execution_time_observer_config: Option<sui_config::node::ExecutionTimeObserverConfig>,
 
+    state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
+
     #[cfg(msim)]
     inject_synthetic_execution_time: bool,
 }
@@ -994,9 +996,15 @@ impl TestClusterBuilder {
             indexer_backed_rpc: false,
             rpc_config: None,
             execution_time_observer_config: None,
+            state_sync_config: None,
             #[cfg(msim)]
             inject_synthetic_execution_time: false,
         }
+    }
+
+    pub fn with_state_sync_config(mut self, config: sui_config::p2p::StateSyncConfig) -> Self {
+        self.state_sync_config = Some(config);
+        self
     }
 
     pub fn with_execution_time_observer_config(
@@ -1413,6 +1421,10 @@ impl TestClusterBuilder {
         if let Some(submit_delay_step_override_millis) = self.submit_delay_step_override_millis {
             builder =
                 builder.with_submit_delay_step_override_millis(submit_delay_step_override_millis);
+        }
+
+        if let Some(state_sync_config) = self.state_sync_config.clone() {
+            builder = builder.with_state_sync_config(state_sync_config);
         }
 
         if self.disable_fullnode_pruning {

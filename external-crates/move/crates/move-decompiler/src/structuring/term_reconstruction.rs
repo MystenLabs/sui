@@ -49,75 +49,93 @@ pub fn exp(
             }
             SI::AssignReg {
                 lhs,
-                rhs:
-                    RValue::Data {
-                        op: DataOp::Unpack(ty),
-                        args,
-                    },
-            } => {
-                let fields = &ty.struct_.fields.0;
-                debug_assert!(fields.len() == lhs.len());
-                assert!(args.len() == 1);
-                let unpack_fields = fields
-                    .iter()
-                    .zip(lhs.iter())
-                    .map(|(f, r)| (f.1.name, r.name()))
-                    .collect::<Vec<_>>();
-                let module_id = ty.struct_.defining_module;
-                let name = ty.struct_.name;
-                let rhs = Box::new(trivials(&mut map, args.clone()).remove(0));
-                seq.push(Out::Exp::Unpack((module_id, name), unpack_fields, rhs));
-            }
-            SI::AssignReg {
-                lhs,
-                rhs:
-                    RValue::Data {
-                        op:
-                            op @ (DataOp::UnpackVariant(_)
-                            | DataOp::UnpackVariantImmRef(_)
-                            | DataOp::UnpackVariantMutRef(_)),
-                        args,
-                    },
-            } => {
-                let (ty, unpack_kind) = match op {
-                    DataOp::UnpackVariant(ty) => (ty, Out::UnpackKind::Value),
-                    DataOp::UnpackVariantImmRef(ty) => (ty, Out::UnpackKind::ImmRef),
-                    DataOp::UnpackVariantMutRef(ty) => (ty, Out::UnpackKind::MutRef),
-                    _ => unreachable!(),
-                };
-                let fields = &ty.variant.fields.0;
-                debug_assert!(fields.len() == lhs.len());
-                assert!(args.len() == 1);
-                let unpack_fields = fields
-                    .iter()
-                    .zip(lhs.iter())
-                    .map(|(f, r)| (*f.0, r.name()))
-                    .collect::<Vec<_>>();
-                let module_id = ty.enum_.defining_module;
-                let enum_ = ty.enum_.name;
-                let variant = ty.variant.name;
-                let rhs = Box::new(trivials(&mut map, args.clone()).remove(0));
-                seq.push(Out::Exp::UnpackVariant(
-                    unpack_kind,
-                    (module_id, enum_, variant),
-                    unpack_fields,
-                    rhs,
-                ));
-            }
-            SI::AssignReg {
-                lhs: _,
-                rhs:
-                    RValue::Data {
-                        op: DataOp::WriteRef,
-                        args,
-                    },
-            } => seq.push(Out::Exp::Data {
-                op: DataOp::WriteRef,
-                args: trivials(&mut map, args),
-            }),
+                rhs: RValue::Data { op, args },
+            } => match op {
+                // Multi-arity LHSs
+                DataOp::Unpack(ty) => {
+                    let fields = &ty.struct_.fields.0;
+                    debug_assert!(fields.len() == lhs.len());
+                    assert!(args.len() == 1);
+                    let unpack_fields = fields
+                        .iter()
+                        .zip(lhs.iter())
+                        .map(|(f, r)| (f.1.name, r.name()))
+                        .collect::<Vec<_>>();
+                    let module_id = ty.struct_.defining_module;
+                    let name = ty.struct_.name;
+                    let rhs = Box::new(trivials(&mut map, args.clone()).remove(0));
+                    seq.push(Out::Exp::Unpack((module_id, name), unpack_fields, rhs));
+                }
+                DataOp::UnpackVariant(_)
+                | DataOp::UnpackVariantImmRef(_)
+                | DataOp::UnpackVariantMutRef(_) => {
+                    let (ty, unpack_kind) = match op {
+                        DataOp::UnpackVariant(ty) => (ty, Out::UnpackKind::Value),
+                        DataOp::UnpackVariantImmRef(ty) => (ty, Out::UnpackKind::ImmRef),
+                        DataOp::UnpackVariantMutRef(ty) => (ty, Out::UnpackKind::MutRef),
+                        _ => unreachable!(),
+                    };
+                    let fields = &ty.variant.fields.0;
+                    debug_assert!(fields.len() == lhs.len());
+                    assert!(args.len() == 1);
+                    let unpack_fields = fields
+                        .iter()
+                        .zip(lhs.iter())
+                        .map(|(f, r)| (*f.0, r.name()))
+                        .collect::<Vec<_>>();
+                    let module_id = ty.enum_.defining_module;
+                    let enum_ = ty.enum_.name;
+                    let variant = ty.variant.name;
+                    let rhs = Box::new(trivials(&mut map, args.clone()).remove(0));
+                    seq.push(Out::Exp::UnpackVariant(
+                        unpack_kind,
+                        (module_id, enum_, variant),
+                        unpack_fields,
+                        rhs,
+                    ));
+                }
+                DataOp::VecUnpack(_ty) => {
+                    assert!(args.len() == 1, "VecUnpack expects a single argument");
+                    let unpack_fields = lhs.iter().map(|r| r.name()).collect::<Vec<_>>();
+                    let rhs = Box::new(trivials(&mut map, args.clone()).remove(0));
+                    seq.push(Out::Exp::VecUnpack(unpack_fields, rhs));
+                }
+                // Zero-arity LHSs
+                DataOp::VecSwap(ty) => seq.push(Out::Exp::Data {
+                    op: DataOp::VecSwap(ty),
+                    args: trivials(&mut map, args),
+                }),
+                DataOp::WriteRef => seq.push(Out::Exp::Data {
+                    op: DataOp::WriteRef,
+                    args: trivials(&mut map, args),
+                }),
+                DataOp::VecPushBack(ty) => seq.push(Out::Exp::Data {
+                    op: DataOp::VecPushBack(ty),
+                    args: trivials(&mut map, args),
+                }),
+                // Single-arity LHSs
+                DataOp::ReadRef
+                | DataOp::FreezeRef
+                | DataOp::MutBorrowField(_)
+                | DataOp::ImmBorrowField(_)
+                | DataOp::VecPack(_)
+                | DataOp::VecLen(_)
+                | DataOp::VecImmBorrow(_)
+                | DataOp::VecMutBorrow(_)
+                | DataOp::VecPopBack(_)
+                | DataOp::PackVariant(_)
+                | DataOp::Pack(_) => {
+                    let [reg] = &lhs[..] else {
+                        panic!("Register assignment with invalid lhs {:?}", lhs);
+                    };
+                    let rvalue = rvalue(&mut map, RValue::Data { op, args });
+                    let res = map.insert(reg.name, rvalue);
+                    assert!(res.is_none());
+                }
+            },
             SI::AssignReg { lhs, rhs } => {
                 let [reg] = &lhs[..] else {
-                    panic!("Registe assignment with invalid lhs {:?}", rhs);
+                    panic!("Register assignment with invalid lhs {:?}", lhs);
                 };
                 let rvalue = rvalue(&mut map, rhs);
                 let res = map.insert(reg.name, rvalue);

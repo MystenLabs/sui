@@ -160,7 +160,7 @@ pub mod tests {
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_checkpoint_from_watermark, 0);
+        assert_eq!(indexer.first_ingestion_checkpoint, 0);
     }
 
     #[tokio::test]
@@ -179,7 +179,7 @@ pub mod tests {
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_checkpoint_from_watermark, 11);
+        assert_eq!(indexer.first_ingestion_checkpoint, 11);
     }
 
     #[tokio::test]
@@ -205,11 +205,11 @@ pub mod tests {
             .concurrent_pipeline(ConcurrentPipeline2, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_checkpoint_from_watermark, 21);
+        assert_eq!(indexer.first_ingestion_checkpoint, 21);
         indexer
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
             .unwrap();
-        assert_eq!(indexer.first_checkpoint_from_watermark, 11);
+        assert_eq!(indexer.first_ingestion_checkpoint, 11);
     }
 }

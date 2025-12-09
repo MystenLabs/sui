@@ -174,7 +174,7 @@ fn check_signers(filter_config: &TransactionDenyConfig, tx_data: &TransactionDat
     if deny_map.is_empty() {
         return Ok(());
     }
-    for signer in tx_data.signers() {
+    for signer in tx_data.required_signers() {
         deny_if_true!(
             deny_map.contains(&signer),
             format!(

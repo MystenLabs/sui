@@ -1,2 +1,2 @@
 build -v
--d -v build
+build --test -v

@@ -26,8 +26,14 @@ error[E01002]: unexpected token
 error[E03009]: unbound variable
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:10:44
    │
+ 8 │     public fun weird_is_some(o: Option<bool>): bool {
+   │                              - Similarly named defintion found here
+ 9 │        match (o) {
 10 │          Option::Other { mut x: mut y } => y,
-   │                                            ^ Unbound variable 'y'
+   │                                            ^
+   │                                            │
+   │                                            Unbound variable 'y'
+   │                                            Did you mean: 'o'
 
 error[E02010]: invalid name
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:11:33
@@ -52,8 +58,14 @@ error[E01002]: unexpected token
 error[E03009]: unbound variable
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:12:40
    │
+ 8 │     public fun weird_is_some(o: Option<bool>): bool {
+   │                              - Similarly named defintion found here
+   ·
 12 │          Option::Other { mut x: y } => y,
-   │                                        ^ Unbound variable 'y'
+   │                                        ^
+   │                                        │
+   │                                        Unbound variable 'y'
+   │                                        Did you mean: 'o'
 
 warning[W09002]: unused variable
    ┌─ tests/move_2024/parser/invalid_mut_usage_match.move:13:10

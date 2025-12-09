@@ -397,12 +397,13 @@ impl Database {
     #[cfg(tidehunter)]
     pub fn drop_cells_in_range(
         &self,
-        ks: tidehunter::KeySpace,
+        ks: KeySpace,
         from_inclusive: &[u8],
         to_inclusive: &[u8],
     ) -> anyhow::Result<()> {
         if let Storage::TideHunter(db) = &self.storage {
-            db.drop_cells_in_range(ks, from_inclusive, to_inclusive)?;
+            db.drop_cells_in_range(ks, from_inclusive, to_inclusive)
+                .map_err(|e| anyhow::anyhow!("{:?}", e))?;
         } else {
             panic!("drop_cells_in_range called on non-TideHunter storage");
         }

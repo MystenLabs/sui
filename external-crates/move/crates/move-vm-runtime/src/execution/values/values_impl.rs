@@ -3613,7 +3613,7 @@ use move_core_types::annotated_value::{
 impl Value {
     /// Converts the value to an annotated move value. This is only needed for tracing and care
     /// should be taken when using this function as it can possibly inflate the size of the value.
-    pub(crate) fn as_annotated_move_value(&self, layout: &AnnTypeLayout) -> Option<AnnValue> {
+    pub fn as_annotated_move_value(&self, layout: &AnnTypeLayout) -> Option<AnnValue> {
         use AnnTypeLayout as L;
         use AnnValue as AV;
         match (layout, self) {

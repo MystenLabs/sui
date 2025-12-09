@@ -19,7 +19,7 @@ task 2, lines 26-31:
 //> 2: test::m1::r();
 // unconsumed copyable value, and most recent usage was not by-value
 Error: Transaction Effects Status: Unused result without the drop ability. Command result 2, return value 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 2, secondary_idx: 0 }, source: None, command: None } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 2, secondary_idx: 0 }, source: Some("Unused value without drop"), command: None } }
 
 task 3, lines 32-40:
 //# programmable --sender A

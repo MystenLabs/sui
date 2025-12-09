@@ -11,12 +11,8 @@ edition = "2024"
 datatest-stable.workspace = true
 sui-transactional-test-runner.workspace = true
 
-# [[test]]
-# name = "tests"
-# harness = false
-
 [[test]]
-name = "ptb_v2_tests"
+name = "tests"
 harness = false
 
 [dependencies]

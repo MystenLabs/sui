@@ -24,8 +24,8 @@ use move_vm_runtime::{
 };
 use move_vm_runtime::{
     execution::{
-        values::{self, StructRef, Value},
         Type,
+        values::{self, StructRef, Value},
     },
     pop_arg,
 };

@@ -12,7 +12,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
     CheckpointVersionSpecificData, EndOfEpochData, FullCheckpointContents, VerifiedCheckpoint,
-    VerifiedCheckpointContents,
+    VerifiedCheckpointContents, VersionedFullCheckpointContents,
 };
 use sui_types::object::OBJECT_START_VERSION;
 use sui_types::transaction::{Transaction, VerifiedTransaction};
@@ -163,13 +163,14 @@ impl MockCheckpointBuilder {
     ) {
         let contents =
             CheckpointContents::new_with_causally_ordered_execution_data(self.transactions.iter());
-        let full_contents = VerifiedCheckpointContents::new_unchecked(
-            FullCheckpointContents::new_with_causally_ordered_transactions(
-                mem::take(&mut self.transactions)
-                    .into_iter()
-                    .map(|e| e.into_inner()),
-            ),
-        );
+        let full_contents =
+            VerifiedCheckpointContents::new_unchecked(VersionedFullCheckpointContents::V1(
+                FullCheckpointContents::new_with_causally_ordered_transactions(
+                    mem::take(&mut self.transactions)
+                        .into_iter()
+                        .map(|e| e.into_inner()),
+                ),
+            ));
 
         let (epoch, epoch_rolling_gas_cost_summary, end_of_epoch_data) =
             if let Some((next_epoch, end_of_epoch_data)) = new_epoch_data {

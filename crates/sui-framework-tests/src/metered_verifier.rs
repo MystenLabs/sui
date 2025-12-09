@@ -3,23 +3,19 @@
 
 use move_bytecode_verifier_meter::Scope;
 use prometheus::Registry;
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Instant,
-};
+use std::{path::Path, sync::Arc, time::Instant};
 use sui_adapter::adapter::run_metered_move_bytecode_verifier;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_framework::BuiltInFramework;
-use sui_move_build::{CompiledPackage, SuiPackageHooks};
+use sui_move_build::CompiledPackage;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::{
-    error::{SuiErrorKind, SuiResult},
-    metrics::BytecodeVerifierMetrics,
-};
+use sui_types::{error::SuiErrorKind, metrics::BytecodeVerifierMetrics};
 use sui_verifier::meter::SuiVerifierMeter;
 
-fn build(path: &Path) -> SuiResult<CompiledPackage> {
+use crate::setup_examples;
+
+/// Copy `base` to a temporary directory `tmp` and then build in `tmp/extension`
+fn build(path: &Path) -> anyhow::Result<CompiledPackage> {
     let mut config = sui_move_build::BuildConfig::new_for_testing();
     config.config.warnings_are_errors = true;
     config.build(path)
@@ -28,9 +24,10 @@ fn build(path: &Path) -> SuiResult<CompiledPackage> {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_metered_move_bytecode_verifier() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    let path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sui-framework/packages/sui-framework");
+    let tempdir = setup_examples();
+    let path = tempdir
+        .path()
+        .join("crates/sui-framework/packages/sui-framework");
     let compiled_package = build(&path).unwrap();
     let compiled_modules: Vec<_> = compiled_package.get_modules().cloned().collect();
 
@@ -194,12 +191,11 @@ fn test_metered_move_bytecode_verifier() {
     // Check shared meter logic works across all publish in PT
     let mut packages = vec![];
     let with_unpublished_deps = false;
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/move/basics");
-    let package = build(&path).unwrap();
+    let path = tempdir.path().join("examples/move/basics");
+    let package = build(&path).unwrap().package;
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
-
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples/move/coin");
+    let path = tempdir.path().join("examples/move/coin");
     let package = build(&path).unwrap();
     packages.push(package.get_dependency_sorted_modules(with_unpublished_deps));
 
@@ -230,8 +226,6 @@ fn test_metered_move_bytecode_verifier() {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_meter_system_packages() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-
     let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
     let verifier_config =
@@ -286,8 +280,6 @@ fn test_meter_system_packages() {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_build_and_verify_programmability_examples() {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-
     let signing_config = VerifierSigningConfig::default();
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
     let verifier_config =
@@ -295,7 +287,8 @@ fn test_build_and_verify_programmability_examples() {
     let meter_config = signing_config.meter_config_for_signing();
     let registry = &Registry::new();
     let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(registry));
-    let examples = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../examples");
+    let tempdir = setup_examples();
+    let examples = tempdir.path().join("examples");
 
     for example in std::fs::read_dir(examples).unwrap() {
         let Ok(example) = example else { continue };

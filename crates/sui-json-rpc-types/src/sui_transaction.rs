@@ -620,6 +620,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::DisplayRegistryCreate => {
                                 SuiEndOfEpochTransactionKind::DisplayRegistryCreate
                             }
+                            EndOfEpochTransactionKind::AddressAliasStateCreate => {
+                                SuiEndOfEpochTransactionKind::AddressAliasStateCreate
+                            }
                         })
                         .collect(),
                 })
@@ -1784,6 +1787,7 @@ pub enum SuiEndOfEpochTransactionKind {
     AccumulatorRootCreate,
     CoinRegistryCreate,
     DisplayRegistryCreate,
+    AddressAliasStateCreate,
 }
 
 #[serde_as]

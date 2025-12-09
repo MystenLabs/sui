@@ -41,6 +41,7 @@ pub enum EndOfEpochTransactionKind {
     AccumulatorRootCreate(AccumulatorRootCreateTransaction),
     CoinRegistryCreate(CoinRegistryCreateTransaction),
     DisplayRegistryCreate(DisplayRegistryCreateTransaction),
+    AddressAliasStateCreate(AddressAliasStateCreateTransaction),
     // TODO: Add more complex transaction types incrementally
 }
 
@@ -147,6 +148,14 @@ pub struct DisplayRegistryCreateTransaction {
     dummy: Option<bool>,
 }
 
+/// System transaction for creating the alias state.
+#[derive(SimpleObject, Clone)]
+pub struct AddressAliasStateCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
 /// System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other optional transactions to run at the end of the epoch.
 #[Object]
 impl EndOfEpochTransaction {
@@ -216,6 +225,9 @@ impl EndOfEpochTransactionKind {
             }
             N::DisplayRegistryCreate => {
                 K::DisplayRegistryCreate(DisplayRegistryCreateTransaction { dummy: None })
+            }
+            N::AddressAliasStateCreate => {
+                K::AddressAliasStateCreate(AddressAliasStateCreateTransaction { dummy: None })
             }
         }
     }

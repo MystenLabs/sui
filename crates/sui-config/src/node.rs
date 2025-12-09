@@ -721,6 +721,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Arden".to_string(),                                                    // Arden partner
         "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
         "EveFrontier".to_string(),
+        "TestEveFrontier".to_string(),
         "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz".to_string(), // Decot, external partner
     ]);
 
@@ -1254,6 +1255,11 @@ pub struct StateSnapshotConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub object_store_config: Option<ObjectStoreConfig>,
     pub concurrency: usize,
+    /// Archive snapshots every N epochs. If set to 0, archival is disabled.
+    /// Archived snapshots are copied to `archive/epoch_<N>/` in the same bucket
+    /// and are intended to be kept indefinitely.
+    #[serde(default)]
+    pub archive_interval_epochs: u64,
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]

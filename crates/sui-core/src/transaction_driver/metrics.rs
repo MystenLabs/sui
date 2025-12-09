@@ -73,7 +73,7 @@ impl TransactionDriverMetrics {
                 "Time in seconds to successfully submit a transaction to a validator.\n\
                 Includes all retries and measures from the start of submission\n\
                 until a validator accepts the transaction.",
-                &["validator", "tx_type", "ping"],
+                &["tx_type", "ping"],
                 mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )

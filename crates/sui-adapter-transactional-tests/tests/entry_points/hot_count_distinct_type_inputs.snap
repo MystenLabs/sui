@@ -38,8 +38,8 @@ task 5, lines 60-68:
 //> test::m::cool(NestedResult(0, 1));
 //> test::m::cool(Result(1));
 //> test::m::cool(Result(2));
-Error: Transaction Effects Status: Invalid command argument at 0. Invalid argument to private entry function. These functions cannot take arguments from other Move functions
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidArgumentToPrivateEntryFunction }, source: None, command: Some(3) } }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 6, lines 70-74:
 //# programmable --sender A --inputs receiving(4,0)
@@ -47,5 +47,5 @@ task 6, lines 70-74:
 //> 0: test::m::heat_imm<sui::transfer::Receiving<test::m::B>>(Input(0));
 //> test::m::play_receiving(Input(0));
 //> test::m::cool(Result(0));
-Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

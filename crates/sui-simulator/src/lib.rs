@@ -15,7 +15,8 @@ pub use anemo;
 pub use anemo_tower;
 pub use fastcrypto;
 pub use lru;
-pub use move_package;
+pub use move_package_alt;
+pub use move_package_alt_compilation;
 pub use mysten_network;
 #[cfg(msim)]
 pub use sui_execution;

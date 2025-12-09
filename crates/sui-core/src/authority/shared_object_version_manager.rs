@@ -9,12 +9,15 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+use sui_types::SUI_CLOCK_OBJECT_ID;
+use sui_types::SUI_CLOCK_OBJECT_SHARED_VERSION;
 use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::executable_transaction::VerifiedExecutableTransactionWithAliases;
 use sui_types::storage::{
     ObjectKey, transaction_non_shared_input_object_keys, transaction_receiving_object_keys,
 };
@@ -79,11 +82,31 @@ pub enum Schedulable<T = VerifiedExecutableTransaction> {
     Transaction(T),
     RandomnessStateUpdate(EpochId, RandomnessRound),
     AccumulatorSettlement(EpochId, u64 /* checkpoint height */),
+    ConsensusCommitPrologue(EpochId, u64 /* round */, u32 /* sub_dag_index */),
 }
 
 impl From<VerifiedExecutableTransaction> for Schedulable<VerifiedExecutableTransaction> {
     fn from(tx: VerifiedExecutableTransaction) -> Self {
         Schedulable::Transaction(tx)
+    }
+}
+
+impl From<Schedulable<VerifiedExecutableTransactionWithAliases>>
+    for Schedulable<VerifiedExecutableTransaction>
+{
+    fn from(schedulable: Schedulable<VerifiedExecutableTransactionWithAliases>) -> Self {
+        match schedulable {
+            Schedulable::Transaction(tx) => Schedulable::Transaction(tx.into_tx()),
+            Schedulable::RandomnessStateUpdate(epoch, round) => {
+                Schedulable::RandomnessStateUpdate(epoch, round)
+            }
+            Schedulable::AccumulatorSettlement(epoch, checkpoint_height) => {
+                Schedulable::AccumulatorSettlement(epoch, checkpoint_height)
+            }
+            Schedulable::ConsensusCommitPrologue(epoch, round, sub_dag_index) => {
+                Schedulable::ConsensusCommitPrologue(epoch, round, sub_dag_index)
+            }
+        }
     }
 }
 
@@ -105,6 +128,18 @@ impl AsTx for &'_ VerifiedExecutableTransaction {
     }
 }
 
+impl AsTx for VerifiedExecutableTransactionWithAliases {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction {
+        self.tx()
+    }
+}
+
+impl AsTx for &'_ VerifiedExecutableTransactionWithAliases {
+    fn as_tx(&self) -> &VerifiedExecutableTransaction {
+        self.tx()
+    }
+}
+
 impl Schedulable<&'_ VerifiedExecutableTransaction> {
     // Cannot use the blanket ToOwned trait impl because it just calls clone.
     pub fn to_owned_schedulable(&self) -> Schedulable<VerifiedExecutableTransaction> {
@@ -115,6 +150,9 @@ impl Schedulable<&'_ VerifiedExecutableTransaction> {
             }
             Schedulable::AccumulatorSettlement(epoch, checkpoint_height) => {
                 Schedulable::AccumulatorSettlement(*epoch, *checkpoint_height)
+            }
+            Schedulable::ConsensusCommitPrologue(epoch, round, sub_dag_index) => {
+                Schedulable::ConsensusCommitPrologue(*epoch, *round, *sub_dag_index)
             }
         }
     }
@@ -129,6 +167,7 @@ impl<T> Schedulable<T> {
             Schedulable::Transaction(tx) => Some(tx.as_tx()),
             Schedulable::RandomnessStateUpdate(_, _) => None,
             Schedulable::AccumulatorSettlement(_, _) => None,
+            Schedulable::ConsensusCommitPrologue(_, _, _) => None,
         }
     }
 
@@ -161,6 +200,13 @@ impl<T> Schedulable<T> {
                     mutability: SharedObjectMutability::Mutable,
                 }))
             }
+            Schedulable::ConsensusCommitPrologue(_, _, _) => {
+                Either::Right(std::iter::once(SharedInputObject {
+                    id: SUI_CLOCK_OBJECT_ID,
+                    initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                    mutability: SharedObjectMutability::Mutable,
+                }))
+            }
         }
     }
 
@@ -173,6 +219,7 @@ impl<T> Schedulable<T> {
                 .expect("Transaction input should have been verified"),
             Schedulable::RandomnessStateUpdate(_, _) => vec![],
             Schedulable::AccumulatorSettlement(_, _) => vec![],
+            Schedulable::ConsensusCommitPrologue(_, _, _) => vec![],
         }
     }
 
@@ -184,6 +231,7 @@ impl<T> Schedulable<T> {
             Schedulable::Transaction(tx) => transaction_receiving_object_keys(tx.as_tx()),
             Schedulable::RandomnessStateUpdate(_, _) => vec![],
             Schedulable::AccumulatorSettlement(_, _) => vec![],
+            Schedulable::ConsensusCommitPrologue(_, _, _) => vec![],
         }
     }
 
@@ -198,6 +246,9 @@ impl<T> Schedulable<T> {
             }
             Schedulable::AccumulatorSettlement(epoch, checkpoint_height) => {
                 TransactionKey::AccumulatorSettlement(*epoch, *checkpoint_height)
+            }
+            Schedulable::ConsensusCommitPrologue(epoch, round, sub_dag_index) => {
+                TransactionKey::ConsensusCommitPrologue(*epoch, *round, *sub_dag_index)
             }
         }
     }
@@ -511,7 +562,6 @@ mod tests {
     };
 
     use sui_types::object::Object;
-    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
 
     use sui_types::gas_coin::GAS;
@@ -970,22 +1020,7 @@ mod tests {
         shared_objects: &[(ObjectID, SequenceNumber, bool)],
         gas_object_version: u64,
     ) -> VerifiedExecutableTransaction {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        for (shared_object_id, shared_object_init_version, shared_object_mutable) in shared_objects
-        {
-            builder
-                .obj(ObjectArg::SharedObject {
-                    id: *shared_object_id,
-                    initial_shared_version: *shared_object_init_version,
-                    mutability: if *shared_object_mutable {
-                        SharedObjectMutability::Mutable
-                    } else {
-                        SharedObjectMutability::Immutable
-                    },
-                })
-                .unwrap();
-        }
-        let tx_data = TestTransactionBuilder::new(
+        let mut tx_builder = TestTransactionBuilder::new(
             SuiAddress::ZERO,
             (
                 ObjectID::random(),
@@ -993,9 +1028,26 @@ mod tests {
                 ObjectDigest::random(),
             ),
             0,
-        )
-        .programmable(builder.finish())
-        .build();
+        );
+        let tx_data = {
+            let builder = tx_builder.ptb_builder_mut();
+            for (shared_object_id, shared_object_init_version, shared_object_mutable) in
+                shared_objects
+            {
+                builder
+                    .obj(ObjectArg::SharedObject {
+                        id: *shared_object_id,
+                        initial_shared_version: *shared_object_init_version,
+                        mutability: if *shared_object_mutable {
+                            SharedObjectMutability::Mutable
+                        } else {
+                            SharedObjectMutability::Immutable
+                        },
+                    })
+                    .unwrap();
+            }
+            tx_builder.build()
+        };
         let tx = SenderSignedData::new(tx_data, vec![]);
         VerifiedExecutableTransaction::new_unchecked(ExecutableTransaction::new_from_data_and_sig(
             tx,
@@ -1028,22 +1080,23 @@ mod tests {
         }
 
         pub fn add_withdraw_transaction(&mut self) -> TransactionKey {
-            let mut ptb_builder = ProgrammableTransactionBuilder::new();
-            ptb_builder
-                .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
-                    200,
-                    TypeInput::from(GAS::type_tag()),
-                ))
-                .unwrap();
             // Generate random sender and gas object for each transaction
             let (sender, keypair) = get_account_key_pair();
             let gas_object = Object::with_owner_for_testing(sender);
             let gas_object_ref = gas_object.compute_object_reference();
             // Generate a unique gas price to make the transaction unique.
             let gas_price = (self.assignables.len() + 1) as u64;
-            let tx_data = TestTransactionBuilder::new(sender, gas_object_ref, gas_price)
-                .programmable(ptb_builder.finish())
-                .build();
+            let mut tx_builder = TestTransactionBuilder::new(sender, gas_object_ref, gas_price);
+            let tx_data = {
+                let ptb_builder = tx_builder.ptb_builder_mut();
+                ptb_builder
+                    .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
+                        200,
+                        TypeInput::from(GAS::type_tag()),
+                    ))
+                    .unwrap();
+                tx_builder.build()
+            };
             let cert = VerifiedExecutableTransaction::new_for_testing(tx_data, &keypair);
             let key = cert.key();
             self.assignables.push(Schedulable::Transaction(cert));
@@ -1059,35 +1112,36 @@ mod tests {
         }
 
         pub fn add_withdraw_with_shared_object_transaction(&mut self) -> TransactionKey {
-            let mut ptb_builder = ProgrammableTransactionBuilder::new();
-            // Add shared object to the transaction
-            if let Some(shared_obj) = self.shared_objects.first() {
-                let id = shared_obj.id();
-                let init_version = shared_obj.owner.start_version().unwrap();
-                ptb_builder
-                    .obj(ObjectArg::SharedObject {
-                        id,
-                        initial_shared_version: init_version,
-                        mutability: SharedObjectMutability::Mutable,
-                    })
-                    .unwrap();
-            }
-            // Add balance withdraw
-            ptb_builder
-                .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
-                    200,
-                    TypeInput::from(GAS::type_tag()),
-                ))
-                .unwrap();
             // Generate random sender and gas object for each transaction
             let (sender, keypair) = get_account_key_pair();
             let gas_object = Object::with_owner_for_testing(sender);
             let gas_object_ref = gas_object.compute_object_reference();
             // Generate a unique gas price to make the transaction unique.
             let gas_price = (self.assignables.len() + 1) as u64;
-            let tx_data = TestTransactionBuilder::new(sender, gas_object_ref, gas_price)
-                .programmable(ptb_builder.finish())
-                .build();
+            let mut tx_builder = TestTransactionBuilder::new(sender, gas_object_ref, gas_price);
+            let tx_data = {
+                let ptb_builder = tx_builder.ptb_builder_mut();
+                // Add shared object to the transaction
+                if let Some(shared_obj) = self.shared_objects.first() {
+                    let id = shared_obj.id();
+                    let init_version = shared_obj.owner.start_version().unwrap();
+                    ptb_builder
+                        .obj(ObjectArg::SharedObject {
+                            id,
+                            initial_shared_version: init_version,
+                            mutability: SharedObjectMutability::Mutable,
+                        })
+                        .unwrap();
+                }
+                // Add balance withdraw
+                ptb_builder
+                    .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
+                        200,
+                        TypeInput::from(GAS::type_tag()),
+                    ))
+                    .unwrap();
+                tx_builder.build()
+            };
             let cert = VerifiedExecutableTransaction::new_for_testing(tx_data, &keypair);
             let key = cert.key();
             self.assignables.push(Schedulable::Transaction(cert));

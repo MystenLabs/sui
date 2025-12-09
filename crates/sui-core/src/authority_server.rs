@@ -546,9 +546,13 @@ impl ValidatorService {
         let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
 
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
-        let transaction = epoch_store.verify_transaction(transaction).tap_err(|_| {
-            metrics.signature_errors.inc();
-        })?;
+        let transaction = epoch_store
+            // Aliases are not supported outside of MFP.
+            .verify_transaction_require_no_aliases(transaction)
+            .tap_err(|_| {
+                metrics.signature_errors.inc();
+            })?
+            .into_tx();
         drop(tx_verif_metrics_guard);
 
         let tx_digest = transaction.digest();
@@ -720,16 +724,26 @@ impl ValidatorService {
             // Ok to fail the request when any signature is invalid.
             let verified_transaction = {
                 let _metrics_guard = metrics.tx_verification_latency.start_timer();
-                match epoch_store.verify_transaction(transaction) {
-                    Ok(txn) => txn,
-                    Err(e) => {
-                        metrics.signature_errors.inc();
-                        return Err(e.into());
+                if epoch_store.protocol_config().address_aliases() {
+                    match epoch_store.verify_transaction_with_current_aliases(transaction) {
+                        Ok(tx) => tx,
+                        Err(e) => {
+                            metrics.signature_errors.inc();
+                            return Err(e.into());
+                        }
+                    }
+                } else {
+                    match epoch_store.verify_transaction_require_no_aliases(transaction) {
+                        Ok(tx) => tx,
+                        Err(e) => {
+                            metrics.signature_errors.inc();
+                            return Err(e.into());
+                        }
                     }
                 }
             };
 
-            let tx_digest = verified_transaction.digest();
+            let tx_digest = verified_transaction.tx().digest();
             tx_digests.push(*tx_digest);
 
             debug!(
@@ -762,7 +776,10 @@ impl ValidatorService {
                 "handle_submit_transaction: waiting for fastpath dependency objects"
             );
             if !state
-                .wait_for_fastpath_dependency_objects(&verified_transaction, epoch_store.epoch())
+                .wait_for_fastpath_dependency_objects(
+                    verified_transaction.tx(),
+                    epoch_store.epoch(),
+                )
                 .await?
             {
                 debug!(
@@ -771,7 +788,7 @@ impl ValidatorService {
                 );
             }
 
-            match state.handle_vote_transaction(&epoch_store, verified_transaction.clone()) {
+            match state.handle_vote_transaction(&epoch_store, verified_transaction.tx().clone()) {
                 Ok(_) => { /* continue processing */ }
                 Err(e) => {
                     // Check if transaction has been executed while being validated.
@@ -805,10 +822,17 @@ impl ValidatorService {
                 }
             }
 
-            consensus_transactions.push(ConsensusTransaction::new_user_transaction_message(
-                &self.state.name,
-                verified_transaction.into(),
-            ));
+            if epoch_store.protocol_config().address_aliases() {
+                consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
+                    &self.state.name,
+                    verified_transaction.into(),
+                ));
+            } else {
+                consensus_transactions.push(ConsensusTransaction::new_user_transaction_message(
+                    &self.state.name,
+                    verified_transaction.into_tx().into(),
+                ));
+            }
             transaction_indexes.push(idx);
             total_size_bytes += tx_size;
         }
@@ -1227,7 +1251,10 @@ impl ValidatorService {
                     ConsensusTransactionKind::UserTransaction(tx) => {
                         self.state.await_transaction_effects(*tx.digest(), epoch_store).await?
                     }
-                    _ => panic!("`handle_submit_to_consensus` received transaction that is not a CertifiedTransaction or UserTransaction"),
+                    ConsensusTransactionKind::UserTransactionV2(tx) => {
+                        self.state.await_transaction_effects(*tx.tx().digest(), epoch_store).await?
+                    }
+                    _ => panic!("`handle_submit_to_consensus` received transaction that is not a CertifiedTransaction, UserTransaction, or UserTransactionV2"),
                 };
                 let events = if include_events && effects.events_digest().is_some() {
                     Some(self.state.get_transaction_events(effects.transaction_digest())?)

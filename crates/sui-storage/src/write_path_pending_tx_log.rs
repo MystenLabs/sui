@@ -83,6 +83,10 @@ impl WritePathPendingTransactionLog {
         transactions_set.extend(transactions.iter().map(|t| *t.digest()));
         Ok(transactions)
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.transactions_set.lock().is_empty() && self.pending_transactions.logs.is_empty()
+    }
 }
 
 #[cfg(test)]

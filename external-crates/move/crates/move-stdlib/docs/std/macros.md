@@ -53,8 +53,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_max">num_max</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
-    <b>if</b> (x &gt; y) x
-    <b>else</b> y
+    <b>if</b> (x &gt; y) x <b>else</b> y
 }
 </code></pre>
 
@@ -80,8 +79,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_min">num_min</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
-    <b>if</b> (x &lt; y) x
-    <b>else</b> y
+    <b>if</b> (x &lt; y) x <b>else</b> y
 }
 </code></pre>
 
@@ -107,8 +105,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_diff">num_diff</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
-    <b>if</b> (x &gt; y) x - y
-    <b>else</b> y - x
+    <b>if</b> (x &gt; y) x - y <b>else</b> y - x
 }
 </code></pre>
 
@@ -134,8 +131,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_divide_and_round_up">num_divide_and_round_up</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
-    <b>if</b> (x % y == 0) x / y
-    <b>else</b> x / y + 1
+    <b>if</b> (x % y == 0) x / y <b>else</b> x / y + 1
 }
 </code></pre>
 
@@ -379,8 +375,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u8">try_as_u8</a>($x: _): Option&lt;<a href="../std/u8.md#std_u8">u8</a>&gt; {
     <b>let</b> x = $x;
-    <b>if</b> (x &gt; 0xFF) <a href="../std/option.md#std_option_none">option::none</a>()
-    <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u8.md#std_u8">u8</a>)
+    <b>if</b> (x &gt; 0xFF) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u8.md#std_u8">u8</a>)
 }
 </code></pre>
 
@@ -405,8 +400,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u16">try_as_u16</a>($x: _): Option&lt;<a href="../std/u16.md#std_u16">u16</a>&gt; {
     <b>let</b> x = $x;
-    <b>if</b> (x &gt; 0xFFFF) <a href="../std/option.md#std_option_none">option::none</a>()
-    <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u16.md#std_u16">u16</a>)
+    <b>if</b> (x &gt; 0xFFFF) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u16.md#std_u16">u16</a>)
 }
 </code></pre>
 
@@ -431,8 +425,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u32">try_as_u32</a>($x: _): Option&lt;<a href="../std/u32.md#std_u32">u32</a>&gt; {
     <b>let</b> x = $x;
-    <b>if</b> (x &gt; 0xFFFF_FFFF) <a href="../std/option.md#std_option_none">option::none</a>()
-    <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u32.md#std_u32">u32</a>)
+    <b>if</b> (x &gt; 0xFFFF_FFFF) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u32.md#std_u32">u32</a>)
 }
 </code></pre>
 
@@ -457,8 +450,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u64">try_as_u64</a>($x: _): Option&lt;<a href="../std/u64.md#std_u64">u64</a>&gt; {
     <b>let</b> x = $x;
-    <b>if</b> (x &gt; 0xFFFF_FFFF_FFFF_FFFF) <a href="../std/option.md#std_option_none">option::none</a>()
-    <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u64.md#std_u64">u64</a>)
+    <b>if</b> (x &gt; 0xFFFF_FFFF_FFFF_FFFF) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u64.md#std_u64">u64</a>)
 }
 </code></pre>
 
@@ -483,8 +475,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u128">try_as_u128</a>($x: _): Option&lt;<a href="../std/u128.md#std_u128">u128</a>&gt; {
     <b>let</b> x = $x;
-    <b>if</b> (x &gt; 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF) <a href="../std/option.md#std_option_none">option::none</a>()
-    <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u128.md#std_u128">u128</a>)
+    <b>if</b> (x &gt; 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u128.md#std_u128">u128</a>)
 }
 </code></pre>
 

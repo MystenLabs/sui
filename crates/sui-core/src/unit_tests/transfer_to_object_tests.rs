@@ -3,7 +3,6 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
@@ -80,15 +79,7 @@ impl TestRunner {
         telemetry_subscribers::init_for_testing();
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
 
-        let mut protocol_config =
-            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
-        protocol_config.set_per_object_congestion_control_mode_for_testing(
-            PerObjectCongestionControlMode::None,
-        );
-        let authority_state = TestAuthorityBuilder::new()
-            .with_protocol_config(protocol_config)
-            .build()
-            .await;
+        let authority_state = TestAuthorityBuilder::new().build().await;
 
         let rgp = authority_state.reference_gas_price_for_testing().unwrap();
         let mut gas_object_ids = vec![];

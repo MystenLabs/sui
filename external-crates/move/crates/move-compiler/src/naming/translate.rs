@@ -224,6 +224,16 @@ impl ResolvedType {
             ResolvedType::Unbound => (),
         }
     }
+
+    fn name_loc_opt(&self) -> Option<Loc> {
+        match self {
+            ResolvedType::ModuleType(dt) => Some(dt.name().loc()),
+            ResolvedType::TParam(loc, _) => Some(*loc),
+            ResolvedType::BuiltinType(_) => None,
+            ResolvedType::Hole => None,
+            ResolvedType::Unbound => None,
+        }
+    }
 }
 
 impl ResolvedDatatype {
@@ -383,6 +393,14 @@ impl ResolvedModuleMember {
             ResolvedModuleMember::Datatype(dt) => dt.name_symbol(),
             ResolvedModuleMember::Function(fun) => fun.name.value(),
             ResolvedModuleMember::Constant(const_) => const_.name.value(),
+        }
+    }
+
+    fn name_loc(&self) -> Loc {
+        match self {
+            ResolvedModuleMember::Datatype(dt) => dt.name().loc(),
+            ResolvedModuleMember::Function(fun) => fun.name.loc(),
+            ResolvedModuleMember::Constant(const_) => const_.name.loc(),
         }
     }
 }
@@ -554,7 +572,7 @@ pub(super) struct Context<'outer, 'env> {
     reporter: DiagnosticReporter<'env>,
     unscoped_types: Vec<BTreeMap<Symbol, ResolvedType>>,
     current_module: ModuleIdent,
-    local_scopes: Vec<BTreeMap<Symbol, u16>>,
+    local_scopes: Vec<BTreeMap<Symbol, (Loc, u16)>>,
     local_count: BTreeMap<Symbol, u16>,
     used_locals: BTreeSet<N::Var_>,
     nominal_blocks: Vec<(Option<Symbol>, BlockLabel, NominalBlockType)>,
@@ -686,14 +704,14 @@ impl<'outer, 'env> Context<'outer, 'env> {
     fn valid_module(&mut self, m: &ModuleIdent) -> bool {
         let resolved = self.outer.module_members.contains_key(m);
         if !resolved {
-            let diag = make_unbound_module_error(self, m.loc, m);
+            // This is currently only called from 'friend', so suggesting self makes no sense.
+            let diag = make_unbound_module_error(self, m.loc, m, /* suggest_self */ false);
             self.add_diag(diag);
         }
         resolved
     }
 
-    /// Main module access resolver. Everything for modules should go through this when possible,
-    /// as it automatically preserves location information on symbols.
+    /// Module suggestion creation.
     fn resolve_module_access(
         &mut self,
         kind: &Option<ErrorKind>,
@@ -714,14 +732,16 @@ impl<'outer, 'env> Context<'outer, 'env> {
     ) -> Option<ResolvedModuleMember> {
         let Some(members) = self.outer.module_members.get(m) else {
             if report_errors {
-                self.add_diag(make_unbound_module_error(self, m.loc, m))
+                self.add_diag(make_unbound_module_error(
+                    self, m.loc, m, /* suggest_self */ true,
+                ))
             };
             return None;
         };
         let result = members.get(&n.value);
         if result.is_none() && report_errors {
             self.add_diag(make_unbound_module_member_error(
-                self, kind, loc, *m, n.value,
+                self, kind, loc, *m, &n.value,
             ))
         }
         result.map(|inner| {
@@ -860,6 +880,20 @@ impl<'outer, 'env> Context<'outer, 'env> {
     }
 
     fn resolve_unscoped_type(&mut self, loc: Loc, n: Name) -> ResolvedType {
+        fn find_suggestion<'a>(
+            unscoped_types: &'a [BTreeMap<Symbol, ResolvedType>],
+            n: &str,
+        ) -> Option<(&'a Symbol, Option<Loc>)> {
+            for candidates in unscoped_types.iter().rev() {
+                if let Some((suggestion, ty)) =
+                    suggest_levenshtein_candidate(candidates, n, |(name, _)| name.as_str())
+                {
+                    return Some((suggestion, ty.name_loc_opt()));
+                }
+            }
+            None
+        }
+
         match self
             .unscoped_types
             .iter()
@@ -868,6 +902,11 @@ impl<'outer, 'env> Context<'outer, 'env> {
         {
             None => {
                 let diag = make_unbound_local_name_error(self, &ErrorKind::Type, loc, n);
+                if let Some((suggestion, defn_loc_opt)) =
+                    find_suggestion(&self.unscoped_types, n.value.as_str())
+                {
+                    add_suggestion(&mut diag.clone(), loc, &suggestion, defn_loc_opt);
+                }
                 self.add_diag(diag);
                 ResolvedType::Unbound
             }
@@ -935,6 +974,9 @@ impl<'outer, 'env> Context<'outer, 'env> {
                 match self.resolve_local(
                     n.loc,
                     NameResolution::UnboundUnscopedName,
+                    // Provide a suggestion if this might be a lambda argument.
+                    /* provide_suggestion */
+                    n.value.as_str().starts_with("$"),
                     |n| {
                         if possibly_datatype_name {
                             format!("Unbound datatype or function '{}' in current scope", n)
@@ -1129,9 +1171,11 @@ impl<'outer, 'env> Context<'outer, 'env> {
     fn resolve_term(&mut self, sp!(mloc, ma_): E::ModuleAccess) -> ResolvedTerm {
         match ma_ {
             E::ModuleAccess_::Name(name) if !is_constant_name(&name.value) => {
+                let name_starts_with_lowercase = name.value.as_str().starts_with(LOWERCASE_LETTERS);
                 match self.resolve_local(
                     mloc,
                     NameResolution::UnboundVariable,
+                    /* provide_suggestion */ name_starts_with_lowercase,
                     |name| format!("Unbound variable '{name}'"),
                     name,
                 ) {
@@ -1300,7 +1344,10 @@ impl<'outer, 'env> Context<'outer, 'env> {
             .entry(name)
             .and_modify(|c| *c += 1)
             .or_insert(default);
-        self.local_scopes.last_mut().unwrap().insert(name, id);
+        self.local_scopes
+            .last_mut()
+            .unwrap()
+            .insert(name, (vloc, id));
         // all locals start at color zero
         // they will be incremented when substituted for macros
         let nvar_ = N::Var_ { name, id, color: 0 };
@@ -1311,9 +1358,25 @@ impl<'outer, 'env> Context<'outer, 'env> {
         &mut self,
         loc: Loc,
         code: diagnostics::codes::NameResolution,
+        provide_suggestions: bool,
         variable_msg: impl FnOnce(Symbol) -> S,
         sp!(vloc, name): Name,
     ) -> Option<N::Var> {
+        pub fn find_suggestion(
+            local_scopes: &[BTreeMap<Symbol, (Loc, u16)>],
+            n: &str,
+        ) -> Option<(Symbol, Loc)> {
+            for candidates in local_scopes.iter().rev() {
+                if let Some((name, loc)) =
+                    suggest_levenshtein_candidate(candidates, n, |(name, _)| name.as_str())
+                        .map(|(s, (loc, _))| (s, loc))
+                {
+                    return Some((*name, *loc));
+                }
+            }
+            None
+        }
+
         let id_opt = self
             .local_scopes
             .iter()
@@ -1322,10 +1385,17 @@ impl<'outer, 'env> Context<'outer, 'env> {
         match id_opt {
             None => {
                 let msg = variable_msg(name);
-                self.add_diag(diag!(code, (loc, msg)));
+                let mut diag = diag!(code, (loc, msg));
+                if provide_suggestions
+                    && let Some((suggestion, loc)) =
+                        find_suggestion(&self.local_scopes, name.as_str())
+                {
+                    add_suggestion(&mut diag, vloc, suggestion, Some(loc));
+                }
+                self.add_diag(diag);
                 None
             }
-            Some(id) => {
+            Some((_, id)) => {
                 // all locals start at color zero
                 // they will be incremented when substituted for macros
                 let nvar_ = N::Var_ { name, id, color: 0 };
@@ -1346,7 +1416,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
                 self.add_diag(ice!((loc, msg)));
                 None
             }
-            Some(id) => {
+            Some((_, id)) => {
                 let nvar_ = N::Var_ { name, id, color: 0 };
                 Some(sp(vloc, nvar_))
             }
@@ -1490,6 +1560,28 @@ impl<'outer, 'env> Context<'outer, 'env> {
     fn exit_nominal_block(&mut self) -> (BlockLabel, NominalBlockType) {
         let (_name, label, name_type) = self.nominal_blocks.pop().unwrap();
         (label, name_type)
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Suggestions
+    // ---------------------------------------------------------------------------------------------
+
+    fn suggest_module(&self, m: &ModuleIdent, suggest_self: bool) -> Option<&ModuleIdent> {
+        // We only consider modules with the same address for suggestions.
+        // We also skip the current module, because that would have worked out during name
+        // resolution, and it is not a helpful suggestion. It is also weird to write it.
+        let candidates = self
+            .outer
+            .module_members
+            .keys()
+            .filter(|mid| mid.value.address == m.value.address)
+            .filter(|mid| {
+                suggest_self || mid.value.module_name() != self.current_module.value.module_name()
+            });
+
+        suggest_levenshtein_candidate(candidates, m.value.module_name(), |candidate| {
+            candidate.value.module_name()
+        })
     }
 }
 
@@ -1657,13 +1749,20 @@ fn make_unbound_name_error_msg(
 fn make_unbound_module_error(
     context: &Context,
     loc: Loc,
-    mident: impl std::fmt::Display,
+    mident: &ModuleIdent,
+    suggest_self: bool,
 ) -> Diagnostic {
     let msg = make_unbound_name_error_msg(context, &ErrorKind::Module, true, mident);
-    diag!(
+    let mut diag = diag!(
         ErrorKind::Module.unbound_error_code(/* is_single_name */ true),
         (loc, msg)
-    )
+    );
+
+    if let Some(suggestion) = context.suggest_module(mident, suggest_self) {
+        add_suggestion(&mut diag, loc, suggestion, None);
+    }
+
+    diag
 }
 
 fn make_unbound_local_name_error(
@@ -1685,7 +1784,7 @@ fn make_unbound_module_member_error(
     expected: &Option<ErrorKind>,
     loc: Loc,
     mident: ModuleIdent,
-    name: impl std::fmt::Display,
+    name: &Symbol,
 ) -> Diagnostic {
     let expected = expected.as_ref().unwrap_or(&ErrorKind::ModuleMember);
     let same_module = context.current_module == mident;
@@ -1698,10 +1797,27 @@ fn make_unbound_module_member_error(
         "{prefix}{}{postfix}",
         make_unbound_name_error_msg(context, expected, same_module, name)
     );
-    diag!(
+    let mut diag = diag!(
         expected.unbound_error_code(/* is_single_name */ false),
         (loc, msg)
-    )
+    );
+    if let Some(members) = context.outer.module_members.get(&mident) {
+        let members = members.iter().filter(|(_, kind)| match (expected, kind) {
+            (ErrorKind::Function, ResolvedModuleMember::Function(_)) => true,
+            (ErrorKind::Constant, ResolvedModuleMember::Constant(_)) => true,
+            (ErrorKind::Datatype, ResolvedModuleMember::Datatype(_)) => true,
+            (ErrorKind::ModuleMember, _) => false,
+            _ => false,
+        });
+        if let Some((suggestion, member)) =
+            suggest_levenshtein_candidate(members, name.to_string().as_str(), |(candidate, _)| {
+                candidate.as_str()
+            })
+        {
+            add_suggestion(&mut diag, loc, suggestion, Some(member.name_loc()));
+        }
+    }
+    diag
 }
 
 fn make_invalid_module_member_kind_error(
@@ -3931,6 +4047,7 @@ fn lvalue(
                     C::Assign => context.resolve_local(
                         loc,
                         NameResolution::UnboundVariable,
+                        /* provide_suggestion */ true,
                         |name| format!("Invalid assignment. Unbound variable '{name}'"),
                         n,
                     )?,

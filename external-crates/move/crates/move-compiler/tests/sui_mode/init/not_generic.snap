@@ -6,9 +6,9 @@ info:
   lint: false
 ---
 error[Sui E02003]: invalid 'init' function
-  ┌─ tests/sui_mode/init/not_generic.move:4:9
+  ┌─ tests/sui_mode/init/not_generic.move:5:9
   │
-4 │     fun init<T>(_ctx: &mut tx_context::TxContext) {
+5 │     fun init<T>(_ctx: &mut tx_context::TxContext) {
   │         ^^^^ - 'init' functions cannot have type parameters
   │         │     
   │         Invalid 'init' function declaration

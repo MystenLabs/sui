@@ -5,8 +5,10 @@ use std::path::PathBuf;
 
 use clap::*;
 use colored::Colorize;
-use move_package::BuildConfig as MoveBuildConfig;
+use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
+use sui_config::{SUI_CLIENT_CONFIG, sui_config_dir};
 use sui_move::execute_move_command;
+use sui_sdk::wallet_context::WalletContext;
 use sui_types::exit_main;
 use tracing::debug;
 
@@ -64,10 +66,18 @@ async fn main() {
         .init();
     debug!("Sui-Move CLI version: {VERSION}");
 
-    exit_main!(execute_move_command(
+    exit_main!(execute(args).await);
+}
+
+async fn execute(args: Args) -> anyhow::Result<()> {
+    let config = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
+    let wallet = WalletContext::new(&config)?;
+    execute_move_command(
         args.package_path.as_deref(),
         args.build_config,
         args.cmd,
         None,
-    ));
+        &wallet,
+    )
+    .await
 }

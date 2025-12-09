@@ -9,7 +9,7 @@ use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::natives::functions::{NativeContext, NativeResult};
 use move_vm_runtime::{execution::values::VectorRef, native_charge_gas_early_exit};
 use move_vm_runtime::{
-    execution::{values::Value, Type},
+    execution::{Type, values::Value},
     pop_arg,
 };
 use smallvec::smallvec;

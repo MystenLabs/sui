@@ -1,6 +1,3 @@
 [package]
-name = "Dep"
+name = "a"
 edition = "2024.beta"
-
-[addresses]
-a = "0x41"

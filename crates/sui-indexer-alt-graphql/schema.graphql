@@ -142,6 +142,16 @@ type Address implements IAddressable {
 }
 
 """
+System transaction for creating the alias state.
+"""
+type AddressAliasStateCreateTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
+}
+
+"""
 Object is exclusively owned by a single address, and is mutable.
 """
 type AddressOwner {
@@ -1052,7 +1062,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction | DisplayRegistryCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction | DisplayRegistryCreateTransaction | AddressAliasStateCreateTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -1258,6 +1268,8 @@ type Event {
 	"""
 	Timestamp corresponding to the checkpoint this event's transaction was finalized in.
 	All events from the same transaction share the same timestamp.
+	
+	`null` for simulated/executed transactions as they are not included in a checkpoint.
 	"""
 	timestamp: DateTime
 	"""
@@ -3544,7 +3556,7 @@ type SharedInput {
 }
 
 """
-The result of simulating a transaction, including the predicted effects, events, and any errors.
+The result of simulating a transaction, including the predicted effects and any errors.
 """
 type SimulationResult {
 	"""
@@ -3559,12 +3571,6 @@ type SimulationResult {
 	`None` if the simulation was successful.
 	"""
 	error: String
-	"""
-	The events that would be emitted if the transaction were executed.
-	
-	`None` if the simulation failed or no events would be emitted.
-	"""
-	events: [Event!]
 	"""
 	The intermediate outputs for each command of the transaction simulation, including contents of mutated references and return values.
 	"""
@@ -3827,6 +3833,8 @@ type TransactionEffects {
 	status: ExecutionStatus
 	"""
 	Timestamp corresponding to the checkpoint this transaction was finalized in.
+	
+	`null` for executed/simulated transactions that have not been included in a checkpoint.
 	"""
 	timestamp: DateTime
 	"""

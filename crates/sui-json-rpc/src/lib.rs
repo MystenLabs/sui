@@ -7,10 +7,10 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http;
-use hyper::header::HeaderName;
-use hyper::header::HeaderValue;
 use hyper::Method;
 use hyper::Request;
+use hyper::header::HeaderName;
+use hyper::header::HeaderValue;
 use jsonrpsee::RpcModule;
 use metrics::Metrics;
 use metrics::MetricsLayer;

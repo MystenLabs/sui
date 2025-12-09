@@ -1,0 +1,17 @@
+# this is disabled because it is testing setting dep "_" addresses, which isn't supported in the new system
+[package]
+name = "Foo"
+edition = "2024.beta"
+
+[addresses]
+A = "_"
+foo = "0x0"
+
+[dev-addresses]
+std = "0x1"
+A = "0x2"
+B = "0x3"
+
+[dev-dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+Bar = { local = "dep" }

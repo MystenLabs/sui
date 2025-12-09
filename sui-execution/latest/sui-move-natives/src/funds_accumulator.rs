@@ -7,8 +7,8 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{account_address::AccountAddress, u256::U256, vm_status::StatusCode};
 use move_vm_runtime::{
     execution::{
-        values::{Struct, Value},
         Type,
+        values::{Struct, Value},
     },
     native_charge_gas_early_exit,
     natives::functions::{NativeContext, NativeResult},

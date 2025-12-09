@@ -22,8 +22,8 @@ task 2, lines 44-53:
 //> test::m1::assert_string(Input(0));
 // Tests that locals of the same type are distinct even if they are the same value+type
 // This should abort
-Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 54-58:
 //# programmable --inputs 0u8 0u8
@@ -39,8 +39,8 @@ task 4, lines 59-63:
 //> 1: test::m1::borrow_mut<std::ascii::String>(Input(0));
 //> test::m1::modify_ascii(Result(1));
 //> test::m1::modify_u8(Result(0));
-Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, lines 65-69:
 //# programmable --inputs 0u8
@@ -48,5 +48,5 @@ task 5, lines 65-69:
 //> 1: test::m1::borrow_mut<std::ascii::String>(Input(0));
 //> test::m1::modify_u8(Result(0));
 //> test::m1::modify_ascii(Result(1));
-Error: Transaction Effects Status: Invalid public Move function signature. Unsupported return type for return value 0
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidPublicFunctionReturnType { idx: 0 }, source: None, command: Some(0) } }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

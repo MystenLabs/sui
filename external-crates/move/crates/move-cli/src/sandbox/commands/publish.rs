@@ -7,7 +7,7 @@ use crate::{
     sandbox::utils::{get_gas_status, on_disk_state_view::OnDiskStateView},
 };
 use anyhow::{Result, bail};
-use move_package::compilation::compiled_package::CompiledPackage;
+use move_package_alt_compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::{
     dev_utils::{gas_schedule::CostTable, storage::StoredPackage},
     natives::{extensions::NativeExtensions, functions::NativeFunctions},

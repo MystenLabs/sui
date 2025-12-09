@@ -32,8 +32,8 @@ Contents: test::m::S {
 
 task 4, line 24:
 //# transfer-object 2,0 --sender A --recipient B
-Error: Transaction Effects Status: Invalid command argument at 0. Immutable objects cannot be passed by-value.
-Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue } at command Some(0)
+Error: Transaction Effects Status: Invalid command argument at 0. Object passed to TransferObject does not have public transfer, i.e. the `store` ability
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidTransferObject } at command Some(0)
 
 task 5, line 26:
 //# view-object 2,0

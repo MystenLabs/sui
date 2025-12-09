@@ -4,14 +4,13 @@
 
 use std::collections::BTreeMap;
 
-use tracing::debug;
-
 use crate::{
     errors::{FileHandle, PackageResult},
+    flavor::MoveFlavor,
     schema::{PackageID, ParsedLockfile, Pin},
 };
 
-use super::{EnvironmentName, paths::PackagePath};
+use super::{EnvironmentName, package_lock::PackageSystemLock, paths::PackagePath};
 
 #[derive(Debug)]
 pub struct Lockfiles {
@@ -24,22 +23,13 @@ pub struct Lockfiles {
 
 impl Lockfiles {
     /// Read `Move.lock` from `path`; returning [None] if it doesn't exist
-    pub fn read_from_dir(path: &PackagePath) -> PackageResult<Option<Self>> {
-        // Parse `Move.lock`
-        debug!("reading lockfiles from {:?}", path);
-        let lockfile_name = path.lockfile_path();
-        if !lockfile_name.exists() {
-            debug!("no lockfile found");
-            return Ok(None);
-        };
-
-        let file_id = FileHandle::new(lockfile_name)?;
-        let main: ParsedLockfile = toml_edit::de::from_str(file_id.source())?;
-
-        Ok(Some(Lockfiles {
-            main,
-            file: file_id,
-        }))
+    pub fn read_from_dir<F: MoveFlavor>(
+        path: &PackagePath,
+        mtx: &PackageSystemLock,
+    ) -> PackageResult<Option<Self>> {
+        Ok(path
+            .read_lockfile(mtx)?
+            .map(|(file, main)| Lockfiles { main, file }))
     }
 
     pub fn pins_for_env(&self, env: &EnvironmentName) -> Option<&BTreeMap<PackageID, Pin>> {

@@ -4,7 +4,6 @@ edition = "2024.beta"
 
 [addresses]
 vec = "0x0"
-std = "0x1"
 
-[dev-dependencies]
+[dependencies]
 MoveStdlib = { local = "../../../../move-stdlib" }

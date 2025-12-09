@@ -333,7 +333,10 @@ impl SurferState {
     #[tracing::instrument(skip_all, fields(surfer_id = self.id))]
     pub async fn publish_package(&mut self, path: &Path) {
         let rgp = self.cluster.get_reference_gas_price().await;
-        let package = BuildConfig::new_for_testing().build(path).unwrap();
+        let package = BuildConfig::new_for_testing()
+            .build_async(path)
+            .await
+            .unwrap();
         let modules = package.get_package_bytes(false);
         let tx_data = TransactionData::new_module(
             self.address,
@@ -344,6 +347,8 @@ impl SurferState {
             rgp,
         );
         let tx = self.cluster.wallet.sign_transaction(&tx_data).await;
+        let tx_digest = *tx.digest();
+        info!(?tx_digest, "Publishing package");
         let start = Instant::now();
         let response = loop {
             match self
@@ -358,12 +363,12 @@ impl SurferState {
                 Err(err) => {
                     if start.elapsed() > Duration::from_secs(120) {
                         fatal!(
-                            "Failed to publish package after 120 seconds: {:?} {}",
+                            "Failed to publish package after 120 seconds: {} {}",
                             err,
                             tx.digest()
                         );
                     }
-                    error!("Failed to publish package: {:?} {}", err, tx.digest());
+                    error!(?tx_digest, "Failed to publish package: {}", err);
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             }

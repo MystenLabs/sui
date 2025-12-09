@@ -86,9 +86,9 @@ pub struct MockConnection<'c>(pub &'c MockStore);
 impl Connection for MockConnection<'_> {
     async fn committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline_task: &str,
     ) -> Result<Option<CommitterWatermark>, anyhow::Error> {
-        let watermark = self.0.watermarks.get(pipeline);
+        let watermark = self.0.watermarks.get(pipeline_task);
         Ok(watermark.map(|w| CommitterWatermark {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
@@ -131,7 +131,7 @@ impl Connection for MockConnection<'_> {
 
     async fn set_committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline_task: &str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
         // Check if we should simulate a commit failure
@@ -146,7 +146,11 @@ impl Connection for MockConnection<'_> {
             self.0.commit_watermark_failures.failures - prev
         );
 
-        let mut wm = self.0.watermarks.entry(pipeline.to_string()).or_default();
+        let mut wm = self
+            .0
+            .watermarks
+            .entry(pipeline_task.to_string())
+            .or_default();
 
         wm.epoch_hi_inclusive = watermark.epoch_hi_inclusive;
         wm.checkpoint_hi_inclusive = watermark.checkpoint_hi_inclusive;
@@ -406,24 +410,24 @@ impl MockStore {
         self
     }
 
-    pub fn with_watermark(self, watermark_key: &str, watermark: MockWatermark) -> Self {
-        self.watermarks.insert(watermark_key.to_string(), watermark);
+    pub fn with_watermark(self, pipeline_task: &str, watermark: MockWatermark) -> Self {
+        self.watermarks.insert(pipeline_task.to_string(), watermark);
         self
     }
 
     pub fn with_data(
         self,
-        watermark_key: &str,
+        pipeline_task: &str,
         data: std::collections::HashMap<u64, Vec<u64>>,
     ) -> Self {
         self.data
-            .insert(watermark_key.to_string(), DashMap::from_iter(data));
+            .insert(pipeline_task.to_string(), DashMap::from_iter(data));
         self
     }
 
     /// Helper to get the current watermark state for testing.
-    pub fn watermark(&self, watermark_key: &str) -> Option<MockWatermark> {
-        self.watermarks.get(watermark_key).map(|w| w.clone())
+    pub fn watermark(&self, pipeline_task: &str) -> Option<MockWatermark> {
+        self.watermarks.get(pipeline_task).map(|w| w.clone())
     }
 
     /// Get the sequential checkpoint data
@@ -479,11 +483,11 @@ impl MockStore {
     }
 
     /// Wait for any data to be processed and stored, panicking if timeout is reached
-    pub async fn wait_for_any_data(&self, watermark_key: &str, timeout_duration: Duration) {
+    pub async fn wait_for_any_data(&self, pipeline_task: &str, timeout_duration: Duration) {
         let start = std::time::Instant::now();
         while start.elapsed() < timeout_duration {
             {
-                if self.data.contains_key(watermark_key) {
+                if self.data.contains_key(pipeline_task) {
                     return;
                 }
             }
@@ -495,14 +499,14 @@ impl MockStore {
     /// Wait for data from a specific checkpoint, panicking if timeout is reached
     pub async fn wait_for_data(
         &self,
-        watermark_key: &str,
+        pipeline_task: &str,
         checkpoint: u64,
         timeout_duration: Duration,
     ) -> Vec<u64> {
         let start = std::time::Instant::now();
         while start.elapsed() < timeout_duration {
             {
-                if let Some(pipeline_data) = self.data.get(watermark_key)
+                if let Some(pipeline_data) = self.data.get(pipeline_task)
                     && let Some(values) = pipeline_data.get(&checkpoint)
                 {
                     return values.clone();
@@ -516,22 +520,23 @@ impl MockStore {
     /// Wait for watermark to reach the expected checkpoint, returning the watermark when reached
     pub async fn wait_for_watermark(
         &self,
-        watermark_key: &str,
+        pipeline_task: &str,
         checkpoint: u64,
         timeout_duration: Duration,
     ) -> MockWatermark {
-        let start = std::time::Instant::now();
+        let start = tokio::time::Instant::now();
         while start.elapsed() < timeout_duration {
-            if let Some(watermark) = self.watermark(watermark_key)
+            if let Some(watermark) = self.watermark(pipeline_task)
                 && watermark.checkpoint_hi_inclusive >= checkpoint
             {
                 return watermark;
             }
+
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
         panic!(
             "Timeout waiting for watermark on pipeline {} to reach {}",
-            watermark_key, checkpoint
+            pipeline_task, checkpoint
         );
     }
 }
