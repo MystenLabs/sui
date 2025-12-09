@@ -515,22 +515,14 @@ fn get_or_init_versions<'a>(
         .map(|so| so.into_id_and_version())
         .collect();
 
-    #[cfg(debug_assertions)]
-    {
-        // In tests, we often call assign_versions_from_consensus without going through consensus.
-        // When that happens, there is no settlement transaction to update the accumulator root object version.
-        // And hence the list of shared input objects does not contain the accumulator root object.
-        // We have to manually add it here to make sure we can access the version when needed
-        // when assigning versions for certificates.
-        if epoch_store.accumulators_enabled() {
-            shared_input_objects.push((
-                SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-                epoch_store
-                    .epoch_start_config()
-                    .accumulator_root_obj_initial_shared_version()
-                    .expect("accumulator root obj initial shared version should be set"),
-            ));
-        }
+    if epoch_store.accumulators_enabled() {
+        shared_input_objects.push((
+            SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            epoch_store
+                .epoch_start_config()
+                .accumulator_root_obj_initial_shared_version()
+                .expect("accumulator root obj initial shared version should be set"),
+        ));
     }
 
     shared_input_objects.sort();
