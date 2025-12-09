@@ -122,6 +122,9 @@ impl executor::Executor for Executor {
         let mut ptb_v2_protocol_config = protocol_config.clone();
         ptb_v2_protocol_config.set_enable_ptb_execution_v2_for_testing(true);
 
+        let mut new_gas_status = gas_status.clone();
+        new_gas_status.set_gas_model_version(ptb_v2_protocol_config.gas_model_version());
+
         // old vm + new adapter
         let (m_inner_temporary_store, m_sui_gas_status, m_transaction_effects, _, _) =
             replay_cut::execution_engine::execute_transaction_to_effects::<
@@ -130,7 +133,7 @@ impl executor::Executor for Executor {
                 store,
                 input_objects.clone(),
                 gas.clone(),
-                gas_status.clone(),
+                new_gas_status.clone(),
                 transaction_kind.clone(),
                 transaction_signer,
                 transaction_digest,
@@ -149,7 +152,7 @@ impl executor::Executor for Executor {
                 store,
                 input_objects,
                 gas,
-                gas_status,
+                new_gas_status,
                 transaction_kind,
                 transaction_signer,
                 transaction_digest,
