@@ -207,7 +207,17 @@ public macro fun destroy<$T, $R: drop>($v: vector<$T>, $f: |$T| -> $R) {
 }
 
 /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
-/// Preserves the order of elements in the vector.
+/// Preserves the order of elements in the vector. 
+///
+/// If `T` has the `copy` ability, the original vector still exists after the macro call
+/// because `vector<T>` can be copied:
+///
+/// ```move
+/// struct Data has copy, drop, store { value: u64 }
+/// let mut v = vector[Data { value: 42 }];
+/// v.do!(|data| data.value);
+/// let len = v.length(); // v still exists!
+/// ```
 public macro fun do<$T, $R: drop>($v: vector<$T>, $f: |$T| -> $R) {
     let mut v = $v;
     v.reverse();
