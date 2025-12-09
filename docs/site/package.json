@@ -17,8 +17,7 @@
     "write-heading-ids": "docusaurus write-heading-ids",
     "typecheck": "tsc",
     "fire:deploy-dev": "firebase deploy --only hosting:dev",
-    "ampli": "ampli",
-    "pull-amplitude": "ampli pull web"
+    "ampli": "ampli"
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.5.3",
