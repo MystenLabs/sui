@@ -92,9 +92,6 @@ impl CoinReservationResolver {
             ));
         }
 
-        self.object_id_to_type_cache
-            .insert(object_id, (sender, type_input.clone()));
-
         Ok(type_input)
     }
 
