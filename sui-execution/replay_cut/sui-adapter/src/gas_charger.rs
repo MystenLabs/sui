@@ -331,8 +331,6 @@ pub mod checked {
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
             }
 
-            // system transactions (None smashed_gas_coin)  do not have gas and so do not charge
-            // for storage, however they track storage values to check for conservation rules
             if let Some(payer_address) = self.address_balance_gas_payer {
                 let is_insufficient_balance_error = execution_result
                     .as_ref()
@@ -345,6 +343,8 @@ pub mod checked {
                 if is_insufficient_balance_error {
                     GasCostSummary::default()
                 } else {
+                    self.compute_storage_and_rebate(temporary_store, execution_result);
+
                     let cost_summary = self.gas_status.summary();
                     let net_change = cost_summary.net_gas_usage();
 
@@ -365,11 +365,7 @@ pub mod checked {
                     cost_summary
                 }
             } else if let Some(gas_object_id) = self.smashed_gas_coin {
-                if dont_charge_budget_on_storage_oog(self.gas_model_version) {
-                    self.handle_storage_and_rebate_v2(temporary_store, execution_result)
-                } else {
-                    self.handle_storage_and_rebate_v1(temporary_store, execution_result)
-                }
+                self.compute_storage_and_rebate(temporary_store, execution_result);
 
                 let cost_summary = self.gas_status.summary();
                 let gas_used = cost_summary.net_gas_usage();
@@ -382,7 +378,32 @@ pub mod checked {
                 temporary_store.mutate_input_object(gas_object);
                 cost_summary
             } else {
+                // system transactions (None smashed_gas_coin)  do not have gas and so do not charge
+                // for storage, however they track storage values to check for conservation rules
                 GasCostSummary::default()
+            }
+        }
+
+        /// Calculate total gas cost considering storage and rebate.
+        ///
+        /// First, we net computation, storage, and rebate to determine total gas to charge.
+        ///
+        /// If we exceed gas_budget, we set execution_result to InsufficientGas, failing the tx.
+        /// If we have InsufficientGas, we determine how much gas to charge for the failed tx:
+        ///
+        /// v1: we set computation_cost = gas_budget, so we charge net (gas_budget - storage_rebates)
+        /// v2: we charge (computation + storage costs for input objects - storage_rebates)
+        ///     if the gas balance is still insufficient, we fall back to set computation_cost = gas_budget
+        ///     so we charge net (gas_budget - storage_rebates)
+        fn compute_storage_and_rebate<T>(
+            &mut self,
+            temporary_store: &mut TemporaryStore<'_>,
+            execution_result: &mut Result<T, ExecutionError>,
+        ) {
+            if dont_charge_budget_on_storage_oog(self.gas_model_version) {
+                self.handle_storage_and_rebate_v2(temporary_store, execution_result)
+            } else {
+                self.handle_storage_and_rebate_v1(temporary_store, execution_result)
             }
         }
 
@@ -410,12 +431,13 @@ pub mod checked {
             if let Err(err) = self.gas_status.charge_storage_and_rebate() {
                 // we run out of gas charging storage, reset and try charging for storage again.
                 // Input objects are touched and so they have a storage cost
+                // Attempt to charge just for computation + input object storage costs - storage_rebate
                 self.reset(temporary_store);
                 temporary_store.ensure_active_inputs_mutated();
                 temporary_store.collect_storage_and_rebate(self);
                 if let Err(err) = self.gas_status.charge_storage_and_rebate() {
                     // we run out of gas attempting to charge for the input objects exclusively,
-                    // deal with this edge case by not charging for storage
+                    // deal with this edge case by not charging for storage: we charge (gas_budget - rebates).
                     self.reset(temporary_store);
                     self.gas_status.adjust_computation_on_out_of_gas();
                     temporary_store.ensure_active_inputs_mutated();
