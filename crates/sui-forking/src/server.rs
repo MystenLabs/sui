@@ -27,6 +27,7 @@ use tracing::info;
 
 use crate::{
     consistent_store::{self, start_consistent_store},
+    forking_store::ForkingStore,
     graphql::GraphQLClient,
     indexer::{self, start_indexer},
     rpc::start_rpc,
@@ -51,12 +52,11 @@ impl AppState {
         protocol_version: u64,
         protocol_config: ProtocolConfig,
     ) -> Self {
-        let genesis = get_genesis_for_chain(chain).await;
-        let mut simulacrum = Simulacrum::new_from_genesis_and_custom_store(
-            &genesis,
+        let mut simulacrum = Simulacrum::new_with_protocol_version_and_chain_override_and_store(
             OsRng,
             protocol_version.into(),
             chain,
+            store,
         );
 
         simulacrum.set_data_ingestion_path(data_ingestion_path);

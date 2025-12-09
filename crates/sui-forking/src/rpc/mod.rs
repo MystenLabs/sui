@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod objects;
 pub mod read;
 pub mod write;
 
@@ -49,6 +50,11 @@ pub(crate) async fn start_rpc(
         cancel.child_token(),
     )
     .await?;
+    rpc.add_module(objects::Objects {
+        simulacrum: simulacrum.clone(),
+        protocol_version,
+        chain,
+    });
     rpc.add_module(read::Read {
         simulacrum: simulacrum.clone(),
         protocol_version,

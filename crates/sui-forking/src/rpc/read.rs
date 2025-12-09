@@ -4,12 +4,14 @@
 use fastcrypto::encoding::Base64;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sui_json_rpc_types::{
-    DryRunTransactionBlockResponse, ProtocolConfigResponse, SuiTransactionBlock,
-    SuiTransactionBlockEffects, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    DryRunTransactionBlockResponse, ProtocolConfigResponse, SuiObjectDataOptions,
+    SuiObjectResponse, SuiTransactionBlock, SuiTransactionBlockEffects,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::{
+    base_types::ObjectID,
     digests::ChainIdentifier,
     quorum_driver_types::ExecuteTransactionRequestType,
     sui_serde::BigInt,
@@ -35,6 +37,16 @@ pub trait ReadApi {
         /// An optional protocol version specifier. If omitted, the latest protocol config table for the node will be returned.
         version: Option<BigInt<u64>>,
     ) -> RpcResult<ProtocolConfigResponse>;
+
+    /// Return the object information for a specified object
+    #[method(name = "getObject")]
+    async fn get_object(
+        &self,
+        /// the ID of the queried object
+        object_id: ObjectID,
+        /// options for specifying the content to be returned
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiObjectResponse>;
 }
 
 pub(crate) struct Read {
@@ -77,6 +89,29 @@ impl ReadApiServer for Read {
         let response = ProtocolConfigResponse::from(protocol_config);
 
         Ok(response)
+    }
+
+    async fn get_object(
+        &self,
+        object_id: ObjectID,
+        options: Option<SuiObjectDataOptions>,
+    ) -> RpcResult<SuiObjectResponse> {
+        println!("Trying to get object: {}", object_id);
+        todo!()
+        // let simulacrum = self.simulacrum.read().unwrap();
+        // let object = simulacrum
+        //     .store()
+        //     .get_object(&object_id)
+        //     .map_err(|e| invalid_params(format!("Failed to get object: {}", e)))?;
+        //
+        // let response = SuiObjectResponse::from_object(
+        //     object,
+        //     options.unwrap_or_default(),
+        //     simulacrum.store().as_ref(),
+        // )
+        // .map_err(|e| invalid_params(format!("Failed to construct object response: {}", e)))?;
+        //
+        // Ok(response)
     }
 }
 
