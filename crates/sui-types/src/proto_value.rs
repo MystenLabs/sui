@@ -8,9 +8,7 @@ use prost_types::Value;
 use prost_types::value::Kind;
 
 use crate::object::option_visitor as OV;
-use crate::rpc_visitor::Error as RpcVisitorError;
-use crate::rpc_visitor::RpcVisitor;
-use crate::rpc_visitor::Writer;
+use crate::object::rpc_visitor as RV;
 
 /// This is the maximum depth of a proto message
 /// The maximum depth of a proto message is 100. Given this value may be nested itself somewhere
@@ -27,7 +25,7 @@ pub struct ProtoWriter<'b> {
     depth: usize,
 }
 
-pub type ProtoVisitor<'b> = RpcVisitor<ProtoWriter<'b>>;
+pub type ProtoVisitor<'b> = RV::RpcVisitor<ProtoWriter<'b>>;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -60,7 +58,7 @@ impl ProtoVisitorBuilder {
         A::MoveValue::visit_deserialize(
             bytes,
             layout,
-            &mut RpcVisitor::new(ProtoWriter {
+            &mut RV::RpcVisitor::new(ProtoWriter {
                 bound: &mut self.bound,
                 depth: 0,
             }),
@@ -92,7 +90,7 @@ impl ProtoWriter<'_> {
     }
 }
 
-impl<'b> Writer for ProtoWriter<'b> {
+impl<'b> RV::Writer for ProtoWriter<'b> {
     type Value = Value;
     type Error = Error;
 
@@ -166,8 +164,8 @@ impl<'b> Writer for ProtoWriter<'b> {
     }
 }
 
-impl From<RpcVisitorError> for Error {
-    fn from(RpcVisitorError: RpcVisitorError) -> Self {
+impl From<RV::Error> for Error {
+    fn from(RV::Error: RV::Error) -> Self {
         Error::UnexpectedType
     }
 }

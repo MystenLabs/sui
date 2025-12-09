@@ -18,8 +18,7 @@ use serde_json::{Map, Value};
 use sui_package_resolver::{PackageStore, Resolver, error::Error as ResolverError};
 use sui_types::{
     event::Event,
-    object::option_visitor as OV,
-    rpc_visitor::{Error as RpcVisitorError, RpcVisitor, Writer},
+    object::{option_visitor as OV, rpc_visitor as RV},
 };
 
 /// Error type for JSON visitor operations
@@ -60,7 +59,7 @@ struct JsonWriter;
 impl JsonVisitor {
     /// Deserialize BCS bytes as JSON using the provided type layout.
     pub fn deserialize_value(bytes: &[u8], layout: &MoveTypeLayout) -> anyhow::Result<Value> {
-        let mut visitor = RpcVisitor::new(JsonWriter);
+        let mut visitor = RV::RpcVisitor::new(JsonWriter);
         Ok(MoveValue::visit_deserialize(bytes, layout, &mut visitor)?)
     }
 
@@ -69,7 +68,7 @@ impl JsonVisitor {
         bytes: &[u8],
         layout: &move_core_types::annotated_value::MoveStructLayout,
     ) -> anyhow::Result<Value> {
-        let mut visitor = RpcVisitor::new(JsonWriter);
+        let mut visitor = RV::RpcVisitor::new(JsonWriter);
         Ok(MoveStruct::visit_deserialize(bytes, layout, &mut visitor)?)
     }
 
@@ -117,7 +116,7 @@ impl JsonVisitor {
     }
 }
 
-impl Writer for JsonWriter {
+impl RV::Writer for JsonWriter {
     type Value = Value;
     type Error = Error;
 
@@ -170,8 +169,8 @@ impl Writer for JsonWriter {
     }
 }
 
-impl From<RpcVisitorError> for Error {
-    fn from(RpcVisitorError: RpcVisitorError) -> Self {
+impl From<RV::Error> for Error {
+    fn from(RV::Error: RV::Error) -> Self {
         Error::UnexpectedType
     }
 }
