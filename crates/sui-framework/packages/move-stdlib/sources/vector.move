@@ -189,7 +189,17 @@ public macro fun tabulate<$T>($n: u64, $f: |u64| -> $T): vector<$T> {
 }
 
 /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
-/// Does not preserve the order of elements in the vector (starts from the end of the vector).
+/// Does not preserve the order of elements in the vector (starts from the end of the vector). 
+///
+/// If `T` has the `copy` ability, the original vector still exists after the macro call
+/// because `vector<T>` can be copied:
+///
+/// ```move
+/// struct Data has copy, drop, store { value: u64 }
+/// let mut v = vector[Data { value: 42 }];
+/// v.destroy!(|data| data.value);
+/// let len = v.length(); // v still exists!
+/// ```
 public macro fun destroy<$T, $R: drop>($v: vector<$T>, $f: |$T| -> $R) {
     let mut v = $v;
     v.length().do!(|_| $f(v.pop_back()));
