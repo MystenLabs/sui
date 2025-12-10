@@ -9,7 +9,6 @@ use async_trait::async_trait;
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
-use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::{EventFilter, EventPage, SuiEvent};
 use sui_types::Identifier;
 use sui_types::base_types::ObjectID;
@@ -24,7 +23,7 @@ use sui_types::object::Owner;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
 
-use crate::sui_client::SuiClientInner;
+use crate::sui_client::{ExecuteTransactionResult, SuiClientInner};
 use crate::types::{BridgeAction, BridgeActionStatus, IsBridgePaused, SuiEvents};
 
 /// Mock client used in test environments.
@@ -39,8 +38,8 @@ pub struct SuiMockClient {
     events_by_tx_digest:
         Arc<Mutex<HashMap<TransactionDigest, Result<Vec<SuiEvent>, sui_sdk::error::Error>>>>,
     transaction_responses:
-        Arc<Mutex<HashMap<TransactionDigest, BridgeResult<SuiTransactionBlockResponse>>>>,
-    wildcard_transaction_response: Arc<Mutex<Option<BridgeResult<SuiTransactionBlockResponse>>>>,
+        Arc<Mutex<HashMap<TransactionDigest, BridgeResult<ExecuteTransactionResult>>>>,
+    wildcard_transaction_response: Arc<Mutex<Option<BridgeResult<ExecuteTransactionResult>>>>,
     get_object_info: Arc<Mutex<HashMap<ObjectID, (GasCoin, ObjectRef, Owner)>>>,
     onchain_status: Arc<Mutex<HashMap<(u8, u64), BridgeActionStatus>>>,
     bridge_committee_summary: Arc<Mutex<Option<BridgeCommitteeSummary>>>,
@@ -96,7 +95,7 @@ impl SuiMockClient {
     pub fn add_transaction_response(
         &self,
         tx_digest: TransactionDigest,
-        response: BridgeResult<SuiTransactionBlockResponse>,
+        response: BridgeResult<ExecuteTransactionResult>,
     ) {
         self.transaction_responses
             .lock()
@@ -124,7 +123,7 @@ impl SuiMockClient {
 
     pub fn set_wildcard_transaction_response(
         &self,
-        response: BridgeResult<SuiTransactionBlockResponse>,
+        response: BridgeResult<ExecuteTransactionResult>,
     ) {
         *self.wildcard_transaction_response.lock().unwrap() = Some(response);
     }
@@ -281,7 +280,7 @@ impl SuiClientInner for SuiMockClient {
     async fn execute_transaction_block_with_effects(
         &self,
         tx: Transaction,
-    ) -> Result<SuiTransactionBlockResponse, BridgeError> {
+    ) -> Result<ExecuteTransactionResult, BridgeError> {
         self.requested_transactions_tx.send(*tx.digest()).unwrap();
         match self.transaction_responses.lock().unwrap().get(tx.digest()) {
             Some(response) => response.clone(),

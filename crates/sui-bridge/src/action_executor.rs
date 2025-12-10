@@ -9,9 +9,7 @@ use crate::types::IsBridgePaused;
 use arc_swap::ArcSwap;
 use mysten_metrics::spawn_logged_monitored_task;
 use shared_crypto::intent::{Intent, IntentMessage};
-use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
-};
+use sui_json_rpc_types::SuiExecutionStatus;
 use sui_types::TypeTag;
 use sui_types::transaction::ObjectArg;
 use sui_types::{
@@ -32,7 +30,7 @@ use crate::{
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
     error::BridgeError,
     storage::BridgeOrchestratorTables,
-    sui_client::{SuiClient, SuiClientInner},
+    sui_client::{ExecuteTransactionResult, SuiClient, SuiClientInner},
     sui_transaction_builder::build_sui_transaction,
     types::{BridgeAction, BridgeActionStatus, VerifiedCertifiedBridgeAction},
 };
@@ -574,21 +572,15 @@ where
     // TODO: do we need a mechanism to periodically read pending actions from DB?
     async fn handle_execution_effects(
         tx_digest: TransactionDigest,
-        response: SuiTransactionBlockResponse,
+        response: ExecuteTransactionResult,
         store: &Arc<BridgeOrchestratorTables>,
         action: &BridgeAction,
         metrics: &Arc<BridgeMetrics>,
     ) {
-        let effects = response
-            .effects
-            .clone()
-            .expect("We requested effects but got None.");
-        let status = effects.status();
-        match status {
+        match &response.status {
             SuiExecutionStatus::Success => {
-                let events = response.events.expect("We requested events but got None.");
-                let relevant_events = events
-                    .data
+                let relevant_events = response
+                    .events
                     .iter()
                     .filter(|e| {
                         e.type_ == *TokenTransferAlreadyClaimed.get().unwrap()
@@ -601,7 +593,7 @@ where
                     !relevant_events.is_empty(),
                     "Expected TokenTransferAlreadyClaimed, TokenTransferClaimed, TokenTransferApproved \
                     or TokenTransferAlreadyApproved event but got: {:?}",
-                    events
+                    response.events
                 );
                 info!(?tx_digest, "Sui transaction executed successfully");
                 // track successful approval and claim events
@@ -691,9 +683,7 @@ mod tests {
     use prometheus::Registry;
     use std::collections::{BTreeMap, HashMap};
     use std::str::FromStr;
-    use sui_json_rpc_types::SuiTransactionBlockEffects;
-    use sui_json_rpc_types::SuiTransactionBlockEvents;
-    use sui_json_rpc_types::{SuiEvent, SuiTransactionBlockResponse};
+    use sui_json_rpc_types::SuiEvent;
     use sui_types::TypeTag;
     use sui_types::crypto::get_key_pair;
     use sui_types::gas_coin::GasCoin;
@@ -1493,12 +1483,10 @@ mod tests {
         events: Option<Vec<SuiEvent>>,
         wildcard: bool,
     ) {
-        let mut response = SuiTransactionBlockResponse::new(tx_digest);
-        let effects = SuiTransactionBlockEffects::new_for_testing(tx_digest, status);
-        if let Some(events) = events {
-            response.events = Some(SuiTransactionBlockEvents { data: events });
-        }
-        response.effects = Some(effects);
+        let response = ExecuteTransactionResult {
+            status,
+            events: events.unwrap_or_default(),
+        };
         if wildcard {
             sui_client_mock.set_wildcard_transaction_response(Ok(response));
         } else {
