@@ -1893,7 +1893,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<ObjectInfoResponse> {
         let request = request.into_inner();
         let response = self.state.handle_object_info_request(request).await?;
-        Ok((tonic::Response::new(response), Weight::one()))
+        Ok((tonic::Response::new(response), Weight::new(0.5).unwrap()))
     }
 
     async fn transaction_info_impl(
@@ -1902,7 +1902,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<TransactionInfoResponse> {
         let request = request.into_inner();
         let response = self.state.handle_transaction_info_request(request).await?;
-        Ok((tonic::Response::new(response), Weight::one()))
+        Ok((tonic::Response::new(response), Weight::new(0.5).unwrap()))
     }
 
     async fn checkpoint_impl(
@@ -1911,7 +1911,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<CheckpointResponse> {
         let request = request.into_inner();
         let response = self.state.handle_checkpoint_request(&request)?;
-        Ok((tonic::Response::new(response), Weight::one()))
+        Ok((tonic::Response::new(response), Weight::new(0.5).unwrap()))
     }
 
     async fn checkpoint_v2_impl(
@@ -1920,7 +1920,7 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<CheckpointResponseV2> {
         let request = request.into_inner();
         let response = self.state.handle_checkpoint_request_v2(&request)?;
-        Ok((tonic::Response::new(response), Weight::one()))
+        Ok((tonic::Response::new(response), Weight::new(0.5).unwrap()))
     }
 
     async fn get_system_state_object_impl(
@@ -1931,7 +1931,7 @@ impl ValidatorService {
             .state
             .get_object_cache_reader()
             .get_sui_system_state_object_unsafe()?;
-        Ok((tonic::Response::new(response), Weight::one()))
+        Ok((tonic::Response::new(response), Weight::new(0.1).unwrap()))
     }
 
     async fn validator_health_impl(
@@ -1979,7 +1979,10 @@ impl ValidatorService {
                 tonic::Status::internal(format!("Failed to serialize health response: {}", e))
             })?;
 
-        Ok((tonic::Response::new(raw_response), Weight::one()))
+        Ok((
+            tonic::Response::new(raw_response),
+            Weight::new(0.5).unwrap(),
+        ))
     }
 
     fn get_client_ip_addr<T>(
