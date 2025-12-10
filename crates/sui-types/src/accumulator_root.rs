@@ -48,8 +48,8 @@ pub fn get_accumulator_root_obj_initial_shared_version(
         }))
 }
 
-/// Rust type for the Move type AccumulatorKey used to derive the dynamic field id for the
-/// balance account object.
+/// Rust type for the Move type accumulator::Key used to derive the dynamic field id for the
+/// accumulator value.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AccumulatorKey {
     pub owner: SuiAddress,
@@ -87,7 +87,7 @@ impl MoveTypeTagTrait for U128 {
     }
 }
 
-/// New-type for ObjectIDs that are known to have been properly derived as an Balance accumulator field.
+/// New-type for ObjectIDs that are known to have been properly derived as a Balance accumulator field.
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub struct AccumulatorObjId(ObjectID);
 
