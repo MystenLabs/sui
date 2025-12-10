@@ -14,9 +14,6 @@ pub struct SizeConfig {
     pub traverse_references: bool,
     /// If true, the size of the vector will be included in the abstract memory size.
     pub include_vector_size: bool,
-    /// TODO(vm-rewrite): Can remove this flag as we don't need to protocol gate it
-    /// If true, use a more fine-grained size calculation for primitive values.
-    pub fine_grained_value_size: bool,
 }
 
 /// Trait that provides an abstract view into a Move type.
