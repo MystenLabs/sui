@@ -1,14 +1,14 @@
 ---
 title: Package Management Migration
 sidebar_label: Migration
-description: Learn how to migrate from the previous package management system to the new, optimized system. 
+description: Learn how to migrate from the previous package management system to the new, optimized system.
 keywords: [ move, move reference, package management, package manager, migrate, new package manager, update package manager ]
 pagination_prev: null
 ---
 
-This guide describes the changes from the old package management system (prev. November 2025) to the new package management system.
+Version 1.63 of the Sui CLI introduced a major overhaul of the package management system. This document describes the changes between the old and new systems and gives guidance on migrating your packages. See [the package management user guide](/guides/developer/sui-101/move-package-management.mdx) for full details on the new system.
 
-The new system is currently in a prototype stage. Some features are not yet fully implemented, and these are noted. The documentation focuses primarily on the cases where you have a valid setup, so some error messages might need polish, and there might be cases where a consistency check is not yet performed. 
+With any change of this magnatude there are bound to be some issues that crop up. Please report any issues you encounter while using the new package system [here](https://github.com/MystenLabs/sui/issues/24540).
 
 ## Advantages of the new package management system
 
@@ -26,25 +26,24 @@ The system pins dependencies to specific versions and only updates them when you
 
 You can rename dependencies, so you can now depend on multiple packages with the same name. The `[addresses]` section is gone, and dependency names and package names are unified. Dependency names are not inherited from dependencies, so understanding what package a name refers to only requires looking at your `Move.toml` and not your dependencies' `Move.toml` files.
 
-**Baseline for new features**
+**Other conveniences**
 
-The new implementation sets you up to implement new features or to properly implement old features that don't work well, such as a stored upgrade cap, efficient git downloads, source verification, republishing dependencies on local networks, and on-chain dependencies.
+The new system brings several conveniences, such as efficient git downloads, stored upgrade capabilities, and tooling for managing dependency publication on local networks.
+
+**Upcoming features**
+
+The new implementation is a solid foundation for future features that we're planning, including improved source verification and on-chain dependencies.
 
 ## Installing and running the new package manager
 
-To install the new package manager, use [`suiup`](https://github.com/MystenLabs/suiup):
+The new package system will be included in the 1.63 release of the Sui CLI, which will be released in January. However, you can install it before then using [`suiup`](https://github.com/MystenLabs/suiup):
 
 ```sh
-$ suiup install sui --nightly=sui-pkg-alt -y
+$ suiup install sui --nightly=sui-pkg-alt
+$ suiup install sui --nightly=ml/pkg-alt-integration mvr
 ```
 
 This compiles `sui` from the prototype branch, so it requires the Rust toolchain installed and might take a while to complete installation.
-
-If you want to use `mvr` dependencies, you need a patched version of `mvr` as well. You can install it using:
-
-```sh
-$ suiup install mvr --nightly=ml/cli-pkg-alt -y
-```
 
 ## Changes to the `Move.toml` file
 
@@ -102,7 +101,7 @@ Sui advises against disabling implicit dependencies.
 
 ### `dependencies` section
 
-In the `[dependencies]` section, you must define each package that your source code refers to by name. The name you give the dependency is the same as the name used in your source code. 
+In the `[dependencies]` section, you must define each package that your source code refers to by name. The name you give the dependency is the same as the name used in your source code.
 
 If you want to include a dependency on `../example` and refer to it as `example_dependency`, you would write:
 
@@ -188,7 +187,7 @@ testnet.example_dependency = { published-at = "0x5678", original-id = "0x1234" }
 
 :::info
 
-The `git` fields are currently not merged between `[dependencies]` and `[dep-replacements]`. For example, you can't give a different `rev` field in the `[dep-replacements]`; you must also include the `git` field. Moreover, if you do give a `git` field, the `subdir` and `rev` fields are not copied over. 
+The `git` fields are currently not merged between `[dependencies]` and `[dep-replacements]`. For example, you can't give a different `rev` field in the `[dep-replacements]`; you must also include the `git` field. Moreover, if you do give a `git` field, the `subdir` and `rev` fields are not copied over.
 
 :::
 

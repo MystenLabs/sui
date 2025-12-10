@@ -8,7 +8,7 @@ A Move package is a collection of Move modules that you publish together as a si
 
 :::info
 
-Version 1.63 introduced major changes to the Move package system. This document describes the new system; see TODO for the documentation on the old system, and [the migration guide](/references/package-managers/package-manager-migration.mdx) for a description of the differences and how to migrate to the new system.
+Version 1.63 introduced major changes to the Move package system. This document describes the new system; see [automated address management](/concepts/sui-move-concepts/packages/automated-address-management.mdx) for the documentation on the old system, and [the migration guide](/references/package-managers/package-manager-migration.mdx) for a description of the differences and how to migrate to the new system.
 
 :::
 
@@ -251,13 +251,11 @@ This is easier to achieve if you are using `mvr`, which automatically resolves t
 codec = { r.mvr = "@potatoes/codec" }
 ```
 
+#### Environment-specific dependency configuration
+
 There are additional fields that you can provide for dependencies in the `dep-replacements` section that only make sense for a specific environment: `use-environment`, `published-at`, and `original-id`.
 
-#### Using a different environment for a dependency
-
 The `use-environment` field indicates which of the dependency's environments should be used. For example, if you want to depend on a package in the `testnet_beta` environment, you could add `use-environment = "testnet_beta"` to the dependency in the `[dep-replacements.testnet]` section.
-
-#### Overriding dependency addresses
 
 The `published-at` and `original-id` can be used to override the published address for a dependency. If you include either of these fields, you must include both of them.
 
@@ -287,29 +285,37 @@ The system updates the publication file (`Published.toml`) to include the update
 
 ```toml
 [published.mainnet]
-chain-id = "TODO"
-published-at = "TODO"
-original-id = "TODO"
+chain-id = "35834a8a"
+original-id = "0x9c11913b6be956a7020cb9e120f03f396e52c3b766164c6163569ac9d7fabe06"
+published-at = "0x9c11913b6be956a7020cb9e120f03f396e52c3b766164c6163569ac9d7fabe06"
 version = 2
-toolchain-version = "sui-1.62.1"
-build-config = "TODO"
-upgrade-capability = "TODO"
+toolchain-version = "sui-1.63.0"
+upgrade-capability = "0x7804be7ba062dcd09e7adfeda7be090b9fe35cda9c02ad2c417b88d6c419ca52"
 
 [published.testnet]
-chain-id = "TODO"
-published-at = "TODO"
-original-id = "TODO"
-version = 3
+chain-id = "4c78adac"
+original-id = "0x65d106ccd0feddc4183dcaa92decafd3376ee9b34315aae938dc838f6d654f18"
+published-at = "0x65d106ccd0feddc4183dcaa92decafd3376ee9b34315aae938dc838f6d654f18"
+version = 1
 toolchain-version = "sui-1.62.4"
-build-config = "TODO"
-upgrade-capability = "TODO"
+upgrade-capability = "0xe03549eaeab8d9461977ff1e993adf37a7d320f688a787b30fbdd30ce53c939c"
 ```
 
-You can also publish or upgrade using the `sui client ptb` command; see TODO for details.
+You should commit the publication file to source control so that other packages can depend on your package.
+
+You can also publish or upgrade using the `sui client ptb` command; see [Building Programmable Transaction Blocks](/guides/developer/sui-101/building-ptb.mdx) for details.
+
+:::info
+
+In the old system, the `Published.toml` information was stored in `Move.lock`.
+
+:::
 
 ### Ephemeral publication {#test-publish}
 
-The package manager supports ephemeral publication of a package and its dependencies for testing. The ephemeral publish command works like a normal publish, except that the system reads the publication addresses for packages and writes them to a separate file.
+By design, the `Published.toml` file only should only record publications to persistent environments like mainnet and testnet; addresses for ephemeral publications on local networks or devnet should not usually be committed to source control.
+
+Instead, the package manager supports ephemeral publication of a package and its dependencies for testing. The `sui client test-publish` command works like a normal publish, except that the system reads the publication addresses for packages and writes them to a separate file.
 
 The format of an ephemeral publication file is as follows:
 
@@ -340,11 +346,15 @@ original-id = "0x000000000000000000000000000000000000000000000000000000000000567
 upgrade-cap = "0x000000000000000000000000000000000000000000000000000000000022cc00"
 ```
 
+:::caution
+
+You should not commit ephemeral publication files to source control because they contain information that is only relevant in a local development environment.
+
+:::
+
 The system identifies entries by the `source` field. These fields are pinned dependencies, so they might be different from the dependencies written in your manifest file, however they should match the `source` fields in the lockfile.
 
 If an entry for a dependency is missing, the `test-publish` command attempts to obtain the published address for the dependency from the build environment. This produces an error if the dependency is not published on the ephemeral environment.
-
-/// (TODO: write the exact error message, and maybe make it better - people will probably google this).
 
 The command `sui client test-publish <pubfile> --build-env <env>` builds the root package for the `<env>` environment and then publishes it to a chain using the addresses from the ephemeral publication file `<pubfile>`.
 
@@ -352,37 +362,11 @@ If `<pubfile>` is omitted, it defaults to `Pub.<env-name>.toml` where `<env-name
 
 If `--build-env <env>` is omitted, it defaults to the `build-env` name of the file at `<file>`. If that is missing, the system errors. The build environment determines how the system resolves dependencies for the package.
 
-If `--build-env <env>` is present and different from the `build-env` in the file, the system fails.
-
-If `<file>` exists and `chain-id` doesn't match, the system doesn't fail immediately, but if you have dependencies published on a network with a different chain ID, the publication fails.
-
-## Register your package on mvr
-
-Once you have published your package, you should consider adding it to the Move registry so that others can easily depend on it.
-
-/// See TODO for details.
-
-#### Persistent networks
-
-When you publish or upgrade your package on a persistent network like Mainnet or Testnet, the package system creates or updates a publication file: `Published.toml`. It contains information about published packages on persistent networks, such as their on-chain addresses and upgrade capabilities. You should commit the publication file to source control so that other packages can depend on your package.
-
-See TODO below for details of the publication file format.
-
-#### Ephemeral networks
-
-If you publish your package to an ephemeral network like Localnet or Devnet, you can use the `test-publish` command. It reads dependency addresses from an ephemeral publication file (`Pub.<env>.toml`), and writes the package's published address back to that file.
-
-/// See TODO below for details of the ephemeral publication file format.
-
-:::caution
-
-You should not commit ephemeral publication files to source control because they contain information that is only relevant in a local development environment.
-
+:::info
+The old system did not support ephemeral publication
 :::
 
-### Publication files
-
-The package system uses different publication files depending on whether you're publishing to persistent or ephemeral networks:
+Although publication files and ephemeral publication files are similar, they hold different information:
 
 | Feature | Persistent networks (`Published.toml`) | Ephemeral networks (`Pub.<env>.toml`) |
 |---------|----------------------------|----------------------------|
@@ -392,12 +376,6 @@ The package system uses different publication files depending on whether you're 
 | **Commit to source control** | Yes since others can depend on your package | No since it contains local development data |
 | **Created by** | `sui client publish` | `sui client test-publish` |
 
-:::info
+## Register your package on mvr
 
-In the old system, the `Published.toml` information was stored in `Move.lock`. The old system didn't have ephemeral publication.
-
-:::
-
-## Interacting with Legacy Packages
-
-/// TODO
+Once you have published your package, you should consider adding it to the Move registry so that others can easily depend on it. See [the move registry documentation](https://docs.suins.io/move-registry/managing-package-info) for more information.
