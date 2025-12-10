@@ -12,6 +12,7 @@ use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::SchedulingSource;
+use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
 use crate::traffic_controller::TrafficController;
@@ -63,6 +64,7 @@ use std::{
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_protocol_config::PerObjectCongestionControlMode;
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
@@ -802,8 +804,9 @@ pub struct ExecutionEnv {
     pub expected_effects_digest: Option<TransactionEffectsDigest>,
     /// The source of the scheduling of the transaction.
     pub scheduling_source: SchedulingSource,
-    /// Status of the balance withdraw scheduling of the transaction.
-    pub withdraw_status: BalanceWithdrawStatus,
+    /// Status of the address balance withdraw scheduling of the transaction,
+    /// including both address and object balance withdraws.
+    pub balance_withdraw_status: BalanceWithdrawStatus,
     /// Transactions that must finish before this transaction can be executed.
     /// Used to schedule barrier transactions after non-exclusive writes.
     pub barrier_dependencies: Vec<TransactionDigest>,
@@ -815,7 +818,7 @@ impl Default for ExecutionEnv {
             assigned_versions: Default::default(),
             expected_effects_digest: None,
             scheduling_source: SchedulingSource::NonFastPath,
-            withdraw_status: BalanceWithdrawStatus::NoWithdraw,
+            balance_withdraw_status: BalanceWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
         }
     }
@@ -844,13 +847,8 @@ impl ExecutionEnv {
         self
     }
 
-    pub fn with_sufficient_balance(mut self) -> Self {
-        self.withdraw_status = BalanceWithdrawStatus::SufficientBalance;
-        self
-    }
-
     pub fn with_insufficient_balance(mut self) -> Self {
-        self.withdraw_status = BalanceWithdrawStatus::InsufficientBalance;
+        self.balance_withdraw_status = BalanceWithdrawStatus::Insufficient;
         self
     }
 
@@ -1765,7 +1763,7 @@ impl AuthorityState {
         &self,
         tx_lock: &CertLockGuard,
         certificate: &VerifiedExecutableTransaction,
-        assigned_shared_object_versions: AssignedVersions,
+        assigned_shared_object_versions: &AssignedVersions,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<InputObjects> {
         let _scope = monitored_scope("Execution::load_input_objects");
@@ -1778,7 +1776,7 @@ impl AuthorityState {
             &certificate.key(),
             tx_lock,
             input_objects,
-            &assigned_shared_object_versions,
+            assigned_shared_object_versions,
             epoch_store.epoch(),
         )
     }
@@ -1873,7 +1871,7 @@ impl AuthorityState {
         let input_objects = match self.read_objects_for_execution(
             tx_guard.as_lock_guard(),
             certificate,
-            execution_env.assigned_versions,
+            &execution_env.assigned_versions,
             epoch_store,
         ) {
             Ok(objects) => objects,
@@ -1909,7 +1907,7 @@ impl AuthorityState {
             certificate,
             input_objects,
             expected_effects_digest,
-            execution_env.withdraw_status,
+            execution_env,
             epoch_store,
         )
     }
@@ -2022,7 +2020,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         input_objects: InputObjects,
         expected_effects_digest: Option<TransactionEffectsDigest>,
-        withdraw_status: BalanceWithdrawStatus,
+        execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> ExecutionOutput<(
         TransactionOutputs,
@@ -2064,7 +2062,7 @@ impl AuthorityState {
             &tx_digest,
             &input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
-            &withdraw_status,
+            &execution_env.balance_withdraw_status,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2098,6 +2096,18 @@ impl AuthorityState {
                 tx_digest,
                 &mut None,
             );
+
+        if !self
+            .execution_scheduler
+            .should_commit_object_balance_withdraws(
+                certificate,
+                &effects,
+                &execution_env,
+                epoch_store,
+            )
+        {
+            return ExecutionOutput::RetryLater;
+        }
 
         if let Some(expected_effects_digest) = expected_effects_digest
             && effects.digest() != expected_effects_digest
@@ -2238,7 +2248,7 @@ impl AuthorityState {
                 certificate,
                 input_objects,
                 None,
-                BalanceWithdrawStatus::NoWithdraw,
+                ExecutionEnv::default(),
                 epoch_store,
             )
             .unwrap();
@@ -2381,8 +2391,12 @@ impl AuthorityState {
             &transaction_digest,
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
-            // TODO(address-balances): Mimic withdraw scheduling and pass the result.
-            &BalanceWithdrawStatus::NoWithdraw,
+            // TODO(address-balances): This does not currently support balance withdraws properly.
+            // For address balance withdraws, this cannot detect insufficient balance. We need to
+            // first check if the balance is sufficient, similar to how we schedule withdraws.
+            // For object balance withdraws, we need to handle the case where object balance is
+            // insufficient in the post-execution.
+            &BalanceWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2590,7 +2604,7 @@ impl AuthorityState {
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
             // TODO(address-balances): Mimic withdraw scheduling and pass the result.
-            &BalanceWithdrawStatus::NoWithdraw,
+            &BalanceWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2835,7 +2849,7 @@ impl AuthorityState {
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
             // TODO(address-balances): Mimic withdraw scheduling and pass the result.
-            &BalanceWithdrawStatus::NoWithdraw,
+            &BalanceWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -3916,17 +3930,22 @@ impl AuthorityState {
         Ok(new_epoch_store)
     }
 
-    pub async fn settle_transactions_for_testing(
-        &self,
-        ckpt_seq: CheckpointSequenceNumber,
-        effects: &[TransactionEffects],
-    ) {
+    pub async fn settle_accumulator_for_testing(&self, effects: &[TransactionEffects]) {
+        let accumulator_version = self
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .await
+            .unwrap()
+            .version();
+        // Use the current accumulator version as the checkpoint sequence number.
+        // This is a convenient hack to keep the checkpoint version unique for each settlement and incrementing.
+        let ckpt_seq = accumulator_version.value();
         let builder = AccumulatorSettlementTxBuilder::new(
             Some(self.get_transaction_cache_reader().as_ref()),
             effects,
             ckpt_seq,
             0,
         );
+        let balance_changes = builder.collect_accumulator_changes();
         let epoch_store = self.epoch_store_for_testing();
         let epoch = epoch_store.epoch();
         let (settlements, barrier) = builder.build_tx(
@@ -3974,6 +3993,12 @@ impl AuthorityState {
                 .unwrap();
             assert!(effects.status().is_ok());
         }
+
+        let next_accumulator_version = accumulator_version.next();
+        self.execution_scheduler.settle_balances(BalanceSettlement {
+            balance_changes,
+            next_accumulator_version,
+        });
     }
 
     /// Advance the epoch store to the next epoch for testing only.
@@ -6058,7 +6083,7 @@ impl AuthorityState {
         let input_objects = self.read_objects_for_execution(
             &tx_lock,
             &executable_tx,
-            assigned_versions,
+            &assigned_versions,
             epoch_store,
         )?;
 
@@ -6068,7 +6093,7 @@ impl AuthorityState {
                 &executable_tx,
                 input_objects,
                 None,
-                BalanceWithdrawStatus::NoWithdraw,
+                ExecutionEnv::default(),
                 epoch_store,
             )
             .unwrap();

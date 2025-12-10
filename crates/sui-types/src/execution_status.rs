@@ -242,7 +242,7 @@ pub enum ExecutionFailureStatus {
     #[error("A valid linkage was unable to be determined for the transaction")]
     InvalidLinkage,
 
-    #[error("Insufficient balance for transaction withdrawal")]
+    #[error("Insufficient balance for balance accumulator withdrawal")]
     InsufficientBalanceForWithdraw,
 
     #[error("Non-exclusive write input object {id} has been modified")]

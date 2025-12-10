@@ -2432,6 +2432,10 @@ impl ProtocolConfig {
         }
         address_aliases
     }
+
+    pub fn enable_object_funds_withdraw(&self) -> bool {
+        self.feature_flags.enable_object_funds_withdraw
+    }
 }
 
 #[cfg(not(msim))]
@@ -4228,7 +4232,7 @@ impl ProtocolConfig {
                 95 => {
                     cfg.type_name_id_base_cost = Some(52);
 
-                    // Reudce the frequency of checkpoint splitting under high TPS.
+                    // Reduce the frequency of checkpoint splitting under high TPS.
                     cfg.max_transactions_per_checkpoint = Some(20_000);
                 }
                 96 => {
@@ -4326,6 +4330,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_accumulators = true;
                         cfg.feature_flags.enable_address_balance_gas_payments = true;
                         cfg.feature_flags.enable_authenticated_event_streams = true;
+                        cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
                 }
                 // Use this template when making changes:

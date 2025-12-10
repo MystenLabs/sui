@@ -5,9 +5,7 @@
 module sui::funds_accumulator_tests;
 
 use std::unit_test::assert_eq;
-use sui::balance::Balance;
 use sui::funds_accumulator::create_withdrawal;
-use sui::test_scenario;
 
 public struct TestToken has store {}
 
@@ -128,18 +126,4 @@ fun test_withdrawal_split_join(owner: address, l1: u128, l2: u128, l3: u128) {
 
 public struct TestObject has key {
     id: UID,
-}
-
-// TODO: Remove this test once we enable object funds withdraw
-#[test]
-#[expected_failure(abort_code = sui::funds_accumulator::EObjectFundsWithdrawNotEnabled)]
-fun test_withdraw_from_object_not_enabled() {
-    let sender = @0x0;
-    let mut scenario = test_scenario::begin(sender);
-    let mut id = scenario.new_object();
-    let withdrawal = sui::funds_accumulator::withdraw_from_object<Balance<TestToken>>(&mut id, 100);
-    let balance = sui::balance::redeem_funds<TestToken>(withdrawal);
-    balance.destroy_for_testing();
-    id.delete();
-    scenario.end();
 }
