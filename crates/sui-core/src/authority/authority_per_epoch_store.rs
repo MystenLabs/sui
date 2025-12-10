@@ -1893,7 +1893,9 @@ impl AuthorityPerEpochStore {
             let SettlementRegistration::Waiting(tx) = registration else {
                 fatal!("Settlement registration should be waiting");
             };
-            tx.send(txns).unwrap();
+            // Receiver is held in a `within_alive_epoch` task, so it may have
+            // been dropped already.
+            tx.send(txns).ok();
         } else {
             registrations.insert(tx_key, SettlementRegistration::Ready(txns));
         }
