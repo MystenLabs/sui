@@ -4,6 +4,13 @@
 //! Module for conversions from sui-core types to rpc protos
 
 use crate::crypto::SuiSignature;
+
+fn ms_to_timestamp(ms: u64) -> prost_types::Timestamp {
+    prost_types::Timestamp {
+        seconds: (ms / 1000) as _,
+        nanos: ((ms % 1000) * 1_000_000) as _,
+    }
+}
 use crate::message_envelope::Message as _;
 use fastcrypto::traits::ToFromBytes;
 use sui_rpc::field::FieldMaskTree;
@@ -2035,23 +2042,15 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
             E::ValidDuring {
                 min_epoch,
                 max_epoch,
-                min_timestamp_seconds,
-                max_timestamp_seconds,
+                min_timestamp,
+                max_timestamp,
                 chain,
                 nonce,
             } => {
                 message.epoch = max_epoch;
                 message.min_epoch = min_epoch;
-                message.min_timestamp =
-                    min_timestamp_seconds.map(|seconds| prost_types::Timestamp {
-                        seconds: seconds as _,
-                        nanos: 0,
-                    });
-                message.max_timestamp =
-                    max_timestamp_seconds.map(|seconds| prost_types::Timestamp {
-                        seconds: seconds as _,
-                        nanos: 0,
-                    });
+                message.min_timestamp = min_timestamp.map(ms_to_timestamp);
+                message.max_timestamp = max_timestamp.map(ms_to_timestamp);
                 message.set_chain(sui_sdk_types::Digest::new(*chain.as_bytes()));
                 message.set_nonce(nonce);
 

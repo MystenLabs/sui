@@ -1273,9 +1273,9 @@ TransactionExpiration:
               OPTION: U64
           - max_epoch:
               OPTION: U64
-          - min_timestamp_seconds:
+          - min_timestamp:
               OPTION: U64
-          - max_timestamp_seconds:
+          - max_timestamp:
               OPTION: U64
           - chain:
               TYPENAME: ChainIdentifier

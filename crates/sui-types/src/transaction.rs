@@ -1891,9 +1891,9 @@ pub enum TransactionExpiration {
         /// Transaction expires after this epoch. Must equal current epoch
         max_epoch: Option<EpochId>,
         /// Future support for sub-epoch timing (not yet implemented)
-        min_timestamp_seconds: Option<u64>,
+        min_timestamp: Option<u64>,
         /// Future support for sub-epoch timing (not yet implemented)
-        max_timestamp_seconds: Option<u64>,
+        max_timestamp: Option<u64>,
         /// Network identifier to prevent cross-chain replay
         chain: ChainIdentifier,
         /// User-provided uniqueness identifier to differentiate otherwise identical transactions
@@ -2602,12 +2602,12 @@ impl TransactionDataAPI for TransactionDataV1 {
         if let TransactionExpiration::ValidDuring {
             min_epoch,
             max_epoch,
-            min_timestamp_seconds,
-            max_timestamp_seconds,
+            min_timestamp,
+            max_timestamp,
             ..
         } = self.expiration()
         {
-            if min_timestamp_seconds.is_some() || max_timestamp_seconds.is_some() {
+            if min_timestamp.is_some() || max_timestamp.is_some() {
                 return Err(UserInputError::Unsupported(
                     "Timestamp-based transaction expiration is not yet supported".to_string(),
                 ));
