@@ -15,7 +15,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::DateTime;
 use chrono::Utc;
 use move_core_types::account_address::AccountAddress;
-use move_core_types::annotated_value::MoveFieldLayout;
+use move_core_types::annotated_value as A;
 use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
@@ -33,10 +33,14 @@ use sui_types::base_types::move_utf8_str_layout;
 use sui_types::base_types::url_layout;
 use sui_types::id::ID;
 use sui_types::id::UID;
+use sui_types::object::rpc_visitor as RV;
+use sui_types::object::rpc_visitor::Writer as _;
 
 use crate::v2::error::FormatError;
+use crate::v2::parser::Base64Modifier;
 use crate::v2::parser::Transform;
-use crate::v2::writer::BoundedWriter;
+use crate::v2::writer::JsonWriter;
+use crate::v2::writer::StringWriter;
 
 /// Dynamically load objects by their ID. The output should be a `Slice` containing references to
 /// the raw BCS bytes and the corresponding `MoveTypeLayout` for the object. This implies the
@@ -134,10 +138,8 @@ impl Value<'_> {
     pub(crate) fn format(
         self,
         transform: Transform,
-        w: &mut BoundedWriter<'_>,
+        w: &mut StringWriter<'_>,
     ) -> Result<(), FormatError> {
-        // TODO(amnn): Detect transforms that can't be applied in this context (e.g. 'json' and
-        // 'display').
         match transform {
             Transform::Base64(xmod) => Atom::try_from(self)?.format_as_base64(xmod.engine(), w),
             Transform::Bcs(xmod) => {
@@ -146,9 +148,42 @@ impl Value<'_> {
             }
 
             Transform::Hex => Atom::try_from(self)?.format_as_hex(w),
+            Transform::Json => Err(FormatError::TransformInvalid("unexpected 'json' in string")),
             Transform::Str => Atom::try_from(self)?.format_as_str(w),
             Transform::Timestamp => Atom::try_from(self)?.format_as_timestamp(w),
             Transform::Url => Atom::try_from(self)?.format_as_url(w),
+        }
+    }
+
+    /// Write out a formatted representation of this value as JSON, using the provided writer.
+    ///
+    /// This operation can fail if the output is too large. If it succeeds, `w` will be modified to
+    /// account for the size of the written data, which will be returned.
+    pub(crate) fn format_json(
+        self,
+        mut w: JsonWriter<'_>,
+    ) -> Result<serde_json::Value, FormatError> {
+        match self {
+            Value::Address(a) => w.write_str(a.to_canonical_string(true)),
+            Value::Bool(b) => w.write_bool(b),
+            Value::U8(n) => w.write_number(n as u32),
+            Value::U16(n) => w.write_number(n as u32),
+            Value::U32(n) => w.write_number(n),
+            Value::U64(n) => w.write_str(n.to_string()),
+            Value::U128(n) => w.write_str(n.to_string()),
+            Value::U256(n) => w.write_str(n.to_string()),
+
+            Value::Bytes(bs) => w.write_str(Base64Modifier::EMPTY.engine().encode(&bs)),
+            Value::String(bs) => w.write_str(
+                str::from_utf8(&bs)
+                    .map_err(|_| FormatError::TransformInvalid("expected utf8 bytes"))?
+                    .to_owned(),
+            ),
+
+            Value::Struct(s) => s.format_json(w),
+            Value::Enum(e) => e.format_json(w),
+            Value::Vector(v) => v.format_json(w),
+            Value::Slice(s) => s.format_json(w),
         }
     }
 
@@ -192,12 +227,12 @@ impl Value<'_> {
 
         match self {
             // Numeric literals in Display
-            V::U8(i) => Some(*i as u64),
-            V::U16(i) => Some(*i as u64),
-            V::U32(i) => Some(*i as u64),
-            V::U64(i) => Some(*i),
-            V::U128(i) => u64::try_from(*i).ok(),
-            V::U256(i) => u64::try_from(*i).ok(),
+            V::U8(n) => Some(*n as u64),
+            V::U16(n) => Some(*n as u64),
+            V::U32(n) => Some(*n as u64),
+            V::U64(n) => Some(*n),
+            V::U128(n) => u64::try_from(*n).ok(),
+            V::U256(n) => u64::try_from(*n).ok(),
 
             // Numeric values sliced out of Move values
             V::Slice(Slice {
@@ -227,7 +262,7 @@ impl Value<'_> {
 
 impl Atom<'_> {
     /// Format the atom as a hexadecimal string.
-    fn format_as_hex(&self, w: &mut BoundedWriter<'_>) -> Result<(), FormatError> {
+    fn format_as_hex(&self, w: &mut StringWriter<'_>) -> Result<(), FormatError> {
         match self {
             Atom::Bool(b) => write!(w, "{:02x}", *b as u8)?,
             Atom::U8(n) => write!(w, "{n:02x}")?,
@@ -254,7 +289,7 @@ impl Atom<'_> {
     }
 
     /// Format the atom as a string.
-    fn format_as_str(&self, w: &mut BoundedWriter<'_>) -> Result<(), FormatError> {
+    fn format_as_str(&self, w: &mut StringWriter<'_>) -> Result<(), FormatError> {
         match self {
             Atom::Address(a) => write!(w, "{}", a.to_canonical_display(true))?,
             Atom::Bool(b) => write!(w, "{b}")?,
@@ -276,7 +311,7 @@ impl Atom<'_> {
 
     /// Coerce the atom into an `i64`, interpreted as an offset in milliseconds since the Unix
     /// epoch, and format it as an ISO8601 timestamp.
-    fn format_as_timestamp(&self, w: &mut BoundedWriter<'_>) -> Result<(), FormatError> {
+    fn format_as_timestamp(&self, w: &mut StringWriter<'_>) -> Result<(), FormatError> {
         let ts = self
             .as_i64()
             .and_then(DateTime::from_timestamp_millis)
@@ -289,7 +324,7 @@ impl Atom<'_> {
     }
 
     /// Like string formatting, but percent-encoding reserved URL characters.
-    fn format_as_url(&self, w: &mut BoundedWriter<'_>) -> Result<(), FormatError> {
+    fn format_as_url(&self, w: &mut StringWriter<'_>) -> Result<(), FormatError> {
         match self {
             Atom::Address(a) => write!(w, "{}", a.to_canonical_display(true))?,
             Atom::Bool(b) => write!(w, "{b}")?,
@@ -318,7 +353,7 @@ impl Atom<'_> {
     fn format_as_base64(
         &self,
         e: &impl Engine,
-        w: &mut BoundedWriter<'_>,
+        w: &mut StringWriter<'_>,
     ) -> Result<(), FormatError> {
         let base64 = match self {
             Atom::Address(a) => e.encode(a.into_bytes()),
@@ -377,9 +412,51 @@ impl<'s> Accessor<'s> {
     }
 }
 
+impl Slice<'_> {
+    fn format_json(self, w: JsonWriter<'_>) -> Result<serde_json::Value, FormatError> {
+        A::MoveValue::visit_deserialize(self.bytes, self.layout, &mut RV::RpcVisitor::new(w))
+    }
+}
+
 impl Vector<'_> {
     fn type_(&self) -> TypeTag {
         TypeTag::Vector(Box::new(self.type_.clone().into_owned()))
+    }
+
+    fn format_json(self, mut w: JsonWriter<'_>) -> Result<serde_json::Value, FormatError> {
+        let mut elems = vec![];
+        let mut nested = w.nest()?;
+        for e in self.elements {
+            let json = e.format_json(nested)?;
+            nested.vec_push_element(&mut elems, json)?;
+        }
+
+        w.write_vec(elems)
+    }
+}
+
+impl Struct<'_> {
+    fn format_json(self, mut w: JsonWriter<'_>) -> Result<serde_json::Value, FormatError> {
+        let mut map = serde_json::Map::new();
+        let nested = w.nest()?;
+        self.fields.format_json(nested, &mut map)?;
+        w.write_map(map)
+    }
+}
+
+impl Enum<'_> {
+    fn format_json(self, mut w: JsonWriter<'_>) -> Result<serde_json::Value, FormatError> {
+        let mut map = serde_json::Map::new();
+        let mut nested = w.nest()?;
+
+        let name = match self.variant_name {
+            Some(name) => nested.write_str(name.to_owned())?,
+            None => nested.write_number(self.variant_index as u32)?,
+        };
+
+        nested.map_push_field(&mut map, "@variant".to_owned(), name)?;
+        self.fields.format_json(nested, &mut map)?;
+        w.write_map(map)
     }
 }
 
@@ -411,6 +488,30 @@ impl<'s> Fields<'s> {
             Fields::Positional(fs) => fs.len(),
             Fields::Named(fs) => fs.len(),
         }
+    }
+
+    fn format_json(
+        self,
+        mut w: JsonWriter<'_>,
+        map: &mut serde_json::Map<String, serde_json::Value>,
+    ) -> Result<(), FormatError> {
+        match self {
+            Fields::Positional(values) => {
+                for (i, value) in values.into_iter().enumerate() {
+                    let json = value.format_json(w)?;
+                    w.map_push_field(map, format!("pos{i}"), json)?;
+                }
+            }
+
+            Fields::Named(items) => {
+                for (field, value) in items {
+                    let json = value.format_json(w)?;
+                    w.map_push_field(map, field.to_owned(), json)?;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -623,14 +724,21 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
 pub(crate) mod tests {
     use std::collections::BTreeMap;
     use std::str::FromStr;
+    use std::sync::atomic::AtomicUsize;
 
-    use move_core_types::annotated_value::{
-        MoveEnumLayout, MoveFieldLayout, MoveStructLayout, MoveTypeLayout as L,
-    };
+    use move_core_types::annotated_value::MoveEnumLayout;
+    use move_core_types::annotated_value::MoveFieldLayout;
+    use move_core_types::annotated_value::MoveStructLayout;
+    use move_core_types::annotated_value::MoveTypeLayout as L;
     use move_core_types::identifier::Identifier;
-    use sui_types::base_types::{STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME};
-    use sui_types::dynamic_field::{DynamicFieldInfo, Field, derive_dynamic_field_id};
-    use sui_types::id::{ID, UID};
+    use serde_json::json;
+    use sui_types::base_types::STD_ASCII_MODULE_NAME;
+    use sui_types::base_types::STD_ASCII_STRUCT_NAME;
+    use sui_types::dynamic_field::DynamicFieldInfo;
+    use sui_types::dynamic_field::Field;
+    use sui_types::dynamic_field::derive_dynamic_field_id;
+    use sui_types::id::ID;
+    use sui_types::id::UID;
 
     use super::*;
 
@@ -1169,5 +1277,125 @@ pub(crate) mod tests {
             let actual = Atom::try_from(value).unwrap();
             assert_eq!(actual, expect);
         }
+    }
+
+    #[test]
+    fn test_basic_json_formatting() {
+        let values = vec![
+            Value::Bool(true),
+            Value::U8(42),
+            Value::U16(43),
+            Value::U32(44),
+            Value::U64(45),
+            Value::U128(46),
+            Value::U256(U256::from(47u64)),
+            Value::Address("0x48".parse().unwrap()),
+            Value::String(Cow::Borrowed("hello".as_bytes())),
+            Value::Bytes(Cow::Borrowed(&[1, 2, 3])),
+        ];
+
+        let json = vec![
+            json!(true),
+            json!(42u8),
+            json!(43u8),
+            json!(44u8),
+            json!("45"),
+            json!("46"),
+            json!("47"),
+            json!("0x0000000000000000000000000000000000000000000000000000000000000048"),
+            json!("hello"),
+            json!("AQID"),
+        ];
+
+        assert_eq!(values.len(), json.len());
+        for (value, expect) in values.into_iter().zip(json.into_iter()) {
+            let used = AtomicUsize::new(0);
+            let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
+            let actual = value.format_json(writer).unwrap();
+            assert_eq!(actual, expect);
+        }
+    }
+
+    #[test]
+    fn test_struct_json_formatting() {
+        let literal = Value::Struct(Struct {
+            type_: &"0x2::foo::Bar".parse().unwrap(),
+            fields: Fields::Named(vec![
+                ("x", Value::U32(100)),
+                ("y", Value::U32(200)),
+                ("z", Value::Address("0x300".parse().unwrap())),
+            ]),
+        });
+
+        let slice = Value::Slice(Slice {
+            layout: &struct_(
+                "0x2::foo::Bar",
+                vec![("x", L::U32), ("y", L::U32), ("z", L::Address)],
+            ),
+            bytes: &bcs::to_bytes(&(100u32, 200u32, "0x300".parse::<AccountAddress>().unwrap()))
+                .unwrap(),
+        });
+
+        let expect = json!({
+            "x": 100u32,
+            "y": 200u32,
+            "z": "0x0000000000000000000000000000000000000000000000000000000000000300"
+        });
+
+        let used = AtomicUsize::new(0);
+        let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
+
+        assert_eq!(expect, literal.format_json(writer).unwrap());
+        assert_eq!(expect, slice.format_json(writer).unwrap());
+    }
+
+    #[test]
+    fn test_enum_named_variant_json_formatting() {
+        let literal = Value::Enum(Enum {
+            type_: &"0x1::m::E".parse().unwrap(),
+            variant_name: Some("A"),
+            variant_index: 0,
+            fields: Fields::Named(vec![("b", Value::U64(42)), ("c", Value::Bool(true))]),
+        });
+
+        let slice = Value::Slice(Slice {
+            layout: &enum_(
+                "0x1::m::E",
+                vec![("A", vec![("b", L::U64), ("c", L::Bool)])],
+            ),
+            bytes: &bcs::to_bytes(&(0u8, 42u64, true)).unwrap(),
+        });
+
+        let expect = json!({
+            "@variant": "A",
+            "b": "42",
+            "c": true
+        });
+
+        let used = AtomicUsize::new(0);
+        let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
+
+        assert_eq!(expect, literal.format_json(writer).unwrap());
+        assert_eq!(expect, slice.format_json(writer).unwrap());
+    }
+
+    #[test]
+    fn test_enum_numeric_variant_json_formatting() {
+        let literal = Value::Enum(Enum {
+            type_: &"0x1::m::E".parse().unwrap(),
+            variant_name: None,
+            variant_index: 0,
+            fields: Fields::Named(vec![("b", Value::U64(42)), ("c", Value::Bool(true))]),
+        });
+
+        let expect = json!({
+            "@variant": 0,
+            "b": "42",
+            "c": true
+        });
+
+        let used = AtomicUsize::new(0);
+        let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
+        assert_eq!(expect, literal.format_json(writer).unwrap());
     }
 }
