@@ -1,0 +1,16 @@
+name: CI
+on:
+  pull_request:
+jobs:
+  Lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Typo Check
+        uses: crate-ci/typos@master
+
+      - name: Awesome Linter
+        run: npx awesome-lint
