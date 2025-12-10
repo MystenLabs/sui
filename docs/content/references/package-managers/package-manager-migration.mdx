@@ -1,0 +1,202 @@
+---
+title: Package Management Migration
+sidebar_label: Migration
+description: Learn how to migrate from the previous package management system to the new, optimized system.
+keywords: [ move, move reference, package management, package manager, migrate, new package manager, update package manager ]
+pagination_prev: null
+---
+
+Version 1.63 of the Sui CLI introduced a major overhaul of the package management system. This document describes the changes between the old and new systems and gives guidance on migrating your packages. See [the package management user guide](/guides/developer/sui-101/move-package-management.mdx) for full details on the new system.
+
+With any change of this magnitude there are bound to be some issues that crop up. Report any issues you encounter while using the new package system [here](https://github.com/MystenLabs/sui/issues/24540).
+
+## Advantages of the new package management system
+
+The new system provides several benefits.
+
+**Designed for multiple environments**
+
+The system ensures that you can write a single manifest that works correctly for multiple environments, for example, Mainnet and Testnet. You can override dependencies for specific environments, so you have more flexibility in your testing deployment process. You can add multiple environments on the same network to support more complex deployment scenarios. These are not strictly tied to the environments defined in the CLI.
+
+**Predictability and offline rebuilds**
+
+The system pins dependencies to specific versions and only updates them when you update your manifest. This enables you to create reliable builds over time. If you do not change your `Move.toml`, you do not change your dependencies. This also means that building does not need to access git once you fetch the dependencies for the first time.
+
+**Flexible and local naming**
+
+You can rename dependencies, so you can now depend on multiple packages with the same name. The `[addresses]` section is gone, and dependency names and package names are unified. Dependency names are not inherited from dependencies, so understanding what package a name refers to only requires looking at your `Move.toml` and not your dependencies' `Move.toml` files.
+
+**Other conveniences**
+
+The new system brings several conveniences, such as efficient git downloads, stored upgrade capabilities, and tooling for managing dependency publication on local networks.
+
+**Upcoming features**
+
+The new implementation is a solid foundation for future features that are planned, including improved source verification and on-chain dependencies.
+
+## Installing and running the new package manager
+
+The new package system is included in the 1.63 release of the Sui CLI, which was released in January. However, you can install it before then using [`suiup`](https://github.com/MystenLabs/suiup):
+
+```sh
+$ suiup install sui --nightly=sui-pkg-alt
+$ suiup install sui --nightly=ml/pkg-alt-integration mvr
+```
+
+This compiles `sui` from the prototype branch, so it requires the Rust toolchain installed and might take a while to complete installation.
+
+## Changes to the `Move.toml` file
+
+Configure packages using a `Move.toml` file. The system also manages its own information in `Move.lock` files. The format of these files has changed.
+
+### No addresses section
+
+In the new system, you can no longer provide named addresses. Instead, the names used for packages come from the names they are given in the `[dependencies]` section or in the `[package]` section for the package's own name.
+
+For example, suppose you have a package called `example_package` that has a dependency on `example_dependency`, which in turn has a dependency on `dep_of_dep`. In your Move code, you might have:
+
+```move
+module example_package::m;
+use example_dependency::n;
+use dep_of_dep::p;
+```
+
+In the old package management system, the `Move.toml` for `example_package` might include:
+
+```toml
+[package]
+name = "Example"
+
+[dependencies]
+ExampleDep = { local = "../example_dependency" }
+
+[addresses]
+example_package = "0x0"
+```
+
+The names `ExampleDep` and `Example` are ignored. The source code name `example_package` comes from the `addresses` section, the name `example_dependency` comes from the `../example_dependency/Move.toml`, and the name `dep_of_dep` comes from the `Move.toml` file of whatever package `example_dependency` depends on.
+
+In the new system, the `Move.toml` for `example_package` would look like this:
+
+```toml
+[package]
+name = "example_package"
+
+[dependencies]
+example_dependency = { local = "../example_dependency" }
+dep_of_dep = { git = "..." }
+```
+
+You must define a dependency for every package that you name in your source code, although you do not need to add a dependency if you do not directly use the package. The name you use in `Move.toml` for the dependency is what defines the name in your Move code. The name you use in the `[package]` section is how you refer to your own address in Move.
+
+### `package` section
+
+There are 2 changes to the `[package]` section of the manifest:
+
+1. You should change the `name` used in your manifest to match the name used in your code.
+
+2. A new `implicit-dependencies = false` field. In the old package management system, adding an explicit system dependency disabled implicit dependencies. In the new system, if you want to turn off implicit dependencies you must explicitly include `implicit-dependencies = false` in the `[package]` section.
+
+Sui advises against disabling implicit dependencies.
+
+### `dependencies` section
+
+In the `[dependencies]` section, you must define each package that your source code refers to by name. The name you give the dependency is the same as the name used in your source code.
+
+If you want to include a dependency on `../example` and refer to it as `example_dependency`, you would write:
+
+```toml
+[dependencies]
+example_dependency = { local = "../example" }
+```
+
+As in the previous system you can have `git`, `local`, or `r.<resolver>` dependencies, for example, `r.mvr`. Support for `on-chain` dependencies is planned, but this is not yet implemented.
+
+In addition to the type-specific fields like `rev` for `git` dependencies, all dependencies allow an `override = true`. This works exactly the same way that it did in the old system.
+
+Sui encourages consistency by requiring that the name that you give a dependency must match the name that the dependency gives itself (the `name` field in `../example/Move.toml`). However, if you want to override the name, you can add a `rename-from` field to the dependency. For example, if `../example/Move.toml` had `name = "example"`, you could write:
+
+```toml
+[dependencies]
+example_dependency = { local = "../example", rename-from = "example" }
+```
+
+Your Move code then refers to the package using `example_dependency` even though the Move code for the dependency refers to itself using `example`.
+
+This allows you to easily mix dependencies that happen to have the same name:
+
+```toml
+[dependencies]
+alices_mathlib = { git = "https://github.com/alice.git", rename-from = "mathlib" }
+bobs_mathlib = { git = "https://github.com/bob.git", rename-from = "mathlib" }
+```
+
+### Git dependencies with short SHAs
+
+The new system handles git dependencies much more efficiently than the old system. Once your dependencies have been pinned and fetched, you no longer need to interact with git on subsequent builds. The new system only downloads the files and versions that you require, so the downloads are much faster.
+
+However, if you have a git dependency with `rev = "<commit hash>"` and `<commit hash>` is not a full 40-character SHA, the system is forced to download the entire commit history to expand the SHA. If you want to add a dependency on a particular commit, include the entire 40-character SHA.
+
+### `environments` and `dep-replacements` sections
+
+In the new system, all package operations happen in the context of an environment. Every environment has a name and a chain ID. There are 2 implicitly defined environments: `mainnet` and `testnet`. You can add your own environments in the `[environments]` section:
+
+```toml
+[environments]
+testnet_alpha = "4c78adac"
+```
+
+Replace your dependencies in specific environments by adding a `[dep-replacements]` section:
+
+```toml
+[dependencies]
+example_dependency = { git = "example.git" }
+
+[dep-replacements]
+testnet.example_dependency = { git = "example.git", rev = "testnet-1.2.3" }
+```
+
+:::info
+
+The `Move.toml` file allows you to add `example_dependency = {...}` to `[dep-replacements.testnet]`. This is the same as adding `testnet.example_dependency = {...}` to `[dep-replacements]`.
+
+:::
+
+### Environment-specific dependency fields
+
+There are additional fields that you can add to dependencies in the `[dep-replacements]` section:
+
+You can add a `use-environment` field to indicate which of the dependency's environments to use. For example, if the dependency defines a `testnet_alpha` environment, you can depend on that environment:
+
+```toml
+[dependencies]
+example_dependency = { git = "example.git" }
+
+[dep-replacements]
+testnet.example_dependency = { use-environment = "testnet_alpha" }
+```
+
+This uses the published address for the `testnet_alpha` version of `example_dependency` when publishing this package to `testnet`.
+
+Normally you do not need to specify dependencies' addresses in your manifest, but if you depend on legacy packages or packages that have been published but have not updated their lockfile, you can override the `published-at` and `original-id` fields for the dependency. If you want to do one of these, you must do both:
+
+```toml
+[dep-replacements]
+testnet.example_dependency = { published-at = "0x5678", original-id = "0x1234" }
+```
+
+:::info
+
+The `git` fields are currently not merged between `[dependencies]` and `[dep-replacements]`. For example, you cannot give a different `rev` field in the `[dep-replacements]`; you must also include the `git` field. Moreover, if you do give a `git` field, the `subdir` and `rev` fields are not copied over.
+
+:::
+
+## CLI changes
+
+The package manager is integrated into the `sui` binary, so most of the previous commands work the same way. There are a few changes though.
+
+All operations must be done in a specific environment due to `dep-replacements` and how some details about how package conflicts are determined. By default, the `sui` binary tries to choose the right environment based on the `sui client` environment determined by `sui client active-env`.
+
+If there is not an obvious choice of environment, either because the manifest declares multiple environments with the same chain ID or because it does not declare one at all, you must choose a specific environment by passing `-e <environment>`.
+
+This means that to publish to Devnet or Localnet, for example, you need to have environments defined for them.
