@@ -108,14 +108,7 @@ pub fn list_owned_objects(
                 continue;
             };
 
-            let mut message = Object::default();
-
-            if read_mask.contains(Object::JSON_FIELD) {
-                message.json =
-                    crate::grpc::v2::render_object_to_json(service, &object).map(Box::new);
-            }
-            sui_rpc::merge::Merge::merge(&mut message, &object, &read_mask);
-            message
+            service.render_object_to_proto(&object, &read_mask)
         } else {
             owned_object_to_proto(object_info, &read_mask)
         };

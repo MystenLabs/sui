@@ -257,7 +257,7 @@ pub fn simulate_transaction(
                     }
 
                     // Try to render clever error info
-                    super::super::ledger_service::render_clever_error(service, &mut effects);
+                    service.render_clever_error(&mut effects);
 
                     effects
                 })
@@ -265,13 +265,7 @@ pub fn simulate_transaction(
 
         message.events = submask
             .subtree(ExecutedTransaction::EVENTS_FIELD.name)
-            .and_then(|mask| {
-                events.map(|events| {
-                    sui_sdk_types::TransactionEvents::try_from(events)
-                        .map(|events| TransactionEvents::merge_from(events, &mask))
-                })
-            })
-            .transpose()?;
+            .and_then(|mask| events.map(|events| service.render_events_to_proto(&events, &mask)));
 
         message.transaction = submask
             .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
