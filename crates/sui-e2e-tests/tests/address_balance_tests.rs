@@ -2962,11 +2962,14 @@ async fn test_get_all_balances() {
         let child_object_resolver = state.get_child_object_resolver().as_ref();
 
         let types =
-            get_currency_types_for_owner(sender, child_object_resolver, index_tables).unwrap();
+            get_currency_types_for_owner(sender, child_object_resolver, index_tables, 10, None)
+                .unwrap();
         assert_eq!(types.len(), 2);
-        assert!(types
-            .iter()
-            .any(|t| t.to_canonical_string(true).contains("::sui::SUI")));
+        assert!(
+            types
+                .iter()
+                .any(|t| t.to_canonical_string(true).contains("::sui::SUI"))
+        );
         assert!(types.iter().any(|t| {
             t.to_canonical_string(true)
                 .contains("::trusted_coin::TRUSTED_COIN")
@@ -2986,7 +2989,7 @@ async fn publish_and_mint_trusted_coin(
 
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["tests", "rpc", "data", "trusted_coin"]);
-    let coin_publish = test_tx_builder.publish(path).build();
+    let coin_publish = test_tx_builder.publish_async(path).await.build();
     let coin_publish = test_cluster.sign_transaction(&coin_publish).await;
 
     let (effects, _) = test_cluster

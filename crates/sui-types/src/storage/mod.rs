@@ -34,6 +34,7 @@ pub use read_store::BalanceInfo;
 pub use read_store::BalanceIterator;
 pub use read_store::CoinInfo;
 pub use read_store::DynamicFieldIndexInfo;
+pub use read_store::DynamicFieldIteratorItem;
 pub use read_store::DynamicFieldKey;
 pub use read_store::EpochInfo;
 pub use read_store::OwnedObjectInfo;

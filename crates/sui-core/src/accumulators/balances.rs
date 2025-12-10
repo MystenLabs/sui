@@ -3,8 +3,14 @@
 
 use mysten_common::debug_fatal;
 use sui_types::{
-    TypeTag, accumulator_metadata::AccumulatorOwner, accumulator_root::AccumulatorValue,
-    balance::Balance, base_types::SuiAddress, error::SuiResult, storage::ChildObjectResolver,
+    TypeTag,
+    accumulator_metadata::AccumulatorOwner,
+    accumulator_root::AccumulatorValue,
+    balance::Balance,
+    base_types::{ObjectID, SuiAddress},
+    error::SuiResult,
+    storage::error::Error as StorageError,
+    storage::{ChildObjectResolver, DynamicFieldIteratorItem, DynamicFieldKey, RpcIndexes},
 };
 
 use crate::jsonrpc_index::IndexStoreTables;
@@ -39,11 +45,48 @@ pub fn get_balance(
     Ok(u64_balance)
 }
 
+pub trait GetDynamicFieldsIter {
+    fn get_dynamic_fields_iterator(
+        &self,
+        parent: ObjectID,
+        cursor: Option<ObjectID>,
+    ) -> Result<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>, StorageError>;
+}
+
+impl GetDynamicFieldsIter for &IndexStoreTables {
+    fn get_dynamic_fields_iterator(
+        &self,
+        parent: ObjectID,
+        cursor: Option<ObjectID>,
+    ) -> Result<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>, StorageError> {
+        Ok(Box::new(
+            IndexStoreTables::get_dynamic_fields_iterator(self, parent, cursor).map(
+                move |r| match r {
+                    Ok((field_id, _)) => Ok(DynamicFieldKey { parent, field_id }),
+                    Err(e) => Err(e),
+                },
+            ),
+        ))
+    }
+}
+
+impl<T: RpcIndexes> GetDynamicFieldsIter for T {
+    fn get_dynamic_fields_iterator(
+        &self,
+        parent: ObjectID,
+        cursor: Option<ObjectID>,
+    ) -> Result<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>, StorageError> {
+        Ok(Box::new(self.dynamic_field_iter(parent, cursor)?))
+    }
+}
+
 /// Get all currency types for a given owner address (which can be a wallet or an object)
 pub fn get_currency_types_for_owner(
     owner: SuiAddress,
     child_object_resolver: &dyn ChildObjectResolver,
-    index_tables: &IndexStoreTables,
+    index_tables: impl GetDynamicFieldsIter,
+    limit: usize,
+    cursor: Option<ObjectID>,
 ) -> SuiResult<Vec<TypeTag>> {
     let Some(owner_obj) = AccumulatorOwner::load_object(child_object_resolver, None, owner)? else {
         return Ok(Vec::new());
@@ -62,15 +105,17 @@ pub fn get_currency_types_for_owner(
 
     // get all balance types for the owner
     let accumulator_metadata: Vec<_> = index_tables
-        .get_dynamic_fields_iterator(*bag_id, None)?
+        .get_dynamic_fields_iterator(*bag_id, cursor)?
+        .take(limit)
         .collect();
 
     let mut currency_types = Vec::new();
     for result in accumulator_metadata {
-        let (object_id, _) = result?;
+        let DynamicFieldKey { parent, field_id } = result?;
+        debug_assert_eq!(parent, *bag_id);
 
         if let Some(object) =
-            child_object_resolver.read_child_object(bag_id, &object_id, owner_version)?
+            child_object_resolver.read_child_object(bag_id, &field_id, owner_version)?
         {
             let ty = object
                 .data
@@ -99,9 +144,12 @@ pub fn get_currency_types_for_owner(
 pub fn get_all_balances_for_owner(
     owner: SuiAddress,
     child_object_resolver: &dyn ChildObjectResolver,
-    index_tables: &IndexStoreTables,
+    index_tables: impl GetDynamicFieldsIter,
+    limit: usize,
+    cursor: Option<ObjectID>,
 ) -> SuiResult<Vec<(TypeTag, u64)>> {
-    let currency_types = get_currency_types_for_owner(owner, child_object_resolver, index_tables)?;
+    let currency_types =
+        get_currency_types_for_owner(owner, child_object_resolver, index_tables, limit, cursor)?;
     let mut balances = Vec::new();
     for currency_type in currency_types {
         let balance = get_balance(owner, child_object_resolver, currency_type.clone())?;
