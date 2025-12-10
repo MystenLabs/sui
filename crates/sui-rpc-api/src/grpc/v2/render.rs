@@ -4,11 +4,8 @@
 use sui_rpc::{
     field::FieldMaskTree,
     merge::Merge,
-    proto::sui::rpc::v2::{
-        Bcs, Event, ExecutedTransaction, Object, TransactionEffects, TransactionEvents,
-    },
+    proto::sui::rpc::v2::{Bcs, Event, Object, TransactionEffects, TransactionEvents},
 };
-use sui_types::balance_change::derive_balance_changes_2;
 
 use crate::RpcService;
 
