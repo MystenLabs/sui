@@ -348,7 +348,8 @@ struct CachedCommittedData {
     executed_effects_digests:
         MonotonicCache<TransactionDigest, PointCacheItem<TransactionEffectsDigest>>,
 
-    transaction_executed_in_last_epoch: MonotonicCache<TransactionDigest, PointCacheItem<bool>>,
+    transaction_executed_in_last_epoch:
+        MonotonicCache<(EpochId, TransactionDigest), PointCacheItem<()>>,
 
     // Objects that were read at transaction signing time - allows us to access them again at
     // execution time with a single lock / hash lookup
@@ -562,9 +563,6 @@ impl WritebackCache {
         self.cached.executed_effects_digests.invalidate(tx_digest);
         self.cached.transaction_events.invalidate(tx_digest);
         self.cached.transactions.invalidate(tx_digest);
-        self.cached
-            .transaction_executed_in_last_epoch
-            .invalidate(tx_digest);
     }
 
     fn write_object_entry(
@@ -2114,25 +2112,35 @@ impl TransactionCacheRead for WritebackCache {
         digest: &TransactionDigest,
         current_epoch: EpochId,
     ) -> SuiResult<bool> {
+        if current_epoch == 0 {
+            return Ok(false);
+        }
+        let last_epoch = current_epoch - 1;
+        let cache_key = (last_epoch, *digest);
+
         let ticket = self
             .cached
             .transaction_executed_in_last_epoch
-            .get_ticket_for_read(digest);
+            .get_ticket_for_read(&cache_key);
 
-        if let Some(cached) = self.cached.transaction_executed_in_last_epoch.get(digest)
-            && let Some(was_executed) = *cached.lock()
+        if let Some(cached) = self
+            .cached
+            .transaction_executed_in_last_epoch
+            .get(&cache_key)
         {
+            let was_executed = cached.lock().is_some();
             return Ok(was_executed);
         }
 
         let was_executed = self
             .store
             .perpetual_tables
-            .was_transaction_executed_in_last_epoch(digest, current_epoch)?;
+            .was_transaction_executed_in_last_epoch(digest, current_epoch);
 
+        let value = if was_executed { Some(()) } else { None };
         self.cached
             .transaction_executed_in_last_epoch
-            .insert(digest, Some(was_executed), ticket)
+            .insert(&cache_key, value, ticket)
             .ok();
 
         Ok(was_executed)

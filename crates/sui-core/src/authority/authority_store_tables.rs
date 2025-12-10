@@ -637,13 +637,13 @@ impl AuthorityPerpetualTables {
         &self,
         digest: &TransactionDigest,
         current_epoch: EpochId,
-    ) -> SuiResult<bool> {
+    ) -> bool {
         if current_epoch == 0 {
-            return Ok(false);
+            return false;
         }
-        Ok(self
-            .executed_transaction_digests
-            .contains_key(&(current_epoch - 1, *digest))?)
+        self.executed_transaction_digests
+            .contains_key(&(current_epoch - 1, *digest))
+            .expect("db error")
     }
 
     // DEPRECATED as the backing table has been moved to authority_per_epoch_store.
