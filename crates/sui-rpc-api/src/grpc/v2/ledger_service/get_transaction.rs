@@ -11,18 +11,14 @@ use sui_rpc::merge::Merge;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsResponse;
-use sui_rpc::proto::sui::rpc::v2::Event;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::GetTransactionResult;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
-use sui_rpc::proto::sui::rpc::v2::TransactionEffects;
-use sui_rpc::proto::sui::rpc::v2::TransactionEvents;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
 use sui_rpc::proto::timestamp_ms_to_proto;
-use sui_sdk_types::{Address, Digest};
-use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
+use sui_sdk_types::Digest;
 
 pub const READ_MASK_DEFAULT: &str = "digest";
 
@@ -135,56 +131,17 @@ fn transaction_to_response(
     }
 
     if let Some(submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name) {
-        let mut effects = TransactionEffects::merge_from(&source.effects, &submask);
-
-        if submask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD) {
-            effects.unchanged_loaded_runtime_objects = source
-                .unchanged_loaded_runtime_objects
-                .unwrap_or_default()
-                .iter()
-                .map(Into::into)
-                .collect();
-        }
-
-        if let Some(object_types) = source.object_types {
-            if submask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
-                for changed_object in effects.changed_objects.iter_mut() {
-                    let Ok(object_id) = changed_object.object_id().parse::<Address>() else {
-                        continue;
-                    };
-
-                    if let Some(ty) = object_types.get(&object_id.into()) {
-                        changed_object.object_type = Some(match ty {
-                            sui_types::base_types::ObjectType::Package => "package".to_owned(),
-                            sui_types::base_types::ObjectType::Struct(struct_tag) => {
-                                struct_tag.to_canonical_string(true)
-                            }
-                        });
-                    }
-                }
-            }
-
-            if submask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
-                for unchanged_consensus_object in effects.unchanged_consensus_objects.iter_mut() {
-                    let Ok(object_id) = unchanged_consensus_object.object_id().parse::<Address>()
-                    else {
-                        continue;
-                    };
-
-                    if let Some(ty) = object_types.get(&object_id.into()) {
-                        unchanged_consensus_object.object_type = Some(match ty {
-                            sui_types::base_types::ObjectType::Package => "package".to_owned(),
-                            sui_types::base_types::ObjectType::Struct(struct_tag) => {
-                                struct_tag.to_canonical_string(true)
-                            }
-                        });
-                    }
-                }
-            }
-        }
-
-        // Try to render clever error info
-        service.render_clever_error(&mut effects);
+        let effects = service.render_effects_to_proto(
+            &source.effects,
+            &source.unchanged_loaded_runtime_objects.unwrap_or_default(),
+            |object_id| {
+                source
+                    .object_types
+                    .as_ref()
+                    .and_then(|types| types.get(object_id).cloned())
+            },
+            &submask,
+        );
 
         message.effects = Some(effects);
     }

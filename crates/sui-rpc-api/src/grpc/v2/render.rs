@@ -4,8 +4,11 @@
 use sui_rpc::{
     field::FieldMaskTree,
     merge::Merge,
-    proto::sui::rpc::v2::{Bcs, Event, Object, TransactionEffects, TransactionEvents},
+    proto::sui::rpc::v2::{
+        Bcs, Event, ExecutedTransaction, Object, TransactionEffects, TransactionEvents,
+    },
 };
+use sui_types::balance_change::derive_balance_changes_2;
 
 use crate::RpcService;
 
@@ -174,5 +177,70 @@ impl RpcService {
         }
 
         move_abort.clever_error = render(self, move_abort);
+    }
+
+    pub fn render_effects_to_proto<F>(
+        &self,
+        effects: &sui_types::effects::TransactionEffects,
+        unchanged_loaded_runtime_objects: &[sui_types::storage::ObjectKey],
+        object_type_lookup: F,
+        mask: &FieldMaskTree,
+    ) -> TransactionEffects
+    where
+        F: Fn(&sui_types::base_types::ObjectID) -> Option<sui_types::base_types::ObjectType>,
+    {
+        // TODO consider inlining this function here to avoid needing to do the extra parsing below
+        let mut effects = TransactionEffects::merge_from(effects, mask);
+
+        if mask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD) {
+            effects.unchanged_loaded_runtime_objects = unchanged_loaded_runtime_objects
+                .iter()
+                .map(Into::into)
+                .collect();
+        }
+
+        if mask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD) {
+            for changed_object in effects.changed_objects.iter_mut() {
+                let Ok(object_id) = changed_object
+                    .object_id()
+                    .parse::<sui_types::base_types::ObjectID>()
+                else {
+                    continue;
+                };
+
+                if let Some(object_type) = object_type_lookup(&object_id) {
+                    changed_object.set_object_type(object_type_to_string(object_type));
+                }
+            }
+        }
+
+        if mask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD) {
+            for unchanged_consensus_object in effects.unchanged_consensus_objects.iter_mut() {
+                let Ok(object_id) = unchanged_consensus_object
+                    .object_id()
+                    .parse::<sui_types::base_types::ObjectID>()
+                else {
+                    continue;
+                };
+
+                if let Some(object_type) = object_type_lookup(&object_id) {
+                    unchanged_consensus_object.set_object_type(object_type_to_string(object_type));
+                }
+            }
+        }
+
+        // Try to render clever error info
+        self.render_clever_error(&mut effects);
+
+        effects
+    }
+}
+
+fn object_type_to_string(object_type: sui_types::base_types::ObjectType) -> String {
+    match object_type {
+        sui_types::base_types::ObjectType::Package => "package".to_owned(),
+        sui_types::base_types::ObjectType::Struct(move_object_type) => {
+            move_object_type.to_canonical_string(true)
+        }
     }
 }
