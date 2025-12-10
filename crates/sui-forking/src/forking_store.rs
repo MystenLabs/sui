@@ -235,7 +235,7 @@ impl ChildObjectResolver for ForkingStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        let child_object = match crate::store::SimulatorStore::get_object(self, child) {
+        let child_object = match simulacrum::SimulatorStore::get_object(self, child) {
             None => return Ok(None),
             Some(obj) => obj,
         };
@@ -268,8 +268,7 @@ impl ChildObjectResolver for ForkingStore {
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
     ) -> sui_types::error::SuiResult<Option<Object>> {
-        let recv_object = match crate::store::SimulatorStore::get_object(self, receiving_object_id)
-        {
+        let recv_object = match simulacrum::SimulatorStore::get_object(self, receiving_object_id) {
             None => return Ok(None),
             Some(obj) => obj,
         };

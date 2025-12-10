@@ -92,6 +92,132 @@ pub struct AdvanceEpochConfig {
 mod epoch_state;
 pub mod store;
 
+/// Builder for creating a Simulacrum instance.
+///
+/// This builder provides a flexible way to construct a Simulacrum with custom configuration.
+/// The store implementation must be explicitly specified - there is no default.
+///
+/// # Examples
+///
+/// ```
+/// use simulacrum::{SimulacrumBuilder, InMemoryStore};
+/// use rand::rngs::OsRng;
+///
+/// # fn main() {
+/// // Create with InMemoryStore
+/// let sim = SimulacrumBuilder::new()
+///     .with_rng(OsRng)
+///     .with_store_creator(|genesis| InMemoryStore::new(genesis))
+///     .build();
+/// # }
+/// ```
+pub struct SimulacrumBuilder<R = OsRng> {
+    rng: R,
+    protocol_version: Option<ProtocolVersion>,
+    chain: Option<Chain>,
+    chain_start_timestamp_ms: u64,
+    accounts: Vec<AccountConfig>,
+    committee_size: NonZeroUsize,
+}
+
+impl SimulacrumBuilder<OsRng> {
+    /// Create a new builder with default configuration using OsRng.
+    pub fn new() -> Self {
+        Self {
+            rng: OsRng,
+            protocol_version: None,
+            chain: None,
+            chain_start_timestamp_ms: 1,
+            accounts: vec![],
+            committee_size: NonZeroUsize::new(1).unwrap(),
+        }
+    }
+}
+
+impl<R> SimulacrumBuilder<R> {
+    /// Set a custom RNG for deterministic chain creation.
+    pub fn with_rng<NewR>(self, rng: NewR) -> SimulacrumBuilder<NewR> {
+        SimulacrumBuilder {
+            rng,
+            protocol_version: self.protocol_version,
+            chain: self.chain,
+            chain_start_timestamp_ms: self.chain_start_timestamp_ms,
+            accounts: self.accounts,
+            committee_size: self.committee_size,
+        }
+    }
+
+    /// Set the protocol version.
+    pub fn with_protocol_version(mut self, version: ProtocolVersion) -> Self {
+        self.protocol_version = Some(version);
+        self
+    }
+
+    /// Set the chain identifier.
+    pub fn with_chain(mut self, chain: Chain) -> Self {
+        self.chain = Some(chain);
+        self
+    }
+
+    /// Set the chain start timestamp in milliseconds.
+    pub fn with_chain_start_timestamp_ms(mut self, timestamp_ms: u64) -> Self {
+        self.chain_start_timestamp_ms = timestamp_ms;
+        self
+    }
+
+    /// Set the account configurations.
+    pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
+        self.accounts = accounts;
+        self
+    }
+
+    /// Set the committee size.
+    pub fn with_committee_size(mut self, size: NonZeroUsize) -> Self {
+        self.committee_size = size;
+        self
+    }
+
+    /// Build the Simulacrum with a store created from the genesis configuration.
+    ///
+    /// The `store_creator` function receives the genesis configuration and should return
+    /// an initialized store instance.
+    pub fn with_store_creator<S, F>(mut self, store_creator: F) -> Simulacrum<R, S>
+    where
+        R: rand::RngCore + rand::CryptoRng,
+        S: SimulatorStore,
+        F: FnOnce(&genesis::Genesis) -> S,
+    {
+        let mut builder = ConfigBuilder::new_with_temp_dir()
+            .rng(&mut self.rng)
+            .with_chain_start_timestamp_ms(self.chain_start_timestamp_ms)
+            .deterministic_committee_size(self.committee_size);
+
+        if let Some(version) = self.protocol_version {
+            builder = builder.with_protocol_version(version);
+        }
+
+        if let Some(chain) = self.chain {
+            builder = builder.with_chain_override(chain);
+        }
+
+        if !self.accounts.is_empty() {
+            builder = builder.with_accounts(self.accounts);
+        }
+
+        let config = builder.build();
+        let store = store_creator(&config.genesis);
+        Simulacrum::new_with_network_config_store(&config, self.rng, store)
+    }
+
+    /// Build the Simulacrum with an InMemoryStore (convenience method).
+    pub fn build_in_mem(self) -> Simulacrum<R, InMemoryStore>
+    where
+        R: rand::RngCore + rand::CryptoRng,
+    {
+        self.with_store_creator(|genesis| InMemoryStore::new(genesis))
+    }
+}
+
 /// A `Simulacrum` of Sui.
 ///
 /// This type represents a simulated instantiation of a Sui blockchain that needs to be driven
@@ -100,8 +226,10 @@ pub mod store;
 ///
 /// See [module level][mod] documentation for more details.
 ///
+/// Use [`SimulacrumBuilder`] to construct instances with custom store implementations.
+///
 /// [mod]: index.html
-pub struct Simulacrum<R = OsRng, Store: SimulatorStore = InMemoryStore> {
+pub struct Simulacrum<R, Store: SimulatorStore> {
     rng: R,
     keystore: KeyStore,
     #[allow(unused)]
@@ -118,23 +246,27 @@ pub struct Simulacrum<R = OsRng, Store: SimulatorStore = InMemoryStore> {
     verifier_signing_config: VerifierSigningConfig,
 }
 
-impl Simulacrum {
-    /// Create a new, random Simulacrum instance using an `OsRng` as the source of randomness.
+impl Simulacrum<OsRng, InMemoryStore> {
+    /// Create a new, random Simulacrum instance using an `OsRng` as the source of randomness
+    /// with an in-memory store.
+    ///
+    /// For more control over store selection, use [`SimulacrumBuilder`].
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self::new_with_rng(OsRng)
     }
 }
 
-impl<R, S> Simulacrum<R, S>
+impl<R> Simulacrum<R, InMemoryStore>
 where
     R: rand::RngCore + rand::CryptoRng,
-    S: store::SimulatorStore,
 {
-    /// Create a new Simulacrum instance using the provided `rng`.
+    /// Create a new Simulacrum instance using the provided `rng` with an in-memory store.
     ///
     /// This allows you to create a fully deterministic initial chainstate when a seeded rng is
     /// used.
+    ///
+    /// For more control over store selection, use [`SimulacrumBuilder`].
     ///
     /// ```
     /// use simulacrum::Simulacrum;
@@ -154,7 +286,9 @@ where
         Self::new_with_network_config_in_mem(&config, rng)
     }
 
-    /// Create a new Simulacrum instance with a specific protocol version.
+    /// Create a new Simulacrum instance with a specific protocol version and in-memory store.
+    ///
+    /// For more control over store selection, use [`SimulacrumBuilder`].
     pub fn new_with_protocol_version(mut rng: R, protocol_version: ProtocolVersion) -> Self {
         let config = ConfigBuilder::new_with_temp_dir()
             .rng(&mut rng)
@@ -165,6 +299,9 @@ where
         Self::new_with_network_config_in_mem(&config, rng)
     }
 
+    /// Create a new Simulacrum instance with protocol version, accounts, and in-memory store.
+    ///
+    /// For more control over store selection, use [`SimulacrumBuilder`].
     pub fn new_with_protocol_version_and_accounts(
         mut rng: R,
         chain_start_timestamp_ms: u64,
@@ -181,6 +318,9 @@ where
         Self::new_with_network_config_in_mem(&config, rng)
     }
 
+    /// Create a new Simulacrum instance with protocol version, chain override, and in-memory store.
+    ///
+    /// For more control over store selection, use [`SimulacrumBuilder`].
     pub fn new_with_protocol_version_and_chain_override(
         mut rng: R,
         protocol_version: ProtocolVersion,
@@ -196,29 +336,9 @@ where
         Self::new_with_network_config_in_mem(&config, rng)
     }
 
-    pub fn new_with_protocol_version_and_chain_override_and_store(
-        mut rng: R,
-        protocol_version: ProtocolVersion,
-        chain: Chain,
-    ) -> Self {
-        let config = ConfigBuilder::new_with_temp_dir()
-            .rng(&mut rng)
-            .with_chain_start_timestamp_ms(1)
-            .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
-            .with_protocol_version(protocol_version)
-            .with_chain_override(chain)
-            .build();
-        let store = Store::new(&config.genesis);
-        Self::new_with_network_config_store(&config, rng, store)
-    }
-
-    fn new_with_network_config_and_store(config: &NetworkConfig, rng: R, store: Store) -> Self {
-        Self::new_with_network_config_store(config, rng, store)
-    }
-
     fn new_with_network_config_in_mem(config: &NetworkConfig, rng: R) -> Self {
         let store = InMemoryStore::new(&config.genesis);
-        Self::new_with_network_config_store(config, rng, store)
+        Simulacrum::new_with_network_config_store(config, rng, store)
     }
 }
 
@@ -859,7 +979,7 @@ impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for 
     }
 }
 
-impl Simulacrum {
+impl<R, S: SimulatorStore> Simulacrum<R, S> {
     /// Generate a random transfer transaction.
     /// TODO: This is here today to make it easier to write tests. But we should utilize all the
     /// existing code for generating transactions in sui-test-transaction-builder by defining a trait

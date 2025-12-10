@@ -6,7 +6,7 @@ use axum::{
     routing::{get, post},
 };
 use rand::rngs::OsRng;
-use simulacrum::{AdvanceEpochConfig, Simulacrum};
+use simulacrum::{AdvanceEpochConfig, Simulacrum, SimulacrumBuilder};
 use std::{
     net::SocketAddr,
     path::PathBuf,
@@ -37,7 +37,7 @@ use crate::{
 use diesel::prelude::*;
 
 pub struct AppState {
-    pub simulacrum: Arc<RwLock<Simulacrum>>,
+    pub simulacrum: Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>,
     pub transaction_count: Arc<AtomicUsize>,
     pub forked_at_checkpoint: u64,
     pub chain: Chain,
@@ -52,12 +52,11 @@ impl AppState {
         protocol_version: u64,
         protocol_config: ProtocolConfig,
     ) -> Self {
-        let mut simulacrum = Simulacrum::new_with_protocol_version_and_chain_override_and_store(
-            OsRng,
-            protocol_version.into(),
-            chain,
-            store,
-        );
+        let mut store = ForkingStore::default();
+        let mut simulacrum = SimulacrumBuilder::new()
+            .with_chain(chain)
+            .with_protocol_version(protocol_version.into())
+            .with_store_creator(|genesis| ForkingStore::new(genesis));
 
         simulacrum.set_data_ingestion_path(data_ingestion_path);
         let simulacrum = Arc::new(RwLock::new(simulacrum));

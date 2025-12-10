@@ -46,6 +46,7 @@ sui-indexer-alt-reader.workspace = true
 sui-pg-db.workspace = true
 sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
+sui-swarm-config.workspace = true
 sui-types.workspace = true
 
 [build-dependencies]

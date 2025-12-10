@@ -17,6 +17,8 @@ use sui_types::{
 use sui_indexer_alt_jsonrpc::{api::rpc_module::RpcModule, error::invalid_params};
 use sui_types::effects::TransactionEffectsAPI;
 
+use crate::forking_store::ForkingStore;
+use rand::rngs::OsRng;
 use simulacrum::Simulacrum;
 use std::sync::{Arc, RwLock};
 
@@ -48,7 +50,7 @@ pub trait WriteApi {
     ) -> RpcResult<DryRunTransactionBlockResponse>;
 }
 
-pub(crate) struct Write(pub Arc<RwLock<Simulacrum>>);
+pub(crate) struct Write(pub Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>);
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -67,7 +69,7 @@ pub enum Error {
 }
 
 impl Write {
-    pub fn new(simulacrum: Arc<RwLock<Simulacrum>>) -> Self {
+    pub fn new(simulacrum: Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>) -> Self {
         Self(simulacrum)
     }
 }

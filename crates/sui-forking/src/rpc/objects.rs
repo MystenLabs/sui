@@ -13,7 +13,7 @@ use sui_types::{
     supported_protocol_versions::Chain,
 };
 
-use self::error::Error;
+use crate::forking_store::ForkingStore;
 use simulacrum::Simulacrum;
 use std::sync::{Arc, RwLock};
 
@@ -32,7 +32,7 @@ trait ObjectsApi {
 }
 
 pub(crate) struct Objects {
-    pub simulacrum: Arc<RwLock<Simulacrum>>,
+    pub simulacrum: Arc<RwLock<Simulacrum<R, ForkingStore>>>,
     pub protocol_version: u64,
     pub chain: Chain,
 }

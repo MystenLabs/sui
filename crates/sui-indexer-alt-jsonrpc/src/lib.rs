@@ -347,7 +347,7 @@ pub async fn basic_rpc(
     rpc.add_module(Governance(context.clone()))?;
     rpc.add_module(MoveUtils(context.clone()))?;
     rpc.add_module(NameService(context.clone()))?;
-    rpc.add_module(Objects(context.clone()))?;
+    // rpc.add_module(Objects(context.clone()))?;
     rpc.add_module(QueryObjects(context.clone()))?;
     rpc.add_module(QueryTransactions(context.clone()))?;
     rpc.add_module(Transactions(context.clone()))?;
