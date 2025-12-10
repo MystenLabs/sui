@@ -8,7 +8,7 @@ A Move package is a collection of Move modules that you publish together as a si
 
 :::info
 
-Version 1.63 introduced major changes to the Move package system. This document describes the new system; see [automated address management](/concepts/sui-move-concepts/packages/automated-address-management.mdx) for the documentation on the old system, and [the migration guide](/references/package-managers/package-manager-migration.mdx) for a description of the differences and how to migrate to the new system.
+Version 1.63 introduced major changes to the Move package system. This document describes the new system. See [automated address management](/concepts/sui-move-concepts/packages/automated-address-management.mdx) for the documentation on the old system, and [the migration guide](/references/package-managers/package-manager-migration.mdx) for a description of the differences and how to migrate to the new system.
 
 :::
 
@@ -16,7 +16,7 @@ Version 1.63 introduced major changes to the Move package system. This document 
 
 Package authors configure their packages by providing a manifest file (`Move.toml`) in the root of the package directory. This file contains metadata about the package and its list of dependencies.
 
-When a Move package is built for the first time, the package management system uses the information in the manifest file to find the source code for the package's dependencies. The system stores the exact versions of the dependencies in a lockfile (`Move.lock`). The system calls this process _pinning_.
+When you build a Move package for the first time, the package management system uses the information in the manifest file to find the source code for the package's dependencies. The system stores the exact versions of the dependencies in a lockfile (`Move.lock`). The system calls this process _pinning_.
 
 For example, the manifest might specify a dependency on a branch of a git repository. The package system pins that dependency to a specific commit so that subsequent builds use exactly the same source.
 
@@ -24,7 +24,7 @@ You should commit the `Move.lock` file to source control so that your collaborat
 
 The third file that the package management system uses is the publication file (`Published.toml`). Each time you publish your package, the package system updates this file with metadata about the publication, such as its on-chain address, upgrade capability address, and information about the compiler version used to build the package. The `Published.toml` file should be committed to source control.
 
-Finally, the `test-publish` command makes use of ephemeral publication files, typically named `Pub.<env-name>.toml`. These files contain information about temporary publications that aren't intended to be shared, such as publications to local networks.
+Finally, the `test-publish` command makes use of ephemeral publication files, typically named `Pub.<env-name>.toml`. These files contain information about temporary publications that are not intended to be shared, such as publications to local networks.
 
 ## Dependencies
 
@@ -51,27 +51,27 @@ use ascii::ascii;
 use ascii::char;
 ```
 
-When you build this package, the package system will download and use the source code for the ascii package. When published, the package will link to the on-chain package object referenced from ascii's `Published.toml` file.
+When you build this package, the package system downloads and uses the source code for the ascii package. When published, the package links to the on-chain package object referenced from the ascii `Published.toml` file.
 
 ### Dependency types
 
 The Move package system supports 4 types of dependencies, each suited for different use cases:
 
- - Move registry (mvr) dependencies are the recommended way to depend on published packages from the ecosystem
- - Local dependencies are used when a single repository contains multiple packages
- - Git dependencies can be used to depend on packages that haven't yet been published to move registry
- - System dependencies are used for built-in packages that are part of Sui
+ - Move registry (`mvr`) dependencies are the recommended way to depend on published packages from the ecosystem.
+ - Local dependencies are used when a single repository contains multiple packages.
+ - Git dependencies can be used to depend on packages that have not yet been published to Move registry.
+ - System dependencies are used for built-in packages that are part of Sui.
 
 The remainder of this section describes these dependency types in detail.
 
-#### Move registry (mvr) dependencies (recommended)
+#### Move registry (`mvr`) dependencies (recommended)
 
 The preferred way to depend on another package is using the Move registry, called `mvr`. The [Move registry](https://moveregistry.com/) is an on-chain database linking published packages with their source code.
 
 To depend on a package with `mvr` name `@example/package`, add `example = { r.mvr = "@example/package" }` to your `[dependencies]` section.
 
 **Advantages:**
-- Automatically resolves correct version for your environment (Mainnet vs Testnet).
+- Automatically resolves correct version for your environment (Mainnet versus Testnet).
 - Ensures package source code is verified and available.
 - Simplest way to depend on published packages.
 
@@ -93,7 +93,7 @@ Git dependencies can be used to depend on packages stored in git repositories. A
 usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "packages/usdc", rev = "master" }
 ```
 
-Manifest files are written in TOML, which also allows you to expand inline tables. The above is equivalent to:
+Manifest files are written in TOML, which also allows you to expand inline tables. The preceding example is equivalent to:
 
 ```toml
 [dependencies.usdc]
@@ -103,26 +103,26 @@ rev = "master"
 ```
 
 :::caution
+
 Although you can use a shortened commit hash, doing so requires downloading the entire git history, which is less efficient than including the full 40-character hash.
+
 :::
 
 #### System dependencies
 
 :::info
 
-System dependencies don't exist in the old system, and implicit dependencies work differently.
+System dependencies do not exist in the old system, and implicit dependencies work differently.
 
 :::
 
-Several packages are built into Sui; the `system` dependency type can be used
-to depend on these packages. The available system packages are `std`, `sui`,
-`sui_system`, `bridge`, and `deepbook`.
+Several packages are built into Sui. The `system` dependency type can be used to depend on these packages. The available system packages are `std`, `sui`, `sui_system`, `bridge`, and `deepbook`.
 
 However:
 
  - The `std` and `sui` packages are implicitly included unless you write `implicit-dependencies = false` in your `[package]` section. You do not need to explicitly include them.
 
- - The `deepbook` system package is for the deprecated DeepBook version 2; new applications should use DeepBook version 3 by adding `deepbook = { mvr = "@deepbook/core" }`
+ - The `deepbook` system package is for the deprecated DeepBook version 2. New applications should use DeepBook version 3 by adding `deepbook = { mvr = "@deepbook/core" }`.
 
 To include a system dependency, write `{ system = "<name>" }`. For example, to use `sui_system`, add `sui_system = { system = "sui_system" }` to your `[dependencies]` section.
 
@@ -134,7 +134,7 @@ There are additional fields that can be used with any of the 4 dependency types:
 
 :::info
 
-`rename-from` doesn't exist in the old system.
+`rename-from` does not exist in the old system.
 
 :::
 
@@ -165,7 +165,7 @@ graph LR;
 
 The package system does not allow this by default, because running code in package `a` would require both versions 1 and 2 of `d`.
 
-By adding `override = true` to a dependency, you force all of your dependencies to use the specified version of the dependency. In the above example, you could add an override dependency on `d` version 2, which would cause `b` to use version 2 of `d` instead of version 1.
+By adding `override = true` to a dependency, you force all of your dependencies to use the specified version of the dependency. In the preceding example, you could add an override dependency on `d` version 2, which would cause `b` to use version 2 of `d` instead of version 1.
 
 ```mermaid
 graph LR;
@@ -180,7 +180,7 @@ You are only allowed to override packages to newer versions. In the example you 
 
 #### Test-only and moded dependencies
 
-The `modes` field lets you add dependencies that are only used in specific modes, such as test mode. If no `modes` field is provided, the dependency is included in all modes. For example, to include the `ascii` dependency for testing only, you would write
+The `modes` field lets you add dependencies that are only used in specific modes, such as test mode. If no `modes` field is provided, the dependency is included in all modes. For example, to include the `ascii` dependency for testing only, you would write:
 
 ```toml
 ascii = { r.mvr = "@potatoes/ascii", modes = ["test"] }
@@ -214,7 +214,7 @@ By default, the available environments are `mainnet` and `testnet`, but you can 
 devnet = "aba3e445"
 ```
 
-The right-hand side of the entry is the chain identifier for the network; you can find the chain ID using `sui client chain-identifier`. The chain identifier is used to ensure dependencies agree on the meaning of the environment name, and to reset package addresses if the network is wiped and restarted.
+The right-hand side of the entry is the chain identifier for the network. You can find the chain ID using `sui client chain-identifier`. The chain identifier is used to ensure dependencies agree on the meaning of the environment name, and to reset package addresses if the network is wiped and restarted.
 
 :::caution
 
@@ -279,7 +279,7 @@ Run `sui move update-deps` to repin all of your dependencies. This does not chan
 
 ### Publishing and upgrading
 
-During normal package publication and upgrades (`sui client publish` or `sui client upgrade`), the system rechecks that the dependencies are published on the given network and that the relevant chain IDs are consistent. The system also ensures that the additional on-chain linkage requirements are satisfied. For example, on-chain packages can have extra dependencies in their linkage that they don't actually use, so the system needs to include the on-chain linkages.
+During normal package publication and upgrades (`sui client publish` or `sui client upgrade`), the system rechecks that the dependencies are published on the given network and that the relevant chain IDs are consistent. The system also ensures that the additional on-chain linkage requirements are satisfied. For example, on-chain packages can have extra dependencies in their linkage that they do not actually use, so the system needs to include the on-chain linkages.
 
 The system updates the publication file (`Published.toml`) to include the updated publication information. The publication file contains an entry for each environment that has a published version of the package. The entry contains the published address, original ID (the address of the first version of the package), the version number, the upgrade capability, and information about the build configuration that can be used for source validation. Here is an example publication file:
 
@@ -303,7 +303,7 @@ upgrade-capability = "0xe03549eaeab8d9461977ff1e993adf37a7d320f688a787b30fbdd30c
 
 You should commit the publication file to source control so that other packages can depend on your package.
 
-You can also publish or upgrade using the `sui client ptb` command; see [Building Programmable Transaction Blocks](/guides/developer/sui-101/building-ptb.mdx) for details.
+You can also publish or upgrade using the `sui client ptb` command. See [Building Programmable Transaction Blocks](/guides/developer/sui-101/building-ptb.mdx) for details.
 
 :::info
 
@@ -313,7 +313,7 @@ In the old system, the `Published.toml` information was stored in `Move.lock`.
 
 ### Ephemeral publication {#test-publish}
 
-By design, the `Published.toml` file only should only record publications to persistent environments like mainnet and testnet; addresses for ephemeral publications on local networks or devnet should not usually be committed to source control.
+By design, the `Published.toml` file should only record publications to persistent environments like Mainnet and Testnet. Addresses for ephemeral publications on local networks or Devnet should not usually be committed to source control.
 
 Instead, the package manager supports ephemeral publication of a package and its dependencies for testing. The `sui client test-publish` command works like a normal publish, except that the system reads the publication addresses for packages and writes them to a separate file.
 
@@ -363,7 +363,7 @@ If `<pubfile>` is omitted, it defaults to `Pub.<env-name>.toml` where `<env-name
 If `--build-env <env>` is omitted, it defaults to the `build-env` name of the file at `<file>`. If that is missing, the system errors. The build environment determines how the system resolves dependencies for the package.
 
 :::info
-The old system did not support ephemeral publication
+The old system did not support ephemeral publication.
 :::
 
 Although publication files and ephemeral publication files are similar, they hold different information:
@@ -376,6 +376,6 @@ Although publication files and ephemeral publication files are similar, they hol
 | **Commit to source control** | Yes since others can depend on your package | No since it contains local development data |
 | **Created by** | `sui client publish` | `sui client test-publish` |
 
-## Register your package on mvr
+## Register your package on `mvr`
 
-Once you have published your package, you should consider adding it to the Move registry so that others can easily depend on it. See [the move registry documentation](https://docs.suins.io/move-registry/managing-package-info) for more information.
+Once you have published your package, you should consider adding it to the Move registry so that others can easily depend on it. See [the Move registry documentation](https://docs.suins.io/move-registry/managing-package-info) for more information.
