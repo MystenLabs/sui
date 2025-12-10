@@ -437,10 +437,18 @@ pub struct AuthorityPerEpochStore {
     /// settlement transaction keys to resolve to transactions.
     /// Stored in AuthorityPerEpochStore so that it is automatically cleaned up at the end of the epoch.
     settlement_registrations: Arc<Mutex<HashMap<TransactionKey, SettlementRegistration>>>,
+
+    /// Waiters for barrier transactions. Used by execution scheduler to wait for
+    /// barrier transaction (keyed by the same AccumulatorSettlement key as settlements).
+    barrier_registrations: Arc<Mutex<HashMap<TransactionKey, BarrierRegistration>>>,
 }
 enum SettlementRegistration {
     Ready(Vec<VerifiedExecutableTransaction>),
     Waiting(oneshot::Sender<Vec<VerifiedExecutableTransaction>>),
+}
+enum BarrierRegistration {
+    Ready(Box<VerifiedExecutableTransaction>),
+    Waiting(oneshot::Sender<VerifiedExecutableTransaction>),
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -1221,6 +1229,7 @@ impl AuthorityPerEpochStore {
             submitted_transaction_cache,
             finalized_transactions_cache,
             settlement_registrations: Default::default(),
+            barrier_registrations: Default::default(),
         });
 
         s.update_buffer_stake_metric();
@@ -1915,6 +1924,44 @@ impl AuthorityPerEpochStore {
             } else {
                 let (tx, rx) = oneshot::channel();
                 registrations.insert(key, SettlementRegistration::Waiting(tx));
+                rx
+            }
+        };
+
+        rx.await.unwrap()
+    }
+
+    pub(crate) fn notify_barrier_transaction_ready(
+        &self,
+        tx_key: TransactionKey,
+        txn: VerifiedExecutableTransaction,
+    ) {
+        debug_assert!(matches!(tx_key, TransactionKey::AccumulatorSettlement(..)));
+        let mut registrations = self.barrier_registrations.lock();
+        if let Some(registration) = registrations.remove(&tx_key) {
+            let BarrierRegistration::Waiting(tx) = registration else {
+                fatal!("Barrier registration should be waiting");
+            };
+            tx.send(txn).unwrap();
+        } else {
+            registrations.insert(tx_key, BarrierRegistration::Ready(Box::new(txn)));
+        }
+    }
+
+    pub(crate) async fn wait_for_barrier_transaction(
+        &self,
+        key: TransactionKey,
+    ) -> VerifiedExecutableTransaction {
+        let rx = {
+            let mut registrations = self.barrier_registrations.lock();
+            if let Some(registration) = registrations.remove(&key) {
+                let BarrierRegistration::Ready(txn) = registration else {
+                    fatal!("Barrier registration should be ready");
+                };
+                return *txn;
+            } else {
+                let (tx, rx) = oneshot::channel();
+                registrations.insert(key, BarrierRegistration::Waiting(tx));
                 rx
             }
         };
