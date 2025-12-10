@@ -139,7 +139,7 @@ fn native_sub_string(
         // gating the change behind a feature flag, so best to keep this as-is, at least for now.
         return Ok(NativeResult::err(context.gas_used(), 1));
     }
-    let cost = gas_params.base + gas_params.per_byte * NumBytes::new((j - i) as u64);
+    let cost = gas_params.per_byte * NumBytes::new((j - i) as u64);
     native_charge_gas_early_exit!(context, cost);
 
     let s_arg = pop_arg!(args, VectorRef);
