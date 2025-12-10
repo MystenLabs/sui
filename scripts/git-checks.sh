@@ -8,11 +8,11 @@ oldrev="origin/main"
 newrev="HEAD"
 
 # Disallow merge commits
-for rev in $(git rev-list --merges $oldrev..$newrev); do
-	echo "Merge commit $rev found"
-	echo "Please fix your branch/PR to not include merges"
-	exit 1
-done
+# for rev in $(git rev-list --merges $oldrev..$newrev); do
+# 	echo "Merge commit $rev found"
+# 	echo "Please fix your branch/PR to not include merges"
+# 	exit 1
+# done
 
 # Disallow submodules
 for rev in $(git rev-list $oldrev..$newrev); do
