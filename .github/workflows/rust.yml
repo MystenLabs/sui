@@ -63,8 +63,8 @@ jobs:
         uses: './.github/actions/diffs'
         id: diff
 
-  lints:
-    name: lints-check
+  license-check:
+    name: license-check
     runs-on: [ ubuntu-latest ]
     steps:
       # Run license checker
