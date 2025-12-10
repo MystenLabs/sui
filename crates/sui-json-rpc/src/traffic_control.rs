@@ -65,7 +65,7 @@ async fn handle_traffic_req(
     traffic_controller: &Arc<TrafficController>,
     client: &Option<IpAddr>,
 ) -> Result<(), MethodResponse> {
-    if !traffic_controller.check(client, &None).await {
+    if !traffic_controller.check(client, &None, "json_rpc").await {
         // Entity in blocklist
         let err_obj =
             ErrorObject::borrowed(ErrorCode::ServerIsBusy.code(), TOO_MANY_REQUESTS_MSG, None);

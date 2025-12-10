@@ -2113,9 +2113,13 @@ impl ValidatorService {
         }
     }
 
-    async fn handle_traffic_req(&self, client: Option<IpAddr>) -> Result<(), tonic::Status> {
+    async fn handle_traffic_req(
+        &self,
+        client: Option<IpAddr>,
+        method: &str,
+    ) -> Result<(), tonic::Status> {
         if let Some(traffic_controller) = &self.traffic_controller {
-            if !traffic_controller.check(&client, &None).await {
+            if !traffic_controller.check(&client, &None, method).await {
                 // Entity in blocklist
                 Err(tonic::Status::from_error(
                     SuiErrorKind::TooManyRequests.into(),
@@ -2202,7 +2206,9 @@ macro_rules! handle_with_decoration {
         let client = $self.get_client_ip_addr(&$request, $self.client_id_source.as_ref().unwrap());
 
         // check if either IP is blocked, in which case return early
-        $self.handle_traffic_req(client.clone()).await?;
+        $self
+            .handle_traffic_req(client.clone(), $method_name)
+            .await?;
 
         // handle traffic tallying
         let wrapped_response = $self.$func_name($request).await;
