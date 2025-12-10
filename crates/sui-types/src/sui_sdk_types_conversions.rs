@@ -10,16 +10,16 @@
 
 use fastcrypto::traits::ToFromBytes;
 use sui_sdk_types::{
-    self, ActiveJwk, Address, Argument, AuthenticatorStateExpire, Bitmap, Bls12381PublicKey,
-    Bls12381Signature, CanceledTransaction, CanceledTransactionV2, ChangeEpoch,
+    self, AccumulatorWrite, ActiveJwk, Address, Argument, AuthenticatorStateExpire, Bitmap,
+    Bls12381PublicKey, Bls12381Signature, CanceledTransaction, CanceledTransactionV2, ChangeEpoch,
     CheckpointCommitment, CheckpointContents, CheckpointData, CheckpointSummary, Command,
     CommandArgumentError, ConsensusDeterminedVersionAssignments, Digest, Ed25519PublicKey,
     Ed25519Signature, EndOfEpochTransactionKind, ExecutionError, ExecutionStatus,
-    ExecutionTimeObservationKey, ExecutionTimeObservations, IdOperation, Identifier, Input, Jwk,
-    JwkId, MakeMoveVector, MergeCoins, MoveCall, MoveLocation, MovePackage,
-    MultisigMemberPublicKey, MultisigMemberSignature, Object, ObjectIn, ObjectOut, ObjectReference,
-    Owner, PackageUpgradeError, PasskeyAuthenticator, PasskeyPublicKey, Publish,
-    Secp256k1PublicKey, Secp256k1Signature, Secp256r1PublicKey, Secp256r1Signature,
+    ExecutionTimeObservationKey, ExecutionTimeObservations, FundsWithdrawal, IdOperation,
+    Identifier, Input, Jwk, JwkId, MakeMoveVector, MergeCoins, MoveCall, MoveLocation, MovePackage,
+    MultisigMemberPublicKey, MultisigMemberSignature, Mutability, Object, ObjectIn, ObjectOut,
+    ObjectReference, Owner, PackageUpgradeError, PasskeyAuthenticator, PasskeyPublicKey, Publish,
+    Secp256k1PublicKey, Secp256k1Signature, Secp256r1PublicKey, Secp256r1Signature, SharedInput,
     SignatureScheme, SignedCheckpointSummary, SignedTransaction, SimpleSignature, SplitCoins,
     StructTag, SystemPackage, Transaction, TransactionEffects, TransactionEffectsV1,
     TransactionEffectsV2, TransactionEvents, TransactionExpiration, TransactionKind,
@@ -578,7 +578,6 @@ impl From<UnchangedConsensusKind> for crate::effects::UnchangedConsensusKind {
             }
             UnchangedConsensusKind::Canceled { version } => Self::Cancelled(version.into()),
             UnchangedConsensusKind::PerEpochConfig => Self::PerEpochConfig,
-            UnchangedConsensusKind::PerEpochConfigWithSequenceNumber { .. } => todo!(),
             _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
@@ -637,9 +636,33 @@ impl From<crate::effects::ObjectOut> for ObjectOut {
                 digest: digest.into(),
             },
 
-            // TODO implement accumulator in sdk. This feature is not live yet on any network
-            crate::effects::ObjectOut::AccumulatorWriteV1(_) => todo!(),
+            crate::effects::ObjectOut::AccumulatorWriteV1(accumulator_write) => {
+                Self::AccumulatorWrite(accumulator_write.into())
+            }
         }
+    }
+}
+
+impl From<crate::effects::AccumulatorWriteV1> for AccumulatorWrite {
+    fn from(value: crate::effects::AccumulatorWriteV1) -> Self {
+        let operation = match value.operation {
+            crate::effects::AccumulatorOperation::Merge => {
+                sui_sdk_types::AccumulatorOperation::Merge
+            }
+            crate::effects::AccumulatorOperation::Split => {
+                sui_sdk_types::AccumulatorOperation::Split
+            }
+        };
+        Self::new(
+            value.address.address.into(),
+            type_tag_core_to_sdk(value.address.ty).unwrap(),
+            operation,
+            match value.value {
+                crate::effects::AccumulatorValue::Integer(value) => value,
+                crate::effects::AccumulatorValue::IntegerTuple(_, _)
+                | crate::effects::AccumulatorValue::EventDigest(_) => todo!(),
+            },
+        )
     }
 }
 
@@ -658,11 +681,21 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
         match value {
             crate::transaction::TransactionExpiration::None => Self::None,
             crate::transaction::TransactionExpiration::Epoch(epoch) => Self::Epoch(epoch),
-            crate::transaction::TransactionExpiration::ValidDuring { .. } => {
-                // TODO: Implement proper SDK conversion for ValidDuring
-                // For now, treat as None to maintain compatibility
-                Self::None
-            }
+            crate::transaction::TransactionExpiration::ValidDuring {
+                min_epoch,
+                max_epoch,
+                min_timestamp_seconds,
+                max_timestamp_seconds,
+                chain,
+                nonce,
+            } => Self::ValidDuring {
+                min_epoch,
+                max_epoch,
+                min_timestamp: min_timestamp_seconds,
+                max_timestamp: max_timestamp_seconds,
+                chain: Digest::new(*chain.as_bytes()),
+                nonce,
+            },
         }
     }
 }
@@ -672,6 +705,21 @@ impl From<TransactionExpiration> for crate::transaction::TransactionExpiration {
         match value {
             TransactionExpiration::None => Self::None,
             TransactionExpiration::Epoch(epoch) => Self::Epoch(epoch),
+            TransactionExpiration::ValidDuring {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain,
+                nonce,
+            } => Self::ValidDuring {
+                min_epoch,
+                max_epoch,
+                min_timestamp_seconds: min_timestamp,
+                max_timestamp_seconds: max_timestamp,
+                chain: crate::digests::CheckpointDigest::from(chain).into(),
+                nonce,
+            },
             _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
     }
@@ -882,10 +930,10 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::MoveRawValueTooBig { value_size, max_scaled_size } => Self::MoveRawValueTooBig { value_size, max_scaled_size },
             crate::execution_status::ExecutionFailureStatus::InvalidLinkage => Self::InvalidLinkage,
             crate::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw => {
-                todo!("Add InsufficientBalanceForWithdraw to sdk")
+                Self::InsufficientBalanceForWithdraw
             }
-            crate::execution_status::ExecutionFailureStatus::NonExclusiveWriteInputObjectModified { .. } => {
-                todo!("Add NonExclusiveWriteInputObjectModified to sdk")
+            crate::execution_status::ExecutionFailureStatus::NonExclusiveWriteInputObjectModified { id } => {
+                Self::NonExclusiveWriteInputObjectModified { object: id.into() }
             }
         }
     }
@@ -1174,10 +1222,22 @@ impl From<crate::crypto::SignatureScheme> for SignatureScheme {
     }
 }
 
+impl From<crate::transaction::SharedObjectMutability> for Mutability {
+    fn from(value: crate::transaction::SharedObjectMutability) -> Self {
+        match value {
+            crate::transaction::SharedObjectMutability::Immutable => Self::Immutable,
+            crate::transaction::SharedObjectMutability::Mutable => Self::Mutable,
+            crate::transaction::SharedObjectMutability::NonExclusiveWrite => {
+                Self::NonExclusiveWrite
+            }
+        }
+    }
+}
+
 impl From<crate::transaction::CallArg> for Input {
     fn from(value: crate::transaction::CallArg) -> Self {
         match value {
-            crate::transaction::CallArg::Pure(vec) => Self::Pure { value: vec },
+            crate::transaction::CallArg::Pure(value) => Self::Pure(value),
             crate::transaction::CallArg::Object(object_arg) => match object_arg {
                 crate::transaction::ObjectArg::ImmOrOwnedObject((id, version, digest)) => {
                     Self::ImmutableOrOwned(ObjectReference::new(
@@ -1190,23 +1250,36 @@ impl From<crate::transaction::CallArg> for Input {
                     id,
                     initial_shared_version,
                     mutability,
-                } => Self::Shared {
-                    object_id: id.into(),
-                    initial_shared_version: initial_shared_version.value(),
-                    mutable: match mutability {
-                        crate::transaction::SharedObjectMutability::Mutable => true,
-                        crate::transaction::SharedObjectMutability::Immutable => false,
-                        // TODO(address-balances): expose non-exclusive writes to sdk
-                        crate::transaction::SharedObjectMutability::NonExclusiveWrite => false,
-                    },
-                },
+                } => Self::Shared(SharedInput::new(
+                    id.into(),
+                    initial_shared_version.value(),
+                    mutability,
+                )),
                 crate::transaction::ObjectArg::Receiving((id, version, digest)) => Self::Receiving(
                     ObjectReference::new(id.into(), version.value(), digest.into()),
                 ),
             },
-            crate::transaction::CallArg::FundsWithdrawal(_) => {
-                // TODO(address-balances): Add support for balance withdraws.
-                todo!("Convert balance withdraw reservation to sdk Input")
+            crate::transaction::CallArg::FundsWithdrawal(withdrawal) => {
+                let amount = match withdrawal.reservation {
+                    crate::transaction::Reservation::EntireBalance => {
+                        todo!("entire balance isn't supported yet")
+                    }
+                    crate::transaction::Reservation::MaxAmountU64(amount) => amount,
+                };
+
+                let crate::transaction::WithdrawalTypeArg::Balance(coin_type) = withdrawal.type_arg;
+                let source = match withdrawal.withdraw_from {
+                    crate::transaction::WithdrawFrom::Sender => sui_sdk_types::WithdrawFrom::Sender,
+                    crate::transaction::WithdrawFrom::Sponsor => {
+                        sui_sdk_types::WithdrawFrom::Sponsor
+                    }
+                };
+
+                Self::FundsWithdrawal(FundsWithdrawal::new(
+                    amount,
+                    coin_type.try_into().unwrap(),
+                    source,
+                ))
             }
         }
     }
@@ -1217,7 +1290,7 @@ impl From<Input> for crate::transaction::CallArg {
         use crate::transaction::ObjectArg;
 
         match value {
-            Input::Pure { value } => Self::Pure(value),
+            Input::Pure(value) => Self::Pure(value),
             Input::ImmutableOrOwned(object_reference) => {
                 let (id, version, digest) = object_reference.into_parts();
                 Self::Object(ObjectArg::ImmOrOwnedObject((
@@ -1226,17 +1299,15 @@ impl From<Input> for crate::transaction::CallArg {
                     digest.into(),
                 )))
             }
-            Input::Shared {
-                object_id,
-                initial_shared_version,
-                mutable,
-            } => Self::Object(ObjectArg::SharedObject {
-                id: object_id.into(),
-                initial_shared_version: initial_shared_version.into(),
-                mutability: if mutable {
-                    crate::transaction::SharedObjectMutability::Mutable
-                } else {
-                    crate::transaction::SharedObjectMutability::Immutable
+            Input::Shared(shared_input) => Self::Object(ObjectArg::SharedObject {
+                id: shared_input.object_id().into(),
+                initial_shared_version: shared_input.version().into(),
+                mutability: match shared_input.mutability() {
+                    Mutability::Immutable => crate::transaction::SharedObjectMutability::Immutable,
+                    Mutability::Mutable => crate::transaction::SharedObjectMutability::Mutable,
+                    Mutability::NonExclusiveWrite => {
+                        crate::transaction::SharedObjectMutability::NonExclusiveWrite
+                    }
                 },
             }),
             Input::Receiving(object_reference) => {
@@ -1246,6 +1317,28 @@ impl From<Input> for crate::transaction::CallArg {
                     version.into(),
                     digest.into(),
                 )))
+            }
+            Input::FundsWithdrawal(withdrawal) => {
+                Self::FundsWithdrawal(crate::transaction::FundsWithdrawalArg {
+                    reservation: withdrawal
+                        .amount()
+                        .map(crate::transaction::Reservation::MaxAmountU64)
+                        .unwrap_or(crate::transaction::Reservation::EntireBalance),
+                    type_arg: crate::transaction::WithdrawalTypeArg::Balance(
+                        withdrawal.coin_type().to_owned().into(),
+                    ),
+                    withdraw_from: match withdrawal.source() {
+                        sui_sdk_types::WithdrawFrom::Sender => {
+                            crate::transaction::WithdrawFrom::Sender
+                        }
+                        sui_sdk_types::WithdrawFrom::Sponsor => {
+                            crate::transaction::WithdrawFrom::Sponsor
+                        }
+                        _ => {
+                            unreachable!("sdk shouldn't have a variant that the mono repo doesn't")
+                        }
+                    },
+                })
             }
             _ => unreachable!("sdk shouldn't have a variant that the mono repo doesn't"),
         }
@@ -1507,7 +1600,7 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
                 stored_execution_time_observations,
             ) => Self::StoreExecutionTimeObservations(stored_execution_time_observations.into()),
             crate::transaction::EndOfEpochTransactionKind::AccumulatorRootCreate => {
-                todo!("AccumulatorRootCreate needs to be added to sdk")
+                Self::AccumulatorRootCreate
             }
             crate::transaction::EndOfEpochTransactionKind::CoinRegistryCreate => {
                 Self::CoinRegistryCreate
