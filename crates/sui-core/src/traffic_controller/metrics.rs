@@ -61,7 +61,7 @@ impl TrafficControllerMetrics {
             requests_blocked_at_protocol: register_int_counter_vec_with_registry!(
                 "requests_blocked_at_protocol",
                 "Number of requests blocked by this node at the protocol level (ip is hashed to bucket_0..bucket_99 to limit cardinality)",
-                &["dry_run", "ip"],
+                &["dry_run", "ip", "method"],
                 registry
             )
             .unwrap(),

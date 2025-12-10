@@ -341,7 +341,12 @@ impl TrafficController {
     }
 
     /// Handle check with dry-run mode considered
-    pub async fn check(&self, client: &Option<IpAddr>, proxied_client: &Option<IpAddr>) -> bool {
+    pub async fn check(
+        &self,
+        client: &Option<IpAddr>,
+        proxied_client: &Option<IpAddr>,
+        method: &str,
+    ) -> bool {
         let policy_config = { self.policy_config.read().await.clone() };
 
         let allowed = match &self.acl {
@@ -358,19 +363,19 @@ impl TrafficController {
             // request blocked while in dry-run mode
             (false, true) => {
                 debug!("Dry run mode: Blocked request from client {:?}", client);
-                self.record_blocked_request(client, true);
+                self.record_blocked_request(client, true, method);
                 true
             }
             // request blocked
             (false, false) => {
                 debug!("Blocked request from client {:?}", client);
-                self.record_blocked_request(client, false);
+                self.record_blocked_request(client, false, method);
                 false
             }
         }
     }
 
-    fn record_blocked_request(&self, client: &Option<IpAddr>, dry_run: bool) {
+    fn record_blocked_request(&self, client: &Option<IpAddr>, dry_run: bool, method: &str) {
         let dry_run_str = if dry_run { "true" } else { "false" };
 
         // Hash IP to bucket to limit cardinality (100 buckets: bucket_0 through bucket_99)
@@ -389,7 +394,7 @@ impl TrafficController {
 
         self.metrics
             .requests_blocked_at_protocol
-            .with_label_values(&[dry_run_str, &ip_label])
+            .with_label_values(&[dry_run_str, &ip_label, method])
             .inc();
     }
 
@@ -927,7 +932,7 @@ impl TrafficSim {
 
         while start.elapsed() < duration {
             let client = Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, task_num)));
-            let allowed = controller.check(&client, &None).await;
+            let allowed = controller.check(&client, &None, "test_method").await;
             if allowed {
                 if currently_blocked {
                     total_time_blocked += time_blocked_start.elapsed();
