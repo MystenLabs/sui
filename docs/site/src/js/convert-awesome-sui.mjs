@@ -12,15 +12,15 @@ const __dirname = path.dirname(__filename);
 // Paths (adjusted for new location)
 const readmePath = path.join(
   __dirname,
-  "../../../submodules/awesome-sui/README.md",
+  "../../../subtree/awesome-sui/README.md",
 );
 const detailsSourceDir = path.join(
   __dirname,
-  "../../../submodules/awesome-sui/details",
+  "../../../subtree/awesome-sui/details",
 );
 const mediaSourceDir = path.join(
   __dirname,
-  "../../../submodules/awesome-sui/media",
+  "../../../subtree/awesome-sui/media",
 );
 const readmeTargetPath = path.join(
   __dirname,
