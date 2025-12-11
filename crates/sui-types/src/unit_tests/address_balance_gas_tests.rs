@@ -188,8 +188,8 @@ fn test_address_balance_payment_multi_epoch_range_rejected() {
         TransactionExpiration::ValidDuring {
             min_epoch: Some(5),
             max_epoch: Some(7),
-            min_timestamp_seconds: None,
-            max_timestamp_seconds: None,
+            min_timestamp: None,
+            max_timestamp: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
             nonce: 999,
         },
