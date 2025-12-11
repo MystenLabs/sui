@@ -4,6 +4,7 @@
 use move_core_types::{identifier::Identifier, u256::U256};
 use shared_crypto::intent::Intent;
 use std::path::PathBuf;
+use sui_core::accumulators::balances::get_currency_types_for_owner;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -24,8 +25,9 @@ use sui_types::{
     storage::ChildObjectResolver,
     supported_protocol_versions::SupportedProtocolVersions,
     transaction::{
-        Argument, Command, FundsWithdrawalArg, GasData, ObjectArg, Transaction, TransactionData,
-        TransactionDataAPI, TransactionDataV1, TransactionExpiration, TransactionKind,
+        Argument, CallArg, Command, FundsWithdrawalArg, GasData, ObjectArg, Transaction,
+        TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
+        TransactionKind,
     },
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -1149,9 +1151,7 @@ fn create_delete_test_transaction_kind(
 ) -> TransactionKind {
     let mut builder = ProgrammableTransactionBuilder::new();
     let object_arg = builder
-        .obj(sui_types::transaction::ObjectArg::ImmOrOwnedObject(
-            object_to_delete,
-        ))
+        .obj(ObjectArg::ImmOrOwnedObject(object_to_delete))
         .unwrap();
     builder.programmable_move_call(
         gas_test_package_id,
@@ -2917,4 +2917,160 @@ async fn test_sponsored_address_balance_storage_oog() {
     );
 
     test_cluster.trigger_reconfiguration().await;
+}
+
+#[sim_test]
+async fn test_get_all_balances() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.enable_accumulators_for_testing();
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+
+    let (sender, gas) = get_sender_and_one_gas(&mut test_cluster.wallet).await;
+
+    let gas = publish_and_mint_trusted_coin(&mut test_cluster, sender, gas, rgp).await;
+
+    // send 1000 gas from the gas coins to ourselves
+    let gas = {
+        let tx = TestTransactionBuilder::new(sender, gas, rgp)
+            .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1000, sender)])
+            .build();
+
+        let res = test_cluster.sign_and_execute_transaction(&tx).await;
+        res.effects.unwrap().gas_object().reference.to_object_ref()
+    };
+
+    let recipient = SuiAddress::random_for_testing_only();
+    // send 1000 gas from the gas coins to the other recipient
+    let _gas = {
+        let tx = TestTransactionBuilder::new(sender, gas, rgp)
+            .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1001, recipient)])
+            .build();
+
+        let res = test_cluster.sign_and_execute_transaction(&tx).await;
+        res.effects.unwrap().gas_object().reference.to_object_ref()
+    };
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let indexes = state.indexes.clone().unwrap();
+        let index_tables = indexes.tables();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+
+        let types =
+            get_currency_types_for_owner(sender, child_object_resolver, index_tables, 10, None)
+                .unwrap();
+        assert_eq!(types.len(), 2);
+        assert!(
+            types
+                .iter()
+                .any(|t| t.to_canonical_string(true).contains("::sui::SUI"))
+        );
+        assert!(types.iter().any(|t| {
+            t.to_canonical_string(true)
+                .contains("::trusted_coin::TRUSTED_COIN")
+        }));
+    });
+}
+
+// publishes trusted_coin, mints a coin with balance 1000000, transfers some to the sender's
+// address balance, and returns the updated gas object ref
+async fn publish_and_mint_trusted_coin(
+    test_cluster: &mut TestCluster,
+    sender: SuiAddress,
+    gas: ObjectRef,
+    rgp: u64,
+) -> ObjectRef {
+    let test_tx_builder = TestTransactionBuilder::new(sender, gas, rgp);
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["tests", "rpc", "data", "trusted_coin"]);
+    let coin_publish = test_tx_builder.publish_async(path).await.build();
+    let coin_publish = test_cluster.sign_transaction(&coin_publish).await;
+
+    let (effects, _) = test_cluster
+        .execute_transaction_return_raw_effects(coin_publish)
+        .await
+        .unwrap();
+    let gas = effects.gas_object().0;
+
+    // Find the treasury cap object
+    let treasury_cap = {
+        let mut treasury_cap = None;
+        for (obj_ref, owner) in effects.created() {
+            if owner.is_address_owned() {
+                let object = test_cluster
+                    .fullnode_handle
+                    .sui_node
+                    .with_async(
+                        |node| async move { node.state().get_object(&obj_ref.0).await.unwrap() },
+                    )
+                    .await;
+                if object.type_().unwrap().name().as_str() == "TreasuryCap" {
+                    treasury_cap = Some(obj_ref);
+                    break;
+                }
+            }
+        }
+        treasury_cap.expect("Treasury cap not found")
+    };
+
+    // extract the newly published package id.
+    let package_id = effects.published_packages().into_iter().next().unwrap();
+
+    // call my_coin::mint to mint a coin with balance 1000000
+    let test_tx_builder = TestTransactionBuilder::new(sender, gas, rgp);
+    let mint_tx = test_tx_builder
+        .move_call(
+            package_id,
+            "trusted_coin",
+            "mint",
+            vec![
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(treasury_cap)),
+                CallArg::Pure(bcs::to_bytes(&1000000u64).unwrap()),
+            ],
+        )
+        .build();
+    let mint_tx = test_cluster.sign_transaction(&mint_tx).await;
+
+    let (mint_effects, _) = test_cluster
+        .execute_transaction_return_raw_effects(mint_tx)
+        .await
+        .unwrap();
+
+    // the trusted coin is the only address-owned object created.
+    let trusted_coin_ref = mint_effects
+        .created()
+        .iter()
+        .find(|(_, owner)| owner.is_address_owned())
+        .unwrap()
+        .0;
+
+    let send_tx = TestTransactionBuilder::new(sender, mint_effects.gas_object().0, rgp)
+        .transfer_funds_to_address_balance(
+            FundSource::Coin(trusted_coin_ref),
+            vec![(1000, sender)],
+            format!("{}::trusted_coin::TRUSTED_COIN", package_id)
+                .parse()
+                .unwrap(),
+        )
+        .build();
+    let send_tx = test_cluster.sign_transaction(&send_tx).await;
+    let (send_effects, _) = test_cluster
+        .execute_transaction_return_raw_effects(send_tx)
+        .await
+        .unwrap();
+    assert!(
+        send_effects.status().is_ok(),
+        "Transaction should succeed, got: {:?}",
+        send_effects.status()
+    );
+
+    send_effects.gas_object().0
 }
