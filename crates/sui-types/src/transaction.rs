@@ -2616,7 +2616,7 @@ impl TransactionDataAPI for TransactionDataV1 {
             match (min_epoch, max_epoch) {
                 (Some(min), Some(max)) => {
                     if config.enable_multi_epoch_transaction_expiration() {
-                        if min > max || *max > min.saturating_add(1) {
+                        if !(*max == *min || *max == min.saturating_add(1)) {
                             return Err(UserInputError::Unsupported(
                                 "max_epoch must be at most min_epoch + 1".to_string(),
                             ));
