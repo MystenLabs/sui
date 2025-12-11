@@ -42,3 +42,4 @@ public macro fun assert_ref_eq<$T>($t1: &$T, $t2: &$T) {
 /// }
 /// ```
 public native fun destroy<T>(v: T);
+
