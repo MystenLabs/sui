@@ -102,8 +102,8 @@ fn run_full_test(file_path: &Path) -> datatest_stable::Result<()> {
         env,
         config.mode_set(),
     )?;
-    let binding = loaded_root_pkg.package_info();
-    let root_pkg = binding.display_name();
+    let root_pkg_info = loaded_root_pkg.package_info();
+    let root_pkg = root_pkg_info.display_name();
 
     let model = model_builder::build(&mut writer, &loaded_root_pkg, &config)?;
 
