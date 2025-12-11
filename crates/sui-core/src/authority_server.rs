@@ -631,17 +631,24 @@ impl ValidatorService {
                         debug!(
                             "ValidatorHaltedAtEpochEnd. Will retry after validator reconfigures"
                         );
-                        if let Ok(new_epoch) = state.wait_for_epoch(next_epoch).await {
-                            assert_reachable!("retry submission at epoch end");
-                            if new_epoch == next_epoch {
-                                continue;
-                            }
+                        match timeout(Duration::from_secs(15), state.wait_for_epoch(next_epoch))
+                            .await
+                        {
+                            Ok(Ok(new_epoch)) => {
+                                assert_reachable!("retry submission at epoch end");
+                                if new_epoch == next_epoch {
+                                    continue;
+                                }
 
-                            debug_fatal!(
-                                "expected epoch {} after reconfiguration. got {}",
-                                next_epoch,
-                                new_epoch
-                            );
+                                debug_fatal!(
+                                    "expected epoch {} after reconfiguration. got {}",
+                                    next_epoch,
+                                    new_epoch
+                                );
+                            }
+                            // Fall through on either timeout or `wait_for_epoch` error and reject
+                            // the request.
+                            Ok(Err(_err)) | Err(_) => {}
                         }
                     }
                     return Err(err.into());
