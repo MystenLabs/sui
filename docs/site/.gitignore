@@ -30,3 +30,4 @@ package-lock.json
 # Generated awesome-sui files
 static/awesome-sui/
 src/static/awesome-sui/
+../docs/subtree/
