@@ -10,11 +10,11 @@ use std::sync::RwLock;
 
 use anyhow::Context;
 use prometheus::Registry;
-use tokio_util::sync::CancellationToken;
-
-use crate::forking_store::ForkingStore;
 use rand::rngs::OsRng;
 use reqwest::Url;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
+
 use simulacrum::Simulacrum;
 use sui_indexer_alt_jsonrpc::NodeArgs;
 use sui_indexer_alt_jsonrpc::RpcArgs;
@@ -24,7 +24,8 @@ use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_pg_db::DbArgs;
 use sui_types::supported_protocol_versions::Chain;
-use tokio::task::JoinHandle;
+
+use crate::store::ForkingStore;
 
 pub(crate) async fn start_rpc(
     simulacrum: Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>,

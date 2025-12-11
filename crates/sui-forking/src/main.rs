@@ -1,29 +1,29 @@
-mod commands;
-mod consistent_store;
-mod forking_store;
+mod cli;
 mod graphql;
-mod indexer;
+mod indexers;
 mod rpc;
 mod seeds;
 mod server;
-mod types;
+mod store;
+
+use std::env::temp_dir;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
 use tracing::info;
 
-use crate::commands::{Args, Commands};
-use crate::consistent_store::start_consistent_store;
-use crate::seeds::{InitialSeeds, Network, fetch_owned_objects};
-use crate::server::start_server;
-use crate::types::{AdvanceClockRequest, ApiResponse, ExecuteTxRequest, ForkingStatus};
-use indexer::{IndexerConfig, start_indexer};
-use std::env::temp_dir;
-use std::path::PathBuf;
-use std::str::FromStr;
 use sui_indexer_alt_consistent_store::config::ServiceConfig;
 use sui_pg_db::DbArgs;
 use sui_types::supported_protocol_versions::Chain;
+
+use crate::cli::{Args, Commands};
+use crate::indexers::consistent_store::start_consistent_store;
+use crate::indexers::indexer::{IndexerConfig, start_indexer};
+use crate::seeds::{InitialSeeds, Network, fetch_owned_objects};
+use crate::server::server::start_server;
+use crate::server::types::{AdvanceClockRequest, ApiResponse, ExecuteTxRequest, ForkingStatus};
 
 // Define the `GIT_REVISION` const
 bin_version::git_revision!();

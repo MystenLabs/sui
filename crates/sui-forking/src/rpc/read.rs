@@ -3,11 +3,19 @@
 
 use fastcrypto::encoding::Base64;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use rand::rngs::OsRng;
+use std::sync::{Arc, RwLock};
+
+use simulacrum::Simulacrum;
+use sui_indexer_alt_jsonrpc::{api::rpc_module::RpcModule, error::invalid_params};
 use sui_json_rpc_types::{
-    DryRunTransactionBlockResponse, ProtocolConfigResponse, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse, SuiTransactionBlock, SuiTransactionBlockEffects, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions
+    DryRunTransactionBlockResponse, ProtocolConfigResponse, SuiObjectData, SuiObjectDataOptions,
+    SuiObjectResponse, SuiTransactionBlock, SuiTransactionBlockEffects,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::{
     base_types::ObjectID,
     digests::ChainIdentifier,
@@ -17,13 +25,7 @@ use sui_types::{
     transaction::{Transaction, TransactionData},
 };
 
-use sui_indexer_alt_jsonrpc::{api::rpc_module::RpcModule, error::invalid_params};
-use sui_types::effects::TransactionEffectsAPI;
-
-use crate::forking_store::ForkingStore;
-use rand::rngs::OsRng;
-use simulacrum::Simulacrum;
-use std::sync::{Arc, RwLock};
+use crate::store::ForkingStore;
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
 #[rpc(server, client, namespace = "sui")]
@@ -38,15 +40,15 @@ pub trait ReadApi {
         version: Option<BigInt<u64>>,
     ) -> RpcResult<ProtocolConfigResponse>;
 
-    /// Return the object information for a specified object
-    #[method(name = "getObject")]
-    async fn get_object(
-        &self,
-        /// the ID of the queried object
-        object_id: ObjectID,
-        /// options for specifying the content to be returned
-        options: Option<SuiObjectDataOptions>,
-    ) -> RpcResult<SuiObjectResponse>;
+    // /// Return the object information for a specified object
+    // #[method(name = "getObject")]
+    // async fn get_object(
+    //     &self,
+    //     /// the ID of the queried object
+    //     object_id: ObjectID,
+    //     /// options for specifying the content to be returned
+    //     options: Option<SuiObjectDataOptions>,
+    // ) -> RpcResult<SuiObjectResponse>;
 }
 
 pub(crate) struct Read {
@@ -95,55 +97,55 @@ impl ReadApiServer for Read {
         Ok(response)
     }
 
-    async fn get_object(
-        &self,
-        object_id: ObjectID,
-        options: Option<SuiObjectDataOptions>,
-    ) -> RpcResult<SuiObjectResponse> {
-        println!("Trying to get object: {}", object_id);
-        let simulacrum = self.simulacrum.read().unwrap();
-        let object = simulacrum.store().get_object(&object_id).ok_or_else(|| {
-            RpcResult::Err(SuiObjectResponse::new_with_error(
-                sui_types::error::SuiObjectResponseError::NotExists { object_id },
-            ))
-        })?;
-    let bcs: OptionFuture<_> = options
-        .show_bcs
-        .then(|| object_data::<SuiRawData>(ctx, &object))
-        .into();
-
-        let type_ = None;
-        let owner = None;
-        let previous_transaction = None;
-        let storage_rebate = None;
-        let display = None;
-        let content = None;
-        let bcs = object.
-
- Ok(SuiObjectData {
-        object_id: object.id(),
-        version: object.version(),
-        digest: object.digest(),
-        type_,
-        owner,
-        previous_transaction,
-        storage_rebate,
-        display,
-        content,
-        bcs,
-    })
-
-
-        let response = SuiObjectResponse::from_object(
-            object,
-            options.unwrap_or_default(),
-            simulacrum.store().as_ref(),
-        )
-        .unwrap();
-        // .map_err(|e| invalid_params(format!("Failed to construct object response: {}", e)))?;
-
-        Ok(response)
-    }
+    //    async fn get_object(
+    //        &self,
+    //        object_id: ObjectID,
+    //        options: Option<SuiObjectDataOptions>,
+    //    ) -> RpcResult<SuiObjectResponse> {
+    //        println!("Trying to get object: {}", object_id);
+    //        let simulacrum = self.simulacrum.read().unwrap();
+    //        let object = simulacrum.store().get_object(&object_id).ok_or_else(|| {
+    //            RpcResult::Err(SuiObjectResponse::new_with_error(
+    //                sui_types::error::SuiObjectResponseError::NotExists { object_id },
+    //            ))
+    //        })?;
+    //    let bcs: OptionFuture<_> = options
+    //        .show_bcs
+    //        .then(|| object_data::<SuiRawData>(ctx, &object))
+    //        .into();
+    //
+    //        let type_ = None;
+    //        let owner = None;
+    //        let previous_transaction = None;
+    //        let storage_rebate = None;
+    //        let display = None;
+    //        let content = None;
+    //        let bcs = object.
+    //
+    // Ok(SuiObjectData {
+    //        object_id: object.id(),
+    //        version: object.version(),
+    //        digest: object.digest(),
+    //        type_,
+    //        owner,
+    //        previous_transaction,
+    //        storage_rebate,
+    //        display,
+    //        content,
+    //        bcs,
+    //    })
+    //
+    //
+    //        let response = SuiObjectResponse::from_object(
+    //            object,
+    //            options.unwrap_or_default(),
+    //            simulacrum.store().as_ref(),
+    //        )
+    //        .unwrap();
+    //        // .map_err(|e| invalid_params(format!("Failed to construct object response: {}", e)))?;
+    //
+    //        Ok(response)
+    //    }
 }
 
 impl RpcModule for Read {

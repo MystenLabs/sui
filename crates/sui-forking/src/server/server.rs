@@ -1,12 +1,3 @@
-use anyhow::Result;
-use axum::{
-    Json, Router,
-    extract::State,
-    response::IntoResponse,
-    routing::{get, post},
-};
-use rand::rngs::OsRng;
-use simulacrum::{AdvanceEpochConfig, Simulacrum, SimulacrumBuilder};
 use std::{
     net::SocketAddr,
     path::PathBuf,
@@ -15,6 +6,20 @@ use std::{
         atomic::{AtomicUsize, Ordering},
     },
 };
+
+use anyhow::Result;
+use axum::{
+    Json, Router,
+    extract::State,
+    response::IntoResponse,
+    routing::{get, post},
+};
+use diesel::prelude::*;
+use rand::rngs::OsRng;
+use tower_http::cors::CorsLayer;
+use tracing::info;
+
+use simulacrum::{AdvanceEpochConfig, Simulacrum, SimulacrumBuilder};
 use sui_types::{
     supported_protocol_versions::{
         Chain::{self, Mainnet},
@@ -22,19 +27,17 @@ use sui_types::{
     },
     transaction::Transaction,
 };
-use tower_http::cors::CorsLayer;
-use tracing::info;
 
 use crate::{
-    consistent_store::{self, start_consistent_store},
-    forking_store::ForkingStore,
     graphql::GraphQLClient,
-    indexer::{self, start_indexer},
+    indexers::{
+        consistent_store::{self, ConsistentStoreConfig, start_consistent_store},
+        indexer::{IndexerConfig, start_indexer},
+    },
     rpc::start_rpc,
-    types::*,
+    server::types::*,
+    store::ForkingStore,
 };
-
-use diesel::prelude::*;
 
 pub struct AppState {
     pub simulacrum: Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>,
@@ -233,8 +236,7 @@ pub async fn start_server(
     let protocol_version = client.fetch_protocol_version(checkpoint).await?;
     let protocol_config = ProtocolConfig::get_for_version(protocol_version.into(), chain);
     let data_ingestion_path_clone = data_ingestion_path.clone();
-    let database_url =
-        reqwest::Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")?;
+    let database_url = Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")?;
     // Start indexers
     tokio::spawn(async move {
         if let Err(e) = start_indexers(data_ingestion_path.clone(), version).await {
@@ -275,13 +277,13 @@ pub async fn start_server(
 /// Start the indexers: both the main indexer and the consistent store
 async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> Result<()> {
     let registry = prometheus::Registry::new();
-    let cancel = tokio_util::sync::CancellationToken::new();
-    let rocksdb_db_path = mysten_common::tempdir().unwrap().keep();
+    let cancel = CancellationToken::new();
+    let rocksdb_db_path = tempdir().unwrap().keep();
     let db_url_str = "postgres://postgres:postgrespw@localhost:5432";
-    let db_url = reqwest::Url::parse(&format!("{db_url_str}/sui_indexer_alt")).unwrap();
+    let db_url = Url::parse(&format!("{db_url_str}/sui_indexer_alt")).unwrap();
     let _ = drop_and_recreate_db(db_url_str).unwrap();
-    let indexer_config = indexer::IndexerConfig::new(db_url, data_ingestion_path.clone());
-    let consistent_store_config = consistent_store::ConsistentStoreConfig::new(
+    let indexer_config = IndexerConfig::new(db_url, data_ingestion_path.clone());
+    let consistent_store_config = ConsistentStoreConfig::new(
         rocksdb_db_path.clone(),
         indexer_config.indexer_args.clone(),
         indexer_config.client_args.clone(),
@@ -294,8 +296,10 @@ async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> 
 }
 
 use diesel::pg::PgConnection;
+use mysten_common::tempdir;
 use reqwest::Url;
 use sui_config::genesis::Genesis;
+use tokio_util::sync::CancellationToken;
 
 fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Connect to the 'postgres' database (not your target database)
