@@ -58,6 +58,14 @@ function extractVersionFromTag(tag) {
   return null;
 }
 
+function extractNetwork(tag) {
+  const lower = tag.toLowerCase();
+  if (lower.includes('testnet')) return 'testnet';
+  if (lower.includes('devnet')) return 'devnet';
+  if (lower.includes('mainnet')) return 'mainnet';
+  return 'other';
+}
+
 function processLocalContent(content) {
   // Remove horizontal rules
   content = content.replace(/^---+\s*$/gm, '');
@@ -75,15 +83,15 @@ function processLocalContent(content) {
       const text = headingMatch[2].trim();
       
       if (!firstHeadingFound) {
-        // Keep the first heading as H2
-        processedLines.push(`## ${text}`);
+        // Keep the first heading as H4
+        processedLines.push(`#### ${text}`);
         firstHeadingFound = true;
       } else if (text.toLowerCase().includes('full log')) {
-        // Make "Full log" headings H4
-        processedLines.push(`#### ${text}`);
+        // Make "Full log" headings H5
+        processedLines.push(`##### ${text}`);
       } else {
-        // All other headings become H3
-        processedLines.push(`### ${text}`);
+        // All other headings become H5
+        processedLines.push(`##### ${text}`);
       }
     } else {
       processedLines.push(line);
@@ -117,12 +125,18 @@ function sanitizeForMDX(content) {
 }
 
 function convertGitHubHeadingsToH3(content) {
-  // Convert all headings to H3, except "Full log" which becomes H4
+  // Convert all headings to H3, except "Full log" which becomes H5
+  // Also skip headings that are "Protocol" followed by protocol version info
   return content.replace(/^(#{1,6})\s+(.*)$/gm, (match, hashes, text) => {
     const trimmedText = text.trim();
     
+    // Skip "Protocol" headings that appear to be protocol version info
+    if (trimmedText.toLowerCase() === 'protocol') {
+      return ''; // Remove this heading entirely
+    }
+    
     if (trimmedText.toLowerCase().includes('full log')) {
-      return `#### ${trimmedText}`;
+      return `##### ${trimmedText}`;
     } else {
       return `### ${trimmedText}`;
     }
@@ -222,6 +236,7 @@ async function consolidateReleaseNotes() {
 
       const headingName = release.tag_name || release.name;
       const versionKey = extractVersionFromTag(headingName);
+      const network = extractNetwork(headingName);
       let githubContent = release.body || 'No release notes provided.';
 
       const localNotes = versionKey ? localNotesByVersion.get(versionKey) : null;
@@ -230,18 +245,19 @@ async function consolidateReleaseNotes() {
       let processedGitHubContent = '';
       
       if (localNotes && localNotes.length > 0) {
-        // Local content is already processed with correct heading levels
         localContent = localNotes.map(note => note.content).join('\n\n');
         console.log(`✓ Merged ${localNotes.length} local note(s) from ${versionKey}/ with GitHub release ${headingName}`);
         localNotesByVersion.delete(versionKey);
       }
       
-      // Process GitHub content separately
       processedGitHubContent = sanitizeForMDX(githubContent);
       processedGitHubContent = convertGitHubHeadingsToH3(processedGitHubContent);
+      // Clean up any empty lines from removed headings
+      processedGitHubContent = processedGitHubContent.replace(/\n{3,}/g, '\n\n');
 
       allReleaseNotes.push({
         heading: headingName,
+        network: network,
         localContent: localContent,
         githubContent: processedGitHubContent,
         source: localContent ? 'combined' : 'github',
@@ -265,16 +281,24 @@ async function consolidateReleaseNotes() {
 sidebar_position: 999
 sidebar_label: 'Release Notes'
 title: 'Release Notes'
+hide_table_of_contents: true
 ---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
 # Release Notes
 
+<Tabs groupId="network" queryString>
+  <TabItem value="all" label="All Networks" default>
 `;
 
+  // All networks tab
   allReleaseNotes.forEach((note) => {
-    consolidatedContent += `\n---\n\n`;
-    // Use H1 for the GitHub tag
-    consolidatedContent += `# ${note.heading}\n\n`;
+    consolidatedContent += `
+## ${note.heading}
+
+`;
     
     if (note.source === 'github') {
       consolidatedContent += `*Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
@@ -282,14 +306,61 @@ title: 'Release Notes'
       consolidatedContent += `*Sources: Local release notes and [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
     }
     
-    // Add local content first (already processed with H2 for first heading)
+    // Add Protocol heading if there's local content
     if (note.localContent) {
+      consolidatedContent += `### Protocol\n\n`;
       consolidatedContent += note.localContent + '\n\n';
     }
     
-    // Add GitHub content (all headings converted to H3)
     consolidatedContent += note.githubContent + '\n\n';
+    consolidatedContent += '---\n\n';
   });
+
+  consolidatedContent += `
+  </TabItem>
+`;
+
+  // Create tabs for each network
+  ['mainnet', 'testnet', 'devnet'].forEach(network => {
+    const networkReleases = allReleaseNotes.filter(note => note.network === network);
+    
+    if (networkReleases.length > 0) {
+      const networkLabel = network.charAt(0).toUpperCase() + network.slice(1);
+      consolidatedContent += `
+  <TabItem value="${network}" label="${networkLabel}">
+`;
+
+      networkReleases.forEach((note) => {
+        consolidatedContent += `
+## ${note.heading}
+
+`;
+        
+        if (note.source === 'github') {
+          consolidatedContent += `*Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
+        } else if (note.source === 'combined') {
+          consolidatedContent += `*Sources: Local release notes and [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
+        }
+        
+        // Add Protocol heading if there's local content
+        if (note.localContent) {
+          consolidatedContent += `### Protocol\n\n`;
+          consolidatedContent += note.localContent + '\n\n';
+        }
+        
+        consolidatedContent += note.githubContent + '\n\n';
+        consolidatedContent += '---\n\n';
+      });
+
+      consolidatedContent += `
+  </TabItem>
+`;
+    }
+  });
+
+  consolidatedContent += `
+</Tabs>
+`;
 
   const outputDir = path.dirname(outputReleaseNotesPath);
   if (!fs.existsSync(outputDir)) {
