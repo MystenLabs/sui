@@ -4,15 +4,14 @@
 use anyhow::Context;
 use clap::Parser;
 use prometheus::Registry;
+use sui_futures::service::Error;
 use sui_indexer_alt_jsonrpc::{
     args::{Args, Command},
     config::RpcLayer,
     start_rpc,
 };
 use sui_indexer_alt_metrics::{MetricsService, uptime};
-use tokio::{fs, signal};
-use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tokio::fs;
 
 // Define the `GIT_REVISION` const
 bin_version::git_revision!();
@@ -59,32 +58,17 @@ async fn main() -> anyhow::Result<()> {
             }
             .finish();
 
-            let cancel = CancellationToken::new();
-
             let registry = Registry::new_custom(Some("jsonrpc_alt".into()), None)
                 .context("Failed to create Prometheus registry.")?;
 
-            let metrics = MetricsService::new(metrics_args, registry, cancel.child_token());
-
-            let h_ctrl_c = tokio::spawn({
-                let cancel = cancel.clone();
-                async move {
-                    tokio::select! {
-                        _ = cancel.cancelled() => {}
-                        _ = signal::ctrl_c() => {
-                            info!("Received Ctrl-C, shutting down...");
-                            cancel.cancel();
-                        }
-                    }
-                }
-            });
+            let metrics = MetricsService::new(metrics_args, registry);
 
             metrics
                 .registry()
                 .register(uptime(VERSION)?)
                 .context("Failed to register uptime metric.")?;
 
-            let h_rpc = start_rpc(
+            let s_rpc = start_rpc(
                 Some(database_url),
                 bigtable_instance,
                 db_args,
@@ -94,16 +78,22 @@ async fn main() -> anyhow::Result<()> {
                 system_package_task_args,
                 rpc_config,
                 metrics.registry(),
-                cancel.child_token(),
             )
             .await?;
 
-            let h_metrics = metrics.run().await?;
+            let s_metrics = metrics.run().await?;
 
-            let _ = h_rpc.await;
-            cancel.cancel();
-            let _ = h_metrics.await;
-            let _ = h_ctrl_c.await;
+            match s_rpc.attach(s_metrics).main().await {
+                Ok(()) | Err(Error::Terminated) => {}
+
+                Err(Error::Aborted) => {
+                    std::process::exit(1);
+                }
+
+                Err(Error::Task(_)) => {
+                    std::process::exit(2);
+                }
+            }
         }
 
         Command::GenerateConfig => {

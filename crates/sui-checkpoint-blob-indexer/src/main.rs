@@ -8,6 +8,7 @@ use object_store::{
     gcp::GoogleCloudStorageBuilder, http::HttpBuilder, local::LocalFileSystem,
 };
 use sui_checkpoint_blob_indexer::{CheckpointBlobPipeline, EpochsPipeline};
+use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_framework::{Indexer, IndexerArgs, ingestion::ClientArgs};
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_indexer_alt_object_store::ObjectStore;
@@ -124,14 +125,9 @@ async fn main() -> anyhow::Result<()> {
 
     let store = ObjectStore::new(object_store);
 
-    let cancel = tokio_util::sync::CancellationToken::new();
-
     let registry = prometheus::Registry::new_custom(Some("checkpoint_blob".into()), None)?;
-    let metrics_service = sui_indexer_alt_metrics::MetricsService::new(
-        args.metrics_args,
-        registry.clone(),
-        cancel.clone(),
-    );
+    let metrics_service =
+        sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
 
     let config = ConcurrentConfig {
         committer: CommitterConfig {
@@ -149,7 +145,6 @@ async fn main() -> anyhow::Result<()> {
         IngestionConfig::default(),
         None,
         &registry,
-        cancel.clone(),
     )
     .await?;
 
@@ -166,67 +161,23 @@ async fn main() -> anyhow::Result<()> {
         .concurrent_pipeline(EpochsPipeline, config.clone())
         .await?;
 
-    let h_metrics = metrics_service.run().await?;
-    let mut h_indexer = indexer.run().await?;
+    let s_metrics = metrics_service.run().await?;
+    let s_indexer = indexer.run().await?;
 
-    enum ExitReason {
-        Completed,
-        UserInterrupt, // SIGINT / Ctrl-C
-        Terminated,    // SIGTERM (i.e. from K8s)
-    }
-
-    let exit_reason = tokio::select! {
-        res = &mut h_indexer => {
-            tracing::info!("Indexer completed successfully");
-            res?;
-            ExitReason::Completed
+    match s_indexer.attach(s_metrics).main().await {
+        Ok(()) => Ok(()),
+        Err(Error::Terminated) => {
+            if is_bounded_job {
+                std::process::exit(1);
+            } else {
+                Ok(())
+            }
         }
-        _ = tokio::signal::ctrl_c() => {
-            tracing::info!("Received SIGINT, shutting down...");
-            ExitReason::UserInterrupt
-        }
-        _ = wait_for_sigterm() => {
-            tracing::info!("Received SIGTERM, shutting down...");
-            ExitReason::Terminated
-        }
-    };
-
-    cancel.cancel();
-    tracing::info!("Waiting for graceful shutdown...");
-    let _ = h_indexer.await;
-    let _ = h_metrics.await;
-
-    // Determine exit code based on exit reason and job type
-    match exit_reason {
-        ExitReason::Completed => {
-            // Job finished all work successfully
-            Ok(())
-        }
-        ExitReason::UserInterrupt => {
-            // User manually stopped it - treat as success
-            Ok(())
-        }
-        ExitReason::Terminated if is_bounded_job => {
-            // Bounded job interrupted by K8s - work incomplete, trigger restart
+        Err(Error::Aborted) => {
             std::process::exit(1);
         }
-        ExitReason::Terminated => {
-            // Continuous indexer - normal shutdown
-            Ok(())
+        Err(Error::Task(_)) => {
+            std::process::exit(2);
         }
     }
-}
-
-#[cfg(unix)]
-async fn wait_for_sigterm() {
-    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-        .expect("Failed to install SIGTERM handler")
-        .recv()
-        .await;
-}
-
-#[cfg(not(unix))]
-async fn wait_for_sigterm() {
-    // SIGTERM doesn't exist on Windows, so wait forever
-    std::future::pending::<()>().await
 }
