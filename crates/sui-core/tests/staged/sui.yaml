@@ -823,6 +823,14 @@ MoveObjectType_:
       BalanceAccumulatorField:
         NEWTYPE:
           TYPENAME: TypeTag
+    6:
+      BalanceAccumulatorOwnerField: UNIT
+    7:
+      SuiBalanceAccumulatorMetadataField: UNIT
+    8:
+      BalanceAccumulatorMetadataField:
+        NEWTYPE:
+          TYPENAME: TypeTag
 MovePackage:
   STRUCT:
     - id:

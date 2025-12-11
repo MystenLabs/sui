@@ -64,6 +64,7 @@ impl Balance {
         s.address == SUI_FRAMEWORK_ADDRESS
             && s.module.as_ident_str() == BALANCE_MODULE_NAME
             && s.name.as_ident_str() == BALANCE_STRUCT_NAME
+            && s.type_params.len() == 1
     }
 
     pub fn is_balance_type(type_param: &TypeTag) -> bool {
