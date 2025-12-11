@@ -3,11 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use criterion::{Criterion, criterion_group, criterion_main, measurement::Measurement};
-use language_benchmarks::{
-    measurement::wall_time_measurement,
-    move_vm::{bench, run_cross_module_tests},
-};
-use std::path::PathBuf;
+use language_benchmarks::measurement::wall_time_measurement;
+use language_benchmarks::move_vm::bench;
 
 //
 // MoveVM benchmarks
@@ -45,11 +42,13 @@ fn vector<M: Measurement + 'static>(c: &mut Criterion<M>) {
     bench(c, "vector.move");
 }
 
-fn cross_module<M: Measurement + 'static>(c: &mut Criterion<M>) {
-    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let dir = "a1";
-    path.extend(["tests", "packages", dir]);
-    run_cross_module_tests(c, path);
+/// Interpreter step() overhead benchmarks.
+/// These measure raw dispatch overhead with minimal work per instruction.
+/// Use to validate tracing optimizations:
+/// - Without tracing: `cargo bench -p language-benchmarks -- interpreter_step`
+/// - With tracing: `cargo bench -p language-benchmarks --features move-vm-runtime/tracing -- interpreter_step`
+fn interpreter_step<M: Measurement + 'static>(c: &mut Criterion<M>) {
+    bench(c, "interpreter_step.move");
 }
 
 criterion_group!(
@@ -63,8 +62,9 @@ criterion_group!(
         loops,
         natives,
         transfers,
-        vector,
         cross_module,
+        // vector, Disabled: requires stdlib to be published
+        interpreter_step,
 );
 
 criterion_main!(vm_benches);
