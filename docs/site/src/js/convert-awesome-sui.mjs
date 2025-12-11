@@ -9,6 +9,13 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Directories to exclude from processing
+const excludeDirs = ['node_modules', '.git', 'build', 'dist', '.docusaurus'];
+
+function shouldExcludeDir(dirPath) {
+  return excludeDirs.some(excluded => dirPath.includes(excluded));
+}
+
 // Paths (adjusted for new location)
 const readmePath = path.join(
   __dirname,
@@ -194,6 +201,12 @@ function processContent(content) {
       if (filename) {
         const detailFilePath = path.join(detailsSourceDir, `${filename}.md`);
         
+        // Skip if path contains excluded directories
+        if (shouldExcludeDir(detailFilePath)) {
+          console.log(`⚠️ Skipping excluded path: ${detailFilePath}`);
+          return `##### Further ${type}`;
+        }
+        
         try {
           if (fs.existsSync(detailFilePath)) {
             const detailContent = fs.readFileSync(detailFilePath, "utf8");
@@ -230,6 +243,13 @@ function processDetailContent(content) {
 
 // Convert README.md
 console.log("Reading README file:", readmePath);
+
+// Skip if path contains excluded directories
+if (shouldExcludeDir(readmePath)) {
+  console.log(`⚠️ Skipping excluded path: ${readmePath}`);
+  process.exit(0);
+}
+
 const readmeContent = fs.readFileSync(readmePath, "utf8");
 const processedReadmeContent = processContent(readmeContent);
 
@@ -260,25 +280,30 @@ console.log("✅ Successfully converted README.md");
 
 // Copy media files to static folder
 if (fs.existsSync(mediaSourceDir)) {
-  // Ensure static media target directory exists
-  if (!fs.existsSync(mediaTargetDir)) {
-    fs.mkdirSync(mediaTargetDir, { recursive: true });
+  // Skip if path contains excluded directories
+  if (shouldExcludeDir(mediaSourceDir)) {
+    console.log(`⚠️ Skipping excluded media directory: ${mediaSourceDir}`);
+  } else {
+    // Ensure static media target directory exists
+    if (!fs.existsSync(mediaTargetDir)) {
+      fs.mkdirSync(mediaTargetDir, { recursive: true });
+    }
+
+    const mediaFiles = fs.readdirSync(mediaSourceDir);
+
+    console.log(`Copying ${mediaFiles.length} media files...`);
+
+    mediaFiles.forEach((filename) => {
+      const sourcePath = path.join(mediaSourceDir, filename);
+      const targetPath = path.join(mediaTargetDir, filename);
+
+      console.log(`Copying ${filename}`);
+
+      fs.copyFileSync(sourcePath, targetPath);
+    });
+
+    console.log(`✅ Successfully copied ${mediaFiles.length} media files`);
   }
-
-  const mediaFiles = fs.readdirSync(mediaSourceDir);
-
-  console.log(`Copying ${mediaFiles.length} media files...`);
-
-  mediaFiles.forEach((filename) => {
-    const sourcePath = path.join(mediaSourceDir, filename);
-    const targetPath = path.join(mediaTargetDir, filename);
-
-    console.log(`Copying ${filename}`);
-
-    fs.copyFileSync(sourcePath, targetPath);
-  });
-
-  console.log(`✅ Successfully copied ${mediaFiles.length} media files`);
 } else {
   console.log("⚠️ Media folder not found");
 }

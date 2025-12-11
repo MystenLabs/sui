@@ -102,7 +102,6 @@ const descriptionPlugin = (context, options) => {
         "/content/snippets/",
         "/references/framework/",
         "/standards/deepbook-ref/",
-        "/submodules/",
         "/app-examples/ts-sdk-ref/",
       ].map((s) => s.replace(/\\/g, "/"));
 
