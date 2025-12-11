@@ -133,9 +133,9 @@ pub(super) async fn resolved_name(
     }
 }
 
-/// Fetch the latest timestamp from the database, based on the watermark for the `obj_info`
-/// pipeline, because we know that the `obj_info` pipeline is being queried as part of address
-/// resolution.
+/// Fetch the latest timestamp from the database, based on the watermark for the `obj_versions`
+/// pipeline, because the `obj_versions` pipeline is used to load the latest object references as
+/// part of address resolution.
 async fn latest_timestamp_ms(ctx: &Context) -> Result<u64, RpcError<Error>> {
     use watermarks::dsl as w;
 
@@ -147,7 +147,7 @@ async fn latest_timestamp_ms(ctx: &Context) -> Result<u64, RpcError<Error>> {
 
     let query = w::watermarks
         .select(w::timestamp_ms_hi_inclusive)
-        .filter(w::pipeline.eq("obj_info"));
+        .filter(w::pipeline.eq("obj_versions"));
 
     let timestamp_ms: i64 = conn
         .first(query)
