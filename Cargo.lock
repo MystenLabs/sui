@@ -13580,7 +13580,6 @@ dependencies = [
  "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v0",
  "move-core-types",
- "move-package-alt",
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime-v0",
