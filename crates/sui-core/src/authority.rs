@@ -2,8 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::accumulators::AccumulatorSettlementTxBuilder;
 use crate::accumulators::balance_read::AccountBalanceRead;
+use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
@@ -3948,18 +3948,19 @@ impl AuthorityState {
         let balance_changes = builder.collect_accumulator_changes();
         let epoch_store = self.epoch_store_for_testing();
         let epoch = epoch_store.epoch();
-        let (settlements, barrier) = builder.build_tx(
+        let accumulator_root_obj_initial_shared_version = epoch_store
+            .epoch_start_config()
+            .accumulator_root_obj_initial_shared_version()
+            .unwrap();
+        let settlements = builder.build_tx(
             epoch_store.protocol_config(),
             epoch,
-            epoch_store
-                .epoch_start_config()
-                .accumulator_root_obj_initial_shared_version()
-                .unwrap(),
+            accumulator_root_obj_initial_shared_version,
             ckpt_seq,
             ckpt_seq,
         );
 
-        let mut settlements: Vec<_> = settlements
+        let settlements: Vec<_> = settlements
             .into_iter()
             .map(|tx| {
                 VerifiedExecutableTransaction::new_system(
@@ -3968,12 +3969,6 @@ impl AuthorityState {
                 )
             })
             .collect();
-        let barrier = VerifiedExecutableTransaction::new_system(
-            VerifiedTransaction::new_system_transaction(barrier),
-            epoch,
-        );
-
-        settlements.push(barrier);
 
         let assigned_versions = epoch_store
             .assign_shared_object_versions_for_tests(
@@ -3981,9 +3976,9 @@ impl AuthorityState {
                 &settlements,
             )
             .unwrap();
-
         let version_map = assigned_versions.into_map();
 
+        let mut settlement_effects = Vec::with_capacity(settlements.len());
         for tx in settlements {
             let env = ExecutionEnv::new()
                 .with_assigned_versions(version_map.get(&tx.key()).unwrap().clone());
@@ -3992,7 +3987,35 @@ impl AuthorityState {
                 .await
                 .unwrap();
             assert!(effects.status().is_ok());
+            settlement_effects.push(effects);
         }
+
+        let barrier = accumulators::build_accumulator_barrier_tx(
+            epoch,
+            accumulator_root_obj_initial_shared_version,
+            ckpt_seq,
+            &settlement_effects,
+        );
+        let barrier = VerifiedExecutableTransaction::new_system(
+            VerifiedTransaction::new_system_transaction(barrier),
+            epoch,
+        );
+
+        let assigned_versions = epoch_store
+            .assign_shared_object_versions_for_tests(
+                self.get_object_cache_reader().as_ref(),
+                std::slice::from_ref(&barrier),
+            )
+            .unwrap();
+        let version_map = assigned_versions.into_map();
+
+        let env = ExecutionEnv::new()
+            .with_assigned_versions(version_map.get(&barrier.key()).unwrap().clone());
+        let (effects, _) = self
+            .try_execute_immediately(&barrier, env, &epoch_store)
+            .await
+            .unwrap();
+        assert!(effects.status().is_ok());
 
         let next_accumulator_version = accumulator_version.next();
         self.execution_scheduler.settle_balances(BalanceSettlement {

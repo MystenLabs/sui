@@ -432,18 +432,21 @@ impl ExecutionScheduler {
             let epoch_store = epoch_store.clone();
 
             spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
-                let mut futures: FuturesUnordered<_> =
-                        settlement_txns
-                            .into_iter()
-                            .map(|(key, env)| {
-                                let epoch_store = epoch_store.clone();
-                                async move {
-                                    (epoch_store.wait_for_settlement_transactions(key).await, env)
-                                }
-                            })
-                            .collect();
+                let mut futures: FuturesUnordered<_> = settlement_txns
+                    .into_iter()
+                    .map(|(key, env)| {
+                        let epoch_store = epoch_store.clone();
+                        async move {
+                            (
+                                key,
+                                epoch_store.wait_for_settlement_transactions(key).await,
+                                env,
+                            )
+                        }
+                    })
+                    .collect();
 
-                while let Some((txns, env)) = futures.next().await {
+                while let Some((settlement_key, txns, env)) = futures.next().await {
                     let mut barrier_deps = BarrierDependencyBuilder::new();
                     let txns = txns
                         .into_iter()
@@ -455,6 +458,20 @@ impl ExecutionScheduler {
                         .collect::<Vec<_>>();
 
                     scheduler.enqueue_transactions(txns, &epoch_store);
+
+                    // Spawn a new task to wait for the barrier transaction.
+                    let scheduler = scheduler.clone();
+                    let epoch_store = epoch_store.clone();
+                    let env = env.clone();
+                    spawn_monitored_task!(epoch_store.clone().within_alive_epoch(async move {
+                        let barrier_tx = epoch_store
+                            .wait_for_barrier_transaction(settlement_key)
+                            .await;
+                        let deps = barrier_deps
+                            .process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
+                        let env = env.with_barrier_dependencies(deps);
+                        scheduler.enqueue_transactions(vec![(barrier_tx, env)], &epoch_store);
+                    }));
                 }
             }));
         }

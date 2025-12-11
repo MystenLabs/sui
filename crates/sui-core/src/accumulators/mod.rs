@@ -311,15 +311,7 @@ impl AccumulatorSettlementTxBuilder {
             .collect()
     }
 
-    // TODO(address-balances): This currently only creates a single accumulator update transaction.
-    // To support multiple accumulator update transactions, we need to:
-    // - have each transaction take the accumulator root as a "non-exclusive mutable" input
-    // - each transaction writes out a set of fields that are disjoint from the others.
-    // - a barrier transaction must be added to advance the version of the accumulator root object.
-    //   The barrier transaction doesn't do any field writes. This is necessary in order to provide
-    //   a consistent view of the system accumulator state. When the version of the accumulator
-    //   root object is advanced, we know that all accumulator state updates prior to that version
-    //   have been applied.
+    /// Builds settlement transactions that apply accumulator updates.
     pub fn build_tx(
         self,
         protocol_config: &ProtocolConfig,
@@ -327,10 +319,7 @@ impl AccumulatorSettlementTxBuilder {
         accumulator_root_obj_initial_shared_version: SequenceNumber,
         checkpoint_height: u64,
         checkpoint_seq: u64,
-    ) -> (
-        Vec<TransactionKind>, /* settlements */
-        TransactionKind,      /* barrier */
-    ) {
+    ) -> Vec<TransactionKind> {
         let Self { updates, addresses } = self;
 
         let build_one_settlement_txn = |idx: u64, updates: &mut Vec<(AccumulatorObjId, Update)>| {
@@ -358,7 +347,7 @@ impl AccumulatorSettlementTxBuilder {
             .max_updates_per_settlement_txn_as_option()
             .unwrap_or(u32::MAX) as usize;
 
-        let settlements: Vec<_> = updates
+        updates
             .into_iter()
             .chunks(chunk_size)
             .into_iter()
@@ -366,31 +355,7 @@ impl AccumulatorSettlementTxBuilder {
             .map(|(idx, chunk)| {
                 build_one_settlement_txn(idx as u64, &mut chunk.collect::<Vec<_>>())
             })
-            .collect();
-
-        // Now construct the barrier transaction
-        let mut builder = ProgrammableTransactionBuilder::new();
-        let root = builder
-            .input(CallArg::Object(ObjectArg::SharedObject {
-                id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-                initial_shared_version: accumulator_root_obj_initial_shared_version,
-                mutability: SharedObjectMutability::Mutable,
-            }))
-            .unwrap();
-
-        Self::add_prologue(
-            &mut builder,
-            root,
-            epoch,
-            checkpoint_height,
-            settlements.len() as u64,
-            0u64,
-            0u64,
-        );
-
-        let barrier = TransactionKind::ProgrammableSystemTransaction(builder.finish());
-
-        (settlements, barrier)
+            .collect()
     }
 
     fn add_prologue(
@@ -472,4 +437,36 @@ impl AccumulatorSettlementTxBuilder {
 
         TransactionKind::ProgrammableSystemTransaction(builder.finish())
     }
+}
+
+/// Builds the barrier transaction that advances the version of the accumulator root object.
+/// This must be called after all settlement transactions have been executed.
+/// `settlement_effects` contains the effects of all settlement transactions.
+pub fn build_accumulator_barrier_tx(
+    epoch: u64,
+    accumulator_root_obj_initial_shared_version: SequenceNumber,
+    checkpoint_height: u64,
+    settlement_effects: &[TransactionEffects],
+) -> TransactionKind {
+    let num_settlements = settlement_effects.len() as u64;
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let root = builder
+        .input(CallArg::Object(ObjectArg::SharedObject {
+            id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+            initial_shared_version: accumulator_root_obj_initial_shared_version,
+            mutability: SharedObjectMutability::Mutable,
+        }))
+        .unwrap();
+
+    AccumulatorSettlementTxBuilder::add_prologue(
+        &mut builder,
+        root,
+        epoch,
+        checkpoint_height,
+        num_settlements,
+        0,
+        0,
+    );
+
+    TransactionKind::ProgrammableSystemTransaction(builder.finish())
 }

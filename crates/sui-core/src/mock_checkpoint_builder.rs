@@ -17,7 +17,8 @@ use sui_types::messages_checkpoint::{
 use sui_types::object::OBJECT_START_VERSION;
 use sui_types::transaction::{Transaction, VerifiedTransaction};
 
-use crate::accumulators::AccumulatorSettlementTxBuilder;
+use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
+use crate::checkpoints::CheckpointHeight;
 
 pub trait ValidatorKeypairProvider {
     fn get_validator_key(&self, name: &AuthorityName) -> &dyn Signer<AuthoritySignature>;
@@ -122,9 +123,11 @@ impl MockCheckpointBuilder {
         )
     }
 
-    // Returns the settlement transactions and associated barrier transaction (in the last position).
-    // The barrier transaction must be executed after all the settlement transactions.
-    pub fn get_settlement_txns(&self, protocol_config: &ProtocolConfig) -> Vec<Transaction> {
+    /// Returns the settlement transactions (without the barrier transaction) and the checkpoint height.
+    pub fn get_settlement_txns(
+        &self,
+        protocol_config: &ProtocolConfig,
+    ) -> (Vec<Transaction>, CheckpointHeight) {
         let effects: Vec<_> = self
             .transactions
             .iter()
@@ -136,7 +139,7 @@ impl MockCheckpointBuilder {
 
         let builder = AccumulatorSettlementTxBuilder::new(None, &effects, checkpoint_seq, 0);
 
-        let (settlement_txns, barrier_tx) = builder.build_tx(
+        let settlement_txns = builder.build_tx(
             protocol_config,
             self.epoch,
             OBJECT_START_VERSION,
@@ -144,11 +147,28 @@ impl MockCheckpointBuilder {
             checkpoint_seq,
         );
 
-        settlement_txns
+        let txns = settlement_txns
             .into_iter()
-            .chain(std::iter::once(barrier_tx))
             .map(|tx| VerifiedTransaction::new_system_transaction(tx).into_inner())
-            .collect()
+            .collect();
+
+        (txns, checkpoint_height)
+    }
+
+    /// Returns the barrier transaction using the effects from the executed settlement transactions.
+    pub fn get_barrier_tx(
+        &self,
+        checkpoint_height: CheckpointHeight,
+        settlement_effects: &[TransactionEffects],
+    ) -> Transaction {
+        let barrier_tx = accumulators::build_accumulator_barrier_tx(
+            self.epoch,
+            OBJECT_START_VERSION,
+            checkpoint_height,
+            settlement_effects,
+        );
+
+        VerifiedTransaction::new_system_transaction(barrier_tx).into_inner()
     }
 
     fn build_internal(

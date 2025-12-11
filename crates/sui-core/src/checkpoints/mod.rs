@@ -6,7 +6,7 @@ pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 
-use crate::accumulators::AccumulatorSettlementTxBuilder;
+use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::authority::AuthorityState;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority_client::{AuthorityAPI, make_network_authority_clients_with_network_config};
@@ -1497,7 +1497,7 @@ impl CheckpointBuilder {
 
         let accumulator_changes = builder.collect_accumulator_changes();
         let num_updates = builder.num_updates();
-        let (settlement_txns, barrier_tx) = builder.build_tx(
+        let settlement_txns = builder.build_tx(
             self.epoch_store.protocol_config(),
             epoch,
             accumulator_root_obj_initial_shared_version,
@@ -1507,7 +1507,6 @@ impl CheckpointBuilder {
 
         let settlement_txns: Vec<_> = settlement_txns
             .into_iter()
-            .chain(std::iter::once(barrier_tx))
             .map(|tx| {
                 VerifiedExecutableTransaction::new_system(
                     VerifiedTransaction::new_system_transaction(tx),
@@ -1527,26 +1526,42 @@ impl CheckpointBuilder {
         self.epoch_store
             .notify_settlement_transactions_ready(tx_key, settlement_txns);
 
-        let settlement_effects = loop {
-            match tokio::time::timeout(Duration::from_secs(5), async {
-                self.effects_store
-                    .notify_read_executed_effects(
-                        "CheckpointBuilder::notify_read_settlement_effects",
-                        &settlement_digests,
-                    )
-                    .await
-            })
-            .await
-            {
-                Ok(effects) => break effects,
-                Err(_) => {
-                    debug_fatal!(
-                        "Timeout waiting for settlement transactions to be executed {:?}, retrying...",
-                        tx_key
-                    );
-                }
-            }
-        };
+        let settlement_effects = wait_for_effects_with_retry(
+            self.effects_store.as_ref(),
+            "CheckpointBuilder::notify_read_settlement_effects",
+            &settlement_digests,
+            tx_key,
+        )
+        .await;
+
+        let barrier_tx = accumulators::build_accumulator_barrier_tx(
+            epoch,
+            accumulator_root_obj_initial_shared_version,
+            checkpoint_height,
+            &settlement_effects,
+        );
+
+        let barrier_tx = VerifiedExecutableTransaction::new_system(
+            VerifiedTransaction::new_system_transaction(barrier_tx),
+            self.epoch_store.epoch(),
+        );
+        let barrier_digest = *barrier_tx.digest();
+
+        self.epoch_store
+            .notify_barrier_transaction_ready(tx_key, barrier_tx);
+
+        let barrier_effects = wait_for_effects_with_retry(
+            self.effects_store.as_ref(),
+            "CheckpointBuilder::notify_read_barrier_effects",
+            &[barrier_digest],
+            tx_key,
+        )
+        .await;
+
+        let settlement_effects: Vec<_> = settlement_effects
+            .into_iter()
+            .chain(barrier_effects)
+            .collect();
 
         let mut next_accumulator_version = None;
         for fx in settlement_effects.iter() {
@@ -2474,6 +2489,31 @@ impl CheckpointBuilder {
                 if let Some(tx) = tx {
                     assert!(!tx.transaction_data().is_consensus_commit_prologue());
                 }
+            }
+        }
+    }
+}
+
+async fn wait_for_effects_with_retry(
+    effects_store: &dyn TransactionCacheRead,
+    task_name: &'static str,
+    digests: &[TransactionDigest],
+    tx_key: TransactionKey,
+) -> Vec<TransactionEffects> {
+    loop {
+        match tokio::time::timeout(Duration::from_secs(5), async {
+            effects_store
+                .notify_read_executed_effects(task_name, digests)
+                .await
+        })
+        .await
+        {
+            Ok(effects) => break effects,
+            Err(_) => {
+                debug_fatal!(
+                    "Timeout waiting for transactions to be executed {:?}, retrying...",
+                    tx_key
+                );
             }
         }
     }
