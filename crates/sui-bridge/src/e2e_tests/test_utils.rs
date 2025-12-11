@@ -813,6 +813,7 @@ pub(crate) async fn start_bridge_cluster(
                 bridge_client_key_path: None,
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: None,
+                sui_bridge_next_sequence_number_override: None,
             },
             metrics_key_pair: default_ed25519_key_pair(),
             metrics: None,

@@ -207,6 +207,7 @@ pub fn generate_bridge_node_config_and_write_to_file(
             bridge_client_key_path: None,
             bridge_client_gas_object: None,
             sui_bridge_module_last_processed_event_id_override: None,
+            sui_bridge_next_sequence_number_override: None,
         },
         eth: EthConfig {
             eth_rpc_url: "your_eth_rpc_url".to_string(),
