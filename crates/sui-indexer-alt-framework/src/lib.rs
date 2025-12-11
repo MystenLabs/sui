@@ -81,7 +81,7 @@ pub struct TaskArgs {
     ///
     /// The framework ensures that tasked pipelines never commit checkpoints below the main
     /// pipeline’s pruner watermark. Requires `--reader-interval-ms`.
-    #[arg(long, requires = "reader-interval-ms")]
+    #[arg(long, requires = "reader_interval_ms")]
     task: Option<String>,
 
     /// The interval in milliseconds at which each of the pipelines on a tasked indexer should
@@ -450,6 +450,7 @@ mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
+    use clap::Parser;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tokio::sync::watch;
     use tokio_util::sync::CancellationToken;
@@ -602,6 +603,38 @@ mod tests {
     test_pipeline!(MockHandler, "test_processor");
     test_pipeline!(SequentialHandler, "sequential_handler");
     test_pipeline!(MockCheckpointSequenceNumberHandler, "test");
+
+    #[test]
+    fn test_arg_parsing() {
+        #[derive(Parser)]
+        struct Args {
+            #[clap(flatten)]
+            indexer: IndexerArgs,
+        }
+
+        let args = Args::try_parse_from([
+            "cmd",
+            "--first-checkpoint",
+            "10",
+            "--last-checkpoint",
+            "100",
+            "--pipeline",
+            "a",
+            "--pipeline",
+            "b",
+            "--task",
+            "t",
+            "--reader-interval-ms",
+            "5000",
+        ])
+        .unwrap();
+
+        assert_eq!(args.indexer.first_checkpoint, Some(10));
+        assert_eq!(args.indexer.last_checkpoint, Some(100));
+        assert_eq!(args.indexer.pipeline, vec!["a", "b"]);
+        assert_eq!(args.indexer.task.task, Some("t".to_owned()));
+        assert_eq!(args.indexer.task.reader_interval_ms, Some(5000));
+    }
 
     /// first_ingestion_checkpoint is smallest among existing watermarks + 1.
     #[tokio::test]
