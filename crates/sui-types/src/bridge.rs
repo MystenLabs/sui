@@ -481,7 +481,7 @@ pub struct MoveTypeBridgeTransferRecord {
 }
 
 /// Rust version of the Move message::BridgeMessage type.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MoveTypeBridgeMessage {
     pub message_type: u8,
     pub message_version: u8,
@@ -491,7 +491,7 @@ pub struct MoveTypeBridgeMessage {
 }
 
 /// Rust version of the Move message::BridgeMessage type.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MoveTypeBridgeRecord {
     pub message: MoveTypeBridgeMessage,
     pub verified_signatures: Option<Vec<Vec<u8>>>,

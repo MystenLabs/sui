@@ -194,6 +194,82 @@ where
         panic!("Sui event channel was closed unexpectedly");
     }
 
+    pub async fn run_sui_grpc_watcher(
+        store: Arc<BridgeOrchestratorTables>,
+        executor_tx: mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
+        mut grpc_events_rx: mysten_metrics::metered_channel::Receiver<(
+            u8,
+            u64,
+            Vec<SuiBridgeEvent>,
+        )>,
+        monitor_tx: mysten_metrics::metered_channel::Sender<SuiBridgeEvent>,
+        metrics: Arc<BridgeMetrics>,
+    ) {
+        info!("Starting sui gRPC watcher task");
+        while let Some((source_chain_id, last_seq_num, events)) = grpc_events_rx.recv().await {
+            if events.is_empty() {
+                continue;
+            }
+            info!(
+                "Received {} Sui gRPC events for chain {}: last_seq_num={}",
+                events.len(),
+                source_chain_id,
+                last_seq_num
+            );
+            metrics
+                .sui_watcher_received_events
+                .inc_by(events.len() as u64);
+
+            let mut actions = vec![];
+            for bridge_event in events {
+                info!("Observed Sui bridge event (gRPC): {:?}", bridge_event);
+
+                // Send event to monitor
+                monitor_tx
+                    .send(bridge_event.clone())
+                    .await
+                    .expect("Sending event to monitor channel should not fail");
+
+                // Convert to action using the same flow as JSON-RPC watcher
+                if let Some(mut action) = bridge_event.try_into_bridge_action() {
+                    metrics.last_observed_actions_seq_num.with_label_values(&[
+                        action.chain_id().to_string().as_str(),
+                        action.action_type().to_string().as_str(),
+                    ]);
+
+                    action = action.update_to_token_transfer();
+                    actions.push(action);
+                }
+            }
+
+            if !actions.is_empty() {
+                info!(
+                    "Received {} actions from Sui gRPC: {:?}",
+                    actions.len(),
+                    actions
+                );
+                metrics
+                    .sui_watcher_received_actions
+                    .inc_by(actions.len() as u64);
+                // Write action to pending WAL
+                store
+                    .insert_pending_actions(&actions)
+                    .expect("Store operation should not fail");
+                for action in actions {
+                    submit_to_executor(&executor_tx, action)
+                        .await
+                        .expect("Submit to executor should not fail");
+                }
+            }
+
+            // Store the sequence number cursor
+            store
+                .update_sui_seq_cursor(source_chain_id, last_seq_num)
+                .expect("Store operation should not fail");
+        }
+        panic!("Sui gRPC event channel was closed unexpectedly");
+    }
+
     async fn run_eth_watcher(
         store: Arc<BridgeOrchestratorTables>,
         executor_tx: mysten_metrics::metered_channel::Sender<BridgeActionExecutionWrapper>,
