@@ -37,7 +37,7 @@ sui-types.workspace = true
 parking_lot.workspace = true
 
 [dev-dependencies]
-move-package.workspace = true
+move-package-alt.workspace = true
 
 [features]
 tracing = [

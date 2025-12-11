@@ -23,5 +23,5 @@ The Move language directory consists of three distinct parts: the Move bytecode 
 - The Move source language is a high-level language that compiles to Move bytecode. It is designed to be a familiar and ergonomic language for developers that provides minimal abstractions over the Move bytecode. Relevant crates include:
   - [move-compiler](crates/move-compiler/) defines the source language and all compilation steps up to the Move IR.
   - [move-analyzer](crates/move-analyzer/) provides the IDE integration for the source language.
-  - [move-package](crates/move-package/) defines the package system used for organizing Move source code.
+  - [move-package-alt](crates/move-package-alt/) defines the package system used for organizing Move source code.
   - [move-cli](crates/move-cli/) provides a standard implementation for command-line utilities, such as building Move binary files and running tests.
