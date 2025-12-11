@@ -91,8 +91,8 @@ impl StateReader {
         digest: sui_sdk_types::Digest,
     ) -> crate::Result<(
         sui_sdk_types::SignedTransaction,
-        sui_sdk_types::TransactionEffects,
-        Option<sui_sdk_types::TransactionEvents>,
+        sui_types::effects::TransactionEffects,
+        Option<sui_types::effects::TransactionEvents>,
     )> {
         use sui_types::effects::TransactionEffectsAPI;
 
@@ -117,11 +117,7 @@ impl StateReader {
             None
         };
 
-        Ok((
-            transaction.try_into()?,
-            effects.try_into()?,
-            events.map(TryInto::try_into).transpose()?,
-        ))
+        Ok((transaction.try_into()?, effects, events))
     }
 
     #[tracing::instrument(skip(self))]
@@ -211,8 +207,8 @@ pub struct TransactionRead {
     pub digest: sui_sdk_types::Digest,
     pub transaction: sui_sdk_types::Transaction,
     pub signatures: Vec<sui_sdk_types::UserSignature>,
-    pub effects: sui_sdk_types::TransactionEffects,
-    pub events: Option<sui_sdk_types::TransactionEvents>,
+    pub effects: sui_types::effects::TransactionEffects,
+    pub events: Option<sui_types::effects::TransactionEvents>,
     pub checkpoint: Option<u64>,
     pub timestamp_ms: Option<u64>,
     pub balance_changes: Option<Vec<BalanceChange>>,

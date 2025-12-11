@@ -8,7 +8,6 @@ use crate::error::ObjectNotFoundError;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::merge::Merge;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse;
@@ -121,13 +120,5 @@ fn get_object_impl(
             .ok_or_else(|| ObjectNotFoundError::new(object_id))?
     };
 
-    let mut message = Object::default();
-
-    if read_mask.contains(Object::JSON_FIELD.name) {
-        message.json = crate::grpc::v2::render_object_to_json(service, &object).map(Box::new);
-    }
-
-    message.merge(&object, read_mask);
-
-    Ok(message)
+    Ok(service.render_object_to_proto(&object, read_mask))
 }

@@ -15,13 +15,10 @@ use sui_rpc::proto::sui::rpc::v2::Bcs;
 use sui_rpc::proto::sui::rpc::v2::CommandOutput;
 use sui_rpc::proto::sui::rpc::v2::CommandResult;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
-use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_rpc::proto::sui::rpc::v2::ObjectSet;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
-use sui_rpc::proto::sui::rpc::v2::TransactionEffects;
-use sui_rpc::proto::sui::rpc::v2::TransactionEvents;
 use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
@@ -205,73 +202,25 @@ pub fn simulate_transaction(
                 vec![]
             };
 
-        message.effects = {
-            let effects = sui_sdk_types::TransactionEffects::try_from(effects)?;
-            submask
-                .subtree(ExecutedTransaction::EFFECTS_FIELD)
-                .map(|mask| {
-                    let mut effects = TransactionEffects::merge_from(&effects, &mask);
-
-                    if submask.contains(TransactionEffects::UNCHANGED_LOADED_RUNTIME_OBJECTS_FIELD)
-                    {
-                        effects.unchanged_loaded_runtime_objects = unchanged_loaded_runtime_objects
+        message.effects = submask
+            .subtree(ExecutedTransaction::EFFECTS_FIELD)
+            .map(|mask| {
+                service.render_effects_to_proto(
+                    &effects,
+                    &unchanged_loaded_runtime_objects,
+                    |object_id| {
+                        objects
                             .iter()
-                            .map(Into::into)
-                            .collect();
-                    }
-
-                    if mask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
-                        for changed_object in effects.changed_objects.iter_mut() {
-                            let Ok(object_id) = changed_object.object_id().parse::<ObjectID>()
-                            else {
-                                continue;
-                            };
-
-                            if let Some(object) = objects.iter().find(|o| o.id() == object_id) {
-                                changed_object.object_type = Some(match object.struct_tag() {
-                                    Some(struct_tag) => struct_tag.to_canonical_string(true),
-                                    None => "package".to_owned(),
-                                });
-                            }
-                        }
-                    }
-
-                    if mask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
-                        for unchanged_consensus_object in
-                            effects.unchanged_consensus_objects.iter_mut()
-                        {
-                            let Ok(object_id) =
-                                unchanged_consensus_object.object_id().parse::<ObjectID>()
-                            else {
-                                continue;
-                            };
-
-                            if let Some(object) = objects.iter().find(|o| o.id() == object_id) {
-                                unchanged_consensus_object.object_type =
-                                    Some(match object.struct_tag() {
-                                        Some(struct_tag) => struct_tag.to_canonical_string(true),
-                                        None => "package".to_owned(),
-                                    });
-                            }
-                        }
-                    }
-
-                    // Try to render clever error info
-                    super::super::ledger_service::render_clever_error(service, &mut effects);
-
-                    effects
-                })
-        };
+                            .find(|o| o.id() == *object_id)
+                            .map(|o| o.into())
+                    },
+                    &mask,
+                )
+            });
 
         message.events = submask
             .subtree(ExecutedTransaction::EVENTS_FIELD.name)
-            .and_then(|mask| {
-                events.map(|events| {
-                    sui_sdk_types::TransactionEvents::try_from(events)
-                        .map(|events| TransactionEvents::merge_from(events, &mask))
-                })
-            })
-            .transpose()?;
+            .and_then(|mask| events.map(|events| service.render_events_to_proto(&events, &mask)));
 
         message.transaction = submask
             .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
@@ -288,7 +237,7 @@ pub fn simulate_transaction(
                 ObjectSet::default().with_objects(
                     objects
                         .iter()
-                        .map(|o| Object::merge_from(o, &mask))
+                        .map(|o| service.render_object_to_proto(o, &mask))
                         .collect(),
                 )
             });

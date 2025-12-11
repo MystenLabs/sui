@@ -144,12 +144,9 @@ pub fn get_checkpoint(
                             && let Some(sdk_events) = &t.events
                         {
                             for (message, event) in events.events.iter_mut().zip(&sdk_events.data) {
-                                message.json = crate::grpc::v2::render_json(
-                                    service,
-                                    &event.type_,
-                                    &event.contents,
-                                )
-                                .map(Box::new);
+                                message.json = service
+                                    .render_json(&event.type_, &event.contents)
+                                    .map(Box::new);
                             }
                         }
 
