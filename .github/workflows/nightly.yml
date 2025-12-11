@@ -94,16 +94,8 @@ jobs:
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
             channel: "build-failures-sui"
-            text: >
-              :sui::error-cross: Workflow *${{ github.workflow }}* has
-              `${{ env.WORKFLOW_CONCLUSION }}`.
-
-              Sui commit: <https://github.com/MystenLabs/sui/commit/${{
-              env.sui_sha }}|${{ env.sui_sha }}>
-
-              <@${{ env.slack_id }}>, current `${{ env.oncall_name }}`
-              oncall, please debug failures.
-
-              Logs are here: <${{ github.server_url }}/${{
-              github.repository }}/actions/runs/${{ github.run_id
-              }}|${{ github.run_id }}>
+            text: |
+              :sui::error-cross: Workflow *${{ github.workflow }}* has `${{ env.WORKFLOW_CONCLUSION }}`.
+              Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
+              <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug failures.
+              Logs are here: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.run_id }}>

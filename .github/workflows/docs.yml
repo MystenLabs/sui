@@ -34,11 +34,9 @@ jobs:
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
             channel: "docs-automations"
-            text: >
+            text: |
               An open PR modifies files in the `examples/` directory.
-              Please review it: <https://github.com/${{
-              github.repository }}/pull/${{ github.event.number
-              }}|PR${{ github.event.number }}>
+              Please review it: <https://github.com/${{ github.repository }}/pull/${{ github.event.number }}|PR${{ github.event.number }}>
   
   spelling:
     name: Lint documentation
