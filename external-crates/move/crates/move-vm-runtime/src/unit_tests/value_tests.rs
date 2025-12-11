@@ -19,14 +19,12 @@ use move_core_types::{account_address::AccountAddress, runtime_value, u256::U256
 const SIZE_CONFIG: SizeConfig = SizeConfig {
     traverse_references: false,
     include_vector_size: true,
-    fine_grained_value_size: true,
 };
 
 #[cfg(test)]
 const SIZE_CONFIG_TRAVERSE: SizeConfig = SizeConfig {
     traverse_references: true,
     include_vector_size: true,
-    fine_grained_value_size: true,
 };
 
 #[test]

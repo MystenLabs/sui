@@ -1395,6 +1395,5 @@ pub(crate) fn abstract_size(_protocol_config: &ProtocolConfig, v: &Value) -> Abs
     v.abstract_memory_size(&SizeConfig {
         include_vector_size: true,
         traverse_references: false,
-        fine_grained_value_size: true,
     })
 }

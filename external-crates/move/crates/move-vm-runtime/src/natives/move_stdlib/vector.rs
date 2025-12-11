@@ -122,7 +122,6 @@ pub fn native_push_back(
                 e.abstract_memory_size(&SizeConfig {
                     traverse_references: false,
                     include_vector_size: false,
-                    fine_grained_value_size: false,
                 }),
                 1.into(),
             );
