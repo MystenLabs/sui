@@ -5,7 +5,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
-#[proc_macro_derive(SerializeParquet)]
+#[proc_macro_derive(SerializeRow)]
 pub fn schema_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let struct_name = &input.ident;
@@ -21,7 +21,7 @@ pub fn schema_derive(input: TokenStream) -> TokenStream {
                         (
                             format!("\"{}\".to_string()", field_name),
                             format!(
-                                "if idx == {} {{ return self.{}.clone().into(); }}",
+                                "if idx == {} {{ return Ok((&self.{}).into()); }}",
                                 idx, field_name
                             ),
                         )
@@ -29,22 +29,23 @@ pub fn schema_derive(input: TokenStream) -> TokenStream {
                     .unzip();
                 (schema_iter.join(", "), getter_iter.join("\n"))
             }
-            _ => panic!("not supported struct for parquet serialization"),
+            _ => panic!("not supported struct for row serialization"),
         },
-        _ => panic!("not supported struct for parquet serialization"),
+        _ => panic!("not supported struct for row serialization"),
     };
     let schema_tokens: proc_macro2::TokenStream = schema.parse().unwrap();
     let getter_implementation_tokens: proc_macro2::TokenStream =
         getter_implementation.parse().unwrap();
+
     quote! {
-        impl ParquetSchema for #struct_name {
+        impl crate::schema::RowSchema for #struct_name {
             fn schema() -> Vec<String> {
                 vec![#schema_tokens]
             }
 
-            fn get_column(&self, idx: usize) -> ParquetValue {
+            fn get_column(&self, idx: usize) -> Result<crate::schema::ColumnValue<'_>, crate::schema::ColumnError> {
                 #getter_implementation_tokens
-                panic!("not supported column {:?}", idx);
+                Err(crate::schema::ColumnError::InvalidIndex(idx))
             }
         }
     }

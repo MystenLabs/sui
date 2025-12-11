@@ -2,20 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
-use crate::{ParquetSchema, ParquetValue};
 use serde::Serialize;
 use strum_macros::Display;
-use sui_analytics_indexer_derive::SerializeParquet;
+use sui_analytics_indexer_derive::SerializeRow;
 use sui_types::dynamic_field::DynamicFieldType;
 
-//
-// Table entries for the analytics database.
-// Each entry is a row in the database.
-//
-
 // Checkpoint information.
-#[derive(Serialize, Clone, SerializeParquet)]
-pub(crate) struct CheckpointEntry {
+#[derive(Serialize, Clone, SerializeRow)]
+pub struct CheckpointRow {
     // indexes
     pub(crate) checkpoint_digest: String,
     pub(crate) sequence_number: u64,
@@ -41,8 +35,8 @@ pub(crate) struct CheckpointEntry {
 }
 
 // Transaction information.
-#[derive(Serialize, Clone, SerializeParquet)]
-pub(crate) struct TransactionEntry {
+#[derive(Serialize, Clone, SerializeRow)]
+pub struct TransactionRow {
     // main indexes
     pub(crate) transaction_digest: String,
     pub(crate) checkpoint: u64,
@@ -104,8 +98,8 @@ pub(crate) struct TransactionEntry {
 }
 
 // Raw Transaction bytes (used by security team).
-#[derive(Serialize, Clone, SerializeParquet)]
-pub(crate) struct TransactionBCSEntry {
+#[derive(Serialize, Clone, SerializeRow)]
+pub struct TransactionBCSRow {
     pub(crate) transaction_digest: String,
     pub(crate) checkpoint: u64,
     pub(crate) epoch: u64,
@@ -114,8 +108,8 @@ pub(crate) struct TransactionBCSEntry {
 }
 
 // Raw Package bytes (BCS encoded package data).
-#[derive(Serialize, Clone, SerializeParquet)]
-pub(crate) struct PackageBCSEntry {
+#[derive(Serialize, Clone, SerializeRow)]
+pub struct PackageBCSRow {
     pub(crate) package_id: String,
     pub(crate) checkpoint: u64,
     pub(crate) epoch: u64,
@@ -125,8 +119,8 @@ pub(crate) struct PackageBCSEntry {
 
 // Event information.
 // Events identity is via `transaction_digest` and `event_index`.
-#[derive(Serialize, Clone, SerializeParquet)]
-pub(crate) struct EventEntry {
+#[derive(Serialize, Clone, SerializeRow)]
+pub struct EventRow {
     // indexes
     pub(crate) transaction_digest: String,
     pub(crate) event_index: u64,
@@ -173,8 +167,8 @@ pub enum OwnerType {
 
 // Object information.
 // A row in the live object table.
-#[derive(Serialize, Clone, SerializeParquet)]
-pub(crate) struct ObjectEntry {
+#[derive(Serialize, Clone, SerializeRow)]
+pub struct ObjectRow {
     // indexes
     pub(crate) object_id: String,
     pub(crate) version: u64,
@@ -207,8 +201,8 @@ pub(crate) struct ObjectEntry {
 // input kind (for input objects) and status (for objets in effects).
 // An object may appear twice as an input and output object. In that case, the
 // version will be different.
-#[derive(Serialize, Clone, SerializeParquet)]
-pub(crate) struct TransactionObjectEntry {
+#[derive(Serialize, Clone, SerializeRow)]
+pub struct TransactionObjectRow {
     // indexes
     pub(crate) object_id: String,
     pub(crate) version: Option<u64>,
@@ -222,8 +216,8 @@ pub(crate) struct TransactionObjectEntry {
 }
 
 // A Move call expressed as a package, module and function.
-#[derive(Serialize, Clone, SerializeParquet)]
-pub(crate) struct MoveCallEntry {
+#[derive(Serialize, Clone, SerializeRow)]
+pub struct MoveCallRow {
     // indexes
     pub(crate) transaction_digest: String,
     pub(crate) checkpoint: u64,
@@ -236,8 +230,8 @@ pub(crate) struct MoveCallEntry {
 }
 
 // A Move package. Package id and MovePackage object bytes
-#[derive(Serialize, Clone, SerializeParquet)]
-pub(crate) struct MovePackageEntry {
+#[derive(Serialize, Clone, SerializeRow)]
+pub struct MovePackageRow {
     // indexes
     pub(crate) package_id: String,
     pub(crate) checkpoint: u64,
@@ -252,8 +246,8 @@ pub(crate) struct MovePackageEntry {
     pub(crate) bcs_length: u64,
 }
 
-#[derive(Serialize, Clone, SerializeParquet)]
-pub(crate) struct DynamicFieldEntry {
+#[derive(Serialize, Clone, SerializeRow)]
+pub struct DynamicFieldRow {
     // indexes
     pub(crate) parent_object_id: String,
     pub(crate) transaction_digest: String,
@@ -272,8 +266,8 @@ pub(crate) struct DynamicFieldEntry {
 
 // Object information.
 // A row in the live object table.
-#[derive(Serialize, Clone, SerializeParquet)]
-pub(crate) struct WrappedObjectEntry {
+#[derive(Serialize, Clone, SerializeRow)]
+pub struct WrappedObjectRow {
     // indexes
     pub(crate) object_id: Option<String>,
     pub(crate) root_object_id: String,
