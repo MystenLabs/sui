@@ -11,7 +11,7 @@ use move_core_types::account_address::AccountAddress;
 use sui_futures::service::Service;
 use sui_sql_macro::query;
 use tokio::time;
-use tracing::{error, info};
+use tracing::{info, warn};
 
 use crate::{package_resolver::PackageCache, pg_reader::PgReader};
 
@@ -76,7 +76,7 @@ impl SystemPackageTask {
                 let mut conn = match pg_reader.connect().await {
                     Ok(conn) => conn,
                     Err(e) => {
-                        error!("Failed to connect to database: {:?}", e);
+                        warn!("Failed to connect to database: {:?}", e);
                         continue;
                     }
                 };
@@ -114,12 +114,12 @@ impl SystemPackageTask {
                     }
 
                     Ok(_) => {
-                        error!("Expected exactly one row from the watermarks table");
+                        warn!("Expected exactly one row from the watermarks table");
                         continue;
                     }
 
                     Err(e) => {
-                        error!("Failed to fetch latest epoch: {e}");
+                        warn!("Failed to fetch latest epoch: {e}");
                         continue;
                     }
                 };
@@ -154,7 +154,7 @@ impl SystemPackageTask {
                     Ok(system_packages) => system_packages,
 
                     Err(e) => {
-                        error!("Failed to fetch system packages: {e}");
+                        warn!("Failed to fetch system packages: {e}");
                         continue;
                     }
                 };
@@ -164,7 +164,7 @@ impl SystemPackageTask {
                     .map(|pkg| AccountAddress::from_bytes(pkg.original_id))
                     .collect::<Result<Vec<_>, _>>()
                 else {
-                    error!("Failed to deserialize system package addresses");
+                    warn!("Failed to deserialize system package addresses");
                     continue;
                 };
 
