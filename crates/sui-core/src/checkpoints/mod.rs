@@ -1526,26 +1526,13 @@ impl CheckpointBuilder {
         self.epoch_store
             .notify_settlement_transactions_ready(tx_key, settlement_txns);
 
-        let settlement_effects = loop {
-            match tokio::time::timeout(Duration::from_secs(5), async {
-                self.effects_store
-                    .notify_read_executed_effects(
-                        "CheckpointBuilder::notify_read_settlement_effects",
-                        &settlement_digests,
-                    )
-                    .await
-            })
-            .await
-            {
-                Ok(effects) => break effects,
-                Err(_) => {
-                    debug_fatal!(
-                        "Timeout waiting for settlement transactions to be executed {:?}, retrying...",
-                        tx_key
-                    );
-                }
-            }
-        };
+        let settlement_effects = wait_for_effects_with_retry(
+            self.effects_store.as_ref(),
+            "CheckpointBuilder::notify_read_settlement_effects",
+            &settlement_digests,
+            tx_key,
+        )
+        .await;
 
         let barrier_tx = accumulators::build_accumulator_barrier_tx(
             epoch,
@@ -1563,26 +1550,13 @@ impl CheckpointBuilder {
         self.epoch_store
             .notify_barrier_transaction_ready(tx_key, barrier_tx);
 
-        let barrier_effects = loop {
-            match tokio::time::timeout(Duration::from_secs(5), async {
-                self.effects_store
-                    .notify_read_executed_effects(
-                        "CheckpointBuilder::notify_read_barrier_effects",
-                        &[barrier_digest],
-                    )
-                    .await
-            })
-            .await
-            {
-                Ok(effects) => break effects,
-                Err(_) => {
-                    debug_fatal!(
-                        "Timeout waiting for barrier transaction to be executed {:?}, retrying...",
-                        tx_key
-                    );
-                }
-            }
-        };
+        let barrier_effects = wait_for_effects_with_retry(
+            self.effects_store.as_ref(),
+            "CheckpointBuilder::notify_read_barrier_effects",
+            &[barrier_digest],
+            tx_key,
+        )
+        .await;
 
         let settlement_effects: Vec<_> = settlement_effects
             .into_iter()
@@ -2515,6 +2489,31 @@ impl CheckpointBuilder {
                 if let Some(tx) = tx {
                     assert!(!tx.transaction_data().is_consensus_commit_prologue());
                 }
+            }
+        }
+    }
+}
+
+async fn wait_for_effects_with_retry(
+    effects_store: &dyn TransactionCacheRead,
+    task_name: &'static str,
+    digests: &[TransactionDigest],
+    tx_key: TransactionKey,
+) -> Vec<TransactionEffects> {
+    loop {
+        match tokio::time::timeout(Duration::from_secs(5), async {
+            effects_store
+                .notify_read_executed_effects(task_name, digests)
+                .await
+        })
+        .await
+        {
+            Ok(effects) => break effects,
+            Err(_) => {
+                debug_fatal!(
+                    "Timeout waiting for transactions to be executed {:?}, retrying...",
+                    tx_key
+                );
             }
         }
     }
