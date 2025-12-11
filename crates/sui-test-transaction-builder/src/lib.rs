@@ -491,6 +491,9 @@ impl TestTransactionBuilder {
     }
 
     pub fn publish(self, path: PathBuf) -> Self {
+        if cfg!(msim) {
+            panic!("In simtests, you must use publish_async() instead");
+        }
         self.publish_with_data(PublishData::Source(path, false))
     }
 
