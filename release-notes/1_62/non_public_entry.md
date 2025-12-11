@@ -80,7 +80,7 @@ public fun repay(bank: &mut Bank, loan: Loan, repayment: Balance<SUI>) {
 
 In this example, when `issue` is called, a `Loan` hot potato is created. In the PTB if `issue` is called, the transaction will not succeed unless the created `Loan` hot potato is destroyed by calling `repay`.
 
-Our goal with non-public `entry` functions is to ensure that no argument is involved in such a flash loan (or similar hot potato) scenario. In other words, the arguments to a non-public `entry` function cannot be entangled in such a way to forces behavior in the PTB after the `entry` function is called. We will track this with an algorithm that that tries to count how many hot potato values are active and what values they can influence.
+Our goal with non-public `entry` functions is to ensure that no argument is involved in such a flash loan (or similar hot potato) scenario. In other words, the arguments to a non-public `entry` function cannot be entangled in such a way to forces behavior in the PTB after the `entry` function is called. We will track this with an algorithm that tries to count how many hot potato values are active and what values they can influence.
 
 ### Terminology
 
@@ -88,7 +88,7 @@ Some brief terminology before looking at the rules and their defining algorithm.
 
 - The rules apply to the PTB _statically_. This means that the verification happens before the PTB begins execution. In some cases (particularly around shared objects), this will result in the rules seeming more general and pessimistic than they otherwise would be if they were applied _dynamically_ as the PTB was executed.
 - A _value_ is any PTB `Argument`. These can be `Input`s, `Result`s, `NestedResult`s, or the `GasCoin` (already smashed).
-- A _result_ is a value that was returned from a PTB command. These are referred to via `Result` and `NestedResult`
+- A _result_ is a value that was returned from a PTB command. These are referred to via `Result` and `NestedResult`.
 - Arguments to a PTB command have two usage types: by-reference (`&` or `&mut`) or by-value (either copied or moved).
 - A value is considered _hot_ if its type has neither `store` nor `drop`.
 - This means a hot value’s type can be in one of the following cases:
@@ -102,7 +102,7 @@ Some brief terminology before looking at the rules and their defining algorithm.
 
 ### The Algorithm
 
-- Each input to the PTB has its own clique with a count of zero.
+- Each input to the PTB starts off in its own clique with a count of zero.
 - When values are used (by reference or by-value) together in a command, their cliques are merged, adding together each clique’s count.
 - The count of the arguments’ merged clique is decremented for each hot value moved (taken by-value and not copied).
 - If the command is a Move call for a non-public `entry` function, the count of the arguments’ merged clique must be zero at this point.
