@@ -1,7 +1,0 @@
-[package]
-name = "A"
-
-[dependencies]
-C = { local = "../C1" }
-D = { local = "../D" }
-E = { local = "../E-v3", override = true }

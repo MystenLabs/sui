@@ -1,5 +1,0 @@
-[package]
-name = "name"
-
-[dependencies]
-A = { }

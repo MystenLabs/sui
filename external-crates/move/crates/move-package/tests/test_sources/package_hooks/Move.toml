@@ -1,5 +1,0 @@
-[package]
-name = "test"
-
-[dependencies]
-Pkg = { id = "0x1" }

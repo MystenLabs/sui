@@ -1,5 +1,0 @@
----
-source: crates/move-package/tests/test_runner.rs
----
-RESOLVING DEPENDENCIES IN A FROM Root WITH ../resolvers/failing.sh
-Failed to resolve dependencies for A

@@ -1,5 +1,0 @@
-[package]
-name = "A"
-
-[dependencies]
-ADep = { local = "../ADep", addr_subst = { "A" = "0x7" } }
