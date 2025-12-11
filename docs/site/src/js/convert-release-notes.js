@@ -1,11 +1,11 @@
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 
-const docsDir = '../../docs'; // Your docs directory
-const releaseNotesDir = '../../release-notes/'; // Release notes directory
-const outputReleaseNotesPath = '../../docs/content/references/release-notes.mdx'; // Output consolidated file
+const docsDir = '../../docs';
+const releaseNotesDir = '../../release-notes/';
+const outputReleaseNotesPath = '../../docs/content/references/release-notes.mdx';
 
-// Directories to exclude from processing
 const excludeDirs = ['node_modules', '.git', 'build', 'dist', '.docusaurus'];
 
 function shouldExcludeDir(dirName) {
@@ -13,7 +13,6 @@ function shouldExcludeDir(dirName) {
 }
 
 function convertMdToMdx(dirPath) {
-  // Skip excluded directories
   if (shouldExcludeDir(dirPath)) {
     return;
   }
@@ -23,7 +22,6 @@ function convertMdToMdx(dirPath) {
   files.forEach(file => {
     const filePath = path.join(dirPath, file);
     
-    // Skip excluded directories
     if (shouldExcludeDir(filePath)) {
       return;
     }
@@ -31,12 +29,11 @@ function convertMdToMdx(dirPath) {
     const stat = fs.statSync(filePath);
 
     if (stat.isDirectory()) {
-      convertMdToMdx(filePath); // Recursively process subdirectories
+      convertMdToMdx(filePath);
     } else if (file.endsWith('.md') && !file.endsWith('.mdx')) {
       const mdxPath = filePath.replace(/\.md$/, '.mdx');
       const content = fs.readFileSync(filePath, 'utf8');
       
-      // Add frontmatter if it doesn't exist
       let mdxContent = content;
       if (!content.startsWith('---')) {
         const title = file.replace('.md', '').replace(/-/g, ' ');
@@ -53,47 +50,216 @@ ${content}`;
   });
 }
 
-function consolidateReleaseNotes() {
-  if (!fs.existsSync(releaseNotesDir)) {
-    console.log('Release notes directory not found, skipping...');
-    return;
+function extractVersionFromTag(tag) {
+  const match = tag.match(/v?(\d+)\.(\d+)(?:\.\d+)?/i);
+  if (match) {
+    return `${match[1]}_${match[2]}`;
   }
+  return null;
+}
 
-  // Get all items in the release notes directory
-  const items = fs.readdirSync(releaseNotesDir);
+function processLocalContent(content) {
+  // Remove horizontal rules
+  content = content.replace(/^---+\s*$/gm, '');
+  content = content.replace(/\n{3,}/g, '\n\n');
   
-  // Filter for subdirectories only
-  const subdirs = items.filter(item => {
-    const itemPath = path.join(releaseNotesDir, item);
-    return fs.statSync(itemPath).isDirectory();
-  });
+  const lines = content.split('\n');
+  const processedLines = [];
+  let firstHeadingFound = false;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+    
+    if (headingMatch) {
+      const text = headingMatch[2].trim();
+      
+      if (!firstHeadingFound) {
+        // Keep the first heading as H2
+        processedLines.push(`## ${text}`);
+        firstHeadingFound = true;
+      } else if (text.toLowerCase().includes('full log')) {
+        // Make "Full log" headings H4
+        processedLines.push(`#### ${text}`);
+      } else {
+        // All other headings become H3
+        processedLines.push(`### ${text}`);
+      }
+    } else {
+      processedLines.push(line);
+    }
+  }
+  
+  return processedLines.join('\n').trim();
+}
 
-  if (subdirs.length === 0) {
-    console.log('No release notes subdirectories found.');
+function sanitizeForMDX(content) {
+  content = content.replace(/(?<!\[#\d+\]\()https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)(?!\))/g, 
+    '[#$3](https://github.com/$1/$2/pull/$3)');
+  
+  content = content.replace(/<([^>\s]+@[^>]+)>/g, '&lt;$1&gt;');
+  content = content.replace(/<(\w+)@([\w.-]+)>/g, '&lt;$1@$2&gt;');
+  
+  const codeBlocks = [];
+  content = content.replace(/(```[\s\S]*?```|`[^`]+`)/g, (match) => {
+    codeBlocks.push(match);
+    return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+  });
+  
+  content = content.replace(/(\s|^)<(\s)/g, '$1&lt;$2');
+  content = content.replace(/(\s)>(\s|$)/g, '$1&gt;$2');
+  
+  codeBlocks.forEach((block, index) => {
+    content = content.replace(`__CODE_BLOCK_${index}__`, block);
+  });
+  
+  return content;
+}
+
+function convertGitHubHeadingsToH3(content) {
+  // Convert all headings to H3, except "Full log" which becomes H4
+  return content.replace(/^(#{1,6})\s+(.*)$/gm, (match, hashes, text) => {
+    const trimmedText = text.trim();
+    
+    if (trimmedText.toLowerCase().includes('full log')) {
+      return `#### ${trimmedText}`;
+    } else {
+      return `### ${trimmedText}`;
+    }
+  });
+}
+
+function fetchGitHubReleases() {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: 'api.github.com',
+      path: '/repos/MystenLabs/sui/releases?per_page=100',
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Node.js Script',
+        'Accept': 'application/vnd.github.v3+json'
+      }
+    };
+
+    const githubToken = process.env.GITHUB_TOKEN;
+    if (githubToken) {
+      options.headers['Authorization'] = `token ${githubToken}`;
+    }
+
+    const req = https.request(options, (res) => {
+      let data = '';
+
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          resolve(JSON.parse(data));
+        } else {
+          reject(new Error(`GitHub API returned status ${res.statusCode}: ${data}`));
+        }
+      });
+    });
+
+    req.on('error', (error) => {
+      reject(error);
+    });
+
+    req.end();
+  });
+}
+
+async function consolidateReleaseNotes() {
+  const localNotesByVersion = new Map();
+
+  if (fs.existsSync(releaseNotesDir)) {
+    const items = fs.readdirSync(releaseNotesDir);
+    
+    const versionDirs = items.filter(item => {
+      const itemPath = path.join(releaseNotesDir, item);
+      return fs.statSync(itemPath).isDirectory() && item.match(/^\d+_\d+$/);
+    });
+
+    versionDirs.forEach(versionDir => {
+      const versionDirPath = path.join(releaseNotesDir, versionDir);
+      const files = fs.readdirSync(versionDirPath)
+        .filter(file => file.endsWith('.md') && file.toLowerCase() !== 'readme.md');
+      
+      if (!localNotesByVersion.has(versionDir)) {
+        localNotesByVersion.set(versionDir, []);
+      }
+      
+      files.forEach(file => {
+        const filePath = path.join(versionDirPath, file);
+        let content = fs.readFileSync(filePath, 'utf8');
+        
+        content = content.replace(/^---\n[\s\S]*?\n---\n/, '');
+        content = processLocalContent(content);
+        
+        localNotesByVersion.get(versionDir).push({
+          fileName: file.replace('.md', ''),
+          content: content.trim(),
+          filePath: filePath
+        });
+      });
+    });
+
+    const totalLocalNotes = Array.from(localNotesByVersion.values()).reduce((sum, notes) => sum + notes.length, 0);
+    console.log(`✓ Found ${totalLocalNotes} local release notes across ${localNotesByVersion.size} versions`);
+  }
+
+  const allReleaseNotes = [];
+  
+  try {
+    console.log('Fetching GitHub releases...');
+    const githubReleases = await fetchGitHubReleases();
+    
+    githubReleases.forEach(release => {
+      if (release.draft) {
+        return;
+      }
+
+      const headingName = release.tag_name || release.name;
+      const versionKey = extractVersionFromTag(headingName);
+      let githubContent = release.body || 'No release notes provided.';
+
+      const localNotes = versionKey ? localNotesByVersion.get(versionKey) : null;
+
+      let localContent = '';
+      let processedGitHubContent = '';
+      
+      if (localNotes && localNotes.length > 0) {
+        // Local content is already processed with correct heading levels
+        localContent = localNotes.map(note => note.content).join('\n\n');
+        console.log(`✓ Merged ${localNotes.length} local note(s) from ${versionKey}/ with GitHub release ${headingName}`);
+        localNotesByVersion.delete(versionKey);
+      }
+      
+      // Process GitHub content separately
+      processedGitHubContent = sanitizeForMDX(githubContent);
+      processedGitHubContent = convertGitHubHeadingsToH3(processedGitHubContent);
+
+      allReleaseNotes.push({
+        heading: headingName,
+        localContent: localContent,
+        githubContent: processedGitHubContent,
+        source: localContent ? 'combined' : 'github',
+        date: release.published_at
+      });
+    });
+
+    console.log(`✓ Found ${githubReleases.length} GitHub releases`);
+  } catch (error) {
+    console.error('⚠️ Error fetching GitHub releases:', error.message);
+  }
+
+  if (allReleaseNotes.length === 0) {
+    console.log('No release notes found.');
     return;
   }
 
-  // Collect all .md files from subdirectories
-  const allFiles = [];
-  subdirs.forEach(subdir => {
-    const subdirPath = path.join(releaseNotesDir, subdir);
-    const files = fs.readdirSync(subdirPath)
-      .filter(file => file.endsWith('.md') && file.toLowerCase() !== 'readme.md')
-      .map(file => ({
-        path: path.join(subdirPath, file),
-        name: file,
-        subdir: subdir
-      }));
-    allFiles.push(...files);
-  });
-
-  if (allFiles.length === 0) {
-    console.log('No release notes markdown files found in subdirectories.');
-    return;
-  }
-
-  // Sort files (most recent first)
-  allFiles.sort((a, b) => b.name.localeCompare(a.name));
+  allReleaseNotes.sort((a, b) => b.heading.localeCompare(a.heading));
 
   let consolidatedContent = `---
 sidebar_position: 999
@@ -105,64 +271,39 @@ title: 'Release Notes'
 
 `;
 
-  allFiles.forEach(fileInfo => {
-    let content = fs.readFileSync(fileInfo.path, 'utf8');
-    
-    // Remove frontmatter if it exists
-    content = content.replace(/^---\n[\s\S]*?\n---\n/, '');
-    
-    // Extract version/date from filename
-    const fileName = fileInfo.name.replace('.md', '');
-    
-    // Add separator and content
+  allReleaseNotes.forEach((note) => {
     consolidatedContent += `\n---\n\n`;
+    // Use H1 for the GitHub tag
+    consolidatedContent += `# ${note.heading}\n\n`;
     
-    // If content doesn't start with a heading, add one from filename
-    if (!content.trim().startsWith('#')) {
-      consolidatedContent += `## ${fileName.replace(/-/g, ' ')}\n\n`;
+    if (note.source === 'github') {
+      consolidatedContent += `*Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
+    } else if (note.source === 'combined') {
+      consolidatedContent += `*Sources: Local release notes and [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
     }
     
-    consolidatedContent += content.trim() + '\n\n';
+    // Add local content first (already processed with H2 for first heading)
+    if (note.localContent) {
+      consolidatedContent += note.localContent + '\n\n';
+    }
+    
+    // Add GitHub content (all headings converted to H3)
+    consolidatedContent += note.githubContent + '\n\n';
   });
 
-  // Convert all H2s to H3s except the first one
-  consolidatedContent = convertH2ToH3ExceptFirst(consolidatedContent);
-
-  // Ensure output directory exists
   const outputDir = path.dirname(outputReleaseNotesPath);
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
   fs.writeFileSync(outputReleaseNotesPath, consolidatedContent, 'utf8');
-  console.log(`✓ Consolidated ${allFiles.length} release notes from ${subdirs.length} subdirectories into: ${outputReleaseNotesPath}`);
+  console.log(`✓ Consolidated ${allReleaseNotes.length} total release notes into: ${outputReleaseNotesPath}`);
 }
 
-function convertH2ToH3ExceptFirst(content) {
-  let firstH2Found = false;
-  
-  // Split content into lines
-  const lines = content.split('\n');
-  const processedLines = lines.map(line => {
-    // Check if line is an H2 heading
-    if (line.match(/^## /)) {
-      if (!firstH2Found) {
-        // Keep the first H2 as is
-        firstH2Found = true;
-        return line;
-      } else {
-        // Convert subsequent H2s to H3s
-        return line.replace(/^## /, '### ');
-      }
-    }
-    return line;
-  });
-  
-  return processedLines.join('\n');
-}
-
-// Run both conversions
 convertMdToMdx(docsDir);
-consolidateReleaseNotes();
+consolidateReleaseNotes().catch(error => {
+  console.error('Error:', error);
+  process.exit(1);
+});
 
 console.log('✓ MDX generation complete!');
