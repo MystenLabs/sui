@@ -12,6 +12,7 @@ use std::{
 use anyhow::{Context, ensure};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
+use prost::Message;
 use reqwest::Client;
 use serde_json::{Value, json};
 use simulacrum::Simulacrum;
@@ -44,8 +45,10 @@ use sui_pg_db::{
     Db, DbArgs,
     temp::{TempDb, get_available_port},
 };
-use sui_storage::blob::{Blob, BlobEncoding};
-use sui_types::full_checkpoint_content::{Checkpoint, CheckpointData};
+use sui_rpc::field::{FieldMask, FieldMaskUtil};
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::sui::rpc;
+use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     crypto::AccountKeyPair,
@@ -708,12 +711,46 @@ pub fn local_ingestion_client_args() -> (ClientArgs, TempDir) {
 
 /// Writes a checkpoint file to the given path.
 pub async fn write_checkpoint(path: &Path, checkpoint: Checkpoint) -> anyhow::Result<()> {
-    // Convert to CheckpointData for serialization
-    // TODO: Change to proto format once we merge pull/24066
-    let checkpoint_data: CheckpointData = checkpoint.into();
-    let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
+    let sequence_number = checkpoint.summary.sequence_number;
+
+    let mask = FieldMask::from_paths([
+        rpc::v2::Checkpoint::path_builder().sequence_number(),
+        rpc::v2::Checkpoint::path_builder().summary().bcs().value(),
+        rpc::v2::Checkpoint::path_builder().signature().finish(),
+        rpc::v2::Checkpoint::path_builder().contents().bcs().value(),
+        rpc::v2::Checkpoint::path_builder()
+            .transactions()
+            .transaction()
+            .bcs()
+            .value(),
+        rpc::v2::Checkpoint::path_builder()
+            .transactions()
+            .effects()
+            .bcs()
+            .value(),
+        rpc::v2::Checkpoint::path_builder()
+            .transactions()
+            .effects()
+            .unchanged_loaded_runtime_objects()
+            .finish(),
+        rpc::v2::Checkpoint::path_builder()
+            .transactions()
+            .events()
+            .bcs()
+            .value(),
+        rpc::v2::Checkpoint::path_builder()
+            .objects()
+            .objects()
+            .bcs()
+            .value(),
+    ]);
+
+    let proto_checkpoint = rpc::v2::Checkpoint::merge_from(&checkpoint, &mask.into());
+    let proto_bytes = proto_checkpoint.encode_to_vec();
+    let compressed = zstd::encode_all(&proto_bytes[..], 3)?;
+
+    let file_name = format!("{}.binpb.zst", sequence_number);
     let file_path = path.join(file_name);
-    let blob = Blob::encode(&checkpoint_data, BlobEncoding::Bcs)?;
-    fs::write(file_path, blob.to_bytes())?;
+    fs::write(file_path, compressed)?;
     Ok(())
 }

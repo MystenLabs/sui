@@ -12931,6 +12931,7 @@ dependencies = [
  "move-core-types",
  "once_cell",
  "prometheus",
+ "prost 0.14.1",
  "rand 0.8.5",
  "serde",
  "shared-crypto",
@@ -12942,11 +12943,13 @@ dependencies = [
  "sui-genesis-builder",
  "sui-keys",
  "sui-protocol-config",
+ "sui-rpc",
  "sui-storage",
  "sui-swarm-config",
  "sui-transaction-checks",
  "sui-types",
  "tracing",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -14992,6 +14995,7 @@ dependencies = [
  "move-core-types",
  "msim",
  "prometheus",
+ "prost 0.14.1",
  "rand 0.8.5",
  "reqwest 0.12.9",
  "serde",
@@ -15012,6 +15016,7 @@ dependencies = [
  "sui-move-build",
  "sui-pg-db",
  "sui-protocol-config",
+ "sui-rpc",
  "sui-sdk",
  "sui-simulator",
  "sui-storage",
@@ -15027,6 +15032,7 @@ dependencies = [
  "tonic 0.14.2",
  "tracing",
  "url",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -15047,6 +15053,7 @@ dependencies = [
  "futures",
  "pin-project-lite",
  "prometheus",
+ "prost 0.14.1",
  "prost-types 0.14.1",
  "rand 0.8.5",
  "reqwest 0.12.9",
@@ -15073,6 +15080,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "wiremock",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]

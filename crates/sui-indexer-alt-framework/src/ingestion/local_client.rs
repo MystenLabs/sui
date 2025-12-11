@@ -24,7 +24,7 @@ impl LocalIngestionClient {
 #[async_trait]
 impl IngestionClientTrait for LocalIngestionClient {
     async fn fetch(&self, checkpoint: u64) -> FetchResult {
-        let path = self.path.join(format!("{}.chk", checkpoint));
+        let path = self.path.join(format!("{}.binpb.zst", checkpoint));
         let bytes = tokio::fs::read(path).await.map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
                 FetchError::NotFound
@@ -44,28 +44,23 @@ pub(crate) mod tests {
     use crate::ingestion::ingestion_client::IngestionClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_ingestion_metrics;
-    use sui_storage::blob::{Blob, BlobEncoding};
 
     #[tokio::test]
     async fn local_test_fetch() {
         let tempdir = tempfile::tempdir().unwrap().keep();
-        let path = tempdir.join("1.chk");
+        let path = tempdir.join("1.binpb.zst");
         let test_checkpoint_data = test_checkpoint_data(1);
         tokio::fs::write(&path, &test_checkpoint_data)
             .await
             .unwrap();
 
-        let local_client = IngestionClient::new_local(tempdir, test_ingestion_metrics());
+        let local_client = IngestionClient::new_local(tempdir.clone(), test_ingestion_metrics());
         let checkpoint = local_client.fetch(1).await.unwrap();
 
+        assert_eq!(checkpoint.summary.sequence_number, 1);
+
         // Convert checkpoint back to CheckpointData for serialization comparison
-        let checkpoint: crate::types::full_checkpoint_content::CheckpointData =
-            (*checkpoint).clone().into();
-        assert_eq!(
-            Blob::encode(&checkpoint, BlobEncoding::Bcs)
-                .unwrap()
-                .to_bytes(),
-            test_checkpoint_data
-        );
+        let written_data = tokio::fs::read(&tempdir.join("1.binpb.zst")).await.unwrap();
+        assert_eq!(written_data, test_checkpoint_data);
     }
 }
