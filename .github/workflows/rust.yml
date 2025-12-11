@@ -67,17 +67,13 @@ jobs:
     name: license-check
     runs-on: [ ubuntu-latest ]
     steps:
-      # Run license checker
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - run: cargo xlint
-
-      # Run various git-related checks
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-        with:
-          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - run: scripts/git-checks.sh
+      - name: Run license check
+        run: cargo xlint
+      - name: Git checks
+        run: scripts/git-checks.sh
 
   test:
     needs: [diff, rustfmt, clippy]
