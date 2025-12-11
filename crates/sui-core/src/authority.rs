@@ -3839,12 +3839,6 @@ impl AuthorityState {
             .map_err(|_| SuiErrorKind::ValidatorHaltedAtEpochEnd.into())
     }
 
-    /// When a ValidatorHaltedAtEpochEnd error occurs, you can call this to wait until the next
-    /// epoch begins.
-    pub async fn wait_for_reconfiguration_to_finish(&self) -> ExecutionLockReadGuard<'_> {
-        self.execution_lock.read().await
-    }
-
     pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard<'_> {
         self.execution_lock.write().await
     }
@@ -3943,7 +3937,7 @@ impl AuthorityState {
         Ok(new_epoch_store)
     }
 
-    pub fn notify_epoch(&self, new_epoch: EpochId) {
+    fn notify_epoch(&self, new_epoch: EpochId) {
         self.notify_epoch.send_modify(|epoch| *epoch = new_epoch);
     }
 
