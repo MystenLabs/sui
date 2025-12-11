@@ -38,7 +38,7 @@ pub(crate) fn run(
 ) -> VMResult<Vec<Value>> {
     let interpreter_timer = telemetry.make_timer(crate::runtime::telemetry::TimerKind::Interpreter);
     let fun_ref = function.to_ref();
-    trace(tracer, |tracer| {
+    trace!(tracer, |tracer| {
         tracer.enter_initial_frame(
             vtables,
             &gas_meter.remaining_gas().into(),
@@ -66,7 +66,7 @@ pub(crate) fn run(
                         fun_ref.module_id(&vtables.interner).clone(),
                     ))
             });
-            trace(tracer, |tracer| {
+            trace!(tracer, |tracer| {
                 tracer.exit_initial_native_frame(&return_result, &gas_meter.remaining_gas().into())
             });
             return_result.map(|values| values.into_iter().collect())

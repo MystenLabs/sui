@@ -153,7 +153,7 @@ fn step(
         ))
     });
 
-    trace(run_context.tracer, |tracer| {
+    trace!(run_context.tracer, |tracer| {
         tracer.start_instruction(
             run_context.vtables,
             state,
@@ -167,7 +167,7 @@ fn step(
     match instruction {
         Bytecode::Ret => {
             let charge_result = gas_meter.charge_simple_instr(SimpleInstruction::Ret);
-            trace(run_context.tracer, |tracer| {
+            trace!(run_context.tracer, |tracer| {
                 tracer.end_instruction(
                     run_context.vtables,
                     state,
@@ -184,7 +184,7 @@ fn step(
                 .charge_drop_frame(non_ref_vals.into_iter())
                 .map_err(|e| state.set_location(e))?;
 
-            trace(run_context.tracer, |tracer| {
+            trace!(run_context.tracer, |tracer| {
                 tracer.exit_frame(
                     run_context.vtables,
                     state,
@@ -204,7 +204,7 @@ fn step(
             }
         }
         Bytecode::CallGeneric(fun_inst_ptr) => {
-            trace(run_context.tracer, |tracer| {
+            trace!(run_context.tracer, |tracer| {
                 tracer.end_instruction(
                     run_context.vtables,
                     state,
@@ -227,7 +227,7 @@ fn step(
             Ok(StepStatus::Running)
         }
         Bytecode::VirtualCall(vtable_key) => {
-            trace(run_context.tracer, |tracer| {
+            trace!(run_context.tracer, |tracer| {
                 tracer.end_instruction(
                     run_context.vtables,
                     state,
@@ -245,7 +245,7 @@ fn step(
             Ok(StepStatus::Running)
         }
         Bytecode::DirectCall(function) => {
-            trace(run_context.tracer, |tracer| {
+            trace!(run_context.tracer, |tracer| {
                 tracer.end_instruction(
                     run_context.vtables,
                     state,
@@ -258,7 +258,7 @@ fn step(
         }
         _ => {
             let step_result = op_step_impl(state, run_context, gas_meter, instruction);
-            trace(run_context.tracer, |tracer| {
+            trace!(run_context.tracer, |tracer| {
                 tracer.end_instruction(
                     run_context.vtables,
                     state,
@@ -859,7 +859,7 @@ fn call_function(
     function: VMPointer<Function>,
     ty_args: Vec<Type>,
 ) -> VMResult<()> {
-    trace(run_context.tracer, |tracer| {
+    trace!(run_context.tracer, |tracer| {
         tracer.enter_frame(
             run_context.vtables,
             state,
@@ -909,7 +909,7 @@ fn call_function(
         let native_result = call_native(state, run_context, gas_meter, &function, ty_args);
 
         // NB: Pass any error into the tracer before raising it.
-        trace(run_context.tracer, |tracer| {
+        trace!(run_context.tracer, |tracer| {
             tracer.exit_frame(
                 run_context.vtables,
                 state,
