@@ -12,11 +12,11 @@ Finally, you need to [deserialize Move events](#deserialize) from raw BCS bytes 
 
 ## Checkpoint data sources {#checkpoint-data-sources}
 
-The `sui-indexer-alt-framework` supports multiple data sources for accessing Sui blockchain data. Data sources are configured through command-line arguments and fall into two categories: **polling-based** and **push-based**.
+The `sui-indexer-alt-framework` supports multiple data sources for accessing Sui blockchain data.You configure these sources through command-line arguments. They fall into two categories: **polling-based** and **push-based**.
 
 ### Polling-based data sources
 
-Polling-based sources periodically check for new checkpoints using the [indexing framework](/concepts/data-access/custom-indexing-framework.mdx) polling mechanism.
+Polling-based sources periodically check for new checkpoints using the polling mechanism provided by the [indexing framework](/concepts/data-access/custom-indexing-framework.mdx).
 
 #### Remote store
 
@@ -42,9 +42,9 @@ $ cargo run -- --local-ingestion-path /path/to/checkpoints
 - Unit and integration testing with known checkpoint data
 - Development workflows with reproducible datasets
 
-#### RPC API
+#### Full node RPC
 
-RPC API access queries full nodes directly using gRPC:
+Full node RPC queries use gRPC:
 
 ```sh
 $ cargo run -- --rpc-api-url https://fullnode.testnet.sui.io:443
@@ -63,11 +63,11 @@ $ cargo run -- --rpc-api-url https://fullnode.testnet.sui.io:443
 
 ### Push-based data sources
 
-Push-based sources provide real-time checkpoint data as it becomes available, offering lower latency than polling.
+Push-based sources deliver real-time checkpoint data as it becomes available, offering lower latency than polling.
 
 #### gRPC streaming
 
-gRPC streaming provides real-time checkpoint data pushed from fullnodes for the latest checkpoints. Because streaming only provides the latest data, it requires a polling-based fallback source (remote store, local path, or RPC API) for historical checkpoints and reliability:
+gRPC streaming delivers real-time checkpoint data pushed from full nodes for the latest checkpoints. Because it only streams latest data, you must configure a polling-based fallback source (remote store, local path, or full node RPC) to retrieve historical checkpoints and ensure reliability:
 
 ```sh
 $ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io --streaming-url https://fullnode.testnet.sui.io:443
@@ -81,14 +81,14 @@ $ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io --streaming
 
 **When to use gRPC streaming:**
 
-- Production indexers requiring minimal latency
+- Production indexers that require minimal latency
 - Real-time data processing pipelines
 - Applications that need immediate checkpoint updates
 
 **Important notes:**
 
-- Always provide a polling-based fallback source (like `--remote-store-url`) for reliability and historical data
-- The streaming connection automatically falls back to the polling source if streaming is unavailable or for historical checkpoints
+- Always configure a polling-based fallback source (like `--remote-store-url`) to ensure reliability and access to historical data.
+- The streaming connection automatically falls back to the polling source when streaming is unavailable or when historical checkpoints are needed.
 
 ## Bring your own store (BYOS) {#byos}
 
