@@ -6,6 +6,7 @@ version.workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
+async-graphql = { workspace = true, features = ["dataloader"] }
 axum.workspace = true
 base64.workspace = true
 bcs.workspace = true
@@ -15,18 +16,22 @@ cynic.workspace = true
 cynic-codegen.workspace = true
 diesel = { workspace = true, features = ["chrono", "postgres"] }
 fastcrypto.workspace = true
+futures.workspace = true
 jsonrpsee.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 reqwest.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_with.workspace = true
 thiserror.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+url.workspace = true
 
 bin-version.workspace = true
 mysten-common.workspace = true
@@ -37,15 +42,20 @@ move-core-types.workspace = true
 move-bytecode-utils.workspace = true
 
 sui-config.workspace = true
+sui-data-store.workspace = true
+sui-display.workspace = true
 sui-json-rpc-types.workspace = true
 sui-indexer-alt.workspace = true
 sui-indexer-alt-framework.workspace = true
 sui-indexer-alt-consistent-store.workspace = true
 sui-indexer-alt-jsonrpc.workspace = true
+sui-indexer-alt-schema.workspace = true
 sui-indexer-alt-reader.workspace = true
+sui-package-resolver.workspace = true
 sui-pg-db.workspace = true
 sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
+sui-sql-macro.workspace = true
 sui-swarm-config.workspace = true
 sui-types.workspace = true
 

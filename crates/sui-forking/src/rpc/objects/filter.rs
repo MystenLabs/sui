@@ -20,13 +20,11 @@ use sui_types::{
     sui_serde::SuiStructTag,
 };
 
-use crate::{
-    context::Context,
-    error::{RpcError, invalid_params},
-    paginate::{BcsCursor, Cursor as _, Page},
-};
+use crate::context::PgContext as Context;
 
 use super::error::Error;
+use sui_indexer_alt_jsonrpc::error::{RpcError, invalid_params};
+use sui_indexer_alt_jsonrpc::paginate::{BcsCursor, Cursor as _, Page};
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase", rename = "ObjectResponseQuery", default)]

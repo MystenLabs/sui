@@ -11,15 +11,16 @@ use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 
-use crate::{
-    context::Context,
+use sui_indexer_alt_jsonrpc::{
+    api::rpc_module::RpcModule,
     error::{InternalContext, invalid_params},
 };
 
-use super::rpc_module::RpcModule;
+use crate::context::Context;
 
 use self::error::Error;
 
+mod data;
 mod error;
 pub(crate) mod filter;
 pub(crate) mod response;
@@ -31,7 +32,7 @@ trait ObjectsApi {
     #[method(name = "getObject")]
     async fn get_object(
         &self,
-        /// The ID of the queried obect
+        /// The ID of the queried object
         object_id: ObjectID,
         /// Options for specifying the content to be returned
         options: Option<SuiObjectDataOptions>,
@@ -119,7 +120,14 @@ impl ObjectsApiServer for Objects {
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
-        let Self(ctx) = self;
+        let Self(Context {
+            pg_context: ctx,
+            rpc_data_store,
+            simulacrum,
+            protocol_version,
+            chain,
+            at_checkpoint,
+        }) = self;
         let options = options.unwrap_or_default();
         Ok(response::live_object(ctx, object_id, &options)
             .await
@@ -133,7 +141,14 @@ impl ObjectsApiServer for Objects {
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
-        let Self(ctx) = self;
+        let Self(Context {
+            pg_context: ctx,
+            rpc_data_store,
+            simulacrum,
+            protocol_version,
+            chain,
+            at_checkpoint,
+        }) = self;
         let config = &ctx.config().objects;
         if object_ids.len() > config.max_multi_get_objects {
             return Err(invalid_params(Error::TooManyKeys {
@@ -165,7 +180,15 @@ impl ObjectsApiServer for Objects {
         version: SequenceNumber,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse> {
-        let Self(ctx) = self;
+        let Self(Context {
+            pg_context: ctx,
+            rpc_data_store,
+            simulacrum,
+            protocol_version,
+            chain,
+            at_checkpoint,
+        }) = self;
+
         let options = options.unwrap_or_default();
         Ok(response::past_object(ctx, object_id, version, &options)
             .await
@@ -182,7 +205,15 @@ impl ObjectsApiServer for Objects {
         past_objects: Vec<SuiGetPastObjectRequest>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
-        let Self(ctx) = self;
+        let Self(Context {
+            pg_context: ctx,
+            rpc_data_store,
+            simulacrum,
+            protocol_version,
+            chain,
+            at_checkpoint,
+        }) = self;
+
         let config = &ctx.config().objects;
         if past_objects.len() > config.max_multi_get_objects {
             return Err(invalid_params(Error::TooManyKeys {
@@ -220,7 +251,14 @@ impl QueryObjectsApiServer for QueryObjects {
         cursor: Option<String>,
         limit: Option<usize>,
     ) -> RpcResult<Page<SuiObjectResponse, String>> {
-        let Self(ctx) = self;
+        let Self(Context {
+            pg_context: ctx,
+            rpc_data_store,
+            simulacrum,
+            protocol_version,
+            chain,
+            at_checkpoint,
+        }) = self;
 
         let query = query.unwrap_or_default();
 

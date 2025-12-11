@@ -10,7 +10,7 @@ pub(crate) enum Error {
     FilterTooDeep { max: usize },
 
     #[error("Pagination issue: {0}")]
-    Pagination(#[from] crate::paginate::Error),
+    Pagination(#[from] sui_indexer_alt_jsonrpc::paginate::Error),
 
     #[error("Requested {requested} keys, exceeding maximum {max}")]
     TooManyKeys { requested: usize, max: usize },

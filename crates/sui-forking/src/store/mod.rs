@@ -26,7 +26,11 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 
+use crate::context::Context;
 use simulacrum::SimulatorStore;
+use sui_data_store::ObjectStore as _;
+
+mod data_store;
 
 #[derive(Debug, Default)]
 pub struct ForkingStore {
@@ -103,8 +107,27 @@ impl ForkingStore {
     }
 
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {
-        let version = self.live_objects.get(id)?;
-        self.get_object_at_version(id, *version)
+        let version = self.live_objects.get(id);
+
+        if let Some(version) = version {
+            self.get_object_at_version(id, *version)
+        }
+        // Fallback to RPC data store if object not found in local store
+        else {
+            let Context {
+                pg_context,
+                rpc_data_store,
+                simulacrum,
+                protocol_version,
+                chain,
+                at_checkpoint,
+            } = &self.context;
+
+            let objs = rpc_data_store.get_objects(&vec![sui_data_store::ObjectKey {
+                object_id: *id,
+                version_query: sui_data_store::VersionQuery::AtCheckpoint(at_checkpoint),
+            }]);
+        }
     }
 
     pub fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<&Object> {

@@ -27,8 +27,7 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
 use sui_types::crypto::{
-    AccountKeyPair, AuthoritySignature, SuiKeyPair, SuiSignatureInner, ToFromBytes,
-    get_account_key_pair, get_key_pair,
+    AccountKeyPair, AuthoritySignature, SuiKeyPair, get_account_key_pair, get_key_pair,
 };
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
 use sui_types::effects::TransactionEffectsAPI;
@@ -54,10 +53,8 @@ use self::epoch_state::EpochState;
 pub use self::store::SimulatorStore;
 pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
-use shared_crypto::intent::{Intent, IntentMessage};
 use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
-use sui_types::signature::GenericSignature;
 use sui_types::{
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -463,8 +460,6 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         &mut self,
         transaction_data: TransactionData,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
-        use sui_types::crypto::Ed25519SuiSignature;
-        use sui_types::crypto::Signature;
         use sui_types::transaction::SenderSignedData;
 
         // Create dummy signatures for each required signer

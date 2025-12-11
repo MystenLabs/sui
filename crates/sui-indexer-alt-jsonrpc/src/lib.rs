@@ -39,11 +39,11 @@ use crate::error::PanicHandler;
 pub mod api;
 pub mod args;
 pub mod config;
-mod context;
+pub mod context;
 pub mod data;
 pub mod error;
-mod metrics;
-mod paginate;
+pub mod metrics;
+pub mod paginate;
 mod timeout;
 
 #[derive(clap::Args, Debug, Clone)]

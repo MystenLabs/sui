@@ -21,11 +21,10 @@ use sui_types::{
 };
 use tokio::join;
 
-use crate::{
-    context::Context,
-    data::load_live,
-    error::{InternalContext, RpcError, rpc_bail},
-};
+use crate::context::PgContext as Context;
+use crate::rpc::objects::data::load_live;
+
+use sui_indexer_alt_jsonrpc::error::{InternalContext, RpcError};
 
 /// Fetch the necessary data from the stores in `ctx` and transform it to build a response for a
 /// the latest version of an object, identified by its ID, according to the response `options`.
@@ -141,10 +140,10 @@ async fn object_data<D: SuiData>(ctx: &Context, object: &Object) -> Result<D, Rp
                     )
                 })?
             else {
-                rpc_bail!(
+                return Err(RpcError::InternalError(anyhow::anyhow!(
                     "Type {} is not a struct",
                     type_.to_canonical_display(/*with_prefix */ true)
-                );
+                )));
             };
 
             D::try_from_object(move_object, *layout)?

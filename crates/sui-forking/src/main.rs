@@ -1,4 +1,5 @@
 mod cli;
+mod context;
 mod graphql;
 mod indexers;
 mod rpc;
@@ -11,7 +12,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow::Result;
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use tracing::info;
 
 use sui_indexer_alt_consistent_store::config::ServiceConfig;

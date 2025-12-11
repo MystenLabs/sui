@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// pub mod objects;
+pub mod objects;
 pub mod read;
 pub mod write;
 

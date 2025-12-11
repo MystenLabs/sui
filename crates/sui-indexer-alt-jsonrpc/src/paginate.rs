@@ -11,7 +11,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::error::{RpcError, invalid_params};
 
-pub(crate) trait Cursor: Sized {
+pub trait Cursor: Sized {
     /// Interpret the string as a cursor, Base64-decode it, and then deserialize it from JSON. A
     /// failure to do so implies the cursor is invalid, which is treated as a user error.
     fn decode(s: &str) -> Result<Self, Error>;
@@ -23,21 +23,21 @@ pub(crate) trait Cursor: Sized {
 
 /// Wraps a value used as a cursor in a paginated request or response. This cursor format
 /// serializes to BCS and then encodes as Base64.
-pub(crate) struct BcsCursor<T>(pub T);
+pub struct BcsCursor<T>(pub T);
 
 /// Wraps a value used as a cursor in a paginated request or response. This cursor format
 /// serializes to JSON and then encodes as Base64.
-pub(crate) struct JsonCursor<T>(pub T);
+pub struct JsonCursor<T>(pub T);
 
 /// Description of a page to be fetched.
-pub(crate) struct Page<C: Cursor> {
+pub struct Page<C: Cursor> {
     pub cursor: Option<C>,
     pub limit: i64,
     pub descending: bool,
 }
 
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
+pub enum Error {
     #[error("Failed to decode Base64: {0}")]
     DecodingBase64(FastCryptoError),
 
@@ -88,7 +88,7 @@ impl<C: Cursor> Page<C> {
     ///
     /// This operation can fail if the Cursor cannot be decoded, or the requested page is too
     /// large. These are all consider user errors.
-    pub(crate) fn from_params<E: From<Error> + std::error::Error>(
+    pub fn from_params<E: From<Error> + std::error::Error>(
         default_page_size: usize,
         max_page_size: usize,
         cursor: Option<String>,

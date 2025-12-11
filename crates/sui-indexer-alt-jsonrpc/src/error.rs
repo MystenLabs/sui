@@ -34,7 +34,7 @@ pub(crate) use internal_error;
 pub(crate) use rpc_bail;
 
 /// Behaves exactly like `anyhow::Context`, but only adds context to `RpcError::InternalError`.
-pub(crate) trait InternalContext<T, E: std::error::Error> {
+pub trait InternalContext<T, E: std::error::Error> {
     fn internal_context<C>(self, ctx: C) -> Result<T, RpcError<E>>
     where
         C: Display + Send + Sync + 'static;
