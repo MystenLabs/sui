@@ -14111,7 +14111,6 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
- "move-package-alt",
  "move-symbol-pool",
  "mysten-common",
  "mysten-metrics",
@@ -15725,7 +15724,6 @@ dependencies = [
  "move-compiler",
  "sui-move-build",
  "sui-package-alt",
- "sui-package-management",
  "tikv-jemalloc-ctl",
  "tikv-jemallocator",
 ]
@@ -16044,7 +16042,6 @@ version = "1.63.0"
 dependencies = [
  "anyhow",
  "move-core-types",
- "move-package-alt",
  "move-symbol-pool",
  "sui-framework-snapshot",
  "sui-json-rpc-types",
@@ -16272,7 +16269,6 @@ dependencies = [
  "sui-move",
  "sui-move-build",
  "sui-package-alt",
- "sui-package-management",
  "sui-types",
  "tabled",
  "telemetry-subscribers",
