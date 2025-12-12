@@ -66,8 +66,46 @@ function extractNetwork(tag) {
   return 'other';
 }
 
+function removeNetworkPrefix(tag) {
+  // Remove mainnet-, testnet-, devnet- prefixes
+  return tag.replace(/^(mainnet|testnet|devnet)-/i, '');
+}
+
+function parseVersion(tag) {
+  const match = tag.match(/v?(\d+)\.(\d+)\.(\d+)/i);
+  if (!match) return null;
+  
+  return {
+    major: parseInt(match[1]),
+    minor: parseInt(match[2]),
+    patch: parseInt(match[3]),
+    original: tag
+  };
+}
+
+function getVersionKey(version) {
+  return `${version.major}.${version.minor}.${version.patch}`;
+}
+
+function compareVersions(v1, v2) {
+  if (v1.major !== v2.major) return v1.major - v2.major;
+  if (v1.minor !== v2.minor) return v1.minor - v2.minor;
+  return v1.patch - v2.patch;
+}
+
+function extractFirstHeading(content) {
+  // Extract the first heading from the content
+  const lines = content.split('\n');
+  for (let line of lines) {
+    const headingMatch = line.match(/^#{1,6}\s+(.+)$/);
+    if (headingMatch) {
+      return headingMatch[1].trim();
+    }
+  }
+  return null;
+}
+
 function processLocalContent(content) {
-  // Remove horizontal rules
   content = content.replace(/^---+\s*$/gm, '');
   content = content.replace(/\n{3,}/g, '\n\n');
   
@@ -83,15 +121,13 @@ function processLocalContent(content) {
       const text = headingMatch[2].trim();
       
       if (!firstHeadingFound) {
-        // Keep the first heading as H4
-        processedLines.push(`#### ${text}`);
+        // Skip the first heading - we'll use it as the summary
         firstHeadingFound = true;
+        continue;
       } else if (text.toLowerCase().includes('full log')) {
-        // Make "Full log" headings H5
-        processedLines.push(`##### ${text}`);
+        processedLines.push(`#### ${text}`);
       } else {
-        // All other headings become H5
-        processedLines.push(`##### ${text}`);
+        processedLines.push(`#### ${text}`);
       }
     } else {
       processedLines.push(line);
@@ -125,20 +161,17 @@ function sanitizeForMDX(content) {
 }
 
 function convertGitHubHeadingsToH3(content) {
-  // Convert all headings to H3, except "Full log" which becomes H5
-  // Also skip headings that are "Protocol" followed by protocol version info
   return content.replace(/^(#{1,6})\s+(.*)$/gm, (match, hashes, text) => {
     const trimmedText = text.trim();
     
-    // Skip "Protocol" headings that appear to be protocol version info
     if (trimmedText.toLowerCase() === 'protocol') {
-      return ''; // Remove this heading entirely
+      return '';
     }
     
     if (trimmedText.toLowerCase().includes('full log')) {
       return `##### ${trimmedText}`;
     } else {
-      return `### ${trimmedText}`;
+      return `#### ${trimmedText}`;
     }
   });
 }
@@ -208,12 +241,19 @@ async function consolidateReleaseNotes() {
         const filePath = path.join(versionDirPath, file);
         let content = fs.readFileSync(filePath, 'utf8');
         
+        // Remove frontmatter if it exists
         content = content.replace(/^---\n[\s\S]*?\n---\n/, '');
-        content = processLocalContent(content);
+        
+        // Extract first heading before processing
+        const firstHeading = extractFirstHeading(content);
+        
+        // Process content (this will remove the first heading)
+        const processedContent = processLocalContent(content);
         
         localNotesByVersion.get(versionDir).push({
           fileName: file.replace('.md', ''),
-          content: content.trim(),
+          title: firstHeading || file.replace('.md', '').replace(/_/g, ' '),
+          content: processedContent.trim(),
           filePath: filePath
         });
       });
@@ -223,152 +263,164 @@ async function consolidateReleaseNotes() {
     console.log(`✓ Found ${totalLocalNotes} local release notes across ${localNotesByVersion.size} versions`);
   }
 
-  const allReleaseNotes = [];
-  
   try {
     console.log('Fetching GitHub releases...');
     const githubReleases = await fetchGitHubReleases();
+    
+    // Group releases by version number
+    const releasesByVersion = new Map();
     
     githubReleases.forEach(release => {
       if (release.draft) {
         return;
       }
 
-      const headingName = release.tag_name || release.name;
-      const versionKey = extractVersionFromTag(headingName);
-      const network = extractNetwork(headingName);
-      let githubContent = release.body || 'No release notes provided.';
-
-      const localNotes = versionKey ? localNotesByVersion.get(versionKey) : null;
-
-      let localContent = '';
-      let processedGitHubContent = '';
+      const tag = release.tag_name || release.name;
+      const network = extractNetwork(tag);
+      const version = parseVersion(tag);
       
-      if (localNotes && localNotes.length > 0) {
-        localContent = localNotes.map(note => note.content).join('\n\n');
-        console.log(`✓ Merged ${localNotes.length} local note(s) from ${versionKey}/ with GitHub release ${headingName}`);
-        localNotesByVersion.delete(versionKey);
+      if (!version || (network !== 'mainnet' && network !== 'testnet')) {
+        return;
       }
       
-      processedGitHubContent = sanitizeForMDX(githubContent);
+      const versionKey = getVersionKey(version);
+      
+      if (!releasesByVersion.has(versionKey)) {
+        releasesByVersion.set(versionKey, {
+          mainnet: null,
+          testnet: null,
+          version: version
+        });
+      }
+      
+      releasesByVersion.get(versionKey)[network] = {
+        tag: tag,
+        content: release.body || 'No release notes provided.',
+        date: release.published_at
+      };
+    });
+    
+    // Convert to array and sort by version (newest first)
+    const sortedReleases = Array.from(releasesByVersion.entries())
+      .sort((a, b) => compareVersions(b[1].version, a[1].version));
+    
+    // Determine which is the latest version overall
+    const latestVersion = sortedReleases.length > 0 ? sortedReleases[0][0] : null;
+    
+    // Build release notes
+    const allReleaseNotes = [];
+    
+    sortedReleases.forEach(([versionKey, data]) => {
+      const isLatest = versionKey === latestVersion;
+      
+      // For latest version, prefer testnet if available, otherwise mainnet
+      // For older versions, always use mainnet
+      let networkToUse;
+      let releaseToUse;
+      
+      if (isLatest) {
+        // Latest version - prefer testnet
+        if (data.testnet) {
+          networkToUse = 'testnet';
+          releaseToUse = data.testnet;
+        } else if (data.mainnet) {
+          networkToUse = 'mainnet';
+          releaseToUse = data.mainnet;
+        } else {
+          return; // Skip if no release
+        }
+      } else {
+        // Older version - always use mainnet
+        if (data.mainnet) {
+          networkToUse = 'mainnet';
+          releaseToUse = data.mainnet;
+        } else {
+          return; // Skip if no mainnet release
+        }
+      }
+      
+      // Get local notes
+      const versionForLocal = extractVersionFromTag(releaseToUse.tag);
+      const localNotes = versionForLocal ? localNotesByVersion.get(versionForLocal) : null;
+      let localNotesData = [];
+      
+      if (localNotes && localNotes.length > 0) {
+        localNotesData = localNotes.map(note => ({
+          title: note.title,
+          content: note.content
+        }));
+        localNotesByVersion.delete(versionForLocal);
+      }
+      
+      // Process content
+      let processedGitHubContent = sanitizeForMDX(releaseToUse.content);
       processedGitHubContent = convertGitHubHeadingsToH3(processedGitHubContent);
-      // Clean up any empty lines from removed headings
       processedGitHubContent = processedGitHubContent.replace(/\n{3,}/g, '\n\n');
 
       allReleaseNotes.push({
-        heading: headingName,
-        network: network,
-        localContent: localContent,
+        version: versionKey,
+        tag: releaseToUse.tag,
+        displayTag: removeNetworkPrefix(releaseToUse.tag),
+        network: networkToUse,
+        localNotes: localNotesData,
         githubContent: processedGitHubContent,
-        source: localContent ? 'combined' : 'github',
-        date: release.published_at
+        hasLocalContent: localNotesData.length > 0,
+        isLatest: isLatest,
+        date: releaseToUse.date
       });
     });
 
-    console.log(`✓ Found ${githubReleases.length} GitHub releases`);
-  } catch (error) {
-    console.error('⚠️ Error fetching GitHub releases:', error.message);
-  }
-
-  if (allReleaseNotes.length === 0) {
-    console.log('No release notes found.');
-    return;
-  }
-
-  allReleaseNotes.sort((a, b) => b.heading.localeCompare(a.heading));
-
-  let consolidatedContent = `---
+    let consolidatedContent = `---
 sidebar_position: 999
 sidebar_label: 'Release Notes'
 title: 'Release Notes'
-hide_table_of_contents: true
 ---
-
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
 
 # Release Notes
 
-<Tabs groupId="network" queryString>
-  <TabItem value="all" label="All Networks" default>
-`;
-
-  // All networks tab
-  allReleaseNotes.forEach((note) => {
-    consolidatedContent += `
-## ${note.heading}
+---
 
 `;
-    
-    if (note.source === 'github') {
-      consolidatedContent += `*Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
-    } else if (note.source === 'combined') {
-      consolidatedContent += `*Sources: Local release notes and [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
-    }
-    
-    // Add Protocol heading if there's local content
-    if (note.localContent) {
-      consolidatedContent += `### Protocol\n\n`;
-      consolidatedContent += note.localContent + '\n\n';
-    }
-    
-    consolidatedContent += note.githubContent + '\n\n';
-    consolidatedContent += '---\n\n';
-  });
 
-  consolidatedContent += `
-  </TabItem>
-`;
-
-  // Create tabs for each network
-  ['mainnet', 'testnet', 'devnet'].forEach(network => {
-    const networkReleases = allReleaseNotes.filter(note => note.network === network);
-    
-    if (networkReleases.length > 0) {
-      const networkLabel = network.charAt(0).toUpperCase() + network.slice(1);
+    // Generate content
+    allReleaseNotes.forEach((note) => {
       consolidatedContent += `
-  <TabItem value="${network}" label="${networkLabel}">
-`;
-
-      networkReleases.forEach((note) => {
-        consolidatedContent += `
-## ${note.heading}
+## ${note.displayTag}
 
 `;
-        
-        if (note.source === 'github') {
-          consolidatedContent += `*Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
-        } else if (note.source === 'combined') {
-          consolidatedContent += `*Sources: Local release notes and [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
-        }
-        
-        // Add Protocol heading if there's local content
-        if (note.localContent) {
-          consolidatedContent += `### Protocol\n\n`;
-          consolidatedContent += note.localContent + '\n\n';
-        }
-        
-        consolidatedContent += note.githubContent + '\n\n';
-        consolidatedContent += '---\n\n';
-      });
+      
+      // Add network badge
+      const networkBadge = note.network === 'testnet' ? '🔶 Testnet' : '✅ Mainnet';
+      consolidatedContent += `**${networkBadge}** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.tag})*\n\n`;
+      
+      // Add local content in collapsible details if it exists
+      if (note.localNotes.length > 0) {
+        note.localNotes.forEach(localNote => {
+          consolidatedContent += `<details>
+<summary>${localNote.title}</summary>
 
-      consolidatedContent += `
-  </TabItem>
+${localNote.content}
+
+</details>
+
 `;
+        });
+      }
+      
+      consolidatedContent += note.githubContent + '\n\n';
+      consolidatedContent += '---\n\n';
+    });
+
+    const outputDir = path.dirname(outputReleaseNotesPath);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
     }
-  });
 
-  consolidatedContent += `
-</Tabs>
-`;
-
-  const outputDir = path.dirname(outputReleaseNotesPath);
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
+    fs.writeFileSync(outputReleaseNotesPath, consolidatedContent, 'utf8');
+    console.log(`✓ Consolidated ${allReleaseNotes.length} release notes into: ${outputReleaseNotesPath}`);
+  } catch (error) {
+    console.error('⚠️ Error fetching GitHub releases:', error.message);
   }
-
-  fs.writeFileSync(outputReleaseNotesPath, consolidatedContent, 'utf8');
-  console.log(`✓ Consolidated ${allReleaseNotes.length} total release notes into: ${outputReleaseNotesPath}`);
 }
 
 convertMdToMdx(docsDir);
