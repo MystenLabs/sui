@@ -44,6 +44,7 @@ pub fn save_trace_output(
         inner_store: tmp_store,
         checkpoint: _,
         protocol_version: _,
+        ..
     } = context_and_effects;
 
     // grab all packages from the transaction and save them locally for debug

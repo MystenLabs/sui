@@ -231,6 +231,61 @@ impl Default for BytecodeSnapshot {
     }
 }
 
+/// Environment variable name for the profile output file path.
+pub const SUI_PROFILE_FILE_ENV: &str = "SUI_PROFILE_FILE";
+
+/// Default profile output file name.
+pub const DEFAULT_PROFILE_FILE: &str = "sui-profile.profraw";
+
+impl BytecodeSnapshot {
+    /// Format as CSV with header row.
+    /// Format: opcode,count,percentage
+    pub fn format_csv(&self) -> String {
+        let total = self.total();
+        let mut csv = String::new();
+        csv.push_str("opcode,count,percentage\n");
+
+        for (opcode, count) in self.sorted_by_frequency() {
+            let pct = if total > 0 {
+                (count as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            };
+            csv.push_str(&format!("{:?},{},{:.4}\n", opcode, count, pct));
+        }
+
+        csv
+    }
+}
+
+/// Dump profile information to a file.
+///
+/// Takes a snapshot of the current bytecode counters and writes them to a CSV file.
+/// The file path is determined by:
+/// 1. The `SUI_PROFILE_FILE` environment variable if set
+/// 2. Otherwise, defaults to "sui-profile.profraw"
+///
+/// Returns `Ok(())` if the file was written successfully, or an error message.
+pub fn dump_profile_info() -> Result<(), String> {
+    let file_path =
+        std::env::var(SUI_PROFILE_FILE_ENV).unwrap_or_else(|_| DEFAULT_PROFILE_FILE.to_string());
+    dump_profile_info_to_file(&file_path)
+}
+
+/// Dump profile information to a specified file path.
+///
+/// Takes a snapshot of the current bytecode counters and writes them to a CSV file
+/// at the specified path.
+///
+/// Returns `Ok(())` if the file was written successfully, or an error message.
+pub fn dump_profile_info_to_file(file_path: &str) -> Result<(), String> {
+    let snapshot = BYTECODE_COUNTERS.snapshot();
+    let csv_content = snapshot.format_csv();
+
+    std::fs::write(file_path, csv_content)
+        .map_err(|e| format!("Failed to write profile to {}: {}", file_path, e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,5 +348,82 @@ mod tests {
         assert_eq!(sorted[1].1, 2);
         assert_eq!(sorted[2].0 as u8, Opcodes::ADD as u8);
         assert_eq!(sorted[2].1, 1);
+    }
+
+    #[test]
+    fn test_format_csv() {
+        let counters = BytecodeCounters::new();
+        counters.increment(Opcodes::ADD);
+        counters.increment(Opcodes::SUB);
+        counters.increment(Opcodes::SUB);
+        counters.increment(Opcodes::MUL);
+        counters.increment(Opcodes::MUL);
+        counters.increment(Opcodes::MUL);
+
+        let snapshot = counters.snapshot();
+        let csv = snapshot.format_csv();
+
+        // Verify header
+        assert!(csv.starts_with("opcode,count,percentage\n"));
+
+        // Verify each line has proper format: opcode,count,percentage
+        let lines: Vec<&str> = csv.lines().collect();
+        assert!(lines.len() >= 4); // header + 3 opcodes
+
+        // Verify MUL appears first (highest count)
+        assert!(lines[1].starts_with("MUL,3,"));
+
+        // Verify SUB appears second
+        assert!(lines[2].starts_with("SUB,2,"));
+
+        // Verify ADD appears third
+        assert!(lines[3].starts_with("ADD,1,"));
+
+        // Verify percentages are present - check they start with expected values
+        // (exact precision may vary slightly)
+        assert!(lines[1].contains("50."));
+        assert!(lines[2].contains("33."));
+        assert!(lines[3].contains("16."));
+    }
+
+    #[test]
+    fn test_format_csv_empty() {
+        let counters = BytecodeCounters::new();
+        let snapshot = counters.snapshot();
+        let csv = snapshot.format_csv();
+
+        // Should only have header when no counts
+        assert_eq!(csv, "opcode,count,percentage\n");
+    }
+
+    #[test]
+    fn test_dump_profile_info_to_file() {
+        use std::fs;
+
+        // Use a unique temp file for this test
+        let test_file = "/tmp/test_dump_profile_info.profraw";
+
+        // Reset counters and add some data
+        BYTECODE_COUNTERS.reset();
+        BYTECODE_COUNTERS.increment(Opcodes::CALL);
+        BYTECODE_COUNTERS.increment(Opcodes::CALL);
+        BYTECODE_COUNTERS.increment(Opcodes::RET);
+
+        // Dump to file using the explicit path function
+        let result = dump_profile_info_to_file(test_file);
+        assert!(result.is_ok(), "dump_profile_info_to_file failed: {:?}", result);
+
+        // Read and verify file contents
+        let contents = fs::read_to_string(test_file).expect("Failed to read profile file");
+
+        // Verify header
+        assert!(contents.starts_with("opcode,count,percentage\n"));
+
+        // Verify CALL and RET are present
+        assert!(contents.contains("CALL,2,"));
+        assert!(contents.contains("RET,1,"));
+
+        // Cleanup
+        let _ = fs::remove_file(test_file);
     }
 }
