@@ -122,10 +122,8 @@ impl Drop for Module {
         // ArenaVec uses ManuallyDrop and does NOT call drop on its elements.
         // This means Function.native (which contains Arc<UnboxedNativeFunction>)
         // would leak if we don't explicitly handle it.
-        for function in self.functions.iter_mut() {
-            unsafe {
-                std::ptr::drop_in_place(function);
-            }
+        for function in self.functions.0.drain(..) {
+            drop(function);
         }
     }
 }
