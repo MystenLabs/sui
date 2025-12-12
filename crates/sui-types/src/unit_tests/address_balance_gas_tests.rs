@@ -181,7 +181,7 @@ fn test_address_balance_payment_one_epoch_range_validation() {
         },
     );
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(
         result.is_ok(),
         "1-epoch range (min_epoch to min_epoch+1) should be valid"
@@ -206,8 +206,10 @@ fn test_address_balance_payment_multi_epoch_range_rejected() {
 
     let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::Unsupported(msg) => {
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::Unsupported(msg),
+        } => {
             assert!(msg.contains("max_epoch must be at most min_epoch + 1"));
         }
         _ => panic!("Expected Unsupported error for epoch range > 1"),
@@ -255,8 +257,10 @@ fn test_address_balance_payment_missing_epochs() {
 
         let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(config));
         assert!(result.is_err());
-        match result.unwrap_err() {
-            UserInputError::Unsupported(msg) => {
+        match result.unwrap_err().into_inner() {
+            SuiErrorKind::UserInputError {
+                error: UserInputError::Unsupported(msg),
+            } => {
                 assert!(msg.contains("Both min_epoch and max_epoch must be specified"));
             }
             _ => panic!("Expected Unsupported error for {}", case_description),
@@ -384,8 +388,10 @@ fn test_regular_gas_payment_with_invalid_valid_during_multi_epoch() {
 
     let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::Unsupported(msg) => {
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::Unsupported(msg),
+        } => {
             assert!(msg.contains("max_epoch must be at most min_epoch + 1"));
         }
         _ => panic!("Expected Unsupported error for multi-epoch expiration"),
@@ -410,8 +416,10 @@ fn test_regular_gas_payment_with_invalid_valid_during_missing_epochs() {
 
     let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::Unsupported(msg) => {
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::Unsupported(msg),
+        } => {
             assert!(msg.contains("Both min_epoch and max_epoch must be specified"));
         }
         _ => panic!("Expected Unsupported error for missing epochs"),
@@ -436,8 +444,10 @@ fn test_regular_gas_payment_with_invalid_valid_during_partial_epochs() {
 
     let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::Unsupported(msg) => {
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::Unsupported(msg),
+        } => {
             assert!(msg.contains("Both min_epoch and max_epoch must be specified"));
         }
         _ => panic!("Expected Unsupported error for partial epoch specification"),

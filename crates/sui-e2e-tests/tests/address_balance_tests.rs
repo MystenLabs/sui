@@ -12,10 +12,11 @@ use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
     accumulator_metadata::AccumulatorOwner,
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
-    base_types::{dbg_addr, FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress, dbg_addr},
     coin_reservation::ParsedObjectRefWithdrawal,
     digests::{ChainIdentifier, CheckpointDigest},
     effects::{InputConsensusObject, TransactionEffectsAPI},
@@ -29,7 +30,6 @@ use sui_types::{
         TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
         TransactionKind, VerifiedTransaction,
     },
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -150,9 +150,11 @@ async fn test_accumulators_root_created() {
     // accumulator root is not created yet.
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        assert!(!state
-            .load_epoch_store_one_call_per_task()
-            .accumulator_root_exists());
+        assert!(
+            !state
+                .load_epoch_store_one_call_per_task()
+                .accumulator_root_exists()
+        );
     });
 
     test_cluster.trigger_reconfiguration().await;
@@ -161,9 +163,11 @@ async fn test_accumulators_root_created() {
     // but we didn't upgrade to the next protocol version yet.
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        assert!(state
-            .load_epoch_store_one_call_per_task()
-            .accumulator_root_exists());
+        assert!(
+            state
+                .load_epoch_store_one_call_per_task()
+                .accumulator_root_exists()
+        );
         assert_eq!(
             state
                 .load_epoch_store_one_call_per_task()
@@ -478,12 +482,14 @@ fn verify_accumulator_exists(
             .expect("read cannot fail")
             .expect("accumulator should exist");
 
-    assert!(accumulator_object
-        .data
-        .try_as_move()
-        .unwrap()
-        .type_()
-        .is_efficient_representation());
+    assert!(
+        accumulator_object
+            .data
+            .try_as_move()
+            .unwrap()
+            .type_()
+            .is_efficient_representation()
+    );
 
     let accumulator_value =
         AccumulatorValue::load(child_object_resolver, None, owner, &sui_coin_type)
@@ -2768,7 +2774,7 @@ async fn test_address_balance_large_rebate() {
     let created_object_ref = effects
         .created()
         .iter()
-        .find(|(obj_ref, _)| obj_ref.0 != effects.gas_object().0 .0)
+        .find(|(obj_ref, _)| obj_ref.0 != effects.gas_object().0.0)
         .map(|(obj_ref, _)| *obj_ref)
         .expect("Should have created an object");
 
@@ -3020,9 +3026,11 @@ async fn test_get_all_balances() {
             get_currency_types_for_owner(sender, child_object_resolver, index_tables, 10, None)
                 .unwrap();
         assert_eq!(types.len(), 2);
-        assert!(types
-            .iter()
-            .any(|t| t.to_canonical_string(true).contains("::sui::SUI")));
+        assert!(
+            types
+                .iter()
+                .any(|t| t.to_canonical_string(true).contains("::sui::SUI"))
+        );
         assert!(types.iter().any(|t| {
             t.to_canonical_string(true)
                 .contains("::trusted_coin::TRUSTED_COIN")
@@ -3428,9 +3436,10 @@ async fn test_coin_reservation_validation() {
             try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender1, sender1, gas1)
                 .await
                 .unwrap_err();
-        assert!(err
-            .to_string()
-            .contains(format!("object id {} not found", random_id).as_str()));
+        assert!(
+            err.to_string()
+                .contains(format!("object id {} not found", random_id).as_str())
+        );
     }
 
     // Verify transaction is rejected if it is not valid in the current epoch.
@@ -3452,9 +3461,10 @@ async fn test_coin_reservation_validation() {
             try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender1, sender1, gas1)
                 .await
                 .unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("reservation amount must be non-zero"));
+        assert!(
+            err.to_string()
+                .contains("reservation amount must be non-zero")
+        );
     }
 
     // Verify the transaction is rejected if the accumulator object is not owned by the sender.
@@ -3471,9 +3481,10 @@ async fn test_coin_reservation_validation() {
         )
         .await
         .unwrap_err();
-        assert!(err
-            .to_string()
-            .contains(format!("is owned by {}, not sender {}", sender1, sender2).as_str()));
+        assert!(
+            err.to_string()
+                .contains(format!("is owned by {}, not sender {}", sender1, sender2).as_str())
+        );
     }
 
     // Verify coin reservations cannot (yet) be used to pay gas.
@@ -3484,9 +3495,10 @@ async fn test_coin_reservation_validation() {
             try_coin_reservation_tx(&mut test_cluster, gas1, sender1, sender1, coin_reservation)
                 .await
                 .unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("Gas object is not an owned object"));
+        assert!(
+            err.to_string()
+                .contains("Gas object is not an owned object")
+        );
     }
 
     // Verify that total reservation limit is enforced for coin reservations.
@@ -3515,9 +3527,10 @@ async fn test_coin_reservation_validation() {
             .await
             .unwrap_err();
 
-        assert!(err
-            .to_string()
-            .contains("Maximum number of balance withdraw reservations is 10"));
+        assert!(
+            err.to_string()
+                .contains("Maximum number of balance withdraw reservations is 10")
+        );
     }
 }
 
@@ -3558,9 +3571,10 @@ async fn test_coin_reservation_gating() {
         let err = try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender, sender, gas)
             .await
             .unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("coin reservation backward compatibility layer is not enabled"));
+        assert!(
+            err.to_string()
+                .contains("coin reservation backward compatibility layer is not enabled")
+        );
     }
 }
 

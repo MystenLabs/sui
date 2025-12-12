@@ -750,8 +750,8 @@ impl CallArg {
                 if ParsedDigest::is_coin_reservation_digest(&object_ref.2) {
                     vec![]
                 } else {
-                vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
-            }
+                    vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
+                }
             }
             CallArg::Object(ObjectArg::SharedObject {
                 id,
@@ -2697,40 +2697,45 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
             }
             TransactionExpiration::ValidDuring {
-            min_epoch,
-            max_epoch,
-            min_timestamp,
-            max_timestamp,
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
                 chain,
                 nonce: _,
             } => {
-            if min_timestamp.is_some() || max_timestamp.is_some() {
-                return Err(UserInputError::Unsupported(
-                    "Timestamp-based transaction expiration is not yet supported".to_string(),
+                if min_timestamp.is_some() || max_timestamp.is_some() {
+                    return Err(UserInputError::Unsupported(
+                        "Timestamp-based transaction expiration is not yet supported".to_string(),
                     )
                     .into());
-            }
+                }
 
-            match (min_epoch, max_epoch) {
-                (Some(min), Some(max)) => {
-                    if config.enable_multi_epoch_transaction_expiration() {
-                        if !(*max == *min || *max == min.saturating_add(1)) {
+                // TODO: these checks can be loosened in the case where the transaction is not stateless,
+                // i.e. contains AddressOwned inputs.
+                match (min_epoch, max_epoch) {
+                    (Some(min), Some(max)) => {
+                        if config.enable_multi_epoch_transaction_expiration() {
+                            if !(*max == *min || *max == min.saturating_add(1)) {
+                                return Err(UserInputError::Unsupported(
+                                    "max_epoch must be at most min_epoch + 1".to_string(),
+                                )
+                                .into());
+                            }
+                        } else if min != max {
                             return Err(UserInputError::Unsupported(
-                                "max_epoch must be at most min_epoch + 1".to_string(),
-                            ));
+                                "min_epoch must equal max_epoch".to_string(),
+                            )
+                            .into());
                         }
-                    } else if min != max {
+                    }
+                    _ => {
                         return Err(UserInputError::Unsupported(
-                            "min_epoch must equal max_epoch".to_string(),
-                        ));
+                            "Both min_epoch and max_epoch must be specified".to_string(),
+                        )
+                        .into());
                     }
                 }
-                _ => {
-                    return Err(UserInputError::Unsupported(
-                        "Both min_epoch and max_epoch must be specified".to_string(),
-                    ));
-                }
-            }
 
                 if *chain != context.chain_identifier {
                     return Err(UserInputError::InvalidChainId {
@@ -2803,18 +2808,18 @@ impl TransactionDataAPI for TransactionDataV1 {
                 };
             }
 
-        for parsed in self.parsed_coin_reservations(context.chain_identifier) {
+            for parsed in self.parsed_coin_reservations(context.chain_identifier) {
                 num_reservations += 1;
-            if parsed.epoch_id() != context.epoch {
-                return Err(SuiErrorKind::TransactionExpired.into());
-            }
-            if parsed.reservation_amount() == 0 {
-                return Err(UserInputError::InvalidWithdrawReservation {
-                    error: "Balance withdraw reservation amount must be non-zero".to_string(),
+                if parsed.epoch_id() != context.epoch {
+                    return Err(SuiErrorKind::TransactionExpired.into());
                 }
-                .into());
+                if parsed.reservation_amount() == 0 {
+                    return Err(UserInputError::InvalidWithdrawReservation {
+                        error: "Balance withdraw reservation amount must be non-zero".to_string(),
+                    }
+                    .into());
+                }
             }
-        }
 
             fp_ensure!(
                 num_reservations <= max_withdraws,
