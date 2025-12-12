@@ -5,8 +5,8 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "update-cli-docs": "node src/js/update-cli-output.js",
-    "prebuild": "git submodule update --init --recursive; node src/js/generate-import-context.js; node src/js/convert-awesome-sui.mjs",
-    "prestart": "git submodule update --init --recursive; node src/js/convert-awesome-sui.mjs",
+    "prebuild": "git submodule update --init --recursive; node src/js/generate-import-context.js; node src/js/convert-awesome-sui.mjs; node src/js/convert-release-notes.js",
+    "prestart": "git submodule update --init --recursive; node src/js/convert-awesome-sui.mjs; node src/js/convert-release-notes.js",
     "start": "node src/utils/grpc-download.js; docusaurus graphql-to-doc:alpha; docusaurus graphql-to-doc:beta; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; docusaurus start",
     "build": "node src/js/generate-import-context.js; node src/utils/grpc-download.js; docusaurus graphql-to-doc:alpha; docusaurus graphql-to-doc:beta; node src/utils/getopenrpcspecs.js; node src/utils/massagegraphql.js; NODE_OPTIONS='--max-old-space-size=4096' docusaurus build",
     "swizzle": "docusaurus swizzle",
