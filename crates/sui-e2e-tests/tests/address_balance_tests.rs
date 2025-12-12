@@ -3298,6 +3298,74 @@ async fn test_coin_reservation_gating() {
     }
 }
 
+#[sim_test]
+async fn test_valid_coin_reservation_transfers() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
+        cfg.enable_accumulators_for_testing();
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let chain_id = test_cluster.get_chain_identifier();
+    let context = &mut test_cluster.wallet;
+
+    let (sender, gas) = get_sender_and_one_gas(context).await;
+
+    // compute the sender's SUI accumulator object id
+    let accumulator_obj_id = AccumulatorValue::get_field_id(
+        sender,
+        &Balance::type_tag(sui_types::gas_coin::GAS::type_tag()),
+    )
+    .unwrap();
+
+    let encode_coin_reservation = |epoch: u64, amount: u64| {
+        ParsedObjectRefWithdrawal::new(*accumulator_obj_id.inner(), epoch, amount)
+            .encode(SequenceNumber::new(), chain_id)
+    };
+    let coin_reservation = encode_coin_reservation(0, 100);
+
+    let recipient = SuiAddress::random_for_testing_only();
+
+    gas = {
+        let res =
+            try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender, recipient, gas)
+                .await
+                .unwrap();
+        assert!(res.effects.as_ref().unwrap().status().is_ok());
+        res.effects.unwrap().gas_object().reference.to_object_ref()
+    };
+
+    // do the same but split the coin first
+    gas = {
+        let res = try_coin_reservation_tx_with_split(
+            &mut test_cluster,
+            coin_reservation,
+            sender,
+            recipient,
+            gas,
+            Some(50),
+        )
+        .await
+        .unwrap();
+        assert!(res.effects.as_ref().unwrap().status().is_ok());
+        res.effects.unwrap().gas_object().reference.to_object_ref()
+    };
+
+    // ensure both balances arrived at the recipient
+    let recipient_balance = test_cluster
+        .fullnode_handle
+        .rpc_client
+        .get_balance(recipient, Some("0x2::sui::SUI".to_string()))
+        .await
+        .unwrap();
+    assert_eq!(recipient_balance.total_balance, 150);
+}
+
 async fn try_coin_reservation_tx(
     test_cluster: &mut TestCluster,
     coin_reservation: ObjectRef,
