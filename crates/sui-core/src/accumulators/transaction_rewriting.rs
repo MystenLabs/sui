@@ -33,8 +33,15 @@ pub fn rewrite_transaction_for_coin_reservations(
     let Some(live_inputs) =
         executor.find_live_inputs(protocol_config, store, &transaction_kind, epoch_id)
     else {
+        if matches!(
+            transaction_kind,
+            TransactionKind::ProgrammableTransaction(_)
+        ) {
+            dbg!("no live inputs", &transaction_kind);
+        }
         return (transaction_kind, 0);
     };
+    dbg!(&live_inputs);
 
     match transaction_kind {
         TransactionKind::ProgrammableTransaction(pt) => {
@@ -77,15 +84,19 @@ fn rewrite_programmable_transaction_for_coin_reservations(
         return (pt, 0);
     }
 
+    dbg!(&pt.inputs);
+
     for (index, input) in pt.inputs.into_iter().enumerate() {
         let index: u16 = index.try_into().expect("too many inputs");
         match input {
             CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))
                 if ParsedDigest::is_coin_reservation_digest(&object_ref.2) =>
             {
+                dbg!(&object_ref);
                 let withdraw = coin_reservation_resolver
                     .resolve_funds_withdrawal(sender, object_ref)
                     .unwrap();
+                dbg!(&withdraw);
 
                 // type_input is T as in Balance<T>
                 let balance_type_input = match &withdraw.type_arg {
@@ -212,6 +223,7 @@ fn rewrite_programmable_transaction_for_coin_reservations(
     if !rewritten_inputs.is_empty() {
         dbg!(&ret);
     }
+    dbg!(&ret.inputs);
 
     (ret, num_coin_creation_commands as usize)
 }

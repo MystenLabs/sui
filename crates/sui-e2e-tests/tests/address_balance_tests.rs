@@ -3342,6 +3342,7 @@ async fn test_valid_coin_reservation_transfers() {
             .encode(SequenceNumber::new(), chain_id)
     };
     let coin_reservation = encode_coin_reservation(0, 100);
+    dbg!(&coin_reservation);
 
     let recipient = SuiAddress::random_for_testing_only();
 
@@ -3365,6 +3366,7 @@ async fn test_valid_coin_reservation_transfers() {
     };
 
     // do the same but split the coin first
+    dbg!("splitting");
     let _gas = {
         let res =
             try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender, recipient, gas)
