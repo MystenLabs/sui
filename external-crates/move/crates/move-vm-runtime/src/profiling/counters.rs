@@ -274,16 +274,44 @@ pub fn dump_profile_info() -> Result<(), String> {
 
 /// Dump profile information to a specified file path.
 ///
-/// Takes a snapshot of the current bytecode counters and writes them to a CSV file
-/// at the specified path.
+/// Takes a snapshot of the current bytecode counters and appends them to a CSV file
+/// at the specified path. If the file doesn't exist, it creates it with a header.
+/// If the file exists, it appends the data without a header.
 ///
 /// Returns `Ok(())` if the file was written successfully, or an error message.
 pub fn dump_profile_info_to_file(file_path: &str) -> Result<(), String> {
-    let snapshot = BYTECODE_COUNTERS.snapshot();
-    let csv_content = snapshot.format_csv();
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    use std::path::Path;
 
-    std::fs::write(file_path, csv_content)
-        .map_err(|e| format!("Failed to write profile to {}: {}", file_path, e))
+    let snapshot = BYTECODE_COUNTERS.snapshot();
+    let file_exists = Path::new(file_path).exists();
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_path)
+        .map_err(|e| format!("Failed to open profile file {}: {}", file_path, e))?;
+
+    // Write header only if file is new
+    if !file_exists {
+        writeln!(file, "opcode,count,percentage")
+            .map_err(|e| format!("Failed to write header to {}: {}", file_path, e))?;
+    }
+
+    // Append data rows (without header)
+    let total = snapshot.total();
+    for (opcode, count) in snapshot.sorted_by_frequency() {
+        let pct = if total > 0 {
+            (count as f64 / total as f64) * 100.0
+        } else {
+            0.0
+        };
+        writeln!(file, "{:?},{},{:.4}", opcode, count, pct)
+            .map_err(|e| format!("Failed to write to {}: {}", file_path, e))?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -403,6 +431,9 @@ mod tests {
         // Use a unique temp file for this test
         let test_file = "/tmp/test_dump_profile_info.profraw";
 
+        // Ensure file doesn't exist from previous test runs
+        let _ = fs::remove_file(test_file);
+
         // Reset counters and add some data
         BYTECODE_COUNTERS.reset();
         BYTECODE_COUNTERS.increment(Opcodes::CALL);
@@ -422,6 +453,50 @@ mod tests {
         // Verify CALL and RET are present
         assert!(contents.contains("CALL,2,"));
         assert!(contents.contains("RET,1,"));
+
+        // Cleanup
+        let _ = fs::remove_file(test_file);
+    }
+
+    #[test]
+    fn test_dump_profile_info_appends() {
+        use std::fs;
+
+        // Use a unique temp file for this test
+        let test_file = "/tmp/test_dump_profile_append.profraw";
+
+        // Ensure file doesn't exist from previous test runs
+        let _ = fs::remove_file(test_file);
+
+        // First dump: CALL and RET
+        BYTECODE_COUNTERS.reset();
+        BYTECODE_COUNTERS.increment(Opcodes::CALL);
+        BYTECODE_COUNTERS.increment(Opcodes::RET);
+        let result = dump_profile_info_to_file(test_file);
+        assert!(result.is_ok(), "First dump failed: {:?}", result);
+
+        // Second dump: ADD
+        BYTECODE_COUNTERS.reset();
+        BYTECODE_COUNTERS.increment(Opcodes::ADD);
+        BYTECODE_COUNTERS.increment(Opcodes::ADD);
+        let result = dump_profile_info_to_file(test_file);
+        assert!(result.is_ok(), "Second dump failed: {:?}", result);
+
+        // Read and verify file contents
+        let contents = fs::read_to_string(test_file).expect("Failed to read profile file");
+
+        // Should have only one header at the beginning
+        assert!(contents.starts_with("opcode,count,percentage\n"));
+        assert_eq!(
+            contents.matches("opcode,count,percentage").count(),
+            1,
+            "Should have exactly one header"
+        );
+
+        // Should contain data from both dumps
+        assert!(contents.contains("CALL,1,"), "Should contain CALL from first dump");
+        assert!(contents.contains("RET,1,"), "Should contain RET from first dump");
+        assert!(contents.contains("ADD,2,"), "Should contain ADD from second dump");
 
         // Cleanup
         let _ = fs::remove_file(test_file);
