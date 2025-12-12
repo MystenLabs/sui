@@ -1,0 +1,28 @@
+[package]
+name = "nansen-example-indexer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Core dependencies for type resolution
+sui-rpc-resolver = { path = "../../../crates/sui-rpc-resolver" }
+sui-package-resolver = { path = "../../../crates/sui-package-resolver" }
+sui-types = { path = "../../../crates/sui-types" }
+sui-indexer-alt-framework = { path = "../../../crates/sui-indexer-alt-framework" }
+sui-storage = { path = "../../../crates/sui-storage" }
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# Error handling
+anyhow = "1.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# URL parsing
+url = "2.0"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
