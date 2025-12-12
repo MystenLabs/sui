@@ -232,10 +232,12 @@ impl Object {
         }
 
         // Fall back to loading from contents
-        self.contents(ctx)
-            .await
-            .map(|opt| opt.as_ref().map(|c| c.version().into()))
-            .transpose()
+        let contents = match self.contents(ctx).await.transpose()? {
+            Ok(contents) => contents,
+            Err(e) => return Some(Err(e)),
+        };
+
+        Some(Ok(contents.version().into()))
     }
 
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
@@ -245,10 +247,12 @@ impl Object {
         }
 
         // Fall back to loading from contents
-        self.contents(ctx)
-            .await
-            .map(|opt| opt.as_ref().map(|c| Base58::encode(c.digest().inner())))
-            .transpose()
+        let contents = match self.contents(ctx).await.transpose()? {
+            Ok(contents) => contents,
+            Err(e) => return Some(Err(e)),
+        };
+
+        Some(Ok(Base58::encode(contents.digest().inner())))
     }
 
     /// Attempts to convert the object into a MoveObject.
@@ -435,14 +439,13 @@ impl Object {
 
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
     pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Option<Result<Base64, RpcError>> {
-        let object = match self.contents(ctx).await {
-            Ok(Some(o)) => o,
-            Ok(None) => return None,
+        let contents = match self.contents(ctx).await.transpose()? {
+            Ok(contents) => contents,
             Err(e) => return Some(Err(e)),
         };
 
         Some(
-            bcs::to_bytes(object)
+            bcs::to_bytes(contents)
                 .context("Failed to serialize object")
                 .map(Base64)
                 .map_err(RpcError::from),
@@ -548,14 +551,15 @@ impl Object {
 
     /// The object's owner kind.
     pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<Result<Owner, RpcError>> {
-        self.contents(ctx)
-            .await
-            .map(|opt| {
-                opt.as_ref().map(|object| {
-                    Owner::from_native(self.super_.scope.clone(), object.owner.clone())
-                })
-            })
-            .transpose()
+        let contents = match self.contents(ctx).await.transpose()? {
+            Ok(contents) => contents,
+            Err(e) => return Some(Err(e)),
+        };
+
+        Some(Ok(Owner::from_native(
+            self.super_.scope.clone(),
+            contents.owner.clone(),
+        )))
     }
 
     /// The transaction that created this version of the object.
@@ -563,17 +567,15 @@ impl Object {
         &self,
         ctx: &Context<'_>,
     ) -> Option<Result<Transaction, RpcError>> {
-        self.contents(ctx)
-            .await
-            .map(|opt| {
-                opt.as_ref().map(|object| {
-                    Transaction::with_id(
-                        self.super_.scope.without_root_version(),
-                        object.previous_transaction,
-                    )
-                })
-            })
-            .transpose()
+        let contents = match self.contents(ctx).await.transpose()? {
+            Ok(contents) => contents,
+            Err(e) => return Some(Err(e)),
+        };
+
+        Some(Ok(Transaction::with_id(
+            self.super_.scope.without_root_version(),
+            contents.previous_transaction,
+        )))
     }
 
     /// The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
@@ -581,13 +583,12 @@ impl Object {
         &self,
         ctx: &Context<'_>,
     ) -> Option<Result<BigInt, RpcError>> {
-        self.contents(ctx)
-            .await
-            .map(|opt| {
-                opt.as_ref()
-                    .map(|object| BigInt::from(object.storage_rebate))
-            })
-            .transpose()
+        let contents = match self.contents(ctx).await.transpose()? {
+            Ok(contents) => contents,
+            Err(e) => return Some(Err(e)),
+        };
+
+        Some(Ok(BigInt::from(contents.storage_rebate)))
     }
 
     /// The transactions that sent objects to this object
@@ -1119,7 +1120,7 @@ impl Object {
     pub(crate) async fn contents(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<&Option<NativeObject>, RpcError> {
+    ) -> Result<Option<&NativeObject>, RpcError> {
         self.contents
             .get_or_try_init(async || {
                 let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
@@ -1161,6 +1162,7 @@ impl Object {
                 }
             })
             .await
+            .map(Option::as_ref)
     }
 }
 

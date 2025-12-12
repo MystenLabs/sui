@@ -452,7 +452,7 @@ impl MoveObject {
         object: &Object,
         ctx: &Context<'_>,
     ) -> Result<Option<Self>, RpcError> {
-        let Some(super_contents) = object.contents(ctx).await?.as_ref() else {
+        let Some(super_contents) = object.contents(ctx).await? else {
             return Ok(None);
         };
 
@@ -473,7 +473,7 @@ impl MoveObject {
     ) -> Result<&Option<NativeMoveObject>, RpcError> {
         self.native
             .get_or_try_init(async || {
-                let Some(contents) = self.super_.contents(ctx).await?.as_ref() else {
+                let Some(contents) = self.super_.contents(ctx).await? else {
                     return Ok(None);
                 };
 
