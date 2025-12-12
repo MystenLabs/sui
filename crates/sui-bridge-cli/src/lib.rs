@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use alloy::{
+    dyn_abi::DynSolValue,
+    primitives::{Address as EthAddress, Bytes, U256},
+    providers::{Provider, WalletProvider},
+};
 use anyhow::anyhow;
 use clap::*;
-use ethers::providers::Middleware;
-use ethers::types::Address as EthAddress;
-use ethers::types::U256;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use fastcrypto::hash::{HashFunction, Keccak256};
@@ -28,7 +30,7 @@ use sui_bridge::types::{
     BlocklistType, EmergencyAction, EmergencyActionType, EvmContractUpgradeAction,
     LimitUpdateAction,
 };
-use sui_bridge::utils::{EthSigner, get_eth_signer_client};
+use sui_bridge::utils::{EthSignerProvider, get_eth_signer_provider};
 use sui_config::Config;
 use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_keys::keypair_file::read_key;
@@ -327,31 +329,27 @@ fn encode_call_data(function_selector: &str, params: &[String]) -> Vec<u8> {
 
     assert_eq!(param_types.len(), params.len(), "Invalid number of params");
 
-    let mut call_data = Keccak256::digest(function_selector).digest[0..4].to_vec();
     let mut tokens = vec![];
     for (param, param_type) in params.iter().zip(param_types.iter()) {
-        match param_type.to_lowercase().as_str() {
+        let token = match param_type.to_lowercase().as_str() {
             "uint256" => {
-                tokens.push(ethers::abi::Token::Uint(
-                    ethers::types::U256::from_dec_str(param).expect("Invalid U256"),
-                ));
+                DynSolValue::Uint(U256::from_str_radix(param, 10).expect("Invalid U256"), 256)
             }
-            "bool" => {
-                tokens.push(ethers::abi::Token::Bool(match param.as_str() {
-                    "true" => true,
-                    "false" => false,
-                    _ => panic!("Invalid bool in params"),
-                }));
-            }
-            "string" => {
-                tokens.push(ethers::abi::Token::String(param.clone()));
-            }
+            "bool" => DynSolValue::Bool(match param.as_str() {
+                "true" => true,
+                "false" => false,
+                _ => panic!("Invalid bool in params"),
+            }),
+            "string" => DynSolValue::String(param.clone()),
             // TODO: need to support more types if needed
             _ => panic!("Invalid param type"),
-        }
+        };
+        tokens.push(token);
     }
+
+    let mut call_data = Keccak256::digest(function_selector).digest[0..4].to_vec();
     if !tokens.is_empty() {
-        call_data.extend(ethers::abi::encode(&tokens));
+        call_data.extend(DynSolValue::Tuple(tokens).abi_encode());
     }
     call_data
 }
@@ -412,7 +410,7 @@ pub struct LoadedBridgeCliConfig {
     /// Key pair for Sui operations
     sui_key: SuiKeyPair,
     /// Key pair for Eth operations, must be Secp256k1 key
-    eth_signer: EthSigner,
+    eth_signer_provider: EthSignerProvider,
 }
 
 impl LoadedBridgeCliConfig {
@@ -445,23 +443,24 @@ impl LoadedBridgeCliConfig {
             (None, None) => unreachable!(),
         };
 
-        let provider = Arc::new(
-            ethers::prelude::Provider::<ethers::providers::Http>::try_from(&cli_config.eth_rpc_url)
-                .unwrap()
-                .interval(std::time::Duration::from_millis(2000)),
+        let private_key_hex = Hex::encode(eth_key.to_bytes_no_flag());
+        let eth_signer_provider =
+            get_eth_signer_provider(&cli_config.eth_rpc_url, &private_key_hex)?;
+        let sui_bridge = EthSuiBridge::new(
+            cli_config.eth_bridge_proxy_address,
+            eth_signer_provider.clone(),
         );
-        let private_key = Hex::encode(eth_key.to_bytes_no_flag());
-        let eth_signer = get_eth_signer_client(&cli_config.eth_rpc_url, &private_key).await?;
-        let sui_bridge = EthSuiBridge::new(cli_config.eth_bridge_proxy_address, provider.clone());
         let eth_bridge_committee_proxy_address: EthAddress = sui_bridge.committee().call().await?;
         let eth_bridge_limiter_proxy_address: EthAddress = sui_bridge.limiter().call().await?;
-        let eth_committee =
-            EthBridgeCommittee::new(eth_bridge_committee_proxy_address, provider.clone());
+        let eth_committee = EthBridgeCommittee::new(
+            eth_bridge_committee_proxy_address,
+            eth_signer_provider.clone(),
+        );
         let eth_bridge_committee_proxy_address: EthAddress = sui_bridge.committee().call().await?;
         let eth_bridge_config_proxy_address: EthAddress = eth_committee.config().call().await?;
 
-        let eth_address = eth_signer.address();
-        let eth_chain_id = provider.get_chainid().await?;
+        let eth_address = eth_signer_provider.default_signer_address();
+        let eth_chain_id = eth_signer_provider.get_chain_id().await?;
         let sui_address = SuiAddress::from(&sui_key.public());
         println!("Using Sui address: {:?}", sui_address);
         println!("Using Eth address: {:?}", eth_address);
@@ -475,14 +474,14 @@ impl LoadedBridgeCliConfig {
             eth_bridge_limiter_proxy_address,
             eth_bridge_config_proxy_address,
             sui_key,
-            eth_signer,
+            eth_signer_provider,
         })
     }
 }
 
 impl LoadedBridgeCliConfig {
-    pub fn eth_signer(self: &LoadedBridgeCliConfig) -> &EthSigner {
-        &self.eth_signer
+    pub fn eth_signer_provider(self: &LoadedBridgeCliConfig) -> EthSignerProvider {
+        self.eth_signer_provider.clone()
     }
 
     pub async fn get_sui_account_info(
@@ -556,19 +555,19 @@ impl BridgeClientCommands {
             } => {
                 let eth_sui_bridge = EthSuiBridge::new(
                     config.eth_bridge_proxy_address,
-                    Arc::new(config.eth_signer().clone()),
+                    config.eth_signer_provider().clone(),
                 );
                 // Note: even with f64 there may still be loss of precision even there are a lot of 0s
                 let int_part = ether_amount.trunc() as u64;
                 let frac_part = ether_amount.fract();
-                let int_wei = U256::from(int_part) * U256::exp10(18);
+                let int_wei = U256::from(int_part) * U256::from(10).pow(U256::from(18));
                 let frac_wei = U256::from((frac_part * 1_000_000_000_000_000_000f64) as u64);
                 let amount = int_wei + frac_wei;
                 let eth_tx = eth_sui_bridge
-                    .bridge_eth(sui_recipient_address.to_vec().into(), target_chain)
+                    .bridgeETH(sui_recipient_address.to_vec().into(), target_chain)
                     .value(amount);
-                let pending_tx = eth_tx.send().await.unwrap();
-                let tx_receipt = pending_tx.await.unwrap().unwrap();
+                let pending_tx = eth_tx.send().await?;
+                let tx_receipt = pending_tx.get_receipt().await?;
                 info!(
                     "Deposited {ether_amount} Ethers to {:?} (target chain {target_chain}). Receipt: {:?}",
                     sui_recipient_address, tx_receipt,
@@ -638,7 +637,7 @@ async fn deposit_on_sui(
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let arg_target_chain = builder.pure(target_chain).unwrap();
-    let arg_target_address = builder.pure(recipient_address.as_bytes()).unwrap();
+    let arg_target_address = builder.pure(recipient_address.as_slice()).unwrap();
     let arg_token = builder
         .obj(ObjectArg::ImmOrOwnedObject(coin_obj_ref))
         .unwrap();
@@ -704,24 +703,26 @@ async fn claim_on_eth(
     let signatures = sigs
         .unwrap()
         .into_iter()
-        .map(|sig: Vec<u8>| ethers::types::Bytes::from(sig))
+        .map(|sig: Vec<u8>| Bytes::from(sig))
         .collect::<Vec<_>>();
 
     let eth_sui_bridge = EthSuiBridge::new(
         config.eth_bridge_proxy_address,
-        Arc::new(config.eth_signer().clone()),
+        Arc::new(config.eth_signer_provider().clone()),
     );
-    let message = eth_sui_bridge::Message::from(parsed_message);
-    let tx = eth_sui_bridge.transfer_bridged_tokens_with_signatures(signatures, message);
+    let message = eth_sui_bridge::BridgeUtils::Message::from(parsed_message);
+    let tx = eth_sui_bridge.transferBridgedTokensWithSignatures(signatures, message);
     if dry_run {
-        let tx = tx.tx;
-        let resp = config.eth_signer.estimate_gas(&tx, None).await;
+        let resp = config
+            .eth_signer_provider
+            .estimate_gas(tx.into_transaction_request())
+            .await?;
         println!(
             "Sui to Eth bridge transfer claim dry run result: {:?}",
             resp
         );
     } else {
-        let eth_claim_tx_receipt = tx.send().await.unwrap().await.unwrap().unwrap();
+        let eth_claim_tx_receipt = tx.send().await?.get_receipt().await?;
         println!(
             "Sui to Eth bridge transfer claimed: {:?}",
             eth_claim_tx_receipt
@@ -732,15 +733,18 @@ async fn claim_on_eth(
 
 #[cfg(test)]
 mod tests {
-    use ethers::abi::FunctionExt;
-
     use super::*;
+    use alloy::{
+        dyn_abi::{DynSolType, DynSolValue},
+        json_abi::JsonAbi,
+        primitives::U256,
+    };
 
     #[tokio::test]
     async fn test_encode_call_data() {
         let abi_json =
             std::fs::read_to_string("../sui-bridge/abi/tests/mock_sui_bridge_v2.json").unwrap();
-        let abi: ethers::abi::Abi = serde_json::from_str(&abi_json).unwrap();
+        let abi: JsonAbi = serde_json::from_str(&abi_json).unwrap();
 
         let function_selector = "initializeV2Params(uint256,bool,string)";
         let params = vec!["420".to_string(), "false".to_string(), "hello".to_string()];
@@ -755,13 +759,23 @@ mod tests {
             .expect("Function not found");
 
         // Decode the data excluding the selector
-        let tokens = function.decode_input(&call_data[4..]).unwrap();
+        let input_types = function
+            .inputs
+            .iter()
+            .map(|param| DynSolType::parse(&param.ty).unwrap())
+            .collect::<Vec<_>>();
+        let tuple_type = DynSolType::Tuple(input_types);
+        let decoded = tuple_type
+            .abi_decode(&call_data[4..])
+            .expect("Decoding failed");
+        let decoded_values = decoded.as_tuple().expect("Expected a tuple");
+
         assert_eq!(
-            tokens,
+            decoded_values,
             vec![
-                ethers::abi::Token::Uint(ethers::types::U256::from_dec_str("420").unwrap()),
-                ethers::abi::Token::Bool(false),
-                ethers::abi::Token::String("hello".to_string())
+                DynSolValue::Uint(U256::from(420), 256),
+                DynSolValue::Bool(false),
+                DynSolValue::String("hello".to_string())
             ]
         )
     }
