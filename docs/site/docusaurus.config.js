@@ -160,7 +160,6 @@ const config = {
           exclude: [
             "**/snippets/**",
             "**/standards/deepbook-ref/**",
-            "**/submodules/**",
             "**/app-examples/ts-sdk-ref/**",
           ],
           admonitions: {
