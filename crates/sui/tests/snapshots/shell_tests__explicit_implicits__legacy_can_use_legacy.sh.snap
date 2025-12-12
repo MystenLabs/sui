@@ -1,0 +1,20 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/explicit_implicits/legacy_can_use_legacy.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# tests that building a legacy package that has explicit deps works fine
+sui move --client.config $CONFIG build -p legacy_can_use_legacy
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+
+----- stderr -----
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING legacy_can_use_legacy
