@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::accumulators::balance_read::AccountBalanceRead;
-use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::accumulators::coin_reservations::CoinReservationResolver;
+use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
