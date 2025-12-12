@@ -133,6 +133,10 @@ fn step(
         fun_ref.name(&run_context.vtables.interner)
     );
     let instruction = &instructions[pc];
+
+    #[cfg(feature = "profiling")]
+    crate::profiling::BYTECODE_COUNTERS.increment(instruction.into());
+
     fail_point!("move_vm::interpreter_loop", |_| {
         Err(state.set_location(
             PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
