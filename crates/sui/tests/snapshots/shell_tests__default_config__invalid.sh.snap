@@ -1,0 +1,19 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/default_config/invalid.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# If the config file is a directory, we fail nicely
+mkdir client.yaml
+sui client --client.config ./client.yaml envs
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+Cannot open wallet config file at "./client.yaml". Err: Is a directory (os error 21)
+
+----- stderr -----

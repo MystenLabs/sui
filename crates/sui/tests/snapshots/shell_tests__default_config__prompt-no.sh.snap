@@ -1,0 +1,23 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/default_config/prompt-no.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# If the config file doesn't exist, we prompt and bail if the user says no
+echo "nope" | sui client --client.config ./client.yaml envs
+cat client.yaml
+cat sui.keystore
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+No sui config found in `"./client.yaml"`, create one [Y/n]?
+No config found, aborting
+
+----- stderr -----
+cat: client.yaml: No such file or directory
+cat: sui.keystore: No such file or directory
