@@ -59,3 +59,8 @@ path = "src/mocks/mock-resolver.rs"
 [[bin]]
 name = "mock-resolver-2"
 path = "src/mocks/mock-resolver-2.rs"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+  'cfg(msim)',
+] }
