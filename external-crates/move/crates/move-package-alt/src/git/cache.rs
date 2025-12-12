@@ -11,9 +11,13 @@ use std::{
 use indoc::formatdoc;
 use path_clean::PathClean;
 use tokio::process::Command;
-use tracing::{debug, info, warn};
+use tracing::debug;
 
-use crate::{package::package_lock::PackageSystemLock, schema::GitSha};
+use crate::{
+    logging::{user_info, user_note},
+    package::package_lock::PackageSystemLock,
+    schema::GitSha,
+};
 
 use super::errors::{GitError, GitResult};
 
@@ -182,7 +186,7 @@ impl GitTree {
         // create repo if necessary
         if !self.path_to_repo.exists() {
             // git clone --sparse --filter=blob:none --no-checkout <url> <path>
-            info!("Downloading from {}", self.repo);
+            user_info!("Downloading from {}", self.repo);
             run_git_cmd_with_args(
                 &[
                     "-c",
@@ -363,9 +367,9 @@ pub async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitR
         .map_err(|e| GitError::io_error(&cmd, &cwd, e))?;
 
     if !output.stderr.is_empty() {
-        info!("output from `{}`", display_cmd(&cmd));
+        user_info!("output from `{}`", display_cmd(&cmd));
         for line in output.stderr.lines() {
-            info!("  │ {}", line.expect("vector read can't fail"));
+            user_info!("  │ {}", line.expect("vector read can't fail"));
         }
     }
 
@@ -474,7 +478,7 @@ async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
         .replace("\n", "");
 
     debug!("Found full sha {full_sha} for temp git repo {path_to_clone_str}");
-    warn!(
+    user_note!(
         "{}",
         formatdoc!(
             r###"

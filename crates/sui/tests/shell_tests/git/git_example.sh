@@ -13,4 +13,6 @@ git -C a -c user.email=test@test.com -c user.name=test commit -q -m "initial rev
 
 HASH=$(git -C a log --pretty=format:%H)
 
-sui move --client.config $CONFIG cache-package testnet 4c78adac "{ git = \"file://$(pwd)/a\", rev = \"${HASH}\", subdir = \".\" }"
+sui move --client.config "$CONFIG" cache-package testnet 4c78adac \
+"{ git = \"file://$(pwd)/a\", rev = \"${HASH}\", subdir = \".\" }" 2>&1 \
+| sed "s|$(pwd)|<ROOT>|g" | grep -v "output from \`git"

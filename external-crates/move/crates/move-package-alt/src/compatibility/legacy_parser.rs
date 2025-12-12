@@ -8,6 +8,7 @@ use crate::{
         find_module_name_for_package,
     },
     errors::FileHandle,
+    logging::user_note,
     package::paths::PackagePath,
     schema::{
         DefaultDependency, Environment, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
@@ -17,7 +18,6 @@ use crate::{
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
 
-use colored::Colorize as _;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde_spanned::Spanned;
 use std::{
@@ -26,7 +26,7 @@ use std::{
     str::FromStr,
 };
 use toml::Value as TV;
-use tracing::{debug, warn};
+use tracing::debug;
 
 use super::{legacy::LegacyData, legacy_lockfile::load_legacy_lockfile, parse_address_literal};
 use move_compiler::editions::Edition;
@@ -276,11 +276,10 @@ fn check_implicits(
     }
 
     if is_root {
-        warn!(
-            "[{}] Dependencies on {} are automatically added, but this feature is \
+        user_note!(
+            "Dependencies on {} are automatically added, but this feature is \
                 disabled for your package because you have explicitly included dependencies on {}. Consider \
                 removing these dependencies from `Move.toml`.",
-            "NOTE".yellow().bold(),
             move_compiler::format_oxford_list!("and", "{}", LEGACY_SYSTEM_DEPS_NAMES),
             move_compiler::format_oxford_list!("and", "{}", explicit_implicits),
         );
