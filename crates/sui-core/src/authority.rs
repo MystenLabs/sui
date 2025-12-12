@@ -90,6 +90,7 @@ use sui_types::transaction_executor::TransactionChecks;
 use tap::TapFallible;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::watch::error::RecvError;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -965,6 +966,9 @@ pub struct AuthorityState {
 
     /// Fork recovery state for handling equivocation after forks
     fork_recovery_state: Option<ForkRecoveryState>,
+
+    /// Notification channel for reconfiguration
+    notify_epoch: tokio::sync::watch::Sender<EpochId>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -3661,6 +3665,7 @@ impl AuthorityState {
             congestion_tracker: Arc::new(CongestionTracker::new()),
             traffic_controller,
             fork_recovery_state,
+            notify_epoch: tokio::sync::watch::channel(epoch).0,
         });
 
         let state_clone = Arc::downgrade(&state);
@@ -3924,10 +3929,27 @@ impl AuthorityState {
         self.execution_scheduler
             .reconfigure(&new_epoch_store, self.get_child_object_resolver());
         *execution_lock = new_epoch;
+
+        self.notify_epoch(new_epoch);
         // drop execution_lock after epoch store was updated
         // see also assert in AuthorityState::process_certificate
         // on the epoch store and execution lock epoch match
         Ok(new_epoch_store)
+    }
+
+    fn notify_epoch(&self, new_epoch: EpochId) {
+        self.notify_epoch.send_modify(|epoch| *epoch = new_epoch);
+    }
+
+    pub async fn wait_for_epoch(&self, target_epoch: EpochId) -> Result<EpochId, RecvError> {
+        let mut rx = self.notify_epoch.subscribe();
+        loop {
+            let epoch = *rx.borrow();
+            if epoch >= target_epoch {
+                return Ok(epoch);
+            }
+            rx.changed().await?;
+        }
     }
 
     pub async fn settle_accumulator_for_testing(&self, effects: &[TransactionEffects]) {

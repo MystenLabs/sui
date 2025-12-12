@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{TryFutureExt, future};
 use itertools::Itertools as _;
+use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
     Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec, Registry,
@@ -603,6 +604,63 @@ impl ValidatorService {
             self.get_client_ip_addr(&request, &ClientIdSource::SocketAddr)
         };
 
+        let inner = request.into_inner();
+        let start_epoch = state.load_epoch_store_one_call_per_task().epoch();
+
+        let next_epoch = start_epoch + 1;
+        let mut max_retries = 1;
+
+        loop {
+            let res = self
+                .handle_submit_transaction_inner(
+                    &state,
+                    &consensus_adapter,
+                    &metrics,
+                    &inner,
+                    submitter_client_addr,
+                )
+                .await;
+            match res {
+                Ok((response, weight)) => return Ok((tonic::Response::new(response), weight)),
+                Err(err) => {
+                    if max_retries > 0
+                        && let SuiErrorKind::ValidatorHaltedAtEpochEnd = err.as_inner()
+                    {
+                        max_retries -= 1;
+
+                        debug!(
+                            "ValidatorHaltedAtEpochEnd. Will retry after validator reconfigures"
+                        );
+
+                        if let Ok(Ok(new_epoch)) =
+                            timeout(Duration::from_secs(15), state.wait_for_epoch(next_epoch)).await
+                        {
+                            assert_reachable!("retry submission at epoch end");
+                            if new_epoch == next_epoch {
+                                continue;
+                            }
+
+                            debug_fatal!(
+                                "expected epoch {} after reconfiguration. got {}",
+                                next_epoch,
+                                new_epoch
+                            );
+                        }
+                    }
+                    return Err(err.into());
+                }
+            }
+        }
+    }
+
+    async fn handle_submit_transaction_inner(
+        &self,
+        state: &AuthorityState,
+        consensus_adapter: &ConsensusAdapter,
+        metrics: &ValidatorServiceMetrics,
+        request: &RawSubmitTxRequest,
+        submitter_client_addr: Option<IpAddr>,
+    ) -> SuiResult<(RawSubmitTxResponse, Weight)> {
         let epoch_store = state.load_epoch_store_one_call_per_task();
         if !epoch_store.protocol_config().mysticeti_fastpath() {
             return Err(SuiErrorKind::UnsupportedFeatureError {
@@ -611,7 +669,6 @@ impl ValidatorService {
             .into());
         }
 
-        let request = request.into_inner();
         let submit_type = SubmitTxType::try_from(request.submit_type).map_err(|e| {
             SuiErrorKind::GrpcMessageDeserializeError {
                 type_info: "RawSubmitTxRequest.submit_type".to_string(),
@@ -707,8 +764,8 @@ impl ValidatorService {
             // Ok to fail the request when any transaction is invalid.
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
-            let overload_check_res = self.state.check_system_overload(
-                &*consensus_adapter,
+            let overload_check_res = state.check_system_overload(
+                consensus_adapter,
                 transaction.data(),
                 state.check_system_overload_at_signing(),
             );
@@ -729,7 +786,7 @@ impl ValidatorService {
                         Ok(tx) => tx,
                         Err(e) => {
                             metrics.signature_errors.inc();
-                            return Err(e.into());
+                            return Err(e);
                         }
                     }
                 } else {
@@ -737,7 +794,7 @@ impl ValidatorService {
                         Ok(tx) => tx,
                         Err(e) => {
                             metrics.signature_errors.inc();
-                            return Err(e.into());
+                            return Err(e);
                         }
                     }
                 }
@@ -753,8 +810,7 @@ impl ValidatorService {
 
             // Check if the transaction has executed, before checking input objects
             // which could have been consumed.
-            if let Some(effects) = self
-                .state
+            if let Some(effects) = state
                 .get_transaction_cache_reader()
                 .get_executed_effects(tx_digest)
             {
@@ -793,8 +849,7 @@ impl ValidatorService {
                 Err(e) => {
                     // Check if transaction has been executed while being validated.
                     // This is an edge case so checking executed effects twice is acceptable.
-                    if let Some(effects) = self
-                        .state
+                    if let Some(effects) = state
                         .get_transaction_cache_reader()
                         .get_executed_effects(tx_digest)
                     {
@@ -824,12 +879,12 @@ impl ValidatorService {
 
             if epoch_store.protocol_config().address_aliases() {
                 consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
-                    &self.state.name,
+                    &state.name,
                     verified_transaction.into(),
                 ));
             } else {
                 consensus_transactions.push(ConsensusTransaction::new_user_transaction_message(
-                    &self.state.name,
+                    &state.name,
                     verified_transaction.into_tx().into(),
                 ));
             }
@@ -838,10 +893,7 @@ impl ValidatorService {
         }
 
         if consensus_transactions.is_empty() && !is_ping_request {
-            return Ok((
-                tonic::Response::new(Self::try_from_submit_tx_response(results)?),
-                Weight::zero(),
-            ));
+            return Ok((Self::try_from_submit_tx_response(results)?, Weight::zero()));
         }
 
         // Set the max bytes size of the soft bundle to be half of the consensus max transactions in block size.
@@ -945,10 +997,7 @@ impl ValidatorService {
             }
         }
 
-        Ok((
-            tonic::Response::new(Self::try_from_submit_tx_response(results)?),
-            Weight::zero(),
-        ))
+        Ok((Self::try_from_submit_tx_response(results)?, Weight::zero()))
     }
 
     fn try_from_submit_tx_response(
