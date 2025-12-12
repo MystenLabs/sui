@@ -14936,9 +14936,9 @@ dependencies = [
 name = "sui-bridge-cli"
 version = "1.64.0"
 dependencies = [
+ "alloy",
  "anyhow",
  "clap",
- "ethers",
  "fastcrypto",
  "futures",
  "move-core-types",
