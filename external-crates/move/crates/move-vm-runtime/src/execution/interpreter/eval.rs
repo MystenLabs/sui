@@ -158,6 +158,11 @@ fn step(
         )));
     }
     let instruction = &partial_error_to_error(state, run_context, instructions.safe_get(pc))?;
+
+    #[cfg(feature = "profiling")]
+    crate::profiling::BYTECODE_COUNTERS.increment((*instruction).into());
+
+
     fail_point!("move_vm::interpreter_loop", |_| {
         Err(state.set_location(partial_vm_error!(
             VERIFIER_INVARIANT_VIOLATION,
