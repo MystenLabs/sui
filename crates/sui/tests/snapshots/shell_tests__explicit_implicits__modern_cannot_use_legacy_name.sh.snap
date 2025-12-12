@@ -13,6 +13,6 @@ sui move --client.config $CONFIG build -p modern_using_legacy_name
 success: false
 exit_code: 1
 ----- stdout -----
-Error while loading dependency .: Dependency `DeepBook` is a legacy system name and cannot be used. See: https://docs.sui.io/guides/developer/sui-101/move-package-management#system-dependencies
+Error while loading dependency .: Dependency `DeepBook` is a legacy system name and cannot be used. See https://docs.sui.io/guides/developer/sui-101/move-package-management#system-dependencies
 
 ----- stderr -----
