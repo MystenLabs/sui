@@ -1952,7 +1952,7 @@ mod tests {
 
     /// During a run, the tasked pipeline will stop sending checkpoints below the main pipeline's
     /// reader watermark to the committer. Committer watermark should still advance.
-    #[tokio::test(start_paused = true)]
+    #[tokio::test]
     async fn test_tasked_pipelines_skip_checkpoints_trailing_main_reader_lo() {
         let registry = Registry::new();
         let store = MockStore::default();
