@@ -154,20 +154,15 @@ jobs:
         echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV
 
     - name: Post to slack
-      uses: slackapi/slack-github-action@37ebaef184d7626c5f204ab8d3baff4262dd30f0 # pin@v1.27.0
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-        SUI_SHA: ${{ env.sui_sha }}
-        SUI_BRANCH_NAME: ${{ env.sui_branch_name }}
-        SUI_BRANCH_NAME_URL: ${{ env.sui_branch_name_url }}
-        GH_JOB_LINK: ${{ env.gh_job_link }}
-        SLACK_ID: ${{ env.slack_id }}
-        ONCALL_NAME: ${{ env.oncall_name }}
+      uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
       with:
-        channel-id: 'code-coverage'
-        slack-message: |
-          *${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
-          Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
-          Sui branch: `${{ env.SUI_BRANCH_NAME }}`
-          Run: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>
-          <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo, to manually check if there are coverage regressions.
+        method: chat.postMessage
+        token: ${{ secrets.SLACK_BOT_TOKEN }}
+        payload: |
+          channel: "code-coverage"
+          text: |
+            *${{ github.workflow }}* workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
+            Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
+            Sui branch: `${{ env.SUI_BRANCH_NAME }}`
+            Run: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>
+            <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo, to manually check if there are coverage regressions.
