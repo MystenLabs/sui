@@ -1609,7 +1609,7 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
                 Self::DisplayRegistryCreate
             }
             crate::transaction::EndOfEpochTransactionKind::AddressAliasStateCreate => {
-                todo!("AddressAliasStateCreate needs to be added to sdk")
+                Self::AddressAliasStateCreate
             }
         }
     }
