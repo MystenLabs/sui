@@ -4,7 +4,7 @@ const https = require('https');
 
 const docsDir = '../../docs';
 const releaseNotesDir = '../../release-notes/';
-const outputReleaseNotesPath = '../../docs/content/references/release-notes.mdx';
+const outputReleaseNotesPath = '../../docs/release-notes.mdx';
 
 const excludeDirs = ['node_modules', '.git', 'build', 'dist', '.docusaurus'];
 
@@ -83,15 +83,15 @@ function processLocalContent(content) {
       const text = headingMatch[2].trim();
       
       if (!firstHeadingFound) {
-        // Keep the first heading as H4
-        processedLines.push(`#### ${text}`);
+        // Keep the first heading as H3
+        processedLines.push(`### ${text}`);
         firstHeadingFound = true;
       } else if (text.toLowerCase().includes('full log')) {
         // Make "Full log" headings H5
         processedLines.push(`##### ${text}`);
       } else {
-        // All other headings become H5
-        processedLines.push(`##### ${text}`);
+        // All other headings become H4
+        processedLines.push(`#### ${text}`);
       }
     } else {
       processedLines.push(line);
@@ -260,7 +260,7 @@ async function consolidateReleaseNotes() {
         network: network,
         localContent: localContent,
         githubContent: processedGitHubContent,
-        source: localContent ? 'combined' : 'github',
+        hasLocalContent: !!localContent,
         date: release.published_at
       });
     });
@@ -281,7 +281,6 @@ async function consolidateReleaseNotes() {
 sidebar_position: 999
 sidebar_label: 'Release Notes'
 title: 'Release Notes'
-hide_table_of_contents: true
 ---
 
 import Tabs from '@theme/Tabs';
@@ -289,28 +288,21 @@ import TabItem from '@theme/TabItem';
 
 # Release Notes
 
-<Tabs groupId="network" queryString>
+<Tabs groupId="release-view" queryString="view">
+  <TabItem value="all" label="All Release Notes" default>
+
+<Tabs groupId="network" queryString="network">
   <TabItem value="all" label="All Networks" default>
 `;
 
-  // All networks tab
+  // All networks - GitHub content only
   allReleaseNotes.forEach((note) => {
     consolidatedContent += `
 ## ${note.heading}
 
 `;
     
-    if (note.source === 'github') {
-      consolidatedContent += `*Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
-    } else if (note.source === 'combined') {
-      consolidatedContent += `*Sources: Local release notes and [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
-    }
-    
-    // Add Protocol heading if there's local content
-    if (note.localContent) {
-      consolidatedContent += `### Protocol\n\n`;
-      consolidatedContent += note.localContent + '\n\n';
-    }
+    consolidatedContent += `*Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
     
     consolidatedContent += note.githubContent + '\n\n';
     consolidatedContent += '---\n\n';
@@ -320,7 +312,7 @@ import TabItem from '@theme/TabItem';
   </TabItem>
 `;
 
-  // Create tabs for each network
+  // Network-specific tabs for GitHub content only
   ['mainnet', 'testnet', 'devnet'].forEach(network => {
     const networkReleases = allReleaseNotes.filter(note => note.network === network);
     
@@ -336,17 +328,7 @@ import TabItem from '@theme/TabItem';
 
 `;
         
-        if (note.source === 'github') {
-          consolidatedContent += `*Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
-        } else if (note.source === 'combined') {
-          consolidatedContent += `*Sources: Local release notes and [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
-        }
-        
-        // Add Protocol heading if there's local content
-        if (note.localContent) {
-          consolidatedContent += `### Protocol\n\n`;
-          consolidatedContent += note.localContent + '\n\n';
-        }
+        consolidatedContent += `*Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.heading})*\n\n`;
         
         consolidatedContent += note.githubContent + '\n\n';
         consolidatedContent += '---\n\n';
@@ -359,6 +341,60 @@ import TabItem from '@theme/TabItem';
   });
 
   consolidatedContent += `
+</Tabs>
+
+  </TabItem>
+  <TabItem value="notable" label="Notable Changes">
+
+<Tabs groupId="network" queryString="network">
+  <TabItem value="all" label="All Networks" default>
+`;
+
+  // All networks - only local content
+  const releasesWithLocalContent = allReleaseNotes.filter(note => note.hasLocalContent);
+  
+  releasesWithLocalContent.forEach((note) => {
+    consolidatedContent += `
+## ${note.heading}
+
+`;
+    consolidatedContent += note.localContent + '\n\n';
+    consolidatedContent += '---\n\n';
+  });
+
+  consolidatedContent += `
+  </TabItem>
+`;
+
+  // Network-specific tabs for local content only
+  ['mainnet', 'testnet', 'devnet'].forEach(network => {
+    const networkReleases = allReleaseNotes.filter(note => note.network === network && note.hasLocalContent);
+    
+    if (networkReleases.length > 0) {
+      const networkLabel = network.charAt(0).toUpperCase() + network.slice(1);
+      consolidatedContent += `
+  <TabItem value="${network}" label="${networkLabel}">
+`;
+
+      networkReleases.forEach((note) => {
+        consolidatedContent += `
+## ${note.heading}
+
+`;
+        consolidatedContent += note.localContent + '\n\n';
+        consolidatedContent += '---\n\n';
+      });
+
+      consolidatedContent += `
+  </TabItem>
+`;
+    }
+  });
+
+  consolidatedContent += `
+</Tabs>
+
+  </TabItem>
 </Tabs>
 `;
 
