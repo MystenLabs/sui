@@ -7,7 +7,7 @@ use std::{
     },
 };
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use axum::{
     Json, Router,
     extract::State,
@@ -71,14 +71,37 @@ impl AppState {
         simulacrum.set_data_ingestion_path(data_ingestion_path);
         let simulacrum = Arc::new(RwLock::new(simulacrum));
 
+        let registry = Registry::new_custom(Some("sui_forking".into()), None)
+            .context("Failed to create Prometheus registry.")
+            .unwrap();
+
+        let metrics_args = sui_indexer_alt_metrics::MetricsArgs::default();
+        let metrics = MetricsService::new(metrics_args, registry.clone());
+        let rpc_args = RpcArgs::default();
+
+        let mut rpc = RpcService::new(rpc_args, &registry)
+            .context("Failed to create RPC service")
+            .unwrap();
+
+        let pg_context = sui_indexer_alt_jsonrpc::context::Context::new(
+            Some(database_url),
+            None,
+            DbArgs::default(),
+            BigtableArgs::default(),
+            RpcConfig::default(),
+            rpc.metrics(),
+            &registry,
+        )
+        .await
+        .expect("Failed to create PG context");
         let context = crate::context::Context {
-            pg_context: todo!(),
+            pg_context,
             simulacrum,
             at_checkpoint,
             chain,
             protocol_version,
         };
-        let rpc = start_rpc(context.clone(), database_url)
+        let rpc = start_rpc(context.clone(), rpc, metrics)
             .await
             .expect("Failed to start RPC server");
         Self {
@@ -248,6 +271,7 @@ pub async fn start_server(
 ) -> Result<()> {
     let chain_str = chain.as_str();
     let client = GraphQLClient::new(format!("https://graphql.{chain_str}.sui.io/graphql"));
+    println!("Fetching starting checkpoint and protocol version...");
     let (at_checkpoint, protocol_version) = if let Some(cp) = checkpoint {
         (cp, client.fetch_protocol_version(Some(cp)).await?)
     } else {
@@ -255,6 +279,10 @@ pub async fn start_server(
             .fetch_latest_checkpoint_and_protocol_version()
             .await?
     };
+    println!(
+        "Starting at checkpoint {} with protocol version {}",
+        at_checkpoint, protocol_version
+    );
     let protocol_config = ProtocolConfig::get_for_version(protocol_version.into(), chain);
     let data_ingestion_path_clone = data_ingestion_path.clone();
     let database_url = Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")?;
@@ -331,9 +359,14 @@ async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> 
 
 use diesel::pg::PgConnection;
 use mysten_common::tempdir;
+use prometheus::Registry;
 use reqwest::Url;
 use sui_config::genesis::Genesis;
 use sui_data_store::Node;
+use sui_indexer_alt_jsonrpc::{RpcArgs, RpcService, config::RpcConfig};
+use sui_indexer_alt_metrics::MetricsService;
+use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
+use sui_pg_db::DbArgs;
 use tokio_util::sync::CancellationToken;
 
 fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> {

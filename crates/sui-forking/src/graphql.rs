@@ -40,6 +40,7 @@ struct LatestCheckpointResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CheckpointNumberProtocolVersion {
     sequence_number: u64,
     query: QueryData,
@@ -209,7 +210,7 @@ impl GraphQLClient {
     }
 
     pub async fn fetch_latest_checkpoint_and_protocol_version(&self) -> Result<(u64, u64)> {
-        let query = "{
+        let query = "query {
               checkpoint {
                 sequenceNumber
                 query {

@@ -32,16 +32,11 @@ use sui_indexer_alt_jsonrpc::context::Context as PgContext;
 use sui_indexer_alt_metrics::MetricsService;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
 
-pub(crate) async fn start_rpc(context: Context, database_url: Url) -> anyhow::Result<()> {
-    let registry = Registry::new_custom(Some("sui_forking".into()), None)
-        .context("Failed to create Prometheus registry.")?;
-
-    let metrics_args = sui_indexer_alt_metrics::MetricsArgs::default();
-    let metrics = MetricsService::new(metrics_args, registry.clone());
-    let rpc_args = RpcArgs::default();
-
-    let mut rpc = RpcService::new(rpc_args, &registry).context("Failed to create RPC service")?;
-
+pub(crate) async fn start_rpc(
+    context: Context,
+    mut rpc: RpcService,
+    metrics: MetricsService,
+) -> anyhow::Result<()> {
     let pg_context = context.clone().pg_context;
     let system_package_task = SystemPackageTask::new(
         SystemPackageTaskArgs::default(),
@@ -56,7 +51,9 @@ pub(crate) async fn start_rpc(context: Context, database_url: Url) -> anyhow::Re
         chain: context.chain,
     })?;
     rpc.add_module(write::Write(context.clone().simulacrum))?;
-    // rpc.add_module(Checkpoints(context.clone()))?;
+    rpc.add_module(sui_indexer_alt_jsonrpc::api::checkpoints::Checkpoints(
+        context.clone(),
+    ))?;
     // rpc.add_module(Coins(context.clone()))?;
 
     let s_metrics = metrics.run().await?;
