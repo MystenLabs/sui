@@ -21,4 +21,3 @@ pub fn new_rpc_data_store(
 
     Ok(store)
 }
-

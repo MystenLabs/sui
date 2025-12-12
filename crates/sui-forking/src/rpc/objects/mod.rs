@@ -122,7 +122,6 @@ impl ObjectsApiServer for Objects {
     ) -> RpcResult<SuiObjectResponse> {
         let Self(Context {
             pg_context: ctx,
-            rpc_data_store,
             simulacrum,
             protocol_version,
             chain,
@@ -143,7 +142,6 @@ impl ObjectsApiServer for Objects {
     ) -> RpcResult<Vec<SuiObjectResponse>> {
         let Self(Context {
             pg_context: ctx,
-            rpc_data_store,
             simulacrum,
             protocol_version,
             chain,
@@ -182,7 +180,6 @@ impl ObjectsApiServer for Objects {
     ) -> RpcResult<SuiPastObjectResponse> {
         let Self(Context {
             pg_context: ctx,
-            rpc_data_store,
             simulacrum,
             protocol_version,
             chain,
@@ -207,7 +204,6 @@ impl ObjectsApiServer for Objects {
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
         let Self(Context {
             pg_context: ctx,
-            rpc_data_store,
             simulacrum,
             protocol_version,
             chain,
@@ -253,7 +249,6 @@ impl QueryObjectsApiServer for QueryObjects {
     ) -> RpcResult<Page<SuiObjectResponse, String>> {
         let Self(Context {
             pg_context: ctx,
-            rpc_data_store,
             simulacrum,
             protocol_version,
             chain,

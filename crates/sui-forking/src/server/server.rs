@@ -40,7 +40,7 @@ use crate::{
 };
 
 pub struct AppState {
-    pub simulacrum: Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>,
+    pub context: crate::context::Context,
     pub transaction_count: Arc<AtomicUsize>,
     pub forked_at_checkpoint: u64,
     pub chain: Chain,
@@ -52,22 +52,37 @@ impl AppState {
         data_ingestion_path: PathBuf,
         database_url: Url,
         chain: Chain,
+        at_checkpoint: u64,
         protocol_version: u64,
         protocol_config: ProtocolConfig,
+        version: &'static str,
     ) -> Self {
-        let mut store = ForkingStore::default();
+        let rpc_data_store = Arc::new(
+            crate::store::data_store::new_rpc_data_store(Node::Mainnet, version)
+                .expect("Failed to create RPC data store"),
+        );
         let mut simulacrum = SimulacrumBuilder::new()
             .with_chain(chain)
             .with_protocol_version(protocol_version.into())
-            .with_store_creator(|genesis| ForkingStore::new(genesis));
+            .with_store_creator(|genesis| {
+                ForkingStore::new(genesis, at_checkpoint, rpc_data_store.clone())
+            });
 
         simulacrum.set_data_ingestion_path(data_ingestion_path);
         let simulacrum = Arc::new(RwLock::new(simulacrum));
-        let rpc = start_rpc(simulacrum.clone(), protocol_version, chain, database_url)
+
+        let context = crate::context::Context {
+            pg_context: todo!(),
+            simulacrum,
+            at_checkpoint,
+            chain,
+            protocol_version,
+        };
+        let rpc = start_rpc(context.clone(), database_url)
             .await
             .expect("Failed to start RPC server");
         Self {
-            simulacrum,
+            context,
             transaction_count: Arc::new(AtomicUsize::new(0)),
             forked_at_checkpoint: 0,
             chain,
@@ -81,7 +96,7 @@ async fn health() -> &'static str {
 }
 
 async fn get_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let sim = state.simulacrum.read().unwrap();
+    let sim = state.context.simulacrum.read().unwrap();
     let store = sim.store();
 
     let checkpoint = store
@@ -110,7 +125,7 @@ async fn get_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 }
 
 async fn advance_checkpoint(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut sim = state.simulacrum.write().unwrap();
+    let mut sim = state.context.simulacrum.write().unwrap();
 
     // create_checkpoint returns a VerifiedCheckpoint, not a Result
     let checkpoint = sim.create_checkpoint();
@@ -131,7 +146,7 @@ async fn advance_clock(
     State(state): State<Arc<AppState>>,
     Json(request): Json<AdvanceClockRequest>,
 ) -> impl IntoResponse {
-    let mut sim = state.simulacrum.write().unwrap();
+    let mut sim = state.context.simulacrum.write().unwrap();
 
     let duration = std::time::Duration::from_secs(request.seconds);
     sim.advance_clock(duration);
@@ -146,7 +161,7 @@ async fn advance_clock(
 }
 
 async fn advance_epoch(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut sim = state.simulacrum.write().unwrap();
+    let mut sim = state.context.simulacrum.write().unwrap();
 
     // Use default configuration for advancing epoch
     let config = AdvanceEpochConfig::default();
@@ -193,7 +208,7 @@ async fn execute_tx(
     };
 
     // Execute the transaction
-    let mut sim = state.simulacrum.write().unwrap();
+    let mut sim = state.context.simulacrum.write().unwrap();
     match sim.execute_transaction(transaction) {
         Ok((effects, execution_error)) => {
             let effects_bytes = bcs::to_bytes(&effects).unwrap();
@@ -233,7 +248,13 @@ pub async fn start_server(
 ) -> Result<()> {
     let chain_str = chain.as_str();
     let client = GraphQLClient::new(format!("https://graphql.{chain_str}.sui.io/graphql"));
-    let protocol_version = client.fetch_protocol_version(checkpoint).await?;
+    let (at_checkpoint, protocol_version) = if let Some(cp) = checkpoint {
+        (cp, client.fetch_protocol_version(Some(cp)).await?)
+    } else {
+        client
+            .fetch_latest_checkpoint_and_protocol_version()
+            .await?
+    };
     let protocol_config = ProtocolConfig::get_for_version(protocol_version.into(), chain);
     let data_ingestion_path_clone = data_ingestion_path.clone();
     let database_url = Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")?;
@@ -249,8 +270,10 @@ pub async fn start_server(
             data_ingestion_path_clone.clone(),
             database_url,
             chain,
+            at_checkpoint,
             protocol_version,
             protocol_config,
+            version,
         )
         .await,
     );
@@ -277,7 +300,6 @@ pub async fn start_server(
 /// Start the indexers: both the main indexer and the consistent store
 async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> Result<()> {
     let registry = prometheus::Registry::new();
-    let cancel = CancellationToken::new();
     let rocksdb_db_path = tempdir().unwrap().keep();
     let db_url_str = "postgres://postgres:postgrespw@localhost:5432";
     let db_url = Url::parse(&format!("{db_url_str}/sui_indexer_alt")).unwrap();
@@ -289,8 +311,20 @@ async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> 
         indexer_config.client_args.clone(),
         version,
     );
-    start_indexer(indexer_config, &registry, cancel.clone()).await?;
-    start_consistent_store(consistent_store_config, &registry, cancel.clone()).await?;
+    let indexer = start_indexer(indexer_config, &registry).await?;
+    let consistent_store = start_consistent_store(consistent_store_config, &registry).await?;
+
+    match indexer.attach(consistent_store).main().await {
+        Ok(()) | Err(sui_futures::service::Error::Terminated) => {}
+
+        Err(sui_futures::service::Error::Aborted) => {
+            std::process::exit(1);
+        }
+
+        Err(sui_futures::service::Error::Task(_)) => {
+            std::process::exit(2);
+        }
+    }
 
     Ok(())
 }
@@ -299,6 +333,7 @@ use diesel::pg::PgConnection;
 use mysten_common::tempdir;
 use reqwest::Url;
 use sui_config::genesis::Genesis;
+use sui_data_store::Node;
 use tokio_util::sync::CancellationToken;
 
 fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> {

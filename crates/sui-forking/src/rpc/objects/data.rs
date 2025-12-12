@@ -4,16 +4,15 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use serde::de::DeserializeOwned;
+use sui_indexer_alt_jsonrpc::context::Context;
 use sui_indexer_alt_reader::object_versions::LatestObjectVersionKey;
 use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
 
-use crate::context::PgContext;
-
 /// Load the contents of the live version of an object from the store and deserialize it as an
 /// `Object`. Returns `None` if the object is deleted, wrapped, or never existed.
 pub async fn load_live(
-    ctx: &PgContext,
+    ctx: &Context,
     object_id: ObjectID,
 ) -> Result<Option<Object>, anyhow::Error> {
     let Some(latest_version) = ctx
@@ -65,7 +64,7 @@ pub async fn load_live(
 /// Fetch the latest version of the object at ID `object_id`, and deserialize its contents as a
 /// Rust type `T`, assuming that it exists and is a Move object (not a package).
 pub async fn load_live_deserialized<T: DeserializeOwned>(
-    ctx: &PgContext,
+    ctx: &Context,
     object_id: ObjectID,
 ) -> Result<T, anyhow::Error> {
     let object = load_live(ctx, object_id).await?.context("No data found")?;

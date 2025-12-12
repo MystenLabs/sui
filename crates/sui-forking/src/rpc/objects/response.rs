@@ -7,6 +7,7 @@ use anyhow::{Context as _, bail};
 use futures::future::OptionFuture;
 use move_core_types::{annotated_value::MoveTypeLayout, language_storage::StructTag};
 use sui_display::v1::Format;
+use sui_indexer_alt_jsonrpc::context::Context;
 use sui_indexer_alt_reader::displays::DisplayKey;
 use sui_json_rpc_types::{
     DisplayFieldsResponse, SuiData, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
@@ -21,7 +22,6 @@ use sui_types::{
 };
 use tokio::join;
 
-use crate::context::PgContext as Context;
 use crate::rpc::objects::data::load_live;
 
 use sui_indexer_alt_jsonrpc::error::{InternalContext, RpcError};

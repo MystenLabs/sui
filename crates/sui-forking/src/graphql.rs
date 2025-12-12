@@ -35,6 +35,17 @@ struct CheckpointResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct LatestCheckpointResponse {
+    checkpoint: CheckpointNumberProtocolVersion,
+}
+
+#[derive(Debug, Deserialize)]
+struct CheckpointNumberProtocolVersion {
+    sequence_number: u64,
+    query: QueryData,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckpointData {
     pub content_bcs: String,
@@ -70,7 +81,7 @@ impl GraphQLClient {
         }
     }
 
-    /// Fetch a checkpoint by sequence number
+    /// Fetch a checkpoint by sequence number. If none is provided, fetch the latest checkpoint.
     pub async fn fetch_checkpoint(&self, sequence_number: u64) -> Result<CheckpointData> {
         let query = format!(
             r#"{{
@@ -195,6 +206,65 @@ impl GraphQLClient {
             .context("No data in GraphQL response")?;
 
         Ok(data.checkpoint.query.protocol_configs.protocol_version)
+    }
+
+    pub async fn fetch_latest_checkpoint_and_protocol_version(&self) -> Result<(u64, u64)> {
+        let query = "{
+              checkpoint {
+                sequenceNumber
+                query {
+                  protocolConfigs {
+                    protocolVersion
+                  }
+                }
+              }
+            }"
+        .to_string();
+
+        let request = GraphQLRequest {
+            query,
+            variables: None,
+        };
+
+        let response = self
+            .client
+            .post(&self.endpoint)
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send GraphQL request")?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unable to read error response".to_string());
+            anyhow::bail!(
+                "GraphQL request failed with status {}: {}",
+                status,
+                error_text
+            );
+        }
+
+        let graphql_response: GraphQLResponse<LatestCheckpointResponse> = response
+            .json()
+            .await
+            .context("Failed to parse GraphQL response")?;
+
+        if let Some(errors) = graphql_response.errors {
+            let error_messages: Vec<String> = errors.into_iter().map(|e| e.message).collect();
+            anyhow::bail!("GraphQL errors: {}", error_messages.join(", "));
+        }
+
+        let data = graphql_response
+            .data
+            .context("No data in GraphQL response")?;
+
+        Ok((
+            data.checkpoint.sequence_number,
+            data.checkpoint.query.protocol_configs.protocol_version,
+        ))
     }
 }
 

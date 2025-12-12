@@ -2,6 +2,7 @@ use anyhow::Context;
 use prometheus::Registry;
 use reqwest::Url;
 use std::path::{Path, PathBuf};
+use sui_futures::service::Service;
 use sui_indexer_alt::{config::IndexerConfig as IndexerAltConfig, setup_indexer};
 use sui_indexer_alt_consistent_store::{args::RpcArgs, config::ServiceConfig, start_service};
 use sui_indexer_alt_framework::{
@@ -10,7 +11,6 @@ use sui_indexer_alt_framework::{
 };
 use sui_pg_db::DbArgs;
 use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 
 pub(crate) struct ConsistentStoreConfig {
     rocksdb_path: PathBuf,
@@ -38,8 +38,7 @@ impl ConsistentStoreConfig {
 pub(crate) async fn start_consistent_store(
     config: ConsistentStoreConfig,
     registry: &Registry,
-    cancel: CancellationToken,
-) -> anyhow::Result<JoinHandle<()>> {
+) -> anyhow::Result<Service> {
     let ConsistentStoreConfig {
         rocksdb_path,
         indexer_args,
@@ -56,7 +55,6 @@ pub(crate) async fn start_consistent_store(
         config.version,
         service_config,
         registry,
-        cancel.child_token(),
     )
     .await
     .context("Failed to start consistent store service")?;

@@ -2,6 +2,7 @@ use anyhow::Context;
 use prometheus::Registry;
 use reqwest::Url;
 use std::path::PathBuf;
+use sui_futures::service::Service;
 use sui_indexer_alt::{config::IndexerConfig as IndexerAltConfig, setup_indexer};
 use sui_indexer_alt_framework::{
     IndexerArgs,
@@ -49,8 +50,7 @@ impl IndexerConfig {
 pub(crate) async fn start_indexer(
     config: IndexerConfig,
     registry: &Registry,
-    cancel: CancellationToken,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Service> {
     let IndexerConfig {
         database_url,
         db_args,
@@ -67,16 +67,11 @@ pub(crate) async fn start_indexer(
         indexer_config,
         None,
         registry,
-        cancel.child_token(),
     )
     .await?;
 
     let pipelines: Vec<_> = indexer.pipelines().collect();
-    let _ = indexer
-        .run()
-        .await
-        .context("Failed to start indexer")
-        .unwrap();
+    let service = indexer.run().await.context("Failed to start indexer")?;
 
-    Ok(())
+    Ok(service)
 }

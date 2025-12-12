@@ -26,13 +26,14 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 
-use crate::context::Context;
 use simulacrum::SimulatorStore;
+use std::sync::Arc;
 use sui_data_store::ObjectStore as _;
+use sui_data_store::stores::{DataStore, FileSystemStore, LruMemoryStore, ReadThroughStore};
 
-mod data_store;
+pub mod data_store;
 
-#[derive(Debug, Default)]
+// #[derive(Debug)]
 pub struct ForkingStore {
     // Checkpoint data
     checkpoints: BTreeMap<CheckpointSequenceNumber, VerifiedCheckpoint>,
@@ -50,13 +51,48 @@ pub struct ForkingStore {
     // Object data
     live_objects: HashMap<ObjectID, SequenceNumber>,
     objects: HashMap<ObjectID, BTreeMap<SequenceNumber, Object>>,
+
+    // Fallback to RPC data store
+    rpc_data_store:
+        Arc<ReadThroughStore<LruMemoryStore, ReadThroughStore<FileSystemStore, DataStore>>>,
+
+    // The checkpoint at which this forked network was forked
+    forked_at_checkpoint: u64,
 }
 
 impl ForkingStore {
-    pub fn new(genesis: &genesis::Genesis) -> Self {
-        let mut store = Self::default();
+    pub fn new(
+        genesis: &genesis::Genesis,
+        forked_at_checkpoint: u64,
+        rpc_data_store: Arc<
+            ReadThroughStore<LruMemoryStore, ReadThroughStore<FileSystemStore, DataStore>>,
+        >,
+    ) -> Self {
+        let mut store =
+            Self::new_with_rpc_data_store_and_checkpoint(rpc_data_store, forked_at_checkpoint);
         store.init_with_genesis(genesis);
         store
+    }
+
+    fn new_with_rpc_data_store_and_checkpoint(
+        rpc_data_store: Arc<
+            ReadThroughStore<LruMemoryStore, ReadThroughStore<FileSystemStore, DataStore>>,
+        >,
+        forked_at_checkpoint: u64,
+    ) -> Self {
+        Self {
+            checkpoints: BTreeMap::new(),
+            checkpoint_digest_to_sequence_number: HashMap::new(),
+            checkpoint_contents: HashMap::new(),
+            transactions: HashMap::new(),
+            effects: HashMap::new(),
+            events: HashMap::new(),
+            epoch_to_committee: vec![],
+            live_objects: HashMap::new(),
+            objects: HashMap::new(),
+            rpc_data_store,
+            forked_at_checkpoint,
+        }
     }
 
     pub fn get_checkpoint_by_sequence_number(
@@ -114,19 +150,16 @@ impl ForkingStore {
         }
         // Fallback to RPC data store if object not found in local store
         else {
-            let Context {
-                pg_context,
-                rpc_data_store,
-                simulacrum,
-                protocol_version,
-                chain,
-                at_checkpoint,
-            } = &self.context;
+            let objs = self
+                .rpc_data_store
+                .get_objects(&vec![sui_data_store::ObjectKey {
+                    object_id: *id,
+                    version_query: sui_data_store::VersionQuery::AtCheckpoint(
+                        self.forked_at_checkpoint,
+                    ),
+                }]);
 
-            let objs = rpc_data_store.get_objects(&vec![sui_data_store::ObjectKey {
-                object_id: *id,
-                version_query: sui_data_store::VersionQuery::AtCheckpoint(at_checkpoint),
-            }]);
+            None
         }
     }
 
