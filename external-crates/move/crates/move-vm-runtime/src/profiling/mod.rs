@@ -16,4 +16,7 @@
 
 pub mod counters;
 
-pub use counters::{BytecodeCounters, BytecodeSnapshot, BYTECODE_COUNTERS};
+pub use counters::{
+    dump_profile_info, dump_profile_info_to_file, BytecodeCounters, BytecodeSnapshot,
+    DEFAULT_PROFILE_FILE, SUI_PROFILE_FILE_ENV, BYTECODE_COUNTERS,
+};

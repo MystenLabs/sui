@@ -14,6 +14,9 @@ pub use verifier::Verifier;
 pub mod executor;
 pub mod verifier;
 
+#[cfg(feature = "profiling")]
+pub use move_vm_runtime_latest::profiling;
+
 mod latest;
 mod replay_cut;
 mod v0;

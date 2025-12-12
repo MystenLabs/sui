@@ -61,6 +61,8 @@ pub struct TxnContextAndEffects {
     pub inner_store: InnerTemporaryStore,      // temporary store used during execution
     pub checkpoint: u64,                       // checkpoint where the transaction was included
     pub protocol_version: u64,                 // protocol version used for execution
+    #[cfg(feature = "profiling")]
+    pub bytecode_profile: sui_execution::profiling::BytecodeSnapshot, // bytecode execution profile
 }
 
 // Entry point. Executes a transaction.
@@ -80,6 +82,11 @@ pub fn execute_transaction_to_effects(
     Error,
 > {
     debug!(op = "execute_tx", phase = "start", "execution");
+
+    // Reset profiling counters before execution
+    #[cfg(feature = "profiling")]
+    sui_execution::profiling::BYTECODE_COUNTERS.reset();
+
     // TODO: Hook up...
     let config_certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
 
@@ -173,6 +180,14 @@ pub fn execute_transaction_to_effects(
         }
     }
 
+    // Capture profiling snapshot after execution and dump to file
+    #[cfg(feature = "profiling")]
+    let bytecode_profile = sui_execution::profiling::BYTECODE_COUNTERS.snapshot();
+    #[cfg(feature = "profiling")]
+    if let Err(e) = sui_execution::profiling::dump_profile_info() {
+        tracing::warn!("Failed to dump profile info: {}", e);
+    }
+
     debug!(op = "execute_tx", phase = "end", "execution");
     Ok((
         result,
@@ -185,6 +200,8 @@ pub fn execute_transaction_to_effects(
             inner_store,
             checkpoint,
             protocol_version: protocol_config.version.as_u64(),
+            #[cfg(feature = "profiling")]
+            bytecode_profile,
         },
     ))
 }
