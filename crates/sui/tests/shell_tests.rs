@@ -79,9 +79,12 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
         std::fs::read_to_string(path)?,
         output.status.success(),
         output.status.code().unwrap_or(!0),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+        String::from_utf8_lossy(&output.stdout), // for windows ...
+        String::from_utf8_lossy(&output.stderr), // for windows ...
     );
+
+    let result = result.replace("\\", "/");
+    let result = result.replace(temp_config_dir.path().to_string_lossy().as_ref(), "<ROOT>");
 
     insta_assert! {
         input_path: path,
