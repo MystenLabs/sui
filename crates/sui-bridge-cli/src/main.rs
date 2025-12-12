@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use alloy::{primitives::Address as EthAddress, providers::Provider};
 use clap::*;
-use ethers::providers::Middleware;
-use ethers::types::Address as EthAddress;
 use fastcrypto::encoding::{Encoding, Hex};
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
@@ -20,6 +19,7 @@ use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::build_sui_transaction;
 use sui_bridge::types::BridgeActionType;
+use sui_bridge::utils::get_eth_provider;
 use sui_bridge::utils::{EthBridgeContracts, get_eth_contracts};
 use sui_bridge::utils::{
     examine_key, generate_bridge_authority_key_and_write_to_file,
@@ -162,7 +162,7 @@ async fn main() -> anyhow::Result<()> {
 
             // Handle eth side
             // TODO assert chain id returned from rpc matches chain_id
-            let eth_signer_client = config.eth_signer();
+            let eth_signer_provider = config.eth_signer_provider();
             // Create BridgeAction
             let eth_action = make_action(chain_id, &cmd);
             println!("Action to execute on Eth: {:?}", eth_action);
@@ -177,21 +177,24 @@ async fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
             let contract_address = select_contract_address(&config, &cmd);
-            let tx = build_eth_transaction(
-                contract_address,
-                eth_signer_client.clone(),
-                certified_action,
-            )
-            .await
-            .expect("Failed to build eth transaction");
+            let tx = build_eth_transaction(contract_address, certified_action)
+                .await
+                .expect("Failed to build eth transaction");
             println!("sending Eth tx: {:?}", tx);
-            match tx.send().await {
-                Ok(tx_hash) => {
-                    println!("Transaction sent with hash: {:?}", tx_hash);
+            let tx_receipt_result = eth_signer_provider
+                .send_transaction(tx)
+                .await?
+                .get_receipt()
+                .await;
+            match tx_receipt_result {
+                Ok(tx_receipt) => {
+                    println!(
+                        "Transaction sent with hash: {:?}",
+                        tx_receipt.transaction_hash
+                    );
                 }
                 Err(err) => {
-                    let revert = err.as_revert();
-                    println!("Transaction reverted: {:?}", revert);
+                    println!("Transaction reverted: {:?}", err);
                 }
             };
 
@@ -211,19 +214,15 @@ async fn main() -> anyhow::Result<()> {
                     "Network or bridge proxy address must be provided"
                 )),
             }?;
-            let provider = Arc::new(
-                ethers::prelude::Provider::<ethers::providers::Http>::try_from(eth_rpc_url)
-                    .unwrap()
-                    .interval(std::time::Duration::from_millis(2000)),
-            );
-            let chain_id = provider.get_chainid().await?;
+            let eth_provider = get_eth_provider(&eth_rpc_url)?;
+            let chain_id = eth_provider.get_chain_id().await?;
             let EthBridgeContracts {
                 bridge,
                 committee,
                 limiter,
                 vault,
                 config,
-            } = get_eth_contracts(bridge_proxy, &provider).await?;
+            } = get_eth_contracts(bridge_proxy, eth_provider.clone()).await?;
             let message_type = BridgeActionType::EvmContractUpgrade as u8;
             let bridge_upgrade_next_nonce: u64 = bridge.nonces(message_type).call().await?;
             let committee_upgrade_next_nonce: u64 = committee.nonces(message_type).call().await?;
@@ -256,12 +255,12 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
 
             let print = OutputEthBridge {
-                chain_id: chain_id.as_u64(),
-                bridge_proxy: bridge.address(),
-                committee_proxy: committee.address(),
-                limiter_proxy: limiter.address(),
-                config_proxy: config.address(),
-                vault: vault.address(),
+                chain_id,
+                bridge_proxy: *bridge.address(),
+                committee_proxy: *committee.address(),
+                limiter_proxy: *limiter.address(),
+                config_proxy: *config.address(),
+                vault: *vault.address(),
                 nonces: Nonces {
                     token_transfer: token_transfer_next_nonce,
                     blocklist_update: blocklist_update_nonce,
