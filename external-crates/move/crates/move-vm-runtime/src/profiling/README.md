@@ -2,6 +2,42 @@
 
 This module provides bytecode execution frequency counters for profile-guided optimization (PGO) of the Move VM interpreter.
 
+## Advantages of Instruction Profiling
+
+Instruction profiling provides insights for optimizing interpreter performance:
+
+### 1. Data-Driven Optimization Decisions
+
+- **Validate optimization effectiveness**: Profile data reveals actual instruction frequencies from real workloads. We can then compare before/after profiles to measure actual improvement.
+
+### 2. Dispatch Loop Optimization
+
+- **Match arm reordering**: Place the most frequent opcodes first in the dispatch switch/match statement. Modern CPUs predict forward branches as not-taken, so placing hot cases first reduces branch mispredictions
+
+### 3. Superinstruction Design
+
+- **Identify common sequences**: Profile data combined with trace analysis reveals frequently occurring instruction pairs or sequences (e.g., COPY_LOC followed by CALL)
+- **Fuse hot paths**: Create specialized superinstructions that handle common sequences in a single dispatch, reducing interpreter overhead
+- **Measure fusion benefits**: Compare profiles before and after superinstruction implementation
+
+### 4. Inline Caching and Specialization
+
+- **Type specialization**: Identify which instructions would benefit from type-specialized fast paths
+- **Inline caching candidates**: Determine which CALL sites are monomorphic and suitable for inline caching
+- **Polymorphic inline caches**: Profile data guides PIC slot allocation based on actual call-site behavior
+
+### 5. Memory Layout Optimization
+
+- **Hot/cold code separation**: Place frequently executed instruction handlers in contiguous memory to improve instruction cache locality
+- **Prefetching hints**: Profile data informs where to insert prefetch instructions for the next likely opcode
+- **Branch target alignment**: Align hot instruction handlers to cache line boundaries
+
+### 6. Workload Characterization
+
+- **Contract analysis**: Understand which operations dominate specific smart contracts
+- **Benchmark validation**: Ensure synthetic benchmarks reflect production instruction distributions
+- **Regression detection**: Detect unexpected changes in instruction profiles that might indicate bugs or performance regressions
+
 ## Overview
 
 The profiling infrastructure tracks how often each bytecode instruction is executed. This data can be used to:
@@ -97,6 +133,56 @@ Global static instance of `BytecodeCounters`. Use this for all profiling operati
 - `total() -> u64` - Get total instruction count
 - `sorted_by_frequency() -> Vec<(Opcodes, u64)>` - Get opcodes sorted by count
 - `format_report() -> String` - Generate human-readable report
+
+## Sui Integration
+
+### sui-replay-2
+
+The `sui-replay-2` crate integrates profiling to capture bytecode execution profiles for replayed transactions.
+
+#### Enabling Profiling in sui-replay-2
+
+```bash
+cargo build -p sui-replay-2 --features profiling
+```
+
+#### Feature Propagation
+
+The profiling feature propagates through the crate hierarchy:
+
+```
+sui-replay-2 --features profiling
+    └── sui-execution --features profiling
+            └── move-vm-runtime-latest --features profiling
+```
+
+#### Accessing Profile Data
+
+When profiling is enabled, the `TxnContextAndEffects` struct includes a `bytecode_profile` field:
+
+```rust
+pub struct TxnContextAndEffects {
+    // ... other fields ...
+    #[cfg(feature = "profiling")]
+    pub bytecode_profile: sui_execution::profiling::BytecodeSnapshot,
+}
+```
+
+The profile is captured automatically after each transaction execution in `execute_transaction_to_effects()`. Counters are reset before each transaction, so the snapshot represents only that transaction's execution.
+
+#### Example Usage
+
+```rust
+use sui_replay_2::execution::execute_transaction_to_effects;
+
+let (result, context) = execute_transaction_to_effects(txn, epoch_store, object_store, &mut None)?;
+
+#[cfg(feature = "profiling")]
+{
+    println!("Transaction bytecode profile:");
+    println!("{}", context.bytecode_profile.format_report());
+}
+```
 
 ## Future Work
 
