@@ -633,6 +633,19 @@ impl AuthorityPerpetualTables {
         Ok(self.effects.get(&effect_digest)?)
     }
 
+    pub(crate) fn was_transaction_executed_in_last_epoch(
+        &self,
+        digest: &TransactionDigest,
+        current_epoch: EpochId,
+    ) -> bool {
+        if current_epoch == 0 {
+            return false;
+        }
+        self.executed_transaction_digests
+            .contains_key(&(current_epoch - 1, *digest))
+            .expect("db error")
+    }
+
     // DEPRECATED as the backing table has been moved to authority_per_epoch_store.
     // Please do not add new accessors/callsites.
     pub fn get_checkpoint_sequence_number(
