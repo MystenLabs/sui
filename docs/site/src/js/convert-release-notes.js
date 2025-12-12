@@ -4,7 +4,7 @@ const https = require('https');
 
 const docsDir = '../../docs';
 const releaseNotesDir = '../../release-notes/';
-const outputReleaseNotesPath = '../../docs/release-notes.mdx';
+const outputReleaseNotesPath = '../../docs/content/references/release-notes.mdx';
 
 const excludeDirs = ['node_modules', '.git', 'build', 'dist', '.docusaurus'];
 
@@ -281,6 +281,7 @@ async function consolidateReleaseNotes() {
 sidebar_position: 999
 sidebar_label: 'Release Notes'
 title: 'Release Notes'
+hide-table-of-contents: true
 ---
 
 import Tabs from '@theme/Tabs';
