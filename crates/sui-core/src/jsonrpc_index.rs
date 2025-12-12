@@ -282,6 +282,23 @@ impl IndexStoreTables {
 
         Ok(())
     }
+
+    pub fn get_dynamic_fields_iterator(
+        &self,
+        object: ObjectID,
+        cursor: Option<ObjectID>,
+    ) -> impl Iterator<Item = Result<(ObjectID, DynamicFieldInfo), TypedStoreError>> + '_ {
+        debug!(?object, "get_dynamic_fields");
+        // The object id 0 is the smallest possible
+        let iter_lower_bound = (object, cursor.unwrap_or(ObjectID::ZERO));
+        let iter_upper_bound = (object, ObjectID::MAX);
+        self.dynamic_field_index
+            .safe_iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
+            // skip an extra b/c the cursor is exclusive
+            .skip(usize::from(cursor.is_some()))
+            .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0.0 == object))
+            .map_ok(|((_, c), object_info)| (c, object_info))
+    }
 }
 
 pub struct IndexStore {
@@ -1446,18 +1463,7 @@ impl IndexStore {
         cursor: Option<ObjectID>,
     ) -> SuiResult<impl Iterator<Item = Result<(ObjectID, DynamicFieldInfo), TypedStoreError>> + '_>
     {
-        debug!(?object, "get_dynamic_fields");
-        // The object id 0 is the smallest possible
-        let iter_lower_bound = (object, cursor.unwrap_or(ObjectID::ZERO));
-        let iter_upper_bound = (object, ObjectID::MAX);
-        Ok(self
-            .tables
-            .dynamic_field_index
-            .safe_iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
-            // skip an extra b/c the cursor is exclusive
-            .skip(usize::from(cursor.is_some()))
-            .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0.0 == object))
-            .map_ok(|((_, c), object_info)| (c, object_info)))
+        Ok(self.tables.get_dynamic_fields_iterator(object, cursor))
     }
 
     #[instrument(skip(self))]

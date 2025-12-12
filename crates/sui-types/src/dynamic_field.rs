@@ -277,10 +277,10 @@ where
     let parent: SuiAddress = parent.into();
     let k_tag_bytes = bcs::to_bytes(key_type_tag)?;
     tracing::trace!(
-        "Deriving dynamic field ID for parent={:?}, key={:?}, key_type_tag={:?}",
+        "Deriving dynamic field ID for parent={:?}, key={:?}, key_type_tag={}",
         parent,
         key_bytes,
-        key_type_tag,
+        key_type_tag.to_canonical_display(true),
     );
 
     // hash(parent || len(key) || key || key_type_tag)
@@ -333,7 +333,7 @@ where
     Ok(DynamicFieldKey(parent_id, key.clone(), K::get_type_tag())
         .into_unbounded_id()?
         .expect_object(key, object_store)?
-        .as_object())
+        .into_object())
 }
 
 /// Similar to `get_dynamic_field_object_from_store`, but returns the value in the field instead of
@@ -594,7 +594,7 @@ impl<K> DynamicFieldObject<K> {
     }
 
     /// Get the underlying Object.
-    pub fn as_object(self) -> Object {
+    pub fn into_object(self) -> Object {
         self.0
     }
 }

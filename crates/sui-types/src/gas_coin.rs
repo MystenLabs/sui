@@ -95,6 +95,14 @@ mod checked {
                 && GAS::is_gas_type(&s.type_params[0])
         }
 
+        pub fn is_gas_balance_type(type_param: &TypeTag) -> bool {
+            if let TypeTag::Struct(s) = type_param {
+                Self::is_gas_balance(s)
+            } else {
+                false
+            }
+        }
+
         pub fn id(&self) -> &ObjectID {
             self.0.id()
         }

@@ -200,8 +200,16 @@ pub async fn execute_transaction(
         .with_read_mask(FieldMask::from_paths(["*"]));
 
     let response = client
-        .execute_transaction_and_wait_for_checkpoint(exec_request, Duration::from_secs(10))
+        .execute_transaction_and_wait_for_checkpoint(exec_request, Duration::from_secs(20))
         .await
+        .inspect_err(|e| {
+            if let sui_rpc::client::ExecuteAndWaitError::CheckpointTimeout(response) = e {
+                eprintln!(
+                    "txn status: {:?}",
+                    response.get_ref().transaction().effects().status()
+                );
+            }
+        })
         .ok() // errors can be huge, avoid printing them if unwrap fails
         .unwrap()
         .into_inner()

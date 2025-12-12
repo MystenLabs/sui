@@ -905,7 +905,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_budget_none() 
     };
 
     let details = Some(
-        json!({ "error": "ExecutionError: Kind: INSUFFICIENT_COIN_BALANCE, Description: No description" }),
+        json!({ "error": "ExecutionError: Kind: INSUFFICIENT_COIN_BALANCE, Description: InsufficientCoinBalance in command 1" }),
     );
     assert_eq!(
         err,
@@ -1090,7 +1090,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_balance_with_budget() 
         .await;
 
     let details = Some(json!({
-        "error": "ExecutionError: Kind: INSUFFICIENT_COIN_BALANCE, Description: No description"
+        "error": "ExecutionError: Kind: INSUFFICIENT_COIN_BALANCE, Description: InsufficientCoinBalance in command 1"
     }));
     let Some(Err(e)) = resps.metadata else {
         panic!("Expected metadata to exist and error")
@@ -1297,7 +1297,7 @@ async fn test_pay_with_many_small_coins_fail_insufficient_budget() -> Result<()>
             description: None,
             retriable: false,
             details: Some(
-                json!({"error": "ExecutionError: Kind: INSUFFICIENT_GAS, Description: No description"})
+                json!({"error": "ExecutionError: Kind: INSUFFICIENT_GAS, Description: InsufficientGas"})
             )
         }
     );

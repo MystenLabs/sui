@@ -9,14 +9,12 @@ use prost::Message;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::merge::Merge;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::Bcs;
 use sui_rpc::proto::sui::rpc::v2::DynamicField;
 use sui_rpc::proto::sui::rpc::v2::ErrorReason;
 use sui_rpc::proto::sui::rpc::v2::ListDynamicFieldsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListDynamicFieldsResponse;
-use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_rpc::proto::sui::rpc::v2::dynamic_field::DynamicFieldKind;
 use sui_sdk_types::Address;
 use sui_types::base_types::ObjectID;
@@ -255,7 +253,7 @@ fn load_dynamic_field(
     }
 
     if let Some(submask) = read_mask.subtree(DynamicField::FIELD_OBJECT_FIELD) {
-        message.field_object = Some(Object::merge_from(&field_object, &submask));
+        message.set_field_object(service.render_object_to_proto(&field_object, &submask));
     }
 
     match field.value_metadata()? {
@@ -286,7 +284,7 @@ fn load_dynamic_field(
                 }
 
                 if let Some(submask) = read_mask.subtree(DynamicField::CHILD_OBJECT_FIELD) {
-                    message.child_object = Some(Object::merge_from(&object, &submask));
+                    message.set_child_object(service.render_object_to_proto(&object, &submask));
                 }
             }
         }

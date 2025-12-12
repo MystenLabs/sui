@@ -70,7 +70,10 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
           ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-      - run: cargo xlint
+      - name: Run license check
+        run: cargo xlint
+      - name: Git checks
+        run: scripts/git-checks.sh
 
   test:
     needs: [diff, rustfmt, clippy]
