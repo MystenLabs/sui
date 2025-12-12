@@ -139,6 +139,7 @@ const concepts = [
 				items: [
 					'concepts/cryptography/nautilus/nautilus-design',
 					'concepts/cryptography/nautilus/using-nautilus',
+					'concepts/cryptography/nautilus/nautilus-seal',
 				],
 			},
 			'concepts/cryptography/system/checkpoint-verification',
