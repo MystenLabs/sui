@@ -95,6 +95,7 @@ public fun create_from_rational(numerator: u64, denominator: u64): FixedPoint32 
 }
 
 /// Create a fixedpoint value from a raw value.
+#[ext(pure)]
 public fun create_from_raw_value(value: u64): FixedPoint32 {
     FixedPoint32 { value }
 }
@@ -102,6 +103,7 @@ public fun create_from_raw_value(value: u64): FixedPoint32 {
 /// Accessor for the raw u64 value. Other less common operations, such as
 /// adding or subtracting FixedPoint32 values, can be done using the raw
 /// values directly.
+#[ext(pure)]
 public fun get_raw_value(num: FixedPoint32): u64 {
     num.value
 }
