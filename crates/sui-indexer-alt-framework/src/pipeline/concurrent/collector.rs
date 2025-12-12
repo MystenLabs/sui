@@ -33,6 +33,25 @@ struct PendingCheckpoint<H: Handler> {
     watermark: WatermarkPart,
 }
 
+/// Batch being accumulated across ticks. Persists until the handler returns `Ready` or `Pending`.
+struct InProgressBatch<H: Handler> {
+    inner: H::Batch,
+    watermark: Vec<WatermarkPart>,
+    len: usize,
+    status: BatchStatus,
+}
+
+impl<H: Handler> Default for InProgressBatch<H> {
+    fn default() -> Self {
+        Self {
+            inner: H::Batch::default(),
+            watermark: Vec::new(),
+            len: 0,
+            status: BatchStatus::Pending,
+        }
+    }
+}
+
 impl<H: Handler> PendingCheckpoint<H> {
     /// Whether there are values left to commit from this indexed checkpoint.
     fn is_empty(&self) -> bool {
@@ -126,6 +145,9 @@ pub(super) fn collector<H: Handler + 'static>(
         let mut pending: BTreeMap<u64, PendingCheckpoint<H>> = BTreeMap::new();
         let mut pending_rows = 0;
 
+        // Batch being accumulated, persisted across ticks when handler returns NotReady.
+        let mut batch = InProgressBatch::<H>::default();
+
         info!(pipeline = H::NAME, "Starting collector");
 
         loop {
@@ -142,26 +164,24 @@ pub(super) fn collector<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    let mut batch = H::Batch::default();
-                    let mut watermark = Vec::new();
-                    let mut batch_len = 0;
+                    let initial_batch_len = batch.len;
 
                     loop {
                         let Some(mut entry) = pending.first_entry() else {
                             break;
                         };
 
-                        if watermark.len() >= H::MAX_WATERMARK_UPDATES {
+                        if batch.watermark.len() >= H::MAX_WATERMARK_UPDATES {
                             break;
                         }
 
                         let indexed = entry.get_mut();
                         let before = indexed.values.len();
-                        let status = handler.batch(&mut batch, &mut indexed.values);
+                        let status = handler.batch(&mut batch.inner, &mut indexed.values);
                         let taken = before - indexed.values.len();
 
-                        batch_len += taken;
-                        watermark.push(indexed.watermark.take(taken));
+                        batch.len += taken;
+                        batch.watermark.push(indexed.watermark.take(taken));
                         if indexed.is_empty() {
                             checkpoint_lag_reporter.report_lag(
                                 indexed.watermark.checkpoint(),
@@ -170,50 +190,74 @@ pub(super) fn collector<H: Handler + 'static>(
                             entry.remove();
                         }
 
-                        if status == BatchStatus::Ready {
-                            // Batch is full, send it
-                            break;
+                        // Update batch.status: Ready takes precedence and exits loop,
+                        // NotReady overrides Pending but continues gathering.
+                        match status {
+                            BatchStatus::Ready => {
+                                batch.status = BatchStatus::Ready;
+                                break;
+                            }
+                            BatchStatus::NotReady => batch.status = BatchStatus::NotReady,
+                            BatchStatus::Pending => {}
                         }
                     }
-                    pending_rows -= batch_len;
-                    let elapsed = guard.stop_and_record();
-                    debug!(
-                        pipeline = H::NAME,
-                        elapsed_ms = elapsed * 1000.0,
-                        rows = batch_len,
-                        pending_rows = pending_rows,
-                        "Gathered batch",
-                    );
 
-                    metrics
-                        .total_collector_batches_created
-                        .with_label_values(&[H::NAME])
-                        .inc();
+                    // Only decrement by newly gathered rows (not the carried-over rows).
+                    pending_rows -= batch.len - initial_batch_len;
 
-                    metrics
-                        .collector_batch_size
-                        .with_label_values(&[H::NAME])
-                        .observe(batch_len as f64);
-
-                    let batched_rows = BatchedRows {
-                        batch,
-                        batch_len,
-                        watermark,
-                    };
-
-                    if tx.send(batched_rows).await.is_err() {
-                        info!(pipeline = H::NAME, "Committer closed channel, stopping collector");
-                        break;
-                    }
-
-                    if pending_rows > 0 {
-                        poll.reset_immediately();
-                    } else if rx.is_closed() && rx.is_empty() {
-                        info!(
+                    // Send unless NotReady (which means handler needs more data).
+                    if batch.status != BatchStatus::NotReady {
+                        let elapsed = guard.stop_and_record();
+                        debug!(
                             pipeline = H::NAME,
-                            "Processor closed channel, pending rows empty, stopping collector",
+                            elapsed_ms = elapsed * 1000.0,
+                            rows = batch.len,
+                            pending_rows = pending_rows,
+                            "Gathered batch",
                         );
-                        break;
+
+                        metrics
+                            .total_collector_batches_created
+                            .with_label_values(&[H::NAME])
+                            .inc();
+
+                        metrics
+                            .collector_batch_size
+                            .with_label_values(&[H::NAME])
+                            .observe(batch.len as f64);
+
+                        // Take the batch and reset to default for the next tick.
+                        let batch = std::mem::take(&mut batch);
+                        let batched_rows = BatchedRows {
+                            batch: batch.inner,
+                            batch_len: batch.len,
+                            watermark: batch.watermark,
+                        };
+
+                        if tx.send(batched_rows).await.is_err() {
+                            info!(pipeline = H::NAME, "Committer closed channel, stopping collector");
+                            break;
+                        }
+
+                        if pending_rows > 0 {
+                            poll.reset_immediately();
+                        } else if rx.is_closed() && rx.is_empty() {
+                            info!(
+                                pipeline = H::NAME,
+                                "Processor closed channel, pending rows empty, stopping collector",
+                            );
+                            break;
+                        }
+                    } else {
+                        // Batch stays as-is for the next tick (status remains NotReady).
+                        let elapsed = guard.stop_and_record();
+                        debug!(
+                            pipeline = H::NAME,
+                            elapsed_ms = elapsed * 1000.0,
+                            rows = batch.len,
+                            pending_rows = pending_rows,
+                            "Batch not ready, carrying over to next tick",
+                        );
                     }
                 }
 
@@ -863,5 +907,107 @@ mod tests {
 
         cancel.cancel();
         collector.await.unwrap();
+    }
+
+    /// Test handler that returns NotReady until a specific batch size is reached, then Ready.
+    /// This simulates the backfill handler's behavior where batches must reach exact boundaries.
+    struct NotReadyHandler {
+        ready_at_size: usize,
+    }
+
+    #[async_trait]
+    impl Processor for NotReadyHandler {
+        type Value = Entry;
+        const NAME: &'static str = "not_ready_handler";
+        const FANOUT: usize = 1;
+
+        async fn process(&self, _checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![])
+        }
+    }
+
+    #[async_trait]
+    impl Handler for NotReadyHandler {
+        type Store = Db;
+        type Batch = Vec<Entry>;
+
+        const MIN_EAGER_ROWS: usize = 1;
+        const MAX_PENDING_ROWS: usize = 10000;
+
+        fn batch(
+            &self,
+            batch: &mut Self::Batch,
+            values: &mut std::vec::IntoIter<Self::Value>,
+        ) -> BatchStatus {
+            batch.extend(values);
+            if batch.len() >= self.ready_at_size {
+                BatchStatus::Ready
+            } else {
+                BatchStatus::NotReady
+            }
+        }
+
+        async fn commit<'a>(
+            &self,
+            _batch: &Self::Batch,
+            _conn: &mut Connection<'a>,
+        ) -> anyhow::Result<usize> {
+            Ok(0)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_collector_carries_over_not_ready_batch() {
+        let (processor_tx, processor_rx) = mpsc::channel(10);
+        let (collector_tx, mut collector_rx) = mpsc::channel(10);
+        let main_reader_lo = Arc::new(SetOnce::new_with(Some(AtomicU64::new(0))));
+        let cancel = CancellationToken::new();
+
+        // Handler returns Ready only when batch has 5 entries.
+        let handler = Arc::new(NotReadyHandler { ready_at_size: 5 });
+        let config = CommitterConfig {
+            collect_interval_ms: 100, // Short interval for testing
+            ..Default::default()
+        };
+        let _collector = collector::<NotReadyHandler>(
+            handler,
+            config,
+            processor_rx,
+            collector_tx,
+            main_reader_lo,
+            test_metrics(),
+            cancel.clone(),
+        );
+
+        // Consume the initial empty batch from collector startup.
+        let initial_batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
+        assert_eq!(initial_batch.batch_len, 0);
+
+        // Send 2 entries - should return NotReady and carry over.
+        let data1 = IndexedCheckpoint::new(0, 1, 10, 1000, vec![Entry; 2]);
+        processor_tx.send(data1).await.unwrap();
+
+        // Wait for a few ticks - batch should NOT be sent because NotReady.
+        expect_timeout(&mut collector_rx, Duration::from_millis(300)).await;
+
+        // Send 2 more entries - still below threshold, should still carry over.
+        let data2 = IndexedCheckpoint::new(0, 2, 20, 2000, vec![Entry; 2]);
+        processor_tx.send(data2).await.unwrap();
+
+        // Wait for a few ticks - batch should still NOT be sent.
+        expect_timeout(&mut collector_rx, Duration::from_millis(300)).await;
+
+        // Send 1 more entry - now at threshold of 5, should return Ready and send.
+        let data3 = IndexedCheckpoint::new(0, 3, 30, 3000, vec![Entry; 1]);
+        processor_tx.send(data3).await.unwrap();
+
+        // Now we should receive the batch with all 5 entries.
+        let batch = recv_with_timeout(&mut collector_rx, Duration::from_secs(1)).await;
+        assert_eq!(batch.batch_len, 5);
+
+        // Watermarks should include all 3 checkpoints.
+        assert_eq!(batch.watermark.len(), 3);
+
+        cancel.cancel();
     }
 }

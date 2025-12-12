@@ -36,10 +36,13 @@ mod reader_watermark;
 /// Status returned by `Handler::batch` to indicate whether the batch is ready to be committed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BatchStatus {
-    /// The batch can accept more values.
+    /// The batch can accept more values, but can also be committed now.
     Pending,
-    /// The batch is full and should be committed.
+    /// The batch is full and must be committed immediately.
     Ready,
+    /// The batch needs more data to be complete and cannot be committed. Continue gathering
+    /// from other checkpoints.
+    NotReady,
 }
 
 /// Handlers implement the logic for a given indexing pipeline: How to process checkpoint data (by
