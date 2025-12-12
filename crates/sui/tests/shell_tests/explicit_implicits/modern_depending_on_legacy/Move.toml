@@ -1,0 +1,5 @@
+[package]
+name = "modern_depending_on_legacy"
+
+[dependencies]
+legacy_can_use_legacy = { local = "../legacy_can_use_legacy" }
