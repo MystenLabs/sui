@@ -1,5 +1,6 @@
 Command `build -v`:
 BUILDING build_include_exclude_stdlib
+[NOTE] Dependencies on Sui, MoveStdlib, Bridge, DeepBook, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on MoveStdlib. Consider removing these dependencies from `Move.toml`.
 error[E03002]: unbound module
   ┌─ ./sources/UseSigner.move:2:9
   │
@@ -15,3 +16,4 @@ error[E03006]: unexpected name in this position
 Command `build --test -v`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING build_include_exclude_stdlib
+[NOTE] Dependencies on Sui, MoveStdlib, Bridge, DeepBook, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on MoveStdlib. Consider removing these dependencies from `Move.toml`.
