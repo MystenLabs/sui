@@ -114,6 +114,20 @@ pub struct Module {
     pub constants: ArenaVec<Constant>,
 }
 
+impl Drop for Module {
+    #![allow(unsafe_code)]
+    fn drop(&mut self) {
+        // Manually drop all NativeFunction Arc references to prevent memory leaks.
+        //
+        // ArenaVec uses ManuallyDrop and does NOT call drop on its elements.
+        // This means Function.native (which contains Arc<UnboxedNativeFunction>)
+        // would leak if we don't explicitly handle it.
+        for function in self.functions.0.drain(..) {
+            drop(function);
+        }
+    }
+}
+
 // A runtime constant
 #[derive(Debug)]
 pub struct Constant {
@@ -137,12 +151,21 @@ pub struct Function {
     pub(crate) locals: ArenaVec<ArenaType>,
     pub(crate) return_: ArenaVec<ArenaType>,
     pub(crate) type_parameters: ArenaVec<AbilitySet>,
-    // TODO(vm-rewrite): This field probably leaks
+    // NOTE: This field is manually dropped in Module::drop() to prevent Arc leaks
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
     pub name: VirtualTableKey,
     pub locals_len: usize,
     pub jump_tables: ArenaVec<VariantJumpTable>,
+}
+
+impl Drop for Function {
+    fn drop(&mut self) {
+        // Take ownership of the Arc and drop it
+        if let Some(native_fn) = self.native.take() {
+            drop(native_fn);
+        }
+    }
 }
 
 // A variant jump table -- note that these are only full at the moment.
