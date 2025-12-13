@@ -20,6 +20,7 @@ use std::sync::Arc;
 use sui_bridge::abi::EthBridgeCommittee;
 use sui_bridge::abi::{EthSuiBridge, eth_sui_bridge};
 use sui_bridge::crypto::BridgeAuthorityPublicKeyBytes;
+use sui_bridge::encoding::TOKEN_TRANSFER_MESSAGE_VERSION_V2;
 use sui_bridge::error::BridgeResult;
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::types::BridgeAction;
@@ -694,6 +695,7 @@ async fn claim_on_eth(
         return Ok(());
     }
     let parsed_message = parsed_message.unwrap();
+    let message_version = parsed_message.message_version;
     let sigs = sui_bridge_client
         .get_token_transfer_action_onchain_signatures_until_success(sui_chain_id, seq_num)
         .await;
@@ -712,7 +714,11 @@ async fn claim_on_eth(
         Arc::new(config.eth_signer().clone()),
     );
     let message = eth_sui_bridge::Message::from(parsed_message);
-    let tx = eth_sui_bridge.transfer_bridged_tokens_with_signatures(signatures, message);
+    let tx = if message_version == TOKEN_TRANSFER_MESSAGE_VERSION_V2 {
+        eth_sui_bridge.transfer_bridged_tokens_with_signatures_v2(signatures, message)
+    } else {
+        eth_sui_bridge.transfer_bridged_tokens_with_signatures(signatures, message)
+    };
     if dry_run {
         let tx = tx.tx;
         let resp = config.eth_signer.estimate_gas(&tx, None).await;

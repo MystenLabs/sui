@@ -343,7 +343,9 @@ where
         match &action {
             BridgeAction::SuiToEthBridgeAction(_)
             | BridgeAction::SuiToEthTokenTransfer(_)
-            | BridgeAction::EthToSuiBridgeAction(_) => (),
+            | BridgeAction::SuiToEthTokenTransferV2(_)
+            | BridgeAction::EthToSuiBridgeAction(_)
+            | BridgeAction::EthToSuiTokenTransferV2(_) => (),
             _ => unreachable!("Non token transfer action should not reach here"),
         };
 
@@ -600,20 +602,26 @@ where
                 relevant_events.iter().for_each(|e| {
                     if e.type_ == *TokenTransferClaimed.get().unwrap() {
                         match action {
-                            BridgeAction::EthToSuiBridgeAction(_) => {
+                            BridgeAction::EthToSuiBridgeAction(_)
+                            | BridgeAction::EthToSuiTokenTransferV2(_) => {
                                 metrics.eth_sui_token_transfer_claimed.inc();
                             }
-                            BridgeAction::SuiToEthBridgeAction(_) => {
+                            BridgeAction::SuiToEthBridgeAction(_)
+                            | BridgeAction::SuiToEthTokenTransfer(_)
+                            | BridgeAction::SuiToEthTokenTransferV2(_) => {
                                 metrics.sui_eth_token_transfer_claimed.inc();
                             }
                             _ => error!("Unexpected action type for claimed event: {:?}", action),
                         }
                     } else if e.type_ == *TokenTransferApproved.get().unwrap() {
                         match action {
-                            BridgeAction::EthToSuiBridgeAction(_) => {
+                            BridgeAction::EthToSuiBridgeAction(_)
+                            | BridgeAction::EthToSuiTokenTransferV2(_) => {
                                 metrics.eth_sui_token_transfer_approved.inc();
                             }
-                            BridgeAction::SuiToEthBridgeAction(_) => {
+                            BridgeAction::SuiToEthBridgeAction(_)
+                            | BridgeAction::SuiToEthTokenTransfer(_)
+                            | BridgeAction::SuiToEthTokenTransferV2(_) => {
                                 metrics.sui_eth_token_transfer_approved.inc();
                             }
                             _ => error!("Unexpected action type for approved event: {:?}", action),

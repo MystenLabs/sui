@@ -537,6 +537,35 @@ impl DataMapper<RawEthData, ProcessedTxnData> for EthDataMapper {
                         }),
                     }));
                 }
+
+                EthSuiBridgeEvents::TokensDepositedV2Filter(bridge_event) => {
+                    info!(
+                        "Observed Eth Deposit at block: {}, tx_hash: {}",
+                        log.block_number(),
+                        log.tx_hash
+                    );
+                    self.metrics.total_eth_token_deposited.inc();
+                    processed_txn_data.push(ProcessedTxnData::TokenTransfer(TokenTransfer {
+                        chain_id: bridge_event.source_chain_id,
+                        nonce: bridge_event.nonce,
+                        block_height: log.block_number(),
+                        timestamp_ms,
+                        txn_hash: txn_hash.clone(),
+                        txn_sender: txn_sender.clone(),
+                        status: TokenTransferStatus::Deposited,
+                        gas_usage: gas.as_u64() as i64,
+                        data_source: BridgeDataSource::ETH,
+                        is_finalized,
+                        data: Some(TokenTransferData {
+                            sender_address: txn_sender.clone(),
+                            destination_chain: bridge_event.destination_chain_id,
+                            recipient_address: bridge_event.recipient_address.to_vec(),
+                            token_id: bridge_event.token_id,
+                            amount: bridge_event.sui_adjusted_amount,
+                            is_finalized,
+                        }),
+                    }));
+                }
                 EthSuiBridgeEvents::TokensClaimedFilter(bridge_event) => {
                     info!(
                         "Observed Eth Claim at block: {}, tx_hash: {}",

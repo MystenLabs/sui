@@ -4483,6 +4483,9 @@ BridgeMessageKey
 TokenTransferPayload
 	public struct
 	0xb::message
+TokenTransferPayloadV2
+	public struct
+	0xb::message
 EmergencyOp
 	public struct
 	0xb::message
@@ -4504,6 +4507,12 @@ ParsedTokenTransferMessage
 extract_token_bridge_payload
 	public fun
 	0xb::message
+extract_token_bridge_payload_v2
+	public fun
+	0xb::message
+to_token_payload_v1
+	public(package) fun
+	0xb::message
 extract_emergency_op_payload
 	public fun
 	0xb::message
@@ -4523,6 +4532,9 @@ serialize_message
 	public fun
 	0xb::message
 create_token_bridge_message
+	public fun
+	0xb::message
+create_token_bridge_message_v2
 	public fun
 	0xb::message
 create_emergency_op_message
@@ -4573,6 +4585,9 @@ token_type
 token_amount
 	public fun
 	0xb::message
+timestamp_ms
+	public fun
+	0xb::message
 emergency_op_type
 	public fun
 	0xb::message
@@ -4619,6 +4634,9 @@ required_voting_power
 	public fun
 	0xb::message
 to_parsed_token_transfer_message
+	public fun
+	0xb::message
+token_transfer_message_version
 	public fun
 	0xb::message
 reverse_bytes
@@ -4711,6 +4729,9 @@ BridgeInner
 TokenDepositedEvent
 	public struct
 	0xb::bridge
+TokenDepositedEventV2
+	public struct
+	0xb::bridge
 EmergencyOpEvent
 	public struct
 	0xb::bridge
@@ -4750,6 +4771,9 @@ register_foreign_token
 send_token
 	public fun
 	0xb::bridge
+send_token_v2
+	public fun
+	0xb::bridge
 approve_token_transfer
 	public fun
 	0xb::bridge
@@ -4775,6 +4799,9 @@ load_inner_mut
 	fun
 	0xb::bridge
 claim_token_internal
+	fun
+	0xb::bridge
+send_token_internal
 	fun
 	0xb::bridge
 execute_emergency_op
