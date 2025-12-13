@@ -10,7 +10,7 @@ use crate::{
     diag,
     diagnostics::codes::{DiagnosticInfo, Severity, custom},
     expansion::ast::{ModuleIdent, Visibility},
-    naming::ast::Type_,
+    naming::ast::TypeInner,
     parser::ast::FunctionName,
     sui_mode::{SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME},
     typing::{ast as T, visitor::simple_visitor},
@@ -43,8 +43,8 @@ simple_visitor!(
 
         for (_, _, sp!(loc, param_ty_)) in &fdef.signature.parameters {
             if matches!(
-                param_ty_,
-                Type_::Ref(false, t) if t.value.is(&SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME),
+                param_ty_.inner(),
+                TypeInner::Ref(false, t) if t.value.is(&SUI_ADDR_VALUE, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME),
             ) {
                 report_non_mutable_tx_context(self, *loc);
             }

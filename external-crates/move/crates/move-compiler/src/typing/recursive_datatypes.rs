@@ -116,18 +116,18 @@ fn enum_def(context: &mut Context, ename: DatatypeName, edef: &N::EnumDefinition
 }
 
 fn type_(context: &mut Context, sp!(loc, ty_): &N::Type) {
-    use N::Type_::*;
-    match ty_ {
-        Var(_) => panic!("ICE tvar in struct field type"),
-        Unit | Anything | Void | UnresolvedError | Param(_) => (),
-        Ref(_, t) => type_(context, t),
-        Apply(_, sp!(_, tn_), tys) => {
+    use N::TypeInner as TI;
+    match ty_.inner() {
+        TI::Var(_) => panic!("ICE tvar in struct field type"),
+        TI::Unit | TI::Anything | TI::Void | TI::UnresolvedError | TI::Param(_) => (),
+        TI::Ref(_, t) => type_(context, t),
+        TI::Apply(_, sp!(_, tn_), tys) => {
             if let TypeName_::ModuleType(m, s) = tn_ {
                 context.add_usage(*loc, m, s)
             }
             tys.iter().for_each(|t| type_(context, t))
         }
-        Fun(ts, t) => {
+        TI::Fun(ts, t) => {
             ts.iter().for_each(|t| type_(context, t));
             type_(context, t)
         }

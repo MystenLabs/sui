@@ -13,12 +13,13 @@ pub fn type_(t: &N::Type) -> Type<'_> {
 
 impl fmt::Display for Type<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            N::Type_::Unit => write!(f, "()"),
-            N::Type_::Ref(false, inner) => write!(f, "&{}", type_(inner)),
-            N::Type_::Ref(true, inner) => write!(f, "&mut {}", type_(inner)),
-            N::Type_::Param(tp) => write!(f, "{}", tp.user_specified_name),
-            N::Type_::Apply(_, sp!(_, tn), targs) => match tn {
+        use N::TypeInner as TI;
+        match self.0.inner() {
+            TI::Unit => write!(f, "()"),
+            TI::Ref(false, inner) => write!(f, "&{}", type_(inner)),
+            TI::Ref(true, inner) => write!(f, "&mut {}", type_(inner)),
+            TI::Param(tp) => write!(f, "{}", tp.user_specified_name),
+            TI::Apply(_, sp!(_, tn), targs) => match tn {
                 N::TypeName_::Multiple(_) => {
                     debug_assert!(targs.len() > 1);
                     write!(f, "(")?;
@@ -45,7 +46,7 @@ impl fmt::Display for Type<'_> {
                     Ok(())
                 }
             },
-            N::Type_::Fun(targs, tret) => {
+            TI::Fun(targs, tret) => {
                 write!(f, "|")?;
                 for (i, t) in targs.iter().enumerate() {
                     if i > 0 {
@@ -55,7 +56,7 @@ impl fmt::Display for Type<'_> {
                 }
                 write!(f, "| -> {}", type_(tret))
             }
-            N::Type_::Var(_) | N::Type_::Anything | N::Type_::Void | N::Type_::UnresolvedError => {
+            TI::Var(_) | TI::Anything | TI::Void | TI::UnresolvedError => {
                 write!(f, "_")
             }
         }

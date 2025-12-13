@@ -87,7 +87,7 @@ use move_compiler::{
     editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{self as E, ModuleIdent, ModuleIdent_, Visibility},
     linters::LintLevel,
-    naming::ast::{DatatypeTypeParameter, StructFields, Type, Type_, TypeName_, VariantFields},
+    naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeInner, TypeName_, VariantFields},
     parser::ast::{self as P, DocComment},
     shared::{
         Identifier, NamedAddressMap, files::MappedFiles,
@@ -750,7 +750,7 @@ fn datatype_type_params(data_tparams: &[DatatypeTypeParameter]) -> Vec<(Type, /*
             (
                 sp(
                     t.param.user_specified_name.loc,
-                    Type_::Param(t.param.clone()),
+                    TypeInner::Param(t.param.clone()).into(),
                 ),
                 t.is_phantom,
             )
@@ -941,7 +941,12 @@ fn get_mod_outer_defs(
             fun.signature
                 .type_parameters
                 .iter()
-                .map(|t| sp(t.user_specified_name.loc, Type_::Param(t.clone())))
+                .map(|t| {
+                    sp(
+                        t.user_specified_name.loc,
+                        TypeInner::Param(t.clone()).into(),
+                    )
+                })
                 .collect(),
             fun.signature
                 .parameters
@@ -1020,9 +1025,9 @@ pub fn type_def_loc(
     mod_outer_defs: &BTreeMap<String, ModuleDefs>,
     sp!(_, t): &Type,
 ) -> Option<Loc> {
-    match t {
-        Type_::Ref(_, r) => type_def_loc(mod_outer_defs, r),
-        Type_::Apply(_, sp!(_, TypeName_::ModuleType(sp!(_, mod_ident), struct_name)), _) => {
+    match t.inner() {
+        TypeInner::Ref(_, r) => type_def_loc(mod_outer_defs, r),
+        TypeInner::Apply(_, sp!(_, TypeName_::ModuleType(sp!(_, mod_ident), struct_name)), _) => {
             let mod_ident_str = expansion_mod_ident_to_map_key(mod_ident);
             mod_outer_defs
                 .get(&mod_ident_str)

@@ -7,7 +7,7 @@ use crate::{
     expansion::ast::{ModuleIdent, Mutability},
     ice,
     naming::ast::{
-        self as N, BlockLabel, Color, MatchArm_, TParamID, Type, Type_, UseFuns, Var, Var_,
+        self as N, BlockLabel, Color, MatchArm_, TParamID, Type, TypeInner, UseFuns, Var, Var_,
     },
     parser::ast::FunctionName,
     shared::{ide::IDEAnnotation, program_info::FunctionInfo, unique_map::UniqueMap},
@@ -134,8 +134,9 @@ pub(crate) fn call(
             Arg::ByValue(e) => (EvalStrategy::ByValue(e.exp.loc), e.ty.clone()),
             Arg::ByName((e, ty)) => (EvalStrategy::ByName(e.loc), ty.clone()),
         };
-        let unfolded = core::unfold_type(&context.subst, arg_ty);
-        if let sp!(tfunloc, Type_::Fun(param_tys, result_ty)) = unfolded {
+        let unfolded = core::unfold_type(&context.subst, &arg_ty);
+        if let TypeInner::Fun(param_tys, result_ty) = unfolded.value.inner() {
+            let tfunloc = unfolded.loc;
             let arg_exp = match arg {
                 Arg::ByValue(_) => {
                     assert!(
@@ -153,8 +154,8 @@ pub(crate) fn call(
                     v,
                     arg_exp,
                     tfunloc,
-                    param_tys,
-                    *result_ty,
+                    param_tys.to_vec(),
+                    result_ty.clone(),
                 )?
             }
         } else {
@@ -765,7 +766,7 @@ fn types(context: &mut Context, tys: &mut [Type]) {
 }
 
 fn type_(context: &mut Context, ty: &mut N::Type) {
-    *ty = core::subst_tparams(&context.tparam_subst, ty.clone())
+    *ty = core::subst_tparams(&context.tparam_subst, ty)
 }
 
 fn block(context: &mut Context, b: &mut N::Block) {

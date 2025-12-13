@@ -168,8 +168,8 @@ impl Context<'_> {
         &mut self,
         sp!(_, ftype_): &N::Type,
     ) -> Option<(Loc, /* direct wrapping */ bool)> {
-        use N::Type_ as T;
-        match ftype_ {
+        use N::TypeInner as T;
+        match ftype_.inner() {
             T::Param(p) => {
                 if p.abilities.has_ability_(P::Ability_::Key) {
                     Some((p.user_specified_name.loc, true))

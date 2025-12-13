@@ -21,7 +21,7 @@ use lsp_types::{
 };
 use move_compiler::{
     expansion::ast::{Address, ModuleIdent, ModuleIdent_, Visibility},
-    naming::ast::{Type, Type_},
+    naming::ast::{Type, TypeInner},
     parser::keywords::PRIMITIVE_TYPES,
     shared::Name,
 };
@@ -363,7 +363,7 @@ pub fn addr_to_ide_string(addr: &Address) -> String {
 }
 
 fn lambda_snippet(sp!(_, ty): &Type, snippet_idx: &mut i32) -> Option<String> {
-    if let Type_::Fun(vec, _) = ty {
+    if let TypeInner::Fun(vec, _) = ty.inner() {
         let arg_snippets = vec
             .iter()
             .map(|_| {

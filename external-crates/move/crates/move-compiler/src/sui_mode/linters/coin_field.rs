@@ -58,8 +58,8 @@ simple_visitor!(
 );
 
 fn is_field_coin_type(sp!(_, t): &N::Type) -> bool {
-    use N::Type_ as T;
-    match t {
+    use N::TypeInner as T;
+    match t.inner() {
         T::Ref(_, inner_t) => is_field_coin_type(inner_t),
         T::Apply(_, tname, _) => {
             let sp!(_, tname) = tname;

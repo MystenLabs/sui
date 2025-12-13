@@ -1132,8 +1132,8 @@ impl<'env> Docgen<'env> {
             .map(|(_, v, ty)| format!("{}: {}", v.value.name, model_display::type_(ty)))
             .join(", ");
         let return_types = &func_env.info().signature.return_type;
-        let return_str = match &return_types.value {
-            move_compiler::naming::ast::Type_::Unit => "".to_owned(),
+        let return_str = match &return_types.value.inner() {
+            move_compiler::naming::ast::TypeInner::Unit => "".to_owned(),
             _ => format!(": {}", model_display::type_(return_types)),
         };
         let visibility_str = match func_env.info().visibility {

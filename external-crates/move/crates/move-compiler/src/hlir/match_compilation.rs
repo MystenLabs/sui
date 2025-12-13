@@ -821,7 +821,10 @@ fn make_arm_variant_unpack_fields(
             field_tys.map(|_field, (ndx, sp!(loc, ty))| {
                 (
                     ndx,
-                    sp(loc, N::Type_::Ref(mut_, Box::new(sp(loc, ty.base_type_())))),
+                    sp(
+                        loc,
+                        N::TypeInner::Ref(mut_, sp(loc, ty.base_type_())).into(),
+                    ),
                 )
             })
         } else {
@@ -874,7 +877,10 @@ fn make_arm_struct_unpack_fields(
             field_tys.map(|_field, (ndx, sp!(loc, ty))| {
                 (
                     ndx,
-                    sp(loc, N::Type_::Ref(mut_, Box::new(sp(loc, ty.base_type_())))),
+                    sp(
+                        loc,
+                        N::TypeInner::Ref(mut_, sp(loc, ty.base_type_())).into(),
+                    ),
                 )
             })
         } else {
@@ -912,23 +918,23 @@ fn make_arm_struct_unpack_fields(
 
 fn make_var_ref(subject: FringeEntry) -> Box<T::Exp> {
     let FringeEntry { var, ty } = subject;
-    match ty {
-        sp!(_, N::Type_::Ref(false, _)) => {
+    match ty.value.inner() {
+        N::TypeInner::Ref(false, _) => {
             let loc = var.loc;
             Box::new(make_copy_exp(ty, loc, var))
         }
-        sp!(_, N::Type_::Ref(true, inner)) => {
+        N::TypeInner::Ref(true, inner) => {
             // NB(cswords): we freeze the mut ref at the non-mut ref type.
             let loc = var.loc;
-            let ref_ty = sp(loc, N::Type_::Ref(true, inner.clone()));
+            let ref_ty = sp(loc, N::TypeInner::Ref(true, inner.clone()).into());
             let freeze_arg = make_copy_exp(ref_ty, loc, var);
-            let freeze_ty = sp(loc, N::Type_::Ref(false, inner));
+            let freeze_ty = sp(loc, N::TypeInner::Ref(false, inner.clone()).into());
             Box::new(make_freeze_exp(freeze_ty, loc, freeze_arg))
         }
-        ty => {
+        _ => {
             // NB(cswords): we borrow the local
             let loc = var.loc;
-            let ref_ty = sp(loc, N::Type_::Ref(false, Box::new(ty)));
+            let ref_ty = sp(loc, N::TypeInner::Ref(false, ty).into());
             let borrow_exp = T::UnannotatedExp_::BorrowLocal(false, var);
             Box::new(T::exp(ref_ty, sp(loc, borrow_exp)))
         }
@@ -946,7 +952,7 @@ fn make_match_variant_unpack(
     rhs: FringeEntry,
     next: T::Exp,
 ) -> T::Exp {
-    assert!(matches!(rhs.ty.value, N::Type_::Ref(false, _)));
+    assert!(matches!(rhs.ty.value.inner(), N::TypeInner::Ref(false, _)));
     let mut seq = VecDeque::new();
 
     let rhs_loc = rhs.var.loc;
@@ -988,7 +994,7 @@ fn make_match_struct_unpack(
     rhs: FringeEntry,
     next: T::Exp,
 ) -> T::Exp {
-    assert!(matches!(rhs.ty.value, N::Type_::Ref(false, _)));
+    assert!(matches!(rhs.ty.value.inner(), N::TypeInner::Ref(false, _)));
     let mut seq = VecDeque::new();
 
     let rhs_loc = rhs.var.loc;
@@ -1091,21 +1097,26 @@ fn make_arm_struct_unpack_stmt(
 
 fn make_match_lit(subject: FringeEntry) -> T::Exp {
     let FringeEntry { var, ty } = subject;
-    match ty {
-        sp!(ty_loc, N::Type_::Ref(false, inner)) => {
+    let sp!(ty_loc, ty_) = ty;
+    match ty_.inner() {
+        N::TypeInner::Ref(false, inner) => {
             let loc = var.loc;
-            let copy_exp = make_copy_exp(sp(ty_loc, N::Type_::Ref(false, inner.clone())), loc, var);
-            make_deref_exp(*inner, loc, copy_exp)
+            let copy_exp = make_copy_exp(
+                sp(ty_loc, N::TypeInner::Ref(false, inner.clone()).into()),
+                loc,
+                var,
+            );
+            make_deref_exp(inner.clone(), loc, copy_exp)
         }
-        sp!(_, N::Type_::Ref(true, inner)) => {
+        N::TypeInner::Ref(true, inner) => {
             let loc = var.loc;
 
             // NB(cswords): we now freeze the mut ref at the non-mut ref type.
-            let ref_ty = sp(loc, N::Type_::Ref(true, inner.clone()));
+            let ref_ty = sp(loc, N::TypeInner::Ref(true, inner.clone()).into());
             let freeze_arg = make_copy_exp(ref_ty, loc, var);
-            let freeze_ty = sp(loc, N::Type_::Ref(false, inner.clone()));
+            let freeze_ty = sp(loc, N::TypeInner::Ref(false, inner.clone()).into());
             let frozen_exp = make_freeze_exp(freeze_ty, loc, freeze_arg);
-            make_deref_exp(*inner, loc, frozen_exp)
+            make_deref_exp(inner.clone(), loc, frozen_exp)
         }
         _ty => unreachable!(),
     }

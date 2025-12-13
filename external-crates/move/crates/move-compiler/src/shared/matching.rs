@@ -82,12 +82,14 @@ pub trait MatchContext<const AFTER_TYPING: bool> {
         arg_types: Fields<N::Type>,
     ) -> Vec<(Field, N::Var, N::Type)> {
         fn make_imm_ref_ty(ty: N::Type) -> N::Type {
-            match ty {
-                sp!(_, N::Type_::Ref(false, _)) => ty,
-                sp!(loc, N::Type_::Ref(true, inner)) => sp(loc, N::Type_::Ref(false, inner)),
-                ty => {
+            match ty.value.inner() {
+                N::TypeInner::Ref(false, _) => ty,
+                N::TypeInner::Ref(true, inner) => {
+                    sp(ty.loc, N::TypeInner::Ref(false, inner.clone()).into())
+                }
+                _ => {
                     let loc = ty.loc;
-                    sp(loc, N::Type_::Ref(false, Box::new(ty)))
+                    sp(loc, N::TypeInner::Ref(false, ty).into())
                 }
             }
         }
@@ -895,8 +897,8 @@ fn const_pats_to_guards<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>
 fn combine_pattern_fields(
     fields: Fields<(Type, Vec<MatchPattern>)>,
 ) -> Vec<Fields<(Type, MatchPattern)>> {
-    type VFields = Vec<(Field, (usize, (Spanned<N::Type_>, MatchPattern)))>;
-    type VVFields = Vec<(Field, (usize, (Spanned<N::Type_>, Vec<MatchPattern>)))>;
+    type VFields = Vec<(Field, (usize, (Type, MatchPattern)))>;
+    type VVFields = Vec<(Field, (usize, (Type, Vec<MatchPattern>)))>;
 
     fn combine_recur(vec: &mut VVFields) -> Vec<VFields> {
         if let Some((f, (ndx, (ty, pats)))) = vec.pop() {
@@ -952,7 +954,7 @@ pub fn new_match_var_name(name: &str, id: usize) -> Symbol {
 fn make_const_test(ty: N::Type, var: N::Var, loc: Loc, m: ModuleIdent, c: ConstantName) -> T::Exp {
     use T::UnannotatedExp_ as E;
     let base_ty = sp(loc, ty.value.base_type_());
-    let ref_ty = sp(loc, N::Type_::Ref(false, Box::new(base_ty.clone())));
+    let ref_ty = sp(loc, N::TypeInner::Ref(false, base_ty.clone()).into());
     let var_exp = T::exp(
         ref_ty.clone(),
         sp(

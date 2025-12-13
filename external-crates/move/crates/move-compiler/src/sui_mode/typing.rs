@@ -12,7 +12,8 @@ use crate::{
     editions::Flavor,
     expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, Visibility},
     naming::ast::{
-        self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, Type_, TypeName_, Var,
+        self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, Type_, TypeInner as TI,
+        TypeName_, UNIT_TYPE, Var,
     },
     parser::ast::{Ability_, DatatypeName, DocComment, FunctionName, TargetKind},
     shared::{CompilationEnv, Identifier, program_info::TypingProgramInfo},
@@ -353,10 +354,10 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
             (tp_loc, "'init' functions cannot have type parameters"),
         ));
     }
-    if !matches!(return_type, sp!(_, Type_::Unit)) {
+    if !matches!(return_type.value.inner(), TI::Unit) {
         let msg = format!(
             "'init' functions must have a return type of {}",
-            error_format_(&Type_::Unit, &Subst::empty())
+            error_format_(&UNIT_TYPE.clone(), &Subst::empty())
         );
         context.add_diag(diag!(
             INIT_FUN_DIAG,
@@ -413,7 +414,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
     } else if parameters.len() > 1 {
         // if there is more than one parameter, the first must be the OTW
         let (_, first_var, first_ty) = parameters.first().unwrap();
-        let is_otw = matches!(&first_ty.value, Type_::UnresolvedError | Type_::Var(_))
+        let is_otw = matches!(&first_ty.value.inner(), TI::UnresolvedError | TI::Var(_))
             || matches!(
                 first_ty.value.type_name(),
                 Some(sp!(_, TypeName_::ModuleType(m, n)))
@@ -609,15 +610,15 @@ fn entry_signature(
 
 fn tx_context_kind(sp!(_, last_param_ty_): &Type) -> TxContextKind {
     // Already an error, so assume a valid, mutable TxContext
-    if matches!(last_param_ty_, Type_::UnresolvedError | Type_::Var(_)) {
+    if matches!(last_param_ty_.inner(), TI::UnresolvedError | TI::Var(_)) {
         return TxContextKind::Mutable;
     }
 
-    let Type_::Ref(is_mut, inner_ty) = last_param_ty_ else {
+    let TI::Ref(is_mut, inner_ty) = last_param_ty_.inner() else {
         // not a reference
         return TxContextKind::None;
     };
-    let Type_::Apply(_, sp!(_, inner_name), _) = &inner_ty.value else {
+    let TI::Apply(_, sp!(_, inner_name), _) = &inner_ty.value.inner() else {
         // not a user defined type
         return TxContextKind::None;
     };
@@ -717,45 +718,43 @@ fn entry_param_ty(
 }
 
 fn is_mut_clock(param_ty: &Type) -> bool {
-    match &param_ty.value {
-        Type_::Ref(/* mut */ false, _) => false,
-        Type_::Ref(/* mut */ true, t) => is_mut_clock(t),
-        Type_::Apply(_, sp!(_, n_), _) => {
-            n_.is(&SUI_ADDR_VALUE, CLOCK_MODULE_NAME, CLOCK_TYPE_NAME)
-        }
-        Type_::Unit
-        | Type_::Param(_)
-        | Type_::Var(_)
-        | Type_::Anything
-        | Type_::Void
-        | Type_::UnresolvedError
-        | Type_::Fun(_, _) => false,
+    match &param_ty.value.inner() {
+        TI::Ref(/* mut */ false, _) => false,
+        TI::Ref(/* mut */ true, t) => is_mut_clock(t),
+        TI::Apply(_, sp!(_, n_), _) => n_.is(&SUI_ADDR_VALUE, CLOCK_MODULE_NAME, CLOCK_TYPE_NAME),
+        TI::Unit
+        | TI::Param(_)
+        | TI::Var(_)
+        | TI::Anything
+        | TI::Void
+        | TI::UnresolvedError
+        | TI::Fun(_, _) => false,
     }
 }
 
 fn is_mut_random(param_ty: &Type) -> bool {
-    match &param_ty.value {
-        Type_::Ref(/* mut */ false, _) => false,
-        Type_::Ref(/* mut */ true, t) => is_mut_random(t),
-        Type_::Apply(_, sp!(_, n_), _) => n_.is(
+    match &param_ty.value.inner() {
+        TI::Ref(/* mut */ false, _) => false,
+        TI::Ref(/* mut */ true, t) => is_mut_random(t),
+        TI::Apply(_, sp!(_, n_), _) => n_.is(
             &SUI_ADDR_VALUE,
             RANDOMNESS_MODULE_NAME,
             RANDOMNESS_STATE_TYPE_NAME,
         ),
-        Type_::Unit
-        | Type_::Param(_)
-        | Type_::Var(_)
-        | Type_::Anything
-        | Type_::Void
-        | Type_::UnresolvedError
-        | Type_::Fun(_, _) => false,
+        TI::Unit
+        | TI::Param(_)
+        | TI::Var(_)
+        | TI::Anything
+        | TI::Void
+        | TI::UnresolvedError
+        | TI::Fun(_, _) => false,
     }
 }
 
 fn is_entry_receiving_ty(param_ty: &Type) -> bool {
-    match &param_ty.value {
-        Type_::Ref(_, t) => is_entry_receiving_ty(t),
-        Type_::Apply(_, sp!(_, n), targs)
+    match &param_ty.value.inner() {
+        TI::Ref(_, t) => is_entry_receiving_ty(t),
+        TI::Apply(_, sp!(_, n), targs)
             if n.is(&SUI_ADDR_VALUE, TRANSFER_MODULE_NAME, RECEIVING_TYPE_NAME) =>
         {
             debug_assert!(targs.len() == 1);
@@ -772,20 +771,20 @@ fn is_entry_primitive_ty(param_ty: &Type) -> bool {
     use BuiltinTypeName_ as B;
     use TypeName_ as N;
 
-    match &param_ty.value {
+    match &param_ty.value.inner() {
         // A bit of a hack since no primitive has key
-        Type_::Param(tp) => !tp.abilities.has_ability_(Ability_::Key),
+        TI::Param(tp) => !tp.abilities.has_ability_(Ability_::Key),
         // nonsensical, but no error needed
-        Type_::Apply(_, sp!(_, N::Multiple(_)), ts) => ts.iter().all(is_entry_primitive_ty),
+        TI::Apply(_, sp!(_, N::Multiple(_)), ts) => ts.iter().all(is_entry_primitive_ty),
         // Simple recursive cases
-        Type_::Ref(_, t) => is_entry_primitive_ty(t),
-        Type_::Apply(_, sp!(_, N::Builtin(sp!(_, B::Vector))), targs) => {
+        TI::Ref(_, t) => is_entry_primitive_ty(t),
+        TI::Apply(_, sp!(_, N::Builtin(sp!(_, B::Vector))), targs) => {
             debug_assert!(targs.len() == 1);
             is_entry_primitive_ty(&targs[0])
         }
 
         // custom "primitives"
-        Type_::Apply(_, sp!(_, n), targs)
+        TI::Apply(_, sp!(_, n), targs)
             if n.is(&STD_ADDR_VALUE, ASCII_MODULE_NAME, ASCII_TYPE_NAME)
                 || n.is(&STD_ADDR_VALUE, UTF_MODULE_NAME, UTF_TYPE_NAME)
                 || n.is(&SUI_ADDR_VALUE, OBJECT_MODULE_NAME, ID_TYPE_NAME) =>
@@ -793,7 +792,7 @@ fn is_entry_primitive_ty(param_ty: &Type) -> bool {
             debug_assert!(targs.is_empty());
             true
         }
-        Type_::Apply(_, sp!(_, n), targs)
+        TI::Apply(_, sp!(_, n), targs)
             if n.is(&STD_ADDR_VALUE, OPTION_MODULE_NAME, OPTION_TYPE_NAME) =>
         {
             debug_assert!(targs.len() == 1);
@@ -801,30 +800,26 @@ fn is_entry_primitive_ty(param_ty: &Type) -> bool {
         }
 
         // primitives
-        Type_::Apply(_, sp!(_, N::Builtin(_)), targs) => {
+        TI::Apply(_, sp!(_, N::Builtin(_)), targs) => {
             debug_assert!(targs.is_empty());
             true
         }
 
         // Non primitive
-        Type_::Apply(_, sp!(_, N::ModuleType(_, _)), _) => false,
-        Type_::Unit => false,
+        TI::Apply(_, sp!(_, N::ModuleType(_, _)), _) => false,
+        TI::Unit => false,
 
         // Error case nothing to do
-        Type_::UnresolvedError
-        | Type_::Anything
-        | Type_::Void
-        | Type_::Var(_)
-        | Type_::Fun(_, _) => true,
+        TI::UnresolvedError | TI::Anything | TI::Void | TI::Var(_) | TI::Fun(_, _) => true,
     }
 }
 
 fn is_entry_object_ty(param_ty: &Type) -> bool {
     use BuiltinTypeName_ as B;
     use TypeName_ as N;
-    match &param_ty.value {
-        Type_::Ref(_, t) => is_entry_object_ty_inner(t),
-        Type_::Apply(_, sp!(_, N::Builtin(sp!(_, B::Vector))), targs) => {
+    match &param_ty.value.inner() {
+        TI::Ref(_, t) => is_entry_object_ty_inner(t),
+        TI::Apply(_, sp!(_, N::Builtin(sp!(_, B::Vector))), targs) => {
             debug_assert!(targs.len() == 1);
             is_entry_object_ty_inner(&targs[0])
         }
@@ -834,25 +829,22 @@ fn is_entry_object_ty(param_ty: &Type) -> bool {
 
 fn is_entry_object_ty_inner(param_ty: &Type) -> bool {
     use TypeName_ as N;
-    match &param_ty.value {
-        Type_::Param(tp) => tp.abilities.has_ability_(Ability_::Key),
+    match &param_ty.value.inner() {
+        TI::Param(tp) => tp.abilities.has_ability_(Ability_::Key),
         // nonsensical, but no error needed
-        Type_::Apply(_, sp!(_, N::Multiple(_)), ts) => ts.iter().all(is_entry_object_ty_inner),
+        TI::Apply(_, sp!(_, N::Multiple(_)), ts) => ts.iter().all(is_entry_object_ty_inner),
         // Simple recursive cases, shouldn't be hit but no need to error
-        Type_::Ref(_, t) => is_entry_object_ty_inner(t),
+        TI::Ref(_, t) => is_entry_object_ty_inner(t),
 
         // Objects
-        Type_::Apply(Some(abilities), _, _) => abilities.has_ability_(Ability_::Key),
+        TI::Apply(Some(abilities), _, _) => abilities.has_ability_(Ability_::Key),
 
         // Error case nothing to do
-        Type_::UnresolvedError
-        | Type_::Anything
-        | Type_::Void
-        | Type_::Var(_)
-        | Type_::Unit
-        | Type_::Fun(_, _) => true,
+        TI::UnresolvedError | TI::Anything | TI::Void | TI::Var(_) | TI::Unit | TI::Fun(_, _) => {
+            true
+        }
         // Unreachable cases
-        Type_::Apply(None, _, _) => unreachable!("ICE abilities should have been expanded"),
+        TI::Apply(None, _, _) => unreachable!("ICE abilities should have been expanded"),
     }
 }
 
@@ -862,10 +854,10 @@ fn entry_return(
     name: FunctionName,
     return_type @ sp!(tloc, return_type_): &Type,
 ) {
-    match return_type_ {
+    match return_type_.inner() {
         // unit is fine, nothing to do
-        Type_::Unit => (),
-        Type_::Ref(_, _) => {
+        TI::Unit => (),
+        TI::Ref(_, _) => {
             let fmsg = format!("Invalid return type for entry function '{}'", name);
             let tmsg = "Expected a non-reference type";
             context.add_diag(diag!(
@@ -874,7 +866,7 @@ fn entry_return(
                 (*tloc, tmsg)
             ))
         }
-        Type_::Param(tp) => {
+        TI::Param(tp) => {
             if !tp.abilities.has_ability_(Ability_::Drop) {
                 let declared_loc_opt = Some(tp.user_specified_name.loc);
                 let declared_abilities = tp.abilities.clone();
@@ -889,7 +881,7 @@ fn entry_return(
                 )
             }
         }
-        Type_::Apply(Some(abilities), sp!(_, tn_), ty_args) => {
+        TI::Apply(Some(abilities), sp!(_, tn_), ty_args) => {
             if !abilities.has_ability_(Ability_::Drop) {
                 let (declared_loc_opt, declared_abilities) = match tn_ {
                     TypeName_::Multiple(_) => (None, AbilitySet::collection(*tloc)),
@@ -911,13 +903,9 @@ fn entry_return(
             }
         }
         // Error case nothing to do
-        Type_::UnresolvedError
-        | Type_::Anything
-        | Type_::Void
-        | Type_::Var(_)
-        | Type_::Fun(_, _) => (),
+        TI::UnresolvedError | TI::Anything | TI::Void | TI::Var(_) | TI::Fun(_, _) => (),
         // Unreachable cases
-        Type_::Apply(None, _, _) => unreachable!("ICE abilities should have been expanded"),
+        TI::Apply(None, _, _) => unreachable!("ICE abilities should have been expanded"),
     }
 }
 

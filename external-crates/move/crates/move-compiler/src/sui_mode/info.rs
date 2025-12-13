@@ -124,24 +124,26 @@ fn all_uid_holders(
         uid_holders: &mut BTreeMap<ModuleIdent, BTreeMap<DatatypeName, UIDHolder>>,
         sp!(_, ty_): &N::Type,
     ) -> Option<UIDHolder> {
-        match ty_ {
-            N::Type_::Unit
-            | N::Type_::Param(_)
-            | N::Type_::Var(_)
-            | N::Type_::Fun(_, _)
-            | N::Type_::Anything
-            | N::Type_::UnresolvedError
-            | N::Type_::Void => None,
+        use N::TypeInner as TI;
 
-            N::Type_::Ref(_, inner) => visit_ty(info, visited, uid_holders, inner),
+        match ty_.inner() {
+            TI::Unit
+            | TI::Param(_)
+            | TI::Var(_)
+            | TI::Fun(_, _)
+            | TI::Anything
+            | TI::UnresolvedError
+            | TI::Void => None,
 
-            N::Type_::Apply(_, sp!(_, tn_), _)
+            TI::Ref(_, inner) => visit_ty(info, visited, uid_holders, inner),
+
+            TI::Apply(_, sp!(_, tn_), _)
                 if tn_.is(&SUI_ADDR_VALUE, OBJECT_MODULE_NAME, UID_TYPE_NAME) =>
             {
                 Some(UIDHolder::IsUID)
             }
 
-            N::Type_::Apply(_, tn, tys) => {
+            TI::Apply(_, tn, tys) => {
                 let phantom_positions = phantom_positions(info, tn);
                 let ty_args_holder = tys
                     .iter()
