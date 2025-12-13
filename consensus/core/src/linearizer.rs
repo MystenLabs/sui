@@ -9,7 +9,7 @@ use itertools::Itertools;
 use parking_lot::RwLock;
 
 use crate::{
-    block::{BlockAPI, VerifiedBlock},
+    block::{BlockAPI, Slot, VerifiedBlock},
     commit::{Commit, CommittedSubDag, TrustedCommit, sort_sub_dag_blocks},
     context::Context,
     dag_state::DagState,
@@ -25,6 +25,10 @@ pub(crate) trait BlockStoreAPI {
     fn set_committed(&mut self, block_ref: &BlockRef) -> bool;
 
     fn is_committed(&self, block_ref: &BlockRef) -> bool;
+
+    /// Returns true if any block at the given slot has been committed.
+    /// This is used to prevent double-commit of equivocating blocks.
+    fn is_any_block_at_slot_committed(&self, slot: Slot) -> bool;
 }
 
 impl BlockStoreAPI
@@ -44,6 +48,10 @@ impl BlockStoreAPI
 
     fn is_committed(&self, block_ref: &BlockRef) -> bool {
         DagState::is_committed(self, block_ref)
+    }
+
+    fn is_any_block_at_slot_committed(&self, slot: Slot) -> bool {
+        DagState::is_any_block_at_slot_committed(self, slot)
     }
 }
 
@@ -183,7 +191,13 @@ impl Linearizer {
                         .iter()
                         .copied()
                         .filter(|ancestor| {
-                            ancestor.round > gc_round && !dag_state.is_committed(ancestor)
+                            ancestor.round > gc_round
+                                && !dag_state.is_committed(ancestor)
+                                // Also check if any block at this slot has been committed.
+                                // This prevents double-commit of equivocating blocks where
+                                // Block A and Block B have the same (Round, Author) but
+                                // different digests.
+                                && !dag_state.is_any_block_at_slot_committed((*ancestor).into())
                         })
                         .collect::<Vec<_>>(),
                 )

@@ -185,6 +185,18 @@ impl DagBuilder {
                     .map(|(_, committed)| *committed)
                     .expect("Block should be found in store")
             }
+
+            fn is_any_block_at_slot_committed(&self, slot: Slot) -> bool {
+                for (block_ref, (_block, committed)) in self.blocks.range((
+                    Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
+                    Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
+                )) {
+                    if *committed {
+                        return true;
+                    }
+                }
+                false
+            }
         }
 
         let mut storage = BlockStorage {
