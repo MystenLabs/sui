@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use alloy::primitives::Address as EthAddress;
 use anyhow::Result;
 use clap::*;
-use ethers::types::Address as EthAddress;
 use prometheus::Registry;
 use std::collections::HashSet;
 use std::env;
@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::eth_client::EthClient;
-use sui_bridge::metered_eth_provider::{MeteredEthHttpProvider, new_metered_eth_provider};
+use sui_bridge::metered_eth_provider::new_metered_eth_provider;
 use sui_bridge::sui_bridge_watchdog::Observable;
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::utils::get_eth_contract_addresses;
@@ -84,8 +84,8 @@ async fn main() -> Result<()> {
     let db_url = config.db_url.clone();
     let pool = get_connection_pool(db_url.clone()).await;
 
-    let eth_client: Arc<EthClient<MeteredEthHttpProvider>> = Arc::new(
-        EthClient::<MeteredEthHttpProvider>::new(
+    let eth_client: Arc<EthClient> = Arc::new(
+        EthClient::new(
             &config.eth_rpc_url,
             HashSet::from_iter(vec![]), // dummy
             bridge_metrics.clone(),
@@ -158,7 +158,7 @@ async fn start_watchdog(
         usdt_address,
         wbtc_address,
         lbtc_address,
-    ) = get_eth_contract_addresses(eth_bridge_proxy_address, &eth_provider).await?;
+    ) = get_eth_contract_addresses(eth_bridge_proxy_address, eth_provider.clone()).await?;
 
     let eth_vault_balance = EthereumVaultBalance::new(
         eth_provider.clone(),

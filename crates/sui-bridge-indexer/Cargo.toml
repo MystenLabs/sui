@@ -7,11 +7,11 @@ publish = false
 edition = "2024"
 
 [dependencies]
+alloy = { version = "1.1.3", features = ["rand", "sol-types", "json-rpc", "provider-ws"] }
 serde.workspace = true
 tap.workspace = true
 diesel = { workspace = true, features = ["serde_json"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres"] }
-ethers = { version = "2.0", features = ["rustls", "ws"] }
 rayon = "1.10.0"
 tokio = { workspace = true, features = ["full"] }
 anyhow.workspace = true
