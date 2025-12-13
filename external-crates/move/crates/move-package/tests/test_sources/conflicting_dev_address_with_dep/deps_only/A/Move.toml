@@ -1,5 +1,0 @@
-[package]
-name = "A"
-
-[addresses]
-A = "0x1"

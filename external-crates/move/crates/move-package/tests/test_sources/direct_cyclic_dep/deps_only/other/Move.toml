@@ -1,5 +1,0 @@
-[package]
-name = "Other"
-
-[dependencies]
-Root = { local = "../.." }

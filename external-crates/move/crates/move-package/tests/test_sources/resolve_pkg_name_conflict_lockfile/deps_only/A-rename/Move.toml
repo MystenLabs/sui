@@ -1,5 +1,0 @@
-[package]
-name = "A-rename"
-
-[dependencies]
-C-rename = { local = "../C-rename-v2" }

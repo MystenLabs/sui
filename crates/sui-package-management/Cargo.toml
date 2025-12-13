@@ -20,7 +20,6 @@ sui-types.workspace = true
 sui-protocol-config.workspace = true
 
 move-core-types.workspace = true
-move-package.workspace = true
 move-symbol-pool.workspace = true
 
 [build-dependencies]

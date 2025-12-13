@@ -963,12 +963,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dissimilar"
-version = "1.0.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59f8e79d1fbf76bdfbde321e902714bf6c49df88a7dda6fc682fc2979226962d"
-
-[[package]]
 name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1069,16 +1063,6 @@ name = "ethnum"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b90ca2580b73ab6a1f724b76ca11ab632df820fd6040c336200d2c1df7b3c82c"
-
-[[package]]
-name = "expect-test"
-version = "1.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63af43ff4431e848fb47472a920f14fa71c24de13255a5692e93d4e90302acb0"
-dependencies = [
- "dissimilar",
- "once_cell",
-]
 
 [[package]]
 name = "fail"
@@ -2380,7 +2364,8 @@ dependencies = [
  "move-ir-types",
  "move-model",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stackless-bytecode",
  "move-stackless-bytecode-2",
  "move-stdlib",
@@ -2574,43 +2559,6 @@ dependencies = [
  "pretty_simple",
  "serde",
  "vfs",
-]
-
-[[package]]
-name = "move-package"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap 4.5.28",
- "colored",
- "datatest-stable",
- "dunce",
- "expect-test",
- "itertools 0.10.5",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-bytecode-utils",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-disassembler",
- "move-docgen",
- "move-model-2",
- "move-symbol-pool",
- "named-lock",
- "once_cell",
- "petgraph",
- "regex",
- "serde",
- "serde_yaml",
- "sha2",
- "tempfile",
- "toml",
- "toml_edit 0.22.24",
- "treeline",
- "vfs",
- "walkdir",
- "whoami",
 ]
 
 [[package]]
