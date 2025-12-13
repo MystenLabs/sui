@@ -3,12 +3,18 @@
 
 //! The SuiSyncer module is responsible for synchronizing Events emitted
 //! on Sui blockchain from concerned modules of bridge package 0x9.
+//!
+//! There are two modes of operation:
+//! 1. Event-based (legacy): Uses JSON-RPC to query events by module
+//! 2. gRPC-based: Iterates over bridge records using LinkedTable iteration
 
 use crate::{
     error::BridgeResult,
+    events::{EmittedSuiToEthTokenBridgeV1, SuiBridgeEvent},
     metrics::BridgeMetrics,
     retry_with_max_elapsed_time,
     sui_client::{SuiClient, SuiClientInner},
+    types::BridgeAction,
 };
 use mysten_metrics::spawn_logged_monitored_task;
 use std::{collections::HashMap, sync::Arc};
@@ -25,6 +31,11 @@ const SUI_EVENTS_CHANNEL_SIZE: usize = 1000;
 
 /// Map from contract address to their start cursor (exclusive)
 pub type SuiTargetModules = HashMap<Identifier, Option<EventID>>;
+
+/// Map from source_chain_id to last processed seq_num (exclusive)
+pub type SuiSeqNumCursors = HashMap<u8, u64>;
+
+pub type GrpcSyncedEvents = (u8, u64, Vec<SuiBridgeEvent>);
 
 pub struct SuiSyncer<C> {
     sui_client: Arc<SuiClient<C>>,
@@ -88,8 +99,6 @@ where
     }
 
     async fn run_event_listening_task(
-        // The module where interested events are defined.
-        // Module is always of bridge package 0x9.
         module: Identifier,
         mut cursor: Option<EventID>,
         events_sender: mysten_metrics::metered_channel::Sender<(Identifier, Vec<SuiEvent>)>,
@@ -150,6 +159,190 @@ where
                 }
                 tracing::info!(?module, ?cursor, "Observed {len} new Sui events");
             }
+        }
+    }
+
+    pub async fn run_grpc(
+        self,
+        source_chain_ids: Vec<u8>,
+        cursors: SuiSeqNumCursors,
+        query_interval: Duration,
+        batch_size: u64,
+    ) -> BridgeResult<(
+        Vec<JoinHandle<()>>,
+        mysten_metrics::metered_channel::Receiver<GrpcSyncedEvents>,
+    )> {
+        let (events_tx, events_rx) = mysten_metrics::metered_channel::channel(
+            SUI_EVENTS_CHANNEL_SIZE,
+            &mysten_metrics::get_metrics()
+                .unwrap()
+                .channel_inflight
+                .with_label_values(&["sui_grpc_events_queue"]),
+        );
+
+        let mut task_handles = vec![];
+        for source_chain_id in source_chain_ids {
+            // todo!("in case of no grpc cursor in db, extract cursor from last processed JSON RPC EventID")
+            let cursor = cursors.get(&source_chain_id).copied().unwrap_or(0);
+            let metrics = self.metrics.clone();
+            let events_tx_clone = events_tx.clone();
+            let sui_client_clone = self.sui_client.clone();
+            task_handles.push(spawn_logged_monitored_task!(Self::run_grpc_listening_task(
+                source_chain_id,
+                cursor,
+                events_tx_clone,
+                sui_client_clone,
+                query_interval,
+                batch_size,
+                metrics,
+            )));
+        }
+        Ok((task_handles, events_rx))
+    }
+
+    async fn run_grpc_listening_task(
+        source_chain_id: u8,
+        mut last_processed_seq_num: u64,
+        events_sender: mysten_metrics::metered_channel::Sender<GrpcSyncedEvents>,
+        sui_client: Arc<SuiClient<C>>,
+        query_interval: Duration,
+        batch_size: u64,
+        metrics: Arc<BridgeMetrics>,
+    ) {
+        tracing::info!(
+            source_chain_id,
+            last_processed_seq_num,
+            "Starting sui grpc records listening task"
+        );
+        let mut interval = time::interval(query_interval);
+        interval.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+
+        // Create a task to update metrics
+        let notify = Arc::new(Notify::new());
+        let notify_clone = notify.clone();
+        let sui_client_clone = sui_client.clone();
+        let chain_label = source_chain_id.to_string();
+        let last_synced_sui_checkpoints_metric = metrics
+            .last_synced_sui_checkpoints
+            .with_label_values(&[&chain_label]);
+        spawn_logged_monitored_task!(async move {
+            loop {
+                notify_clone.notified().await;
+                let Ok(Ok(latest_checkpoint_sequence_number)) = retry_with_max_elapsed_time!(
+                    sui_client_clone.get_latest_checkpoint_sequence_number(),
+                    Duration::from_secs(120)
+                ) else {
+                    tracing::error!(
+                        "Failed to query latest checkpoint sequence number from sui client after retry"
+                    );
+                    continue;
+                };
+                last_synced_sui_checkpoints_metric.set(latest_checkpoint_sequence_number as i64);
+            }
+        });
+
+        loop {
+            interval.tick().await;
+            let Ok(Ok(next_seq_num)) = retry_with_max_elapsed_time!(
+                sui_client.get_token_transfer_next_seq_number(source_chain_id),
+                Duration::from_secs(120)
+            ) else {
+                tracing::error!(
+                    source_chain_id,
+                    "Failed to get next seq num from sui client after retry"
+                );
+                continue;
+            };
+
+            let start_seq_num = last_processed_seq_num + 1;
+            if start_seq_num >= next_seq_num {
+                notify.notify_one();
+                continue;
+            }
+
+            let end_seq_num = std::cmp::min(start_seq_num + batch_size - 1, next_seq_num - 1);
+
+            let Ok(Ok(records)) = retry_with_max_elapsed_time!(
+                sui_client.get_bridge_records_in_range(source_chain_id, start_seq_num, end_seq_num),
+                Duration::from_secs(120)
+            ) else {
+                tracing::error!(
+                    source_chain_id,
+                    start_seq_num,
+                    end_seq_num,
+                    "Failed to get records from sui client after retry"
+                );
+                continue;
+            };
+
+            let len = records.len();
+            if len != 0 {
+                let mut events = Vec::with_capacity(len);
+                let mut batch_last_seq_num = last_processed_seq_num;
+
+                for (seq_num, record) in records {
+                    let event = match Self::bridge_record_to_event(&record, source_chain_id) {
+                        Ok(event) => event,
+                        Err(e) => {
+                            tracing::error!(
+                                source_chain_id,
+                                seq_num,
+                                "Failed to convert record to event: {:?}",
+                                e
+                            );
+                            continue;
+                        }
+                    };
+
+                    events.push(event);
+                    batch_last_seq_num = seq_num;
+                }
+
+                if !events.is_empty() {
+                    events_sender
+                        .send((source_chain_id, batch_last_seq_num, events))
+                        .await
+                        .expect("Bridge events channel receiver is closed");
+
+                    last_processed_seq_num = batch_last_seq_num;
+                    tracing::info!(
+                        source_chain_id,
+                        last_processed_seq_num,
+                        "Processed {len} bridge records"
+                    );
+                }
+            }
+
+            if end_seq_num >= next_seq_num - 1 {
+                // we have processed all records up to the latest checkpoint
+                // so we can update the latest checkpoint metric
+                notify.notify_one();
+            }
+        }
+    }
+
+    fn bridge_record_to_event(
+        record: &sui_types::bridge::MoveTypeBridgeRecord,
+        source_chain_id: u8,
+    ) -> Result<SuiBridgeEvent, crate::error::BridgeError> {
+        let action = BridgeAction::try_from_bridge_record(record)?;
+
+        match action {
+            BridgeAction::SuiToEthTokenTransfer(transfer) => Ok(
+                SuiBridgeEvent::SuiToEthTokenBridgeV1(EmittedSuiToEthTokenBridgeV1 {
+                    nonce: transfer.nonce,
+                    sui_chain_id: transfer.sui_chain_id,
+                    eth_chain_id: transfer.eth_chain_id,
+                    sui_address: transfer.sui_address,
+                    eth_address: transfer.eth_address,
+                    token_id: transfer.token_id,
+                    amount_sui_adjusted: transfer.amount_adjusted,
+                }),
+            ),
+            _ => Err(crate::error::BridgeError::Generic(format!(
+                "Unexpected action type for source_chain_id {}: {:?}",
+                source_chain_id, action
+            ))),
         }
     }
 }

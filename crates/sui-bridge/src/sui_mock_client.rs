@@ -45,6 +45,9 @@ pub struct SuiMockClient {
     bridge_committee_summary: Arc<Mutex<Option<BridgeCommitteeSummary>>>,
     is_paused: Arc<Mutex<Option<IsBridgePaused>>>,
     requested_transactions_tx: tokio::sync::broadcast::Sender<TransactionDigest>,
+    // gRPC-related mock data
+    bridge_records: Arc<Mutex<HashMap<(u8, u64), MoveTypeBridgeRecord>>>,
+    next_seq_nums: Arc<Mutex<HashMap<u8, u64>>>,
 }
 
 impl SuiMockClient {
@@ -62,6 +65,8 @@ impl SuiMockClient {
             bridge_committee_summary: Default::default(),
             is_paused: Default::default(),
             requested_transactions_tx: tokio::sync::broadcast::channel(10000).0,
+            bridge_records: Default::default(),
+            next_seq_nums: Default::default(),
         }
     }
 
@@ -144,6 +149,27 @@ impl SuiMockClient {
         &self,
     ) -> tokio::sync::broadcast::Receiver<TransactionDigest> {
         self.requested_transactions_tx.subscribe()
+    }
+
+    /// Add a bridge record for testing gRPC-based iteration
+    pub fn add_bridge_record(
+        &self,
+        source_chain_id: u8,
+        seq_num: u64,
+        record: MoveTypeBridgeRecord,
+    ) {
+        self.bridge_records
+            .lock()
+            .unwrap()
+            .insert((source_chain_id, seq_num), record);
+    }
+
+    /// Set the next sequence number for a source chain
+    pub fn set_next_seq_num(&self, source_chain_id: u8, next_seq_num: u64) {
+        self.next_seq_nums
+            .lock()
+            .unwrap()
+            .insert(source_chain_id, next_seq_num);
     }
 }
 
@@ -308,5 +334,34 @@ impl SuiClientInner for SuiMockClient {
                     gas_object_id
                 )
             })
+    }
+
+    async fn get_bridge_records_in_range(
+        &self,
+        source_chain_id: u8,
+        start_seq_num: u64,
+        end_seq_num: u64,
+    ) -> Result<Vec<(u64, MoveTypeBridgeRecord)>, BridgeError> {
+        let records = self.bridge_records.lock().unwrap();
+        let mut result = Vec::new();
+        for seq_num in start_seq_num..=end_seq_num {
+            if let Some(record) = records.get(&(source_chain_id, seq_num)) {
+                result.push((seq_num, (*record).clone()));
+            }
+        }
+        Ok(result)
+    }
+
+    async fn get_token_transfer_next_seq_number(
+        &self,
+        source_chain_id: u8,
+    ) -> Result<u64, BridgeError> {
+        Ok(self
+            .next_seq_nums
+            .lock()
+            .unwrap()
+            .get(&source_chain_id)
+            .copied()
+            .unwrap_or(0))
     }
 }

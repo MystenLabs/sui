@@ -22,6 +22,8 @@ pub struct BridgeOrchestratorTables {
     pub(crate) sui_syncer_cursors: DBMap<Identifier, EventID>,
     /// contract address to the last processed block
     pub(crate) eth_syncer_cursors: DBMap<ethers::types::Address, u64>,
+    /// sequence number for the next record to be processed from the bridge records table
+    pub(crate) sui_syncer_seq_cursor: DBMap<(), u64>,
 }
 
 impl BridgeOrchestratorTables {
@@ -84,6 +86,22 @@ impl BridgeOrchestratorTables {
             .map_err(|e| BridgeError::StorageError(format!("Couldn't write batch: {:?}", e)))
     }
 
+    pub(crate) fn update_sui_seq_cursor(&self, cursor: u64) -> BridgeResult<()> {
+        let mut batch = self.sui_syncer_seq_cursor.batch();
+
+        batch
+            .insert_batch(&self.sui_syncer_seq_cursor, [((), cursor)])
+            .map_err(|e| {
+                BridgeError::StorageError(format!(
+                    "Couldn't insert into sui_syncer_seq_cursor: {:?}",
+                    e
+                ))
+            })?;
+        batch
+            .write()
+            .map_err(|e| BridgeError::StorageError(format!("Couldn't write batch: {:?}", e)))
+    }
+
     pub(crate) fn update_eth_event_cursor(
         &self,
         contract_address: ethers::types::Address,
@@ -120,6 +138,12 @@ impl BridgeOrchestratorTables {
         })
     }
 
+    pub fn get_sui_seq_cursor(&self) -> BridgeResult<Option<u64>> {
+        self.sui_syncer_seq_cursor.get(&()).map_err(|e| {
+            BridgeError::StorageError(format!("Couldn't get sui_syncer_seq_cursor: {:?}", e))
+        })
+    }
+
     pub fn get_eth_event_cursors(
         &self,
         contract_addresses: &[ethers::types::Address],
@@ -127,7 +151,7 @@ impl BridgeOrchestratorTables {
         self.eth_syncer_cursors
             .multi_get(contract_addresses)
             .map_err(|e| {
-                BridgeError::StorageError(format!("Couldn't get sui_syncer_cursors: {:?}", e))
+                BridgeError::StorageError(format!("Couldn't get eth_syncer_cursors: {:?}", e))
             })
     }
 }
@@ -256,5 +280,11 @@ mod tests {
                 .unwrap(),
             sui_cursor
         );
+
+        // update sui seq cursor
+        let sui_seq_cursor: u64 = 100;
+        assert!(store.get_sui_seq_cursor().unwrap().is_none());
+        store.update_sui_seq_cursor(sui_seq_cursor).unwrap();
+        assert_eq!(store.get_sui_seq_cursor().unwrap().unwrap(), sui_seq_cursor);
     }
 }

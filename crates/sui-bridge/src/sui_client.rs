@@ -405,6 +405,26 @@ where
             .get_gas_data_panic_if_not_gas(gas_object_id)
             .await
     }
+
+    pub async fn get_bridge_records_in_range(
+        &self,
+        source_chain_id: u8,
+        start_seq_num: u64,
+        end_seq_num: u64,
+    ) -> Result<Vec<(u64, MoveTypeBridgeRecord)>, BridgeError> {
+        self.inner
+            .get_bridge_records_in_range(source_chain_id, start_seq_num, end_seq_num)
+            .await
+    }
+
+    pub async fn get_token_transfer_next_seq_number(
+        &self,
+        source_chain_id: u8,
+    ) -> Result<u64, BridgeError> {
+        self.inner
+            .get_token_transfer_next_seq_number(source_chain_id)
+            .await
+    }
 }
 
 /// Use a trait to abstract over the SuiSDKClient and SuiMockClient for testing.
@@ -467,6 +487,18 @@ pub trait SuiClientInner: Send + Sync {
         &self,
         gas_object_id: ObjectID,
     ) -> (GasCoin, ObjectRef, Owner);
+
+    async fn get_bridge_records_in_range(
+        &self,
+        source_chain_id: u8,
+        start_seq_num: u64,
+        end_seq_num: u64,
+    ) -> Result<Vec<(u64, MoveTypeBridgeRecord)>, BridgeError>;
+
+    async fn get_token_transfer_next_seq_number(
+        &self,
+        source_chain_id: u8,
+    ) -> Result<u64, BridgeError>;
 }
 
 #[async_trait]
@@ -592,6 +624,22 @@ impl SuiClientInner for SuiSdkClient {
                 }
             }
         }
+    }
+
+    async fn get_bridge_records_in_range(
+        &self,
+        _source_chain_id: u8,
+        _start_seq_num: u64,
+        _end_seq_num: u64,
+    ) -> Result<Vec<(u64, MoveTypeBridgeRecord)>, BridgeError> {
+        unimplemented!("use gRPC implementation")
+    }
+
+    async fn get_token_transfer_next_seq_number(
+        &self,
+        _source_chain_id: u8,
+    ) -> Result<u64, BridgeError> {
+        unimplemented!("use gRPC implementation")
     }
 }
 
@@ -1026,6 +1074,35 @@ impl SuiClientInner for sui_rpc::Client {
             }
         }
     }
+
+    async fn get_bridge_records_in_range(
+        &self,
+        source_chain_id: u8,
+        start_seq_num: u64,
+        end_seq_num: u64,
+    ) -> Result<Vec<(u64, MoveTypeBridgeRecord)>, BridgeError> {
+        let mut records = Vec::new();
+        for seq_num in start_seq_num..=end_seq_num {
+            if let Some(record) = self.get_bridge_record(source_chain_id, seq_num).await? {
+                records.push((seq_num, record));
+            }
+        }
+        Ok(records)
+    }
+
+    async fn get_token_transfer_next_seq_number(
+        &self,
+        source_chain_id: u8,
+    ) -> Result<u64, BridgeError> {
+        let summary = self.get_bridge_summary().await?;
+        let seq_num = summary
+            .sequence_nums
+            .iter()
+            .find(|(chain_id, _)| *chain_id == source_chain_id)
+            .map(|(_, seq)| *seq)
+            .unwrap_or(0);
+        Ok(seq_num)
+    }
 }
 
 #[async_trait]
@@ -1133,6 +1210,26 @@ impl SuiClientInner for SuiClientInternal {
     ) -> (GasCoin, ObjectRef, Owner) {
         self.jsonrpc_client
             .get_gas_data_panic_if_not_gas(gas_object_id)
+            .await
+    }
+
+    async fn get_bridge_records_in_range(
+        &self,
+        source_chain_id: u8,
+        start_seq_num: u64,
+        end_seq_num: u64,
+    ) -> Result<Vec<(u64, MoveTypeBridgeRecord)>, BridgeError> {
+        self.grpc_client
+            .get_bridge_records_in_range(source_chain_id, start_seq_num, end_seq_num)
+            .await
+    }
+
+    async fn get_token_transfer_next_seq_number(
+        &self,
+        source_chain_id: u8,
+    ) -> Result<u64, BridgeError> {
+        self.grpc_client
+            .get_token_transfer_next_seq_number(source_chain_id)
             .await
     }
 }
