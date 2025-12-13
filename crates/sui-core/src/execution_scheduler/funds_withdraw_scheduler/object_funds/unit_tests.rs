@@ -1,26 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unit tests for the implementation of the object balance withdraw scheduler.
+//! Unit tests for the implementation of the object funds withdraw scheduler.
 
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use sui_types::{
     accumulator_root::AccumulatorObjId,
     base_types::{ObjectID, SequenceNumber},
-    execution_params::BalanceWithdrawStatus,
+    execution_params::FundsWithdrawStatus,
 };
 
-use crate::execution_scheduler::balance_withdraw_scheduler::{
-    ObjectBalanceWithdrawSchedulerTrait, ObjectBalanceWithdrawStatus,
-    mock_balance_read::MockBalanceRead, naive_scheduler::NaiveObjectBalanceWithdrawScheduler,
+use crate::execution_scheduler::funds_withdraw_scheduler::{
+    ObjectFundsWithdrawSchedulerTrait, ObjectFundsWithdrawStatus, mock_funds_read::MockFundsRead,
+    naive_scheduler::NaiveObjectFundsWithdrawScheduler,
 };
 
 #[tokio::test]
 async fn test_sufficient_balance() {
     let account = ObjectID::random();
-    let scheduler = NaiveObjectBalanceWithdrawScheduler::new(
-        Arc::new(MockBalanceRead::new(
+    let scheduler = NaiveObjectFundsWithdrawScheduler::new(
+        Arc::new(MockFundsRead::new(
             SequenceNumber::from_u64(0),
             BTreeMap::from([(account, 100)]),
         )),
@@ -30,17 +30,14 @@ async fn test_sufficient_balance() {
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]),
         SequenceNumber::from_u64(0),
     );
-    assert!(matches!(
-        status,
-        ObjectBalanceWithdrawStatus::SufficientBalance
-    ));
+    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
 }
 
 #[tokio::test]
 async fn test_insufficient_balance() {
     let account = ObjectID::random();
-    let scheduler = NaiveObjectBalanceWithdrawScheduler::new(
-        Arc::new(MockBalanceRead::new(
+    let scheduler = NaiveObjectFundsWithdrawScheduler::new(
+        Arc::new(MockFundsRead::new(
             SequenceNumber::from_u64(0),
             BTreeMap::from([(account, 100)]),
         )),
@@ -50,20 +47,20 @@ async fn test_insufficient_balance() {
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(0),
     );
-    let ObjectBalanceWithdrawStatus::Pending(receiver) = status else {
+    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
         panic!("Expected pending status");
     };
     // Since the withdraw version is the same as the last settled version, the scheduler can immediately
     // decide that the balance is insufficient.
     let result = receiver.await.unwrap();
-    assert_eq!(result, BalanceWithdrawStatus::Insufficient);
+    assert_eq!(result, FundsWithdrawStatus::Insufficient);
 }
 
 #[tokio::test]
 async fn test_pending_wait() {
     let account = ObjectID::random();
-    let scheduler = NaiveObjectBalanceWithdrawScheduler::new(
-        Arc::new(MockBalanceRead::new(
+    let scheduler = NaiveObjectFundsWithdrawScheduler::new(
+        Arc::new(MockFundsRead::new(
             SequenceNumber::from_u64(0),
             BTreeMap::from([(account, 100)]),
         )),
@@ -74,7 +71,7 @@ async fn test_pending_wait() {
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(2),
     );
-    let ObjectBalanceWithdrawStatus::Pending(receiver) = status else {
+    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
         panic!("Expected pending status");
     };
     scheduler.settle_accumulator_version(SequenceNumber::from_u64(1));
@@ -89,77 +86,74 @@ async fn test_pending_wait() {
 #[tokio::test]
 async fn test_pending_then_sufficient() {
     let account = ObjectID::random();
-    let balance_read = Arc::new(MockBalanceRead::new(
+    let funds_read = Arc::new(MockFundsRead::new(
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
     let scheduler =
-        NaiveObjectBalanceWithdrawScheduler::new(balance_read.clone(), SequenceNumber::from_u64(0));
+        NaiveObjectFundsWithdrawScheduler::new(funds_read.clone(), SequenceNumber::from_u64(0));
     let status = scheduler.schedule(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(1),
     );
-    let ObjectBalanceWithdrawStatus::Pending(receiver) = status else {
+    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
         panic!("Expected pending status");
     };
-    balance_read.settle_balance_changes(
+    funds_read.settle_funds_changes(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 1)]),
         SequenceNumber::from_u64(1),
     );
     scheduler.settle_accumulator_version(SequenceNumber::from_u64(1));
     let result = receiver.await.unwrap();
-    assert_eq!(result, BalanceWithdrawStatus::MaybeSufficient);
+    assert_eq!(result, FundsWithdrawStatus::MaybeSufficient);
 
     let status = scheduler.schedule(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(1),
     );
-    assert!(matches!(
-        status,
-        ObjectBalanceWithdrawStatus::SufficientBalance
-    ));
+    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
 }
 
 #[tokio::test]
 async fn test_pending_then_insufficient() {
     let account = ObjectID::random();
-    let balance_read = Arc::new(MockBalanceRead::new(
+    let funds_read = Arc::new(MockFundsRead::new(
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
     let scheduler =
-        NaiveObjectBalanceWithdrawScheduler::new(balance_read.clone(), SequenceNumber::from_u64(0));
+        NaiveObjectFundsWithdrawScheduler::new(funds_read.clone(), SequenceNumber::from_u64(0));
     let status = scheduler.schedule(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 102)]),
         SequenceNumber::from_u64(1),
     );
-    let ObjectBalanceWithdrawStatus::Pending(receiver) = status else {
+    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
         panic!("Expected pending status");
     };
-    balance_read.settle_balance_changes(
+    funds_read.settle_funds_changes(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 1)]),
         SequenceNumber::from_u64(1),
     );
     scheduler.settle_accumulator_version(SequenceNumber::from_u64(1));
     let result = receiver.await.unwrap();
-    assert_eq!(result, BalanceWithdrawStatus::MaybeSufficient);
+    assert_eq!(result, FundsWithdrawStatus::MaybeSufficient);
 
     let status = scheduler.schedule(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 102)]),
         SequenceNumber::from_u64(1),
     );
-    let ObjectBalanceWithdrawStatus::Pending(receiver) = status else {
+    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
         panic!("Expected pending status");
     };
     let result = receiver.await.unwrap();
-    assert_eq!(result, BalanceWithdrawStatus::Insufficient);
+    assert_eq!(result, FundsWithdrawStatus::Insufficient);
 }
 
 #[tokio::test]
 async fn test_pending_cancels_on_close_epoch() {
     let account = ObjectID::random();
-    let scheduler = NaiveObjectBalanceWithdrawScheduler::new(
-        Arc::new(MockBalanceRead::new(
+    let scheduler = NaiveObjectFundsWithdrawScheduler::new(
+        Arc::new(MockFundsRead::new(
             SequenceNumber::from_u64(0),
             BTreeMap::from([(account, 100)]),
         )),
@@ -169,7 +163,7 @@ async fn test_pending_cancels_on_close_epoch() {
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
         SequenceNumber::from_u64(1),
     );
-    let ObjectBalanceWithdrawStatus::Pending(receiver) = status else {
+    let ObjectFundsWithdrawStatus::Pending(receiver) = status else {
         panic!("Expected pending status");
     };
 
@@ -181,12 +175,12 @@ async fn test_pending_cancels_on_close_epoch() {
 async fn test_multiple_withdraws() {
     let account1 = ObjectID::random();
     let account2 = ObjectID::random();
-    let balance_read = Arc::new(MockBalanceRead::new(
+    let funds_read = Arc::new(MockFundsRead::new(
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account1, 100), (account2, 100)]),
     ));
     let scheduler =
-        NaiveObjectBalanceWithdrawScheduler::new(balance_read.clone(), SequenceNumber::from_u64(0));
+        NaiveObjectFundsWithdrawScheduler::new(funds_read.clone(), SequenceNumber::from_u64(0));
     let status = scheduler.schedule(
         BTreeMap::from([
             (AccumulatorObjId::new_unchecked(account1), 100),
@@ -194,21 +188,18 @@ async fn test_multiple_withdraws() {
         ]),
         SequenceNumber::from_u64(0),
     );
-    assert!(matches!(
-        status,
-        ObjectBalanceWithdrawStatus::SufficientBalance
-    ));
+    assert!(matches!(status, ObjectFundsWithdrawStatus::SufficientFunds));
 }
 
 #[tokio::test]
 async fn test_settle_accumulator_version() {
     let account = ObjectID::random();
-    let balance_read = Arc::new(MockBalanceRead::new(
+    let funds_read = Arc::new(MockFundsRead::new(
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
     let scheduler =
-        NaiveObjectBalanceWithdrawScheduler::new(balance_read.clone(), SequenceNumber::from_u64(0));
+        NaiveObjectFundsWithdrawScheduler::new(funds_read.clone(), SequenceNumber::from_u64(0));
     scheduler.schedule(
         BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]),
         SequenceNumber::from_u64(0),

@@ -9,11 +9,10 @@ use crate::{
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
         ExecutingGuard, PendingCertificateStats,
-        balance_withdraw_scheduler::{
-            BalanceSettlement, ObjectBalanceWithdrawSchedulerTrait, ObjectBalanceWithdrawStatus,
-            ScheduleStatus, TxBalanceWithdraw,
-            naive_scheduler::NaiveObjectBalanceWithdrawScheduler,
-            scheduler::BalanceWithdrawScheduler,
+        funds_withdraw_scheduler::{
+            FundsSettlement, ObjectFundsWithdrawSchedulerTrait, ObjectFundsWithdrawStatus,
+            ScheduleStatus, TxFundsWithdraw, naive_scheduler::NaiveObjectFundsWithdrawScheduler,
+            scheduler::FundsWithdrawScheduler,
         },
     },
 };
@@ -33,7 +32,7 @@ use sui_types::{
     effects::{AccumulatorOperation, AccumulatorValue, TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
-    execution_params::BalanceWithdrawStatus,
+    execution_params::FundsWithdrawStatus,
     storage::{ChildObjectResolver, InputKey},
     transaction::{
         SenderSignedData, SharedInputObject, SharedObjectMutability, TransactionData,
@@ -94,9 +93,8 @@ pub struct ExecutionScheduler {
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     overload_tracker: Arc<OverloadTracker>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
-    address_balance_withdraw_scheduler: Arc<Mutex<Option<BalanceWithdrawScheduler>>>,
-    object_balance_withdraw_scheduler:
-        Arc<Mutex<Option<Box<dyn ObjectBalanceWithdrawSchedulerTrait>>>>,
+    address_funds_withdraw_scheduler: Arc<Mutex<Option<FundsWithdrawScheduler>>>,
+    object_funds_withdraw_scheduler: Arc<Mutex<Option<Box<dyn ObjectFundsWithdrawSchedulerTrait>>>>,
     metrics: Arc<AuthorityMetrics>,
 }
 
@@ -140,8 +138,8 @@ impl ExecutionScheduler {
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         tracing::info!("Creating new ExecutionScheduler");
-        let (address_balance_withdraw_scheduler, object_balance_withdraw_scheduler) =
-            Self::initialize_balance_withdraw_scheduler(
+        let (address_funds_withdraw_scheduler, object_funds_withdraw_scheduler) =
+            Self::initialize_funds_withdraw_scheduler(
                 epoch_store,
                 &object_cache_read,
                 child_object_resolver,
@@ -151,23 +149,21 @@ impl ExecutionScheduler {
             transaction_cache_read,
             overload_tracker: Arc::new(OverloadTracker::new()),
             tx_ready_certificates,
-            address_balance_withdraw_scheduler: Arc::new(Mutex::new(
-                address_balance_withdraw_scheduler,
+            address_funds_withdraw_scheduler: Arc::new(Mutex::new(
+                address_funds_withdraw_scheduler,
             )),
-            object_balance_withdraw_scheduler: Arc::new(Mutex::new(
-                object_balance_withdraw_scheduler,
-            )),
+            object_funds_withdraw_scheduler: Arc::new(Mutex::new(object_funds_withdraw_scheduler)),
             metrics,
         }
     }
 
-    fn initialize_balance_withdraw_scheduler(
+    fn initialize_funds_withdraw_scheduler(
         epoch_store: &Arc<AuthorityPerEpochStore>,
         object_cache_read: &Arc<dyn ObjectCacheRead>,
         child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
     ) -> (
-        Option<BalanceWithdrawScheduler>,
-        Option<Box<dyn ObjectBalanceWithdrawSchedulerTrait>>,
+        Option<FundsWithdrawScheduler>,
+        Option<Box<dyn ObjectFundsWithdrawSchedulerTrait>>,
     ) {
         let withdraw_scheduler_enabled =
             epoch_store.is_validator() && epoch_store.accumulators_enabled();
@@ -176,16 +172,16 @@ impl ExecutionScheduler {
         }
         let starting_accumulator_version = object_cache_read
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .expect("Accumulator root object must be present if balance accumulator is enabled")
+            .expect("Accumulator root object must be present if funds accumulator is enabled")
             .version();
-        let address_balance_withdraw_scheduler = BalanceWithdrawScheduler::new(
+        let address_funds_withdraw_scheduler = FundsWithdrawScheduler::new(
             Arc::new(child_object_resolver.clone()),
             starting_accumulator_version,
         );
-        let object_balance_withdraw_scheduler =
+        let object_funds_withdraw_scheduler =
             if epoch_store.protocol_config().enable_object_funds_withdraw() {
-                let scheduler: Box<dyn ObjectBalanceWithdrawSchedulerTrait> =
-                    Box::new(NaiveObjectBalanceWithdrawScheduler::new(
+                let scheduler: Box<dyn ObjectFundsWithdrawSchedulerTrait> =
+                    Box::new(NaiveObjectFundsWithdrawScheduler::new(
                         Arc::new(child_object_resolver),
                         starting_accumulator_version,
                     ));
@@ -194,8 +190,8 @@ impl ExecutionScheduler {
                 None
             };
         (
-            Some(address_balance_withdraw_scheduler),
-            object_balance_withdraw_scheduler,
+            Some(address_funds_withdraw_scheduler),
+            object_funds_withdraw_scheduler,
         )
     }
 
@@ -339,7 +335,7 @@ impl ExecutionScheduler {
         let _ = self.tx_ready_certificates.send(pending_cert);
     }
 
-    fn schedule_balance_withdraws(
+    fn schedule_funds_withdraws(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -367,17 +363,17 @@ impl ExecutionScheduler {
             withdraws
                 .entry(accumulator_version)
                 .or_insert(Vec::new())
-                .push(TxBalanceWithdraw {
+                .push(TxFundsWithdraw {
                     tx_digest,
                     reservations: tx_withdraws,
                 });
         }
         let mut receivers = FuturesUnordered::new();
         {
-            let guard = self.address_balance_withdraw_scheduler.lock();
+            let guard = self.address_funds_withdraw_scheduler.lock();
             let withdraw_scheduler = guard
                 .as_ref()
-                .expect("Balance withdraw scheduler must be enabled if there are withdraws");
+                .expect("Funds withdraw scheduler must be enabled if there are withdraws");
             for (version, tx_withdraws) in withdraws {
                 receivers.extend(withdraw_scheduler.schedule_withdraws(version, tx_withdraws));
             }
@@ -393,25 +389,25 @@ impl ExecutionScheduler {
             while let Some(result) = receivers.next().await {
                 match result {
                     Ok(result) => match result.status {
-                        ScheduleStatus::InsufficientBalance => {
+                        ScheduleStatus::InsufficientFunds => {
                             let tx_digest = result.tx_digest;
                             debug!(
                                 ?tx_digest,
-                                "Balance withdraw scheduling result: Insufficient balance"
+                                "Funds withdraw scheduling result: Insufficient funds"
                             );
                             let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
-                            let env = env.with_insufficient_balance();
+                            let env = env.with_insufficient_funds();
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
-                        ScheduleStatus::SufficientBalance => {
+                        ScheduleStatus::SufficientFunds => {
                             let tx_digest = result.tx_digest;
-                            debug!(?tx_digest, "Balance withdraw scheduling result: Success");
+                            debug!(?tx_digest, "Funds withdraw scheduling result: Success");
                             let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
                         ScheduleStatus::SkipSchedule => {
                             let tx_digest = result.tx_digest;
-                            debug!(?tx_digest, "Skip scheduling balance withdraw");
+                            debug!(?tx_digest, "Skip scheduling funds withdraw");
                         }
                     },
                     Err(e) => {
@@ -575,7 +571,7 @@ impl ExecutionScheduler {
 
         self.enqueue_transactions(ordinary_txns, epoch_store);
         self.schedule_tx_keys(tx_with_keys, epoch_store);
-        self.schedule_balance_withdraws(tx_with_withdraws, epoch_store);
+        self.schedule_funds_withdraws(tx_with_withdraws, epoch_store);
         self.schedule_settlement_transactions(settlement_txns, epoch_store);
     }
 
@@ -639,45 +635,45 @@ impl ExecutionScheduler {
             .inc_by(already_executed_certs_num);
     }
 
-    pub fn settle_balances(&self, settlement: BalanceSettlement) {
-        if let Some(object_balance_withdraw_scheduler) =
-            self.object_balance_withdraw_scheduler.lock().as_ref()
+    pub fn settle_funds(&self, settlement: FundsSettlement) {
+        if let Some(object_funds_withdraw_scheduler) =
+            self.object_funds_withdraw_scheduler.lock().as_ref()
         {
-            object_balance_withdraw_scheduler
+            object_funds_withdraw_scheduler
                 .settle_accumulator_version(settlement.next_accumulator_version);
         }
-        self.address_balance_withdraw_scheduler
+        self.address_funds_withdraw_scheduler
             .lock()
             .as_ref()
-            .expect("Balance withdraw scheduler must be enabled if there are settlements")
-            .settle_balances(settlement);
+            .expect("Funds withdraw scheduler must be enabled if there are settlements")
+            .settle_funds(settlement);
     }
 
-    /// Reconfigure internal state at epoch start. This resets the balance withdraw scheduler
+    /// Reconfigure internal state at epoch start. This resets the funds withdraw scheduler
     /// to the current accumulator root object version.
     pub fn reconfigure(
         &self,
         new_epoch_store: &Arc<AuthorityPerEpochStore>,
         child_object_resolver: &Arc<dyn ChildObjectResolver + Send + Sync>,
     ) {
-        let (address_balance_withdraw_scheduler, object_balance_withdraw_scheduler) =
-            Self::initialize_balance_withdraw_scheduler(
+        let (address_funds_withdraw_scheduler, object_funds_withdraw_scheduler) =
+            Self::initialize_funds_withdraw_scheduler(
                 new_epoch_store,
                 &self.object_cache_read,
                 child_object_resolver.clone(),
             );
-        let mut guard = self.address_balance_withdraw_scheduler.lock();
+        let mut guard = self.address_funds_withdraw_scheduler.lock();
         if let Some(old_scheduler) = guard.as_ref() {
             old_scheduler.close_epoch();
         }
-        *guard = address_balance_withdraw_scheduler;
+        *guard = address_funds_withdraw_scheduler;
         drop(guard);
 
-        let mut object_guard = self.object_balance_withdraw_scheduler.lock();
+        let mut object_guard = self.object_funds_withdraw_scheduler.lock();
         if let Some(old_scheduler) = object_guard.as_ref() {
             old_scheduler.close_epoch();
         }
-        *object_guard = object_balance_withdraw_scheduler;
+        *object_guard = object_funds_withdraw_scheduler;
     }
 
     pub fn check_execution_overload(
@@ -701,21 +697,21 @@ impl ExecutionScheduler {
                 .get()) as usize
     }
 
-    pub fn should_commit_object_balance_withdraws(
+    pub fn should_commit_object_funds_withdraws(
         &self,
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
         execution_env: &ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> bool {
-        // Object balance withdraw is not enabled on this node.
-        if self.object_balance_withdraw_scheduler.lock().is_none() {
+        // Object funds withdraw is not enabled on this node.
+        if self.object_funds_withdraw_scheduler.lock().is_none() {
             return true;
         }
 
         if effects.status().is_err() {
             // This transaction already failed. It does not matter any more
-            // whether it has sufficient object balance or not.
+            // whether it has sufficient object funds or not.
             return true;
         }
         let address_funds_reservations: BTreeSet<_> = certificate
@@ -733,7 +729,7 @@ impl ExecutionScheduler {
                 if address_funds_reservations.contains(&event.accumulator_obj) {
                     return None;
                 }
-                // Only integer splits are balance withdraws.
+                // Only integer splits are funds withdraws.
                 if let (AccumulatorOperation::Split, AccumulatorValue::Integer(amount)) =
                     (event.write.operation, event.write.value)
                 {
@@ -743,12 +739,12 @@ impl ExecutionScheduler {
                 }
             })
             .collect();
-        // If there are no object withdraws, we can skip checking object balance.
+        // If there are no object withdraws, we can skip checking object funds.
         if object_withdraws.is_empty() {
             return true;
         }
         let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version else {
-            // Fastpath transactions that perform object balance withdraws
+            // Fastpath transactions that perform object funds withdraws
             // must wait for consensus to assign the accumulator version.
             // We cannot optimize the scheduling by processing fastpath object withdraws
             // sooner because these may get reverted, and we don't want them
@@ -758,19 +754,19 @@ impl ExecutionScheduler {
             return false;
         };
         match self
-            .object_balance_withdraw_scheduler
+            .object_funds_withdraw_scheduler
             .lock()
             .as_ref()
             .unwrap()
             .schedule(object_withdraws, accumulator_version)
         {
-            // Sufficient balance, we can go ahead and commit the execution results as it is.
-            ObjectBalanceWithdrawStatus::SufficientBalance => true,
-            // Currently insufficient balance. We need to wait until it reach a deterministic state
+            // Sufficient funds, we can go ahead and commit the execution results as it is.
+            ObjectFundsWithdrawStatus::SufficientFunds => true,
+            // Currently insufficient funds. We need to wait until it reach a deterministic state
             // before we can determine if it is really insufficient (to include potential deposits)
             // At that time we will have to re-enqueue the transaction for execution again.
             // Re-enqueue is handled here so the caller does not need to worry about it.
-            ObjectBalanceWithdrawStatus::Pending(receiver) => {
+            ObjectFundsWithdrawStatus::Pending(receiver) => {
                 let scheduler = self.clone();
                 let cert = certificate.clone();
                 let mut execution_env = execution_env.clone();
@@ -782,22 +778,22 @@ impl ExecutionScheduler {
                     let _ = epoch_store
                         .within_alive_epoch(async move {
                             match receiver.await {
-                                Ok(BalanceWithdrawStatus::MaybeSufficient) => {
+                                Ok(FundsWithdrawStatus::MaybeSufficient) => {
                                     // The withdraw state is now deterministically known,
                                     // so we can enqueue the transaction again and it will check again
                                     // whether it is sufficient or not in the next execution.
                                     // TODO: We should be able to optimize this by avoiding re-execution.
                                 }
-                                Ok(BalanceWithdrawStatus::Insufficient) => {
-                                    // Re-enqueue with insufficient balance status, so it will be executed
+                                Ok(FundsWithdrawStatus::Insufficient) => {
+                                    // Re-enqueue with insufficient funds status, so it will be executed
                                     // in the next execution and fail through early error.
                                     // FIXME: We need to also track the amount of gas that was used,
                                     // so that we could charge properly in the next execution when we
                                     // go through early error. Otherwise we would undercharge.
-                                    execution_env = execution_env.with_insufficient_balance();
+                                    execution_env = execution_env.with_insufficient_funds();
                                 }
                                 Err(e) => {
-                                    error!("Error receiving balance withdraw status: {:?}", e);
+                                    error!("Error receiving funds withdraw status: {:?}", e);
                                 }
                             }
                             scheduler.send_transaction_for_execution(

@@ -7,8 +7,8 @@ use prometheus::IntGauge;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use tokio::time::Instant;
 
-pub(crate) mod balance_withdraw_scheduler;
 pub(crate) mod execution_scheduler_impl;
+pub(crate) mod funds_withdraw_scheduler;
 mod overload_tracker;
 
 // TODO: Cleanup this struct.

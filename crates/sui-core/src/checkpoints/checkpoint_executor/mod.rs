@@ -883,7 +883,7 @@ impl CheckpointExecutor {
                             ..
                         } = effects.status()
                         {
-                            env = env.with_insufficient_balance();
+                            env = env.with_insufficient_funds();
                         }
 
                         Some((tx_digest, (txn.clone(), env)))

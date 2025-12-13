@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use sui_types::{
     accumulator_root::AccumulatorObjId, base_types::SequenceNumber,
-    execution_params::BalanceWithdrawStatus,
+    execution_params::FundsWithdrawStatus,
 };
 use tokio::sync::oneshot;
 
@@ -17,22 +17,22 @@ mod integration_tests;
 #[cfg(test)]
 mod unit_tests;
 
-/// Note that there is no need to have a separate InsufficientBalance variant.
-/// If the balance is insufficient, the execution would still have to abort and rely on
+/// Note that there is no need to have a separate InsufficientFunds variant.
+/// If the funds are insufficient, the execution would still have to abort and rely on
 /// a rescheduling to be able to execute again.
-pub(crate) enum ObjectBalanceWithdrawStatus {
-    SufficientBalance,
-    // The receiver will be notified when the balance is determined to be sufficient or insufficient.
-    // The bool is true if the balance is sufficient, false if the balance is insufficient.
-    Pending(oneshot::Receiver<BalanceWithdrawStatus>),
+pub(crate) enum ObjectFundsWithdrawStatus {
+    SufficientFunds,
+    // The receiver will be notified when the funds are determined to be sufficient or insufficient.
+    // The bool is true if the funds are sufficient, false if the funds are insufficient.
+    Pending(oneshot::Receiver<FundsWithdrawStatus>),
 }
 
-pub(crate) trait ObjectBalanceWithdrawSchedulerTrait: Send + Sync {
+pub(crate) trait ObjectFundsWithdrawSchedulerTrait: Send + Sync {
     fn schedule(
         &self,
         object_withdraws: BTreeMap<AccumulatorObjId, u64>,
         accumulator_version: SequenceNumber,
-    ) -> ObjectBalanceWithdrawStatus;
+    ) -> ObjectFundsWithdrawStatus;
     fn settle_accumulator_version(&self, next_accumulator_version: SequenceNumber);
     fn close_epoch(&self);
     #[cfg(test)]

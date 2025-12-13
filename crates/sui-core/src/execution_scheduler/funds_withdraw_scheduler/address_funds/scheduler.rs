@@ -4,10 +4,10 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use super::{
-    BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
-    eager_scheduler::EagerBalanceWithdrawScheduler, naive_scheduler::NaiveBalanceWithdrawScheduler,
+    FundsSettlement, ScheduleResult, ScheduleStatus, TxFundsWithdraw,
+    eager_scheduler::EagerFundsWithdrawScheduler, naive_scheduler::NaiveFundsWithdrawScheduler,
 };
-use crate::accumulators::balance_read::AccountBalanceRead;
+use crate::accumulators::funds_read::AccountFundsRead;
 use futures::stream::FuturesUnordered;
 use mysten_metrics::monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use sui_types::base_types::SequenceNumber;
@@ -15,9 +15,9 @@ use tokio::sync::oneshot;
 use tracing::debug;
 
 #[async_trait::async_trait]
-pub(crate) trait BalanceWithdrawSchedulerTrait: Send + Sync {
+pub(crate) trait FundsWithdrawSchedulerTrait: Send + Sync {
     async fn schedule_withdraws(&self, withdraws: WithdrawReservations);
-    async fn settle_balances(&self, settlement: BalanceSettlement);
+    async fn settle_funds(&self, settlement: FundsSettlement);
     fn close_epoch(&self);
     #[cfg(test)]
     fn get_current_accumulator_version(&self) -> SequenceNumber;
@@ -25,22 +25,22 @@ pub(crate) trait BalanceWithdrawSchedulerTrait: Send + Sync {
 
 pub(crate) struct WithdrawReservations {
     pub accumulator_version: SequenceNumber,
-    pub withdraws: Vec<TxBalanceWithdraw>,
+    pub withdraws: Vec<TxFundsWithdraw>,
     pub senders: Vec<oneshot::Sender<ScheduleResult>>,
 }
 
 #[derive(Clone)]
-pub(crate) struct BalanceWithdrawScheduler {
-    innards: BTreeMap<String, Arc<dyn BalanceWithdrawSchedulerTrait>>,
+pub(crate) struct FundsWithdrawScheduler {
+    innards: BTreeMap<String, Arc<dyn FundsWithdrawSchedulerTrait>>,
     /// Use channels to process withdraws and settlements asynchronously without blocking the caller.
     withdraw_sender: UnboundedSender<WithdrawReservations>,
-    settlement_sender: UnboundedSender<BalanceSettlement>,
+    settlement_sender: UnboundedSender<FundsSettlement>,
 }
 
 impl WithdrawReservations {
     pub fn new(
         accumulator_version: SequenceNumber,
-        withdraws: Vec<TxBalanceWithdraw>,
+        withdraws: Vec<TxFundsWithdraw>,
     ) -> (Self, FuturesUnordered<oneshot::Receiver<ScheduleResult>>) {
         let (senders, receivers) = (0..withdraws.len())
             .map(|_| {
@@ -72,9 +72,9 @@ impl WithdrawReservations {
     }
 }
 
-impl BalanceWithdrawScheduler {
+impl FundsWithdrawScheduler {
     pub fn new(
-        balance_read: Arc<dyn AccountBalanceRead>,
+        funds_read: Arc<dyn AccountFundsRead>,
         starting_accumulator_version: SequenceNumber,
     ) -> Self {
         // TODO: Currently, scheduling will be as slow as the slowest scheduler (i.e., the naive scheduler).
@@ -83,15 +83,13 @@ impl BalanceWithdrawScheduler {
         let innards = BTreeMap::from([
             (
                 "naive".to_string(),
-                NaiveBalanceWithdrawScheduler::new(
-                    balance_read.clone(),
-                    starting_accumulator_version,
-                ) as Arc<dyn BalanceWithdrawSchedulerTrait>,
+                NaiveFundsWithdrawScheduler::new(funds_read.clone(), starting_accumulator_version)
+                    as Arc<dyn FundsWithdrawSchedulerTrait>,
             ),
             (
                 "eager".to_string(),
-                EagerBalanceWithdrawScheduler::new(balance_read, starting_accumulator_version)
-                    as Arc<dyn BalanceWithdrawSchedulerTrait>,
+                EagerFundsWithdrawScheduler::new(funds_read, starting_accumulator_version)
+                    as Arc<dyn FundsWithdrawSchedulerTrait>,
             ),
         ]);
         let (withdraw_sender, withdraw_receiver) =
@@ -118,7 +116,7 @@ impl BalanceWithdrawScheduler {
     pub fn schedule_withdraws(
         &self,
         accumulator_version: SequenceNumber,
-        withdraws: Vec<TxBalanceWithdraw>,
+        withdraws: Vec<TxFundsWithdraw>,
     ) -> FuturesUnordered<oneshot::Receiver<ScheduleResult>> {
         // TODO: Add debug assertion that withdraws are scheduled in order.
         let (reservations, receivers) = WithdrawReservations::new(accumulator_version, withdraws);
@@ -130,9 +128,9 @@ impl BalanceWithdrawScheduler {
 
     /// This function is called whenever a settlement transaction is executed.
     /// It is only called from checkpoint builder, once for each accumulator version, in order.
-    pub fn settle_balances(&self, settlement: BalanceSettlement) {
+    pub fn settle_funds(&self, settlement: FundsSettlement) {
         if let Err(err) = self.settlement_sender.send(settlement) {
-            tracing::error!("Failed to send balance settlement: {}", err);
+            tracing::error!("Failed to send funds settlement: {}", err);
         }
     }
 
@@ -224,7 +222,7 @@ impl BalanceWithdrawScheduler {
                 let _ = original_sender.send(final_result);
             }
         }
-        tracing::info!("Balance withdraw receiver closed");
+        tracing::info!("Funds withdraw receiver closed");
     }
 
     fn aggregate_results(results: Vec<ScheduleResult>) -> ScheduleResult {
@@ -262,19 +260,19 @@ impl BalanceWithdrawScheduler {
 
     async fn process_settlement_task(
         self,
-        mut settlement_receiver: UnboundedReceiver<BalanceSettlement>,
+        mut settlement_receiver: UnboundedReceiver<FundsSettlement>,
     ) {
         while let Some(settlement) = settlement_receiver.recv().await {
             debug!(
                 next_accumulator_version =? settlement.next_accumulator_version.value(),
-                "Settling balance changes: {:?}",
-                settlement.balance_changes,
+                "Settling funds changes: {:?}",
+                settlement.funds_changes,
             );
             for (name, scheduler) in &self.innards {
-                debug!("Settling balances on scheduler: {}", name);
-                scheduler.settle_balances(settlement.clone()).await;
+                debug!("Settling funds on scheduler: {}", name);
+                scheduler.settle_funds(settlement.clone()).await;
             }
         }
-        tracing::info!("Balance settlement receiver closed");
+        tracing::info!("Funds settlement receiver closed");
     }
 }
