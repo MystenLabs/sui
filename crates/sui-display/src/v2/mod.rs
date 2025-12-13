@@ -724,6 +724,90 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_optional_auto_dereference() {
+        let inner = struct_(
+            "0x1::m::Inner",
+            vec![("data", T::U64), ("optional_data", optional_(T::U64))],
+        );
+
+        let layout = struct_(
+            "0x1::m::Test",
+            vec![
+                ("some_inner", optional_(inner.clone())),
+                ("none_inner", optional_(inner.clone())),
+                ("partial_inner", optional_(inner)),
+                ("some_value", optional_(T::U64)),
+                ("none_value", optional_(T::U64)),
+            ],
+        );
+
+        let bytes = bcs::to_bytes(&(
+            Some((100u64, Some(200u64))), // some_inner
+            None::<(u64, Option<u64>)>,   // none_inner
+            Some((300u64, None::<u64>)),  // partial_inner
+            Some(42u64),                  // some_value
+            None::<u64>,                  // none_value
+        ))
+        .unwrap();
+
+        let formats = [
+            // Accessing through Some option to nested field
+            ("some_inner_data", "{some_inner.data}"),
+            ("some_inner_optional", "{some_inner.optional_data}"),
+            // Accessing through None option should return null
+            ("none_inner_data", "{none_inner.data}"),
+            ("none_inner_optional", "{none_inner.optional_data}"),
+            // Accessing through Some option to None nested optional
+            ("partial_inner_data", "{partial_inner.data}"),
+            ("partial_inner_optional", "{partial_inner.optional_data}"),
+            // Direct optional access
+            ("some_value", "{some_value}"),
+            ("none_value", "{none_value}"),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            usize::MAX,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "some_inner_data": Ok(
+                String("100"),
+            ),
+            "some_inner_optional": Ok(
+                String("200"),
+            ),
+            "none_inner_data": Ok(
+                Null,
+            ),
+            "none_inner_optional": Ok(
+                Null,
+            ),
+            "partial_inner_data": Ok(
+                String("300"),
+            ),
+            "partial_inner_optional": Ok(
+                Null,
+            ),
+            "some_value": Ok(
+                String("42"),
+            ),
+            "none_value": Ok(
+                Null,
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_dynamic_fields() {
         let parent = AccountAddress::from_str("0x1000").unwrap();
         let bytes = bcs::to_bytes(&parent).unwrap();
