@@ -64,7 +64,7 @@ pub fn get_early_execution_error(
     }
 
     if matches!(funds_withdraw_status, FundsWithdrawStatus::Insufficient) {
-        return Some(ExecutionErrorKind::InsufficientBalanceForWithdraw);
+        return Some(ExecutionErrorKind::InsufficientFundsForWithdraw);
     }
 
     None
@@ -140,7 +140,7 @@ mod tests {
         );
         assert_eq!(
             result,
-            Some(ExecutionErrorKind::InsufficientBalanceForWithdraw)
+            Some(ExecutionErrorKind::InsufficientFundsForWithdraw)
         );
 
         // Test with sufficient balance

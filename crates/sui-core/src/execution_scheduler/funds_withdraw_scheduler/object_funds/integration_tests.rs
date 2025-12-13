@@ -277,7 +277,7 @@ async fn test_object_withdraw_multiple_withdraws() {
             assert!(matches!(
                 effects.status(),
                 ExecutionStatus::Failure {
-                    error: ExecutionFailureStatus::InsufficientBalanceForWithdraw,
+                    error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
                     ..
                 }
             ));

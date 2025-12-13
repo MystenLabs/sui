@@ -653,7 +653,7 @@ ExecutionFailureStatus:
     39:
       InvalidLinkage: UNIT
     40:
-      InsufficientBalanceForWithdraw: UNIT
+      InsufficientFundsForWithdraw: UNIT
     41:
       NonExclusiveWriteInputObjectModified:
         STRUCT:
