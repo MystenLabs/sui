@@ -13,7 +13,7 @@ use crate::error::BridgeError;
 use crate::error::BridgeResult;
 use crate::types::BridgeAction;
 use crate::types::SuiToEthTokenTransfer;
-use ethers::types::Address as EthAddress;
+use alloy::primitives::Address as EthAddress;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use move_core_types::language_storage::StructTag;
@@ -451,7 +451,7 @@ pub mod tests {
     use crate::e2e_tests::test_utils::BridgeTestClusterBuilder;
     use crate::types::BridgeAction;
     use crate::types::SuiToEthBridgeAction;
-    use ethers::types::Address as EthAddress;
+    use alloy::primitives::Address as EthAddress;
     use sui_json_rpc_types::BcsEvent;
     use sui_json_rpc_types::SuiEvent;
     use sui_types::Identifier;
@@ -480,7 +480,7 @@ pub mod tests {
             source_chain: sanitized_event.sui_chain_id as u8,
             sender_address: sanitized_event.sui_address.to_vec(),
             target_chain: sanitized_event.eth_chain_id as u8,
-            target_address: sanitized_event.eth_address.as_bytes().to_vec(),
+            target_address: sanitized_event.eth_address.to_vec(),
             token_type: sanitized_event.token_id,
             amount_sui_adjusted: sanitized_event.amount_sui_adjusted,
         };
@@ -584,7 +584,7 @@ pub mod tests {
             source_chain: BridgeChainId::SuiTestnet as u8,
             sender_address: SuiAddress::random_for_testing_only().to_vec(),
             target_chain: BridgeChainId::EthSepolia as u8,
-            target_address: EthAddress::random().as_bytes().to_vec(),
+            target_address: EthAddress::random().to_vec(),
             token_type: TOKEN_ID_SUI,
             amount_sui_adjusted: 0,
         };

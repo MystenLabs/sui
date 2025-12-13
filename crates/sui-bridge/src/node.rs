@@ -1,24 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::WatchdogConfig;
-use crate::crypto::BridgeAuthorityPublicKeyBytes;
-use crate::metered_eth_provider::MeteredEthHttpProvider;
-use crate::sui_bridge_watchdog::eth_bridge_status::EthBridgeStatus;
-use crate::sui_bridge_watchdog::eth_vault_balance::{EthereumVaultBalance, VaultAsset};
-use crate::sui_bridge_watchdog::metrics::WatchdogMetrics;
-use crate::sui_bridge_watchdog::sui_bridge_status::SuiBridgeStatus;
-use crate::sui_bridge_watchdog::total_supplies::TotalSupplies;
-use crate::sui_bridge_watchdog::{BridgeWatchDog, Observable};
-use crate::sui_client::SuiBridgeClient;
-use crate::types::BridgeCommittee;
-use crate::utils::{
-    get_committee_voting_power_by_name, get_eth_contract_addresses, get_validator_names_by_pub_keys,
-};
 use crate::{
     action_executor::BridgeActionExecutor,
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
-    config::{BridgeClientConfig, BridgeNodeConfig},
+    config::{BridgeClientConfig, BridgeNodeConfig, WatchdogConfig},
+    crypto::BridgeAuthorityPublicKeyBytes,
     eth_syncer::EthSyncer,
     events::init_all_struct_tags,
     metrics::BridgeMetrics,
@@ -26,11 +13,24 @@ use crate::{
     orchestrator::BridgeOrchestrator,
     server::{BridgeNodePublicMetadata, handler::BridgeRequestHandler, run_server},
     storage::BridgeOrchestratorTables,
+    sui_bridge_watchdog::{
+        BridgeWatchDog, Observable,
+        eth_bridge_status::EthBridgeStatus,
+        eth_vault_balance::{EthereumVaultBalance, VaultAsset},
+        metrics::WatchdogMetrics,
+        sui_bridge_status::SuiBridgeStatus,
+        total_supplies::TotalSupplies,
+    },
+    sui_client::SuiBridgeClient,
     sui_syncer::SuiSyncer,
+    types::BridgeCommittee,
+    utils::{
+        EthProvider, get_committee_voting_power_by_name, get_eth_contract_addresses,
+        get_validator_names_by_pub_keys,
+    },
 };
+use alloy::primitives::Address as EthAddress;
 use arc_swap::ArcSwap;
-use ethers::providers::Provider;
-use ethers::types::Address as EthAddress;
 use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::BTreeMap;
 use std::{
@@ -152,7 +152,7 @@ pub async fn run_bridge_node(
 async fn start_watchdog(
     watchdog_config: Option<WatchdogConfig>,
     registry: &prometheus::Registry,
-    eth_provider: Arc<Provider<MeteredEthHttpProvider>>,
+    eth_provider: EthProvider,
     eth_bridge_proxy_address: EthAddress,
     sui_client: Arc<SuiBridgeClient>,
 ) {
@@ -166,7 +166,7 @@ async fn start_watchdog(
         usdt_address,
         wbtc_address,
         lbtc_address,
-    ) = get_eth_contract_addresses(eth_bridge_proxy_address, &eth_provider)
+    ) = get_eth_contract_addresses(eth_bridge_proxy_address, eth_provider.clone())
         .await
         .unwrap_or_else(|e| panic!("get_eth_contract_addresses should not fail: {}", e));
 
@@ -433,7 +433,8 @@ fn get_eth_contracts_to_watch(
 
 #[cfg(test)]
 mod tests {
-    use ethers::types::Address as EthAddress;
+    use alloy::primitives::Address as EthAddress;
+    use alloy::primitives::U160;
     use prometheus::Registry;
 
     use super::*;
@@ -461,8 +462,8 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let temp_dir = tempfile::tempdir().unwrap();
         let eth_contracts = vec![
-            EthAddress::from_low_u64_be(1),
-            EthAddress::from_low_u64_be(2),
+            EthAddress::from(U160::from(1)),
+            EthAddress::from(U160::from(2)),
         ];
         let store = BridgeOrchestratorTables::new(temp_dir.path());
 

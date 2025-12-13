@@ -14,12 +14,12 @@ use crate::{
         EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction, SignedBridgeAction,
     },
 };
+use alloy::primitives::Address as EthAddress;
 use axum::{
     Json,
     extract::{Path, State},
 };
 use axum::{Router, http::StatusCode, routing::get};
-use ethers::types::Address as EthAddress;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use fastcrypto::{
     encoding::{Encoding, Hex},

@@ -1,65 +1,103 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::metrics::BridgeMetrics;
-use ethers::providers::{Http, HttpClientError, JsonRpcClient, Provider};
-use serde::{Serialize, de::DeserializeOwned};
-use std::fmt::Debug;
-use std::sync::Arc;
+use crate::{metrics::BridgeMetrics, utils::EthProvider};
+use alloy::{
+    providers::RootProvider,
+    rpc::{
+        client::RpcClient,
+        json_rpc::{RequestPacket, ResponsePacket},
+    },
+    transports::{
+        Transport, TransportError,
+        http::{Http, reqwest},
+    },
+};
+use std::{
+    fmt::Debug,
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
+use tower::Service;
 use url::{ParseError, Url};
 
 #[derive(Debug, Clone)]
-pub struct MeteredEthHttpProvider {
-    inner: Http,
+pub struct MeteredHttpService<S> {
+    inner: S,
     metrics: Arc<BridgeMetrics>,
 }
 
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-impl JsonRpcClient for MeteredEthHttpProvider {
-    type Error = HttpClientError;
-
-    async fn request<T: Serialize + Send + Sync + Debug, R: DeserializeOwned + Send>(
-        &self,
-        method: &str,
-        params: T,
-    ) -> Result<R, HttpClientError> {
-        self.metrics
-            .eth_rpc_queries
-            .with_label_values(&[method])
-            .inc();
-        let _guard = self
-            .metrics
-            .eth_rpc_queries_latency
-            .with_label_values(&[method])
-            .start_timer();
-        self.inner.request(method, params).await
+impl<S> MeteredHttpService<S> {
+    pub fn new(inner: S, metrics: Arc<BridgeMetrics>) -> Self {
+        Self { inner, metrics }
     }
 }
 
-impl MeteredEthHttpProvider {
-    pub fn new(url: impl Into<Url>, metrics: Arc<BridgeMetrics>) -> Self {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .unwrap();
-        let inner = Http::new_with_client(url, client);
-        Self { inner, metrics }
+impl<S> Service<RequestPacket> for MeteredHttpService<S>
+where
+    S: Transport + Clone,
+    S::Future: Send + 'static,
+{
+    type Response = ResponsePacket;
+    type Error = TransportError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: RequestPacket) -> Self::Future {
+        let method_name = match &req {
+            RequestPacket::Single(req) => req.method().to_string(),
+            RequestPacket::Batch(_) => "batch".to_string(),
+        };
+
+        self.metrics
+            .eth_rpc_queries
+            .with_label_values(&[&method_name])
+            .inc();
+
+        let timer = self
+            .metrics
+            .eth_rpc_queries_latency
+            .with_label_values(&[&method_name])
+            .start_timer();
+
+        let future = self.inner.call(req);
+
+        // Wrap the future to ensure the timer is dropped when the future completes
+        Box::pin(async move {
+            let result = future.await;
+            // Dropping the timer records the duration in the histogram
+            drop(timer);
+            result
+        })
     }
 }
 
 pub fn new_metered_eth_provider(
     url: &str,
     metrics: Arc<BridgeMetrics>,
-) -> Result<Provider<MeteredEthHttpProvider>, ParseError> {
-    let http_provider = MeteredEthHttpProvider::new(Url::parse(url)?, metrics);
-    Ok(Provider::new(http_provider))
+) -> Result<EthProvider, ParseError> {
+    let url: Url = url.parse()?;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .expect("Failed to create reqwest client");
+    let http_transport = Http::with_client(client, url);
+    let metered_transport = MeteredHttpService::new(http_transport, metrics);
+    let rpc_client =
+        RpcClient::new(metered_transport, false).with_poll_interval(Duration::from_millis(2000));
+    Ok(Arc::new(RootProvider::new(rpc_client)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ethers::providers::Middleware;
+    use alloy::providers::Provider;
     use prometheus::Registry;
 
     #[tokio::test]

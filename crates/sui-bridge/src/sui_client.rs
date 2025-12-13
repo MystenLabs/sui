@@ -1150,7 +1150,7 @@ mod tests {
             get_test_sui_to_eth_bridge_action,
         },
     };
-    use ethers::types::Address as EthAddress;
+    use alloy::primitives::Address as EthAddress;
     use move_core_types::account_address::AccountAddress;
     use serde::{Deserialize, Serialize};
     use std::str::FromStr;
@@ -1189,7 +1189,7 @@ mod tests {
             source_chain: sanitized_event_1.sui_chain_id as u8,
             sender_address: sanitized_event_1.sui_address.to_vec(),
             target_chain: sanitized_event_1.eth_chain_id as u8,
-            target_address: sanitized_event_1.eth_address.as_bytes().to_vec(),
+            target_address: sanitized_event_1.eth_address.to_vec(),
             token_type: sanitized_event_1.token_id,
             amount_sui_adjusted: sanitized_event_1.amount_sui_adjusted,
         };

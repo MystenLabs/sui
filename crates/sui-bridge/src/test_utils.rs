@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::abi::EthToSuiTokenBridgeV1;
-use crate::eth_mock_provider::EthMockProvider;
+use crate::eth_mock_provider::EthMockService;
 use crate::events::SuiBridgeEvent;
 use crate::server::mock_handler::run_mock_server;
 use crate::sui_transaction_builder::build_sui_transaction;
@@ -19,12 +19,12 @@ use crate::{
         SuiToEthBridgeAction,
     },
 };
-use ethers::abi::{ParamType, long_signature};
-use ethers::types::Address as EthAddress;
-use ethers::types::{
-    Block, BlockNumber, Filter, FilterBlockOption, Log, TransactionReceipt, TxHash, U64,
-    ValueOrArray,
+use alloy::consensus::{ReceiptEnvelope, ReceiptWithBloom};
+use alloy::primitives::{Address as EthAddress, Bloom, LogData, TxHash};
+use alloy::rpc::types::eth::{
+    Block, Filter, FilterBlockOption, FilterSet, Header, Log, Topic, TransactionReceipt,
 };
+use alloy::sol_types::SolValue;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
 use hex_literal::hex;
@@ -169,11 +169,12 @@ pub fn sign_action_with_key(
     SignedBridgeAction::new_from_data_and_sig(action.clone(), sig)
 }
 
-pub fn mock_last_finalized_block(mock_provider: &EthMockProvider, block_number: u64) {
-    let block = Block::<ethers::types::TxHash> {
-        number: Some(U64::from(block_number)),
+pub fn mock_last_finalized_block(mock_provider: &EthMockService, block_number: u64) {
+    let block_header = Header::new(alloy::consensus::Header {
+        number: block_number,
         ..Default::default()
-    };
+    });
+    let block = Block::<TxHash>::empty(block_header);
     mock_provider
         .add_response("eth_getBlockByNumber", ("finalized", false), block)
         .unwrap();
@@ -182,37 +183,38 @@ pub fn mock_last_finalized_block(mock_provider: &EthMockProvider, block_number: 
 // Mocks eth_getLogs and eth_getTransactionReceipt for the given address and block range.
 // The input log needs to have transaction_hash set.
 pub fn mock_get_logs(
-    mock_provider: &EthMockProvider,
+    mock_provider: &EthMockService,
     address: EthAddress,
     from_block: u64,
     to_block: u64,
     logs: Vec<Log>,
 ) {
-    mock_provider.add_response::<[ethers::types::Filter; 1], Vec<ethers::types::Log>, Vec<ethers::types::Log>>(
-        "eth_getLogs",
-        [
-            Filter {
+    mock_provider
+        .add_response::<[alloy::rpc::types::eth::Filter; 1], Vec<Log>, Vec<Log>>(
+            "eth_getLogs",
+            [Filter {
                 block_option: FilterBlockOption::Range {
-                    from_block: Some(BlockNumber::Number(U64::from(from_block))),
-                    to_block: Some(BlockNumber::Number(U64::from(to_block))),
+                    from_block: Some(from_block.into()),
+                    to_block: Some(to_block.into()),
                 },
-                address: Some(ValueOrArray::Value(address)),
-                topics: [None, None, None, None],
-            }
-        ],
-        logs.clone(),
-    ).unwrap();
+                address: FilterSet::from(address),
+                topics: [
+                    Topic::default(),
+                    Topic::default(),
+                    Topic::default(),
+                    Topic::default(),
+                ],
+            }],
+            logs.clone(),
+        )
+        .unwrap();
 
     for log in logs {
         mock_provider
             .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
                 "eth_getTransactionReceipt",
                 [log.transaction_hash.unwrap()],
-                TransactionReceipt {
-                    block_number: log.block_number,
-                    logs: vec![log],
-                    ..Default::default()
-                },
+                make_transaction_receipt(address, log.block_number, vec![log.clone()]),
             )
             .unwrap();
     }
@@ -230,49 +232,57 @@ pub fn get_test_log_and_action(
     let source_address = EthAddress::random();
     let sui_address: SuiAddress = SuiAddress::random_for_testing_only();
     let target_address = Hex::decode(&sui_address.to_string()).unwrap();
-    // Note: must use `encode` rather than `encode_packaged`
-    let encoded = ethers::abi::encode(&[
-        // u8/u64 is encoded as u256 in abi standard
-        ethers::abi::Token::Uint(ethers::types::U256::from(token_id)),
-        ethers::abi::Token::Uint(ethers::types::U256::from(sui_adjusted_amount)),
-        ethers::abi::Token::Address(source_address),
-        ethers::abi::Token::Bytes(target_address.clone()),
-    ]);
-    let log = Log {
-        address: contract_address,
-        topics: vec![
-            long_signature(
-                "TokensDeposited",
-                &[
-                    ParamType::Uint(8),
-                    ParamType::Uint(64),
-                    ParamType::Uint(8),
-                    ParamType::Uint(8),
-                    ParamType::Uint(64),
-                    ParamType::Address,
-                    ParamType::Bytes,
-                ],
-            ),
-            hex!("0000000000000000000000000000000000000000000000000000000000000001").into(), // chain id: sui testnet
-            hex!("0000000000000000000000000000000000000000000000000000000000000010").into(), // nonce: 16
-            hex!("000000000000000000000000000000000000000000000000000000000000000b").into(), // chain id: sepolia
+
+    let encoded = (
+        alloy::primitives::U256::from(token_id),
+        alloy::primitives::U256::from(sui_adjusted_amount),
+        source_address,
+        target_address,
+    )
+        .abi_encode();
+
+    let func = alloy::json_abi::Function {
+        name: "TokensDeposited".into(),
+        inputs: vec![
+            alloy::json_abi::Param::parse("uint8 foo").unwrap(),
+            alloy::json_abi::Param::parse("uint64 foo").unwrap(),
+            alloy::json_abi::Param::parse("uint8 foo").unwrap(),
+            alloy::json_abi::Param::parse("uint8 foo").unwrap(),
+            alloy::json_abi::Param::parse("uint64 foo").unwrap(),
+            alloy::json_abi::Param::parse("address foo").unwrap(),
+            alloy::json_abi::Param::parse("bytes foo").unwrap(),
         ],
-        data: encoded.into(),
+        outputs: vec![],
+        state_mutability: alloy::json_abi::StateMutability::default(),
+    };
+    let topics: Vec<alloy::primitives::B256> = vec![
+        alloy::primitives::keccak256(func.signature()),
+        hex!("0000000000000000000000000000000000000000000000000000000000000001").into(), // chain id: sui testnet
+        hex!("0000000000000000000000000000000000000000000000000000000000000010").into(), // nonce: 16
+        hex!("000000000000000000000000000000000000000000000000000000000000000b").into(), // chain id: sepolia
+    ];
+    let log_data = LogData::new(topics, encoded.into()).unwrap();
+    let log = Log {
+        inner: alloy::primitives::Log {
+            address: contract_address,
+            data: log_data,
+        },
         block_hash: Some(TxHash::random()),
-        block_number: Some(1.into()),
+        block_number: Some(1),
         transaction_hash: Some(tx_hash),
-        log_index: Some(0.into()),
+        log_index: Some(0),
         ..Default::default()
     };
-    let topic_1: [u8; 32] = log.topics[1].into();
-    let topic_3: [u8; 32] = log.topics[3].into();
+    let topic_1: [u8; 32] = log.topics()[1].into();
+    let topic_2: [u8; 32] = log.topics()[2].into();
+    let topic_3: [u8; 32] = log.topics()[3].into();
 
     let bridge_action = BridgeAction::EthToSuiBridgeAction(EthToSuiBridgeAction {
         eth_tx_hash: tx_hash,
         eth_event_index: event_index,
         eth_bridge_event: EthToSuiTokenBridgeV1 {
             eth_chain_id: BridgeChainId::try_from(topic_1[topic_1.len() - 1]).unwrap(),
-            nonce: u64::from_be_bytes(log.topics[2].as_ref()[24..32].try_into().unwrap()),
+            nonce: u64::from_be_bytes(topic_2.as_ref()[24..32].try_into().unwrap()),
             sui_chain_id: BridgeChainId::try_from(topic_3[topic_3.len() - 1]).unwrap(),
             token_id,
             sui_adjusted_amount,
@@ -302,7 +312,7 @@ pub async fn bridge_token(
             vec![
                 CallArg::Object(bridge_object_arg),
                 CallArg::Pure(bcs::to_bytes(&(BridgeChainId::EthCustom as u8)).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&recv_address.as_bytes()).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&recv_address.as_slice()).unwrap()),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(token_ref)),
             ],
         )
@@ -421,5 +431,33 @@ pub fn bridge_committee_to_bridge_committee_summary(
             .collect(),
         member_registration: vec![],
         last_committee_update_epoch: 0,
+    }
+}
+
+pub fn make_transaction_receipt(
+    from: EthAddress,
+    block_number: Option<u64>,
+    logs: Vec<Log>,
+) -> TransactionReceipt {
+    let receipt_envelope = ReceiptEnvelope::Legacy(ReceiptWithBloom::new(
+        alloy::consensus::Receipt {
+            logs,
+            ..Default::default()
+        },
+        Bloom::default(),
+    ));
+    TransactionReceipt {
+        inner: receipt_envelope,
+        transaction_hash: TxHash::default(),
+        transaction_index: None,
+        block_hash: None,
+        block_number,
+        gas_used: 0,
+        effective_gas_price: 0,
+        blob_gas_used: None,
+        blob_gas_price: None,
+        from,
+        to: None,
+        contract_address: None,
     }
 }

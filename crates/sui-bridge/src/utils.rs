@@ -1,61 +1,99 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::{
-    EthBridgeCommittee, EthBridgeConfig, EthBridgeLimiter, EthBridgeVault, EthSuiBridge,
+use crate::{
+    abi::{EthBridgeCommittee, EthBridgeConfig, EthBridgeLimiter, EthBridgeVault, EthSuiBridge},
+    config::{
+        BridgeNodeConfig, EthConfig, MetricsConfig, SuiConfig, WatchdogConfig,
+        default_ed25519_key_pair,
+    },
+    crypto::{BridgeAuthorityKeyPair, BridgeAuthorityPublicKeyBytes},
+    server::APPLICATION_JSON,
+    types::{AddTokensOnSuiAction, BridgeAction, BridgeCommittee},
 };
-use crate::config::{
-    BridgeNodeConfig, EthConfig, MetricsConfig, SuiConfig, WatchdogConfig, default_ed25519_key_pair,
+use alloy::{
+    network::EthereumWallet,
+    primitives::Address as EthAddress,
+    providers::{ProviderBuilder, RootProvider},
+    signers::local::PrivateKeySigner,
 };
-use crate::crypto::BridgeAuthorityKeyPair;
-use crate::crypto::BridgeAuthorityPublicKeyBytes;
-use crate::server::APPLICATION_JSON;
-use crate::types::BridgeCommittee;
-use crate::types::{AddTokensOnSuiAction, BridgeAction};
 use anyhow::anyhow;
-use ethers::core::k256::ecdsa::SigningKey;
-use ethers::middleware::SignerMiddleware;
-use ethers::prelude::*;
-use ethers::providers::{Http, Provider};
-use ethers::signers::Wallet;
-use ethers::types::Address as EthAddress;
-use fastcrypto::ed25519::Ed25519KeyPair;
-use fastcrypto::encoding::{Encoding, Hex};
-use fastcrypto::secp256k1::Secp256k1KeyPair;
-use fastcrypto::traits::EncodeDecodeBase64;
-use fastcrypto::traits::KeyPair;
+use fastcrypto::{
+    ed25519::Ed25519KeyPair,
+    encoding::{Encoding, Hex},
+    secp256k1::Secp256k1KeyPair,
+    traits::{EncodeDecodeBase64, KeyPair},
+};
 use futures::future::join_all;
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::Arc;
+use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc};
 use sui_config::Config;
-use sui_json_rpc_types::SuiExecutionStatus;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use sui_json_rpc_types::{
+    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
+};
 use sui_keys::keypair_file::read_key;
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::BRIDGE_PACKAGE_ID;
-use sui_types::base_types::SuiAddress;
-use sui_types::bridge::BridgeChainId;
-use sui_types::bridge::{BRIDGE_MODULE_NAME, BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME};
-use sui_types::committee::StakeUnit;
-use sui_types::crypto::SuiKeyPair;
-use sui_types::crypto::ToFromBytes;
-use sui_types::crypto::get_key_pair;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
-use sui_types::transaction::{ObjectArg, TransactionData};
+use sui_types::{
+    BRIDGE_PACKAGE_ID,
+    base_types::SuiAddress,
+    bridge::{BRIDGE_MODULE_NAME, BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME, BridgeChainId},
+    committee::StakeUnit,
+    crypto::{SuiKeyPair, ToFromBytes, get_key_pair},
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    sui_system_state::sui_system_state_summary::SuiSystemStateSummary,
+    transaction::{ObjectArg, TransactionData},
+};
+use url::Url;
 
-pub type EthSigner = SignerMiddleware<Provider<Http>, Wallet<SigningKey>>;
+pub struct EthBridgeContracts {
+    pub bridge: EthSuiBridge::EthSuiBridgeInstance<EthProvider>,
+    pub committee: EthBridgeCommittee::EthBridgeCommitteeInstance<EthProvider>,
+    pub limiter: EthBridgeLimiter::EthBridgeLimiterInstance<EthProvider>,
+    pub vault: EthBridgeVault::EthBridgeVaultInstance<EthProvider>,
+    pub config: EthBridgeConfig::EthBridgeConfigInstance<EthProvider>,
+}
 
-pub struct EthBridgeContracts<P> {
-    pub bridge: EthSuiBridge<Provider<P>>,
-    pub committee: EthBridgeCommittee<Provider<P>>,
-    pub limiter: EthBridgeLimiter<Provider<P>>,
-    pub vault: EthBridgeVault<Provider<P>>,
-    pub config: EthBridgeConfig<Provider<P>>,
+pub type EthProvider = Arc<RootProvider<alloy::network::Ethereum>>;
+pub type EthSignerProvider = Arc<
+    alloy::providers::fillers::FillProvider<
+        alloy::providers::fillers::JoinFill<
+            alloy::providers::fillers::JoinFill<
+                alloy::providers::Identity,
+                alloy::providers::fillers::JoinFill<
+                    alloy::providers::fillers::GasFiller,
+                    alloy::providers::fillers::JoinFill<
+                        alloy::providers::fillers::BlobGasFiller,
+                        alloy::providers::fillers::JoinFill<
+                            alloy::providers::fillers::NonceFiller,
+                            alloy::providers::fillers::ChainIdFiller,
+                        >,
+                    >,
+                >,
+            >,
+            alloy::providers::fillers::WalletFiller<EthereumWallet>,
+        >,
+        EthProvider,
+        alloy::network::Ethereum,
+    >,
+>;
+
+pub fn get_eth_provider(url: &str) -> anyhow::Result<EthProvider> {
+    let url = Url::parse(url).map_err(|e| anyhow!("Invalid RPC URL: {}", e))?;
+    let provider = RootProvider::new_http(url);
+    Ok(Arc::new(provider))
+}
+
+pub fn get_eth_signer_provider(
+    url: &str,
+    private_key_hex: &str,
+) -> anyhow::Result<EthSignerProvider> {
+    let signer = PrivateKeySigner::from_str(private_key_hex)
+        .map_err(|e| anyhow!("Invalid private key: {}", e))?;
+    let wallet = EthereumWallet::from(signer);
+    let provider = ProviderBuilder::new()
+        .wallet(wallet)
+        .connect_provider(get_eth_provider(url)?);
+    Ok(Arc::new(provider))
 }
 
 /// Generate Bridge Authority key (Secp256k1KeyPair) and write to a file as base64 encoded `privkey`.
@@ -104,9 +142,9 @@ pub fn generate_bridge_client_key_and_write_to_file(
 }
 
 /// Given the address of SuiBridge Proxy, return the addresses of the committee, limiter, vault, and config.
-pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 'static>(
+pub async fn get_eth_contract_addresses(
     bridge_proxy_address: EthAddress,
-    provider: &Arc<Provider<P>>,
+    provider: EthProvider,
 ) -> anyhow::Result<(
     EthAddress,
     EthAddress,
@@ -125,10 +163,10 @@ pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 's
     let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
     let vault_address: EthAddress = sui_bridge.vault().call().await?;
     let vault = EthBridgeVault::new(vault_address, provider.clone());
-    let weth_address: EthAddress = vault.w_eth().call().await?;
-    let usdt_address: EthAddress = bridge_config.token_address_of(4).call().await?;
-    let wbtc_address: EthAddress = bridge_config.token_address_of(1).call().await?;
-    let lbtc_address: EthAddress = bridge_config.token_address_of(6).call().await?;
+    let weth_address: EthAddress = vault.wETH().call().await?;
+    let usdt_address: EthAddress = bridge_config.tokenAddressOf(4).call().await?;
+    let wbtc_address: EthAddress = bridge_config.tokenAddressOf(1).call().await?;
+    let lbtc_address: EthAddress = bridge_config.tokenAddressOf(6).call().await?;
 
     Ok((
         committee_address,
@@ -143,10 +181,10 @@ pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 's
 }
 
 /// Given the address of SuiBridge Proxy, return the contracts of the committee, limiter, vault, and config.
-pub async fn get_eth_contracts<P: ethers::providers::JsonRpcClient + 'static>(
+pub async fn get_eth_contracts(
     bridge_proxy_address: EthAddress,
-    provider: &Arc<Provider<P>>,
-) -> anyhow::Result<EthBridgeContracts<P>> {
+    provider: EthProvider,
+) -> anyhow::Result<EthBridgeContracts> {
     let sui_bridge = EthSuiBridge::new(bridge_proxy_address, provider.clone());
     let committee_address: EthAddress = sui_bridge.committee().call().await?;
     let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
@@ -236,17 +274,6 @@ pub fn generate_bridge_node_config_and_write_to_file(
         config.db_path = Some(PathBuf::from("/path/to/your/client_db"));
     }
     config.save(path)
-}
-
-pub async fn get_eth_signer_client(url: &str, private_key_hex: &str) -> anyhow::Result<EthSigner> {
-    let provider = Provider::<Http>::try_from(url)
-        .unwrap()
-        .interval(std::time::Duration::from_millis(2000));
-    let chain_id = provider.get_chainid().await?;
-    let wallet = Wallet::from_str(private_key_hex)
-        .unwrap()
-        .with_chain_id(chain_id.as_u64());
-    Ok(SignerMiddleware::new(provider, wallet))
 }
 
 pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
