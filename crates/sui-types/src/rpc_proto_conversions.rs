@@ -1169,7 +1169,8 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                 ExecutionErrorKind::MoveRawValueTooBig
             }
             E::InvalidLinkage => ExecutionErrorKind::InvalidLinkage,
-            E::InsufficientBalanceForWithdraw => ExecutionErrorKind::InsufficientBalanceForWithdraw,
+            // TODO: Rename this in rust-sdk-types.
+            E::InsufficientFundsForWithdraw => ExecutionErrorKind::InsufficientBalanceForWithdraw,
             E::NonExclusiveWriteInputObjectModified { id } => {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified

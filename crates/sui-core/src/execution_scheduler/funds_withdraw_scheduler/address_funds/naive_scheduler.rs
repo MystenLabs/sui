@@ -8,32 +8,32 @@ use tokio::sync::watch;
 use tracing::{debug, instrument};
 
 use super::{
-    BalanceSettlement, ScheduleResult, ScheduleStatus,
-    scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
+    FundsSettlement, ScheduleResult, ScheduleStatus,
+    scheduler::{FundsWithdrawSchedulerTrait, WithdrawReservations},
 };
-use crate::accumulators::balance_read::AccountBalanceRead;
+use crate::accumulators::funds_read::AccountFundsRead;
 
-/// A naive implementation of the balance withdraw scheduler that does not attempt to optimize the scheduling.
+/// A naive implementation of the funds withdraw scheduler that does not attempt to optimize the scheduling.
 /// For each withdraw reservation, it will always wait until the dependent accumulator object is available,
-/// and then check if the balance is sufficient.
+/// and then check if the funds are sufficient.
 /// This implementation is simple and easy to understand, but it is not efficient.
-/// It is only used to unblock further development of the balance withdraw scheduler.
-pub(crate) struct NaiveBalanceWithdrawScheduler {
-    balance_read: Arc<dyn AccountBalanceRead>,
+/// It is only used to unblock further development of the funds withdraw scheduler.
+pub(crate) struct NaiveFundsWithdrawScheduler {
+    funds_read: Arc<dyn AccountFundsRead>,
     accumulator_version_sender: watch::Sender<SequenceNumber>,
     // We must keep a receiver alive to make sure sends go through and can update the last settled version.
     accumulator_version_receiver: watch::Receiver<SequenceNumber>,
 }
 
-impl NaiveBalanceWithdrawScheduler {
+impl NaiveFundsWithdrawScheduler {
     pub fn new(
-        balance_read: Arc<dyn AccountBalanceRead>,
+        funds_read: Arc<dyn AccountFundsRead>,
         cur_accumulator_version: SequenceNumber,
     ) -> Arc<Self> {
         let (accumulator_version_sender, accumulator_version_receiver) =
             watch::channel(cur_accumulator_version);
         Arc::new(Self {
-            balance_read,
+            funds_read,
             accumulator_version_sender,
             accumulator_version_receiver,
         })
@@ -41,7 +41,7 @@ impl NaiveBalanceWithdrawScheduler {
 }
 
 #[async_trait::async_trait]
-impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
+impl FundsWithdrawSchedulerTrait for NaiveFundsWithdrawScheduler {
     #[instrument(level = "debug", skip_all, fields(withdraw_accumulator_version = ?withdraws.accumulator_version.value()))]
     async fn schedule_withdraws(&self, withdraws: WithdrawReservations) {
         let mut receiver = self.accumulator_version_sender.subscribe();
@@ -59,22 +59,22 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
         }
 
         // Map from each account ID that we have seen so far to the current
-        // remaining balance for reservation.
-        let mut cur_balances = BTreeMap::new();
+        // remaining funds for reservation.
+        let mut cur_funds = BTreeMap::new();
         for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
             // Try to reserve all withdraws in this transaction.
             // Note that this is not atomic, so it is possible that we reserve some withdraws and not others.
             // This is intentional to be semantically consistent with the eager scheduler.
             let mut success = true;
             for (object_id, reservation) in &withdraw.reservations {
-                let entry = cur_balances.entry(*object_id).or_insert_with(|| {
-                    self.balance_read
-                        .get_account_balance(object_id, withdraws.accumulator_version)
+                let entry = cur_funds.entry(*object_id).or_insert_with(|| {
+                    self.funds_read
+                        .get_account_amount(object_id, withdraws.accumulator_version)
                 });
                 if *entry < *reservation as u128 {
                     debug!(
                         tx_digest =? withdraw.tx_digest,
-                        "Insufficient balance for {:?}. Requested: {:?}, Available: {:?}",
+                        "Insufficient funds for {:?}. Requested: {:?}, Available: {:?}",
                         object_id, reservation, entry
                     );
                     success = false;
@@ -94,26 +94,26 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
                 );
                 let _ = sender.send(ScheduleResult {
                     tx_digest: withdraw.tx_digest,
-                    status: ScheduleStatus::SufficientBalance,
+                    status: ScheduleStatus::SufficientFunds,
                 });
             } else {
                 let _ = sender.send(ScheduleResult {
                     tx_digest: withdraw.tx_digest,
-                    status: ScheduleStatus::InsufficientBalance,
+                    status: ScheduleStatus::InsufficientFunds,
                 });
             }
         }
     }
 
-    // We don't use the balance changes information in the naive scheduler.
-    // Instead, the withdraw scheduling always read the balance state fro storage.
-    async fn settle_balances(&self, settlement: BalanceSettlement) {
+    // We don't use the funds changes information in the naive scheduler.
+    // Instead, the withdraw scheduling always reads the funds state from storage.
+    async fn settle_funds(&self, settlement: FundsSettlement) {
         let cur_accumulator_version = *self.accumulator_version_receiver.borrow();
         let next_version = cur_accumulator_version.next();
 
         if settlement.next_accumulator_version < next_version {
             // This accumulator version is already settled.
-            // There is no need to settle the balances.
+            // There is no need to settle the funds.
             debug!(
                 next_accumulator_version =? settlement.next_accumulator_version.value(),
                 "Skipping settlement since it is already settled",
@@ -124,14 +124,14 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
         debug!(
             settled_accumulator_version =? cur_accumulator_version.value(),
             next_accumulator_version =? next_version.value(),
-            "Settling balances",
+            "Settling funds",
         );
         assert_eq!(next_version, settlement.next_accumulator_version);
         let _ = self.accumulator_version_sender.send(next_version);
     }
 
     fn close_epoch(&self) {
-        debug!("Closing epoch in NaiveBalanceWithdrawScheduler");
+        debug!("Closing epoch in NaiveFundsWithdrawScheduler");
     }
 
     #[cfg(test)]

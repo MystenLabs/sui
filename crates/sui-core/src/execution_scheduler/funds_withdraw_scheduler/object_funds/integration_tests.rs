@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Testing the integration of the object balance withdraw scheduler with the execution scheduler.
+//! Testing the integration of the object funds withdraw scheduler with the execution scheduler.
 
 use std::sync::Arc;
 
@@ -23,7 +23,7 @@ use sui_types::{
 };
 
 use crate::{
-    accumulators::balance_read::AccountBalanceRead,
+    accumulators::funds_read::AccountFundsRead,
     authority::{
         AuthorityState, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
         shared_object_version_manager::AssignedVersions,
@@ -136,7 +136,7 @@ impl TestEnv {
             AccumulatorValue::get_field_id(self.vault_obj.into(), &Balance::type_tag(type_tag))
                 .unwrap();
         let balance_read = self.authority.get_child_object_resolver();
-        balance_read.get_latest_account_balance(&account_id)
+        balance_read.get_latest_account_amount(&account_id)
     }
 }
 
@@ -277,7 +277,7 @@ async fn test_object_withdraw_multiple_withdraws() {
             assert!(matches!(
                 effects.status(),
                 ExecutionStatus::Failure {
-                    error: ExecutionFailureStatus::InsufficientBalanceForWithdraw,
+                    error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
                     ..
                 }
             ));

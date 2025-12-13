@@ -6,21 +6,21 @@ use std::{collections::BTreeMap, sync::Arc};
 use parking_lot::RwLock;
 use sui_types::{
     accumulator_root::AccumulatorObjId, base_types::SequenceNumber,
-    execution_params::BalanceWithdrawStatus,
+    execution_params::FundsWithdrawStatus,
 };
 use tokio::sync::{oneshot, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    accumulators::balance_read::AccountBalanceRead,
-    execution_scheduler::balance_withdraw_scheduler::object_balance::{
-        ObjectBalanceWithdrawSchedulerTrait, ObjectBalanceWithdrawStatus,
+    accumulators::funds_read::AccountFundsRead,
+    execution_scheduler::funds_withdraw_scheduler::object_funds::{
+        ObjectFundsWithdrawSchedulerTrait, ObjectFundsWithdrawStatus,
     },
 };
 
 #[derive(Clone)]
-pub(crate) struct NaiveObjectBalanceWithdrawScheduler {
-    balance_read: Arc<dyn AccountBalanceRead>,
+pub(crate) struct NaiveObjectFundsWithdrawScheduler {
+    funds_read: Arc<dyn AccountFundsRead>,
     inner: Arc<RwLock<Inner>>,
     accumulator_version_sender: Arc<watch::Sender<SequenceNumber>>,
     // We must keep a receiver alive to make sure sends go through and can update the last settled version.
@@ -36,15 +36,15 @@ struct Inner {
     unsettled_withdraws: BTreeMap<AccumulatorObjId, u128>,
 }
 
-impl NaiveObjectBalanceWithdrawScheduler {
+impl NaiveObjectFundsWithdrawScheduler {
     pub fn new(
-        balance_read: Arc<dyn AccountBalanceRead>,
+        funds_read: Arc<dyn AccountFundsRead>,
         starting_accumulator_version: SequenceNumber,
     ) -> Self {
         let (accumulator_version_sender, accumulator_version_receiver) =
             watch::channel(starting_accumulator_version);
         Self {
-            balance_read,
+            funds_read,
             inner: Arc::new(RwLock::new(Inner {
                 unsettled_withdraws: BTreeMap::new(),
             })),
@@ -56,11 +56,11 @@ impl NaiveObjectBalanceWithdrawScheduler {
 
     fn try_withdraw(&self, object_withdraws: &BTreeMap<AccumulatorObjId, u64>) -> bool {
         for (obj_id, amount) in object_withdraws {
-            // It is safe to get the latest balance here because this function is called during execution,
+            // It is safe to get the latest funds here because this function is called during execution,
             // which means this transaction is not committed yet,
             // so the settlement transaction at the end of the same consensus commit cannot have settled yet.
             // That is, we must be blocked by this transaction in order to make progress.
-            let balance = self.balance_read.get_latest_account_balance(obj_id);
+            let funds = self.funds_read.get_latest_account_amount(obj_id);
             let unsettled_withdraw = self
                 .inner
                 .read()
@@ -68,8 +68,8 @@ impl NaiveObjectBalanceWithdrawScheduler {
                 .get(obj_id)
                 .copied()
                 .unwrap_or_default();
-            assert!(balance >= unsettled_withdraw);
-            if balance - unsettled_withdraw < *amount as u128 {
+            assert!(funds >= unsettled_withdraw);
+            if funds - unsettled_withdraw < *amount as u128 {
                 return false;
             }
         }
@@ -81,20 +81,20 @@ impl NaiveObjectBalanceWithdrawScheduler {
         true
     }
 
-    fn return_insufficient_balance() -> ObjectBalanceWithdrawStatus {
+    fn return_insufficient_funds() -> ObjectFundsWithdrawStatus {
         let (sender, receiver) = oneshot::channel();
         // unwrap is safe because the receiver is defined right above.
-        sender.send(BalanceWithdrawStatus::Insufficient).unwrap();
-        ObjectBalanceWithdrawStatus::Pending(receiver)
+        sender.send(FundsWithdrawStatus::Insufficient).unwrap();
+        ObjectFundsWithdrawStatus::Pending(receiver)
     }
 }
 
-impl ObjectBalanceWithdrawSchedulerTrait for NaiveObjectBalanceWithdrawScheduler {
+impl ObjectFundsWithdrawSchedulerTrait for NaiveObjectFundsWithdrawScheduler {
     fn schedule(
         &self,
         object_withdraws: BTreeMap<AccumulatorObjId, u64>,
         accumulator_version: SequenceNumber,
-    ) -> ObjectBalanceWithdrawStatus {
+    ) -> ObjectFundsWithdrawStatus {
         let last_settled_version = *self.accumulator_version_receiver.borrow();
         // This function is called during execution, which means this transaction is not committed yet,
         // so the settlement transaction at the end of the same consensus commit cannot have settled yet.
@@ -106,9 +106,9 @@ impl ObjectBalanceWithdrawSchedulerTrait for NaiveObjectBalanceWithdrawScheduler
         );
         if accumulator_version == last_settled_version {
             if self.try_withdraw(&object_withdraws) {
-                return ObjectBalanceWithdrawStatus::SufficientBalance;
+                return ObjectFundsWithdrawStatus::SufficientFunds;
             } else {
-                return Self::return_insufficient_balance();
+                return Self::return_insufficient_funds();
             }
         }
 
@@ -126,15 +126,15 @@ impl ObjectBalanceWithdrawSchedulerTrait for NaiveObjectBalanceWithdrawScheduler
                         tracing::error!("Accumulator version receiver channel closed while waiting for accumulator version");
                         return;
                     }
-                    // We notify the waiter that the balance is now deterministically known,
-                    // but we don't need to check here whether it is sufficient or not.
+                    // We notify the waiter that the funds are now deterministically known,
+                    // but we don't need to check here whether they are sufficient or not.
                     // Next time during execution we will check again.
-                    let _ = sender.send(BalanceWithdrawStatus::MaybeSufficient);
+                    let _ = sender.send(FundsWithdrawStatus::MaybeSufficient);
                 }
                 _ = epoch_cancel.cancelled() => {}
             }
         });
-        ObjectBalanceWithdrawStatus::Pending(receiver)
+        ObjectFundsWithdrawStatus::Pending(receiver)
     }
 
     fn settle_accumulator_version(&self, next_accumulator_version: SequenceNumber) {

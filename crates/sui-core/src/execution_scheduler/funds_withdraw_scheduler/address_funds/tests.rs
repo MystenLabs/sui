@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::execution_scheduler::balance_withdraw_scheduler::mock_balance_read::MockBalanceRead;
+use crate::execution_scheduler::funds_withdraw_scheduler::mock_funds_read::MockFundsRead;
 
 use super::{
-    BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
-    scheduler::BalanceWithdrawScheduler,
+    FundsSettlement, ScheduleResult, ScheduleStatus, TxFundsWithdraw,
+    scheduler::FundsWithdrawScheduler,
 };
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
@@ -26,18 +26,18 @@ use tracing::{debug, info};
 
 #[derive(Clone)]
 struct TestScheduler {
-    mock_read: Arc<MockBalanceRead>,
-    scheduler: BalanceWithdrawScheduler,
+    mock_read: Arc<MockFundsRead>,
+    scheduler: FundsWithdrawScheduler,
 }
 
 impl TestScheduler {
-    fn new(init_version: SequenceNumber, init_balances: BTreeMap<ObjectID, u128>) -> Self {
-        let mock_read = Arc::new(MockBalanceRead::new(init_version, init_balances));
+    fn new(init_version: SequenceNumber, init_funds: BTreeMap<ObjectID, u128>) -> Self {
+        let mock_read = Arc::new(MockFundsRead::new(init_version, init_funds));
         Self::new_with_mock_read(mock_read)
     }
 
-    fn new_with_mock_read(mock_read: Arc<MockBalanceRead>) -> Self {
-        let scheduler = BalanceWithdrawScheduler::new(mock_read.clone(), mock_read.cur_version());
+    fn new_with_mock_read(mock_read: Arc<MockFundsRead>) -> Self {
+        let scheduler = FundsWithdrawScheduler::new(mock_read.clone(), mock_read.cur_version());
         Self {
             mock_read,
             scheduler,
@@ -47,12 +47,12 @@ impl TestScheduler {
     fn schedule_withdraws(
         &self,
         version: SequenceNumber,
-        withdraws: Vec<TxBalanceWithdraw>,
+        withdraws: Vec<TxFundsWithdraw>,
     ) -> FuturesUnordered<oneshot::Receiver<ScheduleResult>> {
         self.scheduler.schedule_withdraws(version, withdraws)
     }
 
-    fn settle_balance_changes(
+    fn settle_funds_changes(
         &self,
         next_accumulator_version: SequenceNumber,
         changes: BTreeMap<ObjectID, i128>,
@@ -62,10 +62,10 @@ impl TestScheduler {
             .map(|(id, value)| (AccumulatorObjId::new_unchecked(*id), *value))
             .collect();
         self.mock_read
-            .settle_balance_changes(accumulator_changes.clone(), next_accumulator_version);
-        self.scheduler.settle_balances(BalanceSettlement {
+            .settle_funds_changes(accumulator_changes.clone(), next_accumulator_version);
+        self.scheduler.settle_funds(FundsSettlement {
             next_accumulator_version,
-            balance_changes: accumulator_changes.clone(),
+            funds_changes: accumulator_changes.clone(),
         });
     }
 
@@ -99,7 +99,7 @@ async fn test_schedule_wait_for_settlement() {
     let account = ObjectID::random();
     let test = TestScheduler::new(init_version, BTreeMap::from([(account, 100)]));
 
-    let withdraw = TxBalanceWithdraw {
+    let withdraw = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 200)]),
     };
@@ -108,7 +108,7 @@ async fn test_schedule_wait_for_settlement() {
     assert!(
         wait_for_results(
             receivers,
-            BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
+            BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientFunds)]),
         )
         .await
         .is_err()
@@ -121,46 +121,46 @@ async fn test_schedules_and_settles() {
     let account = ObjectID::random();
     let test = TestScheduler::new(v0, BTreeMap::from([(account, 100)]));
 
-    let withdraw0 = TxBalanceWithdraw {
+    let withdraw0 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 60)]),
     };
     let receivers = test.schedule_withdraws(v0, vec![withdraw0.clone()]);
     wait_for_results(
         receivers,
-        BTreeMap::from([(withdraw0.tx_digest, ScheduleStatus::SufficientBalance)]),
+        BTreeMap::from([(withdraw0.tx_digest, ScheduleStatus::SufficientFunds)]),
     )
     .await
     .unwrap();
 
     let v1 = v0.next();
     // 100 -> 40, v0 -> v1
-    test.settle_balance_changes(v1, BTreeMap::from([(account, -60)]));
+    test.settle_funds_changes(v1, BTreeMap::from([(account, -60)]));
 
-    let withdraw1 = TxBalanceWithdraw {
+    let withdraw1 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 60)]),
     };
     let receivers = test.schedule_withdraws(v1, vec![withdraw1.clone()]);
     wait_for_results(
         receivers,
-        BTreeMap::from([(withdraw1.tx_digest, ScheduleStatus::InsufficientBalance)]),
+        BTreeMap::from([(withdraw1.tx_digest, ScheduleStatus::InsufficientFunds)]),
     )
     .await
     .unwrap();
 
     let v2 = v1.next();
     // 40 -> 60, v1 -> v2
-    test.settle_balance_changes(v2, BTreeMap::from([(account, 20)]));
+    test.settle_funds_changes(v2, BTreeMap::from([(account, 20)]));
 
-    let withdraw2 = TxBalanceWithdraw {
+    let withdraw2 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 60)]),
     };
     let receivers = test.schedule_withdraws(v2, vec![withdraw2.clone()]);
     wait_for_results(
         receivers,
-        BTreeMap::from([(withdraw2.tx_digest, ScheduleStatus::SufficientBalance)]),
+        BTreeMap::from([(withdraw2.tx_digest, ScheduleStatus::SufficientFunds)]),
     )
     .await
     .unwrap();
@@ -177,16 +177,16 @@ async fn test_already_executed() {
     );
 
     // Advance the accumulator version
-    test.settle_balance_changes(init_version.next(), BTreeMap::new());
+    test.settle_funds_changes(init_version.next(), BTreeMap::new());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
 
     // Try to schedule multiple withdraws for the old version
-    let withdraw1 = TxBalanceWithdraw {
+    let withdraw1 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account1), 50)]),
     };
-    let withdraw2 = TxBalanceWithdraw {
+    let withdraw2 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account2), 100)]),
     };
@@ -212,15 +212,15 @@ async fn test_multiple_withdraws_same_version() {
     let account = ObjectID::random();
     let test = TestScheduler::new(init_version, BTreeMap::from([(account, 90)]));
 
-    let withdraw1 = TxBalanceWithdraw {
+    let withdraw1 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 50)]),
     };
-    let withdraw2 = TxBalanceWithdraw {
+    let withdraw2 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 50)]),
     };
-    let withdraw3 = TxBalanceWithdraw {
+    let withdraw3 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 40)]),
     };
@@ -232,9 +232,9 @@ async fn test_multiple_withdraws_same_version() {
     wait_for_results(
         receivers,
         BTreeMap::from([
-            (withdraw1.tx_digest, ScheduleStatus::SufficientBalance),
-            (withdraw2.tx_digest, ScheduleStatus::InsufficientBalance),
-            (withdraw3.tx_digest, ScheduleStatus::SufficientBalance),
+            (withdraw1.tx_digest, ScheduleStatus::SufficientFunds),
+            (withdraw2.tx_digest, ScheduleStatus::InsufficientFunds),
+            (withdraw3.tx_digest, ScheduleStatus::SufficientFunds),
         ]),
     )
     .await
@@ -251,18 +251,18 @@ async fn test_multiple_withdraws_multiple_accounts_same_version() {
         BTreeMap::from([(account1, 100), (account2, 100)]),
     );
 
-    let withdraw1 = TxBalanceWithdraw {
+    let withdraw1 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([
             (AccumulatorObjId::new_unchecked(account1), 100),
             (AccumulatorObjId::new_unchecked(account2), 200),
         ]),
     };
-    let withdraw2 = TxBalanceWithdraw {
+    let withdraw2 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account1), 1)]),
     };
-    let withdraw3 = TxBalanceWithdraw {
+    let withdraw3 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account2), 100)]),
     };
@@ -274,9 +274,9 @@ async fn test_multiple_withdraws_multiple_accounts_same_version() {
     wait_for_results(
         receivers,
         BTreeMap::from([
-            (withdraw1.tx_digest, ScheduleStatus::InsufficientBalance),
-            (withdraw2.tx_digest, ScheduleStatus::InsufficientBalance),
-            (withdraw3.tx_digest, ScheduleStatus::SufficientBalance),
+            (withdraw1.tx_digest, ScheduleStatus::InsufficientFunds),
+            (withdraw2.tx_digest, ScheduleStatus::InsufficientFunds),
+            (withdraw3.tx_digest, ScheduleStatus::SufficientFunds),
         ]),
     )
     .await
@@ -292,13 +292,10 @@ async fn test_withdraw_already_settled_account_object() {
     // Mimic the scenario where while we haven't processed the settlement for version `v1`,
     // the underlying store has already observed a newer version of the account object through
     // the execution of settlement transactions.
-    let mock_read = Arc::new(MockBalanceRead::new(
-        v1,
-        BTreeMap::from([(account, 100u128)]),
-    ));
+    let mock_read = Arc::new(MockFundsRead::new(v1, BTreeMap::from([(account, 100u128)])));
     let scheduler = TestScheduler::new_with_mock_read(mock_read.clone());
 
-    let withdraw = TxBalanceWithdraw {
+    let withdraw = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(account_id, 60)]),
     };
@@ -315,11 +312,11 @@ async fn test_withdraw_already_settled_account_object() {
     // Even though the scheduler itself is still at v0 as the last settled version,
     // withdrawing v1 is still considered as already settled since the object version is already at v2.
     let v2 = v1.next();
-    mock_read.settle_balance_changes(BTreeMap::from([(account_id, 0)]), v2);
+    mock_read.settle_funds_changes(BTreeMap::from([(account_id, 0)]), v2);
     let receivers = scheduler.schedule_withdraws(v1, vec![withdraw.clone()]);
     wait_for_results(
         receivers,
-        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientFunds)]),
     )
     .await
     .unwrap();
@@ -332,14 +329,14 @@ async fn test_settle_just_updated_account_object() {
     let v2 = v1.next();
     let account1 = ObjectID::random();
     let account2 = ObjectID::random();
-    let mock_read = Arc::new(MockBalanceRead::new(
+    let mock_read = Arc::new(MockFundsRead::new(
         v0,
         BTreeMap::from([(account1, 100u128), (account2, 100u128)]),
     ));
 
     let scheduler = TestScheduler::new_with_mock_read(mock_read.clone());
     // Bump underlying account object versions to v1.
-    mock_read.settle_balance_changes(
+    mock_read.settle_funds_changes(
         BTreeMap::from([
             (AccumulatorObjId::new_unchecked(account1), 0),
             (AccumulatorObjId::new_unchecked(account2), 0),
@@ -347,11 +344,11 @@ async fn test_settle_just_updated_account_object() {
         v1,
     );
 
-    let withdraw1 = TxBalanceWithdraw {
+    let withdraw1 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account1), 150)]),
     };
-    let withdraw2 = TxBalanceWithdraw {
+    let withdraw2 = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account2), 150)]),
     };
@@ -363,27 +360,27 @@ async fn test_settle_just_updated_account_object() {
 
     // Bring the scheduler to `v1`.
     // The pending withdraw is still pending since the object version is v1.
-    scheduler.scheduler.settle_balances(BalanceSettlement {
+    scheduler.scheduler.settle_funds(FundsSettlement {
         next_accumulator_version: v1,
-        balance_changes: BTreeMap::new(),
+        funds_changes: BTreeMap::new(),
     });
     scheduler.wait_for_accumulator_version(v1).await;
     assert!(
         wait_for_results(
             receivers1,
-            BTreeMap::from([(withdraw1.tx_digest, ScheduleStatus::InsufficientBalance)]),
+            BTreeMap::from([(withdraw1.tx_digest, ScheduleStatus::InsufficientFunds)]),
         )
         .await
         .is_err()
     );
 
     // This will trigger the scheduler to process the pending withdraw.
-    scheduler.settle_balance_changes(v2, BTreeMap::new());
+    scheduler.settle_funds_changes(v2, BTreeMap::new());
     scheduler.wait_for_accumulator_version(v2).await;
 
     wait_for_results(
         receivers2,
-        BTreeMap::from([(withdraw2.tx_digest, ScheduleStatus::InsufficientBalance)]),
+        BTreeMap::from([(withdraw2.tx_digest, ScheduleStatus::InsufficientFunds)]),
     )
     .await
     .unwrap();
@@ -398,18 +395,15 @@ async fn test_withdraw_settle_and_deleted_account() {
     // Mimic the scenario where while we haven't processed the settlement for version `v1`,
     // the underlying store has already observed a newer version of the account object through
     // the execution of settlement transactions.
-    let mock_read = Arc::new(MockBalanceRead::new(
-        v0,
-        BTreeMap::from([(account, 100u128)]),
-    ));
+    let mock_read = Arc::new(MockFundsRead::new(v0, BTreeMap::from([(account, 100u128)])));
     let scheduler = TestScheduler::new_with_mock_read(mock_read.clone());
 
     // Only update the account balance, without calling the scheduler to settle the balances.
     // This means that the scheduler still thinks we are at v0.
     // The settlement of -100 should lead to 0 balance, causing the account to be deleted.
-    mock_read.settle_balance_changes(BTreeMap::from([(account_id, -100)]), v1);
+    mock_read.settle_funds_changes(BTreeMap::from([(account_id, -100)]), v1);
 
-    let withdraw = TxBalanceWithdraw {
+    let withdraw = TxFundsWithdraw {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(account_id, 100)]),
     };
@@ -417,7 +411,7 @@ async fn test_withdraw_settle_and_deleted_account() {
     let receivers = scheduler.schedule_withdraws(v0, vec![withdraw.clone()]);
     wait_for_results(
         receivers,
-        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientFunds)]),
     )
     .await
     .unwrap();
@@ -426,7 +420,7 @@ async fn test_withdraw_settle_and_deleted_account() {
 struct StressTestEnv {
     init_balances: BTreeMap<ObjectID, u128>,
     accounts: Vec<ObjectID>,
-    withdraws: Vec<(SequenceNumber, Vec<TxBalanceWithdraw>)>,
+    withdraws: Vec<(SequenceNumber, Vec<TxFundsWithdraw>)>,
 }
 
 impl StressTestEnv {
@@ -465,7 +459,7 @@ impl StressTestEnv {
                     )
                 })
                 .collect::<BTreeMap<_, _>>();
-            cur_reservations.push(TxBalanceWithdraw {
+            cur_reservations.push(TxFundsWithdraw {
                 tx_digest: TransactionDigest::random(),
                 reservations,
             });
@@ -552,7 +546,7 @@ async fn balance_withdraw_scheduler_stress_test() {
                         }
 
                         version = version.next();
-                        test_clone.settle_balance_changes(version, settlements.lock()[idx].clone());
+                        test_clone.settle_funds_changes(version, settlements.lock()[idx].clone());
                         idx += 1;
                     }
                 });
@@ -574,7 +568,7 @@ async fn balance_withdraw_scheduler_stress_test() {
                     }
                     let mut reserved_amounts = BTreeMap::new();
                     for withdraw in withdraws {
-                        if results.get(&withdraw.tx_digest) == Some(&ScheduleStatus::SufficientBalance) {
+                        if results.get(&withdraw.tx_digest) == Some(&ScheduleStatus::SufficientFunds) {
                             for (account_id, reservation) in withdraw.reservations {
                                 *reserved_amounts.entry(account_id).or_insert(0) += reservation;
                             }
