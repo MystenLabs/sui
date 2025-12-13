@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["borrow","borrow_quantity","checkpoint","checkpoint_timestamp_ms","digest","event_digest","package","pool_id","sender","star","timestamp","type_name"]};

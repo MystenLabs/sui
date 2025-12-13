@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["sui_bridge",[["impl EthLogDecode for <a class=\"enum\" href=\"sui_bridge/abi/eth_bridge_committee/enum.EthBridgeCommitteeEvents.html\" title=\"enum sui_bridge::abi::eth_bridge_committee::EthBridgeCommitteeEvents\">EthBridgeCommitteeEvents</a>"],["impl EthLogDecode for <a class=\"enum\" href=\"sui_bridge/abi/eth_bridge_config/enum.EthBridgeConfigEvents.html\" title=\"enum sui_bridge::abi::eth_bridge_config::EthBridgeConfigEvents\">EthBridgeConfigEvents</a>"],["impl EthLogDecode for <a class=\"enum\" href=\"sui_bridge/abi/eth_bridge_limiter/enum.EthBridgeLimiterEvents.html\" title=\"enum sui_bridge::abi::eth_bridge_limiter::EthBridgeLimiterEvents\">EthBridgeLimiterEvents</a>"],["impl EthLogDecode for <a class=\"enum\" href=\"sui_bridge/abi/eth_committee_upgradeable_contract/enum.EthCommitteeUpgradeableContractEvents.html\" title=\"enum sui_bridge::abi::eth_committee_upgradeable_contract::EthCommitteeUpgradeableContractEvents\">EthCommitteeUpgradeableContractEvents</a>"],["impl EthLogDecode for <a class=\"enum\" href=\"sui_bridge/abi/eth_erc20/enum.EthERC20Events.html\" title=\"enum sui_bridge::abi::eth_erc20::EthERC20Events\">EthERC20Events</a>"],["impl EthLogDecode for <a class=\"enum\" href=\"sui_bridge/abi/eth_sui_bridge/enum.EthSuiBridgeEvents.html\" title=\"enum sui_bridge::abi::eth_sui_bridge::EthSuiBridgeEvents\">EthSuiBridgeEvents</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1368]}

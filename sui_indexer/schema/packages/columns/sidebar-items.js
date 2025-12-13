@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["checkpoint_sequence_number","move_package","original_id","package_id","package_version","star"]};

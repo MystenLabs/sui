@@ -1,0 +1,813 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/sui-indexer/src/metrics.rs`."><title>metrics.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui_indexer" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0 (1159e78c4 2025-09-14)" data-channel="1.90.0" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../../static.files/storage-68b7e25d.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">sui_indexer/</div>metrics.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Mysten Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">use </span>axum::{Router, extract::Extension, http::StatusCode, routing::get};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>mysten_metrics::RegistryService;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>prometheus::{
+<a href=#7 id=7 data-nosnippet>7</a>    Histogram, IntCounter, IntGauge, register_histogram_with_registry,
+<a href=#8 id=8 data-nosnippet>8</a>    register_int_counter_with_registry, register_int_gauge_with_registry,
+<a href=#9 id=9 data-nosnippet>9</a>};
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>prometheus::{Registry, TextEncoder};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>std::net::SocketAddr;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>tracing::info;
+<a href=#13 id=13 data-nosnippet>13</a>
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">const </span>METRICS_ROUTE: <span class="kw-2">&amp;</span>str = <span class="string">"/metrics"</span>;
+<a href=#15 id=15 data-nosnippet>15</a>
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">pub fn </span>start_prometheus_server(
+<a href=#17 id=17 data-nosnippet>17</a>    addr: SocketAddr,
+<a href=#18 id=18 data-nosnippet>18</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(RegistryService, Registry), anyhow::Error&gt; {
+<a href=#19 id=19 data-nosnippet>19</a>    <span class="macro">info!</span>(address =% addr, <span class="string">"Starting prometheus server"</span>);
+<a href=#20 id=20 data-nosnippet>20</a>    <span class="kw">let </span>registry = Registry::new_custom(<span class="prelude-val">Some</span>(<span class="string">"indexer"</span>.to_string()), <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+<a href=#21 id=21 data-nosnippet>21</a>    <span class="kw">let </span>registry_service = RegistryService::new(registry.clone());
+<a href=#22 id=22 data-nosnippet>22</a>
+<a href=#23 id=23 data-nosnippet>23</a>    <span class="kw">let </span>app = Router::new()
+<a href=#24 id=24 data-nosnippet>24</a>        .route(METRICS_ROUTE, get(metrics))
+<a href=#25 id=25 data-nosnippet>25</a>        .layer(Extension(registry_service.clone()));
+<a href=#26 id=26 data-nosnippet>26</a>
+<a href=#27 id=27 data-nosnippet>27</a>    tokio::spawn(<span class="kw">async move </span>{
+<a href=#28 id=28 data-nosnippet>28</a>        <span class="kw">let </span>listener = tokio::net::TcpListener::bind(<span class="kw-2">&amp;</span>addr).<span class="kw">await</span>.unwrap();
+<a href=#29 id=29 data-nosnippet>29</a>        axum::serve(listener, app).<span class="kw">await</span>.unwrap();
+<a href=#30 id=30 data-nosnippet>30</a>    });
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="prelude-val">Ok</span>((registry_service, registry))
+<a href=#32 id=32 data-nosnippet>32</a>}
+<a href=#33 id=33 data-nosnippet>33</a>
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">async fn </span>metrics(Extension(registry_service): Extension&lt;RegistryService&gt;) -&gt; (StatusCode, String) {
+<a href=#35 id=35 data-nosnippet>35</a>    <span class="kw">let </span>metrics_families = registry_service.gather_all();
+<a href=#36 id=36 data-nosnippet>36</a>    <span class="kw">match </span>TextEncoder.encode_to_string(<span class="kw-2">&amp;</span>metrics_families) {
+<a href=#37 id=37 data-nosnippet>37</a>        <span class="prelude-val">Ok</span>(metrics) =&gt; (StatusCode::OK, metrics),
+<a href=#38 id=38 data-nosnippet>38</a>        <span class="prelude-val">Err</span>(error) =&gt; (
+<a href=#39 id=39 data-nosnippet>39</a>            StatusCode::INTERNAL_SERVER_ERROR,
+<a href=#40 id=40 data-nosnippet>40</a>            <span class="macro">format!</span>(<span class="string">"unable to encode metrics: {error}"</span>),
+<a href=#41 id=41 data-nosnippet>41</a>        ),
+<a href=#42 id=42 data-nosnippet>42</a>    }
+<a href=#43 id=43 data-nosnippet>43</a>}
+<a href=#44 id=44 data-nosnippet>44</a>
+<a href=#45 id=45 data-nosnippet>45</a><span class="doccomment">/// NOTE: for various data ingestion steps, which are expected to be within [0.001, 100] seconds,
+<a href=#46 id=46 data-nosnippet>46</a>/// and high double digits usually means something is broken.
+<a href=#47 id=47 data-nosnippet>47</a></span><span class="kw">const </span>DATA_INGESTION_LATENCY_SEC_BUCKETS: <span class="kw-2">&amp;</span>[f64] = <span class="kw-2">&amp;</span>[
+<a href=#48 id=48 data-nosnippet>48</a>    <span class="number">0.001</span>, <span class="number">0.002</span>, <span class="number">0.005</span>, <span class="number">0.01</span>, <span class="number">0.02</span>, <span class="number">0.05</span>, <span class="number">0.1</span>, <span class="number">0.2</span>, <span class="number">0.5</span>, <span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">5.0</span>, <span class="number">10.0</span>, <span class="number">20.0</span>, <span class="number">50.0</span>, <span class="number">100.0</span>,
+<a href=#49 id=49 data-nosnippet>49</a>];
+<a href=#50 id=50 data-nosnippet>50</a><span class="doccomment">/// NOTE: for objects_snapshot update and advance_epoch, which are expected to be within [0.1, 100] seconds,
+<a href=#51 id=51 data-nosnippet>51</a>/// and can go up to high hundreds of seconds when things go wrong.
+<a href=#52 id=52 data-nosnippet>52</a></span><span class="kw">const </span>DB_UPDATE_QUERY_LATENCY_SEC_BUCKETS: <span class="kw-2">&amp;</span>[f64] = <span class="kw-2">&amp;</span>[
+<a href=#53 id=53 data-nosnippet>53</a>    <span class="number">0.1</span>, <span class="number">0.2</span>, <span class="number">0.5</span>, <span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">5.0</span>, <span class="number">10.0</span>, <span class="number">20.0</span>, <span class="number">50.0</span>, <span class="number">100.0</span>, <span class="number">200.0</span>, <span class="number">500.0</span>, <span class="number">1000.0</span>, <span class="number">2000.0</span>, <span class="number">5000.0</span>,
+<a href=#54 id=54 data-nosnippet>54</a>    <span class="number">10000.0</span>,
+<a href=#55 id=55 data-nosnippet>55</a>];
+<a href=#56 id=56 data-nosnippet>56</a><span class="doccomment">/// NOTE: for json_rpc calls, which are expected to be within [0.01, 100] seconds,
+<a href=#57 id=57 data-nosnippet>57</a>/// high hundreds of seconds usually means something is broken.
+<a href=#58 id=58 data-nosnippet>58</a></span><span class="kw">const </span>JSON_RPC_LATENCY_SEC_BUCKETS: <span class="kw-2">&amp;</span>[f64] = <span class="kw-2">&amp;</span>[
+<a href=#59 id=59 data-nosnippet>59</a>    <span class="number">0.01</span>, <span class="number">0.02</span>, <span class="number">0.05</span>, <span class="number">0.1</span>, <span class="number">0.2</span>, <span class="number">0.5</span>, <span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">5.0</span>, <span class="number">10.0</span>, <span class="number">20.0</span>, <span class="number">50.0</span>, <span class="number">100.0</span>, <span class="number">200.0</span>, <span class="number">500.0</span>, <span class="number">1000.0</span>,
+<a href=#60 id=60 data-nosnippet>60</a>];
+<a href=#61 id=61 data-nosnippet>61</a>
+<a href=#62 id=62 data-nosnippet>62</a><span class="attr">#[derive(Clone)]
+<a href=#63 id=63 data-nosnippet>63</a></span><span class="kw">pub struct </span>IndexerMetrics {
+<a href=#64 id=64 data-nosnippet>64</a>    <span class="kw">pub </span>total_checkpoint_received: IntCounter,
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="kw">pub </span>total_tx_checkpoint_committed: IntCounter,
+<a href=#66 id=66 data-nosnippet>66</a>    <span class="kw">pub </span>total_object_checkpoint_committed: IntCounter,
+<a href=#67 id=67 data-nosnippet>67</a>    <span class="kw">pub </span>total_transaction_committed: IntCounter,
+<a href=#68 id=68 data-nosnippet>68</a>    <span class="kw">pub </span>total_object_change_committed: IntCounter,
+<a href=#69 id=69 data-nosnippet>69</a>    <span class="kw">pub </span>total_transaction_chunk_committed: IntCounter,
+<a href=#70 id=70 data-nosnippet>70</a>    <span class="kw">pub </span>total_object_change_chunk_committed: IntCounter,
+<a href=#71 id=71 data-nosnippet>71</a>    <span class="kw">pub </span>total_epoch_committed: IntCounter,
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="kw">pub </span>latest_fullnode_checkpoint_sequence_number: IntGauge,
+<a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">pub </span>latest_tx_checkpoint_sequence_number: IntGauge,
+<a href=#74 id=74 data-nosnippet>74</a>    <span class="kw">pub </span>latest_indexer_object_checkpoint_sequence_number: IntGauge,
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">pub </span>latest_object_snapshot_sequence_number: IntGauge,
+<a href=#76 id=76 data-nosnippet>76</a>    <span class="comment">// max checkpoint sequence numbers on various stages of indexer data ingestion
+<a href=#77 id=77 data-nosnippet>77</a>    </span><span class="kw">pub </span>max_downloaded_checkpoint_sequence_number: IntGauge,
+<a href=#78 id=78 data-nosnippet>78</a>    <span class="kw">pub </span>max_indexed_checkpoint_sequence_number: IntGauge,
+<a href=#79 id=79 data-nosnippet>79</a>    <span class="kw">pub </span>max_committed_checkpoint_sequence_number: IntGauge,
+<a href=#80 id=80 data-nosnippet>80</a>    <span class="comment">// the related timestamps of max checkpoint ^ on various stages
+<a href=#81 id=81 data-nosnippet>81</a>    </span><span class="kw">pub </span>downloaded_checkpoint_timestamp_ms: IntGauge,
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">pub </span>indexed_checkpoint_timestamp_ms: IntGauge,
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="kw">pub </span>committed_checkpoint_timestamp_ms: IntGauge,
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="comment">// lag starting from the timestamp of the latest checkpoint to the current time
+<a href=#85 id=85 data-nosnippet>85</a>    </span><span class="kw">pub </span>download_lag_ms: IntGauge,
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="kw">pub </span>index_lag_ms: IntGauge,
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">pub </span>db_commit_lag_ms: IntGauge,
+<a href=#88 id=88 data-nosnippet>88</a>    <span class="comment">// latencies of various steps of data ingestion.
+<a href=#89 id=89 data-nosnippet>89</a>    // checkpoint E2E latency is: fullnode_download_latency + checkpoint_index_latency + db_commit_latency
+<a href=#90 id=90 data-nosnippet>90</a>    </span><span class="kw">pub </span>checkpoint_download_bytes_size: IntGauge,
+<a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">pub </span>tokio_blocking_task_wait_latency: Histogram,
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">pub </span>fullnode_checkpoint_data_download_latency: Histogram,
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">pub </span>fullnode_checkpoint_wait_and_download_latency: Histogram,
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">pub </span>fullnode_transaction_download_latency: Histogram,
+<a href=#95 id=95 data-nosnippet>95</a>    <span class="kw">pub </span>fullnode_object_download_latency: Histogram,
+<a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">pub </span>checkpoint_index_latency: Histogram,
+<a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">pub </span>indexing_batch_size: IntGauge,
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="kw">pub </span>indexing_tx_object_changes_latency: Histogram,
+<a href=#99 id=99 data-nosnippet>99</a>    <span class="kw">pub </span>indexing_objects_latency: Histogram,
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">pub </span>indexing_get_object_in_mem_hit: IntCounter,
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="kw">pub </span>indexing_get_object_db_hit: IntCounter,
+<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">pub </span>indexing_module_resolver_in_mem_hit: IntCounter,
+<a href=#103 id=103 data-nosnippet>103</a>    <span class="kw">pub </span>indexing_package_resolver_in_mem_hit: IntCounter,
+<a href=#104 id=104 data-nosnippet>104</a>    <span class="kw">pub </span>indexing_packages_latency: Histogram,
+<a href=#105 id=105 data-nosnippet>105</a>    <span class="kw">pub </span>checkpoint_objects_index_latency: Histogram,
+<a href=#106 id=106 data-nosnippet>106</a>    <span class="kw">pub </span>checkpoint_db_commit_latency: Histogram,
+<a href=#107 id=107 data-nosnippet>107</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_step_1: Histogram,
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_transactions: Histogram,
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_transactions_chunks: Histogram,
+<a href=#110 id=110 data-nosnippet>110</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_transactions_chunks_transformation: Histogram,
+<a href=#111 id=111 data-nosnippet>111</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_objects: Histogram,
+<a href=#112 id=112 data-nosnippet>112</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_objects_snapshot: Histogram,
+<a href=#113 id=113 data-nosnippet>113</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_objects_version: Histogram,
+<a href=#114 id=114 data-nosnippet>114</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_objects_history: Histogram,
+<a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_full_objects_history: Histogram,
+<a href=#116 id=116 data-nosnippet>116</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_objects_chunks: Histogram,
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_objects_snapshot_chunks: Histogram,
+<a href=#118 id=118 data-nosnippet>118</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_objects_version_chunks: Histogram,
+<a href=#119 id=119 data-nosnippet>119</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_objects_history_chunks: Histogram,
+<a href=#120 id=120 data-nosnippet>120</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_full_objects_history_chunks: Histogram,
+<a href=#121 id=121 data-nosnippet>121</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_events: Histogram,
+<a href=#122 id=122 data-nosnippet>122</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_events_chunks: Histogram,
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_event_indices: Histogram,
+<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_event_indices_chunks: Histogram,
+<a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_packages: Histogram,
+<a href=#126 id=126 data-nosnippet>126</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_tx_indices: Histogram,
+<a href=#127 id=127 data-nosnippet>127</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_tx_indices_chunks: Histogram,
+<a href=#128 id=128 data-nosnippet>128</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_checkpoints: Histogram,
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_epoch: Histogram,
+<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">pub </span>checkpoint_db_commit_latency_watermarks: Histogram,
+<a href=#131 id=131 data-nosnippet>131</a>    <span class="kw">pub </span>thousand_transaction_avg_db_commit_latency: Histogram,
+<a href=#132 id=132 data-nosnippet>132</a>    <span class="kw">pub </span>object_db_commit_latency: Histogram,
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="kw">pub </span>object_mutation_db_commit_latency: Histogram,
+<a href=#134 id=134 data-nosnippet>134</a>    <span class="kw">pub </span>object_deletion_db_commit_latency: Histogram,
+<a href=#135 id=135 data-nosnippet>135</a>    <span class="kw">pub </span>epoch_db_commit_latency: Histogram,
+<a href=#136 id=136 data-nosnippet>136</a>    <span class="comment">// latencies of slow DB update queries, now only advance epoch and objects_snapshot update
+<a href=#137 id=137 data-nosnippet>137</a>    </span><span class="kw">pub </span>advance_epoch_latency: Histogram,
+<a href=#138 id=138 data-nosnippet>138</a>    <span class="comment">// latencies of RPC endpoints in read.rs
+<a href=#139 id=139 data-nosnippet>139</a>    </span><span class="kw">pub </span>get_transaction_block_latency: Histogram,
+<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">pub </span>multi_get_transaction_blocks_latency: Histogram,
+<a href=#141 id=141 data-nosnippet>141</a>    <span class="kw">pub </span>get_object_latency: Histogram,
+<a href=#142 id=142 data-nosnippet>142</a>    <span class="kw">pub </span>multi_get_objects_latency: Histogram,
+<a href=#143 id=143 data-nosnippet>143</a>    <span class="kw">pub </span>try_get_past_object_latency: Histogram,
+<a href=#144 id=144 data-nosnippet>144</a>    <span class="kw">pub </span>try_multi_get_past_objects_latency: Histogram,
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="kw">pub </span>get_checkpoint_latency: Histogram,
+<a href=#146 id=146 data-nosnippet>146</a>    <span class="kw">pub </span>get_checkpoints_latency: Histogram,
+<a href=#147 id=147 data-nosnippet>147</a>    <span class="kw">pub </span>get_events_latency: Histogram,
+<a href=#148 id=148 data-nosnippet>148</a>    <span class="kw">pub </span>get_loaded_child_objects_latency: Histogram,
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="kw">pub </span>get_total_transaction_blocks_latency: Histogram,
+<a href=#150 id=150 data-nosnippet>150</a>    <span class="kw">pub </span>get_latest_checkpoint_sequence_number_latency: Histogram,
+<a href=#151 id=151 data-nosnippet>151</a>    <span class="comment">// latencies of RPC endpoints in indexer.rs
+<a href=#152 id=152 data-nosnippet>152</a>    </span><span class="kw">pub </span>get_owned_objects_latency: Histogram,
+<a href=#153 id=153 data-nosnippet>153</a>    <span class="kw">pub </span>query_transaction_blocks_latency: Histogram,
+<a href=#154 id=154 data-nosnippet>154</a>    <span class="kw">pub </span>query_events_latency: Histogram,
+<a href=#155 id=155 data-nosnippet>155</a>    <span class="kw">pub </span>get_dynamic_fields_latency: Histogram,
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="kw">pub </span>get_dynamic_field_object_latency: Histogram,
+<a href=#157 id=157 data-nosnippet>157</a>    <span class="kw">pub </span>get_protocol_config_latency: Histogram,
+<a href=#158 id=158 data-nosnippet>158</a>    <span class="comment">// latency of event websocket subscription
+<a href=#159 id=159 data-nosnippet>159</a>    </span><span class="kw">pub </span>subscription_process_latency: Histogram,
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">pub </span>transaction_per_checkpoint: Histogram,
+<a href=#161 id=161 data-nosnippet>161</a>    <span class="comment">// indexer state metrics
+<a href=#162 id=162 data-nosnippet>162</a>    </span><span class="kw">pub </span>db_conn_pool_size: IntGauge,
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">pub </span>idle_db_conn: IntGauge,
+<a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">pub </span>address_processor_failure: IntCounter,
+<a href=#165 id=165 data-nosnippet>165</a>    <span class="kw">pub </span>checkpoint_metrics_processor_failure: IntCounter,
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="comment">// pruner metrics
+<a href=#167 id=167 data-nosnippet>167</a>    </span><span class="kw">pub </span>last_pruned_epoch: IntGauge,
+<a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">pub </span>last_pruned_checkpoint: IntGauge,
+<a href=#169 id=169 data-nosnippet>169</a>    <span class="kw">pub </span>last_pruned_transaction: IntGauge,
+<a href=#170 id=170 data-nosnippet>170</a>    <span class="kw">pub </span>epoch_pruning_latency: Histogram,
+<a href=#171 id=171 data-nosnippet>171</a>}
+<a href=#172 id=172 data-nosnippet>172</a>
+<a href=#173 id=173 data-nosnippet>173</a><span class="kw">impl </span>IndexerMetrics {
+<a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">pub fn </span>new(registry: <span class="kw-2">&amp;</span>Registry) -&gt; <span class="self">Self </span>{
+<a href=#175 id=175 data-nosnippet>175</a>        <span class="self">Self </span>{
+<a href=#176 id=176 data-nosnippet>176</a>            total_checkpoint_received: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#177 id=177 data-nosnippet>177</a>                <span class="string">"total_checkpoint_received"</span>,
+<a href=#178 id=178 data-nosnippet>178</a>                <span class="string">"Total number of checkpoint received"</span>,
+<a href=#179 id=179 data-nosnippet>179</a>                registry,
+<a href=#180 id=180 data-nosnippet>180</a>            )
+<a href=#181 id=181 data-nosnippet>181</a>            .unwrap(),
+<a href=#182 id=182 data-nosnippet>182</a>            total_tx_checkpoint_committed: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#183 id=183 data-nosnippet>183</a>                <span class="string">"total_checkpoint_committed"</span>,
+<a href=#184 id=184 data-nosnippet>184</a>                <span class="string">"Total number of checkpoint committed"</span>,
+<a href=#185 id=185 data-nosnippet>185</a>                registry,
+<a href=#186 id=186 data-nosnippet>186</a>            )
+<a href=#187 id=187 data-nosnippet>187</a>            .unwrap(),
+<a href=#188 id=188 data-nosnippet>188</a>            total_object_checkpoint_committed: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#189 id=189 data-nosnippet>189</a>                <span class="string">"total_object_checkpoint_committed"</span>,
+<a href=#190 id=190 data-nosnippet>190</a>                <span class="string">"Total number of object checkpoint committed"</span>,
+<a href=#191 id=191 data-nosnippet>191</a>                registry,
+<a href=#192 id=192 data-nosnippet>192</a>            )
+<a href=#193 id=193 data-nosnippet>193</a>            .unwrap(),
+<a href=#194 id=194 data-nosnippet>194</a>            total_transaction_committed: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#195 id=195 data-nosnippet>195</a>                <span class="string">"total_transaction_committed"</span>,
+<a href=#196 id=196 data-nosnippet>196</a>                <span class="string">"Total number of transaction committed"</span>,
+<a href=#197 id=197 data-nosnippet>197</a>                registry,
+<a href=#198 id=198 data-nosnippet>198</a>            )
+<a href=#199 id=199 data-nosnippet>199</a>            .unwrap(),
+<a href=#200 id=200 data-nosnippet>200</a>            total_object_change_committed: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#201 id=201 data-nosnippet>201</a>                <span class="string">"total_object_change_committed"</span>,
+<a href=#202 id=202 data-nosnippet>202</a>                <span class="string">"Total number of object change committed"</span>,
+<a href=#203 id=203 data-nosnippet>203</a>                registry,
+<a href=#204 id=204 data-nosnippet>204</a>            )
+<a href=#205 id=205 data-nosnippet>205</a>            .unwrap(),
+<a href=#206 id=206 data-nosnippet>206</a>            total_transaction_chunk_committed: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#207 id=207 data-nosnippet>207</a>                <span class="string">"total_transaction_chunk_committed"</span>,
+<a href=#208 id=208 data-nosnippet>208</a>                <span class="string">"Total number of transaction chunk committed"</span>,
+<a href=#209 id=209 data-nosnippet>209</a>                registry,
+<a href=#210 id=210 data-nosnippet>210</a>            )
+<a href=#211 id=211 data-nosnippet>211</a>            .unwrap(),
+<a href=#212 id=212 data-nosnippet>212</a>            total_object_change_chunk_committed: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#213 id=213 data-nosnippet>213</a>                <span class="string">"total_object_change_chunk_committed"</span>,
+<a href=#214 id=214 data-nosnippet>214</a>                <span class="string">"Total number of object change chunk committed"</span>,
+<a href=#215 id=215 data-nosnippet>215</a>                registry,
+<a href=#216 id=216 data-nosnippet>216</a>            )
+<a href=#217 id=217 data-nosnippet>217</a>            .unwrap(),
+<a href=#218 id=218 data-nosnippet>218</a>            total_epoch_committed: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#219 id=219 data-nosnippet>219</a>                <span class="string">"total_epoch_committed"</span>,
+<a href=#220 id=220 data-nosnippet>220</a>                <span class="string">"Total number of epoch committed"</span>,
+<a href=#221 id=221 data-nosnippet>221</a>                registry,
+<a href=#222 id=222 data-nosnippet>222</a>            )
+<a href=#223 id=223 data-nosnippet>223</a>            .unwrap(),
+<a href=#224 id=224 data-nosnippet>224</a>            latest_fullnode_checkpoint_sequence_number: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#225 id=225 data-nosnippet>225</a>                <span class="string">"latest_fullnode_checkpoint_sequence_number"</span>,
+<a href=#226 id=226 data-nosnippet>226</a>                <span class="string">"Latest checkpoint sequence number from the Full Node"</span>,
+<a href=#227 id=227 data-nosnippet>227</a>                registry,
+<a href=#228 id=228 data-nosnippet>228</a>            )
+<a href=#229 id=229 data-nosnippet>229</a>            .unwrap(),
+<a href=#230 id=230 data-nosnippet>230</a>            latest_tx_checkpoint_sequence_number: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#231 id=231 data-nosnippet>231</a>                <span class="string">"latest_indexer_checkpoint_sequence_number"</span>,
+<a href=#232 id=232 data-nosnippet>232</a>                <span class="string">"Latest checkpoint sequence number from the Indexer"</span>,
+<a href=#233 id=233 data-nosnippet>233</a>                registry,
+<a href=#234 id=234 data-nosnippet>234</a>            )
+<a href=#235 id=235 data-nosnippet>235</a>            .unwrap(),
+<a href=#236 id=236 data-nosnippet>236</a>            latest_indexer_object_checkpoint_sequence_number: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#237 id=237 data-nosnippet>237</a>                <span class="string">"latest_indexer_object_checkpoint_sequence_number"</span>,
+<a href=#238 id=238 data-nosnippet>238</a>                <span class="string">"Latest object checkpoint sequence number from the Indexer"</span>,
+<a href=#239 id=239 data-nosnippet>239</a>                registry,
+<a href=#240 id=240 data-nosnippet>240</a>            )
+<a href=#241 id=241 data-nosnippet>241</a>            .unwrap(),
+<a href=#242 id=242 data-nosnippet>242</a>            latest_object_snapshot_sequence_number: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#243 id=243 data-nosnippet>243</a>                <span class="string">"latest_object_snapshot_sequence_number"</span>,
+<a href=#244 id=244 data-nosnippet>244</a>                <span class="string">"Latest object snapshot sequence number from the Indexer"</span>,
+<a href=#245 id=245 data-nosnippet>245</a>                registry,
+<a href=#246 id=246 data-nosnippet>246</a>            ).unwrap(),
+<a href=#247 id=247 data-nosnippet>247</a>            max_downloaded_checkpoint_sequence_number: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#248 id=248 data-nosnippet>248</a>                <span class="string">"max_downloaded_checkpoint_sequence_number"</span>,
+<a href=#249 id=249 data-nosnippet>249</a>                <span class="string">"Max downloaded checkpoint sequence number"</span>,
+<a href=#250 id=250 data-nosnippet>250</a>                registry,
+<a href=#251 id=251 data-nosnippet>251</a>            ).unwrap(),
+<a href=#252 id=252 data-nosnippet>252</a>            max_indexed_checkpoint_sequence_number: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#253 id=253 data-nosnippet>253</a>                <span class="string">"max_indexed_checkpoint_sequence_number"</span>,
+<a href=#254 id=254 data-nosnippet>254</a>                <span class="string">"Max indexed checkpoint sequence number"</span>,
+<a href=#255 id=255 data-nosnippet>255</a>                registry,
+<a href=#256 id=256 data-nosnippet>256</a>            ).unwrap(),
+<a href=#257 id=257 data-nosnippet>257</a>            max_committed_checkpoint_sequence_number: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#258 id=258 data-nosnippet>258</a>                <span class="string">"max_committed_checkpoint_sequence_number"</span>,
+<a href=#259 id=259 data-nosnippet>259</a>                <span class="string">"Max committed checkpoint sequence number"</span>,
+<a href=#260 id=260 data-nosnippet>260</a>                registry,
+<a href=#261 id=261 data-nosnippet>261</a>            ).unwrap(),
+<a href=#262 id=262 data-nosnippet>262</a>            downloaded_checkpoint_timestamp_ms: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#263 id=263 data-nosnippet>263</a>                <span class="string">"downloaded_checkpoint_timestamp_ms"</span>,
+<a href=#264 id=264 data-nosnippet>264</a>                <span class="string">"Timestamp of the downloaded checkpoint"</span>,
+<a href=#265 id=265 data-nosnippet>265</a>                registry,
+<a href=#266 id=266 data-nosnippet>266</a>            ).unwrap(),
+<a href=#267 id=267 data-nosnippet>267</a>            indexed_checkpoint_timestamp_ms: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#268 id=268 data-nosnippet>268</a>                <span class="string">"indexed_checkpoint_timestamp_ms"</span>,
+<a href=#269 id=269 data-nosnippet>269</a>                <span class="string">"Timestamp of the indexed checkpoint"</span>,
+<a href=#270 id=270 data-nosnippet>270</a>                registry,
+<a href=#271 id=271 data-nosnippet>271</a>            ).unwrap(),
+<a href=#272 id=272 data-nosnippet>272</a>            committed_checkpoint_timestamp_ms: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#273 id=273 data-nosnippet>273</a>                <span class="string">"committed_checkpoint_timestamp_ms"</span>,
+<a href=#274 id=274 data-nosnippet>274</a>                <span class="string">"Timestamp of the committed checkpoint"</span>,
+<a href=#275 id=275 data-nosnippet>275</a>                registry,
+<a href=#276 id=276 data-nosnippet>276</a>            ).unwrap(),
+<a href=#277 id=277 data-nosnippet>277</a>            download_lag_ms: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#278 id=278 data-nosnippet>278</a>                <span class="string">"download_lag_ms"</span>,
+<a href=#279 id=279 data-nosnippet>279</a>                <span class="string">"Lag of the latest checkpoint in milliseconds"</span>,
+<a href=#280 id=280 data-nosnippet>280</a>                registry,
+<a href=#281 id=281 data-nosnippet>281</a>            ).unwrap(),
+<a href=#282 id=282 data-nosnippet>282</a>            index_lag_ms: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#283 id=283 data-nosnippet>283</a>                <span class="string">"index_lag_ms"</span>,
+<a href=#284 id=284 data-nosnippet>284</a>                <span class="string">"Lag of the latest checkpoint in milliseconds"</span>,
+<a href=#285 id=285 data-nosnippet>285</a>                registry,
+<a href=#286 id=286 data-nosnippet>286</a>            ).unwrap(),
+<a href=#287 id=287 data-nosnippet>287</a>            db_commit_lag_ms: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#288 id=288 data-nosnippet>288</a>                <span class="string">"db_commit_lag_ms"</span>,
+<a href=#289 id=289 data-nosnippet>289</a>                <span class="string">"Lag of the latest checkpoint in milliseconds"</span>,
+<a href=#290 id=290 data-nosnippet>290</a>                registry,
+<a href=#291 id=291 data-nosnippet>291</a>            ).unwrap(),
+<a href=#292 id=292 data-nosnippet>292</a>            checkpoint_download_bytes_size: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#293 id=293 data-nosnippet>293</a>                <span class="string">"checkpoint_download_bytes_size"</span>,
+<a href=#294 id=294 data-nosnippet>294</a>                <span class="string">"Size of the downloaded checkpoint in bytes"</span>,
+<a href=#295 id=295 data-nosnippet>295</a>                registry,
+<a href=#296 id=296 data-nosnippet>296</a>            ).unwrap(),
+<a href=#297 id=297 data-nosnippet>297</a>            fullnode_checkpoint_data_download_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#298 id=298 data-nosnippet>298</a>                <span class="string">"fullnode_checkpoint_data_download_latency"</span>,
+<a href=#299 id=299 data-nosnippet>299</a>                <span class="string">"Time spent in downloading checkpoint and transaction for a new checkpoint from the Full Node"</span>,
+<a href=#300 id=300 data-nosnippet>300</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#301 id=301 data-nosnippet>301</a>                registry,
+<a href=#302 id=302 data-nosnippet>302</a>            )
+<a href=#303 id=303 data-nosnippet>303</a>            .unwrap(),
+<a href=#304 id=304 data-nosnippet>304</a>            fullnode_checkpoint_wait_and_download_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#305 id=305 data-nosnippet>305</a>                <span class="string">"fullnode_checkpoint_wait_and_download_latency"</span>,
+<a href=#306 id=306 data-nosnippet>306</a>                <span class="string">"Time spent in waiting for a new checkpoint from the Full Node"</span>,
+<a href=#307 id=307 data-nosnippet>307</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#308 id=308 data-nosnippet>308</a>                registry,
+<a href=#309 id=309 data-nosnippet>309</a>            )
+<a href=#310 id=310 data-nosnippet>310</a>            .unwrap(),
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a>            fullnode_transaction_download_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#313 id=313 data-nosnippet>313</a>                <span class="string">"fullnode_transaction_download_latency"</span>,
+<a href=#314 id=314 data-nosnippet>314</a>                <span class="string">"Time spent in waiting for a new transaction from the Full Node"</span>,
+<a href=#315 id=315 data-nosnippet>315</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#316 id=316 data-nosnippet>316</a>                registry,
+<a href=#317 id=317 data-nosnippet>317</a>            )
+<a href=#318 id=318 data-nosnippet>318</a>            .unwrap(),
+<a href=#319 id=319 data-nosnippet>319</a>            fullnode_object_download_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#320 id=320 data-nosnippet>320</a>                <span class="string">"fullnode_object_download_latency"</span>,
+<a href=#321 id=321 data-nosnippet>321</a>                <span class="string">"Time spent in waiting for a new epoch from the Full Node"</span>,
+<a href=#322 id=322 data-nosnippet>322</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#323 id=323 data-nosnippet>323</a>                registry,
+<a href=#324 id=324 data-nosnippet>324</a>            )
+<a href=#325 id=325 data-nosnippet>325</a>            .unwrap(),
+<a href=#326 id=326 data-nosnippet>326</a>            checkpoint_index_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#327 id=327 data-nosnippet>327</a>                <span class="string">"checkpoint_index_latency"</span>,
+<a href=#328 id=328 data-nosnippet>328</a>                <span class="string">"Time spent in indexing a checkpoint"</span>,
+<a href=#329 id=329 data-nosnippet>329</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#330 id=330 data-nosnippet>330</a>                registry,
+<a href=#331 id=331 data-nosnippet>331</a>            )
+<a href=#332 id=332 data-nosnippet>332</a>            .unwrap(),
+<a href=#333 id=333 data-nosnippet>333</a>            indexing_batch_size: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#334 id=334 data-nosnippet>334</a>                <span class="string">"indexing_batch_size"</span>,
+<a href=#335 id=335 data-nosnippet>335</a>                <span class="string">"Size of the indexing batch"</span>,
+<a href=#336 id=336 data-nosnippet>336</a>                registry,
+<a href=#337 id=337 data-nosnippet>337</a>            ).unwrap(),
+<a href=#338 id=338 data-nosnippet>338</a>            indexing_tx_object_changes_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#339 id=339 data-nosnippet>339</a>                <span class="string">"indexing_tx_object_changes_latency"</span>,
+<a href=#340 id=340 data-nosnippet>340</a>                <span class="string">"Time spent in indexing object changes for a transaction"</span>,
+<a href=#341 id=341 data-nosnippet>341</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#342 id=342 data-nosnippet>342</a>                registry,
+<a href=#343 id=343 data-nosnippet>343</a>            )
+<a href=#344 id=344 data-nosnippet>344</a>            .unwrap(),
+<a href=#345 id=345 data-nosnippet>345</a>            indexing_objects_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#346 id=346 data-nosnippet>346</a>                <span class="string">"indexing_objects_latency"</span>,
+<a href=#347 id=347 data-nosnippet>347</a>                <span class="string">"Time spent in indexing objects"</span>,
+<a href=#348 id=348 data-nosnippet>348</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#349 id=349 data-nosnippet>349</a>                registry,
+<a href=#350 id=350 data-nosnippet>350</a>            )
+<a href=#351 id=351 data-nosnippet>351</a>            .unwrap(),
+<a href=#352 id=352 data-nosnippet>352</a>            indexing_packages_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#353 id=353 data-nosnippet>353</a>                <span class="string">"indexing_packages_latency"</span>,
+<a href=#354 id=354 data-nosnippet>354</a>                <span class="string">"Time spent in indexing packages"</span>,
+<a href=#355 id=355 data-nosnippet>355</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#356 id=356 data-nosnippet>356</a>                registry,
+<a href=#357 id=357 data-nosnippet>357</a>            )
+<a href=#358 id=358 data-nosnippet>358</a>            .unwrap(),
+<a href=#359 id=359 data-nosnippet>359</a>            indexing_get_object_in_mem_hit: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#360 id=360 data-nosnippet>360</a>                <span class="string">"indexing_get_object_in_mem_hit"</span>,
+<a href=#361 id=361 data-nosnippet>361</a>                <span class="string">"Total number get object hit in mem"</span>,
+<a href=#362 id=362 data-nosnippet>362</a>                registry,
+<a href=#363 id=363 data-nosnippet>363</a>            )
+<a href=#364 id=364 data-nosnippet>364</a>            .unwrap(),
+<a href=#365 id=365 data-nosnippet>365</a>            indexing_get_object_db_hit: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#366 id=366 data-nosnippet>366</a>                <span class="string">"indexing_get_object_db_hit"</span>,
+<a href=#367 id=367 data-nosnippet>367</a>                <span class="string">"Total number get object hit in db"</span>,
+<a href=#368 id=368 data-nosnippet>368</a>                registry,
+<a href=#369 id=369 data-nosnippet>369</a>            )
+<a href=#370 id=370 data-nosnippet>370</a>            .unwrap(),
+<a href=#371 id=371 data-nosnippet>371</a>            indexing_module_resolver_in_mem_hit: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#372 id=372 data-nosnippet>372</a>                <span class="string">"indexing_module_resolver_in_mem_hit"</span>,
+<a href=#373 id=373 data-nosnippet>373</a>                <span class="string">"Total number module resolver hit in mem"</span>,
+<a href=#374 id=374 data-nosnippet>374</a>                registry,
+<a href=#375 id=375 data-nosnippet>375</a>            )
+<a href=#376 id=376 data-nosnippet>376</a>            .unwrap(),
+<a href=#377 id=377 data-nosnippet>377</a>            indexing_package_resolver_in_mem_hit: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#378 id=378 data-nosnippet>378</a>                <span class="string">"indexing_package_resolver_in_mem_hit"</span>,
+<a href=#379 id=379 data-nosnippet>379</a>                <span class="string">"Total number package resolver hit in mem"</span>,
+<a href=#380 id=380 data-nosnippet>380</a>                registry,
+<a href=#381 id=381 data-nosnippet>381</a>            )
+<a href=#382 id=382 data-nosnippet>382</a>            .unwrap(),
+<a href=#383 id=383 data-nosnippet>383</a>            checkpoint_objects_index_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#384 id=384 data-nosnippet>384</a>                <span class="string">"checkpoint_object_index_latency"</span>,
+<a href=#385 id=385 data-nosnippet>385</a>                <span class="string">"Time spent in indexing a checkpoint objects"</span>,
+<a href=#386 id=386 data-nosnippet>386</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#387 id=387 data-nosnippet>387</a>                registry,
+<a href=#388 id=388 data-nosnippet>388</a>            )
+<a href=#389 id=389 data-nosnippet>389</a>            .unwrap(),
+<a href=#390 id=390 data-nosnippet>390</a>            checkpoint_db_commit_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#391 id=391 data-nosnippet>391</a>                <span class="string">"checkpoint_db_commit_latency"</span>,
+<a href=#392 id=392 data-nosnippet>392</a>                <span class="string">"Time spent committing a checkpoint to the db"</span>,
+<a href=#393 id=393 data-nosnippet>393</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#394 id=394 data-nosnippet>394</a>                registry,
+<a href=#395 id=395 data-nosnippet>395</a>            )
+<a href=#396 id=396 data-nosnippet>396</a>            .unwrap(),
+<a href=#397 id=397 data-nosnippet>397</a>
+<a href=#398 id=398 data-nosnippet>398</a>            checkpoint_db_commit_latency_step_1: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#399 id=399 data-nosnippet>399</a>                <span class="string">"checkpoint_db_commit_latency_step_1"</span>,
+<a href=#400 id=400 data-nosnippet>400</a>                <span class="string">"Time spent committing a checkpoint to the db, step 1"</span>,
+<a href=#401 id=401 data-nosnippet>401</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#402 id=402 data-nosnippet>402</a>                registry,
+<a href=#403 id=403 data-nosnippet>403</a>            )
+<a href=#404 id=404 data-nosnippet>404</a>            .unwrap(),
+<a href=#405 id=405 data-nosnippet>405</a>            checkpoint_db_commit_latency_transactions: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#406 id=406 data-nosnippet>406</a>                <span class="string">"checkpoint_db_commit_latency_transactions"</span>,
+<a href=#407 id=407 data-nosnippet>407</a>                <span class="string">"Time spent committing transactions"</span>,
+<a href=#408 id=408 data-nosnippet>408</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#409 id=409 data-nosnippet>409</a>                registry,
+<a href=#410 id=410 data-nosnippet>410</a>            )
+<a href=#411 id=411 data-nosnippet>411</a>            .unwrap(),
+<a href=#412 id=412 data-nosnippet>412</a>            checkpoint_db_commit_latency_transactions_chunks: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#413 id=413 data-nosnippet>413</a>                <span class="string">"checkpoint_db_commit_latency_transactions_chunks"</span>,
+<a href=#414 id=414 data-nosnippet>414</a>                <span class="string">"Time spent committing transactions chunks"</span>,
+<a href=#415 id=415 data-nosnippet>415</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#416 id=416 data-nosnippet>416</a>                registry,
+<a href=#417 id=417 data-nosnippet>417</a>            )
+<a href=#418 id=418 data-nosnippet>418</a>            .unwrap(),
+<a href=#419 id=419 data-nosnippet>419</a>            checkpoint_db_commit_latency_transactions_chunks_transformation: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#420 id=420 data-nosnippet>420</a>                <span class="string">"checkpoint_db_commit_latency_transactions_transaformation"</span>,
+<a href=#421 id=421 data-nosnippet>421</a>                <span class="string">"Time spent in transactions chunks transformation prior to commit"</span>,
+<a href=#422 id=422 data-nosnippet>422</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#423 id=423 data-nosnippet>423</a>                registry,
+<a href=#424 id=424 data-nosnippet>424</a>            )
+<a href=#425 id=425 data-nosnippet>425</a>            .unwrap(),
+<a href=#426 id=426 data-nosnippet>426</a>            checkpoint_db_commit_latency_objects: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#427 id=427 data-nosnippet>427</a>                <span class="string">"checkpoint_db_commit_latency_objects"</span>,
+<a href=#428 id=428 data-nosnippet>428</a>                <span class="string">"Time spent committing objects"</span>,
+<a href=#429 id=429 data-nosnippet>429</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#430 id=430 data-nosnippet>430</a>                registry,
+<a href=#431 id=431 data-nosnippet>431</a>            )
+<a href=#432 id=432 data-nosnippet>432</a>            .unwrap(),
+<a href=#433 id=433 data-nosnippet>433</a>            checkpoint_db_commit_latency_objects_snapshot: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#434 id=434 data-nosnippet>434</a>                <span class="string">"checkpoint_db_commit_latency_objects_snapshot"</span>,
+<a href=#435 id=435 data-nosnippet>435</a>                <span class="string">"Time spent committing objects snapshots"</span>,
+<a href=#436 id=436 data-nosnippet>436</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#437 id=437 data-nosnippet>437</a>                registry,
+<a href=#438 id=438 data-nosnippet>438</a>            )
+<a href=#439 id=439 data-nosnippet>439</a>            .unwrap(),
+<a href=#440 id=440 data-nosnippet>440</a>            checkpoint_db_commit_latency_objects_version: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#441 id=441 data-nosnippet>441</a>                <span class="string">"checkpoint_db_commit_latency_objects_version"</span>,
+<a href=#442 id=442 data-nosnippet>442</a>                <span class="string">"Time spent committing objects version"</span>,
+<a href=#443 id=443 data-nosnippet>443</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#444 id=444 data-nosnippet>444</a>                registry,
+<a href=#445 id=445 data-nosnippet>445</a>            ).unwrap(),
+<a href=#446 id=446 data-nosnippet>446</a>            checkpoint_db_commit_latency_objects_history: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#447 id=447 data-nosnippet>447</a>                <span class="string">"checkpoint_db_commit_latency_objects_history"</span>,
+<a href=#448 id=448 data-nosnippet>448</a>                <span class="string">"Time spent committing objects history"</span>,
+<a href=#449 id=449 data-nosnippet>449</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#450 id=450 data-nosnippet>450</a>                registry,
+<a href=#451 id=451 data-nosnippet>451</a>            ).unwrap(),
+<a href=#452 id=452 data-nosnippet>452</a>            checkpoint_db_commit_latency_full_objects_history: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#453 id=453 data-nosnippet>453</a>                <span class="string">"checkpoint_db_commit_latency_full_objects_history"</span>,
+<a href=#454 id=454 data-nosnippet>454</a>                <span class="string">"Time spent committing full objects history"</span>,
+<a href=#455 id=455 data-nosnippet>455</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#456 id=456 data-nosnippet>456</a>                registry,
+<a href=#457 id=457 data-nosnippet>457</a>            ).unwrap(),
+<a href=#458 id=458 data-nosnippet>458</a>            checkpoint_db_commit_latency_objects_chunks: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#459 id=459 data-nosnippet>459</a>                <span class="string">"checkpoint_db_commit_latency_objects_chunks"</span>,
+<a href=#460 id=460 data-nosnippet>460</a>                <span class="string">"Time spent committing objects chunks"</span>,
+<a href=#461 id=461 data-nosnippet>461</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#462 id=462 data-nosnippet>462</a>                registry,
+<a href=#463 id=463 data-nosnippet>463</a>            )
+<a href=#464 id=464 data-nosnippet>464</a>            .unwrap(),
+<a href=#465 id=465 data-nosnippet>465</a>            checkpoint_db_commit_latency_objects_snapshot_chunks: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#466 id=466 data-nosnippet>466</a>                <span class="string">"checkpoint_db_commit_latency_objects_snapshot_chunks"</span>,
+<a href=#467 id=467 data-nosnippet>467</a>                <span class="string">"Time spent committing objects snapshot chunks"</span>,
+<a href=#468 id=468 data-nosnippet>468</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#469 id=469 data-nosnippet>469</a>                registry,
+<a href=#470 id=470 data-nosnippet>470</a>            )
+<a href=#471 id=471 data-nosnippet>471</a>            .unwrap(),
+<a href=#472 id=472 data-nosnippet>472</a>            checkpoint_db_commit_latency_objects_version_chunks: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#473 id=473 data-nosnippet>473</a>                <span class="string">"checkpoint_db_commit_latency_objects_version_chunks"</span>,
+<a href=#474 id=474 data-nosnippet>474</a>                <span class="string">"Time spent committing objects version chunks"</span>,
+<a href=#475 id=475 data-nosnippet>475</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#476 id=476 data-nosnippet>476</a>                registry,
+<a href=#477 id=477 data-nosnippet>477</a>            ).unwrap(),
+<a href=#478 id=478 data-nosnippet>478</a>            checkpoint_db_commit_latency_objects_history_chunks: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#479 id=479 data-nosnippet>479</a>                <span class="string">"checkpoint_db_commit_latency_objects_history_chunks"</span>,
+<a href=#480 id=480 data-nosnippet>480</a>                <span class="string">"Time spent committing objects history chunks"</span>,
+<a href=#481 id=481 data-nosnippet>481</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#482 id=482 data-nosnippet>482</a>                registry,
+<a href=#483 id=483 data-nosnippet>483</a>            ).unwrap(),
+<a href=#484 id=484 data-nosnippet>484</a>            checkpoint_db_commit_latency_full_objects_history_chunks: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#485 id=485 data-nosnippet>485</a>                <span class="string">"checkpoint_db_commit_latency_full_objects_history_chunks"</span>,
+<a href=#486 id=486 data-nosnippet>486</a>                <span class="string">"Time spent committing full objects history chunks"</span>,
+<a href=#487 id=487 data-nosnippet>487</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#488 id=488 data-nosnippet>488</a>                registry,
+<a href=#489 id=489 data-nosnippet>489</a>            )
+<a href=#490 id=490 data-nosnippet>490</a>            .unwrap(),
+<a href=#491 id=491 data-nosnippet>491</a>            checkpoint_db_commit_latency_events: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#492 id=492 data-nosnippet>492</a>                <span class="string">"checkpoint_db_commit_latency_events"</span>,
+<a href=#493 id=493 data-nosnippet>493</a>                <span class="string">"Time spent committing events"</span>,
+<a href=#494 id=494 data-nosnippet>494</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#495 id=495 data-nosnippet>495</a>                registry,
+<a href=#496 id=496 data-nosnippet>496</a>            )
+<a href=#497 id=497 data-nosnippet>497</a>            .unwrap(),
+<a href=#498 id=498 data-nosnippet>498</a>            checkpoint_db_commit_latency_events_chunks: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#499 id=499 data-nosnippet>499</a>                <span class="string">"checkpoint_db_commit_latency_events_chunks"</span>,
+<a href=#500 id=500 data-nosnippet>500</a>                <span class="string">"Time spent committing events chunks"</span>,
+<a href=#501 id=501 data-nosnippet>501</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#502 id=502 data-nosnippet>502</a>                registry,
+<a href=#503 id=503 data-nosnippet>503</a>            )
+<a href=#504 id=504 data-nosnippet>504</a>            .unwrap(),
+<a href=#505 id=505 data-nosnippet>505</a>            checkpoint_db_commit_latency_event_indices: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#506 id=506 data-nosnippet>506</a>                <span class="string">"checkpoint_db_commit_latency_event_indices"</span>,
+<a href=#507 id=507 data-nosnippet>507</a>                <span class="string">"Time spent committing event indices"</span>,
+<a href=#508 id=508 data-nosnippet>508</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#509 id=509 data-nosnippet>509</a>                registry,
+<a href=#510 id=510 data-nosnippet>510</a>            )
+<a href=#511 id=511 data-nosnippet>511</a>            .unwrap(),
+<a href=#512 id=512 data-nosnippet>512</a>            checkpoint_db_commit_latency_event_indices_chunks: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#513 id=513 data-nosnippet>513</a>                <span class="string">"checkpoint_db_commit_latency_event_indices_chunks"</span>,
+<a href=#514 id=514 data-nosnippet>514</a>                <span class="string">"Time spent committing event indices chunks"</span>,
+<a href=#515 id=515 data-nosnippet>515</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#516 id=516 data-nosnippet>516</a>                registry,
+<a href=#517 id=517 data-nosnippet>517</a>            )
+<a href=#518 id=518 data-nosnippet>518</a>            .unwrap(),
+<a href=#519 id=519 data-nosnippet>519</a>            checkpoint_db_commit_latency_packages: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#520 id=520 data-nosnippet>520</a>                <span class="string">"checkpoint_db_commit_latency_packages"</span>,
+<a href=#521 id=521 data-nosnippet>521</a>                <span class="string">"Time spent committing packages"</span>,
+<a href=#522 id=522 data-nosnippet>522</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#523 id=523 data-nosnippet>523</a>                registry,
+<a href=#524 id=524 data-nosnippet>524</a>            )
+<a href=#525 id=525 data-nosnippet>525</a>            .unwrap(),
+<a href=#526 id=526 data-nosnippet>526</a>            checkpoint_db_commit_latency_tx_indices: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#527 id=527 data-nosnippet>527</a>                <span class="string">"checkpoint_db_commit_latency_tx_indices"</span>,
+<a href=#528 id=528 data-nosnippet>528</a>                <span class="string">"Time spent committing tx indices"</span>,
+<a href=#529 id=529 data-nosnippet>529</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#530 id=530 data-nosnippet>530</a>                registry,
+<a href=#531 id=531 data-nosnippet>531</a>            )
+<a href=#532 id=532 data-nosnippet>532</a>            .unwrap(),
+<a href=#533 id=533 data-nosnippet>533</a>            checkpoint_db_commit_latency_tx_indices_chunks: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#534 id=534 data-nosnippet>534</a>                <span class="string">"checkpoint_db_commit_latency_tx_indices_chunks"</span>,
+<a href=#535 id=535 data-nosnippet>535</a>                <span class="string">"Time spent committing tx_indices chunks"</span>,
+<a href=#536 id=536 data-nosnippet>536</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#537 id=537 data-nosnippet>537</a>                registry,
+<a href=#538 id=538 data-nosnippet>538</a>            )
+<a href=#539 id=539 data-nosnippet>539</a>            .unwrap(),
+<a href=#540 id=540 data-nosnippet>540</a>            checkpoint_db_commit_latency_checkpoints: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#541 id=541 data-nosnippet>541</a>                <span class="string">"checkpoint_db_commit_latency_checkpoints"</span>,
+<a href=#542 id=542 data-nosnippet>542</a>                <span class="string">"Time spent committing checkpoints"</span>,
+<a href=#543 id=543 data-nosnippet>543</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#544 id=544 data-nosnippet>544</a>                registry,
+<a href=#545 id=545 data-nosnippet>545</a>            )
+<a href=#546 id=546 data-nosnippet>546</a>            .unwrap(),
+<a href=#547 id=547 data-nosnippet>547</a>            checkpoint_db_commit_latency_epoch: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#548 id=548 data-nosnippet>548</a>                <span class="string">"checkpoint_db_commit_latency_epochs"</span>,
+<a href=#549 id=549 data-nosnippet>549</a>                <span class="string">"Time spent committing epochs"</span>,
+<a href=#550 id=550 data-nosnippet>550</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#551 id=551 data-nosnippet>551</a>                registry,
+<a href=#552 id=552 data-nosnippet>552</a>            )
+<a href=#553 id=553 data-nosnippet>553</a>            .unwrap(),
+<a href=#554 id=554 data-nosnippet>554</a>            checkpoint_db_commit_latency_watermarks: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#555 id=555 data-nosnippet>555</a>                <span class="string">"checkpoint_db_commit_latency_watermarks"</span>,
+<a href=#556 id=556 data-nosnippet>556</a>                <span class="string">"Time spent committing watermarks"</span>,
+<a href=#557 id=557 data-nosnippet>557</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#558 id=558 data-nosnippet>558</a>                registry,
+<a href=#559 id=559 data-nosnippet>559</a>            )
+<a href=#560 id=560 data-nosnippet>560</a>            .unwrap(),
+<a href=#561 id=561 data-nosnippet>561</a>            tokio_blocking_task_wait_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#562 id=562 data-nosnippet>562</a>                <span class="string">"tokio_blocking_task_wait_latency"</span>,
+<a href=#563 id=563 data-nosnippet>563</a>                <span class="string">"Time spent to wait for tokio blocking task pool"</span>,
+<a href=#564 id=564 data-nosnippet>564</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#565 id=565 data-nosnippet>565</a>                registry,
+<a href=#566 id=566 data-nosnippet>566</a>            ).unwrap(),
+<a href=#567 id=567 data-nosnippet>567</a>            thousand_transaction_avg_db_commit_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#568 id=568 data-nosnippet>568</a>                <span class="string">"transaction_db_commit_latency"</span>,
+<a href=#569 id=569 data-nosnippet>569</a>                <span class="string">"Average time spent committing 1000 transactions to the db"</span>,
+<a href=#570 id=570 data-nosnippet>570</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#571 id=571 data-nosnippet>571</a>                registry,
+<a href=#572 id=572 data-nosnippet>572</a>            )
+<a href=#573 id=573 data-nosnippet>573</a>            .unwrap(),
+<a href=#574 id=574 data-nosnippet>574</a>            object_db_commit_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#575 id=575 data-nosnippet>575</a>                <span class="string">"object_db_commit_latency"</span>,
+<a href=#576 id=576 data-nosnippet>576</a>                <span class="string">"Time spent committing a object to the db"</span>,
+<a href=#577 id=577 data-nosnippet>577</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#578 id=578 data-nosnippet>578</a>                registry,
+<a href=#579 id=579 data-nosnippet>579</a>            )
+<a href=#580 id=580 data-nosnippet>580</a>            .unwrap(),
+<a href=#581 id=581 data-nosnippet>581</a>            object_mutation_db_commit_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#582 id=582 data-nosnippet>582</a>                <span class="string">"object_mutation_db_commit_latency"</span>,
+<a href=#583 id=583 data-nosnippet>583</a>                <span class="string">"Time spent committing a object mutation to the db"</span>,
+<a href=#584 id=584 data-nosnippet>584</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#585 id=585 data-nosnippet>585</a>                registry,
+<a href=#586 id=586 data-nosnippet>586</a>            )
+<a href=#587 id=587 data-nosnippet>587</a>            .unwrap(),
+<a href=#588 id=588 data-nosnippet>588</a>            object_deletion_db_commit_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#589 id=589 data-nosnippet>589</a>                <span class="string">"object_deletion_db_commit_latency"</span>,
+<a href=#590 id=590 data-nosnippet>590</a>                <span class="string">"Time spent committing a object deletion to the db"</span>,
+<a href=#591 id=591 data-nosnippet>591</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#592 id=592 data-nosnippet>592</a>                registry,
+<a href=#593 id=593 data-nosnippet>593</a>            )
+<a href=#594 id=594 data-nosnippet>594</a>            .unwrap(),
+<a href=#595 id=595 data-nosnippet>595</a>            epoch_db_commit_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#596 id=596 data-nosnippet>596</a>                <span class="string">"epoch_db_commit_latency"</span>,
+<a href=#597 id=597 data-nosnippet>597</a>                <span class="string">"Time spent committing a epoch to the db"</span>,
+<a href=#598 id=598 data-nosnippet>598</a>                DATA_INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#599 id=599 data-nosnippet>599</a>                registry,
+<a href=#600 id=600 data-nosnippet>600</a>            )
+<a href=#601 id=601 data-nosnippet>601</a>            .unwrap(),
+<a href=#602 id=602 data-nosnippet>602</a>            advance_epoch_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#603 id=603 data-nosnippet>603</a>                <span class="string">"advance_epoch_latency"</span>,
+<a href=#604 id=604 data-nosnippet>604</a>                <span class="string">"Time spent in advancing epoch"</span>,
+<a href=#605 id=605 data-nosnippet>605</a>                DB_UPDATE_QUERY_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#606 id=606 data-nosnippet>606</a>                registry,
+<a href=#607 id=607 data-nosnippet>607</a>            ).unwrap(),
+<a href=#608 id=608 data-nosnippet>608</a>            subscription_process_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#609 id=609 data-nosnippet>609</a>                <span class="string">"subscription_process_latency"</span>,
+<a href=#610 id=610 data-nosnippet>610</a>                <span class="string">"Time spent in process Websocket subscription"</span>,
+<a href=#611 id=611 data-nosnippet>611</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#612 id=612 data-nosnippet>612</a>                registry,
+<a href=#613 id=613 data-nosnippet>613</a>            )
+<a href=#614 id=614 data-nosnippet>614</a>            .unwrap(),
+<a href=#615 id=615 data-nosnippet>615</a>            transaction_per_checkpoint: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#616 id=616 data-nosnippet>616</a>                <span class="string">"transaction_per_checkpoint"</span>,
+<a href=#617 id=617 data-nosnippet>617</a>                <span class="string">"Number of transactions per checkpoint"</span>,
+<a href=#618 id=618 data-nosnippet>618</a>                <span class="macro">vec!</span>[<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">5.0</span>, <span class="number">10.0</span>, <span class="number">20.0</span>, <span class="number">50.0</span>, <span class="number">100.0</span>, <span class="number">200.0</span>, <span class="number">500.0</span>, <span class="number">1000.0</span>, <span class="number">2000.0</span>, <span class="number">5000.0</span>],
+<a href=#619 id=619 data-nosnippet>619</a>                registry,
+<a href=#620 id=620 data-nosnippet>620</a>            )
+<a href=#621 id=621 data-nosnippet>621</a>            .unwrap(),
+<a href=#622 id=622 data-nosnippet>622</a>            get_transaction_block_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#623 id=623 data-nosnippet>623</a>                <span class="string">"get_transaction_block_latency"</span>,
+<a href=#624 id=624 data-nosnippet>624</a>                <span class="string">"Time spent in get_transaction_block on the fullnode behind."</span>,
+<a href=#625 id=625 data-nosnippet>625</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#626 id=626 data-nosnippet>626</a>                registry
+<a href=#627 id=627 data-nosnippet>627</a>            )
+<a href=#628 id=628 data-nosnippet>628</a>            .unwrap(),
+<a href=#629 id=629 data-nosnippet>629</a>            multi_get_transaction_blocks_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#630 id=630 data-nosnippet>630</a>                <span class="string">"multi_get_transaction_blocks_latency"</span>,
+<a href=#631 id=631 data-nosnippet>631</a>                <span class="string">"Time spent in multi_get_transaction_blocks on the fullnode behind."</span>,
+<a href=#632 id=632 data-nosnippet>632</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#633 id=633 data-nosnippet>633</a>                registry
+<a href=#634 id=634 data-nosnippet>634</a>            )
+<a href=#635 id=635 data-nosnippet>635</a>            .unwrap(),
+<a href=#636 id=636 data-nosnippet>636</a>            get_object_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#637 id=637 data-nosnippet>637</a>                <span class="string">"get_object_latency"</span>,
+<a href=#638 id=638 data-nosnippet>638</a>                <span class="string">"Time spent in get_object on the fullnode behind."</span>,
+<a href=#639 id=639 data-nosnippet>639</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#640 id=640 data-nosnippet>640</a>                registry
+<a href=#641 id=641 data-nosnippet>641</a>            )
+<a href=#642 id=642 data-nosnippet>642</a>            .unwrap(),
+<a href=#643 id=643 data-nosnippet>643</a>            multi_get_objects_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#644 id=644 data-nosnippet>644</a>                <span class="string">"multi_get_objects_latency"</span>,
+<a href=#645 id=645 data-nosnippet>645</a>                <span class="string">"Time spent in multi_get_objects on the fullnode behind."</span>,
+<a href=#646 id=646 data-nosnippet>646</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#647 id=647 data-nosnippet>647</a>                registry
+<a href=#648 id=648 data-nosnippet>648</a>            )
+<a href=#649 id=649 data-nosnippet>649</a>            .unwrap(),
+<a href=#650 id=650 data-nosnippet>650</a>            try_get_past_object_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#651 id=651 data-nosnippet>651</a>                <span class="string">"try_get_past_object_latency"</span>,
+<a href=#652 id=652 data-nosnippet>652</a>                <span class="string">"Time spent in try_get_past_object on the fullnode behind."</span>,
+<a href=#653 id=653 data-nosnippet>653</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#654 id=654 data-nosnippet>654</a>                registry
+<a href=#655 id=655 data-nosnippet>655</a>            )
+<a href=#656 id=656 data-nosnippet>656</a>            .unwrap(),
+<a href=#657 id=657 data-nosnippet>657</a>            try_multi_get_past_objects_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#658 id=658 data-nosnippet>658</a>                <span class="string">"try_multi_get_past_objects_latency"</span>,
+<a href=#659 id=659 data-nosnippet>659</a>                <span class="string">"Time spent in try_multi_get_past_objects on the fullnode behind."</span>,
+<a href=#660 id=660 data-nosnippet>660</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#661 id=661 data-nosnippet>661</a>                registry
+<a href=#662 id=662 data-nosnippet>662</a>            )
+<a href=#663 id=663 data-nosnippet>663</a>            .unwrap(),
+<a href=#664 id=664 data-nosnippet>664</a>            get_checkpoint_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#665 id=665 data-nosnippet>665</a>                <span class="string">"get_checkpoint_latency"</span>,
+<a href=#666 id=666 data-nosnippet>666</a>                <span class="string">"Time spent in get_checkpoint on the fullnode behind."</span>,
+<a href=#667 id=667 data-nosnippet>667</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#668 id=668 data-nosnippet>668</a>                registry
+<a href=#669 id=669 data-nosnippet>669</a>            )
+<a href=#670 id=670 data-nosnippet>670</a>            .unwrap(),
+<a href=#671 id=671 data-nosnippet>671</a>            get_checkpoints_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#672 id=672 data-nosnippet>672</a>                <span class="string">"get_checkpoints_latency"</span>,
+<a href=#673 id=673 data-nosnippet>673</a>                <span class="string">"Time spent in get_checkpoints on the fullnode behind."</span>,
+<a href=#674 id=674 data-nosnippet>674</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#675 id=675 data-nosnippet>675</a>                registry
+<a href=#676 id=676 data-nosnippet>676</a>            )
+<a href=#677 id=677 data-nosnippet>677</a>            .unwrap(),
+<a href=#678 id=678 data-nosnippet>678</a>            get_events_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#679 id=679 data-nosnippet>679</a>                <span class="string">"get_events_latency"</span>,
+<a href=#680 id=680 data-nosnippet>680</a>                <span class="string">"Time spent in get_events on the fullnode behind."</span>,
+<a href=#681 id=681 data-nosnippet>681</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#682 id=682 data-nosnippet>682</a>                registry
+<a href=#683 id=683 data-nosnippet>683</a>            )
+<a href=#684 id=684 data-nosnippet>684</a>            .unwrap(),
+<a href=#685 id=685 data-nosnippet>685</a>            get_total_transaction_blocks_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#686 id=686 data-nosnippet>686</a>                <span class="string">"get_total_transaction_blocks_latency"</span>,
+<a href=#687 id=687 data-nosnippet>687</a>                <span class="string">"Time spent in get_total_transaction_blocks on the fullnode behind."</span>,
+<a href=#688 id=688 data-nosnippet>688</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#689 id=689 data-nosnippet>689</a>                registry
+<a href=#690 id=690 data-nosnippet>690</a>            )
+<a href=#691 id=691 data-nosnippet>691</a>            .unwrap(),
+<a href=#692 id=692 data-nosnippet>692</a>            get_latest_checkpoint_sequence_number_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#693 id=693 data-nosnippet>693</a>                <span class="string">"get_latest_checkpoint_sequence_number_latency"</span>,
+<a href=#694 id=694 data-nosnippet>694</a>                <span class="string">"Time spent in get_latest_checkpoint_sequence_number on the fullnode behind."</span>,
+<a href=#695 id=695 data-nosnippet>695</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#696 id=696 data-nosnippet>696</a>                registry
+<a href=#697 id=697 data-nosnippet>697</a>            )
+<a href=#698 id=698 data-nosnippet>698</a>            .unwrap(),
+<a href=#699 id=699 data-nosnippet>699</a>            get_owned_objects_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#700 id=700 data-nosnippet>700</a>                <span class="string">"get_owned_objects_latency"</span>,
+<a href=#701 id=701 data-nosnippet>701</a>                <span class="string">"Time spent in get_owned_objects on the fullnode behind."</span>,
+<a href=#702 id=702 data-nosnippet>702</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#703 id=703 data-nosnippet>703</a>                registry
+<a href=#704 id=704 data-nosnippet>704</a>            )
+<a href=#705 id=705 data-nosnippet>705</a>            .unwrap(),
+<a href=#706 id=706 data-nosnippet>706</a>            query_transaction_blocks_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#707 id=707 data-nosnippet>707</a>                <span class="string">"query_transaction_blocks_latency"</span>,
+<a href=#708 id=708 data-nosnippet>708</a>                <span class="string">"Time spent in query_transaction_blocks on the fullnode behind."</span>,
+<a href=#709 id=709 data-nosnippet>709</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#710 id=710 data-nosnippet>710</a>                registry
+<a href=#711 id=711 data-nosnippet>711</a>            )
+<a href=#712 id=712 data-nosnippet>712</a>            .unwrap(),
+<a href=#713 id=713 data-nosnippet>713</a>            query_events_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#714 id=714 data-nosnippet>714</a>                <span class="string">"query_events_latency"</span>,
+<a href=#715 id=715 data-nosnippet>715</a>                <span class="string">"Time spent in query_events on the fullnode behind."</span>,
+<a href=#716 id=716 data-nosnippet>716</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#717 id=717 data-nosnippet>717</a>                registry
+<a href=#718 id=718 data-nosnippet>718</a>            )
+<a href=#719 id=719 data-nosnippet>719</a>            .unwrap(),
+<a href=#720 id=720 data-nosnippet>720</a>            get_dynamic_fields_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#721 id=721 data-nosnippet>721</a>                <span class="string">"get_dynamic_fields_latency"</span>,
+<a href=#722 id=722 data-nosnippet>722</a>                <span class="string">"Time spent in get_dynamic_fields on the fullnode behind."</span>,
+<a href=#723 id=723 data-nosnippet>723</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#724 id=724 data-nosnippet>724</a>                registry
+<a href=#725 id=725 data-nosnippet>725</a>            )
+<a href=#726 id=726 data-nosnippet>726</a>            .unwrap(),
+<a href=#727 id=727 data-nosnippet>727</a>            get_dynamic_field_object_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#728 id=728 data-nosnippet>728</a>                <span class="string">"get_dynamic_field_object_latency"</span>,
+<a href=#729 id=729 data-nosnippet>729</a>                <span class="string">"Time spent in get_dynamic_field_object on the fullnode behind."</span>,
+<a href=#730 id=730 data-nosnippet>730</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#731 id=731 data-nosnippet>731</a>                registry
+<a href=#732 id=732 data-nosnippet>732</a>            )
+<a href=#733 id=733 data-nosnippet>733</a>            .unwrap(),
+<a href=#734 id=734 data-nosnippet>734</a>            get_loaded_child_objects_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#735 id=735 data-nosnippet>735</a>                <span class="string">"get_loaded_child_objects_latency"</span>,
+<a href=#736 id=736 data-nosnippet>736</a>                <span class="string">"Time spent in get_loaded_child_objects_latency on the fullnode behind."</span>,
+<a href=#737 id=737 data-nosnippet>737</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#738 id=738 data-nosnippet>738</a>                registry
+<a href=#739 id=739 data-nosnippet>739</a>            )
+<a href=#740 id=740 data-nosnippet>740</a>            .unwrap(),
+<a href=#741 id=741 data-nosnippet>741</a>            get_protocol_config_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#742 id=742 data-nosnippet>742</a>                <span class="string">"get_protocol_config_latency"</span>,
+<a href=#743 id=743 data-nosnippet>743</a>                <span class="string">"Time spent in get_protocol_config_latency on the fullnode behind."</span>,
+<a href=#744 id=744 data-nosnippet>744</a>                JSON_RPC_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#745 id=745 data-nosnippet>745</a>                registry
+<a href=#746 id=746 data-nosnippet>746</a>            )
+<a href=#747 id=747 data-nosnippet>747</a>            .unwrap(),
+<a href=#748 id=748 data-nosnippet>748</a>            db_conn_pool_size: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#749 id=749 data-nosnippet>749</a>                <span class="string">"db_conn_pool_size"</span>,
+<a href=#750 id=750 data-nosnippet>750</a>                <span class="string">"Size of the database connection pool"</span>,
+<a href=#751 id=751 data-nosnippet>751</a>                registry
+<a href=#752 id=752 data-nosnippet>752</a>            ).unwrap(),
+<a href=#753 id=753 data-nosnippet>753</a>            idle_db_conn: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#754 id=754 data-nosnippet>754</a>                <span class="string">"idle_db_conn"</span>,
+<a href=#755 id=755 data-nosnippet>755</a>                <span class="string">"Number of idle database connections"</span>,
+<a href=#756 id=756 data-nosnippet>756</a>                registry
+<a href=#757 id=757 data-nosnippet>757</a>            ).unwrap(),
+<a href=#758 id=758 data-nosnippet>758</a>            address_processor_failure: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#759 id=759 data-nosnippet>759</a>                <span class="string">"address_processor_failure"</span>,
+<a href=#760 id=760 data-nosnippet>760</a>                <span class="string">"Total number of address processor failure"</span>,
+<a href=#761 id=761 data-nosnippet>761</a>                registry,
+<a href=#762 id=762 data-nosnippet>762</a>            )
+<a href=#763 id=763 data-nosnippet>763</a>            .unwrap(),
+<a href=#764 id=764 data-nosnippet>764</a>            checkpoint_metrics_processor_failure: <span class="macro">register_int_counter_with_registry!</span>(
+<a href=#765 id=765 data-nosnippet>765</a>                <span class="string">"checkpoint_metrics_processor_failure"</span>,
+<a href=#766 id=766 data-nosnippet>766</a>                <span class="string">"Total number of checkpoint metrics processor failure"</span>,
+<a href=#767 id=767 data-nosnippet>767</a>                registry,
+<a href=#768 id=768 data-nosnippet>768</a>            )
+<a href=#769 id=769 data-nosnippet>769</a>            .unwrap(),
+<a href=#770 id=770 data-nosnippet>770</a>            last_pruned_epoch: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#771 id=771 data-nosnippet>771</a>                <span class="string">"last_pruned_epoch"</span>,
+<a href=#772 id=772 data-nosnippet>772</a>                <span class="string">"Last pruned epoch number"</span>,
+<a href=#773 id=773 data-nosnippet>773</a>                registry,
+<a href=#774 id=774 data-nosnippet>774</a>            )
+<a href=#775 id=775 data-nosnippet>775</a>            .unwrap(),
+<a href=#776 id=776 data-nosnippet>776</a>            last_pruned_checkpoint: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#777 id=777 data-nosnippet>777</a>                <span class="string">"last_pruned_checkpoint"</span>,
+<a href=#778 id=778 data-nosnippet>778</a>                <span class="string">"Last pruned checkpoint sequence number"</span>,
+<a href=#779 id=779 data-nosnippet>779</a>                registry,
+<a href=#780 id=780 data-nosnippet>780</a>            )
+<a href=#781 id=781 data-nosnippet>781</a>            .unwrap(),
+<a href=#782 id=782 data-nosnippet>782</a>            last_pruned_transaction: <span class="macro">register_int_gauge_with_registry!</span>(
+<a href=#783 id=783 data-nosnippet>783</a>                <span class="string">"last_pruned_transaction"</span>,
+<a href=#784 id=784 data-nosnippet>784</a>                <span class="string">"Last pruned transaction sequence number"</span>,
+<a href=#785 id=785 data-nosnippet>785</a>                registry,
+<a href=#786 id=786 data-nosnippet>786</a>            ).unwrap(),
+<a href=#787 id=787 data-nosnippet>787</a>            epoch_pruning_latency: <span class="macro">register_histogram_with_registry!</span>(
+<a href=#788 id=788 data-nosnippet>788</a>                <span class="string">"epoch_pruning_latency"</span>,
+<a href=#789 id=789 data-nosnippet>789</a>                <span class="string">"Time spent in pruning one epoch"</span>,
+<a href=#790 id=790 data-nosnippet>790</a>                DB_UPDATE_QUERY_LATENCY_SEC_BUCKETS.to_vec(),
+<a href=#791 id=791 data-nosnippet>791</a>                registry
+<a href=#792 id=792 data-nosnippet>792</a>            ).unwrap(),
+<a href=#793 id=793 data-nosnippet>793</a>        }
+<a href=#794 id=794 data-nosnippet>794</a>    }
+<a href=#795 id=795 data-nosnippet>795</a>}
+<a href=#796 id=796 data-nosnippet>796</a>
+<a href=#797 id=797 data-nosnippet>797</a><span class="kw">pub fn </span>spawn_connection_pool_metric_collector(
+<a href=#798 id=798 data-nosnippet>798</a>    metrics: IndexerMetrics,
+<a href=#799 id=799 data-nosnippet>799</a>    connection_pool: <span class="kw">crate</span>::database::ConnectionPool,
+<a href=#800 id=800 data-nosnippet>800</a>) {
+<a href=#801 id=801 data-nosnippet>801</a>    tokio::spawn(<span class="kw">async move </span>{
+<a href=#802 id=802 data-nosnippet>802</a>        <span class="kw">loop </span>{
+<a href=#803 id=803 data-nosnippet>803</a>            <span class="kw">let </span>cp_state = connection_pool.state();
+<a href=#804 id=804 data-nosnippet>804</a>            <span class="macro">tracing::debug!</span>(
+<a href=#805 id=805 data-nosnippet>805</a>                connection_pool_size =% cp_state.connections,
+<a href=#806 id=806 data-nosnippet>806</a>                idle_connections =% cp_state.idle_connections,
+<a href=#807 id=807 data-nosnippet>807</a>            );
+<a href=#808 id=808 data-nosnippet>808</a>            metrics.db_conn_pool_size.set(cp_state.connections <span class="kw">as </span>i64);
+<a href=#809 id=809 data-nosnippet>809</a>            metrics.idle_db_conn.set(cp_state.idle_connections <span class="kw">as </span>i64);
+<a href=#810 id=810 data-nosnippet>810</a>            tokio::time::sleep(tokio::time::Duration::from_secs(<span class="number">60</span>)).<span class="kw">await</span>;
+<a href=#811 id=811 data-nosnippet>811</a>        }
+<a href=#812 id=812 data-nosnippet>812</a>    });
+<a href=#813 id=813 data-nosnippet>813</a>}</code></pre></div></section></main></body></html>
