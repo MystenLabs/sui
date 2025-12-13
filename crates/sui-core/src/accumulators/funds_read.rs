@@ -10,8 +10,8 @@ use sui_types::{
     storage::ChildObjectResolver,
 };
 
-pub(crate) trait AccountBalanceRead: Send + Sync {
-    fn get_account_balance(
+pub(crate) trait AccountFundsRead: Send + Sync {
+    fn get_account_amount(
         &self,
         account_id: &AccumulatorObjId,
         // Version of the accumulator root object, used to
@@ -19,26 +19,26 @@ pub(crate) trait AccountBalanceRead: Send + Sync {
         accumulator_version: SequenceNumber,
     ) -> u128;
 
-    /// Gets latest balance, without a version bound on the accumulator root object.
+    /// Gets latest amount in account, without a version bound on the accumulator root object.
     /// Only used for signing time checks / RPC reads, not scheduling.
-    fn get_latest_account_balance(&self, account_id: &AccumulatorObjId) -> u128;
+    fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> u128;
 
-    /// Checks if balances are available in the latest versions of the referenced acccumulator
+    /// Checks if given amounts are available in the latest versions of the referenced acccumulator
     /// objects. This does un-sequenced reads and can only be used on the signing/voting path
     /// where deterministic results are not required.
-    fn check_balances_available(
+    fn check_amounts_available(
         &self,
-        requested_balances: &BTreeMap<AccumulatorObjId, u64>,
+        requested_amounts: &BTreeMap<AccumulatorObjId, u64>,
     ) -> SuiResult {
-        for (object_id, requested_balance) in requested_balances {
-            let actual_balance = self.get_latest_account_balance(object_id);
+        for (object_id, requested_amount) in requested_amounts {
+            let actual_amount = self.get_latest_account_amount(object_id);
 
-            if actual_balance < *requested_balance as u128 {
+            if actual_amount < *requested_amount as u128 {
                 return Err(SuiErrorKind::UserInputError {
                     error: UserInputError::InvalidWithdrawReservation {
                         error: format!(
-                            "Available balance for object id {} is less than requested: {} < {}",
-                            object_id, actual_balance, requested_balance
+                            "Available amount in account for object id {} is less than requested: {} < {}",
+                            object_id, actual_amount, requested_amount
                         ),
                     },
                 }
@@ -50,8 +50,8 @@ pub(crate) trait AccountBalanceRead: Send + Sync {
     }
 }
 
-impl AccountBalanceRead for Arc<dyn ChildObjectResolver + Send + Sync> {
-    fn get_account_balance(
+impl AccountFundsRead for Arc<dyn ChildObjectResolver + Send + Sync> {
+    fn get_account_amount(
         &self,
         account_id: &AccumulatorObjId,
         accumulator_version: SequenceNumber,
@@ -72,7 +72,7 @@ impl AccountBalanceRead for Arc<dyn ChildObjectResolver + Send + Sync> {
         value.value
     }
 
-    fn get_latest_account_balance(&self, account_id: &AccumulatorObjId) -> u128 {
+    fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> u128 {
         let value = AccumulatorValue::load_by_id(self.as_ref(), None, *account_id)
             .expect("read cannot fail")
             .unwrap_or(U128 { value: 0 });

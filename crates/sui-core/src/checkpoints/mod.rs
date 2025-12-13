@@ -19,7 +19,7 @@ pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;
 use crate::execution_cache::TransactionCacheRead;
 
-use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
+use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use consensus_core::CommitRef;
@@ -1495,7 +1495,7 @@ impl CheckpointBuilder {
             tx_index_offset,
         );
 
-        let accumulator_changes = builder.collect_accumulator_changes();
+        let funds_changes = builder.collect_funds_changes();
         let num_updates = builder.num_updates();
         let settlement_txns = builder.build_tx(
             self.epoch_store.protocol_config(),
@@ -1583,15 +1583,13 @@ impl CheckpointBuilder {
                 next_accumulator_version = Some(version);
             }
         }
-        let settlements = BalanceSettlement {
+        let settlements = FundsSettlement {
             next_accumulator_version: next_accumulator_version
                 .expect("Accumulator root object should be mutated in the settlement transactions"),
-            balance_changes: accumulator_changes,
+            funds_changes,
         };
 
-        self.state
-            .execution_scheduler()
-            .settle_balances(settlements);
+        self.state.execution_scheduler().settle_funds(settlements);
 
         (tx_key, settlement_effects)
     }

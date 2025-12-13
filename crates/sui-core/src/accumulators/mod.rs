@@ -31,7 +31,7 @@ use sui_types::{
 use crate::execution_cache::TransactionCacheRead;
 
 // provides balance read functionality for the scheduler
-pub mod balance_read;
+pub mod funds_read;
 // provides balance read functionality for RPC
 pub mod balances;
 pub mod coin_reservations;
@@ -300,9 +300,9 @@ impl AccumulatorSettlementTxBuilder {
         self.updates.len()
     }
 
-    /// Returns a unified map of accumulator changes for all accounts.
-    /// The accumulator change for each account is merged from the merge and split operations.
-    pub fn collect_accumulator_changes(&self) -> BTreeMap<AccumulatorObjId, i128> {
+    /// Returns a unified map of funds changes for all accounts.
+    /// The funds change for each account is merged from the merge and split operations.
+    pub fn collect_funds_changes(&self) -> BTreeMap<AccumulatorObjId, i128> {
         self.updates
             .iter()
             .filter_map(|(object_id, update)| match (&update.merge, &update.split) {

@@ -15,22 +15,22 @@ use tokio::sync::oneshot::Sender;
 use tracing::{debug, instrument};
 
 use super::{
-    BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
-    scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
+    FundsSettlement, ScheduleResult, ScheduleStatus, TxFundsWithdraw,
+    scheduler::{FundsWithdrawSchedulerTrait, WithdrawReservations},
 };
-use crate::accumulators::balance_read::AccountBalanceRead;
+use crate::accumulators::funds_read::AccountFundsRead;
 
-pub(crate) struct EagerBalanceWithdrawScheduler {
-    balance_read: Arc<dyn AccountBalanceRead>,
+pub(crate) struct EagerFundsWithdrawScheduler {
+    funds_read: Arc<dyn AccountFundsRead>,
     inner_state: Arc<Mutex<InnerState>>,
 }
 
 struct InnerState {
-    /// For each address balance account that we have seen withdraws through `schedule_withdraws`,
+    /// For each address funds account that we have seen withdraws through `schedule_withdraws`,
     /// we track the current state of that account, and only remove it from the map after
     /// we have settled all withdraws for that account.
     tracked_accounts: HashMap<AccumulatorObjId, AccountState>,
-    /// Tracks all the acddress balance accounts that have a withdraw transaction tracked,
+    /// Tracks all the address funds accounts that have a withdraw transaction tracked,
     /// mapping from the accumulator version that the withdraw transaction reads from.
     /// If a withdraw transaction needs to withdraw from account O at version V,
     /// we must process and settle that withdraw transaction whenever we settle all transactions
@@ -42,17 +42,17 @@ struct InnerState {
 
 struct AccountState {
     account_id: AccumulatorObjId,
-    /// The amount of balance that has been reserved for this account, for each accumulator version.
-    /// This is tracked so that we could add them back to the account balance when we settle the withdraws.
-    reserved_balance: HashMap<SequenceNumber, u128>,
-    /// Withdraws that could not yet be scheduled due to insufficient balance, and
-    /// hence have not reserved any balance yet. We track them so that we could schedule them
-    /// anytime we may have sufficient balance.
+    /// The amount of funds that has been reserved for this account, for each accumulator version.
+    /// This is tracked so that we could add them back to the account funds when we settle the withdraws.
+    reserved_funds: HashMap<SequenceNumber, u128>,
+    /// Withdraws that could not yet be scheduled due to insufficient funds, and
+    /// hence have not reserved any funds yet. We track them so that we could schedule them
+    /// anytime we may have sufficient funds.
     pending_reservations: VecDeque<Arc<PendingWithdraw>>,
-    /// The lower bound of the current balance of this account.
-    /// It is the amount of guaranteed balance that we could withdraw from this account at this point.
-    /// This is maintained as the most recent settled balance, subtracted by the reserved balance.
-    balance_lower_bound: u128,
+    /// The lower bound of the current funds of this account.
+    /// It is the amount of guaranteed funds that we could withdraw from this account at this point.
+    /// This is maintained as the most recent settled funds, subtracted by the reserved funds.
+    funds_lower_bound: u128,
 }
 
 struct PendingWithdraw {
@@ -63,18 +63,18 @@ struct PendingWithdraw {
 }
 
 enum TryReserveResult {
-    SufficientBalance,
-    InsufficientBalance,
+    SufficientFunds,
+    InsufficientFunds,
     Pending,
 }
 
-impl EagerBalanceWithdrawScheduler {
+impl EagerFundsWithdrawScheduler {
     pub fn new(
-        balance_read: Arc<dyn AccountBalanceRead>,
+        funds_read: Arc<dyn AccountFundsRead>,
         starting_accumulator_version: SequenceNumber,
     ) -> Arc<Self> {
         Arc::new(Self {
-            balance_read,
+            funds_read,
             inner_state: Arc::new(Mutex::new(InnerState {
                 tracked_accounts: HashMap::new(),
                 pending_settlements: HashMap::new(),
@@ -85,7 +85,7 @@ impl EagerBalanceWithdrawScheduler {
 }
 
 #[async_trait::async_trait]
-impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
+impl FundsWithdrawSchedulerTrait for EagerFundsWithdrawScheduler {
     #[instrument(level = "debug", skip_all, fields(withdraw_accumulator_version = ?withdraws.accumulator_version.value()))]
     async fn schedule_withdraws(&self, withdraws: WithdrawReservations) {
         let mut inner_state = self.inner_state.lock();
@@ -113,9 +113,9 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                     .or_insert_with(|| {
                         // TODO: This will be doing a DF read while holding the state lock.
                         // We may need to look at ways to make the DF reads non-blocking.
-                        // We also need to get rid of the need to read old versions of the account balance.
+                        // We also need to get rid of the need to read old versions of the account funds.
                         AccountState::new(
-                            self.balance_read.as_ref(),
+                            self.funds_read.as_ref(),
                             account_id,
                             cur_accumulator_version,
                         )
@@ -135,12 +135,12 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
         }
     }
 
-    async fn settle_balances(&self, settlement: BalanceSettlement) {
+    async fn settle_funds(&self, settlement: FundsSettlement) {
         let next_accumulator_version = settlement.next_accumulator_version;
         let mut inner_state = self.inner_state.lock();
         if next_accumulator_version <= inner_state.accumulator_version {
             // This accumulator version is already settled.
-            // There is no need to settle the balances.
+            // There is no need to settle the funds.
             debug!(
                 next_accumulator_version =? next_accumulator_version.value(),
                 "Skipping settlement since it is already settled",
@@ -162,11 +162,11 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
         // A settlement bumps the accumulator version from `cleanup_version` to `last_settled_version`.
         // We must processing the following types of accounts:
         // 1. Accounts that had withdraws scheduled at version `cleanup_version`. These withdraws
-        // are now settled and we know their exact balance changes.
+        // are now settled and we know their exact funds changes.
         // 2. Accounts that had withdraws scheduled at version `last_settled_version`. These withdraws
         // if not yet scheduled, can now be deterministically scheduled, since
         // we have the final state before them.
-        // 3. Accounts that have balance changes through settle_balances, this can include
+        // 3. Accounts that have funds changes through settle_funds, this can include
         // both withdraws and deposits.
         let mut affected_accounts = inner_state
             .pending_settlements
@@ -180,7 +180,7 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
         {
             affected_accounts.extend(current_version_accounts);
         }
-        affected_accounts.extend(settlement.balance_changes.keys().cloned());
+        affected_accounts.extend(settlement.funds_changes.keys().cloned());
 
         debug!(
             "Processing withdraws affecting accounts: {:?}",
@@ -195,21 +195,21 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                 "Settling account",
             );
             let reserved = account_state
-                .reserved_balance
+                .reserved_funds
                 .remove(&cleanup_version)
                 .unwrap_or_default() as i128;
             let settled = settlement
-                .balance_changes
+                .funds_changes
                 .get(&object_id)
                 .copied()
                 .unwrap_or_default();
             let net = u128::try_from(reserved.checked_add(settled).unwrap())
                 .expect("Withdraw amounts must be bounded by reservations");
-            account_state.balance_lower_bound += net;
+            account_state.funds_lower_bound += net;
             debug!(
                 account_id = ?object_id,
-                "Reserved balance: {:?}, settled balance: {:?}, new min guaranteed balance: {:?}",
-                reserved, settled, account_state.balance_lower_bound,
+                "Reserved funds: {:?}, settled funds: {:?}, new min guaranteed funds: {:?}",
+                reserved, settled, account_state.funds_lower_bound,
             );
 
             while !account_state.pending_reservations.is_empty() {
@@ -228,7 +228,7 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
 
             if in_test_configuration() {
                 account_state.debug_check_account_state_invariants(
-                    self.balance_read.as_ref(),
+                    self.funds_read.as_ref(),
                     next_accumulator_version,
                 );
             }
@@ -246,7 +246,7 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
     }
 
     fn close_epoch(&self) {
-        debug!("Closing epoch in EagerBalanceWithdrawScheduler",);
+        debug!("Closing epoch in EagerFundsWithdrawScheduler",);
         let inner_state = self.inner_state.lock();
         assert!(inner_state.pending_settlements.is_empty());
         assert!(inner_state.tracked_accounts.is_empty());
@@ -261,22 +261,22 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
 
 impl AccountState {
     fn new(
-        balance_read: &dyn AccountBalanceRead,
+        funds_read: &dyn AccountFundsRead,
         account_id: AccumulatorObjId,
         last_settled_version: SequenceNumber,
     ) -> Self {
-        let balance = balance_read.get_account_balance(&account_id, last_settled_version);
+        let funds = funds_read.get_account_amount(&account_id, last_settled_version);
         debug!(
             last_settled_version =? last_settled_version.value(),
             account_id = ?account_id.inner(),
-            "New account state tracked with initial balance {:?}",
-            balance,
+            "New account state tracked with initial funds {:?}",
+            funds,
         );
         Self {
             account_id,
-            reserved_balance: HashMap::new(),
+            reserved_funds: HashMap::new(),
             pending_reservations: VecDeque::new(),
-            balance_lower_bound: balance,
+            funds_lower_bound: funds,
         }
     }
 
@@ -298,71 +298,70 @@ impl AccountState {
     ) -> TryReserveResult {
         let to_reserve = pending_withdraw.pending_amount(&self.account_id);
         debug!(
-            "Trying to reserve {}, min_guaranteed_balance: {}, pending_reservations size: {}",
+            "Trying to reserve {}, min_guaranteed_funds: {}, pending_reservations size: {}",
             to_reserve,
-            self.balance_lower_bound,
+            self.funds_lower_bound,
             self.pending_reservations.len(),
         );
-        let insufficient_balance = to_reserve > self.balance_lower_bound;
-        if insufficient_balance || has_blocking_reservations {
+        let insufficient_funds = to_reserve > self.funds_lower_bound;
+        if insufficient_funds || has_blocking_reservations {
             if cur_accumulator_version == pending_withdraw.accumulator_version {
                 assert!(!has_blocking_reservations);
-                pending_withdraw.notify_insufficient_balance();
-                TryReserveResult::InsufficientBalance
+                pending_withdraw.notify_insufficient_funds();
+                TryReserveResult::InsufficientFunds
             } else {
                 debug!("Adding to pending reservations since we cannot schedule it yet.");
                 TryReserveResult::Pending
             }
         } else {
             self.commit_reservation(pending_withdraw);
-            TryReserveResult::SufficientBalance
+            TryReserveResult::SufficientFunds
         }
     }
 
     fn commit_reservation(&mut self, pending_withdraw: &Arc<PendingWithdraw>) {
         let mut pending = pending_withdraw.pending.lock();
         let to_reserve = pending.remove(&self.account_id).unwrap() as u128;
-        assert!(self.balance_lower_bound >= to_reserve);
-        self.balance_lower_bound -= to_reserve;
+        assert!(self.funds_lower_bound >= to_reserve);
+        self.funds_lower_bound -= to_reserve;
         *self
-            .reserved_balance
+            .reserved_funds
             .entry(pending_withdraw.accumulator_version)
             .or_default() += to_reserve;
         debug!(
-            "Successfully reserved {} for account. New min guaranteed balance: {}",
-            to_reserve, self.balance_lower_bound
+            "Successfully reserved {} for account. New min guaranteed funds: {}",
+            to_reserve, self.funds_lower_bound
         );
         if pending.is_empty() {
             debug!("Successfully reserved all accounts for withdraw transaction");
             let sender = pending_withdraw.sender.lock().take().unwrap();
             let _ = sender.send(ScheduleResult {
                 tx_digest: pending_withdraw.tx_digest,
-                status: ScheduleStatus::SufficientBalance,
+                status: ScheduleStatus::SufficientFunds,
             });
         }
     }
 
     fn is_empty(&self) -> bool {
-        self.reserved_balance.is_empty() && self.pending_reservations.is_empty()
+        self.reserved_funds.is_empty() && self.pending_reservations.is_empty()
     }
 
     fn debug_check_account_state_invariants(
         &self,
-        balance_read: &dyn AccountBalanceRead,
+        funds_read: &dyn AccountFundsRead,
         last_settled_version: SequenceNumber,
     ) {
-        let total_reserved = self.reserved_balance.values().sum::<u128>();
-        let expected_balance = self.balance_lower_bound + total_reserved;
-        let actual_balance =
-            balance_read.get_account_balance(&self.account_id, last_settled_version);
-        assert_eq!(expected_balance, actual_balance);
+        let total_reserved = self.reserved_funds.values().sum::<u128>();
+        let expected_funds = self.funds_lower_bound + total_reserved;
+        let actual_funds = funds_read.get_account_amount(&self.account_id, last_settled_version);
+        assert_eq!(expected_funds, actual_funds);
     }
 }
 
 impl PendingWithdraw {
     fn new(
         accumulator_version: SequenceNumber,
-        withdraw: TxBalanceWithdraw,
+        withdraw: TxFundsWithdraw,
         sender: Sender<ScheduleResult>,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -377,16 +376,16 @@ impl PendingWithdraw {
         self.pending.lock().get(account_id).copied().unwrap() as u128
     }
 
-    fn notify_insufficient_balance(&self) {
+    fn notify_insufficient_funds(&self) {
         let mut sender_guard = self.sender.lock();
         // sender may be None because this pending withdraw may have multiple
         // insufficient accounts, and when processing the first one, the sender
         // is already taken.
         if let Some(sender) = sender_guard.take() {
-            debug!("Insufficient balance for withdraw");
+            debug!("Insufficient funds for withdraw");
             let _ = sender.send(ScheduleResult {
                 tx_digest: self.tx_digest,
-                status: ScheduleStatus::InsufficientBalance,
+                status: ScheduleStatus::InsufficientFunds,
             });
         }
     }

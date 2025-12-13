@@ -15,7 +15,7 @@ use sui_types::accumulator_root::{
 use sui_types::balance::Balance;
 use sui_types::base_types::ObjectID;
 use sui_types::digests::TransactionDigest;
-use sui_types::execution_params::BalanceWithdrawStatus;
+use sui_types::execution_params::FundsWithdrawStatus;
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress},
     crypto::{AccountKeyPair, get_account_key_pair},
@@ -27,7 +27,7 @@ use sui_types::{
 use tokio::sync::mpsc::{self, unbounded_channel};
 use tokio::time::timeout;
 
-use super::BalanceSettlement;
+use super::FundsSettlement;
 use crate::{
     authority::{
         AuthorityState, ExecutionEnv, shared_object_version_manager::Schedulable,
@@ -151,39 +151,39 @@ impl TestEnv {
 
     async fn expect_withdraw_results(
         &mut self,
-        expected_results: BTreeMap<TransactionDigest, BalanceWithdrawStatus>,
+        expected_results: BTreeMap<TransactionDigest, FundsWithdrawStatus>,
     ) {
         let mut results = BTreeMap::new();
         while results.len() < expected_results.len() {
             let cert = self.receive_certificate().await.unwrap();
             results.insert(
                 *cert.certificate.digest(),
-                cert.execution_env.balance_withdraw_status,
+                cert.execution_env.funds_withdraw_status,
             );
         }
         assert_eq!(results, expected_results);
     }
 
-    fn settle_balances(&mut self, balance_changes: BTreeMap<ObjectID, i128>) {
-        let balance_changes: BTreeMap<AccumulatorObjId, i128> = balance_changes
+    fn settle_funds(&mut self, funds_changes: BTreeMap<ObjectID, i128>) {
+        let funds_changes: BTreeMap<AccumulatorObjId, i128> = funds_changes
             .into_iter()
-            .map(|(object_id, balance_change)| {
-                (AccumulatorObjId::new_unchecked(object_id), balance_change)
+            .map(|(object_id, funds_change)| {
+                (AccumulatorObjId::new_unchecked(object_id), funds_change)
             })
             .collect();
         let mut accumulator_object = self.get_accumulator_object();
         let next_version = accumulator_object.version().next();
-        self.scheduler.settle_balances(BalanceSettlement {
+        self.scheduler.settle_funds(FundsSettlement {
             next_accumulator_version: next_version,
-            balance_changes: balance_changes.clone(),
+            funds_changes: funds_changes.clone(),
         });
-        for (object_id, balance_change) in balance_changes {
+        for (object_id, funds_change) in funds_changes {
             let mut account_object = self
                 .state
                 .get_object_cache_reader()
                 .get_object(object_id.inner())
                 .unwrap();
-            update_account_balance_for_testing(&mut account_object, balance_change);
+            update_account_balance_for_testing(&mut account_object, funds_change);
             account_object
                 .data
                 .try_as_move_mut()
@@ -214,16 +214,13 @@ async fn test_withdraw_schedule_e2e() {
         .expect_withdraw_results(BTreeMap::from([
             (
                 *transactions[0].digest(),
-                BalanceWithdrawStatus::MaybeSufficient,
+                FundsWithdrawStatus::MaybeSufficient,
             ),
             (
                 *transactions[1].digest(),
-                BalanceWithdrawStatus::MaybeSufficient,
+                FundsWithdrawStatus::MaybeSufficient,
             ),
-            (
-                *transactions[2].digest(),
-                BalanceWithdrawStatus::Insufficient,
-            ),
+            (*transactions[2].digest(), FundsWithdrawStatus::Insufficient),
         ]))
         .await;
 
@@ -232,21 +229,18 @@ async fn test_withdraw_schedule_e2e() {
     test_env.enqueue_transactions_with_version(transactions.clone(), next_version);
     assert!(test_env.receive_certificate().await.is_none());
 
-    test_env.settle_balances(BTreeMap::from([(test_env.account_objects[0], -500)]));
+    test_env.settle_funds(BTreeMap::from([(test_env.account_objects[0], -500)]));
     test_env
         .expect_withdraw_results(BTreeMap::from([
             (
                 *transactions[0].digest(),
-                BalanceWithdrawStatus::MaybeSufficient,
+                FundsWithdrawStatus::MaybeSufficient,
             ),
-            (
-                *transactions[1].digest(),
-                BalanceWithdrawStatus::Insufficient,
-            ),
+            (*transactions[1].digest(), FundsWithdrawStatus::Insufficient),
         ]))
         .await;
 
-    test_env.settle_balances(BTreeMap::from([(test_env.account_objects[0], -500)]));
+    test_env.settle_funds(BTreeMap::from([(test_env.account_objects[0], -500)]));
 
     let transactions = test_env.create_transactions(vec![501]);
 
@@ -255,7 +249,7 @@ async fn test_withdraw_schedule_e2e() {
     test_env
         .expect_withdraw_results(BTreeMap::from([(
             *transactions[0].digest(),
-            BalanceWithdrawStatus::Insufficient,
+            FundsWithdrawStatus::Insufficient,
         )]))
         .await;
 }
