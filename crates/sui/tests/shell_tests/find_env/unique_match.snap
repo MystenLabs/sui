@@ -1,0 +1,18 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Active environment matches exactly one manifest address
+sui move --client.config configs/name_mismatch_id_match.yaml build
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+
+----- stderr -----
+Note: `Move.toml` does not define an `active_env` environment; building for `manifest_env` instead
+BUILDING example

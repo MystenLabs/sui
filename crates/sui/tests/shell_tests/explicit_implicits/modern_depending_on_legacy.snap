@@ -1,0 +1,20 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# tests that building a package that depends on a legacy that has explicit System deps can build successfully 
+sui move --client.config $CONFIG build -p modern_depending_on_legacy
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+
+----- stderr -----
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY legacy_can_use_legacy
+BUILDING modern_depending_on_legacy
