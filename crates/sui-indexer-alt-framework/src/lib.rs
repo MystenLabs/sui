@@ -2137,9 +2137,22 @@ mod tests {
             .await
             .unwrap();
 
-        // Sleep so that the new reader watermark can be picked up by the tasked indexer. Given the
-        // `reader_interval_ms` is 10 ms, 1000 ms should be plenty of time.
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        // Wait for the tasked indexer to observe the new reader watermark by polling the metric.
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                let current = metrics
+                    .latest_main_reader_lo
+                    .with_label_values(&[ControllableHandler::NAME])
+                    .get();
+                if current >= 250 {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("Timed out waiting for latest_main_reader_lo to reach 250");
+
         // Allow the processor to resume.
         process_below.send(501).ok();
 
