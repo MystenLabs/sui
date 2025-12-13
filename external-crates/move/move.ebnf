@@ -1,0 +1,442 @@
+/*
+ * Notes:
+ * - move doesn't have binary literals
+ * - last expression in a block is a return value
+ * - automatically insert unit () after last semicolon if no expression follows
+ * - prefer module label with a semicolon, unless there're multiple modules in a file
+ */
+
+/*
+ * Module
+ */
+
+/* A module is a sequence of module members enclosed in braces or terminated by a semicolon. */
+module ::= module_header module_body
+
+/* A module header is a module keyword followed by an address literal or identifier followed by a double colon and an identifier. */
+module_header ::= "module" (hex_numeric_literal | address_identifier) "::" module_identifier
+
+/* A module body is a sequence of module members enclosed in braces or following semicolon in case of module label. */
+module_body ::= ("{" (module_member)* "}") | (";" (module_member)*)
+
+/*
+ * Module Members
+ */
+
+/* A module member is a struct definition, enum definition, const definition, fun definition, or friend declaration. */
+module_member ::= struct_definition | enum_definition | const_definition | function_definition | friend_declaration | use_declaration
+
+/* Use external module or member */
+use_declaration ::= "use" (hex_numeric_literal | address_identifier) "::" (module_or_member_import | ("{" module_or_member_import ("," module_or_member_import)* "}")) ";"
+
+/*
+ * use pkg::module;
+ * use pkg::module::member;
+ * use pkg::module::{member, member}
+ * use pkg::{module, module};
+ * use pkg::{module::{member, member}}
+ */
+module_or_member_import ::=
+    module_identifier
+    | module_identifier "::" module_member_import
+    | module_identifier "::" "{" module_member_import ("," module_member_import)* "}"
+
+/* Possible module member imports */
+module_member_import ::= "Self" | struct_or_enum_identifier | function_identifier
+
+/* A const definition is a const keyword followed by a const identifier, a colon, a built-in type, an equals sign, and a literal. */
+const_definition ::= "const" const_identifier ":" built_in_type "=" (literal | const_expression ) ";"
+
+/*
+ * A friend declaration is a friend keyword followed by an address literal or identifier followed by a double colon and an identifier.
+ *
+ * friend 0x0::mod;
+ * friend pkg::mod;
+ */
+friend_declaration ::= "friend" (hex_numeric_literal | identifier) "::" identifier ";"
+
+/*
+ * Module: struct and enum
+ */
+
+/* A struct definition is a public keyword followed by a struct keyword followed by a struct identifier followed by a struct or enum type parameters followed by an optional abilities followed by a struct body. */
+struct_definition ::= "public" "struct" struct_or_enum_identifier struct_or_enum_type_parameters?
+    struct_with_no_abilities
+    | struct_with_postfix_abilities
+    | struct_with_prefix_abilities
+
+struct_with_no_abilities ::= named_fields | positional_fields
+
+struct_with_prefix_abilities ::= "has" abilities (named_fields | positional_fields)
+
+struct_with_postfix_abilities ::= (named_fields | positional_fields) "has" abilities ";"
+
+/* Regular struct body is enclosed in braces and consists of a sequence of struct members separated by commas. */
+named_fields ::= "{" (struct_field ("," struct_field)*)? "}"
+
+/* Struct field is a field identifier followed by a colon and a type. */
+struct_field ::= field_identifier ":" built_in_type
+
+/* Positional struct body is enclosed in parentheses and consists of a sequence of types separated by commas. */
+positional_fields ::= "(" built_in_type ("," built_in_type)* ")"
+
+/* An enum */
+enum_definition ::= "public" "enum" struct_or_enum_identifier struct_or_enum_type_parameters? ("has" abilities)? enum_variants ("has" abilities ";")?
+
+/* An enum must contain at least one variant. */
+enum_variants ::= "{" enum_variant ("," enum_variant)* "}"
+
+/* An enum variant is an identifier followed by an optional positional fields or optional named fields. */
+enum_variant ::= struct_or_enum_identifier positional_fields | struct_or_enum_identifier named_fields
+
+/*
+ * Module: function
+ */
+
+/* A function definition consists of the function signature followed by the function body for non-native functions. */
+/* A native definition does not feature a body and ends with a semicolon. */
+function_definition ::= function_modifier* function_signature (function_body | ";")
+
+/* A function signature consists of the function identifier, optional type parameters, optional function parameters, and optional return type. */
+function_signature ::= "fun" function_identifier function_type_parameters? function_parameters return_type?
+
+/* Function parameters is a sequence of function parameters separated by commas. */
+function_parameters ::= "(" (function_parameter ("," function_parameter)*)? ")"
+
+/* A function parameter is a mutability, a local variable name, and a type. */
+function_parameter ::= mut? local_identifier ":" type
+
+/* A return type is a single type or a tuple of types with at least one element. */
+return_type ::= ":" (type | type_list)
+
+/* A function body is an expression block. */
+function_body ::= block_expression
+
+/*
+ * Expressions
+ */
+
+/* Expression aggregates all possible expressions. */
+expression ::=
+    literal_expression
+    | pack_expression
+    | unit_expression
+    | block_expression
+    | arithmetic_binop_logical_expression
+    | const_expression
+    | assign_expression
+    | cast_expression
+    | local_identifier
+    | control_flow_expression
+    | labeled_expression
+    | field_access_expression
+    | enum_pack_expression
+    | type_annotation_expression
+
+/* Block expression is a sequence of expressions separated by semicolons. */
+block_expression ::= "{" ((let_statement | expression) (";" (let_statement | expression))* ";"? )? "}"
+
+/* A literal expression is a type literal. */
+literal_expression ::= literal
+
+// name_expression ::=
+
+/* A cast expression is an expression followed by an as keyword and an integer type. */
+cast_expression ::= expression "as" integer_type
+
+/* Function call expression, eg: function<u8, _>(arg1, arg2); */
+call_expression ::= function_identifier expression_type_parameters? expression_list
+
+/* Arithmetic expression is a binary operator followed by two expressions. */
+arithmetic_binop_logical_expression ::= expression operator expression
+
+/* Struct pack expression is a struct identifier followed by either positional values or named field instantiations. */
+pack_expression ::= struct_or_enum_identifier expression_type_parameters? (positional_fields_instantiation | named_fields_instantiation)
+
+/* An enum pack expression is an enum identifier followed by a double colon and an enum identifier, optionally followed by an expression list or named fields instantiation. */
+enum_pack_expression ::= struct_or_enum_identifier "::" struct_or_enum_identifier (positional_fields_instantiation | named_fields_instantiation)?
+
+/* An expression list is a sequence of expressions separated by commas. */
+expression_list ::= "(" (expression ("," expression)*)? ")"
+
+/* A named fields instantiation is a sequence of field identifiers followed by a colon and an expression separated by commas. */
+named_fields_instantiation ::= "{" (field_identifier (":" expression)? ("," field_identifier (":" expression)?)*)? "}"
+
+/* Positional structs are instantiated like an expression list */
+positional_fields_instantiation ::= expression_list
+
+/* A named field instantiation is a field identifier followed by a colon and an expression. */
+/* In case where the field identifier is the same as the local identifier, expression can be omitted. */
+named_field_instantiation ::= (field_identifier ":" expression) | field_identifier
+
+/* A unit expression is a unit literal. */
+unit_expression ::= "()"
+
+/* An assign expression is an expression followed by an equals sign and another expression. */
+assign_expression ::= expression "=" expression
+
+/* Field access is an expression followed by a dot and a field identifier. */
+field_access_expression ::= expression "." field_identifier
+
+type_annotation_expression ::= expression ":" type
+
+/*
+ * Expression: Control Flow
+ */
+
+control_flow_expression ::=
+    if_expression
+    | while_expression
+    | loop_expression
+    | labeled_expression
+    | continue_expression
+    | break_expression
+    | return_expression
+    | match_expression
+
+/* An if expression is an if keyword followed by a condition, an expression, an else keyword and an expression. */
+if_expression ::= "if" "(" expression ")" expression ("else" expression)?
+
+/* A while expression is a while keyword followed by a condition and an expression. */
+while_expression ::= "while" "(" expression ")" expression
+
+/* TODO: A loop expression is a loop keyword followed by an expression. */
+loop_expression ::= "loop" expression
+
+/* A labeled expression is a labeled keyword followed by a label identifier and a colon and an expression. */
+labeled_expression ::= "labeled" label_identifier ":" (block_expression | if_expression | while_expression | loop_expression)
+
+/* A continue expression is a continue keyword optionally followed by a label identifier. */
+continue_expression ::= "continue" ("'" label_identifier)?
+
+/* A break expression is a break keyword optionally followed by a label identifier and an optional expression. */
+break_expression ::= "break" ("'" label_identifier expression?)?
+
+/* A return expression is a return keyword followed by an optional label identifier and an expression. */
+return_expression ::= "return" ("'" label_identifier)? expression?
+
+/* A match on value expression */
+match_expression ::= "match" "(" expression ")" "{" (match_arm ("," match_arm)*)? "}"
+
+/* A match arm is a match pattern, an optional guard, an arrow, and an expression. */
+match_arm ::= match_bind? match_pattern guard? "=>" expression
+
+/* A match bind is a local identifier followed by an at sign. */
+match_bind ::= local_identifier "@"
+
+/* A wildcard is an underscore. */
+wildcard ::= "_"
+
+/* A match pattern is a literal, a constant, an enum variant or a struct constructor. */
+match_pattern ::=
+    boolean_literal
+    | numeric_literal
+    | hex_numeric_literal
+    | address_literal
+    | wildcard
+    | constant_identifier
+    // | enum_variant_pattern
+    | struct_constructor_pattern
+
+/* A struct constructor pattern is a struct identifier followed by a list of fields in braces, optionally followed by an ellipsis. */
+struct_constructor_pattern ::= struct_or_enum_identifier "{" (field_identifier ("," field_identifier)*)? ".."? "}"
+
+/* A guard is an if keyword followed by a condition in parentheses. */
+guard ::= "if" "(" expression ")"
+
+/*
+ * Let Statement
+ */
+
+/* A let statement is a let keyword followed by a mutability, a local identifier, an optional type, and an optional equals sign and an expression. */
+let_statement ::= "let" (let_bind | let_bind_list | let_bind_unpack)
+
+/* mut field: T = call(); */
+let_bind ::= mut? local_identifier (":" type)? "=" expression
+
+/*
+ * (mut field, name, _) = (1, 0, 10)
+ * (_, name, field) = call();
+ * (name, field) = macro_call!();
+ */
+let_bind_list ::= "(" mut? local_identifier ("," mut? local_identifier)* ")" (":" type_list)? "=" (("(" expression ("," expression)* ")") | call_expression | macro_call_expression)
+
+/*
+ * let Positional(..) = value;
+ * let NamedFields { field, .. } = value;
+ */
+let_bind_unpack ::= struct_or_enum_identifier expression_type_parameters? bind_fields (":" type)? "=" expression
+
+/* (field, field) | { field, .. } */
+bind_fields ::= bind_positional_fields | bind_named_fields
+
+/* (field, name, ..) */
+bind_positional_fields ::= "(" (field_identifier_or_rest ("," field_identifier_or_rest)*)? ")"
+
+/* { field, name, .. } */
+bind_named_fields ::= "{" (field_identifier_or_rest ("," field_identifier_or_rest)) "}"
+
+/* field_name | ".." */
+field_identifier_or_rest ::= field_identifier | ".."
+
+/*
+ * Identifiers
+ */
+
+/*
+ * Address identifiers start with any allowed symbol but not a digit.
+ * a_0
+ * _Argument_1
+ * A
+ * _0
+ * _
+ */
+address_identifier ::= (lowercase_letter | uppercase_letter | underscore) (lowercase_letter | uppercase_letter | digit | underscore)*
+
+/* Module identifiers must start with a letter. */
+module_identifier ::= (uppercase_letter | lowercase_letter) (lowercase_letter | digit | underscore)*
+
+/* Struct identifiers must start with an uppercase letter followed by any number of lowercase letters, digits, and underscores. */
+struct_or_enum_identifier ::= uppercase_letter (lowercase_letter | digit | underscore)*
+
+/* Const identifiers must start with an uppercase letter followed by any number of lowercase letters, digits, and underscores. */
+/* Convention: regular constants are named with `ALL_UPPERCASE`, while for error constants `EPascalCase` is used */
+const_identifier ::= uppercase_letter (lowercase_letter | digit | underscore)*
+
+/* Local identifiers must start with a lowercase letter. */
+local_identifier ::= (lowercase_letter | underscore) (lowercase_letter | digit | underscore)*
+
+/* Field identifiers start with any allowed symbol but not a digit. */
+field_identifier ::= (lowercase_letter | uppercase_letter | underscore) (lowercase_letter | uppercase_letter | digit | underscore)*
+
+/* TODO: Function identifiers must start with a lowercase letter. */
+function_identifier ::= field_identifier
+
+/* TODO: Label identifiers must start with a lowercase letter. */
+label_identifier ::= (lowercase_letter | underscore) (lowercase_letter | digit | underscore)*
+
+/*
+ * Generics and Type Parameters
+ */
+
+/* An expression type parameters is a sequence of types separated by commas. */
+expression_type_parameters ::= "<" type_or_omit ("," type_or_omit)* ">"
+
+/* Either specify type or let type inference do the job */
+type_or_omit ::= type | "_"
+
+/* A type parameter is a sequence of type parameters with optional ability constraints. */
+type_parameter ::= identifier (":" ability_constraint)?
+
+/* Phantom type parameter is a parameter prefixed with `phantom`, these type parameters can only be used in type definitions. */
+/* Type parameter must be declared phantom if it is not used in any struct fields. */
+phantom_type_parameter ::= "phantom" type_parameter
+
+/* Generalization of type parameters for structs and enums. */
+struct_or_enum_type_parameter ::= type_parameter | phantom_type_parameter
+
+/* Generalization of type parameters for structs and enums. */
+struct_or_enum_type_parameters ::= "<" (struct_or_enum_type_parameter ("," struct_or_enum_type_parameter)*)? ">"
+
+/* A type parameter list is a sequence of type parameters separated by commas. */
+function_type_parameters ::= "<" (type_parameter ("," type_parameter)*)? ">"
+
+/* (Type, u8) */
+type_list ::= "(" type? ("," type)* ")"
+
+/*
+ * Types
+ */
+
+/* Currently, only unsigned integers are supported. */
+integer_type ::= "u8" | "u16" | "u32" | "u64" | "u128" | "u256"
+
+/* An element type is either a built-in type or a custom type. */
+element_type ::= built_in_type | struct_or_enum_identifier
+
+/* An address type */
+address_type ::= "address"
+
+/* Boolean type */
+boolean_type ::= "bool"
+
+/* A built-in type is a vector type, integer type, or boolean type. */
+built_in_type ::= integer_type | boolean_type | built_in_vector_type | address_type
+
+/* A built-in vector type is a vector of elements. */
+built_in_vector_type ::= "vector" "<" built_in_type ">"
+
+/* A vector type is a vector of elements. */
+vector_type ::= "vector" "<" element_type ">"
+
+/* A generalization of types: includes all built-in types, vector types, and struct or enum identifiers. */
+type ::= built_in_type | vector_type | struct_or_enum_identifier | module_access_type
+
+/*
+ * Foreign type access + conflict resolution by prefixing with ::
+ * coin::Coin
+ * sui::coin::Coin
+ * ::sui::coin::Coin
+ */
+module_access_type ::= ("::"? (hex_numeric_literal | address_identifier) "::")? module_identifier "::" struct_or_enum_identifier
+
+/* Literals */
+
+/* A boolean is either true or false. */
+boolean_literal ::= "true" | "false"
+
+/* A vector literal is a sequence of elements separated by commas. */
+vector_literal ::= "vector" ("<" element_type ">")? "[" (literal ("," literal)*)? "]"
+
+/* A numeric literal is a sequence of digits (cannot start with 0) followed by an optional integer type. */
+numeric_literal ::= ("0" | non_zero_digit+) (integer_type)?
+
+/* A hex numeric literal is a sequence of hex digits (0-9, a-f, A-F) starting with 0x. */
+hex_numeric_literal ::= "0x" (hex_digit+)
+
+/* An address literal is a either a sequence of @ followed by a hex numeric literal up to 64 characters. */
+address_literal ::= "@" (("0" | non_zero_digit)+) | "@" hex_numeric_literal | "@" address_identifier
+
+/* A literal is a boolean literal, vector literal, numeric literal, hex numeric literal, or address literal. */
+literal ::= boolean_literal | vector_literal | numeric_literal | hex_numeric_literal | address_literal
+
+/* Expressions */
+
+/*
+ * Const expression is a block of simple arithmetic and bitwise operations which
+ * can either use const identifiers or literals.
+ */
+const_expression ::= "{" "}"
+
+/* Other */
+
+/* Move type ability */
+ability ::= "key" | "store" | "copy" | "drop"
+
+/* Abilities are a sequence of abilities separated by commas. Used in struct and enum declarations. */
+abilities ::= ability ("," ability)*
+
+/* Ability constraint is a sequence of abilities separated by plus signs. Used in type parameters. */
+ability_constraint ::= ability ("+" ability)*
+
+/* Function modifiers are used in function signatures. */
+function_modifier ::= "public" | "public(package)" | "native" | "entry"
+
+/* Macro function modifier is used for macro functions. */
+macro_function_modifier ::= "macro"
+
+/* Operator is an arithmetic, logical or binary operator. */
+operator ::= "+" | "-" | "*" | "/" | "%" | "|" | "<<" | ">>" | "==" | "<=" | ">=" | "!=" | "<" | ">"
+
+/* A mutability is marked with the mut keyword. If a variable is mutated either directly or via a mutable reference, it must be marked as mut. */
+mut ::= "mut"
+
+/* Utility non-terminals */
+
+digit ::= "0".."9"
+hex_digit ::= "0".."9" | "a".."f" | "A".."F"
+non_zero_digit ::= "1".."9"
+
+underscore ::= "_"
+uppercase_letter ::= "A".."Z"
+lowercase_letter ::= "a".."z"
