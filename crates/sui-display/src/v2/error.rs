@@ -6,8 +6,10 @@ use std::fmt;
 use std::mem;
 use std::sync::Arc;
 
-use move_core_types::annotated_visitor;
+use move_core_types::annotated_visitor as AV;
 use move_core_types::language_storage::TypeTag;
+use sui_types::object::option_visitor as OV;
+use sui_types::object::rpc_visitor as RV;
 
 use crate::v2::lexer::Lexeme;
 use crate::v2::lexer::OwnedLexeme;
@@ -101,7 +103,7 @@ pub enum FormatError {
     VectorTypeMismatch(TypeTag, TypeTag),
 
     #[error("Deserialization error: {0}")]
-    Visitor(#[from] annotated_visitor::Error),
+    Visitor(#[from] AV::Error),
 }
 
 /// The set of patterns that the parser tried to match against the next token, in a given
@@ -239,6 +241,18 @@ impl fmt::Display for ExpectedSet {
         }
 
         Ok(())
+    }
+}
+
+impl From<RV::Error> for FormatError {
+    fn from(RV::Error: RV::Error) -> Self {
+        FormatError::Bcs(bcs::Error::Custom("unexpected type".to_string()))
+    }
+}
+
+impl From<OV::Error> for FormatError {
+    fn from(OV::Error: OV::Error) -> Self {
+        FormatError::Bcs(bcs::Error::ExpectedOption)
     }
 }
 
