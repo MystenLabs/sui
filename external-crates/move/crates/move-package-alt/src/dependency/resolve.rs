@@ -17,11 +17,12 @@ use itertools::Itertools;
 use jsonrpc::Endpoint;
 use thiserror::Error;
 use tokio::process::Command;
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::{
     dependency::combine::Combined,
     flavor::MoveFlavor,
+    logging::user_info,
     package::{EnvironmentID, EnvironmentName},
     schema::{
         EXTERNAL_RESOLVE_ARG, PackageName, ResolveRequest, ResolveResponse, ResolverDependencyInfo,
@@ -243,7 +244,7 @@ async fn call_resolver(
 
     // dump standard error
     if !output.stderr.is_empty() {
-        info!(
+        user_info!(
             "Output from {resolver}:\n{}",
             String::from_utf8_lossy(&output.stderr)
                 .lines()

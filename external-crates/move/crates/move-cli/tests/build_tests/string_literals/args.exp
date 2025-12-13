@@ -1,6 +1,7 @@
 Command `build`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING A
+[NOTE] Dependencies on Sui, MoveStdlib, Bridge, DeepBook, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on MoveStdlib. Consider removing these dependencies from `Move.toml`.
 Command `test`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING A
@@ -9,3 +10,4 @@ Running Move unit tests
 [ PASS    ] A::test::t1
 [ PASS    ] A::test::t2
 Test result: OK. Total tests: 3; passed: 3; failed: 0
+[NOTE] Dependencies on Sui, MoveStdlib, Bridge, DeepBook, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on MoveStdlib. Consider removing these dependencies from `Move.toml`.

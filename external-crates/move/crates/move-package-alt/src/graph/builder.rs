@@ -6,6 +6,7 @@ use crate::{
     dependency::{Pinned, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
+    logging::user_note,
     package::{
         EnvironmentName, Package, lockfile::Lockfiles, package_lock::PackageSystemLock,
         paths::PackagePath,
@@ -20,11 +21,10 @@ use std::{
 };
 
 use bimap::BiBTreeMap;
-use colored::Colorize;
 use petgraph::graph::{DiGraph, NodeIndex};
 use thiserror::Error;
 use tokio::sync::OnceCell;
-use tracing::{debug, info};
+use tracing::debug;
 
 use super::PackageGraph;
 
@@ -118,9 +118,8 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
             let package = self.cache.fetch(&dep, env, mtx).await?;
             let package_manifest_digest = package.digest();
             if check_digests && package_manifest_digest != &pin.manifest_digest {
-                info!(
-                    "[{}] Updating dependencies for `{}` environment because {:?} has been changed since the last update.",
-                    "NOTE".yellow(),
+                user_note!(
+                    "Updating dependencies for `{}` environment because {:?} has been changed since the last update.",
                     env.name(),
                     package.path().path().join("Move.toml")
                 );
