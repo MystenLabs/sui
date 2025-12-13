@@ -1081,7 +1081,7 @@ impl Command {
             Command::Upgrade(_, deps, package_id, _) => deps
                 .iter()
                 .map(|id| InputObjectKind::MovePackage(*id))
-                .chain(Some(InputObjectKind::MovePackage(*package_id)))
+                .chain(iter::once(InputObjectKind::MovePackage(*package_id)))
                 .collect(),
             Command::Publish(_, deps) => deps
                 .iter()
@@ -1214,24 +1214,32 @@ pub fn write_sep<T: Display>(
 impl ProgrammableTransaction {
     pub fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
         let ProgrammableTransaction { inputs, commands } = self;
-        let input_arg_objects = inputs
-            .iter()
-            .flat_map(|arg| arg.input_objects())
-            .collect::<Vec<_>>();
-        // all objects, not just mutable, must be unique
-        let mut used = HashSet::new();
-        if !input_arg_objects.iter().all(|o| used.insert(o.object_id())) {
-            return Err(UserInputError::DuplicateObjectRefInput);
+        let mut final_objects = Vec::new();
+        let mut used_ids = HashSet::new();
+
+        for obj in inputs.iter().flat_map(|arg| arg.input_objects()) {
+            if !used_ids.insert(obj.object_id()) {
+                return Err(UserInputError::DuplicateObjectRefInput);
+            }
+            final_objects.push(obj);
         }
-        // do not duplicate packages referred to in commands
-        let command_input_objects: BTreeSet<InputObjectKind> = commands
+
+        let mut command_objects: Vec<_> = commands
             .iter()
-            .flat_map(|command| command.input_objects())
+            .flat_map(|c| c.input_objects())
             .collect();
-        Ok(input_arg_objects
-            .into_iter()
-            .chain(command_input_objects)
-            .collect())
+
+        // The BTreeSet previously provided sorting and deduplication. We must preserve that
+        // for determinism.
+        command_objects.sort_unstable();
+        command_objects.dedup();
+
+        final_objects.extend(
+            command_objects
+                .into_iter()
+                .filter(|o| used_ids.insert(o.object_id())),
+        );
+        Ok(final_objects)
     }
 
     fn receiving_objects(&self) -> Vec<ObjectRef> {
@@ -1631,11 +1639,9 @@ impl TransactionKind {
             Self::EndOfEpochTransaction(txns) => {
                 // Dedup since transactions may have a overlap in input objects.
                 // Note: it's critical to ensure the order of inputs are deterministic.
-                let before_dedup: Vec<_> =
-                    txns.iter().flat_map(|txn| txn.input_objects()).collect();
                 let mut has_seen = HashSet::new();
                 let mut after_dedup = vec![];
-                for obj in before_dedup {
+                for obj in txns.iter().flat_map(|txn| txn.input_objects()) {
                     if has_seen.insert(obj) {
                         after_dedup.push(obj);
                     }
