@@ -2,10 +2,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::accumulators::AccumulatorSettlementTxBuilder;
 use crate::accumulators::balance_read::AccountBalanceRead;
 use crate::accumulators::coin_reservations::CoinReservationResolver;
 use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
+use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
@@ -69,8 +69,7 @@ use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::accumulator_root::AccumulatorValue;
-use sui_types::coin_reservation;
-use sui_types::coin_reservation::is_coin_reservation_digest;
+use sui_types::coin_reservation::{ParsedDigest, ParsedObjectRefWithdrawal};
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
@@ -2047,7 +2046,7 @@ impl AuthorityState {
             protocol_config,
             store,
             executor,
-            &self.coin_reservation_resolver,
+            &*self.coin_reservation_resolver,
             sender,
             kind,
             *epoch_id,
@@ -2056,7 +2055,7 @@ impl AuthorityState {
         // filter out coin reservation obj refs from gas data
         gas_data
             .payment
-            .retain(|obj_ref| !is_coin_reservation_digest(&obj_ref.2));
+            .retain(|obj_ref| !ParsedDigest::is_coin_reservation_digest(&obj_ref.2));
 
         let (inner_temp_store, gas_status, mut effects, timings, execution_error) = executor
             .execute_transaction_to_effects(
@@ -4595,12 +4594,12 @@ impl AuthorityState {
             return Ok(None);
         };
 
-        let object_ref = coin_reservation::encode_object_ref(
+        let object_ref = ParsedObjectRefWithdrawal::new(
             accumulator_obj.id(),
-            accumulator_obj.version(),
             self.load_epoch_store_one_call_per_task().epoch(),
             balance,
-        )?;
+        )
+        .encode(accumulator_obj.version(), self.get_chain_identifier());
 
         Ok(Some((
             object_ref,

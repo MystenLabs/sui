@@ -10,7 +10,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::coin::{
     COIN_MODULE_NAME, COIN_REDEEM_FUNDS_FUNCTION_NAME, COIN_SEND_FUNDS_FUNCTION_NAME,
 };
-use sui_types::coin_reservation::{self, CoinReservationResolverTrait};
+use sui_types::coin_reservation::{CoinReservationResolverTrait, ParsedDigest};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::storage::BackingStore;
 use sui_types::transaction::{
@@ -73,7 +73,7 @@ fn rewrite_programmable_transaction_for_coin_reservations(
     let mut ephemeral_coins = Vec::new();
 
     // Early exit when no coin reservations are used
-    if pt.pt_coin_reservation_obj_refs().count() == 0 {
+    if pt.coin_reservation_obj_refs().count() == 0 {
         return (pt, 0);
     }
 
@@ -81,7 +81,7 @@ fn rewrite_programmable_transaction_for_coin_reservations(
         let index: u16 = index.try_into().expect("too many inputs");
         match input {
             CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref))
-                if coin_reservation::is_coin_reservation_digest(&object_ref.2) =>
+                if ParsedDigest::is_coin_reservation_digest(&object_ref.2) =>
             {
                 let withdraw = coin_reservation_resolver
                     .resolve_funds_withdrawal(sender, object_ref)
