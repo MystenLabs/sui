@@ -12,7 +12,7 @@ use crate::server::APPLICATION_JSON;
 use crate::types::{AddTokensOnSuiAction, BridgeAction, BridgeCommittee};
 use alloy::network::EthereumWallet;
 use alloy::primitives::Address as EthAddress;
-use alloy::providers::{ProviderBuilder, RootProvider};
+use alloy::providers::{ProviderBuilder, RootProvider, WsConnect};
 use alloy::signers::local::PrivateKeySigner;
 use anyhow::anyhow;
 use fastcrypto::ed25519::Ed25519KeyPair;
@@ -74,6 +74,25 @@ pub type EthSignerProvider = Arc<
         alloy::network::Ethereum,
     >,
 >;
+pub type EthWsProvider = Arc<
+    alloy::providers::fillers::FillProvider<
+        alloy::providers::fillers::JoinFill<
+            alloy::providers::Identity,
+            alloy::providers::fillers::JoinFill<
+                alloy::providers::fillers::GasFiller,
+                alloy::providers::fillers::JoinFill<
+                    alloy::providers::fillers::BlobGasFiller,
+                    alloy::providers::fillers::JoinFill<
+                        alloy::providers::fillers::NonceFiller,
+                        alloy::providers::fillers::ChainIdFiller,
+                    >,
+                >,
+            >,
+        >,
+        alloy::providers::RootProvider<alloy::network::Ethereum>,
+        alloy::network::Ethereum,
+    >,
+>;
 
 pub fn get_eth_provider(url: &str) -> anyhow::Result<EthProvider> {
     let url = Url::parse(url).map_err(|e| anyhow!("Invalid RPC URL: {}", e))?;
@@ -91,6 +110,13 @@ pub fn get_eth_signer_provider(
     let provider = ProviderBuilder::new()
         .wallet(wallet)
         .connect_provider(get_eth_provider(url)?);
+    Ok(Arc::new(provider))
+}
+
+pub async fn get_eth_ws_provider(url: &str) -> anyhow::Result<EthWsProvider> {
+    let url = Url::parse(url).map_err(|e| anyhow!("Invalid WebSocket URL: {}", e))?;
+    let ws = WsConnect::new(url);
+    let provider = ProviderBuilder::new().connect_ws(ws).await?;
     Ok(Arc::new(provider))
 }
 
