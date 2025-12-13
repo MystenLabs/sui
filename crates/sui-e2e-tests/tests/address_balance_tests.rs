@@ -2063,8 +2063,8 @@ async fn test_sponsor_insufficient_balance_charges_zero_gas() {
     );
     let status_str = format!("{:?}", failed_effects.status());
     assert!(
-        status_str.contains("InsufficientBalanceForWithdraw"),
-        "Failed transaction should have InsufficientBalanceForWithdraw error: {}",
+        status_str.contains("InsufficientFundsForWithdraw"),
+        "Failed transaction should have InsufficientFundsForWithdraw error: {}",
         status_str
     );
 
@@ -2178,8 +2178,8 @@ async fn test_insufficient_balance_charges_zero_gas() {
     );
     let status_str = format!("{:?}", failed_effects.status());
     assert!(
-        status_str.contains("InsufficientBalanceForWithdraw"),
-        "Failed transaction should have InsufficientBalanceForWithdraw error: {}",
+        status_str.contains("InsufficientFundsForWithdraw"),
+        "Failed transaction should have InsufficientFundsForWithdraw error: {}",
         status_str
     );
 

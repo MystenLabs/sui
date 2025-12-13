@@ -879,7 +879,7 @@ impl CheckpointExecutor {
 
                         // Check if the expected effects indicate insufficient balance
                         if let &ExecutionStatus::Failure {
-                            error: ExecutionFailureStatus::InsufficientBalanceForWithdraw,
+                            error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
                             ..
                         } = effects.status()
                         {

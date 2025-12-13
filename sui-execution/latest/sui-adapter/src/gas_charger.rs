@@ -338,7 +338,7 @@ pub mod checked {
                     .map(|err| {
                         matches!(
                             err.kind(),
-                            sui_types::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw
+                            sui_types::execution_status::ExecutionFailureStatus::InsufficientFundsForWithdraw
                         )
                     })
                     .unwrap_or(false);

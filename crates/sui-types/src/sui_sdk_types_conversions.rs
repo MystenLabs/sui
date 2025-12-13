@@ -929,7 +929,8 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::MoveVectorElemTooBig { value_size, max_scaled_size } => Self::MoveVectorElemTooBig { value_size, max_scaled_size },
             crate::execution_status::ExecutionFailureStatus::MoveRawValueTooBig { value_size, max_scaled_size } => Self::MoveRawValueTooBig { value_size, max_scaled_size },
             crate::execution_status::ExecutionFailureStatus::InvalidLinkage => Self::InvalidLinkage,
-            crate::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw => {
+            crate::execution_status::ExecutionFailureStatus::InsufficientFundsForWithdraw => {
+                // TODO: Rename this in rust-sdk-types.
                 Self::InsufficientBalanceForWithdraw
             }
             crate::execution_status::ExecutionFailureStatus::NonExclusiveWriteInputObjectModified { id } => {
