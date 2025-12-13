@@ -41,14 +41,15 @@ fn create_test_transaction_data(
 #[test]
 fn test_address_balance_payment_requires_accumulators_enabled() {
     let mut config = ProtocolConfig::get_for_max_version_UNSAFE();
+
     // accumulators not enabled
     config.disable_accumulators_for_testing();
 
     let tx_data = create_test_transaction_data(
         vec![],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(1),
-            max_epoch: Some(1),
+            min_epoch: Some(0),
+            max_epoch: Some(0),
             min_timestamp: None,
             max_timestamp: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -56,10 +57,12 @@ fn test_address_balance_payment_requires_accumulators_enabled() {
         },
     );
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::MissingGasPayment => {}
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::MissingGasPayment,
+        } => {}
         _ => panic!("Expected MissingGasPayment error for disabled accumulators"),
     }
 }
@@ -73,8 +76,8 @@ fn test_address_balance_payment_requires_feature_flag() {
     let tx_data = create_test_transaction_data(
         vec![],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(1),
-            max_epoch: Some(1),
+            min_epoch: Some(0),
+            max_epoch: Some(0),
             min_timestamp: None,
             max_timestamp: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -82,10 +85,12 @@ fn test_address_balance_payment_requires_feature_flag() {
         },
     );
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::MissingGasPayment => {}
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::MissingGasPayment,
+        } => {}
         _ => panic!("Expected MissingGasPayment error when feature flag is disabled"),
     }
 }
@@ -97,8 +102,8 @@ fn test_address_balance_payment_valid() {
     let tx_data = create_test_transaction_data(
         vec![],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(1),
-            max_epoch: Some(1),
+            min_epoch: Some(0),
+            max_epoch: Some(0),
             min_timestamp: None,
             max_timestamp: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -106,7 +111,7 @@ fn test_address_balance_payment_valid() {
         },
     );
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(
         result.is_ok(),
         "Transaction should be valid with accumulators enabled"
@@ -119,19 +124,23 @@ fn test_address_balance_payment_requires_valid_during_expiration() {
 
     let tx_data = create_test_transaction_data(vec![], TransactionExpiration::None);
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::MissingGasPayment => {}
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::MissingGasPayment,
+        } => {}
         _ => panic!("Expected MissingGasPayment error"),
     }
 
     let tx_data = create_test_transaction_data(vec![], TransactionExpiration::Epoch(1));
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::InvalidExpiration { .. } => {}
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::InvalidExpiration { .. },
+        } => {}
         _ => panic!("Expected InvalidExpiration error"),
     }
 }
@@ -143,8 +152,8 @@ fn test_address_balance_payment_single_epoch_validation() {
     let tx_data = create_test_transaction_data(
         vec![],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(5),
-            max_epoch: Some(5),
+            min_epoch: Some(0),
+            max_epoch: Some(0),
             min_timestamp: None,
             max_timestamp: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -152,14 +161,14 @@ fn test_address_balance_payment_single_epoch_validation() {
         },
     );
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_ok(), "Single epoch expiration should be valid");
 
     let tx_data = create_test_transaction_data(
         vec![],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(5),
-            max_epoch: Some(6),
+            min_epoch: Some(0),
+            max_epoch: Some(1),
             min_timestamp: None,
             max_timestamp: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -167,10 +176,12 @@ fn test_address_balance_payment_single_epoch_validation() {
         },
     );
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::Unsupported(msg) => {
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::Unsupported(msg),
+        } => {
             assert!(msg.contains("Multi-epoch transaction expiration is not yet supported"));
         }
         _ => panic!("Expected Unsupported error for multi-epoch expiration"),
@@ -184,8 +195,8 @@ fn test_address_balance_payment_timestamp_validation() {
     let tx_data = create_test_transaction_data(
         vec![],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(1),
-            max_epoch: Some(1),
+            min_epoch: Some(0),
+            max_epoch: Some(0),
             min_timestamp: Some(1000),
             max_timestamp: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -193,10 +204,12 @@ fn test_address_balance_payment_timestamp_validation() {
         },
     );
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::Unsupported(msg) => {
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::Unsupported(msg),
+        } => {
             assert!(msg.contains("Timestamp-based transaction expiration is not yet supported"));
         }
         _ => panic!("Expected Unsupported error for timestamp expiration"),
@@ -214,10 +227,12 @@ fn test_address_balance_payment_missing_epochs() {
     ) {
         let tx_data = create_test_transaction_data(vec![], expiration);
 
-        let result = tx_data.validity_check(config);
+        let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(config));
         assert!(result.is_err());
-        match result.unwrap_err() {
-            UserInputError::Unsupported(msg) => {
+        match result.unwrap_err().into_inner() {
+            SuiErrorKind::UserInputError {
+                error: UserInputError::Unsupported(msg),
+            } => {
                 assert!(msg.contains("Both min_epoch and max_epoch must be specified and equal"));
             }
             _ => panic!("Expected Unsupported error for {}", case_description),
@@ -269,7 +284,7 @@ fn test_regular_gas_payment_works_without_accumulators() {
     let tx_data =
         create_test_transaction_data(vec![random_object_ref()], TransactionExpiration::None);
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(
         result.is_ok(),
         "Regular gas payment should work without accumulators"
@@ -283,8 +298,8 @@ fn test_regular_gas_payment_with_valid_during_expiration() {
     let tx_data = create_test_transaction_data(
         vec![random_object_ref()],
         TransactionExpiration::ValidDuring {
-            min_epoch: Some(1),
-            max_epoch: Some(1),
+            min_epoch: Some(0),
+            max_epoch: Some(0),
             min_timestamp: None,
             max_timestamp: None,
             chain: ChainIdentifier::from(CheckpointDigest::default()),
@@ -292,7 +307,7 @@ fn test_regular_gas_payment_with_valid_during_expiration() {
         },
     );
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(
         result.is_ok(),
         "Regular gas payment with ValidDuring expiration should be allowed"
@@ -315,10 +330,12 @@ fn test_regular_gas_payment_with_invalid_valid_during_timestamp() {
         },
     );
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::Unsupported(msg) => {
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::Unsupported(msg),
+        } => {
             assert!(msg.contains("Timestamp-based transaction expiration is not yet supported"));
         }
         _ => panic!("Expected Unsupported error for timestamp expiration"),
@@ -341,10 +358,12 @@ fn test_regular_gas_payment_with_invalid_valid_during_multi_epoch() {
         },
     );
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::Unsupported(msg) => {
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::Unsupported(msg),
+        } => {
             assert!(msg.contains("Multi-epoch transaction expiration is not yet supported"));
         }
         _ => panic!("Expected Unsupported error for multi-epoch expiration"),
@@ -367,10 +386,12 @@ fn test_regular_gas_payment_with_invalid_valid_during_missing_epochs() {
         },
     );
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::Unsupported(msg) => {
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::Unsupported(msg),
+        } => {
             assert!(msg.contains("Both min_epoch and max_epoch must be specified and equal"));
         }
         _ => panic!("Expected Unsupported error for missing epochs"),
@@ -393,10 +414,12 @@ fn test_regular_gas_payment_with_invalid_valid_during_partial_epochs() {
         },
     );
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(result.is_err());
-    match result.unwrap_err() {
-        UserInputError::Unsupported(msg) => {
+    match result.unwrap_err().into_inner() {
+        SuiErrorKind::UserInputError {
+            error: UserInputError::Unsupported(msg),
+        } => {
             assert!(msg.contains("Both min_epoch and max_epoch must be specified and equal"));
         }
         _ => panic!("Expected Unsupported error for partial epoch specification"),
@@ -410,7 +433,7 @@ fn test_regular_gas_payment_with_epoch_expiration() {
     let tx_data =
         create_test_transaction_data(vec![random_object_ref()], TransactionExpiration::Epoch(5));
 
-    let result = tx_data.validity_check(&config);
+    let result = tx_data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(&config));
     assert!(
         result.is_ok(),
         "Regular gas payment with Epoch expiration should be allowed"
