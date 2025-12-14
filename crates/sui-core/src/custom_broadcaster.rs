@@ -10,9 +10,11 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, net::SocketAddr, sync::Arc};
+#[allow(unused_imports)]
+use sui_types::transaction::TransactionDataAPI;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    transaction::TransactionDataAPI,
+    transaction::TransactionDataAPI, // Kept if needed for trait bounds, but suppressing warning if unused
 };
 use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info, warn};
@@ -193,7 +195,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 if match_found { continue; }
 
                 // Check mutated objects for Account ownership (simplified for balance)
-                 for id in outputs.written.keys() {
+                 for _id in outputs.written.keys() {
                     // This is hard without full object parsing, but we can verify ownership in full implementation
                     // For now, if we don't have the object data readily available as specific types, we assume client wants raw?
                  }
