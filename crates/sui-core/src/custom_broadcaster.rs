@@ -52,6 +52,14 @@ pub enum StreamMessage {
         coin_type: String,
         new_balance: u64,
     },
+    Event {
+        package_id: ObjectID,
+        transaction_module: String,
+        sender: SuiAddress,
+        type_: String,
+        contents: Vec<u8>,
+        digest: String,
+    },
     // Raw output for advanced filtering
     Raw(SerializableOutput),
 }
@@ -158,7 +166,31 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                              if let Err(_) = send_json(&mut socket, &msg).await {
                                  break;
                              }
-                             match_found = true;
+                            if match_found { continue; }
+
+                // Check mutated objects for Account ownership (simplified for balance)
+                 for _id in outputs.written.keys() {
+                    // This is hard without full object parsing, but we can verify ownership in full implementation
+                    // For now, if we don't have the object data readily available as specific types, we assume client wants raw?
+                 }
+
+                 // [NEW] Broadcast Events
+                 // We broadcast all events if subscribe_all is true, or if they match filter (not implemented for events yet)
+                 if subscribe_all { // For now only in firehose mode to avoid noise
+                     for event in &outputs.events.data {
+                         let msg = StreamMessage::Event {
+                             package_id: event.package_id,
+                             transaction_module: event.transaction_module.to_string(),
+                             sender: event.sender,
+                             type_: event.type_.to_string(),
+                             contents: event.contents.clone(),
+                             digest: digest.to_string(),
+                         };
+                         if let Err(_) = send_json(&mut socket, &msg).await {
+                             break;
+                         }
+                     }
+                 }
                          }
 
                          if !match_found {
