@@ -152,77 +152,67 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                 match res {
                     Ok(outputs) => {
                          let digest = outputs.transaction.digest();
-                         let mut match_found = false;
+                         // We track if we sent anything to avoid noise or filtered logic if needed,
+                         // but for now we just process all independent categories.
 
+                         // 1. Firehose / SubscribeAll Events (Optional, can be heavy)
                          if subscribe_all {
-                             // Firehose: send account activity for sender as a baseline
+                             // Account Activity (Sender)
                              let sender = outputs.transaction.sender_address();
                              let msg = StreamMessage::AccountActivity {
                                  account: sender,
                                  digest: digest.to_string(),
                                  kind: "Transaction".to_string(),
                              };
-                             if let Err(_) = send_json(&mut socket, &msg).await {
-                                 break;
-                             }
-                            if match_found { continue; }
-
-                // Check mutated objects for Account ownership (simplified for balance)
-                 for _id in outputs.written.keys() {
-                    // This is hard without full object parsing, but we can verify ownership in full implementation
-                    // For now, if we don't have the object data readily available as specific types, we assume client wants raw?
-                 }
-
-                 // [NEW] Broadcast Events
-                 // We broadcast all events if subscribe_all is true, or if they match filter (not implemented for events yet)
-                 if subscribe_all { // For now only in firehose mode to avoid noise
-                     for event in &outputs.events.data {
-                         let msg = StreamMessage::Event {
-                             package_id: event.package_id,
-                             transaction_module: event.transaction_module.to_string(),
-                             sender: event.sender,
-                             type_: event.type_.to_string(),
-                             contents: event.contents.clone(),
-                             digest: digest.to_string(),
-                         };
-                         if let Err(_) = send_json(&mut socket, &msg).await {
-                             break;
-                         }
-                     }
-                 }
+                             if let Err(_) = send_json(&mut socket, &msg).await { break; }
                          }
 
-                         if !match_found {
-                             for (id, object) in &outputs.written {
-                    if subscriptions_pools.contains(id) {
-                         let object_bytes = object.data.try_as_move().map(|o| o.contents().to_vec());
-                         let msg = StreamMessage::PoolUpdate {
-                             pool_id: *id,
-                             digest: digest.to_string(),
-                             object: object_bytes,
-                         };
-                         if let Err(_) = send_json(&mut socket, &msg).await {
-                             break; // Socket error
-                         }
-                         match_found = true;
-                         break;
-                    }
-                }
-                         }
-
-                         if !match_found {
-                            let sender = outputs.transaction.sender_address();
-                            if subscriptions_accounts.contains(&sender) {
-                                 let msg = StreamMessage::AccountActivity {
-                                     account: sender,
+                         // 2. Events Broadcast
+                         // If subscribe_all is true, we send all events.
+                         // In the future, we can add filter sets for events.
+                         if subscribe_all {
+                             for event in &outputs.events.data {
+                                 let msg = StreamMessage::Event {
+                                     package_id: event.package_id,
+                                     transaction_module: event.transaction_module.to_string(),
+                                     sender: event.sender,
+                                     type_: event.type_.to_string(),
+                                     contents: event.contents.clone(),
                                      digest: digest.to_string(),
-                                     kind: "Transaction".to_string(),
                                  };
-                                 if let Err(_) = send_json(&mut socket, &msg).await {
-                                     break;
-                                 }
-                            }
+                                 if let Err(_) = send_json(&mut socket, &msg).await { break; }
+                             }
                          }
+
+                         // 3. Pool Updates (Written Objects)
+                         // We iterate through written objects to see if any match our subscribed pools
+                         for (id, object) in &outputs.written {
+                             if subscriptions_pools.contains(id) {
+                                  let object_bytes = object.data.try_as_move().map(|o| o.contents().to_vec());
+                                  let msg = StreamMessage::PoolUpdate {
+                                      pool_id: *id,
+                                      digest: digest.to_string(),
+                                      object: object_bytes,
+                                  };
+                                  if let Err(_) = send_json(&mut socket, &msg).await { break; }
+                             }
+                         }
+
+                         // 4. Account Updates (Sender)
+                         // Check if the sender is one of our subscribed accounts
+                         let sender = outputs.transaction.sender_address();
+                         if subscriptions_accounts.contains(&sender) {
+                             let msg = StreamMessage::AccountActivity {
+                                 account: sender,
+                                 digest: digest.to_string(),
+                                 kind: "Transaction".to_string(),
+                             };
+                             if let Err(_) = send_json(&mut socket, &msg).await { break; }
+                         }
+
+                         // Note: Explicit BalanceChange extraction would require parsing the Move objects
+                         // in `outputs.written` to see if they are Coin<T> owned by `sender` and what their value is.
+                         // This is complex without a resolver. For now, AccountActivity gives the trigger.
                     }
                     Err(_) => break, // Channel closed
                 }
