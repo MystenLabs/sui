@@ -540,10 +540,10 @@ impl GlobalStateHasher {
         checkpoint_acc: Option<GlobalStateHash>,
     ) -> SuiResult {
         let _scope = monitored_scope("AccumulateRunningRoot");
-        tracing::info!(
-            "accumulating running root for checkpoint {}",
-            checkpoint_seq_num
-        );
+        // tracing::info!(
+        //     "accumulating running root for checkpoint {}",
+        //     checkpoint_seq_num
+        // );
 
         // Idempotency.
         if epoch_store
