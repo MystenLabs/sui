@@ -155,6 +155,10 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                          // We track if we sent anything to avoid noise or filtered logic if needed,
                          // but for now we just process all independent categories.
 
+                         // Debug Logging [Added for Verification]
+                         let sender = outputs.transaction.sender_address();
+                         info!("CustomBroadcaster: Processing Tx {} from Sender {}", digest, sender);
+
                          // 1. Firehose / SubscribeAll Events (Optional, can be heavy)
                          if subscribe_all {
                              // Account Activity (Sender)
@@ -202,6 +206,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                          // Check if the sender is one of our subscribed accounts
                          let sender = outputs.transaction.sender_address();
                          if subscriptions_accounts.contains(&sender) {
+                             info!("CustomBroadcaster: Match found for Account {}", sender);
                              let msg = StreamMessage::AccountActivity {
                                  account: sender,
                                  digest: digest.to_string(),
