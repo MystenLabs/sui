@@ -10,8 +10,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, net::SocketAddr, sync::Arc};
-#[allow(unused_imports)]
-use sui_types::transaction::TransactionDataAPI;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     transaction::TransactionDataAPI, // Kept if needed for trait bounds, but suppressing warning if unused
