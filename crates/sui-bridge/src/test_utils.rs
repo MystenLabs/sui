@@ -239,7 +239,7 @@ pub fn get_test_log_and_action(
         source_address,
         target_address,
     )
-        .abi_encode();
+        .abi_encode_params();
 
     let func = alloy::json_abi::Function {
         name: "TokensDeposited".into(),
