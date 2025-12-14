@@ -82,7 +82,7 @@ impl CustomBroadcaster {
                 // We broadcast the Arc directly to avoid cloning the heavy data structure.
                 // The serialization happens in the client handling task.
                 if let Err(e) = tx_clone.send(outputs) {
-                    warn!(
+                    debug!(
                         "CustomBroadcaster: No active subscribers, dropped message: {}",
                         e
                     );
