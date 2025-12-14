@@ -84,15 +84,16 @@ fn live_object_set_index_task<T: LiveObjectIndexer>(
     let end_id = ObjectID::new(id_bytes);
 
     let mut object_scanned: u64 = 0;
-    for live in authority_store.perpetual_tables.range_iter_live_object_set(
-        Some(start_id),
-        Some(end_id),
-        false,
-    ) {
-        let LiveObject::Normal(object) = live else {
-            unreachable!("range_iter_live_object_set(false) must not yield wrapped objects");
-        };
-
+    for object in authority_store
+        .perpetual_tables
+        .range_iter_live_object_set(Some(start_id), Some(end_id), false)
+        .map(|live| {
+            let LiveObject::Normal(object) = live else {
+                unreachable!("range_iter_live_object_set(false) must not yield wrapped objects");
+            };
+            object
+        })
+    {
         object_scanned += 1;
         if object_scanned.is_multiple_of(2_000_000) {
             info!(
