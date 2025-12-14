@@ -23,7 +23,15 @@ use tracing::{debug, error, info, warn};
 pub enum SubscriptionRequest {
     SubscribePool(ObjectID),
     SubscribeAccount(SuiAddress),
+    SubscribeAll,
 }
+
+// ... (StreamMessage and AppState remain unchanged, I will skip them in replacement if possible, but I need to target the enum first)
+// actually I'll target the whole file content from line 22 to end of handle_socket if easier, or use chunks.
+// Chunks are better.
+
+// Chunk 1: Enum update
+// Chunk 2: handle_socket rewrite
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "type", content = "data")]
@@ -126,81 +134,94 @@ async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) ->
 async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
     let mut rx = state.tx.subscribe();
 
-    // In a real implementation, we would read the first message as a subscription request.
-    // For now, we assume interest in EVERYTHING or let them filter client side?
-    // Requirement says: "filter only interesting updates (e.g. pool objects, coin objects)"
-    // So let's accept a JSON subscription message.
-
     let mut subscriptions_pools = HashSet::new();
     let mut subscriptions_accounts = HashSet::new();
-
-    // Wait for subscription message (simple handshake)
-    if let Some(Ok(msg)) = socket.recv().await {
-        if let Message::Text(text) = msg {
-            // In newer Axum/Tungstenite, Text contains Utf8Bytes which works like a string.
-            // We access it as a str for parsing.
-            if let Ok(req) = serde_json::from_str::<SubscriptionRequest>(&text) {
-                info!("Client subscribed: {:?}", req);
-                match req {
-                    SubscriptionRequest::SubscribePool(id) => {
-                        subscriptions_pools.insert(id);
-                    }
-                    SubscriptionRequest::SubscribeAccount(addr) => {
-                        subscriptions_accounts.insert(addr);
-                    }
-                }
-            }
-        }
-    }
+    let mut subscribe_all = false;
 
     loop {
         tokio::select! {
             // Outbound: Send updates to client
-            Ok(outputs) = rx.recv() => {
-                let digest = outputs.transaction.digest();
+            res = rx.recv() => {
+                match res {
+                    Ok(outputs) => {
+                         let digest = outputs.transaction.digest();
+                         let mut match_found = false;
 
-                // Helper to check if transaction involves a pool
-                let mut match_found = false;
+                         if subscribe_all {
+                             // Firehose: send account activity for sender as a baseline
+                             let sender = outputs.transaction.sender_address();
+                             let msg = StreamMessage::AccountActivity {
+                                 account: sender,
+                                 digest: digest.to_string(),
+                                 kind: "Transaction".to_string(),
+                             };
+                             if let Err(_) = send_json(&mut socket, &msg).await {
+                                 break;
+                             }
+                             match_found = true;
+                         }
 
-                // Check Written objects for Pool IDs
-                // Fix: loop over keys() returns &ObjectID directly, no tuple pattern matching needed
-                for id in outputs.written.keys() {
-                    if subscriptions_pools.contains(id) {
-                         let msg = StreamMessage::PoolUpdate {
-                             pool_id: *id,
-                             digest: digest.to_string(),
-                         };
-                         let _ = send_json(&mut socket, &msg).await;
-                         match_found = true;
-                         break;
+                         if !match_found {
+                             for id in outputs.written.keys() {
+                                if subscriptions_pools.contains(id) {
+                                     let msg = StreamMessage::PoolUpdate {
+                                         pool_id: *id,
+                                         digest: digest.to_string(),
+                                     };
+                                     if let Err(_) = send_json(&mut socket, &msg).await {
+                                         break; // Socket error
+                                     }
+                                     match_found = true;
+                                     break;
+                                }
+                            }
+                         }
+
+                         if !match_found {
+                            let sender = outputs.transaction.sender_address();
+                            if subscriptions_accounts.contains(&sender) {
+                                 let msg = StreamMessage::AccountActivity {
+                                     account: sender,
+                                     digest: digest.to_string(),
+                                     kind: "Transaction".to_string(),
+                                 };
+                                 if let Err(_) = send_json(&mut socket, &msg).await {
+                                     break;
+                                 }
+                            }
+                         }
                     }
+                    Err(_) => break, // Channel closed
                 }
-
-                if match_found { continue; }
-
-                // Check Transaction Sender for Account Activity
-                let sender = outputs.transaction.sender_address();
-                if subscriptions_accounts.contains(&sender) {
-                     let msg = StreamMessage::AccountActivity {
-                         account: sender,
-                         digest: digest.to_string(),
-                         kind: "Transaction".to_string(),
-                     };
-                     let _ = send_json(&mut socket, &msg).await;
-                     match_found = true;
-                }
-
-                if match_found { continue; }
-
-                // Check mutated objects for Account ownership (simplified for balance)
-                 for _id in outputs.written.keys() {
-                    // This is hard without full object parsing, but we can verify ownership in full implementation
-                    // For now, if we don't have the object data readily available as specific types, we assume client wants raw?
-                 }
             }
 
-            // Inbound: Handle control messages or disconnects
-            else => break,
+            // Inbound: Handle subscriptions
+            res = socket.recv() => {
+                match res {
+                    Some(Ok(msg)) => {
+                        if let Message::Text(text) = msg {
+                            if let Ok(req) = serde_json::from_str::<SubscriptionRequest>(&text) {
+                                info!("Client subscribed: {:?}", req);
+                                match req {
+                                    SubscriptionRequest::SubscribePool(id) => {
+                                        subscriptions_pools.insert(id);
+                                    }
+                                    SubscriptionRequest::SubscribeAccount(addr) => {
+                                        subscriptions_accounts.insert(addr);
+                                    }
+                                    SubscriptionRequest::SubscribeAll => {
+                                        subscribe_all = true;
+                                    }
+                                }
+                            }
+                        } else if let Message::Close(_) = msg {
+                            break;
+                        }
+                    }
+                    Some(Err(_)) => break,
+                    None => break,
+                }
+            }
         }
     }
 }
