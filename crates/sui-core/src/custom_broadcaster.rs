@@ -39,8 +39,7 @@ pub enum StreamMessage {
     PoolUpdate {
         pool_id: ObjectID,
         digest: String,
-        // Add more specific fields here, e.g., square root price if available immediately
-        // For now we stream the event or the object change notification
+        object: Option<Vec<u8>>,
     },
     AccountActivity {
         account: SuiAddress,
@@ -194,19 +193,21 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                          }
 
                          if !match_found {
-                             for id in outputs.written.keys() {
-                                if subscriptions_pools.contains(id) {
-                                     let msg = StreamMessage::PoolUpdate {
-                                         pool_id: *id,
-                                         digest: digest.to_string(),
-                                     };
-                                     if let Err(_) = send_json(&mut socket, &msg).await {
-                                         break; // Socket error
-                                     }
-                                     match_found = true;
-                                     break;
-                                }
-                            }
+                             for (id, object) in &outputs.written {
+                    if subscriptions_pools.contains(id) {
+                         let object_bytes = object.data.try_as_move().map(|o| o.contents().to_vec());
+                         let msg = StreamMessage::PoolUpdate {
+                             pool_id: *id,
+                             digest: digest.to_string(),
+                             object: object_bytes,
+                         };
+                         if let Err(_) = send_json(&mut socket, &msg).await {
+                             break; // Socket error
+                         }
+                         match_found = true;
+                         break;
+                    }
+                }
                          }
 
                          if !match_found {
