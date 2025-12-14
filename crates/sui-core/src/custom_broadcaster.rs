@@ -157,7 +157,12 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
 
                          // Debug Logging [Added for Verification]
                          let sender = outputs.transaction.sender_address();
-                         info!("CustomBroadcaster: Processing Tx {} from Sender {}", digest, sender);
+                         info!("CustomBroadcaster: Processing Tx {} from Sender {} (AccSubs: {}, PoolSubs: {})",
+                             digest,
+                             sender,
+                             subscriptions_accounts.len(),
+                             subscriptions_pools.len()
+                         );
 
                          // 1. Firehose / SubscribeAll Events (Optional, can be heavy)
                          if subscribe_all {
@@ -235,6 +240,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                                         subscriptions_pools.insert(id);
                                     }
                                     SubscriptionRequest::SubscribeAccount(addr) => {
+                                        info!("CustomBroadcaster: Client subscribed to Account {}", addr);
                                         subscriptions_accounts.insert(addr);
                                     }
                                     SubscriptionRequest::SubscribeAll => {
