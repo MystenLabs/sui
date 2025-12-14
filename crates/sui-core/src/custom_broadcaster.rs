@@ -15,7 +15,7 @@ use sui_types::{
     transaction::TransactionDataAPI, // Kept if needed for trait bounds, but suppressing warning if unused
 };
 use tokio::sync::{broadcast, mpsc};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 // --- Data Structures ---
 
