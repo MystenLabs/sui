@@ -410,7 +410,7 @@ impl BridgeMessageEncoding for EvmContractUpgradeAction {
     }
 
     fn as_payload_bytes(&self) -> Result<Vec<u8>> {
-        Ok((self.proxy_address, self.new_impl_address, &self.call_data).abi_encode())
+        Ok((self.proxy_address, self.new_impl_address, &self.call_data).abi_encode_params())
     }
 }
 
@@ -995,7 +995,8 @@ mod tests {
         );
         // Ensure that the call data (start from bytes 29) can be decoded
         let _decoded =
-            <(EthAddress, EthAddress, alloy::primitives::Bytes)>::abi_decode(&data[29..]).unwrap();
+            <(EthAddress, EthAddress, alloy::primitives::Bytes)>::abi_decode_params(&data[29..])
+                .unwrap();
     }
 
     #[test]
