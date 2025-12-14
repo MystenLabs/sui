@@ -460,6 +460,9 @@ pub struct WritebackCache {
     backpressure_threshold: u64,
     backpressure_manager: Arc<BackpressureManager>,
     metrics: Arc<ExecutionCacheMetrics>,
+    // [NEW] Channel for custom broadcaster
+    // "A separate async task... should receive updates from the channel"
+    broadcaster_tx: Option<tokio::sync::mpsc::Sender<Arc<TransactionOutputs>>>,
 }
 
 macro_rules! check_cache_entry_by_version {
@@ -505,6 +508,7 @@ impl WritebackCache {
         store: Arc<AuthorityStore>,
         metrics: Arc<ExecutionCacheMetrics>,
         backpressure_manager: Arc<BackpressureManager>,
+        broadcaster_tx: Option<tokio::sync::mpsc::Sender<Arc<TransactionOutputs>>>,
     ) -> Self {
         let packages = MokaCache::builder(8)
             .max_capacity(randomize_cache_capacity_in_tests(
@@ -526,6 +530,7 @@ impl WritebackCache {
             backpressure_manager,
             backpressure_threshold: config.backpressure_threshold(),
             metrics,
+            broadcaster_tx,
         }
     }
 
@@ -535,6 +540,7 @@ impl WritebackCache {
             store,
             ExecutionCacheMetrics::new(&prometheus::Registry::new()).into(),
             BackpressureManager::new_for_tests(),
+            None,
         )
     }
 
@@ -545,6 +551,7 @@ impl WritebackCache {
             self.store.clone(),
             self.metrics.clone(),
             self.backpressure_manager.clone(),
+            self.broadcaster_tx.clone(),
         );
         std::mem::swap(self, &mut new);
     }
@@ -896,6 +903,23 @@ impl WritebackCache {
 
     #[instrument(level = "debug", skip_all)]
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
+        // [NEW] Broadcast hook
+        // "Identify the module... insert a hook that sends the state update"
+        // "This hook MUST NOT: block, await, panic"
+        if let Some(tx) = &self.broadcaster_tx {
+            // try_send is non-blocking. If full, it returns error (dropped).
+            // "If the channel is full, the update should be dropped with a log warning."
+            if let Err(e) = tx.try_send(tx_outputs.clone()) {
+                use tokio::sync::mpsc::error::TrySendError;
+                match e {
+                    TrySendError::Full(_) => {
+                        tracing::warn!("CustomBroadcaster channel full, dropping update")
+                    }
+                    TrySendError::Closed(_) => tracing::warn!("CustomBroadcaster channel closed"),
+                }
+            }
+        }
+
         let tx_digest = *tx_outputs.transaction.digest();
         trace!(?tx_digest, "writing transaction outputs to cache");
 
