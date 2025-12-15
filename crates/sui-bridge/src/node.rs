@@ -267,6 +267,7 @@ async fn start_client_components(
         &store,
         client_config.sui_bridge_module_last_processed_event_id_override,
     );
+
     let eth_contracts_to_watch = get_eth_contracts_to_watch(
         &store,
         &client_config.eth_contracts,
@@ -276,6 +277,18 @@ async fn start_client_components(
 
     let sui_client = client_config.sui_client.clone();
 
+    let last_processed_bridge_event_id = sui_modules_to_watch
+        .get(&BRIDGE_MODULE_NAME.to_owned())
+        .and_then(|opt| *opt);
+
+    let next_sequence_number = get_next_sequence_number(
+        &store,
+        &sui_client,
+        last_processed_bridge_event_id,
+        client_config.sui_bridge_next_sequence_number_override,
+    )
+    .await;
+
     let mut all_handles = vec![];
     let (task_handles, eth_events_rx, _) =
         EthSyncer::new(client_config.eth_client.clone(), eth_contracts_to_watch)
@@ -284,12 +297,17 @@ async fn start_client_components(
             .expect("Failed to start eth syncer");
     all_handles.extend(task_handles);
 
-    let (task_handles, sui_events_rx) = SuiSyncer::new(
+    let (task_handles, sui_grpc_events_rx) = SuiSyncer::new(
         client_config.sui_client,
         sui_modules_to_watch,
         metrics.clone(),
     )
-    .run(Duration::from_secs(2))
+    .run_grpc(
+        client_config.sui_bridge_chain_id,
+        next_sequence_number,
+        Duration::from_secs(2),
+        10,
+    )
     .await
     .expect("Failed to start sui syncer");
     all_handles.extend(task_handles);
@@ -345,9 +363,9 @@ async fn start_client_components(
     );
     all_handles.push(spawn_logged_monitored_task!(monitor.run()));
 
-    // Create a dummy channel for the grpc sui_events_rx that the orchestrator expects
-    // This channel will never receive any events since we have not yet switched to the grpc syncer
-    let (_sui_grpc_events_tx, sui_grpc_events_rx) = mysten_metrics::metered_channel::channel(
+    // Create a dummy channel for the sui_events_rx that the orchestrator expects
+    // This channel will never receive any events since we have migrated to the gRPC based event syncer
+    let (_sui_events_tx, sui_events_rx) = mysten_metrics::metered_channel::channel(
         1,
         &mysten_metrics::get_metrics()
             .unwrap()
@@ -366,12 +384,14 @@ async fn start_client_components(
         metrics,
     );
 
-    all_handles.extend(orchestrator.run(bridge_action_executor).await);
+    all_handles.extend(
+        orchestrator
+            .run_with_grpc(bridge_action_executor, sui_grpc_events_rx)
+            .await,
+    );
     Ok(all_handles)
 }
 
-// NOTE: This function will be used later when we switch to the gRPC based event syncer.
-#[allow(unused)]
 async fn get_next_sequence_number<C: crate::sui_client::SuiClientInner>(
     store: &BridgeOrchestratorTables,
     sui_client: &crate::sui_client::SuiClient<C>,
