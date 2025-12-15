@@ -155,6 +155,13 @@ jobs:
 
     - name: Post to slack
       uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
+      env:
+        SUI_SHA: ${{ env.sui_sha }}
+        SUI_BRANCH_NAME: ${{ env.sui_branch_name }}
+        SUI_BRANCH_NAME_URL: ${{ env.sui_branch_name_url }}
+        GH_JOB_LINK: ${{ env.gh_job_link }}
+        SLACK_ID: ${{ env.slack_id }}
+        ONCALL_NAME: ${{ env.oncall_name }}
       with:
         method: chat.postMessage
         token: ${{ secrets.SLACK_BOT_TOKEN }}
