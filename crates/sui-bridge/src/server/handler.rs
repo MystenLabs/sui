@@ -203,10 +203,10 @@ mod tests {
         let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
         let sui_client_mock = SuiMockClient::default();
 
-        let eth_mock_provider = EthMockService::default();
+        let eth_mock_service = EthMockService::default();
         let contract_address = EthAddress::random();
         let eth_client = EthClient::new_mocked(
-            eth_mock_provider.clone(),
+            eth_mock_service.clone(),
             HashSet::from_iter(vec![contract_address]),
         );
 
@@ -216,12 +216,7 @@ mod tests {
             Arc::new(eth_client),
             approved_actions,
         );
-        (
-            handler,
-            sui_client_mock,
-            eth_mock_provider,
-            contract_address,
-        )
+        (handler, sui_client_mock, eth_mock_service, contract_address)
     }
 
     #[tokio::test]
@@ -285,13 +280,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_eth_verify() {
-        let (handler, _sui_client_mock, eth_mock_provider, contract_address) = test_handler(vec![]);
+        let (handler, _sui_client_mock, eth_mock_service, contract_address) = test_handler(vec![]);
 
         // Test `sign` Ok result
         let eth_tx_hash = TxHash::random();
         let eth_event_idx = 0;
         let (log, _action) = get_test_log_and_action(contract_address, eth_tx_hash, eth_event_idx);
-        eth_mock_provider
+        eth_mock_service
             .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
                 "eth_getTransactionReceipt",
                 [log.transaction_hash.unwrap()],
@@ -302,7 +297,7 @@ mod tests {
                 ),
             )
             .unwrap();
-        mock_last_finalized_block(&eth_mock_provider, log.block_number.unwrap());
+        mock_last_finalized_block(&eth_mock_service, log.block_number.unwrap());
 
         handler
             .verify_eth((eth_tx_hash, eth_event_idx))

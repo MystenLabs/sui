@@ -169,13 +169,13 @@ pub fn sign_action_with_key(
     SignedBridgeAction::new_from_data_and_sig(action.clone(), sig)
 }
 
-pub fn mock_last_finalized_block(mock_provider: &EthMockService, block_number: u64) {
+pub fn mock_last_finalized_block(mock_service: &EthMockService, block_number: u64) {
     let block_header = Header::new(alloy::consensus::Header {
         number: block_number,
         ..Default::default()
     });
     let block = Block::<TxHash>::empty(block_header);
-    mock_provider
+    mock_service
         .add_response("eth_getBlockByNumber", ("finalized", false), block)
         .unwrap();
 }
@@ -183,13 +183,13 @@ pub fn mock_last_finalized_block(mock_provider: &EthMockService, block_number: u
 // Mocks eth_getLogs and eth_getTransactionReceipt for the given address and block range.
 // The input log needs to have transaction_hash set.
 pub fn mock_get_logs(
-    mock_provider: &EthMockService,
+    mock_service: &EthMockService,
     address: EthAddress,
     from_block: u64,
     to_block: u64,
     logs: Vec<Log>,
 ) {
-    mock_provider
+    mock_service
         .add_response::<[alloy::rpc::types::eth::Filter; 1], Vec<Log>, Vec<Log>>(
             "eth_getLogs",
             [Filter {
@@ -210,7 +210,7 @@ pub fn mock_get_logs(
         .unwrap();
 
     for log in logs {
-        mock_provider
+        mock_service
             .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
                 "eth_getTransactionReceipt",
                 [log.transaction_hash.unwrap()],

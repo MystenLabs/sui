@@ -219,10 +219,10 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
         mysten_metrics::init_metrics(&registry);
-        let mock_provider = EthMockService::new();
-        mock_last_finalized_block(&mock_provider, 777);
+        let mock_service = EthMockService::new();
+        mock_last_finalized_block(&mock_service, 777);
         let client = EthClient::new_mocked(
-            mock_provider.clone(),
+            mock_service.clone(),
             HashSet::from_iter(vec![EthAddress::default()]),
         );
         let result = client.get_last_finalized_block_id().await.unwrap();
@@ -242,7 +242,7 @@ mod tests {
             log: log.clone(),
         };
         mock_get_logs(
-            &mock_provider,
+            &mock_service,
             EthAddress::default(),
             100,
             777,
@@ -264,14 +264,14 @@ mod tests {
         assert_eq!(logs_rx.try_recv().unwrap_err(), TryRecvError::Empty);
 
         mock_get_logs(
-            &mock_provider,
+            &mock_service,
             EthAddress::default(),
             778,
             888,
             vec![log.clone()],
         );
         // The latest finalized block is updated to 888, event listener should query again.
-        mock_last_finalized_block(&mock_provider, 888);
+        mock_last_finalized_block(&mock_service, 888);
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 888);
         let (contract_address, end_block, received_logs) = logs_rx.recv().await.unwrap();
@@ -289,13 +289,13 @@ mod tests {
         let registry = Registry::new();
         mysten_metrics::init_metrics(&registry);
 
-        let mock_provider = EthMockService::new();
-        mock_last_finalized_block(&mock_provider, 198);
+        let mock_service = EthMockService::new();
+        mock_last_finalized_block(&mock_service, 198);
 
         let another_address =
             EthAddress::from_str("0x00000000219ab540356cbb839cbe05303d7705fa").unwrap();
         let client = EthClient::new_mocked(
-            mock_provider.clone(),
+            mock_service.clone(),
             HashSet::from_iter(vec![another_address]),
         );
 
@@ -315,7 +315,7 @@ mod tests {
             log: log1.clone(),
         };
         mock_get_logs(
-            &mock_provider,
+            &mock_service,
             EthAddress::default(),
             100,
             198,
@@ -333,13 +333,7 @@ mod tests {
         };
         // Mock logs for another_address although it shouldn't be queried. We don't expect to
         // see log2 in the logs channel later on.
-        mock_get_logs(
-            &mock_provider,
-            another_address,
-            200,
-            198,
-            vec![log2.clone()],
-        );
+        mock_get_logs(&mock_service, another_address, 200, 198, vec![log2.clone()]);
 
         let (_handles, mut logs_rx, mut finalized_block_rx) =
             EthSyncer::new(Arc::new(client), addresses)
@@ -369,7 +363,7 @@ mod tests {
             log: log1.clone(),
         };
         mock_get_logs(
-            &mock_provider,
+            &mock_service,
             EthAddress::default(),
             199,
             400,
@@ -391,14 +385,8 @@ mod tests {
             log_index_in_tx: 0,
             log: log2.clone(),
         };
-        mock_get_logs(
-            &mock_provider,
-            another_address,
-            200,
-            400,
-            vec![log2.clone()],
-        );
-        mock_last_finalized_block(&mock_provider, 400);
+        mock_get_logs(&mock_service, another_address, 200, 400, vec![log2.clone()]);
+        mock_last_finalized_block(&mock_service, 400);
 
         finalized_block_rx.changed().await.unwrap();
         assert_eq!(*finalized_block_rx.borrow(), 400);
@@ -424,13 +412,13 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         let registry = Registry::new();
         mysten_metrics::init_metrics(&registry);
-        let mock_provider = EthMockService::new();
+        let mock_service = EthMockService::new();
         let start_block = 100;
         // range too big, we need two queries
         let last_finalized_block = start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE + 1;
-        mock_last_finalized_block(&mock_provider, last_finalized_block);
+        mock_last_finalized_block(&mock_service, last_finalized_block);
         let client = EthClient::new_mocked(
-            mock_provider.clone(),
+            mock_service.clone(),
             HashSet::from_iter(vec![EthAddress::default()]),
         );
         let result = client.get_last_finalized_block_id().await.unwrap();
@@ -463,7 +451,7 @@ mod tests {
         };
         // First query handles [start, start + ETH_LOG_QUERY_MAX_BLOCK_RANGE - 1]
         mock_get_logs(
-            &mock_provider,
+            &mock_service,
             EthAddress::default(),
             start_block,
             start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE - 1,
@@ -471,7 +459,7 @@ mod tests {
         );
         // Second query handles [start + ETH_LOG_QUERY_MAX_BLOCK_RANGE, last_finalized_block]
         mock_get_logs(
-            &mock_provider,
+            &mock_service,
             EthAddress::default(),
             start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE,
             last_finalized_block,
