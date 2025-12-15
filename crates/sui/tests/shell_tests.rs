@@ -83,7 +83,7 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
         String::from_utf8_lossy(&output.stderr), // for windows ...
     );
 
-    let result = result.replace("\\", "/");
+    // redact the temporary directory path
     let result = result.replace(temp_config_dir.path().to_string_lossy().as_ref(), "<ROOT>");
 
     insta_assert! {
