@@ -782,6 +782,7 @@ fn parse_spec_only_loop_inv(
     return vec![sp(
         *inner_loc, // check it
         Attribute_::SpecOnly {
+            axiom: false,
             inv_target: None,
             explicit_specs: vec![],
             loop_inv: Some(LoopInvariantInfo {
@@ -804,17 +805,40 @@ fn parse_spec_only_parametized(
 
     for attr in attrs {
         match &attr.value {
-            ParsedAttribute_::Name(_) => {
-                let msg = make_attribute_format_error(
-                    &attr.value,
-                    &format!(
-                        "Expected assign or parameterized attributes only for {}",
+            ParsedAttribute_::Name(name) => {
+                if name.value != KA::VerificationAttribute::AXIOM.into() {
+                    let msg = make_attribute_format_error(
+                        &attr.value,
+                        &format!(
+                            "Invalid name attribute for {}. Only {} is allowed.",
+                            KA::VerificationAttribute::SPEC_ONLY,
+                            KA::VerificationAttribute::AXIOM,
+                        ),
+                    );
+                    let diag = diag!(Attributes::InvalidUsage, (*inner_loc, msg));
+                    context.add_diag(diag);
+                    return vec![];
+                }
+                if attrs.len() != 1 {
+                    let msg = format!(
+                        "Only standalone usage of {} attribute is allowed for {}",
+                        KA::VerificationAttribute::AXIOM,
                         KA::VerificationAttribute::SPEC_ONLY,
-                    ),
-                );
-                let diag = diag!(Attributes::InvalidUsage, (*inner_loc, msg));
-                context.add_diag(diag);
-                return vec![];
+                    );
+                    let diag = diag!(Attributes::InvalidUsage, (*inner_loc, msg));
+                    context.add_diag(diag);
+                    return vec![];
+                }
+
+                return vec![sp(
+                    *loc,
+                    Attribute_::SpecOnly {
+                        axiom: true,
+                        inv_target: None,
+                        loop_inv: None,
+                        explicit_specs: vec![],
+                    },
+                )];
             }
             ParsedAttribute_::Assigned(kind, val) => {
                 let allowed = [
@@ -887,6 +911,7 @@ fn parse_spec_only_parametized(
     return vec![sp(
         *loc,
         Attribute_::SpecOnly {
+            axiom: false,
             inv_target,
             loop_inv: None,
             explicit_specs,
@@ -902,6 +927,7 @@ fn parse_spec_only(context: &mut Context, attribute: ParsedAttribute) -> Vec<Att
             vec![sp(
                 loc,
                 Attribute_::SpecOnly {
+                    axiom: false,
                     inv_target: None,
                     loop_inv: None,
                     explicit_specs: vec![],

@@ -344,6 +344,7 @@ fn attribute(
                 .map(|result| result.access),
         }),
         PA::SpecOnly {
+            axiom,
             inv_target,
             loop_inv,
             explicit_specs,
@@ -373,6 +374,7 @@ fn attribute(
                 });
 
             KA::Verification(A::VerificationAttribute::SpecOnly {
+                axiom,
                 inv_target: inv_target
                     .map(|t: Spanned<P::NameAccessChain_>| {
                         context.name_access_chain_to_module_access(

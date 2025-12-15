@@ -245,6 +245,7 @@ pub enum Attribute_ {
         timeout: Option<u64>,
     },
     SpecOnly {
+        axiom: bool,
         inv_target: Option<NameAccessChain>,
         loop_inv: Option<LoopInvariantInfo>,
         explicit_specs: Vec<NameAccessChain>,
@@ -1847,33 +1848,36 @@ impl AstDebug for Attribute_ {
                 w.write(")");
             }
             A::SpecOnly {
+                axiom,
                 inv_target,
                 loop_inv,
                 explicit_specs,
             } => {
-                let li = if let Some(loop_inv) = loop_inv {
-                    format!(
-                        "loop_inv(target={}, label={})",
-                        loop_inv.target.to_string(),
-                        loop_inv.label
-                    )
+                if *axiom {
+                    w.writeln("spec_only(axiom)");
                 } else {
-                    "".to_string()
-                };
+                    w.write("spec_only(");
+                    if let Some(loop_inv) = loop_inv {
+                        w.write(format!(
+                            "loop_inv(target={}, label={})",
+                            loop_inv.target.to_string(),
+                            loop_inv.label
+                        ));
+                    };
 
-                if inv_target.is_some() {
-                    w.write(format!(
-                        "spec_only({li} inv_target={})",
-                        inv_target.clone().unwrap()
-                    ));
-                } else {
-                    w.write(format!("spec_only({li})"));
-                }
-                if !explicit_specs.is_empty() {
-                    w.write(" explicit_specs(");
-                    w.comma(explicit_specs, |w, spec| {
-                        spec.ast_debug(w);
-                    });
+                    if let Some(inv_target) = inv_target {
+                        w.write(format!(
+                            " inv_target={}",
+                            inv_target,
+                        ));
+                    };
+                    if !explicit_specs.is_empty() {
+                        w.write(" explicit_specs(");
+                        w.comma(explicit_specs, |w, spec| {
+                            spec.ast_debug(w);
+                        });
+                        w.write(")");
+                    }
                     w.write(")");
                 }
             }

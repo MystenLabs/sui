@@ -198,6 +198,7 @@ pub enum VerificationAttribute {
     },
     // Denotes a function is only used by specs, only included in compilation in verify mode
     SpecOnly {
+        axiom: bool,
         inv_target: Option<ModuleAccess>,
         loop_inv: Option<LoopInvariantInfo>,
         explicit_specs: Vec<ModuleAccess>,
@@ -311,6 +312,7 @@ impl VerificationAttribute {
     pub const LOOP_INV_TARGET_NAME: &'static str = "target";
     pub const LOOP_INV_LABEL_NAME: &'static str = "label";
     pub const EXPLICIT_SPEC_NAME: &'static str = "include";
+    pub const AXIOM: &'static str = "axiom";
 
     pub const fn name(&self) -> &str {
         match self {
@@ -1020,41 +1022,44 @@ impl AstDebug for VerificationAttribute {
                 w.write(")");
             }
             VerificationAttribute::SpecOnly {
+                axiom,
                 inv_target,
                 loop_inv,
                 explicit_specs,
                 explicit_spec_modules,
             } => {
-                let li = if let Some(loop_inv) = loop_inv {
-                    format!(
-                        "loop_inv(target={}, label={})",
-                        loop_inv.target.to_string(),
-                        loop_inv.label
-                    )
+                if *axiom {
+                    w.writeln("spec_only(axiom)");
                 } else {
-                    "".to_string()
-                };
+                    w.write("spec_only(");
+                    if let Some(loop_inv) = loop_inv {
+                        w.write(format!(
+                            "loop_inv(target={}, label={})",
+                            loop_inv.target.to_string(),
+                            loop_inv.label
+                        ));
+                    };
 
-                if inv_target.is_some() {
-                    w.write(format!(
-                        "spec_only({li} inv_target={})",
-                        inv_target.clone().unwrap()
-                    ));
-                } else {
-                    w.write(format!("spec_only({li})"));
-                }
-                if !explicit_specs.is_empty() {
-                    w.write(" explicit_specs(");
-                    w.comma(explicit_specs, |w, spec| {
-                        spec.ast_debug(w);
-                    });
-                    w.write(")");
-                }
-                if !explicit_spec_modules.is_empty() {
-                    w.write(" explicit_spec_modules(");
-                    w.comma(explicit_spec_modules, |w, spec_module| {
-                        w.write(spec_module.value.module.to_string());
-                    });
+                    if let Some(inv_target) = inv_target {
+                        w.write(format!(
+                            " inv_target={}",
+                            inv_target,
+                        ));
+                    };
+                    if !explicit_specs.is_empty() {
+                        w.write(" explicit_specs(");
+                        w.comma(explicit_specs, |w, spec| {
+                            spec.ast_debug(w);
+                        });
+                        w.write(")");
+                    }
+                    if !explicit_spec_modules.is_empty() {
+                        w.write(" explicit_spec_modules(");
+                        w.comma(explicit_spec_modules, |w, spec_module| {
+                            w.write(spec_module.value.module.to_string());
+                        });
+                        w.write(")");
+                    }
                     w.write(")");
                 }
             }
