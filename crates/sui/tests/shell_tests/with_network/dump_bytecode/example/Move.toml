@@ -1,0 +1,9 @@
+[package]
+name = "example"
+version = "0.0.1"
+implicit-dependencies = false
+
+[dependencies]
+sui = { local = "../sui-framework" }
+std = { local = "../move-stdlib" }
+unpublished = { local = "../unpublished-dep" }
