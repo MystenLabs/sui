@@ -16,7 +16,6 @@ use tokio::{
 };
 use tracing::{info, warn};
 
-use crate::metrics::IndexerMetrics;
 use crate::store::{Connection, Store};
 
 use super::Handler;
@@ -27,7 +26,6 @@ pub(super) fn track_main_reader_lo<H: Handler + 'static>(
     reader_lo: Arc<SetOnce<AtomicU64>>,
     reader_interval: Option<Duration>,
     store: H::Store,
-    metrics: Arc<IndexerMetrics>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         let Some(reader_interval) = reader_interval else {
@@ -70,11 +68,6 @@ pub(super) fn track_main_reader_lo<H: Handler + 'static>(
             } else {
                 reader_lo.set(AtomicU64::new(watermark)).ok();
             }
-
-            metrics
-                .latest_main_reader_lo
-                .with_label_values(&[H::NAME])
-                .set(watermark as i64);
         }
     })
 }

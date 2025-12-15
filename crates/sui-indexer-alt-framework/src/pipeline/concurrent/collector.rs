@@ -184,7 +184,12 @@ pub(super) fn collector<H: Handler + 'static>(
                 Some(mut indexed) = rx.recv(), if pending_rows < H::MAX_PENDING_ROWS => {
                     // Clear the values of outdated checkpoints, so that we don't commit data to the
                     // store, but can still advance watermarks.
-                    if indexed.checkpoint() < main_reader_lo.wait().await.load(Ordering::Relaxed) {
+                    let reader_lo = main_reader_lo.wait().await.load(Ordering::Relaxed);
+                    metrics
+                        .collector_reader_lo
+                        .with_label_values(&[H::NAME])
+                        .set(reader_lo as i64);
+                    if indexed.checkpoint() < reader_lo {
                         indexed.values.clear();
                         metrics.total_collector_skipped_checkpoints
                             .with_label_values(&[H::NAME])

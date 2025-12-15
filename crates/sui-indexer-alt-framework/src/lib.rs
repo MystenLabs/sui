@@ -1950,31 +1950,36 @@ mod tests {
         assert_eq!(tasked_pipeline_watermark.reader_lo, 0);
     }
 
-    /// During a run, the tasked pipeline will stop sending checkpoints below the main pipeline's
-    /// reader watermark to the committer. Committer watermark should still advance.
-    #[tokio::test(start_paused = true)]
+    /// During a run, the tasked pipeline collector will stop sending checkpoints below the main
+    /// pipeline's reader watermark to the committer. Committer watermark should still advance.
+    #[tokio::test]
     async fn test_tasked_pipelines_skip_checkpoints_trailing_main_reader_lo() {
         let registry = Registry::new();
         let store = MockStore::default();
 
         let mut conn = store.connect().await.unwrap();
+        // Set the main pipeline watermark.
+        conn.set_committer_watermark(
+            ControllableHandler::NAME,
+            CommitterWatermark {
+                checkpoint_hi_inclusive: 11,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        conn.set_reader_watermark(ControllableHandler::NAME, 0)
+            .await
+            .unwrap();
 
-        // Start a tasked indexer that will ingest from genesis to checkpoint 500.
+        // Start a tasked indexer. We'll shut it down manually after processing completes.
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(0),
-            last_checkpoint: Some(500),
+            last_checkpoint: None,
             pipeline: vec![],
             task: TaskArgs::tasked("task".to_string(), 10 /* reader_interval_ms */),
         };
         let temp_dir = tempfile::tempdir().unwrap();
-        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
-            ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 0,
-            num_checkpoints: 501,
-            checkpoint_size: 2,
-        })
-        .await;
-
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {
                 local_ingestion_path: Some(temp_dir.path().to_owned()),
@@ -1982,9 +1987,7 @@ mod tests {
             },
             ..Default::default()
         };
-
         let ingestion_config = IngestionConfig::default();
-
         let mut tasked_indexer = Indexer::new(
             store.clone(),
             indexer_args,
@@ -1995,9 +1998,7 @@ mod tests {
         )
         .await
         .unwrap();
-
         let (controllable_handler, process_below) = ControllableHandler::with_limit(10);
-
         let _ = tasked_indexer
             .concurrent_pipeline(
                 controllable_handler,
@@ -2011,14 +2012,19 @@ mod tests {
                 },
             )
             .await;
-
-        let ingestion_metrics = tasked_indexer.ingestion_metrics().clone();
         let metrics = tasked_indexer.indexer_metrics().clone();
-
         let indexer_handle = tokio::spawn(async move {
             tasked_indexer.run().await.unwrap().join().await.unwrap();
         });
 
+        // Allow the indexer to index up to checkpoint 10 inclusive.
+        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+            ingestion_dir: temp_dir.path().to_owned(),
+            starting_checkpoint: 0,
+            num_checkpoints: 11, // ending at checkpoint 10 inclusive
+            checkpoint_size: 2,
+        })
+        .await;
         store
             .wait_for_watermark(
                 &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
@@ -2027,60 +2033,139 @@ mod tests {
             )
             .await;
 
-        // Bump the reader watermark to checkpoint 250. The tasked pipeline should only commit
-        // checkpoints >= 250 once it ticks.
-        conn.set_committer_watermark(
-            ControllableHandler::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 300,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_reader_watermark(ControllableHandler::NAME, 250)
-            .await
-            .unwrap();
+        // Cache the initial collector_reader_lo value. In a loop, update `reader_watermark` to be
+        // the next checkpoint + buffer, write the checkpoint file, and allow the processor to
+        // process the checkpoint so that the collector can eventually pick up some new `reader_lo`.
+        // Break when this happens.
+        let cached_reader_lo = metrics
+            .collector_reader_lo
+            .with_label_values(&[ControllableHandler::NAME])
+            .get();
+        let buffer = 100u64;
+        let mut iterations = 0;
+        let (observed_reader_lo, true_reader_lo) =
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                let mut interval = tokio::time::interval(std::time::Duration::from_millis(1000));
+                let mut n = 11u64;
+                loop {
+                    interval.tick().await;
 
-        // Wait for the tasked indexer to observe the new reader watermark by polling the metric.
-        tokio::time::timeout(std::time::Duration::from_secs(10), async {
-            loop {
-                let current = metrics
-                    .latest_main_reader_lo
-                    .with_label_values(&[ControllableHandler::NAME])
-                    .get();
-                if current >= 250 {
-                    break;
+                    // Update watermark  to stay ahead of current checkpoint. On the initial
+                    // iteration, watermark is 11 + 100 = 111.
+                    let watermark = n + buffer;
+                    conn.set_reader_watermark(ControllableHandler::NAME, watermark)
+                        .await
+                        .unwrap();
+                    conn.set_committer_watermark(
+                        ControllableHandler::NAME,
+                        CommitterWatermark {
+                            checkpoint_hi_inclusive: watermark,
+                            ..Default::default()
+                        },
+                    )
+                    .await
+                    .unwrap();
+
+                    // Generate and allow one checkpoint.
+                    synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+                        ingestion_dir: temp_dir.path().to_owned(),
+                        // create checkpoint 11 on first iteration, then 12, and so on
+                        starting_checkpoint: n,
+                        num_checkpoints: 1,
+                        checkpoint_size: 2,
+                    })
+                    .await;
+                    process_below.send(n).ok();
+
+                    // Check if collector observed a new reader_lo.
+                    let current = metrics
+                        .collector_reader_lo
+                        .with_label_values(&[ControllableHandler::NAME])
+                        .get();
+                    if current != cached_reader_lo {
+                        return (current as u64, watermark);
+                    }
+                    n += 1;
+                    iterations += 1;
                 }
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-            }
+            })
+            .await
+            .expect("Timed out waiting for collector to observe new reader_lo");
+
+        // At termination, the observed_reader_lo is some value <= 11 + N + 100. Generate and allow
+        // processing checkpoints below 11 + N + 200 inclusive. Send out the remaining
+        // `[last_committed + 1, true_reader_lo + buffer]` checkpoints to be processed.`
+        let last_committed = conn
+            .committer_watermark(
+                &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
+            )
+            .await
+            .unwrap()
+            .unwrap()
+            .checkpoint_hi_inclusive;
+        let final_checkpoint = true_reader_lo + buffer;
+        process_below.send(final_checkpoint).ok();
+        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+            ingestion_dir: temp_dir.path().to_owned(),
+            starting_checkpoint: last_committed + 1,
+            num_checkpoints: final_checkpoint - last_committed + 1,
+            checkpoint_size: 2,
         })
-        .await
-        .expect("Timed out waiting for latest_main_reader_lo to reach 250");
+        .await;
 
-        // Allow the processor to resume.
-        process_below.send(501).ok();
+        // Wait for processing to complete, then shut down the indexer.
+        store
+            .wait_for_watermark(
+                &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
+                final_checkpoint,
+                std::time::Duration::from_secs(10),
+            )
+            .await;
+        indexer_handle.abort();
+        let _ = indexer_handle.await;
 
-        indexer_handle.await.unwrap();
-
+        // Assertions based on dynamic values:
+        // - Checkpoints 0-10: committed (before reader_lo was set)
+        // - Checkpoints (10, last_committed]: these must have been committed as the collector picks
+        //   up the new `reader_lo`.
+        // - Checkpoints `(last_committed, observed_reader_lo)` must be skipped
+        // - Checkpoints `[observed_reader_lo, true_reader_lo)`: no guarantees can be made that all
+        //   checkpoints are skipped
+        // - Checkpoints `[true_reader_lo, final_checkpoint]` must be committed
         let data = store.data.get(ControllableHandler::NAME).unwrap();
-        // All 500+1 checkpoints should have been ingested.
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 501);
-        // Checkpoints 11 to 249 should have been skipped.
-        assert_eq!(
-            metrics
-                .total_collector_skipped_checkpoints
-                .get_metric_with_label_values(&[ControllableHandler::NAME])
-                .unwrap()
-                .get(),
-            239
+
+        let num_must_skipped = observed_reader_lo - last_committed - 2;
+        let skipped = metrics
+            .total_collector_skipped_checkpoints
+            .with_label_values(&[ControllableHandler::NAME])
+            .get();
+        assert!(
+            skipped >= num_must_skipped,
+            "Expected at least {num_must_skipped} skipped, got {skipped}"
         );
 
-        let ge_250 = data.iter().filter(|e| *e.key() >= 250).count();
-        let lt_250 = data.iter().filter(|e| *e.key() < 250).count();
-        // Checkpoints 250 to 500 inclusive must have been committed.
-        assert_eq!(ge_250, 251);
-        assert_eq!(lt_250, 11);
+        let must_be_committed = final_checkpoint - true_reader_lo + 1;
+        let committed = data.iter().filter(|e| *e.key() >= true_reader_lo).count();
+        assert_eq!(
+            committed, must_be_committed as usize,
+            "Expected {must_be_committed} checkpoints >= {true_reader_lo} to be committed"
+        );
+        // And that we've committed at least `buffer + 1` checkpoints.
+        assert_eq!(
+            committed,
+            buffer as usize + 1,
+            "Expected at least {buffer} + 1 checkpoints >= {true_reader_lo} to be committed"
+        );
+
+        // Checkpoints 0-10 should still be committed, as no pruning has actually been run to clean
+        // up data.
+        let committed_initial = data.iter().filter(|e| *e.key() <= 10).count();
+        assert_eq!(
+            committed_initial, 11,
+            "Checkpoints 0-10 should be committed"
+        );
+
+        // Final watermark should be at final_checkpoint.
         assert_eq!(
             conn.committer_watermark(
                 &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap()
@@ -2089,7 +2174,7 @@ mod tests {
             .unwrap()
             .unwrap()
             .checkpoint_hi_inclusive,
-            500
+            final_checkpoint
         );
     }
 }

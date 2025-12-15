@@ -271,7 +271,6 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         main_reader_lo.clone(),
         task.as_ref().map(|t| t.reader_interval),
         store.clone(),
-        metrics.clone(),
     );
 
     let s_reader_watermark =
