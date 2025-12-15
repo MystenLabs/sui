@@ -1032,32 +1032,38 @@ async fn test_simulate_transaction_balance_changes() {
         .expect("GraphQL request failed");
 
     // Verify balance changes are populated from execution context
-    let balance_changes = result
+    let mut balance_changes: Vec<_> = result
         .pointer("/data/simulateTransaction/effects/balanceChanges/nodes")
         .expect("balanceChanges should be present")
         .as_array()
-        .unwrap();
+        .unwrap()
+        .iter()
+        .map(|v| {
+            (
+                v["coinType"]["repr"].as_str().unwrap(),
+                v["amount"].as_str().unwrap(),
+            )
+        })
+        .collect();
+
+    // Sort for deterministic ordering (order depends on address which varies between runs)
+    balance_changes.sort();
 
     // Should have balance changes for both sender and recipient
     assert_eq!(balance_changes.len(), 2, "Should have 2 balance changes");
 
     // Verify structure matches expected format
-    insta::assert_json_snapshot!(result.pointer("/data/simulateTransaction/effects/balanceChanges"), @r###"
-    {
-      "nodes": [
-        {
-          "coinType": {
-            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-          },
-          "amount": "-3976000"
-        },
-        {
-          "coinType": {
-            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
-          },
-          "amount": "1000000"
-        }
-      ]
-    }
-    "###);
+    assert_eq!(
+        balance_changes,
+        vec![
+            (
+                "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+                "-3976000"
+            ),
+            (
+                "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+                "1000000"
+            ),
+        ]
+    );
 }
