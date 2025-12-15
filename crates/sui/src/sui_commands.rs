@@ -1516,7 +1516,7 @@ async fn prompt_if_no_config(
             wallet_conf_file
         );
         let response = read_line()?.trim().to_lowercase();
-        if response != "" && response != "y" {
+        if !response.is_empty() && response != "y" {
             bail!("No config found, aborting");
         }
     }
