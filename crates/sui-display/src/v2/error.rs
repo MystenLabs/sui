@@ -100,11 +100,15 @@ pub enum FormatError {
     VectorNoType,
 
     #[error(
-        "Vector literal's element type, could be {} or {}",
-        .0.to_canonical_display(true),
-        .1.to_canonical_display(true),
+        "Vector at offset {offset}, could have element type {} or {}",
+        .this.to_canonical_display(true),
+        .that.to_canonical_display(true),
     )]
-    VectorTypeMismatch(TypeTag, TypeTag),
+    VectorTypeMismatch {
+        offset: usize,
+        this: TypeTag,
+        that: TypeTag,
+    },
 
     #[error("Deserialization error: {0}")]
     Visitor(#[from] AV::Error),
