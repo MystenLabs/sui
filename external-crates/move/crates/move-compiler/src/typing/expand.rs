@@ -209,13 +209,12 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
     use TypeInner as TI;
 
     fn expand_type_for_errors(context: &mut Context, ty: &Type) {
-        let mut ty = ty.clone();
-        let unfolded_type = core::unfold_type(&context.subst, &ty);
+        let mut unfolded_type = core::unfold_type(&context.subst, &ty);
         match unfolded_type.value.inner() {
             TI::Anything => (),
             _ => {
                 // report errors if there is an uninferred type argument somewhere
-                type_(context, &mut ty);
+                type_(context, &mut unfolded_type);
             }
         }
     }

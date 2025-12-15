@@ -2800,7 +2800,7 @@ pub fn ready_tvars(subst: &Subst, ty @ sp!(loc, t_): &Type) -> Type {
             if let Some(ty) = subst.get(last_var) {
                 // If the type variable is already bound, we can just return it
                 assert!(!ty.value.is_var());
-                ty.clone()
+                ready_tvars(subst, ty)
             } else {
                 // If the type variable is not bound, we create a new one
                 sp(*loc, TI::Var(last_var).into())
@@ -3281,28 +3281,6 @@ fn join_impl(
             Box::new(rhs.clone()),
         )),
     };
-
-    // Print location info for input and output
-
-        println!("--------------------\nJoined\n    lhs: {:?}\n    rhs: {:?}", lhs.loc, rhs.loc);
-    match &result {
-        Ok((_, ty)) => {
-            println!("    ty: {:?}", ty.loc);
-        }
-        Err(e) => {
-            match e {
-                TypingError::SubtypeError(_, _) => println!("    SubtypeError"),
-                TypingError::Incompatible(_, _) => println!("    Incompatible"),
-                TypingError::InvariantError(_, _) => println!("    InvariantError"),
-                TypingError::ArityMismatch(_, _, _, _) => println!("    ArityMismatch"),
-                TypingError::FunArityMismatch(_, _, _, _) => println!("    FunArityMismatch"),
-                TypingError::RecursiveType(_) => println!("    RecursiveType"),
-                TypingError::IncompatibleConstraints(_, _) => {
-                    println!("    IncompatibleConstraints")
-                }
-            }
-        }
-    }
 
     result
 }
