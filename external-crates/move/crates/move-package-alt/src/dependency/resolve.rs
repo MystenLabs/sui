@@ -21,6 +21,7 @@ use tracing::{debug, info};
 
 use crate::{
     dependency::combine::Combined,
+    flavor::MoveFlavor,
     package::{EnvironmentID, EnvironmentName},
     schema::{
         EXTERNAL_RESOLVE_ARG, PackageName, ResolveRequest, ResolveResponse, ResolverDependencyInfo,
@@ -30,7 +31,7 @@ use crate::{
 use super::{CombinedDependency, Dependency};
 
 /// A [Dependency<Resolved>] is like a [Dependency<Combined>] except that it no longer has
-/// externally resolved dependencies
+/// externally resolved or system dependencies
 pub type Resolved = ResolverDependencyInfo;
 
 pub type ResolverName = String;
@@ -50,6 +51,11 @@ pub enum ResolverError {
         #[source]
         source: std::io::Error,
     },
+
+    #[error(
+        "External resolver `{resolver}` not found; ensure that it is installed and on your PATH"
+    )]
+    ResolverNotFound { resolver: ResolverName },
 
     /// This indicates that the resolver was faulty
     #[error("`{resolver}` did not follow the external resolver protocol ({message})")]
@@ -78,18 +84,20 @@ pub enum ResolverError {
 impl ResolvedDependency {
     /// Replace all external dependencies in `deps` with internal dependencies by invoking their
     /// resolvers.
-    pub async fn resolve(
-        deps: BTreeMap<PackageName, CombinedDependency>,
+    ///
+    /// Precondition: there are no `System` dependencies (TODO: this needs better design)
+    pub async fn resolve<F: MoveFlavor>(
+        deps: Vec<CombinedDependency>,
         environment_id: &EnvironmentID,
-    ) -> ResolverResult<BTreeMap<PackageName, ResolvedDependency>> {
+    ) -> ResolverResult<Vec<ResolvedDependency>> {
         // iterate over [deps] to collect queries for external resolvers
         let mut requests: BTreeMap<ResolverName, BTreeMap<PackageName, ResolveRequest>> =
             BTreeMap::new();
 
-        for (pkg, dep) in deps.iter() {
+        for dep in deps.iter() {
             if let Combined::External(ext) = &dep.0.dep_info {
                 requests.entry(ext.resolver.clone()).or_default().insert(
-                    pkg.clone(),
+                    dep.0.name.clone(),
                     ResolveRequest {
                         env: environment_id.clone(),
                         data: ext.data.clone(),
@@ -110,20 +118,18 @@ impl ResolvedDependency {
             .collect();
 
         // build the output
-        let mut result = BTreeMap::new();
-        for (pkg, dep) in deps.into_iter() {
-            let ext = responses.remove(&pkg);
-            result.insert(
-                pkg,
-                ResolvedDependency(dep.0.map(|info| match info {
-                    Combined::Local(loc) => Resolved::Local(loc),
-                    Combined::Git(git) => Resolved::Git(git),
-                    Combined::OnChain(onchain) => Resolved::OnChain(onchain),
-                    Combined::External(_) => {
-                        ext.expect("resolve_single outputs same keys as input")
-                    }
-                })),
-            );
+        let mut result = Vec::new();
+        for dep in deps.into_iter() {
+            let ext = responses.remove(&dep.0.name);
+            result.push(ResolvedDependency(dep.0.map(|info| match info {
+                Combined::Local(loc) => Resolved::Local(loc),
+                Combined::Git(git) => Resolved::Git(git),
+                Combined::OnChain(onchain) => Resolved::OnChain(onchain),
+                Combined::External(_) => ext.expect("resolve_single outputs same keys as input"),
+                Combined::System(_) => panic!(
+                    "invariant violation; all system dependencies should already be transformed"
+                ),
+            })));
         }
         assert!(responses.is_empty());
 
@@ -133,9 +139,15 @@ impl ResolvedDependency {
 
 impl ResolverError {
     pub fn io_error(resolver: &ResolverName, source: std::io::Error) -> Self {
-        Self::IoError {
-            resolver: resolver.clone(),
-            source,
+        if source.kind() == std::io::ErrorKind::NotFound {
+            Self::ResolverNotFound {
+                resolver: resolver.clone(),
+            }
+        } else {
+            Self::IoError {
+                resolver: resolver.clone(),
+                source,
+            }
         }
     }
 

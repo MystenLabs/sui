@@ -249,7 +249,8 @@ impl Workload<dyn Payload> for PartyWorkload {
         } = system_state_observer.state.borrow().clone();
         let transaction =
             TestTransactionBuilder::new(first_gas.1, first_gas.0, reference_gas_price)
-                .publish(path)
+                .publish_async(path)
+                .await
                 .build_and_sign(first_gas.2.as_ref());
         let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.unwrap();

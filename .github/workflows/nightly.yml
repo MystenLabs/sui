@@ -88,17 +88,14 @@ jobs:
           echo "slack_id=$(echo ${slack_id} | tr -d '"')" >> $GITHUB_ENV 
 
       - name: Post to slack
-        uses: slackapi/slack-github-action@37ebaef184d7626c5f204ab8d3baff4262dd30f0 # pin@v1.27.0
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SUI_SHA: ${{ env.sui_sha }}
-          SLACK_ID: ${{ env.slack_id }}
-          ONCALL_NAME: ${{ env.oncall_name }}
-          WORKFLOW_CONCLUSION: ${{ env.WORKFLOW_CONCLUSION }}
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # pin@v2.1.1
         with:
-          channel-id: 'build-failures-sui'
-          slack-message: |
-            :sui::error-cross: Workflow *${{ github.workflow }}* has `${{ env.WORKFLOW_CONCLUSION }}`.
-            Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
-             <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug failures.
-            Logs are here: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.run_id }}>
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: "build-failures-sui"
+            text: |
+              :sui::error-cross: Workflow *${{ github.workflow }}* has `${{ env.WORKFLOW_CONCLUSION }}`.
+              Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
+              <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug failures.
+              Logs are here: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.run_id }}>

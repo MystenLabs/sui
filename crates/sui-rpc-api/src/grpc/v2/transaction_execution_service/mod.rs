@@ -12,17 +12,13 @@ use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::ExecuteTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::ExecuteTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
-use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_rpc::proto::sui::rpc::v2::ObjectSet;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionRequest;
 use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
-use sui_rpc::proto::sui::rpc::v2::TransactionEffects;
-use sui_rpc::proto::sui::rpc::v2::TransactionEvents;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionService;
-use sui_sdk_types::Address;
-use sui_types::balance_change::derive_balance_changes;
+use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
 
@@ -133,14 +129,22 @@ pub async fn execute_transaction(
     let executed_transaction = {
         let events = read_mask
             .subtree(ExecutedTransaction::EVENTS_FIELD)
-            .and_then(|mask| events.map(|e| TransactionEvents::merge_from(&e, &mask)));
+            .and_then(|mask| events.map(|events| service.render_events_to_proto(&events, &mask)));
 
-        let input_objects = input_objects.unwrap_or_default();
-        let output_objects = output_objects.unwrap_or_default();
+        let objects = {
+            let mut objects = sui_types::full_checkpoint_content::ObjectSet::default();
+            for o in input_objects
+                .into_iter()
+                .chain(output_objects.into_iter())
+                .flatten()
+            {
+                objects.insert(o);
+            }
+            objects
+        };
 
-        let balance_changes = if read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
-        {
-            derive_balance_changes(&effects, &input_objects, &output_objects)
+        let balance_changes = if read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD) {
+            derive_balance_changes_2(&effects, &objects)
                 .into_iter()
                 .map(Into::into)
                 .collect()
@@ -148,80 +152,31 @@ pub async fn execute_transaction(
             vec![]
         };
 
-        let input_objects = input_objects
-            .into_iter()
-            .map(sui_sdk_types::Object::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-        let output_objects = output_objects
-            .into_iter()
-            .map(sui_sdk_types::Object::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let effects = sui_sdk_types::TransactionEffects::try_from(effects)?;
         let effects = read_mask
-            .subtree(ExecutedTransaction::EFFECTS_FIELD.name)
+            .subtree(ExecutedTransaction::EFFECTS_FIELD)
             .map(|mask| {
-                let mut effects = TransactionEffects::merge_from(&effects, &mask);
-
-                if mask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
-                    for changed_object in effects.changed_objects.iter_mut() {
-                        let Ok(object_id) = changed_object.object_id().parse::<Address>() else {
-                            continue;
-                        };
-
-                        if let Some(object) = input_objects
+                service.render_effects_to_proto(
+                    &effects,
+                    &[],
+                    |object_id| {
+                        objects
                             .iter()
-                            .chain(&output_objects)
-                            .find(|o| o.object_id() == object_id)
-                        {
-                            changed_object.object_type = Some(match object.object_type() {
-                                sui_sdk_types::ObjectType::Package => "package".to_owned(),
-                                sui_sdk_types::ObjectType::Struct(struct_tag) => {
-                                    struct_tag.to_string()
-                                }
-                            });
-                        }
-                    }
-                }
-
-                if mask.contains(TransactionEffects::UNCHANGED_CONSENSUS_OBJECTS_FIELD.name) {
-                    for unchanged_consensus_object in effects.unchanged_consensus_objects.iter_mut()
-                    {
-                        let Ok(object_id) =
-                            unchanged_consensus_object.object_id().parse::<Address>()
-                        else {
-                            continue;
-                        };
-
-                        if let Some(object) =
-                            input_objects.iter().find(|o| o.object_id() == object_id)
-                        {
-                            unchanged_consensus_object.object_type =
-                                Some(match object.object_type() {
-                                    sui_sdk_types::ObjectType::Package => "package".to_owned(),
-                                    sui_sdk_types::ObjectType::Struct(struct_tag) => {
-                                        struct_tag.to_string()
-                                    }
-                                });
-                        }
-                    }
-                }
-
-                // Try to render clever error info
-                super::ledger_service::render_clever_error(service, &mut effects);
-
-                effects
+                            .find(|o| o.id() == *object_id)
+                            .map(|o| o.into())
+                    },
+                    &mask,
+                )
             });
 
         let mut message = ExecutedTransaction::default();
         message.digest = read_mask
-            .contains(ExecutedTransaction::DIGEST_FIELD.name)
+            .contains(ExecutedTransaction::DIGEST_FIELD)
             .then(|| transaction.digest().to_string());
         message.transaction = read_mask
-            .subtree(ExecutedTransaction::TRANSACTION_FIELD.name)
+            .subtree(ExecutedTransaction::TRANSACTION_FIELD)
             .map(|mask| Transaction::merge_from(transaction, &mask));
         message.signatures = read_mask
-            .subtree(ExecutedTransaction::SIGNATURES_FIELD.name)
+            .subtree(ExecutedTransaction::SIGNATURES_FIELD)
             .map(|mask| {
                 signatures
                     .into_iter()
@@ -240,14 +195,10 @@ pub async fn execute_transaction(
                     .finish(),
             )
             .map(|mask| {
-                let set: std::collections::BTreeMap<_, _> = input_objects
-                    .into_iter()
-                    .chain(output_objects.into_iter())
-                    .map(|object| ((object.object_id(), object.version()), object))
-                    .collect();
                 ObjectSet::default().with_objects(
-                    set.into_values()
-                        .map(|o| Object::merge_from(o, &mask))
+                    objects
+                        .iter()
+                        .map(|o| service.render_object_to_proto(o, &mask))
                         .collect(),
                 )
             });

@@ -192,6 +192,7 @@
   {
     "type": "annotation",
     "named": true,
+    "extra": true,
     "fields": {},
     "children": {
       "multiple": true,

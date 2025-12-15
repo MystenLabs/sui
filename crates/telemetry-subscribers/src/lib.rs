@@ -64,6 +64,8 @@ pub struct TelemetryConfig {
     pub sample_rate: f64,
     /// Add directive to include trace logs with provided target
     pub trace_target: Option<Vec<String>>,
+    /// Print unadorned logs from the target on standard error if this is a tty
+    pub user_info_target: Vec<String>,
 }
 
 #[must_use]
@@ -255,6 +257,7 @@ impl TelemetryConfig {
             prom_registry: None,
             sample_rate: 1.0,
             trace_target: None,
+            user_info_target: Vec::new(),
         }
     }
 
@@ -294,6 +297,13 @@ impl TelemetryConfig {
             None => self.trace_target = Some(vec![target.to_owned()]),
         };
 
+        self
+    }
+
+    /// Adds `target` to the list of modules that will have their info & above logs printed
+    /// unadorned to standard error (for non-json output)
+    pub fn with_user_info_target(mut self, target: &str) -> Self {
+        self.user_info_target.push(target.to_owned());
         self
     }
 
@@ -459,10 +469,34 @@ impl TelemetryConfig {
             // Output to file or to stderr with ANSI colors
             let fmt_layer = fmt::layer()
                 .with_ansi(config.log_file.is_none() && stderr().is_tty())
-                .with_writer(nb_output)
+                .with_writer(nb_output.clone())
                 .with_filter(log_filter)
                 .boxed();
+
             layers.push(fmt_layer);
+
+            if config.log_file.is_none() && stderr().is_tty() && !config.user_info_target.is_empty()
+            {
+                // Add another printer that prints unadorned info messages to stderr
+                let mut directives = String::from("none");
+                for target in config.user_info_target {
+                    directives.push_str(&format!(",{target}=info"));
+                }
+
+                let fmt_layer = fmt::layer()
+                    .with_ansi(config.log_file.is_none() && stderr().is_tty())
+                    .event_format(
+                        fmt::format()
+                            .without_time()
+                            .with_target(false)
+                            .with_level(false),
+                    )
+                    .with_writer(nb_output)
+                    .with_filter(EnvFilter::new(directives))
+                    .boxed();
+
+                layers.push(fmt_layer);
+            }
         }
 
         let subscriber = tracing_subscriber::registry().with(layers);

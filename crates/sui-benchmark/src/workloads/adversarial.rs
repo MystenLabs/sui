@@ -24,8 +24,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 use strum::{EnumCount, IntoEnumIterator};
 use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
+use sui_move_build::{BuildConfig, CompiledPackage};
 use sui_protocol_config::ProtocolConfig;
-use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::base_types::{ObjectRef, random_object_ref};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::Command;
@@ -116,6 +117,8 @@ pub struct AdversarialTestPayload {
     state: InMemoryWallet,
     system_state_observer: Arc<SystemStateObserver>,
     adversarial_payload_cfg: AdversarialPayloadCfg,
+    /// The really big package used for MaxPackagePublish workload.
+    max_package_published_compiled: CompiledPackage,
 }
 
 impl std::fmt::Display for AdversarialTestPayload {
@@ -243,10 +246,10 @@ impl AdversarialTestPayload {
                 to_sender_signed_transaction(data, account.key())
             }
             AdversarialPayloadType::MaxPackagePublish => {
-                let mut path = benchmark_move_base_dir();
-                path.push("src/workloads/data/max_package");
                 TestTransactionBuilder::new(self.sender, account.gas, gas_price)
-                    .publish(path)
+                    .publish_with_data(PublishData::CompiledPackage(
+                        self.max_package_published_compiled.clone(),
+                    ))
                     .build_and_sign(account.key())
             }
             _ => self.state.move_call_pt(
@@ -470,7 +473,8 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         let protocol_config = protocol_config.unwrap();
         let gas_budget = protocol_config.max_tx_gas();
         let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
-            .publish(path)
+            .publish_async(path)
+            .await
             .build_and_sign(gas.2.as_ref());
 
         let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
@@ -550,6 +554,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
                 state: InMemoryWallet::new(gas),
                 system_state_observer: system_state_observer.clone(),
                 adversarial_payload_cfg: self.adversarial_payload_cfg,
+                max_package_published_compiled: get_max_package_published_compiled_package().await,
             })
         }
         payloads
@@ -566,4 +571,13 @@ impl Workload<dyn Payload> for AdversarialWorkload {
 struct AdversarialPayloadArgs {
     pub fn_name: String,
     pub args: Vec<BenchMoveCallArg>,
+}
+
+async fn get_max_package_published_compiled_package() -> CompiledPackage {
+    let mut path = benchmark_move_base_dir();
+    path.push("src/workloads/data/really_big_package");
+    BuildConfig::new_for_testing()
+        .build_async(&path)
+        .await
+        .unwrap()
 }

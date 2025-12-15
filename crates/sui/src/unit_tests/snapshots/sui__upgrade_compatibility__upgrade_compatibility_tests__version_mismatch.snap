@@ -12,4 +12,4 @@ error[Compatibility E01008]: file format version downgrade
   = Please upgrade to the latest version of the move language tooling.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'additive'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'additive'. Use --skip-verify-compatibility to bypass this check locally.

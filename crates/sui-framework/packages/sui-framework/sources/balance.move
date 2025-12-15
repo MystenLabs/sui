@@ -110,10 +110,7 @@ public fun redeem_funds<T>(withdrawal: sui::funds_accumulator::Withdrawal<Balanc
 }
 
 /// Create a `Withdrawal<Balance<T>>` from an object to withdraw funds from it.
-public(package) fun withdraw_funds_from_object<T>(
-    obj: &mut UID,
-    value: u64,
-): Withdrawal<Balance<T>> {
+public fun withdraw_funds_from_object<T>(obj: &mut UID, value: u64): Withdrawal<Balance<T>> {
     sui::funds_accumulator::withdraw_from_object(obj, value as u256)
 }
 

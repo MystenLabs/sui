@@ -9,7 +9,7 @@ use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::{
     TransactionData as KVTransactionData, TransactionEventsData as KVTransactionEventsData,
 };
-use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
+use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_types::{
     base_types::ObjectID,
     crypto::AuthorityQuorumSignInfo,
@@ -58,6 +58,7 @@ pub enum TransactionContents {
         events: Option<Vec<Event>>,
         transaction_data: Box<TransactionData>,
         signatures: Vec<GenericSignature>,
+        balance_changes: Vec<grpc::BalanceChange>,
     },
 }
 
@@ -244,7 +245,7 @@ impl KvLoader {
 
 impl TransactionContents {
     pub fn from_executed_transaction(
-        executed_transaction: &ExecutedTransaction,
+        executed_transaction: &grpc::ExecutedTransaction,
         transaction_data: TransactionData,
         signatures: Vec<GenericSignature>,
     ) -> anyhow::Result<Self> {
@@ -266,11 +267,14 @@ impl TransactionContents {
             .transpose()?
             .map(|events: TransactionEvents| events.data);
 
+        let balance_changes = executed_transaction.balance_changes.clone();
+
         Ok(Self::ExecutedTransaction {
             effects: Box::new(effects),
             events,
             transaction_data: Box::new(transaction_data),
             signatures,
+            balance_changes,
         })
     }
 
@@ -340,6 +344,15 @@ impl TransactionContents {
             Self::Bigtable(kv) => Ok(kv.events.clone().unwrap_or_default().data),
             Self::LedgerGrpc(txn) => Ok(txn.events.clone().unwrap_or_default()),
             Self::ExecutedTransaction { events, .. } => Ok(events.clone().unwrap_or_default()),
+        }
+    }
+
+    pub fn balance_changes(&self) -> Option<&[grpc::BalanceChange]> {
+        match self {
+            Self::ExecutedTransaction {
+                balance_changes, ..
+            } => Some(balance_changes),
+            _ => None,
         }
     }
 

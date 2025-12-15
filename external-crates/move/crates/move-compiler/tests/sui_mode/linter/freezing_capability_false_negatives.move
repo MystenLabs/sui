@@ -6,19 +6,19 @@ module a::test_false_negatives {
     use sui::transfer;
 
     struct AdminRights has key {
-       id: UID
+        id: UID,
     }
 
     struct PrivilegeToken has key {
-       id: UID
+        id: UID,
     }
 
     struct AccessControl has key {
-       id: UID
+        id: UID,
     }
 
     struct Capv0 has key {
-        id: UID
+        id: UID,
     }
 
     public fun freeze_admin_rights(w: AdminRights) {
@@ -46,6 +46,7 @@ module sui::object {
 
 module sui::transfer {
     const ZERO: u64 = 0;
+
     public fun public_freeze_object<T: key>(_: T) {
         abort ZERO
     }

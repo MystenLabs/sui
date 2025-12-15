@@ -64,6 +64,7 @@ pub struct SwarmBuilder<R = OsRng> {
     submit_delay_step_override_millis: Option<u64>,
     global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
     disable_fullnode_pruning: bool,
+    state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
     #[cfg(msim)]
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
 }
@@ -98,6 +99,7 @@ impl SwarmBuilder {
             submit_delay_step_override_millis: None,
             global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig::Global(true),
             disable_fullnode_pruning: false,
+            state_sync_config: None,
             #[cfg(msim)]
             execution_time_observer_config: None,
         }
@@ -134,6 +136,7 @@ impl<R> SwarmBuilder<R> {
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
             disable_fullnode_pruning: self.disable_fullnode_pruning,
+            state_sync_config: self.state_sync_config,
             #[cfg(msim)]
             execution_time_observer_config: self.execution_time_observer_config,
         }
@@ -304,6 +307,11 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_state_sync_config(mut self, config: sui_config::p2p::StateSyncConfig) -> Self {
+        self.state_sync_config = Some(config);
+        self
+    }
+
     pub fn with_fullnode_run_with_range(mut self, run_with_range: Option<RunWithRange>) -> Self {
         if let Some(run_with_range) = run_with_range {
             self.fullnode_run_with_range = Some(run_with_range);
@@ -414,6 +422,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                     self.global_state_hash_v2_enabled_config.clone(),
                 );
 
+            if let Some(state_sync_config) = self.state_sync_config.clone() {
+                final_builder = final_builder.with_state_sync_config(state_sync_config);
+            }
+
             #[cfg(msim)]
             if let Some(execution_time_observer_config) = self.execution_time_observer_config {
                 final_builder = final_builder
@@ -443,6 +455,11 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .with_data_ingestion_dir(ingest_data)
             .with_fw_config(self.fullnode_fw_config)
             .with_disable_pruning(self.disable_fullnode_pruning);
+
+        if let Some(state_sync_config) = self.state_sync_config.clone() {
+            fullnode_config_builder =
+                fullnode_config_builder.with_state_sync_config(state_sync_config);
+        }
 
         if let Some(chain) = self.chain_override {
             fullnode_config_builder = fullnode_config_builder.with_chain_override(chain);

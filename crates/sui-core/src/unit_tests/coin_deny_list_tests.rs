@@ -9,7 +9,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use std::sync::Arc;
-use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr};
 use sui_types::crypto::{AccountKeyPair, get_account_key_pair};
@@ -228,7 +228,7 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
     let (denied_address, denied_keypair) = get_account_key_pair();
 
     env.authority
-        .settle_transactions_for_testing(0, std::slice::from_ref(&env.publish_effects))
+        .settle_accumulator_for_testing(std::slice::from_ref(&env.publish_effects))
         .await;
 
     {
@@ -252,7 +252,7 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
         env_gas_ref = effects.gas_object().0;
 
         env.authority
-            .settle_transactions_for_testing(1, std::slice::from_ref(&effects))
+            .settle_accumulator_for_testing(std::slice::from_ref(&effects))
             .await;
     }
 
@@ -308,7 +308,10 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
     );
     let tx = Transaction::from_data_and_signer(tx_data, vec![&denied_keypair, &env.keypair]);
     let epoch_store = env.authority.load_epoch_store_one_call_per_task();
-    let verified = epoch_store.verify_transaction(tx).unwrap();
+    let verified = epoch_store
+        .verify_transaction_require_no_aliases(tx)
+        .unwrap()
+        .into_tx();
 
     let err = env
         .authority
@@ -423,8 +426,6 @@ async fn new_authority_and_publish(path: &str) -> TestEnv {
     let mut protocol_config =
         ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
     protocol_config.enable_accumulators_for_testing();
-    protocol_config
-        .set_per_object_congestion_control_mode_for_testing(PerObjectCongestionControlMode::None);
 
     let authority = TestAuthorityBuilder::new()
         .with_starting_objects(&[gas_object])

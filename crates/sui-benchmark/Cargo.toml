@@ -51,6 +51,8 @@ mysten-metrics.workspace = true
 test-cluster.workspace = true
 sysinfo.workspace = true
 
+sui-move-build.workspace = true
+
 [target.'cfg(msim)'.dependencies]
 sui-framework.workspace = true
 sui-framework-snapshot.workspace = true

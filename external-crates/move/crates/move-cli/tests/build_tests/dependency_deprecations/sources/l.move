@@ -1,6 +1,6 @@
 module A::l {
-    use A::m as am;
-    use A::mod_deprecated;
+    use Dep::m as am;
+    use Dep::mod_deprecated;
 
     #[allow(unused_function)]
     fun f() {

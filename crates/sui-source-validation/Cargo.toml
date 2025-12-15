@@ -6,19 +6,29 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[lints]
+workspace = true
+
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
 anyhow.workspace = true
 colored.workspace = true
-thiserror.workspace = true
-tracing.workspace = true
+flate2.workspace = true
 futures.workspace = true
+serde.workspace = true
+tar.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+tracing.workspace = true
+ureq.workspace = true
 
 sui-json-rpc-types.workspace = true
 sui-move-build.workspace = true
 sui-package-management.workspace = true
+sui-package-alt.workspace = true
 sui-types.workspace = true
 sui-sdk.workspace = true
 
@@ -27,22 +37,30 @@ move-bytecode-source-map.workspace = true
 move-command-line-common.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
-move-package.workspace = true
+move-package-alt.workspace = true
+move-package-alt-compilation.workspace = true
 move-symbol-pool.workspace = true
 
-tar.workspace = true
-tempfile.workspace = true
-flate2.workspace = true
-ureq.workspace = true
-
-
 [dev-dependencies]
-
+datatest-stable.workspace = true
 expect-test.workspace = true
+fs_extra.workspace = true
+insta.workspace = true
+insta-cmd.workspace = true
 rand.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "test-util"] }
 tracing.workspace = true
 
+sui-config.workspace = true
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
+
+[target.'cfg(msim)'.dependencies]
+msim.workspace = true
+
+[[test]]
+name = "shell_tests"
+harness = false
+
+

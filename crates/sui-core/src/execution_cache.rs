@@ -500,6 +500,12 @@ pub trait TransactionCacheRead: Send + Sync {
             .expect("multi-get must return correct number of items")
     }
 
+    fn transaction_executed_in_last_epoch(
+        &self,
+        digest: &TransactionDigest,
+        current_epoch: EpochId,
+    ) -> bool;
+
     fn multi_get_effects(
         &self,
         digests: &[TransactionEffectsDigest],
@@ -689,6 +695,8 @@ pub trait StateSyncAPI: Send + Sync {
 
 pub trait TestingAPI: Send + Sync {
     fn database_for_testing(&self) -> Arc<AuthorityStore>;
+
+    fn cache_for_testing(&self) -> &WritebackCache;
 }
 
 macro_rules! implement_storage_traits {
@@ -881,6 +889,10 @@ macro_rules! implement_passthrough_traits {
         impl TestingAPI for $implementor {
             fn database_for_testing(&self) -> Arc<AuthorityStore> {
                 self.store.clone()
+            }
+
+            fn cache_for_testing(&self) -> &WritebackCache {
+                self
             }
         }
     };

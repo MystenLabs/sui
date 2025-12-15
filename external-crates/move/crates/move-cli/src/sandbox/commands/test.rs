@@ -10,13 +10,17 @@ use move_command_line_common::{
 };
 use move_compiler::command_line::COLOR_MODE_ENV_VAR;
 use move_coverage::coverage_map::{CoverageMap, ExecCoverageMapWithModules};
-use move_package::{
-    BuildConfig,
-    compilation::{compiled_package::OnDiskCompiledPackage, package_layout::CompiledPackageLayout},
-    resolution::resolution_graph::ResolvedGraph,
-    source_package::{layout::SourcePackageLayout, manifest_parser::parse_move_manifest_from_file},
+
+use move_package_alt::{
+    flavor::{Vanilla, vanilla},
+    package::{RootPackage, layout::SourcePackageLayout},
 };
+use move_package_alt_compilation::{
+    layout::CompiledPackageLayout, on_disk_package::OnDiskCompiledPackage,
+};
+use path_clean::clean;
 use std::{
+    cmp::max,
     collections::{BTreeMap, HashMap},
     env,
     fmt::Write as FmtWrite,
@@ -26,6 +30,7 @@ use std::{
     process::Command,
 };
 use tempfile::tempdir;
+use tracing::debug;
 
 // Basic datatest testing framework for the CLI. The `run_one` entrypoint expects
 // an `args.txt` file with arguments that the `move` binary understands (one set
@@ -60,20 +65,17 @@ fn collect_coverage(
     build_dir: &Path,
 ) -> anyhow::Result<ExecCoverageMapWithModules> {
     let canonical_build = build_dir.canonicalize().unwrap();
-    let package_name = parse_move_manifest_from_file(
-        &SourcePackageLayout::try_find_root(&canonical_build).unwrap(),
-    )?
-    .package
-    .name
-    .to_string();
-    let pkg = OnDiskCompiledPackage::from_path(
-        &build_dir
-            .join(package_name)
-            .join(CompiledPackageLayout::BuildInfo.path()),
-    )?
-    .into_compiled_package()?;
+
+    let pkg_root = &SourcePackageLayout::try_find_root(&canonical_build).unwrap();
+    let package_name = move_package_alt::read_name_from_manifest(pkg_root)?;
+
+    let pkg_path = &build_dir
+        .join(package_name)
+        .join(CompiledPackageLayout::BuildInfo.path());
+    let pkg = OnDiskCompiledPackage::from_path(pkg_path)?.into_compiled_package()?;
+
     let src_modules = pkg
-        .all_modules()
+        .all_compiled_units_with_source()
         .map(|unit| {
             let absolute_path = path_to_string(&unit.source_path.canonicalize()?)?;
             Ok((absolute_path, unit.unit.module.clone()))
@@ -98,67 +100,86 @@ fn collect_coverage(
     Ok(coverage_map)
 }
 
-fn determine_package_nest_depth(
-    resolution_graph: &ResolvedGraph,
-    pkg_dir: &Path,
-) -> anyhow::Result<usize> {
-    let mut depth = 0;
-    for (_, dep) in resolution_graph.package_table.iter() {
-        depth = std::cmp::max(
-            depth,
-            dep.package_path.strip_prefix(pkg_dir)?.components().count() + 1,
-        );
-    }
-    Ok(depth)
-}
-
-fn pad_tmp_path(tmp_dir: &Path, pad_amount: usize) -> anyhow::Result<PathBuf> {
-    let mut tmp_dir = tmp_dir.to_path_buf();
-    for i in 0..pad_amount {
-        tmp_dir.push(format!("{}", i));
-    }
-    std::fs::create_dir_all(&tmp_dir)?;
-    Ok(tmp_dir)
-}
-
-// We need to copy dependencies over (transitively) and at the same time keep the paths valid in
-// the package. To do this we compute the resolution graph for all possible dependencies (so in dev
-// mode) and then calculate the nesting under `tmp_dir` the we need to copy the root package so
-// that it, and all its dependencies reside under `tmp_dir` with the same paths as in the original
-// package manifest.
-fn copy_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> {
-    // Sometimes we run a test that isn't a package for metatests so if there isn't a package we
-    // don't need to nest at all. Resolution graph diagnostics are only needed for CLI commands so
-    // ignore them by passing a vector as the writer.
-    let package_resolution = match (BuildConfig {
-        dev_mode: true,
-        ..Default::default()
-    })
-    .resolution_graph_for_package(pkg_dir, None, &mut Vec::new())
-    {
-        Ok(pkg) => pkg,
-        Err(_) => return Ok(tmp_dir.to_path_buf()),
-    };
-    let package_nest_depth = determine_package_nest_depth(&package_resolution, pkg_dir)?;
-    let tmp_dir = pad_tmp_path(tmp_dir, package_nest_depth)?;
-    for (_, dep) in package_resolution.package_table.iter() {
-        let source_dep_path = &dep.package_path;
-        let dest_dep_path = tmp_dir.join(dep.package_path.strip_prefix(pkg_dir).unwrap());
-        if !dest_dep_path.exists() {
-            fs::create_dir_all(&dest_dep_path)?;
+/// Given a list of paths `paths = [p_1, p_2, p_3, ...], produce another path `result = dir/dir/dir/...`
+/// so that for each `i`, `{result}/{p_i}` cleans to a path with no `..`
+///
+/// For example, if `paths` is  [`foo`, `../bar`, `../../../../baz`], then `make_dir_prefix(paths)`
+/// would be `dir/dir/dir/dir` so that `dir/dir/dir/dir/../../../../baz` would clean to `baz`.
+fn make_dir_prefix(paths: impl IntoIterator<Item = impl AsRef<Path>>) -> PathBuf {
+    let mut max_depth = 0;
+    for path in paths {
+        let mut depth = 0;
+        for component in clean(path).components() {
+            if component.as_os_str() != ".." {
+                break;
+            }
+            depth += 1;
         }
-        simple_copy_dir(&dest_dep_path, source_dep_path)?;
+        max_depth = max(max_depth, depth);
     }
-    Ok(tmp_dir)
+    let mut result = PathBuf::new();
+    for _ in 0..max_depth - 1 {
+        result.push("dir");
+    }
+    result
 }
 
+/// Copy `pkg_dir` and all of its dependencies into `tmp_dir`, keeping all of the relative
+/// paths the same. This may require copying into a subdirectory of `tmp_dir` if the local paths
+/// start with `..`; the actual subdirectory containing the copied files is returned.
+fn copy_pkg_and_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> {
+    let paths = match package_paths(pkg_dir) {
+        Ok(paths) => paths,
+        Err(e) => {
+            debug!("couldn't find packages: {e}");
+            [pkg_dir.to_path_buf()].into()
+        }
+    };
+
+    let prefix = make_dir_prefix(&paths);
+
+    debug!("copying {paths:?}");
+
+    for path in paths {
+        debug!("cp {:?} {:?}", &path, tmp_dir.join(&prefix).join(&path));
+        simple_copy_dir(&tmp_dir.join(&prefix).join(&path), &path)?;
+    }
+
+    Ok(tmp_dir.join(prefix).join(pkg_dir))
+}
+
+/// Return the paths to all the packages needed by the package at `pkg_dir` (including itself); if
+/// the package cannot be loaded we just return the package itself. (sometimes we run a test that
+/// isn't a package for metatests so if there isn't a package we don't need to nest at all).
+///
+/// We copy as if `--mode test` were passed, so that `dev-dependencies` will be included; if tests
+/// use moded dependencies with any other modes, those dependencies won't be copied and this code
+/// will need to be fixed.
+fn package_paths(pkg_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let rt = tokio::runtime::Runtime::new()?;
+
+    let root_pkg = rt.block_on(RootPackage::<Vanilla>::load(
+        pkg_dir,
+        vanilla::default_environment(),
+        vec!["test".into()],
+    ))?;
+
+    let packages = root_pkg.packages();
+
+    Ok(packages
+        .iter()
+        .map(|pkg| pkg.path().path().to_path_buf())
+        .collect())
+}
+
+/// Recursively copy all files in `src` into `dir`
 fn simple_copy_dir(dst: &Path, src: &Path) -> io::Result<()> {
+    fs::create_dir_all(&dst)?;
     for entry in fs::read_dir(src)? {
         let src_entry = entry?;
         let src_entry_path = src_entry.path();
         let dst_entry_path = dst.join(src_entry.file_name());
         if src_entry_path.is_dir() {
-            fs::create_dir_all(&dst_entry_path)?;
             simple_copy_dir(&dst_entry_path, &src_entry_path)?;
         } else {
             fs::copy(&src_entry_path, &dst_entry_path)?;
@@ -180,9 +201,9 @@ pub fn run_one(
     // path where we will run the binary
     let exe_dir = args_path.parent().unwrap();
     let temp_dir = if use_temp_dir {
-        // symlink everything in the exe_dir into the temp_dir
+        // copy everything in the exe_dir into the temp_dir
         let dir = tempdir()?;
-        let padded_dir = copy_deps(dir.path(), exe_dir)?;
+        let padded_dir = copy_pkg_and_deps(dir.path(), exe_dir)?;
         simple_copy_dir(&padded_dir, exe_dir)?;
         Some((dir, padded_dir))
     } else {
@@ -359,11 +380,28 @@ pub fn run_all(
     let mut test_passed: u64 = 0;
     let mut cov_info = ExecCoverageMapWithModules::empty();
 
+    debug!("Current directory: {:?}", std::env::current_dir()?);
+
     // find `args.txt` and iterate over them
     for entry in find_filenames(&[args_path], |fpath| {
+        tracing::debug!("fpath: {}", fpath.display());
         fpath.file_name().expect("unexpected file entry path") == TEST_ARGS_FILENAME
     })? {
-        match run_one(Path::new(&entry), cli_binary, use_temp_dir, track_cov) {
+        tracing::debug!("Entry {entry}, {args_path:?}");
+        tracing::debug!(
+            "Current directory when processing entry: {:?}",
+            std::env::current_dir()?
+        );
+        // The entry path is already correct relative to the current directory
+        // since find_filenames returns paths that include the base directory
+        let entry_path = Path::new(&entry);
+        tracing::debug!(
+            "About to call run_one with path: {:?}, exists: {}",
+            entry_path,
+            entry_path.exists()
+        );
+
+        match run_one(entry_path, cli_binary, use_temp_dir, track_cov) {
             Ok(cov_opt) => {
                 test_passed = test_passed.checked_add(1).unwrap();
                 if let Some(cov) = cov_opt {

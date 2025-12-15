@@ -10,6 +10,7 @@ edition = "2024"
 anyhow.workspace = true
 clap.workspace = true
 colored.workspace = true
+indoc.workspace = true
 once_cell.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
@@ -17,13 +18,16 @@ tracing.workspace = true
 prometheus.workspace = true
 bin-version.workspace = true
 serde.workspace = true
+futures.workspace = true
+toml.workspace = true
 
 move-binary-format.workspace = true
 move-cli.workspace = true
 move-compiler.workspace = true
 move-disassembler.workspace = true
 move-ir-types.workspace = true
-move-package.workspace = true
+move-package-alt.workspace = true
+move-package-alt-compilation.workspace = true
 move-bytecode-source-map.workspace = true
 move-unit-test.workspace = true
 move-core-types.workspace = true
@@ -33,10 +37,12 @@ tokio = { workspace = true, features = ["full"] }
 move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime" }
 sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
 
+sui-config.workspace = true
 sui-move-build.workspace = true
 sui-protocol-config.workspace = true
+sui-sdk.workspace = true
 sui-types.workspace = true
-sui-package-management.workspace = true
+sui-package-alt.workspace = true
 better_any = "0.1.1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
@@ -50,7 +56,7 @@ tempfile.workspace = true
 walkdir.workspace = true
 insta.workspace = true
 
-move-package.workspace = true
+move-package-alt.workspace = true
 
 mysten-metrics.workspace = true
 sui-macros.workspace = true

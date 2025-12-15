@@ -5,15 +5,17 @@
 //! Defines the [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
 //! flavor-specific resolvers and stores no additional metadata in the lockfile.
 
-use std::{collections::BTreeMap, iter::empty};
+use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
 use crate::schema::{
-    Environment, EnvironmentID, EnvironmentName, PackageName, ReplacementDependency,
+    Environment, EnvironmentID, EnvironmentName, LockfileDependencyInfo, PackageName,
+    ParsedManifest, ReplacementDependency,
 };
 
 use super::MoveFlavor;
+use indexmap::IndexMap;
 
 pub const DEFAULT_ENV_NAME: &str = "_test_env";
 pub const DEFAULT_ENV_ID: &str = "_test_env_id";
@@ -49,21 +51,23 @@ impl MoveFlavor for Vanilla {
         "vanilla".to_string()
     }
 
-    fn default_environments() -> BTreeMap<EnvironmentName, EnvironmentID> {
-        let mut envs = BTreeMap::new();
+    fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID> {
+        let mut envs = IndexMap::new();
         envs.insert(DEFAULT_ENV_NAME.to_string(), DEFAULT_ENV_ID.to_string());
         envs
     }
 
-    fn system_dependencies(
-        _environment: EnvironmentID,
-    ) -> BTreeMap<PackageName, ReplacementDependency> {
-        empty().collect()
+    fn system_deps(_environment: &EnvironmentID) -> BTreeMap<String, LockfileDependencyInfo> {
+        BTreeMap::new()
     }
 
-    fn default_system_dependencies(
-        environment: EnvironmentID,
+    fn implicit_dependencies(
+        _environment: &EnvironmentID,
     ) -> BTreeMap<PackageName, ReplacementDependency> {
-        Self::system_dependencies(environment)
+        BTreeMap::new()
+    }
+
+    fn validate_manifest(_: &ParsedManifest) -> Result<(), String> {
+        Ok(())
     }
 }

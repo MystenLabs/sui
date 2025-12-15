@@ -8,7 +8,6 @@ module a::m {
     public entry fun no(_: &vector<S>) {
         abort 0
     }
-
 }
 
 module sui::object {

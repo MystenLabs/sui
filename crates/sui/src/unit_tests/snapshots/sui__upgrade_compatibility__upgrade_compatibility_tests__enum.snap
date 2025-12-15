@@ -1,5 +1,5 @@
 ---
-source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
+source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility_tests.rs
 expression: normalize_path(err.to_string())
 ---
 error[Compatibility E01003]: ability mismatch
@@ -301,4 +301,4 @@ error[Compatibility E01002]: type mismatch
     = Restore the original enum's variant for enum 'EnumWithNamedChanged' including the ordering.
 
 
-Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'. Use --skip-verify-compatibility to bypass this check locally.

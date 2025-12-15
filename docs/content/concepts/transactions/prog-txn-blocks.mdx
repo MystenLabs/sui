@@ -53,7 +53,7 @@ The inputs and results can be seen as populating an array of values. For inputs,
 
 Input arguments to a PTB are broadly categorized as either objects or pure values. The direct implementation of these arguments is often obscured by transaction builders or SDKs. Each `Input` is either an object, `Input::Object(ObjectArg)`, which contains the necessary metadata to specify the object being used, or a pure value, `Input::Pure(PureArg)`, which contains the bytes of the value.
 
-For object inputs, the metadata needed differs depending on the type of [ownership of the object](/concepts/object-ownership.mdx). The data for the `ObjectArg` enum follows:
+For object inputs, the metadata needed differs depending on the type of [ownership of the object](/guides/developer/objects/object-ownership.mdx). The data for the `ObjectArg` enum follows:
 
 - If the object is owned by an address or it is immutable, then use `ObjectArg::ImmOrOwnedObject(ObjectID, SequenceNumber, ObjectDigest)`. The triple respectively specifies the object's ID, its sequence or version number, and the digest of the object's data.
 

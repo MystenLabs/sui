@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{TryFutureExt, future};
 use itertools::Itertools as _;
+use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
     Gauge, Histogram, HistogramVec, IntCounter, IntCounterVec, Registry,
@@ -546,9 +547,13 @@ impl ValidatorService {
         let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
 
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
-        let transaction = epoch_store.verify_transaction(transaction).tap_err(|_| {
-            metrics.signature_errors.inc();
-        })?;
+        let transaction = epoch_store
+            // Aliases are not supported outside of MFP.
+            .verify_transaction_require_no_aliases(transaction)
+            .tap_err(|_| {
+                metrics.signature_errors.inc();
+            })?
+            .into_tx();
         drop(tx_verif_metrics_guard);
 
         let tx_digest = transaction.digest();
@@ -599,6 +604,63 @@ impl ValidatorService {
             self.get_client_ip_addr(&request, &ClientIdSource::SocketAddr)
         };
 
+        let inner = request.into_inner();
+        let start_epoch = state.load_epoch_store_one_call_per_task().epoch();
+
+        let next_epoch = start_epoch + 1;
+        let mut max_retries = 1;
+
+        loop {
+            let res = self
+                .handle_submit_transaction_inner(
+                    &state,
+                    &consensus_adapter,
+                    &metrics,
+                    &inner,
+                    submitter_client_addr,
+                )
+                .await;
+            match res {
+                Ok((response, weight)) => return Ok((tonic::Response::new(response), weight)),
+                Err(err) => {
+                    if max_retries > 0
+                        && let SuiErrorKind::ValidatorHaltedAtEpochEnd = err.as_inner()
+                    {
+                        max_retries -= 1;
+
+                        debug!(
+                            "ValidatorHaltedAtEpochEnd. Will retry after validator reconfigures"
+                        );
+
+                        if let Ok(Ok(new_epoch)) =
+                            timeout(Duration::from_secs(15), state.wait_for_epoch(next_epoch)).await
+                        {
+                            assert_reachable!("retry submission at epoch end");
+                            if new_epoch == next_epoch {
+                                continue;
+                            }
+
+                            debug_fatal!(
+                                "expected epoch {} after reconfiguration. got {}",
+                                next_epoch,
+                                new_epoch
+                            );
+                        }
+                    }
+                    return Err(err.into());
+                }
+            }
+        }
+    }
+
+    async fn handle_submit_transaction_inner(
+        &self,
+        state: &AuthorityState,
+        consensus_adapter: &ConsensusAdapter,
+        metrics: &ValidatorServiceMetrics,
+        request: &RawSubmitTxRequest,
+        submitter_client_addr: Option<IpAddr>,
+    ) -> SuiResult<(RawSubmitTxResponse, Weight)> {
         let epoch_store = state.load_epoch_store_one_call_per_task();
         if !epoch_store.protocol_config().mysticeti_fastpath() {
             return Err(SuiErrorKind::UnsupportedFeatureError {
@@ -607,7 +669,6 @@ impl ValidatorService {
             .into());
         }
 
-        let request = request.into_inner();
         let submit_type = SubmitTxType::try_from(request.submit_type).map_err(|e| {
             SuiErrorKind::GrpcMessageDeserializeError {
                 type_info: "RawSubmitTxRequest.submit_type".to_string(),
@@ -703,8 +764,8 @@ impl ValidatorService {
             // Ok to fail the request when any transaction is invalid.
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
 
-            let overload_check_res = self.state.check_system_overload(
-                &*consensus_adapter,
+            let overload_check_res = state.check_system_overload(
+                consensus_adapter,
                 transaction.data(),
                 state.check_system_overload_at_signing(),
             );
@@ -720,16 +781,26 @@ impl ValidatorService {
             // Ok to fail the request when any signature is invalid.
             let verified_transaction = {
                 let _metrics_guard = metrics.tx_verification_latency.start_timer();
-                match epoch_store.verify_transaction(transaction) {
-                    Ok(txn) => txn,
-                    Err(e) => {
-                        metrics.signature_errors.inc();
-                        return Err(e.into());
+                if epoch_store.protocol_config().address_aliases() {
+                    match epoch_store.verify_transaction_with_current_aliases(transaction) {
+                        Ok(tx) => tx,
+                        Err(e) => {
+                            metrics.signature_errors.inc();
+                            return Err(e);
+                        }
+                    }
+                } else {
+                    match epoch_store.verify_transaction_require_no_aliases(transaction) {
+                        Ok(tx) => tx,
+                        Err(e) => {
+                            metrics.signature_errors.inc();
+                            return Err(e);
+                        }
                     }
                 }
             };
 
-            let tx_digest = verified_transaction.digest();
+            let tx_digest = verified_transaction.tx().digest();
             tx_digests.push(*tx_digest);
 
             debug!(
@@ -739,8 +810,7 @@ impl ValidatorService {
 
             // Check if the transaction has executed, before checking input objects
             // which could have been consumed.
-            if let Some(effects) = self
-                .state
+            if let Some(effects) = state
                 .get_transaction_cache_reader()
                 .get_executed_effects(tx_digest)
             {
@@ -757,12 +827,30 @@ impl ValidatorService {
                 }
             }
 
+            if self
+                .state
+                .get_transaction_cache_reader()
+                .transaction_executed_in_last_epoch(tx_digest, epoch_store.epoch())
+            {
+                results[idx] = Some(SubmitTxResult::Rejected {
+                    error: UserInputError::TransactionAlreadyExecuted { digest: *tx_digest }.into(),
+                });
+                debug!(
+                    ?tx_digest,
+                    "handle_submit_transaction: transaction already executed in previous epoch"
+                );
+                continue;
+            }
+
             debug!(
                 ?tx_digest,
                 "handle_submit_transaction: waiting for fastpath dependency objects"
             );
             if !state
-                .wait_for_fastpath_dependency_objects(&verified_transaction, epoch_store.epoch())
+                .wait_for_fastpath_dependency_objects(
+                    verified_transaction.tx(),
+                    epoch_store.epoch(),
+                )
                 .await?
             {
                 debug!(
@@ -771,13 +859,12 @@ impl ValidatorService {
                 );
             }
 
-            match state.handle_vote_transaction(&epoch_store, verified_transaction.clone()) {
+            match state.handle_vote_transaction(&epoch_store, verified_transaction.tx().clone()) {
                 Ok(_) => { /* continue processing */ }
                 Err(e) => {
                     // Check if transaction has been executed while being validated.
                     // This is an edge case so checking executed effects twice is acceptable.
-                    if let Some(effects) = self
-                        .state
+                    if let Some(effects) = state
                         .get_transaction_cache_reader()
                         .get_executed_effects(tx_digest)
                     {
@@ -805,19 +892,23 @@ impl ValidatorService {
                 }
             }
 
-            consensus_transactions.push(ConsensusTransaction::new_user_transaction_message(
-                &self.state.name,
-                verified_transaction.into(),
-            ));
+            if epoch_store.protocol_config().address_aliases() {
+                consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
+                    &state.name,
+                    verified_transaction.into(),
+                ));
+            } else {
+                consensus_transactions.push(ConsensusTransaction::new_user_transaction_message(
+                    &state.name,
+                    verified_transaction.into_tx().into(),
+                ));
+            }
             transaction_indexes.push(idx);
             total_size_bytes += tx_size;
         }
 
         if consensus_transactions.is_empty() && !is_ping_request {
-            return Ok((
-                tonic::Response::new(Self::try_from_submit_tx_response(results)?),
-                Weight::zero(),
-            ));
+            return Ok((Self::try_from_submit_tx_response(results)?, Weight::zero()));
         }
 
         // Set the max bytes size of the soft bundle to be half of the consensus max transactions in block size.
@@ -921,10 +1012,7 @@ impl ValidatorService {
             }
         }
 
-        Ok((
-            tonic::Response::new(Self::try_from_submit_tx_response(results)?),
-            Weight::zero(),
-        ))
+        Ok((Self::try_from_submit_tx_response(results)?, Weight::zero()))
     }
 
     fn try_from_submit_tx_response(
@@ -1227,7 +1315,10 @@ impl ValidatorService {
                     ConsensusTransactionKind::UserTransaction(tx) => {
                         self.state.await_transaction_effects(*tx.digest(), epoch_store).await?
                     }
-                    _ => panic!("`handle_submit_to_consensus` received transaction that is not a CertifiedTransaction or UserTransaction"),
+                    ConsensusTransactionKind::UserTransactionV2(tx) => {
+                        self.state.await_transaction_effects(*tx.tx().digest(), epoch_store).await?
+                    }
+                    _ => panic!("`handle_submit_to_consensus` received transaction that is not a CertifiedTransaction, UserTransaction, or UserTransactionV2"),
                 };
                 let events = if include_events && effects.events_digest().is_some() {
                     Some(self.state.get_transaction_events(effects.transaction_digest())?)

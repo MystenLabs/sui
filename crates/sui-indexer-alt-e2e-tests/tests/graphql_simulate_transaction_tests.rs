@@ -29,8 +29,7 @@ use sui_pg_db::{
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::gas_coin::GasCoin;
 
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
+use sui_futures::service::Service;
 use url::Url;
 
 use sui_types::base_types::SuiAddress;
@@ -141,9 +140,10 @@ struct FieldLayout {
 
 struct GraphQlTestCluster {
     url: Url,
-    handle: JoinHandle<()>,
-    cancel: CancellationToken,
-    indexer_handle: JoinHandle<()>,
+    /// Hold on to the service so it doesn't get dropped (and therefore aborted) until the cluster
+    /// goes out of scope.
+    #[allow(unused)]
+    service: Service,
     /// Hold on to the database so it doesn't get dropped until the cluster is stopped.
     #[allow(unused)]
     database: TempDb,
@@ -153,7 +153,6 @@ impl GraphQlTestCluster {
     async fn new(validator_cluster: &TestCluster) -> Self {
         let graphql_port = get_available_port();
         let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
-        let cancel = CancellationToken::new();
 
         let database = TempDb::new().expect("Failed to create temp database");
         let database_url = database.database().url().clone();
@@ -179,15 +178,14 @@ impl GraphQlTestCluster {
             IndexerConfig::for_test(),
             None,
             &Registry::new(),
-            cancel.child_token(),
         )
         .await
         .expect("Failed to setup indexer");
 
         let pipelines: Vec<String> = indexer.pipelines().map(|s| s.to_string()).collect();
-        let indexer_handle = indexer.run().await.expect("Failed to start indexer");
+        let s_indexer = indexer.run().await.expect("Failed to start indexer");
 
-        let graphql_handle = start_graphql(
+        let s_graphql = start_graphql(
             Some(database_url),
             fullnode_args,
             DbArgs::default(),
@@ -202,7 +200,6 @@ impl GraphQlTestCluster {
             GraphQlConfig::default(),
             pipelines,
             &Registry::new(),
-            cancel.child_token(),
         )
         .await
         .expect("Failed to start GraphQL server");
@@ -212,9 +209,7 @@ impl GraphQlTestCluster {
 
         Self {
             url,
-            handle: graphql_handle,
-            cancel,
-            indexer_handle,
+            service: s_graphql.merge(s_indexer),
             database,
         }
     }
@@ -240,12 +235,6 @@ impl GraphQlTestCluster {
             .context("Failed to parse GraphQL response")?;
 
         Ok(body)
-    }
-
-    async fn stopped(self) {
-        self.cancel.cancel();
-        let _ = self.handle.await;
-        let _ = self.indexer_handle.await;
     }
 }
 
@@ -312,8 +301,6 @@ async fn test_simulate_transaction_basic() {
 
     // For simulation, signatures should be empty since we don't provide them
     assert_eq!(transaction.signatures.len(), 0);
-
-    graphql_cluster.stopped().await;
 }
 
 #[tokio::test]
@@ -326,7 +313,8 @@ async fn test_simulate_transaction_with_events() {
     let tx_data = validator_cluster
         .test_transaction_builder()
         .await
-        .publish(path)
+        .publish_async(path)
+        .await
         .build();
     let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
     let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
@@ -350,7 +338,7 @@ async fn test_simulate_transaction_with_events() {
                                         modules {
                                             nodes {
                                                 name
-                                            }         
+                                            }
                                         }
                                     }
                                     name
@@ -408,8 +396,6 @@ async fn test_simulate_transaction_with_events() {
       "error": null
     }
     "#);
-
-    graphql_cluster.stopped().await;
 }
 
 #[tokio::test]
@@ -441,8 +427,6 @@ async fn test_simulate_transaction_input_validation() {
 
     // Should return GraphQL errors for invalid input
     assert!(result.get("errors").is_some());
-
-    graphql_cluster.stopped().await;
 }
 
 #[tokio::test]
@@ -570,8 +554,6 @@ async fn test_simulate_transaction_object_changes() {
         .as_str()
         .unwrap();
     assert_eq!(created_type, sui_coin_type);
-
-    graphql_cluster.stopped().await;
 }
 
 #[tokio::test]
@@ -585,7 +567,8 @@ async fn test_simulate_transaction_command_results() {
     let publish_tx = validator_cluster
         .test_transaction_builder()
         .await
-        .publish(package_path)
+        .publish_async(package_path)
+        .await
         .build();
     let signed_tx = validator_cluster.sign_transaction(&publish_tx).await;
     let publish_result = validator_cluster.execute_transaction(signed_tx).await;
@@ -780,8 +763,6 @@ async fn test_simulate_transaction_command_results() {
             _ => panic!("Unexpected command index: {}", i),
         }
     }
-
-    graphql_cluster.stopped().await;
 }
 
 #[tokio::test]
@@ -889,8 +870,6 @@ async fn test_simulate_transaction_json_transfer() {
 
     // For simulation, signatures should be empty since we don't provide them
     assert_eq!(transaction.signatures.len(), 0);
-
-    graphql_cluster.stopped().await;
 }
 
 #[tokio::test]
@@ -1002,6 +981,89 @@ async fn test_package_resolver_finds_newly_published_package() {
             .unwrap()
             .contains("::resolver_test::NestedObject")
     );
+}
 
-    graphql_cluster.stopped().await;
+#[tokio::test]
+async fn test_simulate_transaction_balance_changes() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    // Create a transfer transaction that will cause balance changes
+    let recipient = SuiAddress::random_for_testing_only();
+    let transfer_amount = 1_000_000u64;
+
+    let signed_tx = make_transfer_sui_transaction(
+        &validator_cluster.wallet,
+        Some(recipient),
+        Some(transfer_amount),
+    )
+    .await;
+    let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
+                    effects {
+                        status
+                        balanceChanges {
+                            nodes {
+                                coinType {
+                                    repr
+                                }
+                                amount
+                            }
+                        }
+                    }
+                    error
+                }
+            }
+        "#,
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    // Verify balance changes are populated from execution context
+    let mut balance_changes: Vec<_> = result
+        .pointer("/data/simulateTransaction/effects/balanceChanges/nodes")
+        .expect("balanceChanges should be present")
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| {
+            (
+                v["coinType"]["repr"].as_str().unwrap(),
+                v["amount"].as_str().unwrap(),
+            )
+        })
+        .collect();
+
+    // Sort for deterministic ordering (order depends on address which varies between runs)
+    balance_changes.sort();
+
+    // Should have balance changes for both sender and recipient
+    assert_eq!(balance_changes.len(), 2, "Should have 2 balance changes");
+
+    // Verify structure matches expected format
+    assert_eq!(
+        balance_changes,
+        vec![
+            (
+                "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+                "-3976000"
+            ),
+            (
+                "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+                "1000000"
+            ),
+        ]
+    );
 }

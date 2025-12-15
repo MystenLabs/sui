@@ -4,6 +4,7 @@ module a::m {
 
 module a::beep {
     struct BEEP has drop {}
+
     fun init(_: Who, _ctx: &mut sui::tx_context::TxContext) {}
 }
 

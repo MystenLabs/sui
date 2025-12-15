@@ -21,13 +21,12 @@ use metrics::RpcMetrics;
 use metrics::middleware::MetricsLayer;
 use prometheus::Registry;
 use serde_json::json;
+use sui_futures::service::Service;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_open_rpc::Project;
 use timeout::TimeoutLayer;
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 use tower_layer::Identity;
 use tracing::{info, warn};
 use url::Url;
@@ -88,9 +87,6 @@ pub struct RpcService {
 
     /// Description of the schema served by this service.
     schema: Project,
-
-    /// Cancellation token controlling all services.
-    cancel: CancellationToken,
 }
 
 impl RpcArgs {
@@ -109,11 +105,7 @@ impl RpcArgs {
 impl RpcService {
     /// Create a new instance of the JSON-RPC service, configured by `rpc_args`. The service will
     /// not accept connections until [Self::run] is called.
-    pub fn new(
-        rpc_args: RpcArgs,
-        registry: &Registry,
-        cancel: CancellationToken,
-    ) -> anyhow::Result<Self> {
+    pub fn new(rpc_args: RpcArgs, registry: &Registry) -> anyhow::Result<Self> {
         let metrics = RpcMetrics::new(registry);
 
         let server = ServerBuilder::new()
@@ -143,7 +135,6 @@ impl RpcService {
             slow_request_threshold: rpc_args.slow_request_threshold(),
             modules: jsonrpsee::RpcModule::new(()),
             schema,
-            cancel,
         })
     }
 
@@ -161,9 +152,9 @@ impl RpcService {
             .context("Failed to add module because of a name conflict")
     }
 
-    /// Start the service (it will accept connections) and return a handle that will resolve when
-    /// the service stops.
-    pub async fn run(self) -> anyhow::Result<JoinHandle<()>> {
+    /// Start the service (it will accept connections) and return a handle that tracks the
+    /// lifecycle of the service.
+    pub async fn run(self) -> anyhow::Result<Service> {
         let Self {
             rpc_listen_address,
             server,
@@ -172,7 +163,6 @@ impl RpcService {
             slow_request_threshold,
             mut modules,
             schema,
-            cancel,
         } = self;
 
         info!("Starting JSON-RPC service on {rpc_listen_address}",);
@@ -206,20 +196,15 @@ impl RpcService {
             .context("Failed to bind JSON-RPC service")?
             .start(modules);
 
-        // Set-up a helper task that will tear down the RPC service when the cancellation token is
-        // triggered.
-        let cancel_handle = handle.clone();
-        let cancel_cancel = cancel.clone();
-        let h_cancel = tokio::spawn(async move {
-            cancel_cancel.cancelled().await;
-            cancel_handle.stop()
-        });
-
-        Ok(tokio::spawn(async move {
-            handle.stopped().await;
-            cancel.cancel();
-            let _ = h_cancel.await;
-        }))
+        let signal = handle.clone();
+        Ok(Service::new()
+            .with_shutdown_signal(async move {
+                let _ = signal.stop();
+            })
+            .spawn(async move {
+                handle.stopped().await;
+                Ok(())
+            }))
     }
 }
 
@@ -243,8 +228,7 @@ pub struct NodeArgs {
 }
 
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
-/// command-line). The service will continue to run until the cancellation token is triggered, and
-/// will signal cancellation on the token when it is shutting down.
+/// command-line).
 ///
 /// Access to most reads is controlled by the `database_url` -- if it is `None`, reads will not work.
 /// The only exceptions are the `DelegationCoins` and `DelegationGovernance` modules, which are controlled
@@ -269,10 +253,8 @@ pub async fn start_rpc(
     system_package_task_args: SystemPackageTaskArgs,
     rpc_config: RpcConfig,
     registry: &Registry,
-    cancel: CancellationToken,
-) -> anyhow::Result<JoinHandle<()>> {
-    let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
-        .context("Failed to create RPC service")?;
+) -> anyhow::Result<Service> {
+    let mut rpc = RpcService::new(rpc_args, registry).context("Failed to create RPC service")?;
 
     let context = Context::new(
         database_url,
@@ -282,7 +264,6 @@ pub async fn start_rpc(
         rpc_config,
         rpc.metrics(),
         registry,
-        cancel.child_token(),
     )
     .await?;
 
@@ -290,7 +271,6 @@ pub async fn start_rpc(
         system_package_task_args,
         context.pg_reader().clone(),
         context.package_resolver().package_store().clone(),
-        cancel.child_token(),
     );
 
     rpc.add_module(Checkpoints(context.clone()))?;
@@ -320,14 +300,10 @@ pub async fn start_rpc(
         );
     }
 
-    let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
-    let h_system_package_task = system_package_task.run();
+    let s_rpc = rpc.run().await.context("Failed to start RPC service")?;
+    let s_system_package_task = system_package_task.run();
 
-    Ok(tokio::spawn(async move {
-        let _ = h_rpc.await;
-        cancel.cancel();
-        let _ = h_system_package_task.await;
-    }))
+    Ok(s_rpc.attach(s_system_package_task))
 }
 
 #[cfg(test)]
@@ -394,21 +370,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_graceful_shutdown() {
-        let cancel = CancellationToken::new();
-        let rpc = RpcService::new(
-            RpcArgs {
-                rpc_listen_address: test_listen_address(),
-                ..Default::default()
-            },
-            &Registry::new(),
-            cancel.clone(),
-        )
-        .unwrap();
+        let rpc = test_service().await;
+        let svc = rpc.run().await.unwrap();
 
-        let handle = rpc.run().await.unwrap();
-
-        cancel.cancel();
-        tokio::time::timeout(Duration::from_millis(500), handle)
+        tokio::time::timeout(Duration::from_millis(500), svc.shutdown())
             .await
             .expect("Shutdown should not timeout")
             .expect("Shutdown should succeed");
@@ -416,25 +381,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_rpc_discovery() {
-        let cancel = CancellationToken::new();
         let rpc_listen_address = test_listen_address();
-
         let mut rpc = RpcService::new(
             RpcArgs {
                 rpc_listen_address,
                 ..Default::default()
             },
             &Registry::new(),
-            cancel.clone(),
         )
         .unwrap();
 
         rpc.add_module(Foo).unwrap();
         rpc.add_module(Baz).unwrap();
 
-        let handle = rpc.run().await.unwrap();
+        let svc = rpc.run().await.unwrap();
 
-        let url = format!("http://{}/", rpc_listen_address);
+        let url = format!("http://{rpc_listen_address}/");
         let client = Client::new();
 
         let resp: Value = client
@@ -490,8 +452,7 @@ mod tests {
             ])
         );
 
-        cancel.cancel();
-        tokio::time::timeout(Duration::from_millis(500), handle)
+        tokio::time::timeout(Duration::from_millis(500), svc.shutdown())
             .await
             .expect("Shutdown should not timeout")
             .expect("Shutdown should succeed");
@@ -499,25 +460,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_metrics() {
-        let cancel = CancellationToken::new();
         let rpc_listen_address = test_listen_address();
-
         let mut rpc = RpcService::new(
             RpcArgs {
                 rpc_listen_address,
                 ..Default::default()
             },
             &Registry::new(),
-            cancel.clone(),
         )
         .unwrap();
 
         rpc.add_module(Foo).unwrap();
 
         let metrics = rpc.metrics();
-        let handle = rpc.run().await.unwrap();
+        let svc = rpc.run().await.unwrap();
 
-        let url = format!("http://{}/", rpc_listen_address);
+        let url = format!("http://{rpc_listen_address}/");
         let client = Client::new();
 
         client
@@ -582,8 +540,7 @@ mod tests {
             1
         );
 
-        cancel.cancel();
-        tokio::time::timeout(Duration::from_millis(500), handle)
+        tokio::time::timeout(Duration::from_millis(500), svc.shutdown())
             .await
             .expect("Shutdown should not timeout")
             .expect("Shutdown should succeed");
@@ -677,14 +634,12 @@ mod tests {
     }
 
     async fn test_service() -> RpcService {
-        let cancel = CancellationToken::new();
         RpcService::new(
             RpcArgs {
                 rpc_listen_address: test_listen_address(),
                 ..Default::default()
             },
             &Registry::new(),
-            cancel,
         )
         .expect("Failed to create test JSON-RPC service")
     }

@@ -5,13 +5,21 @@ use std::{
     collections::HashMap,
     ffi::OsStr,
     fs::File,
-    io::{self, Seek},
+    io::{self, Read},
     path::{Path, PathBuf},
     process::Command,
+    str::FromStr,
 };
 
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use colored::Colorize;
+use serde::{Deserialize, Serialize};
+use tar::Archive;
+use tempfile::TempDir;
+use tracing::{debug, info};
+
+use sui_package_alt::SuiFlavor;
+
 use move_binary_format::CompiledModule;
 use move_bytecode_source_map::utils::source_map_from_file;
 use move_command_line_common::{
@@ -26,23 +34,147 @@ use move_compiler::{
     editions::{Edition, Flavor},
     shared::{NumericalAddress, files::FileName},
 };
-use move_package::{
-    compilation::{
-        compiled_package::CompiledUnitWithSource, package_layout::CompiledPackageLayout,
-    },
-    lock_file::schema::{Header, ToolchainVersion},
-    source_package::{layout::SourcePackageLayout, parsed_manifest::PackageName},
+use move_package_alt::{
+    package::layout::SourcePackageLayout,
+    schema::{Environment, ParsedPublishedFile},
 };
+use move_package_alt_compilation::compiled_package::CompiledUnitWithSource;
+use move_package_alt_compilation::layout::CompiledPackageLayout;
 use move_symbol_pool::Symbol;
-use tar::Archive;
-use tempfile::TempDir;
-use tracing::{debug, info};
 
 pub(crate) const CURRENT_COMPILER_VERSION: &str = env!("CARGO_PKG_VERSION");
 const LEGACY_COMPILER_VERSION: &str = CURRENT_COMPILER_VERSION; // TODO: update this when Move 2024 is released
 const PRE_TOOLCHAIN_MOVE_LOCK_VERSION: u16 = 0; // Used to detect lockfiles pre-toolchain versioning support
 const CANONICAL_UNIX_BINARY_NAME: &str = "sui";
 const CANONICAL_WIN_BINARY_NAME: &str = "sui.exe";
+
+/// Lock file version written by this version of the compiler.  Backwards compatibility is
+/// guaranteed (the compiler can read lock files with older versions), forward compatibility is not
+/// (the compiler will fail to read lock files at newer versions).
+///
+/// V0: Base version.
+/// V1: Adds toolchain versioning support.
+/// V2: Adds support for managing addresses on package publish and upgrades.
+/// V3: Renames dependency `name` field to `id` and adds a `name` field to store the name from the manifest.
+pub const VERSION: u16 = 3;
+
+// TODO: pkg-alt, maybe we want to reuse the code in move-package-alt to read lockfiles
+#[derive(Serialize, Deserialize)]
+pub struct LockfileHeader {
+    pub version: u16,
+}
+
+// TODO: pkg-alt this needs to work with both old style and new style formats. Particularly, for
+// the new pkg system, the toolchain version is in the Published.toml file, or Pub.env.toml file.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ToolchainVersion {
+    /// The Move compiler version used to compile this package.
+    #[serde(rename = "compiler-version")]
+    pub compiler_version: String,
+    /// The Move compiler configuration used to compile this package.
+    pub edition: Edition,
+    pub flavor: Flavor,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Schema<T> {
+    #[serde(rename = "move")]
+    move_: T,
+}
+
+// TODO: pkg-alt, maybe we want to reuse the code in move-package-alt to read lockfiles
+impl LockfileHeader {
+    /// Read lock file header after verifying that the version of the lock is not newer than the version
+    /// supported by this library.
+    pub fn read(lock: &mut impl Read) -> Result<Self> {
+        let contents = {
+            let mut buf = String::new();
+            lock.read_to_string(&mut buf).context("Reading lock file")?;
+            buf
+        };
+        Self::from_str(&contents)
+    }
+
+    fn from_str(contents: &str) -> Result<Self> {
+        let Schema { move_: header } =
+            toml::de::from_str::<Schema<Self>>(contents).context("Deserializing lock header")?;
+
+        if header.version != VERSION {
+            bail!(
+                "Lock file format mismatch, expected version {}, found {}",
+                VERSION,
+                header.version
+            );
+        }
+
+        Ok(header)
+    }
+}
+
+impl ToolchainVersion {
+    /// Read toolchain version info from the root project directory. Tries to read Published.toml
+    /// first (new pkg-alt format), then falls back to Move.lock (old format). Returns None if
+    /// neither file exists or if no toolchain info is found.
+    pub fn read(root_path: &Path, env: &Environment) -> anyhow::Result<Option<ToolchainVersion>> {
+        let published_path = root_path.join("Published.toml");
+        let lock_path = root_path.join(SourcePackageLayout::Lock.path());
+
+        if published_path.exists() {
+            let contents =
+                std::fs::read_to_string(&published_path).context("Reading Published.toml file")?;
+            let parsed: ParsedPublishedFile<SuiFlavor> =
+                toml::de::from_str(&contents).context("Deserializing Published.toml")?;
+
+            if let Some((_, publication)) = parsed.published.into_iter().next()
+                && let (Some(compiler_version), Some(build_config)) = (
+                    publication.metadata.toolchain_version,
+                    publication.metadata.build_config,
+                )
+            {
+                // Check that the publication info matches the current environment before returning
+                // the toolchain info. If they don't match, then we don't know which toolchain was
+                // used.
+                if env.id() == &publication.chain_id {
+                    debug!("Found toolchain version in Published.toml file");
+                    return Ok(Some(ToolchainVersion {
+                        compiler_version,
+                        edition: Edition::from_str(&build_config.edition)?,
+                        flavor: Flavor::from_str(&build_config.flavor)?,
+                    }));
+                }
+            }
+
+            debug!("Did not find toolchain version in Published.toml file");
+
+            return Ok(None);
+        }
+
+        if lock_path.exists() {
+            debug!("Found Move.lock file, reading toolchain version from it");
+            let contents = std::fs::read_to_string(&lock_path).context("Reading Move.lock file")?;
+            let _ = LockfileHeader::from_str(&contents)?;
+
+            #[derive(serde::Deserialize)]
+            struct TV {
+                #[serde(rename = "toolchain-version")]
+                toolchain_version: Option<ToolchainVersion>,
+            }
+
+            let Schema { move_: value } = toml::de::from_str::<Schema<TV>>(&contents)
+                .context("Deserializing toolchain version from Move.lock")?;
+
+            debug!(
+                "Toolchain version read from Move.lock file {:?}",
+                value.toolchain_version
+            );
+            return Ok(value.toolchain_version);
+        }
+
+        debug!("Did not find Move.lock nor Published.toml file");
+
+        Ok(None)
+    }
+}
 
 pub(crate) fn current_toolchain() -> ToolchainVersion {
     ToolchainVersion {
@@ -60,13 +192,14 @@ pub(crate) fn legacy_toolchain() -> ToolchainVersion {
     }
 }
 
-/// Ensures `compiled_units` are compiled with the right compiler version, based on
-/// Move.lock contents. This works by detecting if a compiled unit requires a prior compiler version:
-/// - If so, download the compiler, recompile the unit, and return that unit in the result.
-/// - If not, simply keep the current compiled unit.
+// /// Ensures `compiled_units` are compiled with the right compiler version, based on
+// /// Move.lock contents. This works by detecting if a compiled unit requires a prior compiler version:
+// /// - If so, download the compiler, recompile the unit, and return that unit in the result.
+// /// - If not, simply keep the current compiled unit.
 pub(crate) fn units_for_toolchain(
-    compiled_units: &Vec<(PackageName, CompiledUnitWithSource)>,
-) -> anyhow::Result<Vec<(PackageName, CompiledUnitWithSource)>> {
+    compiled_units: &Vec<(Symbol, CompiledUnitWithSource)>,
+    env: &Environment,
+) -> anyhow::Result<Vec<(Symbol, CompiledUnitWithSource)>> {
     if std::env::var("SUI_RUN_TOOLCHAIN_BUILD").is_err() {
         return Ok(compiled_units.clone());
     }
@@ -82,7 +215,10 @@ pub(crate) fn units_for_toolchain(
 
         if sui_types::is_system_package(local_unit.unit.address.into_inner()) {
             // System packages are always compiled with the current compiler.
-            package_version_map.insert(*package, (current_toolchain(), vec![local_unit.clone()]));
+            package_version_map.insert(
+                Symbol::from(package.as_str()),
+                (current_toolchain(), vec![local_unit.clone()]),
+            );
             continue;
         }
 
@@ -95,7 +231,7 @@ pub(crate) fn units_for_toolchain(
         }
 
         let mut lock_file = File::open(lock_file)?;
-        let lock_version = Header::read(&mut lock_file)?.version;
+        let lock_version = LockfileHeader::read(&mut lock_file)?.version;
         if lock_version == PRE_TOOLCHAIN_MOVE_LOCK_VERSION {
             // No need to attempt reading lock file toolchain
             debug!("{package} on legacy compiler",);
@@ -103,23 +239,25 @@ pub(crate) fn units_for_toolchain(
             continue;
         }
 
-        // Read lock file toolchain info
-        lock_file.rewind()?;
-        let toolchain_version = ToolchainVersion::read(&mut lock_file)?;
+        let toolchain_version = ToolchainVersion::read(&package_root, env)?;
         match toolchain_version {
             // No ToolchainVersion and new Move.lock version implies current compiler.
             None => {
                 debug!("{package} on current compiler @ {CURRENT_COMPILER_VERSION}",);
-                package_version_map
-                    .insert(*package, (current_toolchain(), vec![local_unit.clone()]));
+                package_version_map.insert(
+                    Symbol::from(package.as_str()),
+                    (current_toolchain(), vec![local_unit.clone()]),
+                );
             }
             // This dependency uses the current compiler.
             Some(ToolchainVersion {
                 compiler_version, ..
             }) if compiler_version == CURRENT_COMPILER_VERSION => {
                 debug!("{package} on current compiler @ {CURRENT_COMPILER_VERSION}",);
-                package_version_map
-                    .insert(*package, (current_toolchain(), vec![local_unit.clone()]));
+                package_version_map.insert(
+                    Symbol::from(package.as_str()),
+                    (current_toolchain(), vec![local_unit.clone()]),
+                );
             }
             // This dependency needs a prior compiler. Mark it and compile.
             Some(toolchain_version) => {
@@ -128,7 +266,10 @@ pub(crate) fn units_for_toolchain(
                     "REQUIRE".bold().green(),
                     toolchain_version.compiler_version.yellow(),
                 );
-                package_version_map.insert(*package, (toolchain_version, vec![local_unit.clone()]));
+                package_version_map.insert(
+                    Symbol::from(package.as_str()),
+                    (toolchain_version, vec![local_unit.clone()]),
+                );
             }
         }
     }

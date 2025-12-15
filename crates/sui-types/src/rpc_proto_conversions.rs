@@ -4,6 +4,13 @@
 //! Module for conversions from sui-core types to rpc protos
 
 use crate::crypto::SuiSignature;
+
+fn ms_to_timestamp(ms: u64) -> prost_types::Timestamp {
+    prost_types::Timestamp {
+        seconds: (ms / 1000) as _,
+        nanos: ((ms % 1000) * 1_000_000) as _,
+    }
+}
 use crate::message_envelope::Message as _;
 use fastcrypto::traits::ToFromBytes;
 use sui_rpc::field::FieldMaskTree;
@@ -388,17 +395,31 @@ impl Merge<crate::messages_checkpoint::CheckpointContents> for CheckpointContent
         }
 
         if mask.contains(Self::VERSION_FIELD) {
-            self.version = Some(1);
+            self.set_version(match &source {
+                crate::messages_checkpoint::CheckpointContents::V1(_) => 1,
+                crate::messages_checkpoint::CheckpointContents::V2(_) => 2,
+            });
         }
 
         if mask.contains(Self::TRANSACTIONS_FIELD) {
             self.transactions = source
-                .into_iter_with_signatures()
+                .inner()
+                .iter()
                 .map(|(digests, sigs)| {
                     let mut info = CheckpointedTransactionInfo::default();
                     info.transaction = Some(digests.transaction.to_string());
                     info.effects = Some(digests.effects.to_string());
-                    info.signatures = sigs.into_iter().map(Into::into).collect();
+                    let (signatures, versions) = sigs
+                        .map(|(s, v)| {
+                            (s.into(), {
+                                let mut message = AddressAliasesVersion::default();
+                                message.version = v.map(Into::into);
+                                message
+                            })
+                        })
+                        .unzip();
+                    info.signatures = signatures;
+                    info.address_aliases_versions = versions;
                     info
                 })
                 .collect();
@@ -1162,11 +1183,10 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                 ExecutionErrorKind::MoveRawValueTooBig
             }
             E::InvalidLinkage => ExecutionErrorKind::InvalidLinkage,
-            E::InsufficientBalanceForWithdraw => {
-                todo!("Add InsufficientBalanceForWithdraw to rpc sdk")
-            }
-            E::NonExclusiveWriteInputObjectModified { .. } => {
-                todo!("Add NonExclusiveWriteInputObjectModified to rpc sdk")
+            E::InsufficientBalanceForWithdraw => ExecutionErrorKind::InsufficientFundsForWithdraw,
+            E::NonExclusiveWriteInputObjectModified { id } => {
+                message.set_object_id(id.to_canonical_string(true));
+                ExecutionErrorKind::NonExclusiveWriteInputObjectModified
             }
         };
 
@@ -1597,9 +1617,9 @@ impl From<&crate::multisig::MultiSig> for MultisigAggregatedSignature {
 // UserSignature
 //
 
-impl From<crate::signature::GenericSignature> for UserSignature {
-    fn from(value: crate::signature::GenericSignature) -> Self {
-        Self::merge_from(&value, &FieldMaskTree::new_wildcard())
+impl From<&crate::signature::GenericSignature> for UserSignature {
+    fn from(value: &crate::signature::GenericSignature) -> Self {
+        Self::merge_from(value, &FieldMaskTree::new_wildcard())
     }
 }
 
@@ -2033,10 +2053,22 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
                 message.epoch = Some(epoch);
                 TransactionExpirationKind::Epoch
             }
-            E::ValidDuring { .. } => {
-                // TODO: Implement proper proto conversion for ValidDuring
-                // For now, treat as None to maintain compatibility
-                TransactionExpirationKind::None
+            E::ValidDuring {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain,
+                nonce,
+            } => {
+                message.epoch = max_epoch;
+                message.min_epoch = min_epoch;
+                message.min_timestamp = min_timestamp.map(ms_to_timestamp);
+                message.max_timestamp = max_timestamp.map(ms_to_timestamp);
+                message.set_chain(sui_sdk_types::Digest::new(*chain.as_bytes()));
+                message.set_nonce(nonce);
+
+                TransactionExpirationKind::ValidDuring
             }
         };
 
@@ -2378,6 +2410,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             K::AccumulatorRootCreate => message.with_kind(Kind::AccumulatorRootCreate),
             K::CoinRegistryCreate => message.with_kind(Kind::CoinRegistryCreate),
             K::DisplayRegistryCreate => message.with_kind(Kind::DisplayRegistryCreate),
+            K::AddressAliasStateCreate => {
+                todo!("AddressAliasStateCreate needs to be added to proto in sui-apis")
+            }
         }
     }
 }
@@ -2486,6 +2521,7 @@ impl From<crate::transaction::CallArg> for Input {
         use crate::transaction::CallArg as I;
         use crate::transaction::ObjectArg as O;
         use input::InputKind;
+        use input::Mutability;
 
         let mut message = Self::default();
 
@@ -2506,10 +2542,18 @@ impl From<crate::transaction::CallArg> for Input {
                     initial_shared_version,
                     mutability,
                 } => {
-                    // TODO(address-balances): add full enum to schema
                     message.object_id = Some(id.to_canonical_string(true));
                     message.version = Some(initial_shared_version.value());
                     message.mutable = Some(mutability.is_exclusive());
+                    message.set_mutability(match mutability {
+                        crate::transaction::SharedObjectMutability::Immutable => {
+                            Mutability::Immutable
+                        }
+                        crate::transaction::SharedObjectMutability::Mutable => Mutability::Mutable,
+                        crate::transaction::SharedObjectMutability::NonExclusiveWrite => {
+                            Mutability::NonExclusiveWrite
+                        }
+                    });
                     InputKind::Shared
                 }
                 O::Receiving((id, version, digest)) => {
@@ -2519,11 +2563,34 @@ impl From<crate::transaction::CallArg> for Input {
                     InputKind::Receiving
                 }
             },
-            //TODO
-            I::FundsWithdrawal(_) => InputKind::Unknown,
+            I::FundsWithdrawal(withdrawal) => {
+                message.set_funds_withdrawal(withdrawal);
+                InputKind::FundsWithdrawal
+            }
         };
 
         message.set_kind(kind);
+        message
+    }
+}
+
+impl From<crate::transaction::FundsWithdrawalArg> for FundsWithdrawal {
+    fn from(value: crate::transaction::FundsWithdrawalArg) -> Self {
+        use funds_withdrawal::Source;
+
+        let mut message = Self::default();
+
+        message.amount = match value.reservation {
+            crate::transaction::Reservation::EntireBalance => None,
+            crate::transaction::Reservation::MaxAmountU64(amount) => Some(amount),
+        };
+        let crate::transaction::WithdrawalTypeArg::Balance(coin_type) = value.type_arg;
+        message.coin_type = Some(coin_type.to_canonical_string(true));
+        message.set_source(match value.withdraw_from {
+            crate::transaction::WithdrawFrom::Sender => Source::Sender,
+            crate::transaction::WithdrawFrom::Sponsor => Source::Sponsor,
+        });
+
         message
     }
 }
@@ -2993,12 +3060,37 @@ impl From<crate::effects::EffectsObjectChange> for ChangedObject {
                 message.output_digest = Some(digest.to_string());
                 OutputObjectState::PackageWrite
             }
-            //TODO
-            ObjectOut::AccumulatorWriteV1(_) => OutputObjectState::Unknown,
+            ObjectOut::AccumulatorWriteV1(accumulator_write) => {
+                message.set_accumulator_write(accumulator_write);
+                OutputObjectState::AccumulatorWrite
+            }
         };
         message.set_output_state(output_state);
 
         message.set_id_operation(value.id_operation.into());
+        message
+    }
+}
+
+impl From<crate::effects::AccumulatorWriteV1> for AccumulatorWrite {
+    fn from(value: crate::effects::AccumulatorWriteV1) -> Self {
+        use accumulator_write::AccumulatorOperation;
+
+        let mut message = Self::default();
+
+        message.set_address(value.address.address.to_string());
+        message.set_accumulator_type(value.address.ty.to_canonical_string(true));
+        message.set_operation(match value.operation {
+            crate::effects::AccumulatorOperation::Merge => AccumulatorOperation::Merge,
+            crate::effects::AccumulatorOperation::Split => AccumulatorOperation::Split,
+        });
+        match value.value {
+            crate::effects::AccumulatorValue::Integer(value) => message.set_value(value),
+            //TODO unsupported value types
+            crate::effects::AccumulatorValue::IntegerTuple(_, _)
+            | crate::effects::AccumulatorValue::EventDigest(_) => {}
+        }
+
         message
     }
 }

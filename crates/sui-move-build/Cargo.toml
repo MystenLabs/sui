@@ -10,6 +10,8 @@ publish = false
 [dependencies]
 anyhow.workspace = true
 fastcrypto.workspace = true
+futures.workspace = true
+thiserror.workspace = true
 tempfile.workspace = true
 
 move-bytecode-verifier = { path = "../../external-crates/move/crates/move-bytecode-verifier" }
@@ -18,7 +20,8 @@ sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "su
 serde-reflection.workspace = true
 sui-types.workspace = true
 sui-protocol-config.workspace = true
-sui-package-management.workspace = true
+sui-package-alt.workspace = true
+tokio.workspace = true
 mysten-common.workspace = true
 
 move-binary-format.workspace = true
@@ -27,5 +30,9 @@ move-command-line-common.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
 move-ir-types.workspace = true
-move-package.workspace = true
+move-package-alt.workspace = true
+move-package-alt-compilation.workspace = true
 move-symbol-pool.workspace = true
+
+[dev-dependencies]
+fs_extra.workspace = true

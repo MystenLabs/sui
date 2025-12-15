@@ -5,7 +5,6 @@ module a::trigger_lint_cases {
     struct MissingKeyAbility {
         id: UID,
     }
-
 }
 
 module sui::object {

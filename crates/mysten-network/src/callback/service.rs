@@ -60,7 +60,6 @@ where
             Error: std::fmt::Display + 'static,
         >,
     M: MakeCallbackHandler,
-    RequestBody: http_body::Body<Error: std::fmt::Display + 'static>,
     ResponseBodyT: http_body::Body<Error: std::fmt::Display + 'static>,
 {
     type Response = Response<ResponseBody<ResponseBodyT, M::Handler>>;

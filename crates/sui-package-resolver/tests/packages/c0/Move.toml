@@ -2,7 +2,8 @@
 name = "C"
 version = "0.0.1"
 published-at = "0xc0"
-edition = "development"
+edition = "2024"
+implicit-dependencies = false
 
 [dependencies]
 A = { local = "../a1", override = true }

@@ -1,0 +1,209 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Test to make sure we properly randomize addresses across packages.
+sui move --client.config $CONFIG summary --path data/overlapping_summaries
+ls -1 data/overlapping_summaries/package_summaries/
+cat data/overlapping_summaries/package_summaries/child_pkg/a.json
+cat data/overlapping_summaries/package_summaries/other_child/a.json
+cat data/overlapping_summaries/package_summaries/overlapping_summaries/b.json
+cat data/overlapping_summaries/package_summaries/address_mapping.json
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY other_child
+INCLUDING DEPENDENCY child_pkg
+BUILDING overlapping_summaries
+
+Summary generation successful. Summaries stored in 'package_summaries'
+address_mapping.json
+child_pkg
+other_child
+overlapping_summaries
+root_package_metadata.json
+std
+sui
+{
+  "id": {
+    "address": "child_pkg",
+    "name": "a"
+  },
+  "doc": null,
+  "immediate_dependencies": [],
+  "attributes": [],
+  "functions": {
+    "f": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [],
+      "return_": []
+    }
+  },
+  "structs": {
+    "X": {
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Store"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": true,
+        "fields": {
+          "dummy_field": {
+            "index": 0,
+            "type_": "bool"
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}{
+  "id": {
+    "address": "other_child",
+    "name": "a"
+  },
+  "doc": null,
+  "immediate_dependencies": [],
+  "attributes": [],
+  "functions": {
+    "f": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [],
+      "return_": []
+    }
+  },
+  "structs": {
+    "X": {
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "abilities": [
+        "Store"
+      ],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": true,
+        "fields": {
+          "dummy_field": {
+            "index": 0,
+            "type_": "bool"
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}{
+  "id": {
+    "address": "overlapping_summaries",
+    "name": "b"
+  },
+  "doc": null,
+  "immediate_dependencies": [
+    {
+      "address": "child_pkg",
+      "name": "a"
+    },
+    {
+      "address": "other_child",
+      "name": "a"
+    }
+  ],
+  "attributes": [],
+  "functions": {
+    "g": {
+      "source_index": 0,
+      "index": 0,
+      "doc": null,
+      "attributes": [],
+      "visibility": "Public",
+      "entry": false,
+      "type_parameters": [],
+      "parameters": [],
+      "return_": []
+    }
+  },
+  "structs": {
+    "Y": {
+      "index": 0,
+      "doc": null,
+      "attributes": [
+        {
+          "Parameterized": [
+            "allow",
+            [
+              {
+                "Name": "unused"
+              }
+            ]
+          ]
+        }
+      ],
+      "abilities": [],
+      "type_parameters": [],
+      "fields": {
+        "positional_fields": false,
+        "fields": {
+          "x": {
+            "index": 0,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "child_pkg",
+                  "name": "a"
+                },
+                "name": "X",
+                "type_arguments": []
+              }
+            }
+          },
+          "y": {
+            "index": 1,
+            "doc": null,
+            "type_": {
+              "Datatype": {
+                "module": {
+                  "address": "other_child",
+                  "name": "a"
+                },
+                "name": "X",
+                "type_arguments": []
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "enums": {}
+}{
+  "child_pkg": "0x0000000000000000000000000000000000000000000000000000000000001004",
+  "other_child": "0x000000000000000000000000000000000000000000000000000000000000000c",
+  "overlapping_summaries": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "std": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "sui": "0x0000000000000000000000000000000000000000000000000000000000000002"
+}
+----- stderr -----

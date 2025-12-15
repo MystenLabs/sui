@@ -4,20 +4,21 @@ fun t0(): u64 { return 5 }
 
 fun t1(): u64 { return t0() }
 
-public struct S {  }
+public struct S {}
 
-fun t2(): S { return S { } }
+fun t2(): S { return S {} }
 
-public enum E { V }
+public enum E {
+    V,
+}
 
 fun t3(): E { return E::V }
 
-fun t4(): vector<u64> { return vector[1,2,3] }
+fun t4(): vector<u64> { return vector[1, 2, 3] }
 
 fun t5() { return () }
 
-fun t6(): u64 { let x = 0; return move x
-}
+fun t6(): u64 { let x = 0; return move x }
 
 fun t7(): u64 {
     let x = 0;

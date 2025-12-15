@@ -123,3 +123,7 @@ fun test_withdrawal_split_join(owner: address, l1: u128, l2: u128, l3: u128) {
     w1.join(w3);
     assert_eq!(w1.limit(), l1 + l2 + l3);
 }
+
+public struct TestObject has key {
+    id: UID,
+}

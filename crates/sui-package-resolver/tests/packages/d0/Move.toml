@@ -2,7 +2,8 @@
 name = "D"
 version = "0.0.1"
 published-at = "0xd0"
-edition = "development"
+edition = "2024"
+implicit-dependencies = false
 
 [dependencies]
 Sui = { local = "../sui" }

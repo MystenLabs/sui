@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
@@ -40,6 +41,7 @@ use sui_types::storage::EpochInfo;
 use sui_types::storage::TransactionInfo;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::transaction::{TransactionDataAPI, TransactionKind};
 use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 use tracing::{debug, info, warn};
 use typed_store::DBMapUtils;
@@ -387,6 +389,8 @@ struct IndexStoreTables {
 pub struct EventIndexKey {
     pub stream_id: SuiAddress,
     pub checkpoint_seq: u64,
+    /// The accumulator version that this event is settled into
+    pub accumulator_version: u64,
     pub transaction_idx: u32,
     pub event_index: u32,
 }
@@ -686,11 +690,38 @@ impl IndexStoreTables {
         Ok(batch)
     }
 
+    fn extract_accumulator_version(
+        &self,
+        tx: &sui_types::full_checkpoint_content::CheckpointTransaction,
+    ) -> Option<u64> {
+        let TransactionKind::ProgrammableSystemTransaction(pt) =
+            tx.transaction.transaction_data().kind()
+        else {
+            return None;
+        };
+
+        if pt.shared_input_objects().any(|obj| {
+            obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
+                && obj.mutability == sui_types::transaction::SharedObjectMutability::Mutable
+        }) {
+            return tx.output_objects.iter().find_map(|obj| {
+                if obj.id() == SUI_ACCUMULATOR_ROOT_OBJECT_ID {
+                    Some(obj.version().value())
+                } else {
+                    None
+                }
+            });
+        }
+
+        None
+    }
+
     fn index_transaction_events(
         &self,
         tx: &sui_types::full_checkpoint_content::CheckpointTransaction,
         checkpoint_seq: u64,
         tx_idx: u32,
+        accumulator_version: Option<u64>,
         batch: &mut typed_store::rocks::DBBatch,
     ) -> Result<(), StorageError> {
         let acc_events = tx.effects.accumulator_events();
@@ -700,18 +731,29 @@ impl IndexStoreTables {
 
         let mut entries: Vec<(EventIndexKey, ())> = Vec::new();
         for acc in acc_events {
-            if let Some(stream_id) =
-                sui_types::accumulator_root::stream_id_from_accumulator_event(&acc)
-                && let AccumulatorValue::EventDigest(event_digests) = &acc.write.value
-            {
-                for (idx, _d) in event_digests {
-                    let key = EventIndexKey {
-                        stream_id,
+            if let AccumulatorValue::EventDigest(event_digests) = &acc.write.value {
+                let Some(accumulator_version) = accumulator_version else {
+                    mysten_common::debug_fatal!(
+                        "Found events at checkpoint {} tx {} before any accumulator settlement",
                         checkpoint_seq,
-                        transaction_idx: tx_idx,
-                        event_index: *idx as u32,
-                    };
-                    entries.push((key, ()));
+                        tx_idx
+                    );
+                    continue;
+                };
+
+                if let Some(stream_id) =
+                    sui_types::accumulator_root::stream_id_from_accumulator_event(&acc)
+                {
+                    for (idx, _d) in event_digests {
+                        let key = EventIndexKey {
+                            stream_id,
+                            checkpoint_seq,
+                            accumulator_version,
+                            transaction_idx: tx_idx,
+                            event_index: *idx as u32,
+                        };
+                        entries.push((key, ()));
+                    }
                 }
             }
         }
@@ -787,8 +829,10 @@ impl IndexStoreTables {
         index_events: bool,
     ) -> Result<(), StorageError> {
         let cp = checkpoint.checkpoint_summary.sequence_number;
+        let mut current_accumulator_version: Option<u64> = None;
 
-        for (tx_idx, tx) in checkpoint.transactions.iter().enumerate() {
+        // iterate in reverse order, process accumulator settlements first
+        for (tx_idx, tx) in checkpoint.transactions.iter().enumerate().rev() {
             let info = TransactionInfo::new(
                 tx.transaction.transaction_data(),
                 &tx.effects,
@@ -801,7 +845,17 @@ impl IndexStoreTables {
             batch.insert_batch(&self.transactions, [(digest, info)])?;
 
             if index_events {
-                self.index_transaction_events(tx, cp, tx_idx as u32, batch)?;
+                if let Some(version) = self.extract_accumulator_version(tx) {
+                    current_accumulator_version = Some(version);
+                }
+
+                self.index_transaction_events(
+                    tx,
+                    cp,
+                    tx_idx as u32,
+                    current_accumulator_version,
+                    batch,
+                )?;
             }
         }
 
@@ -937,6 +991,7 @@ impl IndexStoreTables {
         &self,
         stream_id: SuiAddress,
         start_checkpoint: u64,
+        start_accumulator_version: u64,
         start_transaction_idx: u32,
         start_event_idx: u32,
         end_checkpoint: u64,
@@ -946,15 +1001,18 @@ impl IndexStoreTables {
         let lower = EventIndexKey {
             stream_id,
             checkpoint_seq: start_checkpoint,
+            accumulator_version: start_accumulator_version,
             transaction_idx: start_transaction_idx,
             event_index: start_event_idx,
         };
         let upper = EventIndexKey {
             stream_id,
             checkpoint_seq: end_checkpoint,
+            accumulator_version: u64::MAX,
             transaction_idx: u32::MAX,
             event_index: u32::MAX,
         };
+
         Ok(self
             .events_by_stream
             .safe_iter_with_bounds(Some(lower), Some(upper))
@@ -1510,6 +1568,7 @@ impl RpcIndexStore {
         &self,
         stream_id: SuiAddress,
         start_checkpoint: u64,
+        start_accumulator_version: u64,
         start_transaction_idx: u32,
         start_event_idx: u32,
         end_checkpoint: u64,
@@ -1519,6 +1578,7 @@ impl RpcIndexStore {
         self.tables.event_iter(
             stream_id,
             start_checkpoint,
+            start_accumulator_version,
             start_transaction_idx,
             start_event_idx,
             end_checkpoint,
@@ -1816,6 +1876,7 @@ mod tests {
             .map(|&checkpoint_seq| EventIndexKey {
                 stream_id,
                 checkpoint_seq,
+                accumulator_version: 0,
                 transaction_idx: 0,
                 event_index: 0,
             })
@@ -1843,12 +1904,14 @@ mod tests {
         let start_key = EventIndexKey {
             stream_id: SuiAddress::ZERO,
             checkpoint_seq: 0,
+            accumulator_version: 0,
             transaction_idx: 0,
             event_index: 0,
         };
         let end_key = EventIndexKey {
             stream_id: SuiAddress::random_for_testing_only(),
             checkpoint_seq: u64::MAX,
+            accumulator_version: u64::MAX,
             transaction_idx: u32::MAX,
             event_index: u32::MAX,
         };
@@ -1880,6 +1943,7 @@ mod tests {
         let old_key = EventIndexKey {
             stream_id: SuiAddress::random_for_testing_only(),
             checkpoint_seq: 50,
+            accumulator_version: 0,
             transaction_idx: 0,
             event_index: 0,
         };
@@ -1892,6 +1956,7 @@ mod tests {
         let new_key = EventIndexKey {
             stream_id: SuiAddress::random_for_testing_only(),
             checkpoint_seq: 150,
+            accumulator_version: 0,
             transaction_idx: 0,
             event_index: 0,
         };
@@ -1904,6 +1969,7 @@ mod tests {
         let boundary_key = EventIndexKey {
             stream_id: SuiAddress::random_for_testing_only(),
             checkpoint_seq: 100,
+            accumulator_version: 0,
             transaction_idx: 0,
             event_index: 0,
         };

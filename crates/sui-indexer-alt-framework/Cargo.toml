@@ -12,6 +12,7 @@ async-trait.workspace = true
 axum.workspace = true
 backoff.workspace = true
 bb8 = "0.8.5"
+bytes.workspace = true
 chrono.workspace = true
 clap = { workspace = true, features = ["env"] }
 diesel = { workspace = true, features = ["chrono"] }
@@ -27,13 +28,13 @@ tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
-tokio-util.workspace = true
 tonic.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, optional = true }
 url.workspace = true
 
 sui-field-count.workspace = true
+sui-futures.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-rpc.workspace = true

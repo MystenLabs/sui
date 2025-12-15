@@ -3,5 +3,5 @@
 
 # tests that sui move new followed by sui move build succeeds
 
-sui move new example
-cd example && sui move build
+sui move --client.config $CONFIG new example
+cd example && sui move --client.config $CONFIG build

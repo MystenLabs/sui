@@ -11,7 +11,7 @@ use crate::{
 };
 use anyhow::{Result, bail};
 use move_binary_format::errors::Location;
-use move_package::compilation::compiled_package::CompiledPackage;
+use move_package_alt_compilation::compiled_package::CompiledPackage;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::gas_schedule::CostTable;
 use std::collections::BTreeMap;
@@ -29,7 +29,7 @@ pub fn publish(
 ) -> Result<()> {
     // collect all modules compiled
     let compiled_modules = if with_deps {
-        package.all_modules().collect::<Vec<_>>()
+        package.all_compiled_units_with_source().collect::<Vec<_>>()
     } else {
         package.root_modules().collect::<Vec<_>>()
     };

@@ -2,14 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod compatibility_tests {
-    use move_package::source_package::{
-        manifest_parser::parse_move_manifest_from_file, parsed_manifest::SourceManifest,
-    };
     use std::collections::BTreeMap;
     use std::path::Path;
     use sui_framework::{BuiltInFramework, compare_system_package};
     use sui_framework_snapshot::{load_bytecode_snapshot, load_bytecode_snapshot_manifest};
-    use sui_move_build::published_at_property;
+    use sui_move_build::{parse_legacy_pkg_info, published_at_property};
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 
     /// The number of bytecode snapshots to backtest against the current framework.
@@ -92,16 +89,16 @@ mod compatibility_tests {
         for entry in manifest.values() {
             for package in entry.packages.iter() {
                 // parse package.path/Move.toml
-                let toml_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                let package_path = Path::new(env!("CARGO_MANIFEST_DIR"))
                     .join("..")
                     .join("..")
                     .join(&package.path);
-                let package_toml: SourceManifest =
-                    parse_move_manifest_from_file(&toml_path).expect("Move.toml exists");
+                let legacy_package_info =
+                    parse_legacy_pkg_info(&package_path).expect("Move.toml exists");
                 // check manifest name field is package.name
-                assert_eq!(package_toml.package.name.to_string(), package.name);
+                assert_eq!(legacy_package_info.legacy_name, package.name);
                 // check manifest published-at field is package.id
-                let published_at_field = published_at_property(&package_toml)
+                let published_at_field = published_at_property(&package_path)
                     .expect("Move.toml file has published-at field");
                 assert_eq!(published_at_field, package.id);
             }

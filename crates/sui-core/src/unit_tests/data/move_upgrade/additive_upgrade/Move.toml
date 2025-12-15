@@ -2,6 +2,7 @@
 name = "additive_upgrade"
 version = "0.0.1"
 edition = "2024.beta"
+implicit-dependencies = false
 
 [addresses]
 base_addr =  "0x0"

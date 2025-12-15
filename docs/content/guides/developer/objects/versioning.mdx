@@ -1,0 +1,184 @@
+---
+title: Object and Package Versioning
+description: Versioning provides the ability to upgrade packages and objects on the Sui network.
+keywords: [ object versioning, object versions, versioning objects, package versioning, package versions, versioning packages ]
+---
+
+Every object stored on-chain is referenced by an ID and version. When a transaction modifies an object, it writes the new contents to an on-chain reference with the same ID but a new version. This means that a single object (with ID `I`) might appear in multiple entries in the distributed store:
+
+```
+(I, v0) => ...
+(I, v1) => ...  # v0 < v1
+(I, v2) => ...  # v1 < v2
+```
+
+Despite appearing multiple times in the store, only the latest version of the object is available to transactions. Moreover, only one transaction can modify the object at that version to create a new version, guaranteeing a linear history, such that `v1` was created in a state where `I` was at `v0`, and `v2` was created in a state where `I` was at `v1`.
+
+Versions are strictly increasing and (`ID`, `version`) pairs are never re-used. This structure allows [node operators](/guides/operator.mdx) to prune their stores of old object versions that are now inaccessible, if they choose. This is not a requirement, though, as node operators might keep prior object versions to serve requests for an object's history, either from other nodes that are catching up or from RPC requests.
+
+## Move objects
+
+Sui uses [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) in its versioning algorithm for objects. The use of Lamport timestamps guarantees that versions never get re-used as the new version for objects touched by a transaction is 1 greater than the latest version among all input objects to the transaction. For example, a transaction transferring an object `O` at version 5 using a [gas object](/concepts/tokenomics/gas-in-sui.mdx) `G` at version 3 updates both `O` and `G` versions to `1 + max(5, 3) = 6`, creating version 6.
+
+### Address-owned objects
+
+You must reference [address-owned](/guides/developer/objects/object-ownership/address-owned.mdx) transaction inputs at a specific ID and version. When a validator signs a transaction with an address-owned object input at a specific version, that version of the object is locked to that transaction. Validators reject requests to sign other transactions that require the same input (same ID and version).
+
+If two sets of validators each sign different transactions using the same object, that object becomes [equivocated] and cannot be used for any further transactions in that [epoch]. This happens because neither transaction can reach consensus without a validator who has already committed the object to the other transaction. All locks reset at the end of the epoch, freeing the objects again.
+
+:::info
+
+Only an object's owner can equivocate it, but this is not a desirable thing to do. You can avoid equivocation by carefully managing the versions of [address-owned](/guides/developer/objects/object-ownership/address-owned.mdx) input objects.
+
+Never attempt to execute 2 different transactions that use the same object. If you don't get a definite success or failure response from the network for a transaction, assume that the transaction might have gone through, and do not re-use any of its objects for different transactions.
+
+:::
+
+### Immutable objects
+
+Like [address-owned](/guides/developer/objects/object-ownership/address-owned.mdx) objects, you reference [immutable](/guides/developer/objects/object-ownership/immutable.mdx) objects at an ID and version, but they do not need to be locked as their contents and versions do not change. Their version is relevant because they could have started as an address-owned object before being frozen. The given version identifies the point at which they became immutable.
+
+### Shared objects
+
+Specifying a [shared](/guides/developer/objects/object-ownership/shared.mdx) transaction input is slightly more complex. You reference it by its ID, the version it was shared at, and a flag indicating whether it is accessed mutably. You don't specify the precise version the transaction accesses because consensus decides that during transaction scheduling. When scheduling multiple transactions that touch the same [shared](/guides/developer/objects/object-ownership/shared.mdx) object, validators agree the order of those transactions, and pick each transaction's input versions for the shared object accordingly. 1 transaction's output version becomes the next transaction's input version, and so on.
+
+Shared transaction inputs that you reference immutably participate in scheduling, but don't modify the object or increment its version.
+
+### Wrapped objects
+
+You can't access [wrapped](/guides/developer/objects/object-ownership/wrapped.mdx) objects by their ID in the object store. You must access them by the object that wraps them. Consider the following example that creates a `make_wrapped` function with an `Inner` object, wrapped in an `Outer` object, which is returned to the transaction sender.
+
+```move
+module example::wrapped {
+    use sui::object::{Self, UID};
+    use sui::transfer;
+    use sui::tx_context::{Self, TxContext};
+
+    struct Inner has key, store {
+        id: UID,
+        x: u64,
+    }
+
+    struct Outer has key {
+        id: UID,
+        inner: Inner,
+    }
+
+    entry fun make_wrapped(ctx: &mut TxContext) {
+        let inner = Inner {
+            id: object::new(ctx),
+            x: 42,
+        };
+
+        let outer = Outer {
+            id: object::new(ctx),
+            inner,
+        };
+
+        transfer::transfer(outer, tx_context::sender(ctx));
+    }
+}
+```
+
+The owner of `Outer` in this example must specify it as the transaction input and then access its `inner` field to read the instance of `Inner`. Validators refuse to sign transactions that directly specify [wrapped](/guides/developer/objects/object-ownership/wrapped.mdx) objects, like the `inner` of an `Outer`, as inputs. As a result, you don't need to specify a wrapped object's version in a transaction that reads that object.
+
+Wrapped objects can eventually become unwrapped, at which they are once again accessible by their ID:
+
+```move
+module example::wrapped {
+    // ...
+
+    entry fun unwrap(outer: Outer, ctx: &TxContext) {
+        let Outer { id, inner } = outer;
+        object::delete(id);
+        transfer::transfer(inner, tx_context::sender(ctx));
+    }
+}
+```
+
+The `unwrap` function takes an instance of `Outer`, destroys it, and sends the `Inner` back to the sender. After calling this function, the previous owner of `Outer` can access `Inner` directly by its ID because it is now unwrapped. Wrapping and unwrapping of an object happens multiple times across its lifespan. The object retains its ID across all events.
+
+The Lamport timestamp-based versioning scheme ensures that the version an object is unwrapped at is always greater than the version it was wrapped at.
+
+- After a transaction, `W`, where object `I` is wrapped by object `O`, the `O` version is greater than or equal to the `I` version. This means 1 of the following conditions is true:
+
+    1. `I` is an input so has a strictly lower version.
+
+    1. `I` is new and has an equal version.
+
+- After a later transaction unwrapping `I` out of `O`, the following must be true:
+
+    - The `O` input version is greater than or equal to its version after `W` because it is a later transaction, so the version can only have increased.
+
+    - The `I` version in the output must be strictly greater than the `O` input version.
+
+This leads to the following chain of inequalities for `I`'s version before wrapping:
+
+This means that `I`'s version is less than or equal to `O`'s version after wrapping, less than or equal to `O`'s version before unwrapping, and less than `I`'s version after unwrapping
+
+The `I` version before wrapping is less than the `I` version after unwrapping.
+
+### Dynamic fields
+
+From a versioning perspective, values held in [dynamic fields](/concepts/dynamic-fields.mdx) behave like [wrapped](/guides/developer/objects/object-ownership/wrapped.mdx) objects. They are only accessible through the field's parent object, not as direct transaction inputs. You do not need to supply their IDs or versions with the transaction inputs. 
+
+Lamport timestamp-based versioning makes sure that when a field contains an object and a transaction removes that field, its value becomes accessible by its ID and the value's version has been incremented to a previously unused version.
+
+:::info
+
+A distinction between [dynamic fields](/concepts/dynamic-fields.mdx) and [wrapped](/guides/developer/objects/object-ownership/wrapped.mdx) objects is that if a transaction modifies a dynamic object field, its version is incremented in that transaction, where a wrapped object's version would not be.
+
+:::
+
+Adding a new dynamic field to a parent object also creates a `Field` object, responsible for associating the field name and value with that parent. Unlike other newly created objects, the ID for the resulting instance of `Field` is not created using `sui::object::new`. Instead, it is computed as a hash of the parent object ID and the type and value of the field name, so that you can use it to look up the `Field` through its parent and name.
+
+When you remove a field, Sui deletes its associated `Field`, and if you add a new field with the same name, Sui creates a new instance with the same ID. Versioning using Lamport timestamps coupled with [dynamic fields](/concepts/dynamic-fields.mdx) being only accessible through their parent object ensures that (`ID`, `version`) pairs are not reused in the process.
+
+The transaction that deletes the original field increments the parent's version to be greater than the deleted field's version. The transaction that creates the new version of the same field creates the field with a version that is greater than the parent's version.
+
+The version of the new `Field` instance is greater than the version of the deleted `Field`.
+
+## Packages
+
+[Move packages](/concepts/sui-move-concepts/packages.mdx) are also versioned and stored on-chain, but follow a different versioning scheme to objects because they are immutable from their inception. This means that you refer to package transaction inputs by just their ID as they are always loaded at their latest version.
+
+### User packages
+
+Every time you publish or upgrade a package, Sui generates a new ID. A newly published package has its version set to 1, whereas an upgraded package's version is 1 greater than the package it is upgrading. Unlike objects, older versions of a package remain accessible even after being upgraded. For example, imagine a package `P` that is published and upgraded twice. It might be represented in the store as:
+
+```
+(0x17fb7f87e48622257725f584949beac81539a3f4ff864317ad90357c37d82605, 1) => P v1
+(0x260f6eeb866c61ab5659f4a89bc0704dd4c51a573c4f4627e40c5bb93d4d500e, 2) => P v2
+(0xd24cc3ec3e2877f085bc756337bf73ae6976c38c3d93a0dbaf8004505de980ef, 3) => P v3
+```
+
+In this example, all 3 versions of the same package are at different IDs. The packages have increasing versions but it is possible to call into `v1`, even though `v2` and `v3` exist on chain.
+
+### Framework packages
+
+Framework packages, such as the [Move standard library](https://move-book.com/reference/) at `0x1`, the [Sui framework library](https://docs.sui.io/references/framework/sui_sui) at `0x2`, [Sui system library](https://docs.sui.io/references/framework/sui_system) at `0x3` and [DeepBook](/standards/deepbook.mdx) at `0xdee9`, are a special case because their IDs must remain stable across upgrades. The network can upgrade framework packages while preserving their IDs through a system transaction, but can only perform this operation on epoch boundaries because they are considered immutable like other packages. New versions of framework packages retain the same ID as their predecessor, but increment their version by 1:
+
+```
+(0x1, 1) => MoveStdlib v1
+(0x1, 2) => MoveStdlib v2
+(0x1, 3) => MoveStdlib v3
+```
+
+The prior example shows the on-chain representation of the first 3 versions of the Move standard library.
+
+### Package versions
+
+Before someone can use an on-chain package, you must publish its first, original version. When you upgrade a package, you create a new version of that package. Each upgrade of a package is based on the immediately preceding version of that package in the versions history. In other words, you can upgrade the `nth` version of a package from only the `nth - 1` version. For example, you can upgrade a package from version 1 to 2, but afterwards you can only upgrade that package from version 2 to 3.
+
+There is a notion of versioning in package manifest files, existing in both the package section and in the dependencies section. For example, consider the manifest code that follows:
+
+```toml
+[package]
+name = "some_pkg"
+version = "1.0.0"
+
+[dependencies]
+another_pkg = { git = "https://github.com/another_pkg/another_pkg.git" , version = "2.0.0"}
+```
+
+The version references in the manifest are used only for user-level documentation as the `publish` and `upgrade` commands do not leverage this information. If you publish a package with a certain package version in the manifest file and then modify and re-publish the same package with a different version, using `publish` command rather than `upgrade` command, they are considered different packages. You cannot use any of these packages as a dependency override to stand in for the other. While you can specify this type of override when building a package, it results in an error when publishing or upgrading on-chain.

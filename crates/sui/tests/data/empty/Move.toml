@@ -1,8 +1,5 @@
 [package]
 name = "Examples"
+edition = "2024.beta"
 version = "0.0.1"
-
-[dependencies]
-
-[addresses]
-examples = "0x0"
+implicit-dependencies = false

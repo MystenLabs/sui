@@ -620,6 +620,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::DisplayRegistryCreate => {
                                 SuiEndOfEpochTransactionKind::DisplayRegistryCreate
                             }
+                            EndOfEpochTransactionKind::AddressAliasStateCreate => {
+                                SuiEndOfEpochTransactionKind::AddressAliasStateCreate
+                            }
                         })
                         .collect(),
                 })
@@ -632,9 +635,12 @@ impl SuiTransactionBlockKind {
         module_cache: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
         match tx {
-            TransactionKind::ProgrammableTransaction(p) => Ok(Self::ProgrammableTransaction(
-                SuiProgrammableTransactionBlock::try_from_with_module_cache(p, module_cache)?,
-            )),
+            TransactionKind::ProgrammableTransaction(p)
+            | TransactionKind::ProgrammableSystemTransaction(p) => {
+                Ok(Self::ProgrammableTransaction(
+                    SuiProgrammableTransactionBlock::try_from_with_module_cache(p, module_cache)?,
+                ))
+            }
             tx => Self::try_from_inner(tx),
         }
     }
@@ -1784,6 +1790,7 @@ pub enum SuiEndOfEpochTransactionKind {
     AccumulatorRootCreate,
     CoinRegistryCreate,
     DisplayRegistryCreate,
+    AddressAliasStateCreate,
 }
 
 #[serde_as]

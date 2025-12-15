@@ -11,7 +11,7 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
     tx_balance_changes::TxBalanceChangeKey,
 };
-use sui_indexer_alt_schema::transactions::BalanceChange as NativeBalanceChange;
+use sui_indexer_alt_schema::transactions::BalanceChange as StoredBalanceChange;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
 use sui_types::{
     digests::TransactionDigest,
@@ -222,9 +222,21 @@ impl EffectsContents {
             return Ok(Some(Connection::new(false, false)));
         };
 
-        let transaction_digest = content.digest()?;
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("TransactionEffects", "balanceChanges");
+        let page = Page::from_params(limits, first, after, last, before)?;
 
-        // Load balance changes from database using DataLoader
+        // First try to get balance changes from execution context (content)
+        if let Some(grpc_balance_changes) = content.balance_changes() {
+            return page
+                .paginate_indices(grpc_balance_changes.len(), |i| {
+                    BalanceChange::from_grpc(self.scope.clone(), &grpc_balance_changes[i])
+                })
+                .map(Some);
+        }
+
+        // Fall back to loading from database
+        let transaction_digest = content.digest()?;
         let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
         let key = TxBalanceChangeKey(transaction_digest);
 
@@ -237,19 +249,12 @@ impl EffectsContents {
         };
 
         // Deserialize balance changes from BCS bytes
-        let balance_changes: Vec<NativeBalanceChange> =
+        let balance_changes: Vec<StoredBalanceChange> =
             bcs::from_bytes(&stored_balance_changes.balance_changes)
                 .context("Failed to deserialize balance changes")?;
 
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("TransactionEffects", "balanceChanges");
-        let page = Page::from_params(limits, first, after, last, before)?;
-
         page.paginate_indices(balance_changes.len(), |i| {
-            Ok(BalanceChange {
-                scope: self.scope.clone(),
-                stored: balance_changes[i].clone(),
-            })
+            BalanceChange::from_stored(self.scope.clone(), balance_changes[i].clone())
         })
         .map(Some)
     }

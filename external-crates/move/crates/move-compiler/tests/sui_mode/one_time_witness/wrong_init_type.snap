@@ -8,7 +8,7 @@ info:
 error[Sui E02003]: invalid 'init' function
   ┌─ tests/sui_mode/one_time_witness/wrong_init_type.move:9:9
   │
-9 │     fun init(_otw: N, _ctx: &mut tx_context::TxContext) {
+9 │     fun init(_otw: N, _ctx: &mut tx_context::TxContext) {}
   │         ^^^^       - Invalid parameter '_otw' of type 'a::m::N'. Expected a one-time witness type, 'a::m::M
   │         │           
   │         Invalid 'init' function declaration

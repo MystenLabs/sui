@@ -1,0 +1,169 @@
+---
+title: Immutable Objects
+description: Immutable objects cannot be changed, transferred, or deleted. Immutable objects cannot have an owner and anyone can use them.
+keywords: [ immutable objects, objects immutable, create immutable object, convert object, use immutable object, test immutable object ]
+---
+
+Objects on Sui can either be immutable or mutable. An immutable object cannot be mutated, transferred, or deleted. These objects have no owner and are freely accessible to everyone.
+
+## Create immutable objects
+
+To make an object immutable, call the [`sui::transfer::public_freeze_object`](/references/framework/sui_sui/transfer#sui_transfer_public_freeze_object) function from the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move):
+
+```move
+public native fun public_freeze_object<T: key>(obj: T);
+```
+
+This call permanently makes the object immutable. The operation cannot be reversed. Only freeze objects when you are certain they never need modification.
+
+You can see this function used in the [`color_object` example module](https://github.com/MystenLabs/sui/blob/main/examples/move/color_object/sources/example.move) tests. The test creates a new address-owned `ColorObject` object, then calls `public_freeze_object` to turn it into an immutable object.
+
+<ImportContent source="examples/move/color_object/sources/example.move" mode="code" fun="test_immutable" noComments />
+
+In this test, you must own a `ColorObject` initially. After freezing, the object becomes immutable and ownerless.
+
+The [`sui::transfer::public_freeze_object`](/references/framework/sui_sui/transfer#sui_transfer_public_freeze_object) function requires that you pass the object by value. If you are allowed to pass the object by a mutable reference, you could still mutate the object after the [`sui::transfer::public_freeze_object`](/references/framework/sui_sui/transfer#sui_transfer_public_freeze_object) call. This contradicts the fact that it should have become immutable.
+
+Alternatively, you can also provide an API that creates an immutable object at creation:
+
+```move
+public fun create_immutable(red: u8, green: u8, blue: u8, ctx: &mut TxContext) {
+    let color_object = new(red, green, blue, ctx);
+    transfer::public_freeze_object(color_object)
+}
+```
+
+This function creates a new `ColorObject` and immediately makes it immutable before it has an owner.
+
+## When to use immutable objects
+
+After an object becomes immutable, the rules of who can use this object in Sui Move calls change:
+
+1. You can only pass an immutable object as a read-only, immutable reference to Sui Move entry functions as `&T`.
+
+2. All network participants can access immutable objects.
+
+Consider a function that copies the value of one object to another:
+
+```move
+public fun copy_into(from: &ColorObject, into: &mut ColorObject);
+```
+
+In this function, anyone can pass an immutable object as the first argument, `from`, but not the second argument. Because you can never change immutable objects, there is no data race, even when multiple transactions are using the same immutable object at the same time. The existence of immutable objects does not pose any requirement on consensus.
+
+## Interact with immutable objects
+
+First, view the objects you own:
+
+```sh
+$ export ADDR=`sui client active-address`
+```
+```sh
+$ sui client objects $ADDR
+```
+
+Publish the `ColorObject` code on-chain using the Sui CLI:
+
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
+
+```sh
+$ sui client publish $ROOT/examples/move/color_object --gas-budget <GAS-AMOUNT>
+```
+
+Set the package object ID to the `$PACKAGE` environment variable, if you have it set. Then create a new `ColorObject`:
+
+```sh
+$ sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
+```
+
+Set the newly created object ID to `$OBJECT`. To view the objects in the current active address:
+
+```sh
+$ sui client objects $ADDR
+```
+
+You should see an object with the ID you used for `$OBJECT`. To turn it into an immutable object:
+
+```sh
+$ sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "freeze_object" --args \"$OBJECT\"
+```
+
+View the list of objects again:
+
+```sh
+$ sui client objects $ADDR
+```
+
+`$OBJECT` is no longer listed. It is no longer owned by anyone. You can see that it is now immutable by querying the object information:
+
+```sh
+$ sui client object $OBJECT
+```
+
+The response includes:
+
+```sh
+Owner: Immutable  // This field shows the object's immutable status
+```
+
+If you try to mutate it:
+
+```sh
+$ sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "update" --args \"$OBJECT\" 0 0 0
+```
+
+The response indicates that you cannot pass an immutable object to a mutable argument.
+
+## Test immutable objects
+
+You can interact with immutable objects in unit tests using `test_scenario::take_immutable<T>` to take an immutable object wrapper from global storage, and `test_scenario::return_immutable` to return the wrapper back to the global storage.
+
+The `test_scenario::take_immutable<T>` function is required because you can access immutable objects solely through read-only references. The `test_scenario` runtime keeps track of the usage of this immutable object. If the compiler does not return the object through `test_scenario::return_immutable` before the start of the next transaction, the test stops.
+
+```move
+let sender1 = @0x1;
+let scenario_val = test_scenario::begin(sender1);
+let scenario = &mut scenario_val;
+{
+    let ctx = test_scenario::ctx(scenario);
+    color_object::create_immutable(255, 0, 255, ctx);
+};
+scenario.next_tx(sender1);
+{
+    // has_most_recent_for_sender returns false for immutable objects.
+    assert!(!test_scenario::has_most_recent_for_sender<ColorObject>(scenario))
+};
+```
+
+This test submits a transaction as `sender1`, which tries to create an immutable object.
+
+The `has_most_recent_for_sender<ColorObject>` function no longer returns `true`, because the object is no longer owned.
+
+To show that this object is indeed not owned by anyone, start the next transaction with `sender2`. It uses `take_immutable` and succeeds. This means that any sender can take an immutable object. To return the object, call the `return_immutable` function.
+
+```move
+// Any sender can work.
+let sender2 = @0x2;
+scenario.next_tx(sender2);
+{
+    let object = test_scenario::take_immutable<ColorObject>(scenario);
+    let (red, green, blue) = color_object::get_color(object);
+    assert!(red == 255 && green == 0 && blue == 255)
+    test_scenario::return_immutable(object);
+};
+```
+
+To verify immutability, create a function attempting to modify a `ColorObject`:
+
+```move
+public fun update(
+    object: &mut ColorObject,
+    red: u8, green: u8, blue: u8,
+) {
+    object.red = red;
+    object.green = green;
+    object.blue = blue;
+}
+```
+
+The function fails because the `ColorObject` is immutable.

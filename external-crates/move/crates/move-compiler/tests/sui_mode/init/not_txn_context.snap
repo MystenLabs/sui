@@ -14,17 +14,17 @@ error[Sui E02003]: invalid 'init' function
   │         Invalid 'init' function declaration
 
 error[Sui E02003]: invalid 'init' function
-   ┌─ tests/sui_mode/init/not_txn_context.move:10:9
+   ┌─ tests/sui_mode/init/not_txn_context.move:11:9
    │
-10 │     fun init(_: TxContext) {
+11 │     fun init(_: TxContext) {
    │         ^^^^    --------- 'init' functions must have their last parameter as '&sui::tx_context::TxContext' or '&mut sui::tx_context::TxContext'
    │         │        
    │         Invalid 'init' function declaration
 
 error[Sui E02003]: invalid 'init' function
-   ┌─ tests/sui_mode/init/not_txn_context.move:17:9
+   ┌─ tests/sui_mode/init/not_txn_context.move:19:9
    │
-17 │     fun init(_: tx_context::TxContext) {
+19 │     fun init(_: tx_context::TxContext) {
    │         ^^^^    --------------------- 'init' functions must have their last parameter as '&sui::tx_context::TxContext' or '&mut sui::tx_context::TxContext'
    │         │        
    │         Invalid 'init' function declaration

@@ -5,13 +5,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use backoff::backoff::Constant;
+use bytes::Bytes;
+use sui_futures::future::with_slow_future_monitor;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
 use sui_storage::blob::Blob;
-use tokio_util::bytes::Bytes;
 use tracing::{debug, error, warn};
 use url::Url;
 
@@ -22,9 +24,7 @@ use crate::ingestion::local_client::LocalIngestionClient;
 use crate::ingestion::remote_client::RemoteIngestionClient;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IngestionMetrics;
-use crate::task::with_slow_future_monitor;
 use crate::types::full_checkpoint_content::{Checkpoint, CheckpointData};
-use async_trait::async_trait;
 
 /// Wait at most this long between retries for transient errors.
 const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
@@ -322,7 +322,6 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::time::timeout;
-    use tokio_util::bytes::Bytes;
 
     use crate::ingestion::test_utils::test_checkpoint_data;
 

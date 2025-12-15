@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use mysten_metrics::{COUNT_BUCKETS, LATENCY_SEC_BUCKETS};
+use mysten_metrics::{COUNT_BUCKETS, SUBSECOND_LATENCY_SEC_BUCKETS};
 use prometheus::{
     GaugeVec, HistogramVec, IntCounterVec, Registry, register_gauge_vec_with_registry,
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
@@ -33,7 +33,7 @@ impl ValidatorClientMetrics {
                 "validator_client_observed_latency",
                 "Client-observed latency of operations per validator",
                 &["validator", "operation_type", "ping"],
-                LATENCY_SEC_BUCKETS.to_vec(),
+                SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

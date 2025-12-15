@@ -13,7 +13,6 @@ use lsp_types::{
     request::Request as _,
 };
 use move_compiler::{editions::Flavor, linters::LintLevel};
-use move_package::{package_hooks::PackageHooks, source_package::parsed_manifest::Dependencies};
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -35,6 +34,7 @@ use crate::{
     },
     vfs::on_text_document_sync_notification,
 };
+use move_package_alt::flavor::MoveFlavor;
 use url::Url;
 use vfs::{VfsPath, impls::memory::MemoryFS};
 
@@ -43,15 +43,7 @@ const LINT_DEFAULT: &str = "default";
 const LINT_ALL: &str = "all";
 
 #[allow(deprecated)]
-pub fn run(
-    implicit_deps: Dependencies,
-    flavor: Option<Flavor>,
-    hooks: Option<Box<dyn PackageHooks + Send + Sync>>,
-) {
-    if let Some(pkg_hooks) = hooks {
-        move_package::package_hooks::register_package_hooks(pkg_hooks);
-    }
-
+pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
     // stdio is used to communicate Language Server Protocol requests and responses.
     // stderr is used for logging (and, when Visual Studio Code is used to communicate with this
     // server, it captures this output in a dedicated "output channel").
@@ -159,13 +151,12 @@ pub fn run(
     };
     eprintln!("linting level {:?}", lint);
 
-    let symbolicator_runner = SymbolicatorRunner::new(
+    let symbolicator_runner = SymbolicatorRunner::new::<F>(
         ide_files_root.clone(),
         symbols_map.clone(),
         pkg_deps.clone(),
         diag_sender,
         lint,
-        implicit_deps.clone(),
         flavor,
         initialize_params.process_id,
     );
@@ -263,7 +254,7 @@ pub fn run(
                         // a chance of completing pending requests (but should not accept new requests
                         // either which is handled inside on_requst) - instead it quits after receiving
                         // the exit notification from the client, which is handled below
-                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received, implicit_deps.clone(), flavor);
+                        shutdown_req_received = on_request::<F>(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received, flavor);
                     }
                     Ok(Message::Response(response)) => on_response(&context, &response),
                     Ok(Message::Notification(notification)) => {
@@ -299,13 +290,12 @@ pub fn run(
 /// The reason why this information is also passed as an argument is that according to the LSP
 /// spec, if any additional requests are received after shutdownd then the LSP implementation
 /// should respond with a particular type of error.
-fn on_request(
+fn on_request<F: MoveFlavor>(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
     shutdown_request_received: bool,
-    implicit_deps: Dependencies,
     flavor: Option<Flavor>,
 ) -> bool {
     if shutdown_request_received {
@@ -324,12 +314,11 @@ fn on_request(
         return true;
     }
     match request.method.as_str() {
-        lsp_types::request::Completion::METHOD => on_completion_request(
+        lsp_types::request::Completion::METHOD => on_completion_request::<F>(
             context,
             request,
             ide_files_root.clone(),
             pkg_dependencies,
-            implicit_deps,
             flavor,
         ),
         lsp_types::request::GotoDefinition::METHOD => {
@@ -351,12 +340,11 @@ fn on_request(
             inlay_hints::on_inlay_hint_request(context, request);
         }
         lsp_types::request::CodeActionRequest::METHOD => {
-            code_action::on_code_action_request(
+            code_action::on_code_action_request::<F>(
                 context,
                 request,
                 ide_files_root.clone(),
                 pkg_dependencies,
-                implicit_deps,
                 flavor,
             );
         }
