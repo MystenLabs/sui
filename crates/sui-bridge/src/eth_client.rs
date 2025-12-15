@@ -322,7 +322,7 @@ mod tests {
         mock_service
             .add_response::<[TxHash; 1], TransactionReceipt, TransactionReceipt>(
                 "eth_getTransactionReceipt",
-                [log.transaction_hash.unwrap().clone()],
+                [log.transaction_hash.unwrap()],
                 make_transaction_receipt(
                     EthAddress::default(),
                     log.block_number,

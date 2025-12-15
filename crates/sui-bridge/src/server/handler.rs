@@ -202,10 +202,10 @@ mod tests {
         let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
         let sui_client_mock = SuiMockClient::default();
 
-        let eth_mock_provider = EthMockService::default();
+        let eth_mock_service = EthMockService::default();
         let contract_address = EthAddress::random();
         let eth_client = EthClient::new_mocked(
-            eth_mock_provider.clone(),
+            eth_mock_service.clone(),
             HashSet::from_iter(vec![contract_address]),
         );
 
@@ -215,12 +215,7 @@ mod tests {
             Arc::new(eth_client),
             approved_actions,
         );
-        (
-            handler,
-            sui_client_mock,
-            eth_mock_provider,
-            contract_address,
-        )
+        (handler, sui_client_mock, eth_mock_service, contract_address)
     }
 
     #[tokio::test]
@@ -322,7 +317,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_signer_with_governace_verifier() {
+    async fn test_signer_with_governance_verifier() {
         let action_1 = BridgeAction::EmergencyAction(EmergencyAction {
             chain_id: BridgeChainId::EthCustom,
             nonce: 1,
@@ -358,7 +353,7 @@ mod tests {
             BridgeError::GovernanceActionIsNotApproved
         ));
 
-        // Non governace action is not signable
+        // Non governance action is not signable
         let action_4 = get_test_sui_to_eth_bridge_action(None, None, None, None, None, None, None);
         assert!(matches!(
             verifier.verify(action_4.clone()).await.unwrap_err(),

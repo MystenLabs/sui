@@ -199,7 +199,7 @@ impl BridgeNodeConfig {
             );
         }
 
-        // Validate approved actions that must be governace actions
+        // Validate approved actions that must be governance actions
         for action in &self.approved_governance_actions {
             if !action.is_governance_action() {
                 anyhow::bail!(format!(

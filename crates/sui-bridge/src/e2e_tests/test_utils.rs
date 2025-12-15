@@ -185,12 +185,12 @@ impl BridgeTestClusterBuilder {
 
         let mut bridge_node_handles = None;
         if self.with_bridge_cluster {
-            let approved_governace_actions = self
+            let approved_governance_actions = self
                 .approved_governance_actions
                 .clone()
                 .unwrap_or(vec![vec![]; self.num_validators]);
             bridge_node_handles = Some(
-                start_bridge_cluster(&test_cluster, &eth_environment, approved_governace_actions)
+                start_bridge_cluster(&test_cluster, &eth_environment, approved_governance_actions)
                     .await,
             );
         }
@@ -360,7 +360,7 @@ impl BridgeTestCluster {
 
     pub async fn start_bridge_cluster(&mut self) {
         assert!(self.bridge_node_handles.is_none());
-        let approved_governace_actions = self
+        let approved_governance_actions = self
             .approved_governance_actions_for_next_start
             .clone()
             .unwrap_or(vec![vec![], vec![], vec![], vec![]]);
@@ -368,7 +368,7 @@ impl BridgeTestCluster {
             start_bridge_cluster(
                 &self.test_cluster,
                 &self.eth_environment,
-                approved_governace_actions,
+                approved_governance_actions,
             )
             .await,
         );
