@@ -1032,7 +1032,7 @@ pub(crate) fn coin_inner_type(ty: &Type) -> Option<&Type> {
 }
 
 /// Returns the inner type `T` if the type is `sui::balance::Balance<T>`, else `None`
-fn balance_inner_type(ty: &Type) -> Option<&Type> {
+pub(crate) fn balance_inner_type(ty: &Type) -> Option<&Type> {
     let Type::Datatype(dt) = ty else {
         return None;
     };
@@ -1048,7 +1048,7 @@ fn balance_inner_type(ty: &Type) -> Option<&Type> {
 }
 
 /// Returns the inner type `T` if the type is `sui::funds_accumulator::Withdrawal<T>`, else `None`
-fn withdrawal_inner_type(ty: &Type) -> Option<&Type> {
+pub(crate) fn withdrawal_inner_type(ty: &Type) -> Option<&Type> {
     let Type::Datatype(dt) = ty else {
         return None;
     };
