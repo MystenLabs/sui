@@ -3,6 +3,7 @@
 
 use fs_extra::dir::CopyOptions;
 use insta_cmd::get_cargo_bin;
+use move_command_line_common::insta_assert;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_KEYSTORE_FILENAME};
@@ -11,7 +12,7 @@ use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use tempfile::TempDir;
 use test_cluster::TestClusterBuilder;
 
-// [test_shell_snapshot] is run on every file matching [TEST_PATTERN] in [TEST_DIR].
+// [shell_test_snapshot] is run on every file matching [TEST_PATTERN] in [TEST_DIR].
 // Files in [TEST_NET_DIR] will be run with a [TestCluster] configured.
 //
 // These run the files as shell scripts and compares their output to the snapshots; use `cargo
@@ -29,7 +30,7 @@ const TEST_PATTERN: &str = r"\.sh$";
 /// If [cluster] is provided, the config file for the cluster is passed as the `CONFIG` environment
 /// variable; otherwise `CONFIG` is set to a temporary file (see [make_temp_config])
 #[tokio::main]
-async fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
+async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
     // set up test cluster
     let cluster = if path.starts_with(TEST_NET_DIR) {
         Some(TestClusterBuilder::new().build().await)
@@ -78,18 +79,17 @@ async fn test_shell_snapshot(path: &Path) -> datatest_stable::Result<()> {
         std::fs::read_to_string(path)?,
         output.status.success(),
         output.status.code().unwrap_or(!0),
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+        String::from_utf8_lossy(&output.stdout), // for windows ...
+        String::from_utf8_lossy(&output.stderr), // for windows ...
     );
 
-    let snapshot_name: String = path
-        .strip_prefix("tests/shell_tests")?
-        .to_string_lossy()
-        .to_string();
+    // redact the temporary directory path
+    let result = result.replace(temp_config_dir.path().to_string_lossy().as_ref(), "<ROOT>");
 
-    insta::with_settings!({description => path.to_string_lossy(), omit_expression => true}, {
-        insta::assert_snapshot!(snapshot_name, result);
-    });
+    insta_assert! {
+        input_path: path,
+        contents: result,
+    }
     Ok(())
 }
 
@@ -138,7 +138,7 @@ fn get_sui_package_dir() -> PathBuf {
 }
 
 #[cfg(not(msim))]
-datatest_stable::harness!(test_shell_snapshot, TEST_DIR, TEST_PATTERN);
+datatest_stable::harness!(shell_tests, TEST_DIR, TEST_PATTERN);
 
 #[cfg(msim)]
 fn main() {}
