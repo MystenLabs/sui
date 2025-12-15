@@ -395,7 +395,7 @@ pub fn maybe_convert_for_guard(
     if gloc.contains(&loc) {
         let new_ty = sp(
             ty.loc,
-            TypeInner::Ref(false, Box::new(sp(ty.loc, ty.value.base_type_()))).into(),
+            TypeInner::Ref(false, sp(ty.loc, ty.value.base_type_())).into(),
         );
         return Some(DefInfo::Local(*name, new_ty, *is_let, *is_mut, *guard_loc));
     }

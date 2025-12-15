@@ -179,8 +179,8 @@ pub fn datatype_type_list_to_ide_string(types: &[(Type, bool)], verbose: bool) -
 }
 
 pub fn ret_type_to_ide_str(ret_type: &Type, verbose: bool) -> String {
-    match ret_type {
-        sp!(_, Type_(TypeInner::Unit)) => "".to_string(),
+    match ret_type.value.inner() {
+        TypeInner::Unit => "".to_string(),
         _ => format!(": {}", type_to_ide_string(ret_type, verbose)),
     }
 }

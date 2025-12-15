@@ -140,7 +140,7 @@ impl TypingAnalysisContext<'_> {
         // enter self-definition for type param
         let type_def_info = DefInfo::Type(sp(
             tp.user_specified_name.loc,
-            N::TypeInner::Param(tp.clone()),
+            N::TypeInner::Param(tp.clone()).into(),
         ));
         let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, &type_def_info);
         self.use_defs.entry(fhash).or_default().insert(
@@ -417,7 +417,7 @@ impl TypingAnalysisContext<'_> {
         use_pos: &Loc,
     ) {
         let sp!(_, typ) = field_type;
-        match typ {
+        match typ.inner() {
             N::TypeInner::Ref(_, t) => self.add_struct_field_type_use_def(t, use_name, use_pos),
             N::TypeInner::Apply(
                 _,
@@ -1193,7 +1193,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
             return true;
         }
         let loc = ty.loc;
-        match &ty.value {
+        match &ty.value.inner() {
             N::TypeInner::Param(tparam) => {
                 let sp!(use_pos, use_name) = tparam.user_specified_name;
                 let Some(name_start) = self.file_start_position_opt(&loc) else {
