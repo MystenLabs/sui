@@ -2040,7 +2040,6 @@ mod tests {
             .await
             .unwrap();
 
-        let mut iterations = 0;
         tokio::time::timeout(std::time::Duration::from_secs(10), async {
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
 
@@ -2056,13 +2055,10 @@ mod tests {
                     break;
                 }
                 allow_process += 1;
-                iterations += 1;
             }
         })
         .await
         .expect("Timed out waiting for collector to observe new reader_lo");
-
-        println!("Made {} iterations", iterations);
 
         // At this point, the collector has observed reader_lo = 250. Release all remaining
         // checkpoints. Guarantees:
