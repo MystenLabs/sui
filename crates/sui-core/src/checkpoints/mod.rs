@@ -3862,6 +3862,10 @@ mod tests {
         ) -> Option<Vec<sui_types::storage::ObjectKey>> {
             unimplemented!()
         }
+
+        fn transaction_executed_in_last_epoch(&self, _: &TransactionDigest, _: EpochId) -> bool {
+            unimplemented!()
+        }
     }
 
     #[async_trait::async_trait]

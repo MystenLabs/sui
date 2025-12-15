@@ -827,6 +827,21 @@ impl ValidatorService {
                 }
             }
 
+            if self
+                .state
+                .get_transaction_cache_reader()
+                .transaction_executed_in_last_epoch(tx_digest, epoch_store.epoch())
+            {
+                results[idx] = Some(SubmitTxResult::Rejected {
+                    error: UserInputError::TransactionAlreadyExecuted { digest: *tx_digest }.into(),
+                });
+                debug!(
+                    ?tx_digest,
+                    "handle_submit_transaction: transaction already executed in previous epoch"
+                );
+                continue;
+            }
+
             debug!(
                 ?tx_digest,
                 "handle_submit_transaction: waiting for fastpath dependency objects"
