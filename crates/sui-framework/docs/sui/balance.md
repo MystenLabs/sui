@@ -32,6 +32,7 @@ custom coins with <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
 <b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
 <b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/internal.md#std_internal">std::internal</a>;
 <b>use</b> <a href="../std/option.md#std_option">std::option</a>;
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
@@ -475,7 +476,7 @@ accumulator.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_redeem_funds">redeem_funds</a>&lt;T&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt;): <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt; {
-    withdrawal.redeem()
+    withdrawal.redeem(internal::permit())
 }
 </code></pre>
 
