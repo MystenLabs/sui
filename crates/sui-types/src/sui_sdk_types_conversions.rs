@@ -930,7 +930,7 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::MoveRawValueTooBig { value_size, max_scaled_size } => Self::MoveRawValueTooBig { value_size, max_scaled_size },
             crate::execution_status::ExecutionFailureStatus::InvalidLinkage => Self::InvalidLinkage,
             crate::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw => {
-                Self::InsufficientBalanceForWithdraw
+                Self::InsufficientFundsForWithdraw
             }
             crate::execution_status::ExecutionFailureStatus::NonExclusiveWriteInputObjectModified { id } => {
                 Self::NonExclusiveWriteInputObjectModified { object: id.into() }

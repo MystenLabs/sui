@@ -395,17 +395,31 @@ impl Merge<crate::messages_checkpoint::CheckpointContents> for CheckpointContent
         }
 
         if mask.contains(Self::VERSION_FIELD) {
-            self.version = Some(1);
+            self.set_version(match &source {
+                crate::messages_checkpoint::CheckpointContents::V1(_) => 1,
+                crate::messages_checkpoint::CheckpointContents::V2(_) => 2,
+            });
         }
 
         if mask.contains(Self::TRANSACTIONS_FIELD) {
             self.transactions = source
-                .into_iter_with_signatures()
+                .inner()
+                .iter()
                 .map(|(digests, sigs)| {
                     let mut info = CheckpointedTransactionInfo::default();
                     info.transaction = Some(digests.transaction.to_string());
                     info.effects = Some(digests.effects.to_string());
-                    info.signatures = sigs.into_iter().map(Into::into).collect();
+                    let (signatures, versions) = sigs
+                        .map(|(s, v)| {
+                            (s.into(), {
+                                let mut message = AddressAliasesVersion::default();
+                                message.version = v.map(Into::into);
+                                message
+                            })
+                        })
+                        .unzip();
+                    info.signatures = signatures;
+                    info.address_aliases_versions = versions;
                     info
                 })
                 .collect();
@@ -1169,7 +1183,7 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                 ExecutionErrorKind::MoveRawValueTooBig
             }
             E::InvalidLinkage => ExecutionErrorKind::InvalidLinkage,
-            E::InsufficientBalanceForWithdraw => ExecutionErrorKind::InsufficientBalanceForWithdraw,
+            E::InsufficientBalanceForWithdraw => ExecutionErrorKind::InsufficientFundsForWithdraw,
             E::NonExclusiveWriteInputObjectModified { id } => {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
@@ -1603,9 +1617,9 @@ impl From<&crate::multisig::MultiSig> for MultisigAggregatedSignature {
 // UserSignature
 //
 
-impl From<crate::signature::GenericSignature> for UserSignature {
-    fn from(value: crate::signature::GenericSignature) -> Self {
-        Self::merge_from(&value, &FieldMaskTree::new_wildcard())
+impl From<&crate::signature::GenericSignature> for UserSignature {
+    fn from(value: &crate::signature::GenericSignature) -> Self {
+        Self::merge_from(value, &FieldMaskTree::new_wildcard())
     }
 }
 
