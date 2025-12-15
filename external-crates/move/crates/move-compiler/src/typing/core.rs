@@ -3284,13 +3284,23 @@ fn join_impl(
 
     // Print location info for input and output
 
-    println!("--------------------\nJoined\n    lhs: {:?}\n    rhs: {:?}", lhs.loc, rhs.loc);
+        println!("--------------------\nJoined\n    lhs: {:?}\n    rhs: {:?}", lhs.loc, rhs.loc);
     match &result {
         Ok((_, ty)) => {
             println!("    ty: {:?}", ty.loc);
         }
-        Err(_) => {
-            println!("    error");
+        Err(e) => {
+            match e {
+                TypingError::SubtypeError(_, _) => println!("    SubtypeError"),
+                TypingError::Incompatible(_, _) => println!("    Incompatible"),
+                TypingError::InvariantError(_, _) => println!("    InvariantError"),
+                TypingError::ArityMismatch(_, _, _, _) => println!("    ArityMismatch"),
+                TypingError::FunArityMismatch(_, _, _, _) => println!("    FunArityMismatch"),
+                TypingError::RecursiveType(_) => println!("    RecursiveType"),
+                TypingError::IncompatibleConstraints(_, _) => {
+                    println!("    IncompatibleConstraints")
+                }
+            }
         }
     }
 
@@ -3402,12 +3412,14 @@ fn join_tvar(
 fn forward_tvar(subst: &Subst, id: TVar) -> TVar {
     let mut cur = id;
     loop {
-        if let Some(sp!(_, ty_)) = subst.get(cur)
-            && let TI::Var(next) = ty_.inner()
-        {
-            cur = *next;
-        } else {
-            break cur;
+        match subst.get(cur) {
+            Some(sp!(_, ty_)) => {
+                match ty_.inner() {
+                    TI::Var(next) => cur = *next,
+                    _ => break cur,
+                }
+            }
+            None => break cur,
         }
     }
 }
