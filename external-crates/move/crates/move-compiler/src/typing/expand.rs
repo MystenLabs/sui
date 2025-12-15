@@ -133,7 +133,7 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
                 (sp(ty.loc, UNRESOLVED_ERROR_TYPE.clone()), true)
             }
             TI::Apply(None, name, tys) => {
-                let abilities = core::infer_abilities(context.info(), &context.subst, &ty);
+                let abilities = core::infer_abilities(context.info(), &context.subst, ty);
                 let (new_tys, _) = types_recur(context, tys);
                 let ty = sp(
                     ty.loc,
@@ -209,7 +209,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
     use TypeInner as TI;
 
     fn expand_type_for_errors(context: &mut Context, ty: &Type) {
-        let mut unfolded_type = core::unfold_type(&context.subst, &ty);
+        let mut unfolded_type = core::unfold_type(&context.subst, ty);
         match unfolded_type.value.inner() {
             TI::Anything => (),
             _ => {
@@ -593,7 +593,7 @@ fn lvalue(context: &mut Context, b: &mut T::LValue) {
         } => {
             // silence type inference error for unused bindings
             if let TI::Var(_) = &ty.value.inner() {
-                let replacement = core::unfold_type(&context.subst, &ty);
+                let replacement = core::unfold_type(&context.subst, ty);
                 if let TI::Anything = replacement.value.inner() {
                     b.value = L::Ignore;
                     return;

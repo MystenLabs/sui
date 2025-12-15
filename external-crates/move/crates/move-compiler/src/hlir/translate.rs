@@ -719,7 +719,7 @@ fn expected_types(reporter: &DiagnosticReporter, loc: Loc, nss: &[Option<N::Type
         )
     };
     let ss = nss
-        .into_iter()
+        .iter()
         .map(|sopt| {
             sopt.as_ref()
                 .map(|s| single_type(reporter, s))
@@ -730,7 +730,7 @@ fn expected_types(reporter: &DiagnosticReporter, loc: Loc, nss: &[Option<N::Type
 }
 
 fn single_types(reporter: &DiagnosticReporter, ss: &[N::Type]) -> Vec<H::SingleType> {
-    ss.into_iter().map(|s| single_type(reporter, s)).collect()
+    ss.iter().map(|s| single_type(reporter, s)).collect()
 }
 
 pub(crate) fn single_type(
@@ -823,7 +823,7 @@ fn tail(
         ty: ref in_type,
         exp: sp!(eloc, e_),
     } = e;
-    let out_type = type_(&context.reporter, &in_type);
+    let out_type = type_(&context.reporter, in_type);
 
     match e_ {
         // -----------------------------------------------------------------------------------------
@@ -1086,7 +1086,7 @@ fn value(
         ty: ref in_type,
         exp: sp!(eloc, e_),
     } = e;
-    let out_type = type_(&context.reporter, &in_type);
+    let out_type = type_(&context.reporter, in_type);
     let make_exp = |exp| H::exp(out_type.clone(), sp(eloc, exp));
 
     let preresult: H::Exp = match e_ {
@@ -1342,7 +1342,7 @@ fn value(
             make_exp(HE::Vector(
                 vec_loc,
                 size,
-                Box::new(base_type(&context.reporter, &*vty)),
+                Box::new(base_type(&context.reporter, &vty)),
                 values,
             ))
         }

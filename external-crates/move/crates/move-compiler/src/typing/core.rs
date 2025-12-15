@@ -2542,7 +2542,7 @@ fn solve_builtin_type_constraint(
     ty: &Type,
 ) {
     use TypeName_::*;
-    let t = unfold_type(&context.subst, &ty);
+    let t = unfold_type(&context.subst, ty);
     let tloc = t.loc;
     let mk_tmsg = || {
         let set_msg = if builtin_set.is_empty() {
@@ -3147,7 +3147,7 @@ fn join_impl(
     let sp!(lhs_loc, lhs_ty_) = lhs;
     let sp!(rhs_loc, rhs_ty_) = rhs;
 
-    let result = match (lhs_ty_.inner(), rhs_ty_.inner()) {
+    match (lhs_ty_.inner(), rhs_ty_.inner()) {
         (TI::Anything, _) => Ok((subst, rhs.clone())),
         (_, TI::Anything) => Ok((subst, lhs.clone())),
 
@@ -3280,9 +3280,7 @@ fn join_impl(
             Box::new(lhs.clone()),
             Box::new(rhs.clone()),
         )),
-    };
-
-    result
+    }
 }
 
 fn join_impl_types(
@@ -3391,12 +3389,10 @@ fn forward_tvar(subst: &Subst, id: TVar) -> TVar {
     let mut cur = id;
     loop {
         match subst.get(cur) {
-            Some(sp!(_, ty_)) => {
-                match ty_.inner() {
-                    TI::Var(next) => cur = *next,
-                    _ => break cur,
-                }
-            }
+            Some(sp!(_, ty_)) => match ty_.inner() {
+                TI::Var(next) => cur = *next,
+                _ => break cur,
+            },
             None => break cur,
         }
     }

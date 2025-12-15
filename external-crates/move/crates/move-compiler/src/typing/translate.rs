@@ -89,7 +89,7 @@ pub fn program(
     compilation_env
         .visitors()
         .typing
-        .iter()
+        .par_iter()
         .for_each(|v| v.visit(compilation_env, &prog));
     prog
 }
@@ -171,9 +171,7 @@ fn extract_macros(
     UniqueMap::maybe_from_iter(
         all_macro_definitions.map(|(mident, mod_use_funs, functions)| {
             let macro_bodies = functions.ref_filter_map(|_, f| {
-                if f.macro_.is_none() {
-                    return None;
-                }
+                f.macro_?;
                 if let N::FunctionBody_::Defined((use_funs, body)) = &f.body.value {
                     let use_funs = merge_use_funs(mod_use_funs, use_funs.clone());
                     Some((use_funs, body.clone()))
@@ -213,7 +211,7 @@ fn modules(
     let typed_modules = Mutex::new(UniqueMap::new());
     let all_new_friends = Mutex::new(BTreeMap::new());
     let used_module_members = Mutex::new(BTreeMap::new());
-    modules.into_iter().for_each(|(ident, mdef)| {
+    modules.into_par_iter().for_each(|(ident, mdef)| {
         let (typed_mdef, new_friends, used_members) = module(
             compilation_env,
             info,
@@ -324,11 +322,11 @@ fn module<'env>(
     let used_members = Mutex::new(BTreeMap::new());
     let used_methods = Mutex::new(BTreeSet::new());
     nstructs
-        .into_iter()
+        .into_par_iter()
         .map(Member::Struct)
-        .chain(nenums.into_iter().map(Member::Enum))
-        .chain(nconstants.into_iter().map(Member::Constant))
-        .chain(nfunctions.into_iter().map(Member::Function))
+        .chain(nenums.into_par_iter().map(Member::Enum))
+        .chain(nconstants.into_par_iter().map(Member::Constant))
+        .chain(nfunctions.into_par_iter().map(Member::Function))
         .for_each(|member| {
             let mut context = context.new_module_member();
             match member {
@@ -1965,7 +1963,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                     e.exp.loc,
                     || -> String { panic!("ICE failed tvar join") },
                     &e.ty,
-                    &tvar,
+                    tvar,
                 );
             }
             let ty = Type_::multiple(eloc, tvars);
@@ -2336,7 +2334,7 @@ fn match_arm(
         ploc,
         || "Invalid pattern",
         &pattern.ty,
-        &subject_type,
+        subject_type,
     );
 
     let binder_map: BTreeMap<N::Var, Type> = binders.clone().into_iter().collect();
@@ -2975,7 +2973,7 @@ fn check_mutation(context: &mut Context, loc: Loc, given_ref: Type, rvalue_ty: &
         context,
         loc,
         || "Invalid mutation. New value is not valid for the reference",
-        &rvalue_ty,
+        rvalue_ty,
         &inner,
     );
     context.add_ability_constraint(
@@ -3010,7 +3008,7 @@ fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Ty
             ));
             context.error_type(loc)
         }
-        TI::Var(i) if !context.subst.is_value_constrainted_var(&i) => {
+        TI::Var(i) if !context.subst.is_value_constrainted_var(i) => {
             context.add_diag(diag!(
                 TypeSafety::UninferredType,
                 (loc, msg()),
@@ -3019,16 +3017,16 @@ fn resolve_field(context: &mut Context, loc: Loc, ty: Type, field: &Field) -> Ty
             context.error_type(loc)
         }
         TI::Apply(_, sp!(_, ModuleType(m, n)), targs) => {
-            if !context.is_current_module(&m) {
+            if !context.is_current_module(m) {
                 let msg = format!(
                     "Invalid access of field '{field}' on the struct '{m}::{n}'. The field '{field}' can only \
                     be accessed within the module '{m}' since it defines '{n}'"
                 );
                 context.add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
             }
-            match context.datatype_kind(&m, &n) {
+            match context.datatype_kind(m, n) {
                 DatatypeKind::Struct => {
-                    core::make_struct_field_type(context, loc, &m, &n, targs.clone(), field)
+                    core::make_struct_field_type(context, loc, m, n, targs.clone(), field)
                 }
                 DatatypeKind::Enum => {
                     let msg = format!(
@@ -4598,7 +4596,7 @@ fn macro_call_impl(
     );
     // instantiate the param types to check for constraints, even if the argument isn't used
     for (_, param_ty) in &parameters {
-        core::instantiate(context, &param_ty);
+        core::instantiate(context, param_ty);
     }
     while args.len() < parameters.len() {
         args.push(EvalStrategy::ByName(sp(loc, N::Exp_::UnresolvedError)));

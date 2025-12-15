@@ -905,7 +905,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
                 if let Some((suggestion, defn_loc_opt)) =
                     find_suggestion(&self.unscoped_types, n.value.as_str())
                 {
-                    add_suggestion(&mut diag.clone(), loc, &suggestion, defn_loc_opt);
+                    add_suggestion(&mut diag.clone(), loc, suggestion, defn_loc_opt);
                 }
                 self.add_diag(diag);
                 ResolvedType::Unbound
