@@ -1935,22 +1935,25 @@ mod tests {
         assert_debug_snapshot!(output, @r###"
         {
             "between_literals": Err(
-                VectorTypeMismatch(
-                    U8,
-                    U64,
-                ),
+                VectorTypeMismatch {
+                    offset: 1,
+                    this: U8,
+                    that: U64,
+                },
             ),
             "between_field_and_literal": Err(
-                VectorTypeMismatch(
-                    U64,
-                    U8,
-                ),
+                VectorTypeMismatch {
+                    offset: 1,
+                    this: U64,
+                    that: U8,
+                },
             ),
             "between_annotation_and_element": Err(
-                VectorTypeMismatch(
-                    U64,
-                    U8,
-                ),
+                VectorTypeMismatch {
+                    offset: 1,
+                    this: U64,
+                    that: U8,
+                },
             ),
         }
         "###);

@@ -363,10 +363,11 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
                 for e in &elements {
                     let element_type = e.type_();
                     if element_type != *type_ {
-                        return Err(FormatError::VectorTypeMismatch(
-                            type_.into_owned(),
-                            element_type,
-                        ));
+                        return Err(FormatError::VectorTypeMismatch {
+                            offset: v.offset,
+                            this: type_.into_owned(),
+                            that: element_type,
+                        });
                     }
                 }
 

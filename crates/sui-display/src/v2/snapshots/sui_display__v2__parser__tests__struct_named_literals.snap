@@ -5,7 +5,7 @@ expression: "strands(\"{ 0x1::string::String { length: 42u64, value: 'foo', data
 { 0x0000000000000000000000000000000000000000000000000000000000000001::string::String {
       length: 42u64,
       value: "foo",
-      data: vector[
+      data: vector@59[
           1u128,
           2u128,
           3u128,

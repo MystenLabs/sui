@@ -103,8 +103,12 @@ pub enum Literal<'s> {
 /// Contents of a vector literal.
 #[derive(PartialEq, Eq)]
 pub struct Vector<'s> {
+    /// Byte offset in the source string where the vector literal starts.
+    pub(crate) offset: usize,
+
     /// Element type, optional for non-empty vectors.
     pub(crate) type_: Option<TypeTag>,
+
     pub(crate) elements: Vec<Chain<'s>>,
 }
 
@@ -484,7 +488,7 @@ impl<'s> Parser<'s> {
                 }
 
                 meter.alloc()?;
-                Literal::Vector(Box::new(Vector { type_, elements }))
+                Literal::Vector(Box::new(Vector { offset, type_, elements }))
             },
         })
     }
@@ -1140,7 +1144,7 @@ impl fmt::Debug for Literal<'_> {
 
 impl fmt::Debug for Vector<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "vector")?;
+        write!(f, "vector@{}", self.offset)?;
         if let Some(type_) = &self.type_ {
             write!(f, "<{}> ", type_.to_canonical_display(true))?;
         }
@@ -1662,6 +1666,7 @@ mod tests {
                 alternates: vec![
                     C {
                         root: Some(L::Vector(Box::new(Vector {
+                            offset: 2,
                             type_: None,
                             elements: vec![
                                 C {
@@ -1682,6 +1687,7 @@ mod tests {
                     },
                     C {
                         root: Some(L::Vector(Box::new(Vector {
+                            offset: 41,
                             type_: Some(TypeTag::U16),
                             elements: vec![
                                 C {
@@ -1698,6 +1704,7 @@ mod tests {
                     },
                     C {
                         root: Some(L::Vector(Box::new(Vector {
+                            offset: 82,
                             type_: Some(TypeTag::U32),
                             elements: vec![],
                         }))),
@@ -1705,6 +1712,7 @@ mod tests {
                     },
                     C {
                         root: Some(L::Vector(Box::new(Vector {
+                            offset: 111,
                             type_: Some(TypeTag::U64),
                             elements: vec![],
                         }))),
@@ -1712,6 +1720,7 @@ mod tests {
                     },
                     C {
                         root: Some(L::Vector(Box::new(Vector {
+                            offset: 142,
                             type_: Some(
                                 TypeTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap()
                             ),
@@ -1752,6 +1761,7 @@ mod tests {
                                 },
                                 C {
                                     root: Some(L::Vector(Box::new(Vector {
+                                        offset: 36,
                                         type_: None,
                                         elements: vec![
                                             C {
