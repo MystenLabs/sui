@@ -56,8 +56,12 @@ pub enum FormatError {
     #[error("Invalid {0}")]
     InvalidIdentifier(OwnedLexeme),
 
-    #[error("Invalid {what}: {err}")]
-    InvalidNumber { what: &'static str, err: String },
+    #[error("Invalid {what} at offset {offset}: {err}")]
+    InvalidNumber {
+        what: &'static str,
+        offset: usize,
+        err: String,
+    },
 
     #[error("Odd number of characters in hex {0}")]
     OddHexLiteral(OwnedLexeme),

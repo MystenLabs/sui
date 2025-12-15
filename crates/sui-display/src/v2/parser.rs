@@ -422,14 +422,14 @@ impl<'s> Parser<'s> {
                 self.parse_data(meter)?
             },
 
-            Tok(_, T::NumDec, _, dec) => {
+            Tok(_, T::NumDec, off, dec) => {
                 self.lexer.next();
-                self.parse_numeric_suffix(dec, 10, meter)?
+                self.parse_numeric_suffix(off, dec, 10, meter)?
             },
 
-            Tok(_, T::NumHex, _, hex) => {
+            Tok(_, T::NumHex, off, hex) => {
                 self.lexer.next();
-                self.parse_numeric_suffix(hex, 16, meter)?
+                self.parse_numeric_suffix(off, hex, 16, meter)?
             },
 
             Tok(_, T::String, _, slice) => {
@@ -505,9 +505,9 @@ impl<'s> Parser<'s> {
                         Accessor::Field(ident)
                     },
 
-                    Tok(_, T::NumDec, _, n) => {
+                    Tok(_, T::NumDec, off, n) => {
                         self.lexer.next();
-                        let index = read_u8(n, 10, "positional field index")?;
+                        let index = read_u8(off, n, 10, "positional field index")?;
 
                         meter.alloc()?;
                         Accessor::Positional(index)
@@ -622,9 +622,9 @@ impl<'s> Parser<'s> {
                 self.lexer.next();
 
                 match_token! { self.lexer; Tok(_, T::Pound, _, _) => self.lexer.next() };
-                let variant_index = match_token! { self.lexer; Tok(_, T::NumDec, _, index) => {
+                let variant_index = match_token! { self.lexer; Tok(_, T::NumDec, off, index) => {
                     self.lexer.next();
-                    read_u16(index, 10, "enum variant index")?
+                    read_u16(off, index, 10, "enum variant index")?
                 }};
 
                 meter.alloc()?;
@@ -636,10 +636,10 @@ impl<'s> Parser<'s> {
                 }))
             },
 
-            Tok(_, T::NumDec, _, index) => {
+            Tok(_, T::NumDec, off, index) => {
                 self.lexer.next();
 
-                let variant_index = read_u16(index, 10, "enum variant index")?;
+                let variant_index = read_u16(off, index, 10, "enum variant index")?;
 
                 meter.alloc()?;
                 Literal::Enum(Box::new(Enum {
@@ -863,14 +863,14 @@ impl<'s> Parser<'s> {
 
     fn parse_address(&mut self) -> Result<AccountAddress, FormatError> {
         let addr = match_token! { self.lexer;
-            Tok(_, T::NumHex, _, slice) => {
+            Tok(_, T::NumHex, off, slice) => {
                 self.lexer.next();
-                read_u256(slice, 16, "'address'")?
+                read_u256(off, slice, 16, "'address'")?
             },
 
-            Tok(_, T::NumDec, _, slice) => {
+            Tok(_, T::NumDec, off, slice) => {
                 self.lexer.next();
-                read_u256(slice, 10, "'address'")?
+                read_u256(off, slice, 10, "'address'")?
             },
         };
 
@@ -889,6 +889,7 @@ impl<'s> Parser<'s> {
 
     fn parse_numeric_suffix<'b>(
         &mut self,
+        offset: usize,
         num: &'s str,
         radix: u32,
         meter: &mut Meter<'b>,
@@ -897,37 +898,37 @@ impl<'s> Parser<'s> {
             Lit(false, T::Ident, _, "u8") => {
                 self.lexer.next();
                 meter.alloc()?;
-                Literal::U8(read_u8(num, radix, "'u8'")?)
+                Literal::U8(read_u8(offset, num, radix, "'u8'")?)
             },
 
             Lit(false, T::Ident, _, "u16") => {
                 self.lexer.next();
                 meter.alloc()?;
-                Literal::U16(read_u16(num, radix, "'u16'")?)
+                Literal::U16(read_u16(offset, num, radix, "'u16'")?)
             },
 
             Lit(false, T::Ident, _, "u32") => {
                 self.lexer.next();
                 meter.alloc()?;
-                Literal::U32(read_u32(num, radix, "'u32'")?)
+                Literal::U32(read_u32(offset, num, radix, "'u32'")?)
             },
 
             Lit(false, T::Ident, _, "u64") => {
                 self.lexer.next();
                 meter.alloc()?;
-                Literal::U64(read_u64(num, radix, "'u64'")?)
+                Literal::U64(read_u64(offset, num, radix, "'u64'")?)
             },
 
             Lit(false, T::Ident, _, "u128") => {
                 self.lexer.next();
                 meter.alloc()?;
-                Literal::U128(read_u128(num, radix, "'u128'")?)
+                Literal::U128(read_u128(offset, num, radix, "'u128'")?)
             },
 
             Lit(false, T::Ident, _, "u256") => {
                 self.lexer.next();
                 meter.alloc()?;
-                Literal::U256(read_u256(num, radix, "'u256'")?)
+                Literal::U256(read_u256(offset, num, radix, "'u256'")?)
             },
         })
     }
@@ -1243,44 +1244,75 @@ impl fmt::Debug for Base64Modifier {
     }
 }
 
-fn read_u8(slice: &str, radix: u32, what: &'static str) -> Result<u8, FormatError> {
+fn read_u8(offset: usize, slice: &str, radix: u32, what: &'static str) -> Result<u8, FormatError> {
     u8::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
+        offset,
         err: err.to_string(),
     })
 }
 
-fn read_u16(slice: &str, radix: u32, what: &'static str) -> Result<u16, FormatError> {
+fn read_u16(
+    offset: usize,
+    slice: &str,
+    radix: u32,
+    what: &'static str,
+) -> Result<u16, FormatError> {
     u16::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
+        offset,
         err: err.to_string(),
     })
 }
 
-fn read_u32(slice: &str, radix: u32, what: &'static str) -> Result<u32, FormatError> {
+fn read_u32(
+    offset: usize,
+    slice: &str,
+    radix: u32,
+    what: &'static str,
+) -> Result<u32, FormatError> {
     u32::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
+        offset,
         err: err.to_string(),
     })
 }
 
-fn read_u64(slice: &str, radix: u32, what: &'static str) -> Result<u64, FormatError> {
+fn read_u64(
+    offset: usize,
+    slice: &str,
+    radix: u32,
+    what: &'static str,
+) -> Result<u64, FormatError> {
     u64::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
+        offset,
         err: err.to_string(),
     })
 }
 
-fn read_u128(slice: &str, radix: u32, what: &'static str) -> Result<u128, FormatError> {
+fn read_u128(
+    offset: usize,
+    slice: &str,
+    radix: u32,
+    what: &'static str,
+) -> Result<u128, FormatError> {
     u128::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
+        offset,
         err: err.to_string(),
     })
 }
 
-fn read_u256(slice: &str, radix: u32, what: &'static str) -> Result<U256, FormatError> {
+fn read_u256(
+    offset: usize,
+    slice: &str,
+    radix: u32,
+    what: &'static str,
+) -> Result<U256, FormatError> {
     U256::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
+        offset,
         err: err.to_string(),
     })
 }

@@ -2,4 +2,4 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(r#\"{foo.500}\"#)"
 ---
-Error: Invalid positional field index: number too large to fit in target type
+Error: Invalid positional field index at offset 5: number too large to fit in target type
