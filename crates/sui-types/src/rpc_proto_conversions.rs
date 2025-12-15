@@ -2410,9 +2410,7 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             K::AccumulatorRootCreate => message.with_kind(Kind::AccumulatorRootCreate),
             K::CoinRegistryCreate => message.with_kind(Kind::CoinRegistryCreate),
             K::DisplayRegistryCreate => message.with_kind(Kind::DisplayRegistryCreate),
-            K::AddressAliasStateCreate => {
-                todo!("AddressAliasStateCreate needs to be added to proto in sui-apis")
-            }
+            K::AddressAliasStateCreate => message.with_kind(Kind::AddressAliasStateCreate),
         }
     }
 }
