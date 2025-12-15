@@ -827,6 +827,10 @@ impl AuthorityEpochTables {
                 ThConfig::new_with_indexing(KeyIndexing::Hash, mutexes, uniform_key),
             ),
             (
+                "deferred_transactions_with_aliases_v2".to_string(),
+                ThConfig::new_with_indexing(KeyIndexing::Hash, mutexes, uniform_key),
+            ),
+            (
                 "dkg_processed_messages_v2".to_string(),
                 ThConfig::new(2, 1, KeyType::uniform(1)),
             ),
