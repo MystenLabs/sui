@@ -2032,10 +2032,10 @@ mod tests {
             )
             .await;
 
-        // Phase 2: Set the `reader_lo`, and detect when the collector picks up the new value. Until
-        // the new reader_lo is picked up, the collector must still allow checkpoints through. The
-        // collector will only pick up the new value when it receives checkpoints from the
-        // processor, so we advance progress by releasing checkpoints one at a time in a loop.
+        // Set the reader_lo to 250, simulating the main pipeline getting ahead. The
+        // track_main_reader_lo task will eventually pick this up and update the atomic. The
+        // collector reads from the atomic when it receives checkpoints, so we release checkpoints
+        // one at a time until the collector_reader_lo metric shows the new value.
         conn.set_reader_watermark(ControllableHandler::NAME, 250)
             .await
             .unwrap();
@@ -2048,7 +2048,6 @@ mod tests {
                 interval.tick().await;
                 process_below.send(allow_process).ok();
 
-                // Check if collector observed a new reader_lo.
                 let current = metrics
                     .collector_reader_lo
                     .with_label_values(&[ControllableHandler::NAME])
@@ -2065,20 +2064,19 @@ mod tests {
 
         println!("Made {} iterations", iterations);
 
-        // Phase 3: At this point, the collector has observed the new `reader_lo`. Once we release
-        // the remaining checkpoints for processing, we can guarantee the following:
-        // - checkpoints [0, allow_process] have been committed
-        // - checkpoints (allow_process, observed_reader_lo) must be skipped
-        // - checkpoints [true_reader_lo, final_checkpoint] must be committed For this test,
-        // observed_reader_lo == true_reader_lo == 250, so (allow_process, 250) must be skipped, and
-        // [250, final_checkpoint] must be committed.
+        // At this point, the collector has observed reader_lo = 250. Release all remaining
+        // checkpoints. Guarantees:
+        // - [0, 10]: committed (before reader_lo was set)
+        // - [11, allow_process]: some committed, some skipped (timing-dependent during detection)
+        // - (allow_process, 250): skipped (in-flight, filtered by collector)
+        // - [250, 500]: committed (>= reader_lo)
         process_below.send(500).ok();
 
         let _ = indexer_handle.await;
 
         let data = store.data.get(ControllableHandler::NAME).unwrap();
 
-        // Asserts that checkpoints `(allow_process, 250)` are skipped.
+        // In-flight checkpoints (allow_process, 250) must be skipped.
         let num_must_skipped = 250 - (allow_process + 1);
         let skipped = metrics
             .total_collector_skipped_checkpoints
@@ -2089,27 +2087,26 @@ mod tests {
             "Expected at least {num_must_skipped} skipped, got {skipped}"
         );
 
-        // Check that no checkpoints between (allow_process, 250) are in the data.
         for chkpt in (allow_process + 1)..250 {
             assert!(
                 data.get(&chkpt).is_none(),
-                "Checkpoint {chkpt} was not expected to be committed"
+                "Checkpoint {chkpt} should have been skipped"
             );
         }
 
-        // Checkpoints [250, 500] must be committed.
+        // Checkpoints >= reader_lo must be committed.
         for chkpt in 250..=500 {
             assert!(
                 data.get(&chkpt).is_some(),
-                "Checkpoint {chkpt} was expected to be committed"
+                "Checkpoint {chkpt} should have been committed (>= reader_lo)"
             );
         }
 
-        // And the first 11 checkpoints must be committed.
+        // Baseline: checkpoints [0, 10] were committed before reader_lo was set.
         for chkpt in 0..=10 {
             assert!(
                 data.get(&chkpt).is_some(),
-                "Checkpoint {chkpt} was expected to be committed"
+                "Checkpoint {chkpt} should have been committed (baseline)"
             );
         }
     }
