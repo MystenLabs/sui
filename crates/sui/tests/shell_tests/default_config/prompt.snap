@@ -21,7 +21,7 @@ ls sui.keystore
 success: true
 exit_code: 0
 ----- stdout -----
-No sui config found in `"./client.yaml"`, create one [Y/n]?
+No sui config found in `./client.yaml`, create one [Y/n]?
 Generated new keypair <REDACTED>
   secret recovery phrase : <REDACTED>
 Created "./client.yaml"

@@ -14,7 +14,7 @@ cat sui.keystore
 success: false
 exit_code: 1
 ----- stdout -----
-No sui config found in `"./client.yaml"`, create one [Y/n]?
+No sui config found in `./client.yaml`, create one [Y/n]?
 No config found, aborting
 
 ----- stderr -----
