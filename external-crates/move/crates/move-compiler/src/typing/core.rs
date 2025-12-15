@@ -3147,7 +3147,7 @@ fn join_impl(
     let sp!(lhs_loc, lhs_ty_) = lhs;
     let sp!(rhs_loc, rhs_ty_) = rhs;
 
-    match (lhs_ty_.inner(), rhs_ty_.inner()) {
+    let result = match (lhs_ty_.inner(), rhs_ty_.inner()) {
         (TI::Anything, _) => Ok((subst, rhs.clone())),
         (_, TI::Anything) => Ok((subst, lhs.clone())),
 
@@ -3280,7 +3280,21 @@ fn join_impl(
             Box::new(lhs.clone()),
             Box::new(rhs.clone()),
         )),
+    };
+
+    // Print location info for input and output
+
+    println!("--------------------\nJoined\n    lhs: {:?}\n    rhs: {:?}", lhs.loc, rhs.loc);
+    match &result {
+        Ok((_, ty)) => {
+            println!("    ty: {:?}", ty.loc);
+        }
+        Err(_) => {
+            println!("    error");
+        }
     }
+
+    result
 }
 
 fn join_impl_types(

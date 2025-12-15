@@ -89,7 +89,7 @@ pub fn program(
     compilation_env
         .visitors()
         .typing
-        .par_iter()
+        .iter()
         .for_each(|v| v.visit(compilation_env, &prog));
     prog
 }
@@ -213,7 +213,7 @@ fn modules(
     let typed_modules = Mutex::new(UniqueMap::new());
     let all_new_friends = Mutex::new(BTreeMap::new());
     let used_module_members = Mutex::new(BTreeMap::new());
-    modules.into_par_iter().for_each(|(ident, mdef)| {
+    modules.into_iter().for_each(|(ident, mdef)| {
         let (typed_mdef, new_friends, used_members) = module(
             compilation_env,
             info,
@@ -324,11 +324,11 @@ fn module<'env>(
     let used_members = Mutex::new(BTreeMap::new());
     let used_methods = Mutex::new(BTreeSet::new());
     nstructs
-        .into_par_iter()
+        .into_iter()
         .map(Member::Struct)
-        .chain(nenums.into_par_iter().map(Member::Enum))
-        .chain(nconstants.into_par_iter().map(Member::Constant))
-        .chain(nfunctions.into_par_iter().map(Member::Function))
+        .chain(nenums.into_iter().map(Member::Enum))
+        .chain(nconstants.into_iter().map(Member::Constant))
+        .chain(nfunctions.into_iter().map(Member::Function))
         .for_each(|member| {
             let mut context = context.new_module_member();
             match member {
