@@ -8,7 +8,7 @@ use clickhouse::{Client, Row};
 use scoped_futures::ScopedBoxFuture;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use sui_indexer_alt_framework_store_traits::{
+use sui_indexer_alt_framework::store::{
     CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
 };
 use url::Url;
@@ -117,17 +117,14 @@ impl TransactionalStore for ClickHouseStore {
 
 #[async_trait]
 impl Connection for ClickHouseConnection {
-    async fn committer_watermark(
-        &mut self,
-        pipeline: &'static str,
-    ) -> Result<Option<CommitterWatermark>> {
+    async fn committer_watermark(&mut self, pipeline: &str) -> Result<Option<CommitterWatermark>> {
         let mut cursor = self
             .client
             .query(
-                "SELECT epoch_hi_inclusive, checkpoint_hi_inclusive, tx_hi, timestamp_ms_hi_inclusive 
-                 FROM watermarks 
-                 WHERE pipeline = ? 
-                 ORDER BY pruner_timestamp DESC 
+                "SELECT epoch_hi_inclusive, checkpoint_hi_inclusive, tx_hi, timestamp_ms_hi_inclusive
+                 FROM watermarks
+                 WHERE pipeline = ?
+                 ORDER BY pruner_timestamp DESC
                  LIMIT 1"
             )
             .bind(pipeline)
@@ -151,10 +148,10 @@ impl Connection for ClickHouseConnection {
         let mut cursor = self
             .client
             .query(
-                "SELECT checkpoint_hi_inclusive, reader_lo 
-                 FROM watermarks 
-                 WHERE pipeline = ? 
-                 ORDER BY pruner_timestamp DESC 
+                "SELECT checkpoint_hi_inclusive, reader_lo
+                 FROM watermarks
+                 WHERE pipeline = ?
+                 ORDER BY pruner_timestamp DESC
                  LIMIT 1",
             )
             .bind(pipeline)
@@ -179,11 +176,11 @@ impl Connection for ClickHouseConnection {
         let mut cursor = self
             .client
             .query(
-                "SELECT reader_lo, pruner_hi, 
+                "SELECT reader_lo, pruner_hi,
                         toInt64(? + (pruner_timestamp - toUnixTimestamp64Milli(now64()))) as wait_for_ms
-                 FROM watermarks 
-                 WHERE pipeline = ? 
-                 ORDER BY pruner_timestamp DESC 
+                 FROM watermarks
+                 WHERE pipeline = ?
+                 ORDER BY pruner_timestamp DESC
                  LIMIT 1"
             )
             .bind(delay_ms)
@@ -202,7 +199,7 @@ impl Connection for ClickHouseConnection {
 
     async fn set_committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline: &str,
         watermark: CommitterWatermark,
     ) -> Result<bool> {
         // Follow PostgreSQL pattern: check if row exists, then UPDATE or INSERT accordingly
@@ -221,8 +218,8 @@ impl Connection for ClickHouseConnection {
             if existing_checkpoint < watermark.checkpoint_hi_inclusive {
                 self.client
                     .query(
-                        "ALTER TABLE watermarks 
-                         UPDATE 
+                        "ALTER TABLE watermarks
+                         UPDATE
                              epoch_hi_inclusive = ?,
                              checkpoint_hi_inclusive = ?,
                              tx_hi = ?,
@@ -264,7 +261,7 @@ impl Connection for ClickHouseConnection {
         // Follow PostgreSQL pattern: simple UPDATE with timestamp update and advancement check
         self.client
             .query(
-                "ALTER TABLE watermarks 
+                "ALTER TABLE watermarks
                  UPDATE reader_lo = ?, pruner_timestamp = toUnixTimestamp64Milli(now64())
                  WHERE pipeline = ? AND reader_lo < ?",
             )
@@ -285,8 +282,8 @@ impl Connection for ClickHouseConnection {
         // Follow PostgreSQL pattern: simple UPDATE statement
         self.client
             .query(
-                "ALTER TABLE watermarks 
-                 UPDATE pruner_hi = ? 
+                "ALTER TABLE watermarks
+                 UPDATE pruner_hi = ?
                  WHERE pipeline = ?",
             )
             .bind(pruner_hi)

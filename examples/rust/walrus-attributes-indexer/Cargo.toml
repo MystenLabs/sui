@@ -2,8 +2,7 @@
 name = "walrus-attributes-indexer"
 version = "0.1.0"
 edition = "2024"
-
-[workspace]
+publish = false
 
 [dependencies]
 anyhow = "1.0"

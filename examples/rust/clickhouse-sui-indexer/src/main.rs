@@ -4,12 +4,13 @@
 mod handlers;
 mod store;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use clap::Parser;
 use sui_indexer_alt_framework::{
+    Indexer, IndexerArgs,
     ingestion::{ClientArgs, IngestionConfig},
     pipeline::concurrent::ConcurrentConfig,
-    Indexer, IndexerArgs,
+    service::Error,
 };
 use url::Url;
 
@@ -55,7 +56,6 @@ async fn main() -> Result<()> {
         IngestionConfig::default(),
         None,                // No metrics prefix
         &Default::default(), // Empty prometheus registry
-        tokio_util::sync::CancellationToken::new(),
     )
     .await?;
 
@@ -72,11 +72,13 @@ async fn main() -> Result<()> {
     println!("Starting ClickHouse Sui indexer...");
 
     // Start the indexer and wait for it to complete
-    let handle = indexer.run().await?;
-
-    // This will run until the indexer is stopped (e.g., by Ctrl+C)
-    handle.await?;
-
-    println!("Indexer stopped");
-    Ok(())
+    match indexer.run().await?.main().await {
+        Ok(()) | Err(Error::Terminated) => Ok(()),
+        Err(Error::Aborted) => {
+            bail!("Indexer aborted due to an unexpected error")
+        }
+        Err(Error::Task(e)) => {
+            bail!(e)
+        }
+    }
 }

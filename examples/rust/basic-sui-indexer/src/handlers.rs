@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // docs::#processordeps (see sui/docs/content/guides/developer/advanced/custom-indexer.mdx)
-use std::sync::Arc;
 use anyhow::Result;
+use std::sync::Arc;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 
 use crate::models::StoredTransactionDigest;
 use crate::schema::transaction_digests::dsl::*;
@@ -13,14 +13,15 @@ use crate::schema::transaction_digests::dsl::*;
 // docs::#handlerdeps
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    postgres::{Connection, Db},
     pipeline::sequential::Handler,
+    postgres::{Connection, Db},
 };
 // docs::/#handlerdeps
 
 pub struct TransactionDigestHandler;
 
 // docs::#processor
+#[async_trait::async_trait]
 impl Processor for TransactionDigestHandler {
     const NAME: &'static str = "transaction_digest_handler";
 
@@ -29,12 +30,14 @@ impl Processor for TransactionDigestHandler {
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
         let checkpoint_seq = checkpoint.summary.sequence_number as i64;
 
-        let digests = checkpoint.transactions.iter().map(|tx| {
-            StoredTransactionDigest {
+        let digests = checkpoint
+            .transactions
+            .iter()
+            .map(|tx| StoredTransactionDigest {
                 tx_digest: tx.transaction.digest().to_string(),
                 checkpoint_sequence_number: checkpoint_seq,
-            }
-        }).collect();
+            })
+            .collect();
 
         Ok(digests)
     }
@@ -50,11 +53,7 @@ impl Handler for TransactionDigestHandler {
         batch.extend(values);
     }
 
-    async fn commit<'a>(
-        &self,
-        batch: &Self::Batch,
-        conn: &mut Connection<'a>,
-    ) -> Result<usize> {
+    async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         let inserted = diesel::insert_into(transaction_digests)
             .values(batch)
             .on_conflict(tx_digest)
