@@ -1512,8 +1512,8 @@ async fn prompt_if_no_config(
     // prompt user
     if !accept_defaults {
         println!(
-            "No sui config found in `{:?}`, create one [Y/n]?",
-            wallet_conf_file
+            "No sui config found in `{}`, create one [Y/n]?",
+            wallet_conf_file.to_string_lossy()
         );
         let response = read_line()?.trim().to_lowercase();
         if !response.is_empty() && response != "y" {
