@@ -1,6 +1,5 @@
 ---
 source: crates/sui/tests/shell_tests.rs
-description: tests/shell_tests/default_config/invalid.sh
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
