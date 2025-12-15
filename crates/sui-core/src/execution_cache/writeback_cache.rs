@@ -916,9 +916,7 @@ impl WritebackCache {
         trace!(?tx_digest, "writing transaction outputs to cache");
 
         assert!(
-            !self
-                .transaction_executed_in_last_epoch(&tx_digest, epoch_id)
-                .unwrap_or(false),
+            !self.transaction_executed_in_last_epoch(&tx_digest, epoch_id),
             "Transaction {:?} was already executed in epoch {}",
             tx_digest,
             epoch_id.saturating_sub(1)
@@ -2111,9 +2109,9 @@ impl TransactionCacheRead for WritebackCache {
         &self,
         digest: &TransactionDigest,
         current_epoch: EpochId,
-    ) -> SuiResult<bool> {
+    ) -> bool {
         if current_epoch == 0 {
-            return Ok(false);
+            return false;
         }
         let last_epoch = current_epoch - 1;
         let cache_key = (last_epoch, *digest);
@@ -2128,8 +2126,7 @@ impl TransactionCacheRead for WritebackCache {
             .transaction_executed_in_last_epoch
             .get(&cache_key)
         {
-            let was_executed = cached.lock().is_some();
-            return Ok(was_executed);
+            return cached.lock().is_some();
         }
 
         let was_executed = self
@@ -2143,7 +2140,7 @@ impl TransactionCacheRead for WritebackCache {
             .insert(&cache_key, value, ticket)
             .ok();
 
-        Ok(was_executed)
+        was_executed
     }
 
     fn notify_read_executed_effects_digests<'a>(

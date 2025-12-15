@@ -830,7 +830,7 @@ impl ValidatorService {
             if self
                 .state
                 .get_transaction_cache_reader()
-                .transaction_executed_in_last_epoch(tx_digest, epoch_store.epoch())?
+                .transaction_executed_in_last_epoch(tx_digest, epoch_store.epoch())
             {
                 results[idx] = Some(SubmitTxResult::Rejected {
                     error: UserInputError::TransactionAlreadyExecuted { digest: *tx_digest }.into(),

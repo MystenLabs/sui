@@ -504,7 +504,7 @@ pub trait TransactionCacheRead: Send + Sync {
         &self,
         digest: &TransactionDigest,
         current_epoch: EpochId,
-    ) -> SuiResult<bool>;
+    ) -> bool;
 
     fn multi_get_effects(
         &self,

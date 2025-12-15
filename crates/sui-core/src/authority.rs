@@ -1191,7 +1191,7 @@ impl AuthorityState {
 
         if self
             .get_transaction_cache_reader()
-            .transaction_executed_in_last_epoch(&tx_digest, epoch_store.epoch())?
+            .transaction_executed_in_last_epoch(&tx_digest, epoch_store.epoch())
         {
             return Err(UserInputError::TransactionAlreadyExecuted { digest: tx_digest }.into());
         }
@@ -1271,7 +1271,7 @@ impl AuthorityState {
             return Ok(());
         }
 
-        if let Ok(true) = self
+        if self
             .get_transaction_cache_reader()
             .transaction_executed_in_last_epoch(transaction.digest(), epoch_store.epoch())
         {
