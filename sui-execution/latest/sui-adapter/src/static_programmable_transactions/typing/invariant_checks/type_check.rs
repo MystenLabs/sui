@@ -59,7 +59,7 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
         withdrawals,
         pure,
         receiving,
-        withdrawal_conversions: _,
+        withdrawal_compatibility_conversions: _,
         commands,
     } = txn;
     for obj in objects {

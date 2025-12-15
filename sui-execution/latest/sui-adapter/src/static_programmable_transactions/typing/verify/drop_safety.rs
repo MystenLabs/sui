@@ -128,46 +128,41 @@ mod refine {
     ) -> Result<(), ExecutionError> {
         // withdrawal conversions not empty ==> accumulators enabled
         assert_invariant!(
-            ast.withdrawal_conversions.is_empty() || env.protocol_config.enable_accumulators(),
+            ast.withdrawal_compatibility_conversions.is_empty()
+                || env.protocol_config.enable_accumulators(),
             "Withdrawal conversions should be empty if accumulators are not enabled"
         );
-        for conversion_info in ast.withdrawal_conversions.values().filter(|conversion| {
-            let conversion_location = T::Location::Result(conversion.conversion_result, 0);
-            !moved_locations.contains(&conversion_location)
-        }) {
+        for conversion_info in
+            ast.withdrawal_compatibility_conversions
+                .values()
+                .filter(|conversion| {
+                    let conversion_location = T::Location::Result(conversion.conversion_result, 0);
+                    !moved_locations.contains(&conversion_location)
+                })
+        {
             let Some(cur_command) = ast.commands.len().checked_sub(1) else {
                 invariant_violation!("cannot be zero commands with a conversion")
             };
             let cur_command = cur_command as u16;
-            let T::WithdrawalConversion {
-                owner_result,
+            let T::WithdrawalCompatibilityConversion {
+                owner,
                 conversion_result,
-                conversion_kind,
             } = *conversion_info;
-            // set owner result as used
-            let owner_command = &mut ast.commands[owner_result as usize];
-            assert_invariant!(
-                owner_command.value.drop_values.as_slice() == [true],
-                "owner result should be unused thus far and should be dropped"
-            );
-            owner_command.value.drop_values[0] = false;
-            let owner_command = &ast.commands[owner_result as usize];
             let conversion_command = &ast.commands[conversion_result as usize];
             assert_invariant!(
                 conversion_command.value.result_type.len() == 1,
                 "conversion should have one result"
             );
+            let T::Location::PureInput(owner_pure_idx) = owner else {
+                invariant_violation!("owner should be a pure input")
+            };
             assert_invariant!(
-                owner_command.value.result_type.len() == 1,
-                "owner command should have one result"
+                ast.pure.len() > owner_pure_idx as usize,
+                "owner pure input index out of bounds"
             );
             assert_invariant!(
-                owner_command.value.result_type[0] == T::Type::Address,
-                "owner command should return an address"
-            );
-            assert_invariant!(
-                matches!(conversion_kind, T::WithdrawalConversionKind::ToCoin),
-                "only coin conversion supported"
+                ast.pure[owner_pure_idx as usize].ty == T::Type::Address,
+                "owner pure input should be an address"
             );
             let conversion_ty = &conversion_command.value.result_type[0];
             let Some(inner_ty) = coin_inner_type(conversion_ty) else {
@@ -176,7 +171,7 @@ mod refine {
             let move_result_ = T::Argument__::new_move(T::Location::Result(conversion_result, 0));
             let move_result = sp(cur_command, (move_result_, conversion_ty.clone()));
             let owner_ty = Type::Address;
-            let owner_arg_ = T::Argument__::new_move(T::Location::Result(owner_result, 0));
+            let owner_arg_ = T::Argument__::new_move(owner);
             let owner_arg = sp(cur_command, (owner_arg_, owner_ty));
             let return_command__ = T::Command__::MoveCall(Box::new(T::MoveCall {
                 function: env.load_framework_function(

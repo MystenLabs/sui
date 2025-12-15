@@ -133,6 +133,8 @@ fn input(
             };
             (
                 L::InputArg::FundsWithdrawal(L::FundsWithdrawalArg {
+                    // TODO populate this field when we add support for compatibility objects
+                    from_compatibility_object: false,
                     amount,
                     ty: ty.clone(),
                     owner,

@@ -13,16 +13,14 @@ use crate::{
 };
 use indexmap::{IndexMap, IndexSet};
 use move_binary_format::file_format::{Ability, AbilitySet};
-use std::{collections::BTreeMap, rc::Rc};
+use std::rc::Rc;
 use sui_types::{
     balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectRef, TxContextKind},
     coin::{COIN_MODULE_NAME, REDEEM_FUNDS_FUNC_NAME, RESOLVED_COIN_STRUCT},
     error::{ExecutionError, ExecutionErrorKind, command_argument_error},
     execution_status::CommandArgumentError,
-    funds_accumulator::{
-        FUNDS_ACCUMULATOR_MODULE_NAME, RESOLVED_WITHDRAWAL_STRUCT, WITHDRAWAL_OWNER_FUNC_NAME,
-    },
+    funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -52,13 +50,9 @@ struct Context {
     withdrawals: IndexMap<T::InputIndex, T::WithdrawalInput>,
     pure: IndexMap<(T::InputIndex, Type), T::PureInput>,
     receiving: IndexMap<(T::InputIndex, Type), T::ReceivingInput>,
-    withdrawal_conversions: IndexMap<T::Location, T::WithdrawalConversion>,
+    withdrawal_compatibility_conversions:
+        IndexMap<T::Location, T::WithdrawalCompatibilityConversion>,
     commands: Vec<T::Command>,
-    // map from original result to the lifted result
-    // the map should only be queried via a range, up to the current command index
-    result_index_lift: BTreeMap<u16, u16>,
-    // When the input location is used, instead, use the masked one
-    location_masks: IndexMap<T::Location, T::Location>,
 }
 
 impl Context {
@@ -72,11 +66,9 @@ impl Context {
             objects: IndexMap::new(),
             withdrawals: IndexMap::new(),
             pure: IndexMap::new(),
-            withdrawal_conversions: IndexMap::new(),
+            withdrawal_compatibility_conversions: IndexMap::new(),
             receiving: IndexMap::new(),
             commands: vec![],
-            result_index_lift: BTreeMap::new(),
-            location_masks: IndexMap::new(),
         };
         // clone inputs for debug assertions
         #[cfg(debug_assertions)]
@@ -108,7 +100,12 @@ impl Context {
                     InputKind::Object
                 }
                 (L::InputArg::FundsWithdrawal(withdrawal), L::InputType::Fixed(input_ty)) => {
-                    let L::FundsWithdrawalArg { ty, owner, amount } = withdrawal;
+                    let L::FundsWithdrawalArg {
+                        from_compatibility_object: _,
+                        ty,
+                        owner,
+                        amount,
+                    } = withdrawal;
                     debug_assert!(ty == input_ty);
                     let withdrawal = T::WithdrawalInput {
                         original_input_index: idx,
@@ -157,7 +154,7 @@ impl Context {
             pure,
             receiving,
             commands,
-            withdrawal_conversions,
+            withdrawal_compatibility_conversions,
             ..
         } = self;
         let objects = objects.into_iter().map(|(_, o)| o).collect();
@@ -170,7 +167,7 @@ impl Context {
             withdrawals,
             pure,
             receiving,
-            withdrawal_conversions,
+            withdrawal_compatibility_conversions,
             commands,
         }
     }
@@ -178,62 +175,6 @@ impl Context {
     fn push_result(&mut self, command: T::Command_) -> Result<(), ExecutionError> {
         self.commands.push(sp(self.current_command, command));
         Ok(())
-    }
-
-    /// Push a generated command that was not part of the original PTB
-    /// It then "lifts" all subsequent result indices by 1
-    /// returns the new index of the pushed command
-    fn push_generated_command(&mut self, command: T::Command_) -> Result<u16, ExecutionError> {
-        // we are "overwriting" the command that was normally at `cur`, as such, we need to "lift"
-        // `cur` and all subsequent result indices by 1
-        let cur = self.current_command;
-        let prev_lift = self
-            .result_index_lift
-            .last_key_value()
-            .map(|(k, v)| {
-                debug_assert!(*k <= cur);
-                *v
-            })
-            .unwrap_or(0);
-        let Some(cur_lift) = prev_lift.checked_add(1) else {
-            invariant_violation!("Cannot increment lift value of {prev_lift}")
-        };
-        self.result_index_lift.insert(cur, cur_lift);
-        self.commands.push(sp(self.current_command, command));
-        Ok(cur)
-    }
-
-    fn lift_result_index(&mut self, original_idx: u16) -> Result<u16, ExecutionError> {
-        let lift = self
-            .result_index_lift
-            .range(0..=original_idx)
-            .last()
-            .map(|(_k, v)| *v)
-            .unwrap_or(0);
-        original_idx.checked_add(lift).ok_or_else(|| {
-            make_invariant_violation!(
-                "Result index lift overflow. Cannot lift {original_idx} by {lift}",
-            )
-        })
-    }
-
-    fn resolve_location_mask(
-        &mut self,
-        location: T::Location,
-    ) -> Result<T::Location, ExecutionError> {
-        let mut cur = location;
-        let mut visited = IndexSet::new();
-        loop {
-            let was_new = visited.insert(cur);
-            assert_invariant!(
-                was_new,
-                "Cycle detected when resolving fixed type for location {location:?}"
-            );
-            let Some(next) = self.location_masks.get(&cur).copied() else {
-                return Ok(cur);
-            };
-            cur = next;
-        }
     }
 
     fn result_type(&self, i: u16) -> Option<&T::ResultType> {
@@ -271,7 +212,7 @@ impl Context {
         env: &Env,
         splat_location: SplatLocation,
     ) -> Result<Option<(T::Location, Type)>, ExecutionError> {
-        let original_location = match splat_location {
+        let location = match splat_location {
             SplatLocation::GasCoin => T::Location::GasCoin,
             SplatLocation::Result(i, j) => T::Location::Result(i, j),
             SplatLocation::Input(i) => match &self.input_resolution[i.0 as usize] {
@@ -290,11 +231,8 @@ impl Context {
                 InputKind::Pure | InputKind::Receiving => return Ok(None),
             },
         };
-        let location = self.resolve_location_mask(original_location)?;
         let Some(ty) = self.fixed_location_type(env, location)? else {
-            invariant_violation!(
-                "Location {original_location:?}=>{location:?} does not have a fixed type"
-            )
+            invariant_violation!("Location {location:?} does not have a fixed type")
         };
         Ok(Some((location, ty)))
     }
@@ -306,7 +244,7 @@ impl Context {
         expected_ty: &Type,
         bytes_constraint: BytesConstraint,
     ) -> Result<(T::Location, Type), ExecutionError> {
-        let original_location = match splat_location {
+        let location = match splat_location {
             SplatLocation::GasCoin => T::Location::GasCoin,
             SplatLocation::Result(i, j) => T::Location::Result(i, j),
             SplatLocation::Input(i) => match &self.input_resolution[i.0 as usize] {
@@ -366,11 +304,8 @@ impl Context {
                 }
             },
         };
-        let location = self.resolve_location_mask(original_location)?;
         let Some(ty) = self.fixed_location_type(env, location)? else {
-            invariant_violation!(
-                "Location {original_location:?}=>{location:?} does not have a fixed type"
-            )
+            invariant_violation!("Location {location:?} does not have a fixed type")
         };
         Ok((location, ty))
     }
@@ -380,8 +315,19 @@ pub fn transaction<Mode: ExecutionMode>(
     env: &Env,
     lt: L::Transaction,
 ) -> Result<T::Transaction, ExecutionError> {
-    let L::Transaction { inputs, commands } = lt;
+    let L::Transaction {
+        mut inputs,
+        mut commands,
+    } = lt;
+    let withdrawal_compatability_inputs =
+        determine_withdrawal_compatibility_inputs(env, &mut inputs)?;
     let mut context = Context::new(inputs)?;
+    withdrawal_compatibility_conversion(
+        env,
+        &mut context,
+        withdrawal_compatability_inputs,
+        &mut commands,
+    )?;
     for (i, c) in commands.into_iter().enumerate() {
         let idx = i as u16;
         context.current_command = idx;
@@ -635,14 +581,13 @@ where
                 }
                 res.push(SplatLocation::Input(T::InputIndex(i)))
             }
-            L::Argument::NestedResult(original_i, j) => {
-                let i = context.lift_result_index(original_i)?;
+            L::Argument::NestedResult(i, j) => {
                 let Some(command_result) = context.result_type(i) else {
-                    return Err(CommandArgumentError::IndexOutOfBounds { idx: original_i }.into());
+                    return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                 };
                 if j as usize >= command_result.len() {
                     return Err(CommandArgumentError::SecondaryIndexOutOfBounds {
-                        result_idx: original_i,
+                        result_idx: i,
                         secondary_idx: j,
                     }
                     .into());
@@ -650,8 +595,7 @@ where
                 res.push(SplatLocation::Result(i, j))
             }
             L::Argument::Result(i) => {
-                let lifted_i = context.lift_result_index(i)?;
-                let Some(result) = context.result_type(lifted_i) else {
+                let Some(result) = context.result_type(i) else {
                     return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                 };
                 let Ok(len): Result<u16, _> = result.len().try_into() else {
@@ -729,14 +673,6 @@ fn argument_(
     };
     let (location, actual_ty) =
         context.resolve_location(env, location, expected_ty, bytes_constraint)?;
-    let (location, actual_ty) = apply_conversion(
-        env,
-        context,
-        command_arg_idx,
-        location,
-        actual_ty,
-        expected_ty,
-    )?;
     Ok(match (actual_ty, expected_ty) {
         // Reference location types
         (Type::Reference(a_is_mut, a), Type::Reference(b_is_mut, b)) => {
@@ -854,22 +790,12 @@ fn constrained_argument_(
 fn constrained_type<'a>(
     env: &'a Env,
     context: &'a mut Context,
-    command_arg_idx: usize,
+    _command_arg_idx: usize,
     location: SplatLocation,
     constraint: AbilitySet,
 ) -> Result<Option<(T::Location, Type)>, ExecutionError> {
     let Some((location, ty)) = context.fixed_type(env, location)? else {
         return Ok(None);
-    };
-    // if the argument is a balance withdrawal, and an object is needed, convert it to a coin
-    let (location, ty) = if env.protocol_config.convert_withdrawal_ptb_arguments()
-        && constraint.has_key()
-        && let Some(ty_withdrawal_inner) = withdrawal_inner_type(&ty)
-        && balance_inner_type(ty_withdrawal_inner).is_some()
-    {
-        convert_withdrawal_to_coin(env, context, command_arg_idx, location, ty)?
-    } else {
-        (location, ty)
     };
     Ok(if constraint.is_subset(ty.abilities()) {
         Some((location, ty))
@@ -892,22 +818,13 @@ fn coin_mut_ref_argument(
 fn coin_mut_ref_argument_(
     env: &Env,
     context: &mut Context,
-    command_arg_idx: usize,
+    _command_arg_idx: usize,
     location: SplatLocation,
 ) -> Result<T::Argument_, EitherError> {
     let Some((location, actual_ty)) = context.fixed_type(env, location)? else {
         // TODO we do not currently bytes in any mode as that would require additional type
         // inference not currently supported
         return Err(CommandArgumentError::TypeMismatch.into());
-    };
-    // if the argument is a balance withdrawal, convert it to a coin
-    let (location, actual_ty) = if env.protocol_config.convert_withdrawal_ptb_arguments()
-        && let Some(actual_withdrawal_inner) = withdrawal_inner_type(&actual_ty)
-        && balance_inner_type(actual_withdrawal_inner).is_some()
-    {
-        convert_withdrawal_to_coin(env, context, command_arg_idx, location, actual_ty)?
-    } else {
-        (location, actual_ty)
     };
     Ok(match &actual_ty {
         Type::Reference(is_mut, ty) if *is_mut => {
@@ -935,29 +852,167 @@ fn check_coin_type(ty: &Type) -> Result<(), EitherError> {
     }
 }
 
-fn apply_conversion(
+//**************************************************************************************************
+// Withdrawal compatibility conversion
+//**************************************************************************************************
+
+/// Determines which withdrawal inputs need to be converted for compatibility, and appends the
+/// owner address of each such withdrawal as a new pure input.
+fn determine_withdrawal_compatibility_inputs(
+    _env: &Env,
+    inputs: &mut L::Inputs,
+) -> Result<IndexMap</* input withdrawal */ u16, /* owner address input */ u16>, ExecutionError> {
+    let mut withdrawal_compatibility_owners = IndexMap::new();
+    for (i, (input_arg, _)) in inputs.iter().enumerate() {
+        let L::InputArg::FundsWithdrawal(withdrawal) = input_arg else {
+            continue;
+        };
+        if !withdrawal.from_compatibility_object {
+            continue;
+        }
+        withdrawal_compatibility_owners.insert(i as u16, withdrawal.owner);
+    }
+    withdrawal_compatibility_owners
+        .into_iter()
+        .map(|(i, owner)| {
+            let owner_idx = inputs.len() as u16;
+            let bytes: Vec<u8> = bcs::to_bytes(&owner).map_err(|_| {
+                make_invariant_violation!(
+                    "Failed to serialize owner address for withdrawal compatibility input",
+                )
+            })?;
+            inputs.push((L::InputArg::Pure(bytes), L::InputType::Bytes));
+            Ok((i, owner_idx))
+        })
+        .collect()
+}
+
+struct WithdrawalCompatibilityRemap {
+    // mapping from original withdrawal input index to new coin result index
+    remap: IndexMap<u16, u16>,
+    // increment for all subsequent result indices
+    lift: u16,
+}
+
+/// For each withdrawal input that needs conversion, insert a conversion command to a
+/// `sui::coin::Coin<T>` and swaps references to that input to the conversion result.
+/// Adjusts result indices in subsequent commands accordingly.
+fn withdrawal_compatibility_conversion(
     env: &Env,
     context: &mut Context,
-    command_arg_idx: usize,
-    location: T::Location,
-    actual_ty: Type,
-    expected_ty: &Type,
-) -> Result<(T::Location, Type), ExecutionError> {
-    // check for withdrawal to coin conversion
-    let expected_ty = match expected_ty {
-        Type::Reference(_, inner) => &**inner,
-        ty => ty,
+    withdrawal_compatability_inputs: IndexMap<
+        /* input withdrawal */ u16,
+        /* owner address input */ u16,
+    >,
+    commands: &mut [L::Command],
+) -> Result<(), ExecutionError> {
+    let mut compatibility_remap = WithdrawalCompatibilityRemap {
+        remap: IndexMap::new(),
+        lift: 0,
     };
-    if env.protocol_config.convert_withdrawal_ptb_arguments()
-        && let Some(expected_inner) = coin_inner_type(expected_ty)
-        && let Some(actual_withdrawal_inner) = withdrawal_inner_type(&actual_ty)
-        && let Some(actual_inner) = balance_inner_type(actual_withdrawal_inner)
-        && actual_inner == expected_inner
-    {
-        convert_withdrawal_to_coin(env, context, command_arg_idx, location, actual_ty)
-    } else {
-        Ok((location, actual_ty))
+    for (input, owner_idx) in withdrawal_compatability_inputs {
+        let result_idx = convert_withdrawal_to_coin(env, context, input, owner_idx)?;
+        compatibility_remap.remap.insert(input, result_idx);
     }
+    compatibility_remap.lift = context.commands.len() as u16;
+    lift_result_indices(&compatibility_remap, commands)
+}
+
+fn convert_withdrawal_to_coin(
+    env: &Env,
+    context: &mut Context,
+    withdrawal_input: u16,
+    owner_input: u16,
+) -> Result</* Result index */ u16, ExecutionError> {
+    assert_invariant!(
+        env.protocol_config.convert_withdrawal_ptb_arguments(),
+        "convert_withdrawal_to_coin called when conversion is disabled"
+    );
+    // Grab the owner `address`
+    let (owner_location, _owner_ty) = context.resolve_location(
+        env,
+        SplatLocation::Input(T::InputIndex(owner_input)),
+        &Type::Address,
+        BytesConstraint {
+            command: 0,
+            argument: 0,
+        },
+    )?;
+    let Some((location, withdrawal_ty)) =
+        context.fixed_type(env, SplatLocation::Input(T::InputIndex(withdrawal_input)))?
+    else {
+        invariant_violation!(
+            "Expected fixed type for withdrawal compatibility input {}",
+            withdrawal_input
+        )
+    };
+    let Some(inner_ty) = withdrawal_inner_type(&withdrawal_ty)
+        .and_then(balance_inner_type)
+        .cloned()
+    else {
+        invariant_violation!("convert_withdrawal_to_coin called with non-withdrawal type");
+    };
+    let idx = 0u16;
+    // insert a conversion command
+    let withdrawal_arg_ = T::Argument__::new_move(location);
+    let withdrawal_arg = sp(idx, (withdrawal_arg_, withdrawal_ty));
+    let ctx_arg_ = T::Argument__::Borrow(true, T::Location::TxContext);
+    let ctx_ty = Type::Reference(true, Rc::new(env.tx_context_type()?));
+    let ctx_arg = sp(idx, (ctx_arg_, ctx_ty));
+    let conversion_command__ = T::Command__::MoveCall(Box::new(T::MoveCall {
+        function: env.load_framework_function(
+            COIN_MODULE_NAME,
+            REDEEM_FUNDS_FUNC_NAME,
+            vec![inner_ty.clone()],
+        )?,
+        arguments: vec![withdrawal_arg, ctx_arg],
+    }));
+    let conversion_command_ = T::Command_ {
+        command: conversion_command__,
+        result_type: vec![env.coin_type(inner_ty.clone())?],
+        drop_values: vec![],
+        consumed_shared_objects: vec![],
+    };
+    let conversion_idx = context.commands.len() as u16;
+    context.push_result(conversion_command_)?;
+    // manage metadata
+    context.withdrawal_compatibility_conversions.insert(
+        location,
+        T::WithdrawalCompatibilityConversion {
+            owner: owner_location,
+            conversion_result: conversion_idx,
+        },
+    );
+    // the result of the conversion is at (conversion_idx, 0)
+    Ok(conversion_idx)
+}
+
+/// Increments all result major indices by the lift amount.
+/// Remaps any converted withdrawal inputs to the new coin result
+fn lift_result_indices(
+    remap: &WithdrawalCompatibilityRemap,
+    commands: &mut [L::Command],
+) -> Result<(), ExecutionError> {
+    for command in commands {
+        for arg in command.arguments_mut() {
+            match arg {
+                L::Argument::NestedResult(result, _) | L::Argument::Result(result) => {
+                    *result = remap.lift.checked_add(*result).ok_or_else(|| {
+                        make_invariant_violation!(
+                            "u16 overflow when lifting result index during withdrawal compatibility",
+                        )
+                    })?;
+                }
+                L::Argument::Input(i) => {
+                    if let Some(converted_withdrawal) = remap.remap.get(i).copied() {
+                        *arg = L::Argument::NestedResult(converted_withdrawal, 0);
+                    }
+                }
+                L::Argument::GasCoin => (),
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Returns the inner type `T` if the type is `sui::coin::Coin<T>`, else `None`
@@ -1006,82 +1061,6 @@ fn withdrawal_inner_type(ty: &Type) -> Option<&Type> {
     } else {
         None
     }
-}
-
-fn convert_withdrawal_to_coin(
-    env: &Env,
-    context: &mut Context,
-    command_arg_idx: usize,
-    location: T::Location,
-    withdrawal_type: Type,
-) -> Result<(T::Location, Type), ExecutionError> {
-    assert_invariant!(
-        env.protocol_config.convert_withdrawal_ptb_arguments(),
-        "convert_withdrawal_to_coin called when conversion is disabled"
-    );
-    let Some(inner_ty) = withdrawal_inner_type(&withdrawal_type)
-        .and_then(balance_inner_type)
-        .cloned()
-    else {
-        invariant_violation!("convert_withdrawal_to_coin called with non-withdrawal type");
-    };
-    let idx = command_arg_idx as u16;
-    // first store the owner of the withdrawal
-    let withdrawal_borrow_ = T::Argument__::Borrow(false, location);
-    let withdrawl_ref_ty = Type::Reference(false, Rc::new(withdrawal_type.clone()));
-    let withdrawal_borrow = sp(idx, (withdrawal_borrow_, withdrawl_ref_ty));
-    let owner_command__ = T::Command__::MoveCall(Box::new(T::MoveCall {
-        function: env.load_framework_function(
-            FUNDS_ACCUMULATOR_MODULE_NAME,
-            WITHDRAWAL_OWNER_FUNC_NAME,
-            vec![inner_ty.clone()],
-        )?,
-        arguments: vec![withdrawal_borrow],
-    }));
-    let owner_command_ = T::Command_ {
-        command: owner_command__,
-        result_type: vec![Type::Address],
-        drop_values: vec![],
-        consumed_shared_objects: vec![],
-    };
-    let owner_idx = context.push_generated_command(owner_command_)?;
-    // we need to insert a conversion command before the current command
-    let withdrawal_arg_ = T::Argument__::new_move(location);
-    let withdrawal_arg = sp(idx, (withdrawal_arg_, withdrawal_type));
-    let ctx_arg_ = T::Argument__::Borrow(true, T::Location::TxContext);
-    let ctx_ty = Type::Reference(true, Rc::new(env.tx_context_type()?));
-    let ctx_arg = sp(idx, (ctx_arg_, ctx_ty));
-    let conversion_command__ = T::Command__::MoveCall(Box::new(T::MoveCall {
-        function: env.load_framework_function(
-            COIN_MODULE_NAME,
-            REDEEM_FUNDS_FUNC_NAME,
-            vec![inner_ty.clone()],
-        )?,
-        arguments: vec![withdrawal_arg, ctx_arg],
-    }));
-    let coin_type = env.coin_type(inner_ty.clone())?;
-    let conversion_command_ = T::Command_ {
-        command: conversion_command__,
-        result_type: vec![env.coin_type(inner_ty.clone())?],
-        drop_values: vec![],
-        consumed_shared_objects: vec![],
-    };
-    let conversion_idx = context.push_generated_command(conversion_command_)?;
-    // add mask
-    context
-        .location_masks
-        .insert(location, T::Location::Result(conversion_idx, 0));
-    // manage metadata
-    context.withdrawal_conversions.insert(
-        location,
-        T::WithdrawalConversion {
-            owner_result: owner_idx,
-            conversion_result: conversion_idx,
-            conversion_kind: T::WithdrawalConversionKind::ToCoin,
-        },
-    );
-    // the result of the conversion is at (conversion_idx, 0)
-    Ok((T::Location::Result(conversion_idx, 0), coin_type))
 }
 
 //**************************************************************************************************
@@ -1255,7 +1234,7 @@ mod consumed_shared_objects {
                 withdrawals: _,
                 pure: _,
                 receiving: _,
-                withdrawal_conversions: _,
+                withdrawal_compatibility_conversions: _,
                 commands: _,
             } = ast;
             let inputs = objects
