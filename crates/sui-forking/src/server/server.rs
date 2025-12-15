@@ -326,10 +326,10 @@ pub async fn start_server(
     let state =
         Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
 
-    tokio::spawn(async move {
+    let rpc_handle = tokio::spawn(async move {
         start_rpc(context.clone(), rpc, metrics).await.unwrap();
     });
-    tokio::spawn(async move {
+    let indexer_handle = tokio::spawn(async move {
         start_indexers(data_ingestion_path.clone(), version)
             .await
             .unwrap();
@@ -350,7 +350,25 @@ pub async fn start_server(
     println!("Forking server listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
+
+    // Set up graceful shutdown handler
+    let shutdown_signal = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to install CTRL+C signal handler");
+        println!("\nReceived CTRL+C, shutting down gracefully...");
+    };
+
+    // Serve with graceful shutdown
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal)
+        .await?;
+
+    // Abort the spawned tasks when the server shuts down
+    rpc_handle.abort();
+    indexer_handle.abort();
+
+    println!("Server shutdown complete");
 
     Ok(())
 }
