@@ -117,14 +117,11 @@ pub struct Module {
 impl Drop for Module {
     #![allow(unsafe_code)]
     fn drop(&mut self) {
-        // Manually drop all NativeFunction Arc references to prevent memory leaks.
-        //
-        // ArenaVec uses ManuallyDrop and does NOT call drop on its elements.
-        // This means Function.native (which contains Arc<UnboxedNativeFunction>)
-        // would leak if we don't explicitly handle it.
-        for function in self.functions.0.drain(..) {
-            drop(function);
-        }
+        // We need to manually drop the arena-allocated functions to ensure their native
+        // Arc fields are correctly dropped.
+        // Note the provided drain iterator calls the destructor on its elements when it is
+        // dropped, so this is sufficient.
+        self.functions.drain();
     }
 }
 

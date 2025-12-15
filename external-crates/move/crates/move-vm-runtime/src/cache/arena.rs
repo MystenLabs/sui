@@ -19,7 +19,7 @@ pub struct Arena(Bump);
 /// An arena-allocated vector. Notably, `Drop` does not drop the elements it holds, as that is the
 /// perview of the arena it was allocated in.
 #[derive(Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ArenaVec<T>(pub(crate) std::mem::ManuallyDrop<Vec<T>>);
+pub struct ArenaVec<T>(std::mem::ManuallyDrop<Vec<T>>);
 
 /// An arena-allocated vector. Notably, `Drop` does not drop the value it holds, as that is the
 /// perview of the arena it was allocated in.
@@ -102,6 +102,10 @@ impl<T> ArenaVec<T> {
             .iter()
             .map(|val_ref| VMPointer::from_ref(val_ref))
             .collect()
+    }
+
+    pub fn drain(&mut self) -> std::vec::Drain<'_, T>  {
+        self.0.drain(..)
     }
 }
 
