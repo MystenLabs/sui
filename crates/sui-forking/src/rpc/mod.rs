@@ -1,17 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod governance;
 pub mod objects;
 pub mod read;
 pub mod write;
 
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use anyhow::Context as _;
 use prometheus::Registry;
 use rand::rngs::OsRng;
 use reqwest::Url;
+use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -50,10 +51,15 @@ pub(crate) async fn start_rpc(
         protocol_version: context.protocol_version,
         chain: context.chain,
     })?;
+    rpc.add_module(governance::Governance {
+        simulacrum: context.clone().simulacrum,
+        protocol_version: context.protocol_version,
+        chain: context.chain,
+    })?;
     rpc.add_module(write::Write(context.clone().simulacrum))?;
-    rpc.add_module(sui_indexer_alt_jsonrpc::api::checkpoints::Checkpoints(
-        context.clone(),
-    ))?;
+    // rpc.add_module(sui_indexer_alt_jsonrpc::api::checkpoints::Checkpoints(
+    // context.clone(),
+    // ))?;
     // rpc.add_module(Coins(context.clone()))?;
 
     let s_metrics = metrics.run().await?;

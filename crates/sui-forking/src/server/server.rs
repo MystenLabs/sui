@@ -2,7 +2,7 @@ use std::{
     net::SocketAddr,
     path::PathBuf,
     sync::{
-        Arc, RwLock,
+        Arc,
         atomic::{AtomicUsize, Ordering},
     },
 };
@@ -16,11 +16,13 @@ use axum::{
 };
 use diesel::prelude::*;
 use rand::rngs::OsRng;
+use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
 use simulacrum::{AdvanceEpochConfig, Simulacrum, SimulacrumBuilder};
 use sui_types::{
+    base_types::SuiAddress,
     supported_protocol_versions::{
         Chain::{self, Mainnet},
         ProtocolConfig,
@@ -49,61 +51,11 @@ pub struct AppState {
 
 impl AppState {
     pub async fn new(
-        data_ingestion_path: PathBuf,
-        database_url: Url,
+        context: crate::context::Context,
         chain: Chain,
         at_checkpoint: u64,
-        protocol_version: u64,
         protocol_config: ProtocolConfig,
-        version: &'static str,
     ) -> Self {
-        let rpc_data_store = Arc::new(
-            crate::store::data_store::new_rpc_data_store(Node::Mainnet, version)
-                .expect("Failed to create RPC data store"),
-        );
-        let mut simulacrum = SimulacrumBuilder::new()
-            .with_chain(chain)
-            .with_protocol_version(protocol_version.into())
-            .with_store_creator(|genesis| {
-                ForkingStore::new(genesis, at_checkpoint, rpc_data_store.clone())
-            });
-
-        simulacrum.set_data_ingestion_path(data_ingestion_path);
-        let simulacrum = Arc::new(RwLock::new(simulacrum));
-
-        let registry = Registry::new_custom(Some("sui_forking".into()), None)
-            .context("Failed to create Prometheus registry.")
-            .unwrap();
-
-        let metrics_args = sui_indexer_alt_metrics::MetricsArgs::default();
-        let metrics = MetricsService::new(metrics_args, registry.clone());
-        let rpc_args = RpcArgs::default();
-
-        let mut rpc = RpcService::new(rpc_args, &registry)
-            .context("Failed to create RPC service")
-            .unwrap();
-
-        let pg_context = sui_indexer_alt_jsonrpc::context::Context::new(
-            Some(database_url),
-            None,
-            DbArgs::default(),
-            BigtableArgs::default(),
-            RpcConfig::default(),
-            rpc.metrics(),
-            &registry,
-        )
-        .await
-        .expect("Failed to create PG context");
-        let context = crate::context::Context {
-            pg_context,
-            simulacrum,
-            at_checkpoint,
-            chain,
-            protocol_version,
-        };
-        let rpc = start_rpc(context.clone(), rpc, metrics)
-            .await
-            .expect("Failed to start RPC server");
         Self {
             context,
             transaction_count: Arc::new(AtomicUsize::new(0)),
@@ -119,7 +71,7 @@ async fn health() -> &'static str {
 }
 
 async fn get_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let sim = state.context.simulacrum.read().unwrap();
+    let sim = state.context.simulacrum.read().await;
     let store = sim.store();
 
     let checkpoint = store
@@ -148,7 +100,7 @@ async fn get_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 }
 
 async fn advance_checkpoint(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut sim = state.context.simulacrum.write().unwrap();
+    let mut sim = state.context.simulacrum.write().await;
 
     // create_checkpoint returns a VerifiedCheckpoint, not a Result
     let checkpoint = sim.create_checkpoint();
@@ -169,7 +121,7 @@ async fn advance_clock(
     State(state): State<Arc<AppState>>,
     Json(request): Json<AdvanceClockRequest>,
 ) -> impl IntoResponse {
-    let mut sim = state.context.simulacrum.write().unwrap();
+    let mut sim = state.context.simulacrum.write().await;
 
     let duration = std::time::Duration::from_secs(request.seconds);
     sim.advance_clock(duration);
@@ -184,7 +136,7 @@ async fn advance_clock(
 }
 
 async fn advance_epoch(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let mut sim = state.context.simulacrum.write().unwrap();
+    let mut sim = state.context.simulacrum.write().await;
 
     // Use default configuration for advancing epoch
     let config = AdvanceEpochConfig::default();
@@ -231,7 +183,7 @@ async fn execute_tx(
     };
 
     // Execute the transaction
-    let mut sim = state.context.simulacrum.write().unwrap();
+    let mut sim = state.context.simulacrum.write().await;
     match sim.execute_transaction(transaction) {
         Ok((effects, execution_error)) => {
             let effects_bytes = bcs::to_bytes(&effects).unwrap();
@@ -260,6 +212,47 @@ async fn execute_tx(
     }
 }
 
+#[derive(serde::Deserialize)]
+struct FaucetRequest {
+    address: SuiAddress,
+    amount: u64,
+}
+
+async fn faucet(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<FaucetRequest>,
+) -> impl IntoResponse {
+    let FaucetRequest { address, amount } = request;
+
+    let mut simulacrum = state.context.simulacrum.write().await;
+    let response = simulacrum.request_gas(address, amount);
+
+    match response {
+        Ok(effects) => {
+            let effects_bytes = bcs::to_bytes(&effects).unwrap();
+            let effects_base64 =
+                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &effects_bytes);
+
+            state.transaction_count.fetch_add(1, Ordering::SeqCst);
+            info!("Executed transaction successfully");
+
+            Json(ApiResponse {
+                success: true,
+                data: Some(ExecuteTxResponse {
+                    effects: effects_base64,
+                    error: None,
+                }),
+                error: None,
+            })
+        }
+        Err(e) => Json(ApiResponse::<ExecuteTxResponse> {
+            success: false,
+            data: None,
+            error: Some(format!("Failed to execute transaction: {}", e)),
+        }),
+    }
+}
+
 /// Start the forking server
 pub async fn start_server(
     chain: Chain,
@@ -271,7 +264,6 @@ pub async fn start_server(
 ) -> Result<()> {
     let chain_str = chain.as_str();
     let client = GraphQLClient::new(format!("https://graphql.{chain_str}.sui.io/graphql"));
-    println!("Fetching starting checkpoint and protocol version...");
     let (at_checkpoint, protocol_version) = if let Some(cp) = checkpoint {
         (cp, client.fetch_protocol_version(Some(cp)).await?)
     } else {
@@ -284,27 +276,64 @@ pub async fn start_server(
         at_checkpoint, protocol_version
     );
     let protocol_config = ProtocolConfig::get_for_version(protocol_version.into(), chain);
-    let data_ingestion_path_clone = data_ingestion_path.clone();
     let database_url = Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")?;
-    // Start indexers
-    tokio::spawn(async move {
-        if let Err(e) = start_indexers(data_ingestion_path.clone(), version).await {
-            eprintln!("Failed to start indexers: {:?}", e);
-        }
-    });
 
-    let state = Arc::new(
-        AppState::new(
-            data_ingestion_path_clone.clone(),
-            database_url,
-            chain,
-            at_checkpoint,
-            protocol_version,
-            protocol_config,
-            version,
-        )
-        .await,
+    let rpc_data_store = Arc::new(
+        crate::store::data_store::new_rpc_data_store(Node::Testnet, version)
+            .expect("Failed to create RPC data store"),
     );
+    let mut simulacrum = SimulacrumBuilder::new()
+        .with_chain(chain)
+        .with_protocol_version(protocol_version.into())
+        .with_store_creator(|genesis| {
+            ForkingStore::new(genesis, at_checkpoint, rpc_data_store.clone())
+        });
+
+    simulacrum.set_data_ingestion_path(data_ingestion_path.clone());
+    let simulacrum = Arc::new(RwLock::new(simulacrum));
+
+    let registry = Registry::new_custom(Some("sui_forking".into()), None)
+        .context("Failed to create Prometheus registry.")
+        .unwrap();
+
+    let metrics_args = sui_indexer_alt_metrics::MetricsArgs::default();
+    let metrics = MetricsService::new(metrics_args, registry.clone());
+    let rpc_args = RpcArgs::default();
+
+    let mut rpc = RpcService::new(rpc_args, &registry)
+        .context("Failed to create RPC service")
+        .unwrap();
+
+    let pg_context = sui_indexer_alt_jsonrpc::context::Context::new(
+        Some(database_url),
+        None,
+        DbArgs::default(),
+        BigtableArgs::default(),
+        RpcConfig::default(),
+        rpc.metrics(),
+        &registry,
+    )
+    .await
+    .expect("Failed to create PG context");
+    let context = crate::context::Context {
+        pg_context,
+        simulacrum,
+        at_checkpoint,
+        chain,
+        protocol_version,
+    };
+
+    let state =
+        Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
+
+    tokio::spawn(async move {
+        start_rpc(context.clone(), rpc, metrics).await.unwrap();
+    });
+    tokio::spawn(async move {
+        start_indexers(data_ingestion_path.clone(), version)
+            .await
+            .unwrap();
+    });
 
     let app = Router::new()
         .route("/health", get(health))
@@ -313,6 +342,7 @@ pub async fn start_server(
         .route("/advance-clock", post(advance_clock))
         .route("/advance-epoch", post(advance_epoch))
         .route("/execute-tx", post(execute_tx))
+        .route("/faucet", post(faucet))
         .layer(CorsLayer::permissive())
         .with_state(state);
 

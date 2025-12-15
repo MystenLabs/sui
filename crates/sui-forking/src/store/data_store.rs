@@ -13,7 +13,7 @@ pub fn new_rpc_data_store(
     ReadThroughStore<LruMemoryStore, ReadThroughStore<FileSystemStore, DataStore>>,
     anyhow::Error,
 > {
-    let graphql = DataStore::new(node.clone(), "")?;
+    let graphql = DataStore::new(node.clone(), version)?;
     let disk = FileSystemStore::new(node.clone())?;
     let disk_with_remote = ReadThroughStore::new(disk, graphql);
     let memory = LruMemoryStore::new(node);

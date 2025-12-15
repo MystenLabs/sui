@@ -95,6 +95,12 @@ impl ForkingStore {
         }
     }
 
+    pub fn get_rpc_data_store(
+        &self,
+    ) -> Arc<ReadThroughStore<LruMemoryStore, ReadThroughStore<FileSystemStore, DataStore>>> {
+        self.rpc_data_store.clone()
+    }
+
     pub fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,

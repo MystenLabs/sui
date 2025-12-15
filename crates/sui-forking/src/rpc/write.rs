@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use fastcrypto::encoding::Base64;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use rand::rngs::OsRng;
+use tokio::sync::RwLock;
 
 use simulacrum::Simulacrum;
 use sui_indexer_alt_jsonrpc::{api::rpc_module::RpcModule, error::invalid_params};
@@ -97,7 +98,7 @@ impl WriteApiServer for Write {
         let transaction = Transaction::from_data(tx_data, vec![]);
 
         // Execute the transaction using Simulacrum
-        let mut simulacrum = self.0.write().unwrap();
+        let mut simulacrum = self.0.write().await;
         let (effects, _execution_error) = simulacrum
             .execute_transaction(transaction.clone())
             .map_err(|e| invalid_params(Error::ExecutionError(e.to_string())))?;

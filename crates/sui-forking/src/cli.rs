@@ -1,5 +1,6 @@
 use crate::seeds::InitialSeeds;
 use clap::{Parser, Subcommand};
+use sui_types::base_types::SuiAddress;
 
 #[derive(Parser, Debug)]
 #[clap(name = "sui-forking")]
@@ -60,5 +61,13 @@ pub enum Commands {
         /// Base64 encoded transaction bytes
         #[clap(long)]
         tx_bytes: String,
+    },
+    Faucet {
+        #[clap(long, default_value = "http://localhost:8123")]
+        server_url: String,
+        #[clap(long)]
+        address: SuiAddress,
+        #[clap(long)]
+        amount: u64,
     },
 }

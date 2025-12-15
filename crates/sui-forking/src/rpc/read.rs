@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use fastcrypto::encoding::Base64;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use rand::rngs::OsRng;
-use std::sync::{Arc, RwLock};
+use tokio::sync::RwLock;
 
 use simulacrum::Simulacrum;
 use sui_indexer_alt_jsonrpc::{api::rpc_module::RpcModule, error::invalid_params};
@@ -74,7 +76,7 @@ impl Read {
 #[async_trait::async_trait]
 impl ReadApiServer for Read {
     async fn get_chain_identifier(&self) -> RpcResult<String> {
-        let simulacrum = self.simulacrum.read().unwrap();
+        let simulacrum = self.simulacrum.read().await;
         let chain_id: ChainIdentifier = simulacrum
             .store()
             .get_checkpoint_by_sequence_number(0)
@@ -103,7 +105,7 @@ impl ReadApiServer for Read {
     //        options: Option<SuiObjectDataOptions>,
     //    ) -> RpcResult<SuiObjectResponse> {
     //        println!("Trying to get object: {}", object_id);
-    //        let simulacrum = self.simulacrum.read().unwrap();
+    //        let simulacrum = self.simulacrum.read().await;
     //        let object = simulacrum.store().get_object(&object_id).ok_or_else(|| {
     //            RpcResult::Err(SuiObjectResponse::new_with_error(
     //                sui_types::error::SuiObjectResponseError::NotExists { object_id },

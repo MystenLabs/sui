@@ -5,20 +5,25 @@ use filter::SuiObjectResponseQuery;
 use futures::future;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sui_json_rpc_types::{
-    Page, SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
+    Page, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
+    SuiPastObjectResponse,
 };
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::{
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    error::SuiObjectResponseError,
+};
 
 use sui_indexer_alt_jsonrpc::{
     api::rpc_module::RpcModule,
     error::{InternalContext, invalid_params},
 };
 
-use crate::context::Context;
+use crate::{context::Context, store::ForkingStore};
 
 use self::error::Error;
+use sui_data_store::{ObjectKey, ObjectStore};
 
 mod data;
 mod error;
@@ -128,11 +133,54 @@ impl ObjectsApiServer for Objects {
             at_checkpoint,
         }) = self;
         let options = options.unwrap_or_default();
-        Ok(response::live_object(ctx, object_id, &options)
-            .await
-            .with_internal_context(|| {
-                format!("Failed to get object {object_id} at latest version")
-            })?)
+        println!("Options: {:?}", options);
+        let object = response::live_object(ctx, object_id, &options).await?;
+
+        // If the object does not exist locally, try to fetch it from the RPC data store
+        if let Some(SuiObjectResponseError::NotExists { object_id }) = &object.error {
+            println!("Need to fetch object from rpc ");
+            {
+                let simulacrum = simulacrum.read().await;
+                let data_store: &ForkingStore = simulacrum.store_1();
+                let obj = data_store
+                    .get_rpc_data_store()
+                    .get_objects(&[ObjectKey {
+                        object_id: *object_id,
+                        version_query: sui_data_store::VersionQuery::AtCheckpoint(
+                            at_checkpoint.clone(),
+                        ),
+                    }])
+                    .unwrap();
+                let obj = obj.into_iter().next().unwrap();
+
+                if let Some((ref object, _version)) = obj {
+                    println!("Fetched object from rpc: {:?}", obj);
+                    let obj = SuiObjectResponse::new_with_data(
+                        response::object_data_with_options(
+                            ctx,
+                            object.clone(),
+                            &SuiObjectDataOptions {
+                                show_bcs: true,
+                                ..Default::default()
+                            },
+                        )
+                        .await?,
+                    );
+                    println!("Returning object: {:?}", obj);
+                    Ok(obj)
+                } else {
+                    Ok(object)
+                }
+            }
+        } else {
+            Ok(object)
+        }
+
+        // Ok(response::live_object(ctx, object_id, &options)
+        //     .await
+        //     .with_internal_context(|| {
+        //         format!("Failed to get object {object_id} at latest version")
+        //     })?)
     }
 
     async fn multi_get_objects(

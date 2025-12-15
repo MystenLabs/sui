@@ -17,8 +17,10 @@ use std::sync::Arc;
 use anyhow::{Context, Result, anyhow, ensure};
 use fastcrypto::traits::Signer;
 use rand::rngs::OsRng;
+
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
+use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_framework_snapshot::load_bytecode_snapshot;
 use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_storage::blob::{Blob, BlobEncoding};
@@ -31,6 +33,7 @@ use sui_types::crypto::{
 };
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::ObjectKey;
@@ -48,18 +51,19 @@ use sui_types::{
     signature::VerifyParams,
     transaction::{Transaction, VerifiedTransaction},
 };
-
-use self::epoch_state::EpochState;
-pub use self::store::SimulatorStore;
-pub use self::store::in_mem_store::InMemoryStore;
-use self::store::in_mem_store::KeyStore;
-use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
-use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::{
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{GasData, TransactionData, TransactionKind},
 };
+
+use self::epoch_state::EpochState;
+use self::store::in_mem_store::KeyStore;
+
+mod epoch_state;
+pub mod store;
+pub use self::store::SimulatorStore;
+pub use self::store::in_mem_store::InMemoryStore;
 
 /// Configuration for advancing epochs in the Simulacrum.
 ///
@@ -86,8 +90,33 @@ pub struct AdvanceEpochConfig {
     pub system_packages_snapshot: Option<u64>,
 }
 
-mod epoch_state;
-pub mod store;
+/// A `Simulacrum` of Sui.
+///
+/// This type represents a simulated instantiation of a Sui blockchain that needs to be driven
+/// manually, that is time doesn't advance and checkpoints are not formed unless explicitly
+/// requested.
+///
+/// See [module level][mod] documentation for more details.
+///
+/// Use [`SimulacrumBuilder`] to construct instances with custom store implementations.
+///
+/// [mod]: index.html
+pub struct Simulacrum<R, Store: SimulatorStore> {
+    rng: R,
+    keystore: KeyStore,
+    #[allow(unused)]
+    genesis: genesis::Genesis,
+    store: Store,
+    checkpoint_builder: MockCheckpointBuilder,
+
+    // Epoch specific data
+    epoch_state: EpochState,
+
+    // Other
+    deny_config: TransactionDenyConfig,
+    data_ingestion_path: Option<PathBuf>,
+    verifier_signing_config: VerifierSigningConfig,
+}
 
 /// Builder for creating a Simulacrum instance.
 ///
@@ -213,34 +242,6 @@ impl<R> SimulacrumBuilder<R> {
     {
         self.with_store_creator(|genesis| InMemoryStore::new(genesis))
     }
-}
-
-/// A `Simulacrum` of Sui.
-///
-/// This type represents a simulated instantiation of a Sui blockchain that needs to be driven
-/// manually, that is time doesn't advance and checkpoints are not formed unless explicitly
-/// requested.
-///
-/// See [module level][mod] documentation for more details.
-///
-/// Use [`SimulacrumBuilder`] to construct instances with custom store implementations.
-///
-/// [mod]: index.html
-pub struct Simulacrum<R, Store: SimulatorStore> {
-    rng: R,
-    keystore: KeyStore,
-    #[allow(unused)]
-    genesis: genesis::Genesis,
-    store: Store,
-    checkpoint_builder: MockCheckpointBuilder,
-
-    // Epoch specific data
-    epoch_state: EpochState,
-
-    // Other
-    deny_config: TransactionDenyConfig,
-    data_ingestion_path: Option<PathBuf>,
-    verifier_signing_config: VerifierSigningConfig,
 }
 
 impl Simulacrum<OsRng, InMemoryStore> {
@@ -417,6 +418,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         self.execute_transaction_impl(transaction)
     }
 
+    // TODO: forking: move this to main
     /// Execute a transaction while impersonating a specific sender.
     ///
     /// This method allows executing transactions as any account without requiring the private
@@ -647,6 +649,11 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     }
 
     pub fn store(&self) -> &dyn SimulatorStore {
+        &self.store
+    }
+
+    // TODO: forking: merge this with the previous one
+    pub fn store_1(&self) -> &S {
         &self.store
     }
 

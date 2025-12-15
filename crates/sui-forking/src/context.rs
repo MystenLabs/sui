@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use rand::rngs::OsRng;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
+use rand::rngs::OsRng;
+use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 

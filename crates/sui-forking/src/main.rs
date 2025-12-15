@@ -146,6 +146,22 @@ async fn main() -> Result<()> {
             let body = serde_json::json!(ExecuteTxRequest { tx_bytes });
             send_command(&server_url, "execute-tx", Some(body)).await?
         }
+
+        Commands::Faucet {
+            server_url,
+            address,
+            amount,
+        } => {
+            send_command(
+                &server_url,
+                "faucet",
+                Some(serde_json::json!({
+                    "address": address,
+                    "amount": amount,
+                })),
+            )
+            .await?
+        }
     }
 
     Ok(())
