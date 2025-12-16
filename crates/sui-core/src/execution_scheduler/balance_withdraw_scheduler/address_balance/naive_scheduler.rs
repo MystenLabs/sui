@@ -9,9 +9,11 @@ use tracing::{debug, instrument};
 
 use super::{
     BalanceSettlement, ScheduleResult, ScheduleStatus,
-    scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
+    scheduler::{
+        BalanceWithdrawSchedulerTrait, LoadBalancesResult, WithdrawReservations, load_all_balances,
+    },
 };
-use crate::accumulators::balance_read::AccountBalanceRead;
+use crate::execution_cache::AccountBalanceRead;
 
 /// A naive implementation of the balance withdraw scheduler that does not attempt to optimize the scheduling.
 /// For each withdraw reservation, it will always wait until the dependent accumulator object is available,
@@ -58,19 +60,27 @@ impl BalanceWithdrawSchedulerTrait for NaiveBalanceWithdrawScheduler {
             return;
         }
 
-        // Map from each account ID that we have seen so far to the current
-        // remaining balance for reservation.
-        let mut cur_balances = BTreeMap::new();
+        // Read all balances upfront before entering the loop.
+        // If any balance is VersionOutOfDate, skip the entire schedule.
+        let mut cur_balances: BTreeMap<_, u128> = match load_all_balances(
+            self.balance_read.as_ref(),
+            &withdraws.withdraws,
+            withdraws.accumulator_version,
+        ) {
+            LoadBalancesResult::Balances(balances) => balances.into_iter().collect(),
+            LoadBalancesResult::VersionOutOfDate => {
+                withdraws.notify_skip_schedule();
+                return;
+            }
+        };
+
         for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
             // Try to reserve all withdraws in this transaction.
             // Note that this is not atomic, so it is possible that we reserve some withdraws and not others.
             // This is intentional to be semantically consistent with the eager scheduler.
             let mut success = true;
             for (object_id, reservation) in &withdraw.reservations {
-                let entry = cur_balances.entry(*object_id).or_insert_with(|| {
-                    self.balance_read
-                        .get_account_balance(object_id, withdraws.accumulator_version)
-                });
+                let entry = cur_balances.get_mut(object_id).unwrap();
                 if *entry < *reservation as u128 {
                     debug!(
                         tx_digest =? withdraw.tx_digest,

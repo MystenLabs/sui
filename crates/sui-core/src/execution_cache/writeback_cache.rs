@@ -64,7 +64,9 @@ use std::sync::atomic::AtomicU64;
 use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
+use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::accumulator_event::AccumulatorEvent;
+use sui_types::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
 };
@@ -88,8 +90,9 @@ use tracing::{debug, info, instrument, trace, warn};
 use super::ExecutionCacheAPI;
 use super::cache_types::Ticket;
 use super::{
-    Batch, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheReconfigAPI,
-    ExecutionCacheWrite, ObjectCacheRead, StateSyncAPI, TestingAPI, TransactionCacheRead,
+    AccountBalanceRead, AccountBalanceReadResult, Batch, CheckpointCache, ExecutionCacheCommit,
+    ExecutionCacheMetrics, ExecutionCacheReconfigAPI, ExecutionCacheWrite, ObjectCacheRead,
+    StateSyncAPI, TestingAPI, TransactionCacheRead,
     cache_types::{CacheResult, CachedVersionMap, IsNewer, MonotonicCache},
     implement_passthrough_traits,
     object_locks::ObjectLocks,
@@ -865,13 +868,14 @@ impl WritebackCache {
         )
     }
 
-    fn get_object_impl(&self, request_type: &'static str, id: &ObjectID) -> Option<Object> {
+    fn get_object_impl(
+        &self,
+        request_type: &'static str,
+        id: &ObjectID,
+    ) -> Option<(SequenceNumber, ObjectEntry)> {
         let ticket = self.object_by_id_cache.get_ticket_for_read(id);
         match self.get_object_entry_by_id_cache_only(request_type, id) {
-            CacheResult::Hit((_, entry)) => match entry {
-                ObjectEntry::Object(object) => Some(object),
-                ObjectEntry::Deleted | ObjectEntry::Wrapped => None,
-            },
+            CacheResult::Hit(result) => Some(result),
             CacheResult::NegativeHit => None,
             CacheResult::Miss => {
                 let obj = self
@@ -885,10 +889,7 @@ impl WritebackCache {
                             LatestObjectCacheEntry::Object(key.1, obj.clone().into()),
                             ticket,
                         );
-                        match obj {
-                            ObjectOrTombstone::Object(object) => Some(object),
-                            ObjectOrTombstone::Tombstone(_) => None,
-                        }
+                        Some((key.1, obj.into()))
                     }
                     None => {
                         self.cache_object_not_found(id, ticket);
@@ -1442,7 +1443,7 @@ impl ObjectCacheRead for WritebackCache {
         // We try the dirty objects cache as well before going to the database. This is necessary
         // because the package could be evicted from the package cache before it is committed
         // to the database.
-        if let Some(p) = self.get_object_impl("package", package_id) {
+        if let Some((_, ObjectEntry::Object(p))) = self.get_object_impl("package", package_id) {
             if p.is_package() {
                 let p = PackageObject::new(p);
                 tracing::trace!(
@@ -1473,7 +1474,10 @@ impl ObjectCacheRead for WritebackCache {
     // get_object and variants.
 
     fn get_object(&self, id: &ObjectID) -> Option<Object> {
-        self.get_object_impl("object_latest", id)
+        match self.get_object_impl("object_latest", id) {
+            Some((_, ObjectEntry::Object(obj))) => Some(obj),
+            _ => None,
+        }
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
@@ -1845,13 +1849,14 @@ impl ObjectCacheRead for WritebackCache {
     }
 
     fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
-        let obj = self.get_object_impl("live_objref", &object_id).ok_or(
-            UserInputError::ObjectNotFound {
+        match self.get_object_impl("live_objref", &object_id) {
+            Some((_, ObjectEntry::Object(obj))) => Ok(obj.compute_object_reference()),
+            _ => Err(UserInputError::ObjectNotFound {
                 object_id,
                 version: None,
-            },
-        )?;
-        Ok(obj.compute_object_reference())
+            }
+            .into()),
+        }
     }
 
     fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
@@ -1912,6 +1917,57 @@ impl ObjectCacheRead for WritebackCache {
             .map(|_| ())
             .boxed()
     }
+}
+
+impl AccountBalanceRead for WritebackCache {
+    fn get_account_balance(
+        &self,
+        account_id: &AccumulatorObjId,
+        accumulator_version: SequenceNumber,
+    ) -> AccountBalanceReadResult {
+        match self.get_object_impl("accumulator_object", account_id.inner()) {
+            Some((v, _)) if v > accumulator_version => {
+                // Object version is newer than the requested bound - version is out of date.
+                AccountBalanceReadResult::VersionOutOfDate
+            }
+            Some((_, ObjectEntry::Object(obj))) => {
+                AccountBalanceReadResult::Balance(extract_balance_from_object(&obj))
+            }
+            Some((_, ObjectEntry::Deleted | ObjectEntry::Wrapped)) => {
+                AccountBalanceReadResult::Balance(0)
+            }
+            None => {
+                // Object not found. Check root object version to distinguish between
+                // non-existent account and version out of date.
+                let root_object =
+                    ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID).unwrap();
+                if root_object.version() > accumulator_version {
+                    AccountBalanceReadResult::VersionOutOfDate
+                } else {
+                    // Account genuinely doesn't exist
+                    AccountBalanceReadResult::Balance(0)
+                }
+            }
+        }
+    }
+
+    fn get_latest_account_balance(&self, account_id: &AccumulatorObjId) -> u128 {
+        match self.get_object_impl("accumulator_object_latest", account_id.inner()) {
+            Some((_, ObjectEntry::Object(obj))) => extract_balance_from_object(&obj),
+            _ => 0,
+        }
+    }
+}
+
+fn extract_balance_from_object(obj: &Object) -> u128 {
+    let move_object = obj
+        .data
+        .try_as_move()
+        .expect("Accumulator object must be a Move object");
+    AccumulatorValue::try_from(move_object)
+        .expect("Failed to deserialize accumulator value")
+        .as_u128()
+        .expect("Accumulator value must be u128")
 }
 
 impl TransactionCacheRead for WritebackCache {

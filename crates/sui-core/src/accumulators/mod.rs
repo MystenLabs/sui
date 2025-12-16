@@ -30,8 +30,6 @@ use sui_types::{
 
 use crate::execution_cache::TransactionCacheRead;
 
-// provides balance read functionality for the scheduler
-pub mod balance_read;
 // provides balance read functionality for RPC
 pub mod balances;
 

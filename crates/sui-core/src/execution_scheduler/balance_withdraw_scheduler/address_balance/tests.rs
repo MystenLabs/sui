@@ -312,14 +312,14 @@ async fn test_withdraw_already_settled_account_object() {
     .unwrap();
 
     // Bump the underlying object version to v2.
-    // Even though the scheduler itself is still at v0 as the last settled version,
+    // Even though the scheduler itself is still at v1 as the last settled version,
     // withdrawing v1 is still considered as already settled since the object version is already at v2.
     let v2 = v1.next();
     mock_read.settle_balance_changes(BTreeMap::from([(account_id, 0)]), v2);
     let receivers = scheduler.schedule_withdraws(v1, vec![withdraw.clone()]);
     wait_for_results(
         receivers,
-        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SkipSchedule)]),
     )
     .await
     .unwrap();
@@ -417,7 +417,7 @@ async fn test_withdraw_settle_and_deleted_account() {
     let receivers = scheduler.schedule_withdraws(v0, vec![withdraw.clone()]);
     wait_for_results(
         receivers,
-        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SufficientBalance)]),
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::SkipSchedule)]),
     )
     .await
     .unwrap();

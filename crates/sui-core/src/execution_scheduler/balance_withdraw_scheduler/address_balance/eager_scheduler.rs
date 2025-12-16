@@ -16,9 +16,11 @@ use tracing::{debug, instrument};
 
 use super::{
     BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
-    scheduler::{BalanceWithdrawSchedulerTrait, WithdrawReservations},
+    scheduler::{
+        BalanceWithdrawSchedulerTrait, LoadBalancesResult, WithdrawReservations, load_all_balances,
+    },
 };
-use crate::accumulators::balance_read::AccountBalanceRead;
+use crate::execution_cache::{AccountBalanceRead, AccountBalanceReadResult};
 
 pub(crate) struct EagerBalanceWithdrawScheduler {
     balance_read: Arc<dyn AccountBalanceRead>,
@@ -88,11 +90,28 @@ impl EagerBalanceWithdrawScheduler {
 impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
     #[instrument(level = "debug", skip_all, fields(withdraw_accumulator_version = ?withdraws.accumulator_version.value()))]
     async fn schedule_withdraws(&self, withdraws: WithdrawReservations) {
+        // Read all balances upfront before acquiring the lock.
+        // Use the withdraw's accumulator_version as the version bound for balance reads.
+        // If any balance is VersionOutOfDate, skip the entire schedule.
+        let account_balances = match load_all_balances(
+            self.balance_read.as_ref(),
+            &withdraws.withdraws,
+            withdraws.accumulator_version,
+        ) {
+            LoadBalancesResult::Balances(balances) => balances,
+            LoadBalancesResult::VersionOutOfDate => {
+                withdraws.notify_skip_schedule();
+                return;
+            }
+        };
+
+        // Now acquire the lock and check if the version is already settled.
+        // This must happen after loading balances so nothing can change between
+        // the version check and the scheduling logic.
         let mut inner_state = self.inner_state.lock();
         let cur_accumulator_version = inner_state.accumulator_version;
         if withdraws.accumulator_version < cur_accumulator_version {
             // This accumulator version is already settled.
-            // There is no need to schedule the withdraws.
             withdraws.notify_skip_schedule();
             return;
         }
@@ -111,14 +130,8 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
                     .tracked_accounts
                     .entry(account_id)
                     .or_insert_with(|| {
-                        // TODO: This will be doing a DF read while holding the state lock.
-                        // We may need to look at ways to make the DF reads non-blocking.
-                        // We also need to get rid of the need to read old versions of the account balance.
-                        AccountState::new(
-                            self.balance_read.as_ref(),
-                            account_id,
-                            cur_accumulator_version,
-                        )
+                        let balance = account_balances[&account_id];
+                        AccountState::new(account_id, balance)
                     });
                 let has_blocking_reservations = !account_state.pending_reservations.is_empty();
                 let result = account_state.try_reserve(
@@ -260,14 +273,8 @@ impl BalanceWithdrawSchedulerTrait for EagerBalanceWithdrawScheduler {
 }
 
 impl AccountState {
-    fn new(
-        balance_read: &dyn AccountBalanceRead,
-        account_id: AccumulatorObjId,
-        last_settled_version: SequenceNumber,
-    ) -> Self {
-        let balance = balance_read.get_account_balance(&account_id, last_settled_version);
+    fn new(account_id: AccumulatorObjId, balance: u128) -> Self {
         debug!(
-            last_settled_version =? last_settled_version.value(),
             account_id = ?account_id.inner(),
             "New account state tracked with initial balance {:?}",
             balance,
@@ -353,8 +360,17 @@ impl AccountState {
     ) {
         let total_reserved = self.reserved_balance.values().sum::<u128>();
         let expected_balance = self.balance_lower_bound + total_reserved;
-        let actual_balance =
-            balance_read.get_account_balance(&self.account_id, last_settled_version);
+        let actual_balance = match balance_read
+            .get_account_balance(&self.account_id, last_settled_version)
+        {
+            AccountBalanceReadResult::Balance(balance) => balance,
+            AccountBalanceReadResult::VersionOutOfDate => {
+                panic!(
+                    "Unexpected VersionOutOfDate in debug_check_account_state_invariants for {:?}",
+                    self.account_id
+                );
+            }
+        };
         assert_eq!(expected_balance, actual_balance);
     }
 }

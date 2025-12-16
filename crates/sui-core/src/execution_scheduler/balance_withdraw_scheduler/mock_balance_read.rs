@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use sui_types::base_types::ObjectID;
 use sui_types::{accumulator_root::AccumulatorObjId, base_types::SequenceNumber};
 
-use crate::accumulators::balance_read::AccountBalanceRead;
+use crate::execution_cache::{AccountBalanceRead, AccountBalanceReadResult};
 
 // Mock implementation of a balance account book for testing.
 // Allows setting the balance for a given account at different accumulator versions.
@@ -117,11 +117,16 @@ impl AccountBalanceRead for MockBalanceRead {
         &self,
         account_id: &AccumulatorObjId,
         accumulator_version: SequenceNumber,
-    ) -> u128 {
+    ) -> AccountBalanceReadResult {
         let inner = self.inner.read();
-        inner
-            .get_account_balance(account_id, accumulator_version)
-            .unwrap_or_default()
+        if inner.cur_version > accumulator_version {
+            return AccountBalanceReadResult::VersionOutOfDate;
+        }
+        AccountBalanceReadResult::Balance(
+            inner
+                .get_account_balance(account_id, accumulator_version)
+                .unwrap_or_default(),
+        )
     }
 
     fn get_latest_account_balance(&self, account_id: &AccumulatorObjId) -> u128 {

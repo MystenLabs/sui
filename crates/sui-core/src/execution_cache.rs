@@ -13,11 +13,12 @@ use either::Either;
 use itertools::Itertools;
 use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
+use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::bridge::Bridge;
 
 use futures::{FutureExt, future::BoxFuture};
 use prometheus::Registry;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use sui_config::ExecutionCacheConfig;
@@ -71,6 +72,7 @@ pub struct ExecutionCacheTraitPointers {
     pub state_sync_store: Arc<dyn StateSyncAPI>,
     pub cache_commit: Arc<dyn ExecutionCacheCommit>,
     pub testing_api: Arc<dyn TestingAPI>,
+    pub account_balance_read: Arc<dyn AccountBalanceRead>,
 }
 
 impl ExecutionCacheTraitPointers {
@@ -88,6 +90,7 @@ impl ExecutionCacheTraitPointers {
             + StateSyncAPI
             + ExecutionCacheCommit
             + TestingAPI
+            + AccountBalanceRead
             + 'static,
     {
         Self {
@@ -104,6 +107,7 @@ impl ExecutionCacheTraitPointers {
             state_sync_store: cache.clone(),
             cache_commit: cache.clone(),
             testing_api: cache.clone(),
+            account_balance_read: cache.clone(),
         }
     }
 }
@@ -169,6 +173,59 @@ pub trait ExecutionCacheCommit: Send + Sync {
 
     // Number of pending uncommitted transactions
     fn approximate_pending_transaction_count(&self) -> u64;
+}
+
+pub enum AccountBalanceReadResult {
+    /// The balance at the requested version.
+    Balance(u128),
+    /// The accumulator version is out of date - a newer version exists.
+    /// The caller should skip scheduling for this version.
+    VersionOutOfDate,
+}
+
+pub trait AccountBalanceRead: Send + Sync {
+    /// Read an account balance with version bound checking.
+    ///
+    /// Returns:
+    /// - `Balance(u128)`: The balance value if the account exists at or before the given version.
+    /// - `VersionOutOfDate`: The accumulator has moved past the requested version, caller should skip.
+    fn get_account_balance(
+        &self,
+        account_id: &AccumulatorObjId,
+        // Version of the accumulator root object, used to
+        // bound the version when we look for child account objects.
+        accumulator_version: SequenceNumber,
+    ) -> AccountBalanceReadResult;
+
+    /// Gets latest balance, without a version bound on the accumulator root object.
+    /// Only used for signing time checks / RPC reads, not scheduling.
+    fn get_latest_account_balance(&self, account_id: &AccumulatorObjId) -> u128;
+
+    /// Checks if balances are available in the latest versions of the referenced acccumulator
+    /// objects. This does un-sequenced reads and can only be used on the signing/voting path
+    /// where deterministic results are not required.
+    fn check_balances_available(
+        &self,
+        requested_balances: &BTreeMap<AccumulatorObjId, u64>,
+    ) -> SuiResult {
+        for (object_id, requested_balance) in requested_balances {
+            let actual_balance = self.get_latest_account_balance(object_id);
+
+            if actual_balance < *requested_balance as u128 {
+                return Err(SuiErrorKind::UserInputError {
+                    error: UserInputError::InvalidWithdrawReservation {
+                        error: format!(
+                            "Available balance for object id {} is less than requested: {} < {}",
+                            object_id, actual_balance, requested_balance
+                        ),
+                    },
+                }
+                .into());
+            }
+        }
+
+        Ok(())
+    }
 }
 
 pub trait ObjectCacheRead: Send + Sync {
@@ -692,7 +749,6 @@ pub trait StateSyncAPI: Send + Sync {
         transactions_and_effects: &[VerifiedExecutionData],
     );
 }
-
 pub trait TestingAPI: Send + Sync {
     fn database_for_testing(&self) -> Arc<AuthorityStore>;
 

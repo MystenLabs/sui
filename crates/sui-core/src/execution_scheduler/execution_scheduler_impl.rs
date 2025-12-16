@@ -6,7 +6,7 @@ use crate::{
         AuthorityMetrics, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
         shared_object_version_manager::Schedulable,
     },
-    execution_cache::{ObjectCacheRead, TransactionCacheRead},
+    execution_cache::{AccountBalanceRead, ObjectCacheRead, TransactionCacheRead},
     execution_scheduler::{
         ExecutingGuard, PendingCertificateStats,
         balance_withdraw_scheduler::{
@@ -34,7 +34,7 @@ use sui_types::{
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     execution_params::BalanceWithdrawStatus,
-    storage::{ChildObjectResolver, InputKey},
+    storage::InputKey,
     transaction::{
         SenderSignedData, SharedInputObject, SharedObjectMutability, TransactionData,
         TransactionDataAPI, TransactionKey,
@@ -133,7 +133,7 @@ impl Drop for PendingGuard<'_> {
 impl ExecutionScheduler {
     pub fn new(
         object_cache_read: Arc<dyn ObjectCacheRead>,
-        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+        account_balance_read: Arc<dyn AccountBalanceRead>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -144,7 +144,7 @@ impl ExecutionScheduler {
             Self::initialize_balance_withdraw_scheduler(
                 epoch_store,
                 &object_cache_read,
-                child_object_resolver,
+                account_balance_read,
             );
         Self {
             object_cache_read,
@@ -164,7 +164,7 @@ impl ExecutionScheduler {
     fn initialize_balance_withdraw_scheduler(
         epoch_store: &Arc<AuthorityPerEpochStore>,
         object_cache_read: &Arc<dyn ObjectCacheRead>,
-        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+        account_balance_read: Arc<dyn AccountBalanceRead>,
     ) -> (
         Option<BalanceWithdrawScheduler>,
         Option<Box<dyn ObjectBalanceWithdrawSchedulerTrait>>,
@@ -179,14 +179,14 @@ impl ExecutionScheduler {
             .expect("Accumulator root object must be present if balance accumulator is enabled")
             .version();
         let address_balance_withdraw_scheduler = BalanceWithdrawScheduler::new(
-            Arc::new(child_object_resolver.clone()),
+            account_balance_read.clone(),
             starting_accumulator_version,
         );
         let object_balance_withdraw_scheduler =
             if epoch_store.protocol_config().enable_object_funds_withdraw() {
                 let scheduler: Box<dyn ObjectBalanceWithdrawSchedulerTrait> =
                     Box::new(NaiveObjectBalanceWithdrawScheduler::new(
-                        Arc::new(child_object_resolver),
+                        account_balance_read,
                         starting_accumulator_version,
                     ));
                 Some(scheduler)
@@ -658,13 +658,13 @@ impl ExecutionScheduler {
     pub fn reconfigure(
         &self,
         new_epoch_store: &Arc<AuthorityPerEpochStore>,
-        child_object_resolver: &Arc<dyn ChildObjectResolver + Send + Sync>,
+        account_balance_read: &Arc<dyn AccountBalanceRead>,
     ) {
         let (address_balance_withdraw_scheduler, object_balance_withdraw_scheduler) =
             Self::initialize_balance_withdraw_scheduler(
                 new_epoch_store,
                 &self.object_cache_read,
-                child_object_resolver.clone(),
+                account_balance_read.clone(),
             );
         let mut guard = self.address_balance_withdraw_scheduler.lock();
         if let Some(old_scheduler) = guard.as_ref() {
@@ -860,7 +860,7 @@ mod test {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = ExecutionScheduler::new(
             state.get_object_cache_reader().clone(),
-            state.get_child_object_resolver().clone(),
+            state.get_account_balance_read().clone(),
             state.get_transaction_cache_reader().clone(),
             tx_ready_certificates,
             &state.epoch_store_for_testing(),

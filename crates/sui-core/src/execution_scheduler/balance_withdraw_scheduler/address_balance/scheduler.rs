@@ -1,18 +1,58 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    sync::Arc,
+};
 
 use super::{
     BalanceSettlement, ScheduleResult, ScheduleStatus, TxBalanceWithdraw,
     eager_scheduler::EagerBalanceWithdrawScheduler, naive_scheduler::NaiveBalanceWithdrawScheduler,
 };
-use crate::accumulators::balance_read::AccountBalanceRead;
+use crate::execution_cache::{AccountBalanceRead, AccountBalanceReadResult};
 use futures::stream::FuturesUnordered;
 use mysten_metrics::monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
-use sui_types::base_types::SequenceNumber;
+use sui_types::{accumulator_root::AccumulatorObjId, base_types::SequenceNumber};
 use tokio::sync::oneshot;
 use tracing::debug;
+
+pub(crate) enum LoadBalancesResult {
+    /// Successfully loaded all balances.
+    Balances(HashMap<AccumulatorObjId, u128>),
+    /// At least one account returned VersionOutOfDate - caller should skip scheduling.
+    VersionOutOfDate,
+}
+
+/// Loads all account balances for the given withdraws.
+/// Returns VersionOutOfDate if any account's version is newer than the requested version.
+pub(crate) fn load_all_balances(
+    balance_read: &dyn AccountBalanceRead,
+    withdraws: &[TxBalanceWithdraw],
+    accumulator_version: SequenceNumber,
+) -> LoadBalancesResult {
+    let all_accounts: BTreeSet<AccumulatorObjId> = withdraws
+        .iter()
+        .flat_map(|w| w.reservations.keys().cloned())
+        .collect();
+
+    let mut balances = HashMap::with_capacity(all_accounts.len());
+    for account_id in all_accounts {
+        match balance_read.get_account_balance(&account_id, accumulator_version) {
+            AccountBalanceReadResult::Balance(balance) => {
+                balances.insert(account_id, balance);
+            }
+            AccountBalanceReadResult::VersionOutOfDate => {
+                debug!(
+                    account_id = ?account_id,
+                    "VersionOutOfDate while loading balances",
+                );
+                return LoadBalancesResult::VersionOutOfDate;
+            }
+        }
+    }
+    LoadBalancesResult::Balances(balances)
+}
 
 #[async_trait::async_trait]
 pub(crate) trait BalanceWithdrawSchedulerTrait: Send + Sync {

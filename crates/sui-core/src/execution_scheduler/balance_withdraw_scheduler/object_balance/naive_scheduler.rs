@@ -12,7 +12,7 @@ use tokio::sync::{oneshot, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    accumulators::balance_read::AccountBalanceRead,
+    execution_cache::AccountBalanceRead,
     execution_scheduler::balance_withdraw_scheduler::object_balance::{
         ObjectBalanceWithdrawSchedulerTrait, ObjectBalanceWithdrawStatus,
     },
