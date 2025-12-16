@@ -4,7 +4,7 @@
 use crate::{
     authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
     checkpoints::CheckpointServiceNotify,
-    consensus_adapter::ConsensusOverloadChecker,
+    consensus_adapter::{ConsensusOverloadChecker, NoopConsensusOverloadChecker},
 };
 use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
@@ -26,7 +26,8 @@ use sui_types::{
 use tap::TapFallible;
 use tracing::{debug, info, instrument, warn};
 
-/// Allows verifying the validity of transactions
+/// Validates transactions from consensus and votes on whether to execute the transactions
+/// based on their validity and the current state of the authority.
 #[derive(Clone)]
 pub struct SuiTxValidator {
     authority_state: Arc<AuthorityState>,
@@ -38,7 +39,6 @@ pub struct SuiTxValidator {
 impl SuiTxValidator {
     pub fn new(
         authority_state: Arc<AuthorityState>,
-        consensus_overload_checker: Arc<dyn ConsensusOverloadChecker>,
         checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
         metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Self {
@@ -47,6 +47,8 @@ impl SuiTxValidator {
             "SuiTxValidator constructed for epoch {}",
             epoch_store.epoch()
         );
+        // Intentionally do not check consensus overload, because this is validating transactions already in consensus.
+        let consensus_overload_checker = Arc::new(NoopConsensusOverloadChecker {});
         Self {
             authority_state,
             consensus_overload_checker,
@@ -358,9 +360,8 @@ mod tests {
     use crate::{
         authority::test_authority_builder::TestAuthorityBuilder,
         checkpoints::CheckpointServiceNoop,
-        consensus_adapter::{
-            NoopConsensusOverloadChecker,
-            consensus_tests::{test_certificates, test_gas_objects, test_user_transaction},
+        consensus_adapter::consensus_tests::{
+            test_certificates, test_gas_objects, test_user_transaction,
         },
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
@@ -392,12 +393,8 @@ mod tests {
         .unwrap();
 
         let metrics = SuiTxValidatorMetrics::new(&Default::default());
-        let validator = SuiTxValidator::new(
-            state.clone(),
-            Arc::new(NoopConsensusOverloadChecker {}),
-            Arc::new(CheckpointServiceNoop {}),
-            metrics,
-        );
+        let validator =
+            SuiTxValidator::new(state.clone(), Arc::new(CheckpointServiceNoop {}), metrics);
         let res = validator.verify_batch(&[&first_transaction_bytes]);
         assert!(res.is_ok(), "{res:?}");
 
@@ -509,7 +506,6 @@ mod tests {
 
         let validator = SuiTxValidator::new(
             state.clone(),
-            Arc::new(NoopConsensusOverloadChecker {}),
             Arc::new(CheckpointServiceNoop {}),
             SuiTxValidatorMetrics::new(&Default::default()),
         );
@@ -593,7 +589,6 @@ mod tests {
 
         let validator = SuiTxValidator::new(
             state.clone(),
-            Arc::new(NoopConsensusOverloadChecker {}),
             Arc::new(CheckpointServiceNoop {}),
             SuiTxValidatorMetrics::new(&Default::default()),
         );
@@ -647,7 +642,6 @@ mod tests {
 
         let validator = SuiTxValidator::new(
             state.clone(),
-            Arc::new(NoopConsensusOverloadChecker {}),
             Arc::new(CheckpointServiceNoop {}),
             SuiTxValidatorMetrics::new(&Default::default()),
         );
@@ -709,7 +703,6 @@ mod tests {
         .unwrap();
         let validator = SuiTxValidator::new(
             state.clone(),
-            Arc::new(NoopConsensusOverloadChecker {}),
             Arc::new(CheckpointServiceNoop {}),
             SuiTxValidatorMetrics::new(&Default::default()),
         );

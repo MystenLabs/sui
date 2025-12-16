@@ -117,6 +117,7 @@ impl TransactionCertifier {
     ///
     /// In addition, add_voted_blocks() will eventually process reject votes contained in the input blocks.
     pub(crate) fn recover_and_vote_on_blocks(&self, blocks: Vec<VerifiedBlock>) {
+        let context = self.certifier_state.read().context.clone();
         let should_vote_blocks = {
             let dag_state = self.dag_state.read();
             let gc_round = dag_state.gc_round();
@@ -139,7 +140,12 @@ impl TransactionCertifier {
                     // A block proposal can include the input block later and retries own votes on it.
                     let reject_transaction_votes =
                         self.block_verifier.vote(&b).unwrap_or_else(|e| {
-                            panic!("Failed to vote on block during recovery: {}", e)
+                            panic!(
+                                "Failed to vote on block {} (own_index={}) during recovery: {}",
+                                b.reference(),
+                                context.own_index,
+                                e
+                            )
                         });
                     (b, reject_transaction_votes)
                 }
