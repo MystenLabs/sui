@@ -1147,9 +1147,10 @@ mod tests {
                 String("2023-04-12T17:00:00Z"),
             ),
             "toobig": Err(
-                TransformInvalid(
-                    "expected unix timestamp in milliseconds",
-                ),
+                TransformInvalid_ {
+                    offset: 0,
+                    reason: "expected unix timestamp in milliseconds",
+                },
             ),
         }
         "###);
@@ -1801,9 +1802,10 @@ mod tests {
                 String("🔥"),
             ),
             "invalid": Err(
-                TransformInvalid(
-                    "expected utf8 bytes",
-                ),
+                TransformInvalid_ {
+                    offset: 0,
+                    reason: "expected utf8 bytes",
+                },
             ),
         }
         "###);

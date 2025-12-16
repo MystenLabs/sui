@@ -15,4 +15,4 @@ expression: "strands(\"{ 0x1::string::String(42u64, 'foo', vector[1u256, 2u256, 
       true,
       100u32,
   )
-}
+}@0
