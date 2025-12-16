@@ -5,4 +5,4 @@ expression: "strands(r#\"{_field | __private | _123mixed}\"#)"
 { _field
 | __private
 | _123mixed
-}
+}@0

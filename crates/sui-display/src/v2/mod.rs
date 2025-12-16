@@ -1141,9 +1141,10 @@ mod tests {
                 String("2023-04-12T17:00:00Z"),
             ),
             "toobig": Err(
-                TransformInvalid(
-                    "expected unix timestamp in milliseconds",
-                ),
+                TransformInvalid_ {
+                    offset: 0,
+                    reason: "expected unix timestamp in milliseconds",
+                },
             ),
         }
         "###);
@@ -1795,9 +1796,10 @@ mod tests {
                 String("🔥"),
             ),
             "invalid": Err(
-                TransformInvalid(
-                    "expected utf8 bytes",
-                ),
+                TransformInvalid_ {
+                    offset: 0,
+                    reason: "expected utf8 bytes",
+                },
             ),
         }
         "###);
@@ -1929,22 +1931,25 @@ mod tests {
         assert_debug_snapshot!(output, @r###"
         {
             "between_literals": Err(
-                VectorTypeMismatch(
-                    U8,
-                    U64,
-                ),
+                VectorTypeMismatch {
+                    offset: 1,
+                    this: U8,
+                    that: U64,
+                },
             ),
             "between_field_and_literal": Err(
-                VectorTypeMismatch(
-                    U64,
-                    U8,
-                ),
+                VectorTypeMismatch {
+                    offset: 1,
+                    this: U64,
+                    that: U8,
+                },
             ),
             "between_annotation_and_element": Err(
-                VectorTypeMismatch(
-                    U64,
-                    U8,
-                ),
+                VectorTypeMismatch {
+                    offset: 1,
+                    this: U64,
+                    that: U8,
+                },
             ),
         }
         "###);

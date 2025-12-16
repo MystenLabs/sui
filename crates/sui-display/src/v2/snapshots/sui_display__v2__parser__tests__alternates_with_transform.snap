@@ -5,4 +5,4 @@ expression: "strands(r#\"{foo | bar | baz :str}\"#)"
 { foo
 | bar
 | baz
-: str}
+: str}@0
