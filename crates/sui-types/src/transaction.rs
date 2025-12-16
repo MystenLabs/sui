@@ -2810,7 +2810,10 @@ impl TransactionDataAPI for TransactionDataV1 {
 
             for parsed in self.parsed_coin_reservations(context.chain_identifier) {
                 num_reservations += 1;
-                if parsed.epoch_id() != context.epoch {
+                // coin reservations are valid for the current and next epoch, just as transactions that
+                // specify a TransactionDuring are.
+                // TODO: this check can be skipped if the transaction contains any address owned inputs.
+                if parsed.epoch_id() != context.epoch && parsed.epoch_id() + 1 != context.epoch {
                     return Err(SuiErrorKind::TransactionExpired.into());
                 }
                 if parsed.reservation_amount() == 0 {
@@ -3015,7 +3018,7 @@ impl TransactionDataV1 {
     }
 
     fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> {
-        // TODO(XXX): add gas coin obj refs
+        // TODO(address-balances): add gas coin obj refs
         self.kind.get_coin_reservation_obj_refs()
     }
 
