@@ -88,19 +88,23 @@ impl AuthenticatorStateUpdateTransaction {
         after: Option<CActiveJwk>,
         last: Option<u64>,
         before: Option<CActiveJwk>,
-    ) -> Result<Option<Connection<String, ActiveJwk>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("AuthenticatorStateUpdateTransaction", "newActiveJwks");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, ActiveJwk>, RpcError>> {
+        let new_active_jwks = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("AuthenticatorStateUpdateTransaction", "newActiveJwks");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        page.paginate_indices(self.native.new_active_jwks.len(), |i| {
-            let active_jwk = ActiveJwk {
-                native: self.native.new_active_jwks[i].clone(),
-                scope: self.scope.clone(),
-            };
-            Ok(active_jwk)
-        })
-        .map(Some)
+            page.paginate_indices(self.native.new_active_jwks.len(), |i| {
+                let active_jwk = ActiveJwk {
+                    native: self.native.new_active_jwks[i].clone(),
+                    scope: self.scope.clone(),
+                };
+                Ok(active_jwk)
+            })
+        }
+        .await;
+
+        Some(new_active_jwks)
     }
 
     /// The initial version of the authenticator object that it was shared at.
