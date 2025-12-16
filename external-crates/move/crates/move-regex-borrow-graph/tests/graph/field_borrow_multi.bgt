@@ -1,0 +1,6 @@
+0 = &mut local_0
+1 = &mut 0.a
+2 = &0.b
+3 = alias 1
+4 = &mut 0.c
+writable: 1,3,4

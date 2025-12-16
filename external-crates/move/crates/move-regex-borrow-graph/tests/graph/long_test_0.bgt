@@ -1,0 +1,22 @@
+0 = &mut local_0
+1 = &local_0
+writable: 0
+2 = &mut 0.a
+writable: 2
+3 = &local_1
+4 = &mut local_1
+writable: 2,4
+5 = &mut call(2,4)
+writable: 5
+6 = alias 5
+writable: 5, 6
+7 = &mut local_2
+writable: 5,6,7
+8 = alias 7
+writable: 5,6,7,8
+9 = &mut call(6)
+writable: 8,7,9
+10 = &9.a
+writable: 7,8
+11 = &mut local_3
+writable: 7,8,11

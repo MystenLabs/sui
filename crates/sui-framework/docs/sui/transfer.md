@@ -218,8 +218,6 @@ The object must have <code>store</code> to be transferred outside of its module.
 
 ## Function `party_transfer`
 
-NOT YET SUPPORTED ON MAINNET. The function will abort with <code><a href="../sui/transfer.md#sui_transfer_ENotSupported">ENotSupported</a></code> if used on a network
-where party objects are not yet supported.
 Transfer ownership of <code>obj</code> to the <code><a href="../sui/party.md#sui_party">party</a></code>. This transfer behaves similar to both
 <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> and <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code>. It is similar to <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> in that the object is authorized for
 use only by the recipient(s), in this case the <code><a href="../sui/party.md#sui_party">party</a></code>. This means that only the members
@@ -256,8 +254,6 @@ to transfer an object with <code>store</code> outside of its module.
 
 ## Function `public_party_transfer`
 
-NOT YET SUPPORTED ON MAINNET. The function will abort with <code><a href="../sui/transfer.md#sui_transfer_ENotSupported">ENotSupported</a></code> if used on a network
-where party objects are not yet supported.
 Transfer ownership of <code>obj</code> to the <code><a href="../sui/party.md#sui_party">party</a></code>. This transfer behaves similar to both
 <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> and <code><a href="../sui/transfer.md#sui_transfer_share_object">share_object</a></code>. It is similar to <code><a href="../sui/transfer.md#sui_transfer">transfer</a></code> in that the object is authorized for
 use only by the recipient(s), in this case the <code><a href="../sui/party.md#sui_party">party</a></code>. This means that only the members
