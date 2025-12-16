@@ -867,8 +867,22 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
         let loc = constant_name.loc();
         // enter self-definition for const name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&loc);
-        let const_info = self.def_info.get(&loc).unwrap();
+        let const_info = self.def_info.get_mut(&loc).unwrap();
         let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, const_info);
+
+        let DefInfo::Const(_, _, _, value, _) = const_info else {
+            debug_assert!(false);
+            self.current_mod_ident_str = None;
+            return;
+        };
+        if let Some(const_string) = self
+            .compiler_analysis_info
+            .string_values
+            .get(&cdef.value.exp.loc)
+        {
+            *value = Some(const_string.clone());
+        }
+
         self.use_defs.entry(loc.file_hash()).or_default().insert(
             name_start.line,
             UseDef::new(

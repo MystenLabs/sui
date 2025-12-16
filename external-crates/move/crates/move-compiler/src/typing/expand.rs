@@ -671,5 +671,6 @@ pub fn ide_annotation(context: &mut Context, annotation: &mut IDEAnnotation) {
         IDEAnnotation::MissingMatchArms(_) => (),
         IDEAnnotation::EllipsisMatchEntries(_) => (),
         IDEAnnotation::PathAutocompleteInfo(_) => (),
+        IDEAnnotation::StringValue(_) => (),
     }
 }
