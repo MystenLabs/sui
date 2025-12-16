@@ -2002,7 +2002,7 @@ mod tests {
         .await
         .unwrap();
         let mut allow_process = 10;
-        // Limit the pipeline to process only checkpoints `[0, 11]`.
+        // Limit the pipeline to process only checkpoints `[0, 10]`.
         let (controllable_handler, process_below) = ControllableHandler::with_limit(allow_process);
         let _ = tasked_indexer
             .concurrent_pipeline(
@@ -2023,7 +2023,8 @@ mod tests {
         });
 
         // Wait for pipeline to commit up to configured checkpoint 10 inclusive. With the main
-        // pipeline `reader_lo` currently unset, all checkpoints allowed should be committed.
+        // pipeline `reader_lo` currently unset, all checkpoints are allowed and should be
+        // committed.
         store
             .wait_for_watermark(
                 &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
