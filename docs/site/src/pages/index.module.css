@@ -12,11 +12,11 @@
 .heroText {
   display: flex;
   flex-direction: column;
-  row-gap: 2.5rem;
+  row-gap: 1rem;
   text-align: center;
   width: 43.375rem;
   max-width: 95%;
-  margin: 10rem auto;
+  margin: 0 auto;
 }
 
 .card, .cardCTA {
@@ -25,10 +25,10 @@
   border-color: var(--sui-line);
   display: flex;
   flex-direction: column;
-  padding: 1.875rem;
+  padding: 1.25rem;
   justify-content: space-between;
   border-radius: 30px;
-  height: 20.3125rem;
+  height: 16rem;
 }
 .cardCTA {
   height: 100%;
