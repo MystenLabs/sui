@@ -6,6 +6,7 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
+use futures::future::Either;
 use futures::future::OptionFuture;
 use futures::future::join_all;
 use futures::join;
@@ -75,24 +76,39 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
                 .map_err(|e| e.for_expr_at_offset(*offset));
         }
 
-        let mut writer = StringWriter::new(&self.used_output, self.max_output_size);
-        for strand in strands {
+        // Evaluate all strands concurrently
+        let evaluated = join_all(strands.iter().map(|strand| async move {
             match strand {
-                P::Strand::Text(s) => writer
-                    .write_str(s)
-                    .map_err(|_| FormatError::TooMuchOutput)?,
-
+                P::Strand::Text(s) => Either::Left(s),
                 P::Strand::Expr(P::Expr {
                     offset,
                     alternates,
                     transform,
-                }) => {
-                    let Some(v) = self.eval_alts(alternates).await? else {
+                }) => Either::Right(
+                    self.eval_alts(alternates)
+                        .await
+                        .map(|v| v.map(|v| (v, transform.unwrap_or_default(), *offset))),
+                ),
+            }
+        }))
+        .await;
+
+        // Format all results into the output
+        let mut writer = StringWriter::new(&self.used_output, self.max_output_size);
+        for result in evaluated {
+            match result {
+                Either::Left(s) => writer
+                    .write_str(s)
+                    .map_err(|_| FormatError::TooMuchOutput)?,
+
+                Either::Right(result) => {
+                    let Some((value, transform, offset)) = result? else {
                         return Ok(serde_json::Value::Null);
                     };
 
-                    v.format(transform.unwrap_or_default(), &mut writer)
-                        .map_err(|e| e.for_expr_at_offset(*offset))?;
+                    value
+                        .format(transform, &mut writer)
+                        .map_err(|e| e.for_expr_at_offset(offset))?;
                 }
             }
         }
