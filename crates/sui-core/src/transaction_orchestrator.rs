@@ -9,14 +9,15 @@ use std::time::Duration;
 
 use futures::FutureExt;
 use futures::stream::{FuturesUnordered, StreamExt};
-use mysten_common::in_antithesis;
+use mysten_common::{backoff, in_antithesis};
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX, spawn_monitored_task};
 use mysten_metrics::{add_server_timing, spawn_logged_monitored_task};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
-    HistogramVec, IntCounter, IntCounterVec, Registry, register_histogram_vec_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, Registry,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry,
 };
 use rand::Rng;
 use sui_config::NodeConfig;
@@ -191,11 +192,9 @@ where
         let tx_digest = *request.transaction.digest();
 
         let inner = self.inner.clone();
-        let (response, mut executed_locally) = spawn_monitored_task!(async move {
-            inner
-                .execute_transaction_with_effects_waiting(request, client_addr)
-                .await
-        })
+        let (response, mut executed_locally) = spawn_monitored_task!(
+            Inner::<A>::execute_transaction_with_retry(inner, request, client_addr)
+        )
         .await
         .map_err(|e| QuorumDriverError::TransactionFailed {
             category: ErrorCategory::Internal,
@@ -268,11 +267,11 @@ where
         };
 
         let inner = self.inner.clone();
-        let (response, _) = spawn_monitored_task!(async move {
-            inner
-                .execute_transaction_with_effects_waiting(request, client_addr)
-                .await
-        })
+        let (response, _) = spawn_monitored_task!(Inner::<A>::execute_transaction_with_retry(
+            inner,
+            request,
+            client_addr
+        ))
         .await
         .map_err(|e| QuorumDriverError::TransactionFailed {
             category: ErrorCategory::Internal,
@@ -340,11 +339,72 @@ impl<A> Inner<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    async fn execute_transaction_with_retry(
+        inner: Arc<Inner<A>>,
+        request: ExecuteTransactionRequestV3,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), QuorumDriverError> {
+        let result = inner
+            .execute_transaction_with_effects_waiting(
+                request.clone(),
+                client_addr,
+                /* enforce_live_input_objects */ false,
+            )
+            .await;
+
+        // If the error is retriable, retry the transaction sufficiently long.
+        if let Err(e) = &result
+            && e.is_retriable()
+        {
+            spawn_monitored_task!(async move {
+                inner.metrics.background_retry_started.inc();
+                let backoff = backoff::ExponentialBackoff::new(
+                    Duration::from_secs(1),
+                    Duration::from_secs(300),
+                );
+                const MAX_RETRIES: usize = 60;
+                for (i, delay) in backoff.enumerate() {
+                    if i == MAX_RETRIES {
+                        break;
+                    }
+                    // Start to enforce live input after 10 retries,
+                    // to avoid excessively retrying transactions with non-existent input objects.
+                    let result = inner
+                        .execute_transaction_with_effects_waiting(
+                            request.clone(),
+                            client_addr,
+                            i > 3,
+                        )
+                        .await;
+                    match result {
+                        Ok(_) => break,
+                        Err(e) => {
+                            if !e.is_retriable() {
+                                break;
+                            }
+                            inner.metrics.background_retry_errors.inc();
+                            if i % 100 == 0 {
+                                debug!(
+                                    "Background retry {i} for transaction {}: {e:?}",
+                                    request.transaction.digest()
+                                );
+                            }
+                        }
+                    };
+                    sleep(delay).await;
+                }
+            });
+        }
+
+        result
+    }
+
     /// Shared implementation for executing transactions with parallel local effects waiting
     async fn execute_transaction_with_effects_waiting(
         &self,
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
+        enforce_live_input_objects: bool,
     ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), QuorumDriverError> {
         let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
         let verified_transaction = epoch_store
@@ -356,9 +416,11 @@ where
         // Early validation check against local state before submission to catch non-retriable errors
         // TODO: Consider moving this check to TransactionDriver for per-retry validation
         if self.enable_early_validation
-            && let Err(e) = self
-                .validator_state
-                .check_transaction_validity(&epoch_store, &verified_transaction)
+            && let Err(e) = self.validator_state.check_transaction_validity(
+                &epoch_store,
+                &verified_transaction,
+                enforce_live_input_objects,
+            )
         {
             let error_category = e.categorize();
             if !error_category.is_submission_retriable() {
@@ -851,6 +913,9 @@ pub struct TransactionOrchestratorMetrics {
 
     early_validation_rejections: IntCounterVec,
 
+    background_retry_started: IntGauge,
+    background_retry_errors: IntCounter,
+
     request_latency: HistogramVec,
     local_execution_latency: HistogramVec,
     settlement_finality_latency: HistogramVec,
@@ -951,6 +1016,18 @@ impl TransactionOrchestratorMetrics {
                 "tx_orchestrator_early_validation_rejections",
                 "Total number of transactions rejected during early validation before submission, by reason",
                 &["reason"],
+                registry,
+            )
+            .unwrap(),
+            background_retry_started: register_int_gauge_with_registry!(
+                "tx_orchestrator_background_retry_started",
+                "Number of background retry tasks kicked off for transactions with retriable errors",
+                registry,
+            )
+            .unwrap(),
+            background_retry_errors: register_int_counter_with_registry!(
+                "tx_orchestrator_background_retry_errors",
+                "Total number of background retry errors, by error type",
                 registry,
             )
             .unwrap(),
