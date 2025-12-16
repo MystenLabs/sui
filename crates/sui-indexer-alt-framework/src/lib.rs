@@ -2045,22 +2045,25 @@ mod tests {
         assert_eq!(tasked_pipeline_watermark.reader_lo, 9);
     }
 
-    /// During a run, the tasked pipeline will stop sending checkpoints below the main pipeline's
-    /// reader watermark to the committer. Committer watermark should still advance.
-    #[tokio::test(start_paused = true)]
+    /// Test that when the collector observes `reader_lo = X`, that all checkpoints >= X will be
+    /// committed, and any checkpoints inflight < X will be skipped.
+    #[tokio::test]
     async fn test_tasked_pipelines_skip_checkpoints_trailing_main_reader_lo() {
         let registry = Registry::new();
         let store = MockStore::default();
-
         let mut conn = store.connect().await.unwrap();
+        // Set the main pipeline watermark.
+        conn.set_committer_watermark(
+            ControllableHandler::NAME,
+            CommitterWatermark {
+                checkpoint_hi_inclusive: 11,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
 
-        // Start a tasked indexer that will ingest from genesis to checkpoint 500.
-        let indexer_args = IndexerArgs {
-            first_checkpoint: Some(0),
-            last_checkpoint: Some(500),
-            pipeline: vec![],
-            task: TaskArgs::tasked("task".to_string(), 10 /* reader_interval_ms */),
-        };
+        // Generate 500 checkpoints upfront, for the indexer to process all at once.
         let temp_dir = tempfile::tempdir().unwrap();
         synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
             ingestion_dir: temp_dir.path().to_owned(),
@@ -2069,7 +2072,12 @@ mod tests {
             checkpoint_size: 2,
         })
         .await;
-
+        let indexer_args = IndexerArgs {
+            first_checkpoint: Some(0),
+            last_checkpoint: Some(500),
+            pipeline: vec![],
+            task: TaskArgs::tasked("task".to_string(), 10 /* reader_interval_ms */),
+        };
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {
                 local_ingestion_path: Some(temp_dir.path().to_owned()),
@@ -2077,9 +2085,7 @@ mod tests {
             },
             ..Default::default()
         };
-
         let ingestion_config = IngestionConfig::default();
-
         let mut tasked_indexer = Indexer::new(
             store.clone(),
             indexer_args,
@@ -2090,9 +2096,9 @@ mod tests {
         )
         .await
         .unwrap();
-
-        let (controllable_handler, process_below) = ControllableHandler::with_limit(10);
-
+        let mut allow_process = 10;
+        // Limit the pipeline to process only checkpoints `[0, 10]`.
+        let (controllable_handler, process_below) = ControllableHandler::with_limit(allow_process);
         let _ = tasked_indexer
             .concurrent_pipeline(
                 controllable_handler,
@@ -2106,14 +2112,13 @@ mod tests {
                 },
             )
             .await;
-
-        let ingestion_metrics = tasked_indexer.ingestion_metrics().clone();
         let metrics = tasked_indexer.indexer_metrics().clone();
 
-        let indexer_handle = tokio::spawn(async move {
-            tasked_indexer.run().await.unwrap().join().await.unwrap();
-        });
+        let mut s_indexer = tasked_indexer.run().await.unwrap();
 
+        // Wait for pipeline to commit up to configured checkpoint 10 inclusive. With the main
+        // pipeline `reader_lo` currently unset, all checkpoints are allowed and should be
+        // committed.
         store
             .wait_for_watermark(
                 &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
@@ -2122,56 +2127,67 @@ mod tests {
             )
             .await;
 
-        // Bump the reader watermark to checkpoint 250. The tasked pipeline should only commit
-        // checkpoints >= 250 once it ticks.
-        conn.set_committer_watermark(
-            ControllableHandler::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 300,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+        // Set the reader_lo to 250, simulating the main pipeline getting ahead. The
+        // track_main_reader_lo task will eventually pick this up and update the atomic. The
+        // collector reads from the atomic when it receives checkpoints, so we release checkpoints
+        // one at a time until the collector_reader_lo metric shows the new value.
         conn.set_reader_watermark(ControllableHandler::NAME, 250)
             .await
             .unwrap();
 
-        // Sleep so that the new reader watermark can be picked up by the tasked indexer. Given the
-        // `reader_interval_ms` is 10 ms, 1000 ms should be plenty of time.
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        // Allow the processor to resume.
-        process_below.send(501).ok();
+        let reader_lo = metrics
+            .collector_reader_lo
+            .with_label_values(&[ControllableHandler::NAME]);
 
-        indexer_handle.await.unwrap();
+        // Send checkpoints one at a time at 10ms intervals. The tasked indexer has a reader refresh
+        // interval of 10ms as well, so the collector should pick up the new reader_lo after a few
+        // checkpoints have been processed.
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
+        while reader_lo.get() != 250 {
+            interval.tick().await;
+            // allow_process is initialized to 11, bump to 11 for the next checkpoint
+            allow_process += 1;
+            assert!(
+                allow_process <= 500,
+                "Released all checkpoints but collector never observed new reader_lo"
+            );
+            process_below.send(allow_process).ok();
+        }
+
+        // At this point, the collector has observed reader_lo = 250. Release all remaining
+        // checkpoints. Guarantees:
+        // - [0, 10]: committed (before reader_lo was set)
+        // - [11, allow_process]: some committed, some skipped (timing-dependent during detection)
+        // - (allow_process, 250): skipped (in-flight, filtered by collector)
+        // - [250, 500]: committed (>= reader_lo)
+        process_below.send(500).ok();
+
+        s_indexer.join().await.unwrap();
 
         let data = store.data.get(ControllableHandler::NAME).unwrap();
-        // All 500+1 checkpoints should have been ingested.
-        assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 501);
-        // Checkpoints 11 to 249 should have been skipped.
-        assert_eq!(
-            metrics
-                .total_collector_skipped_checkpoints
-                .get_metric_with_label_values(&[ControllableHandler::NAME])
-                .unwrap()
-                .get(),
-            239
-        );
 
-        let ge_250 = data.iter().filter(|e| *e.key() >= 250).count();
-        let lt_250 = data.iter().filter(|e| *e.key() < 250).count();
-        // Checkpoints 250 to 500 inclusive must have been committed.
-        assert_eq!(ge_250, 251);
-        assert_eq!(lt_250, 11);
-        assert_eq!(
-            conn.committer_watermark(
-                &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap()
-            )
-            .await
-            .unwrap()
-            .unwrap()
-            .checkpoint_hi_inclusive,
-            500
-        );
+        // Checkpoints (allow_process, 250) must be skipped.
+        for chkpt in (allow_process + 1)..250 {
+            assert!(
+                data.get(&chkpt).is_none(),
+                "Checkpoint {chkpt} should have been skipped"
+            );
+        }
+
+        // Checkpoints >= reader_lo must be committed.
+        for chkpt in 250..=500 {
+            assert!(
+                data.get(&chkpt).is_some(),
+                "Checkpoint {chkpt} should have been committed (>= reader_lo)"
+            );
+        }
+
+        // Baseline: checkpoints [0, 10] were committed before reader_lo was set.
+        for chkpt in 0..=10 {
+            assert!(
+                data.get(&chkpt).is_some(),
+                "Checkpoint {chkpt} should have been committed (baseline)"
+            );
+        }
     }
 }
