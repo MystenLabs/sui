@@ -116,6 +116,17 @@ pub struct Module {
     pub constants: ArenaVec<Constant>,
 }
 
+impl Drop for Module {
+    #![allow(unsafe_code)]
+    fn drop(&mut self) {
+        // We need to manually drop the arena-allocated functions to ensure their native
+        // Arc fields are correctly dropped.
+        // Note the provided drain iterator calls the destructor on its elements when it is
+        // dropped, so this is sufficient.
+        self.functions.drain();
+    }
+}
+
 // A runtime constant
 #[derive(Debug)]
 pub struct Constant {
@@ -139,12 +150,22 @@ pub struct Function {
     pub(crate) locals: ArenaVec<ArenaType>,
     pub(crate) return_: ArenaVec<ArenaType>,
     pub(crate) type_parameters: ArenaVec<AbilitySet>,
-    // TODO(vm-rewrite): This field probably leaks
+    // NOTE: This field is manually dropped in Function::drop() to prevent Arc leaks
+    // Any value holding a `Function` needs to ensure it is correctly dropped.
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
     pub name: VirtualTableKey,
     pub locals_len: usize,
     pub jump_tables: ArenaVec<VariantJumpTable>,
+}
+
+impl Drop for Function {
+    fn drop(&mut self) {
+        // Take ownership of the Arc and drop it
+        if let Some(native_fn) = self.native.take() {
+            drop(native_fn);
+        }
+    }
 }
 
 // A variant jump table -- note that these are only full at the moment.
