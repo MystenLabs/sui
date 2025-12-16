@@ -362,12 +362,12 @@ where
                     Duration::from_secs(1),
                     Duration::from_secs(300),
                 );
-                const MAX_RETRIES: usize = 60;
+                const MAX_RETRIES: usize = 10;
                 for (i, delay) in backoff.enumerate() {
                     if i == MAX_RETRIES {
                         break;
                     }
-                    // Start to enforce live input after 10 retries,
+                    // Start to enforce live input after 3 retries,
                     // to avoid excessively retrying transactions with non-existent input objects.
                     let result = inner
                         .execute_transaction_with_effects_waiting(
