@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// A module for accumulating funds, i.e. Balance-like types.
-#[allow(duplicate_alias)]
 module sui::funds_accumulator;
-
-use std::internal;
 
 /// Allows calling `.split()` on a `Withdrawal` create a sub withdrawal from it.
 public use fun withdrawal_split as Withdrawal.split;
