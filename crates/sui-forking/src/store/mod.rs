@@ -149,6 +149,7 @@ impl ForkingStore {
     }
 
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {
+        // println!("Live objects in store: {:?}", self.live_objects.keys());
         let version = self.live_objects.get(id);
 
         if let Some(version) = version {

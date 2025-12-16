@@ -57,15 +57,27 @@ pub(crate) async fn start_rpc(
         chain: context.chain,
     })?;
     rpc.add_module(write::Write(context.clone().simulacrum))?;
+    rpc.add_module(sui_indexer_alt_jsonrpc::api::transactions::Transactions(
+        context.pg_context.clone(),
+    ))?;
+    rpc.add_module(
+        sui_indexer_alt_jsonrpc::api::transactions::QueryTransactions(context.pg_context.clone()),
+    )?;
     // rpc.add_module(sui_indexer_alt_jsonrpc::api::checkpoints::Checkpoints(
     // context.clone(),
     // ))?;
     // rpc.add_module(Coins(context.clone()))?;
+    // let s_system_package_task = system_package_task.run();
 
     let s_metrics = metrics.run().await?;
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
 
-    match h_rpc.attach(s_metrics).main().await {
+    match h_rpc
+        .attach(s_metrics)
+        // .attach(s_system_package_task)
+        .main()
+        .await
+    {
         Ok(()) | Err(sui_futures::service::Error::Terminated) => {}
 
         Err(sui_futures::service::Error::Aborted) => {

@@ -15,6 +15,7 @@ pub async fn load_live(
     ctx: &Context,
     object_id: ObjectID,
 ) -> Result<Option<Object>, anyhow::Error> {
+    println!("Loading live object: {}", object_id);
     let Some(latest_version) = ctx
         .pg_loader()
         .load_one(LatestObjectVersionKey(object_id))
@@ -27,6 +28,8 @@ pub async fn load_live(
     if latest_version.object_digest.is_none() {
         return Ok(None);
     }
+
+    println!("Found latest version: {:?}", latest_version);
 
     // Read from kv store and retry if the object is not found.
     let mut object = None;

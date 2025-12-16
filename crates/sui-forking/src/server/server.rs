@@ -422,7 +422,7 @@ fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> 
     let mut conn = PgConnection::establish(&db_url)?;
 
     println!("Dropping and recreating database sui_indexer_alt...");
-    // Drop the database
+    // // Drop the database
     diesel::sql_query("DROP DATABASE IF EXISTS sui_indexer_alt").execute(&mut conn)?;
 
     // Recreate it

@@ -100,12 +100,17 @@ impl WriteApiServer for Write {
         // Execute the transaction using Simulacrum
         let mut simulacrum = self.0.write().await;
         let (effects, _execution_error) = simulacrum
-            .execute_transaction(transaction.clone())
+            .execute_transaction_impersonating(transaction.transaction_data().clone())
             .map_err(|e| invalid_params(Error::ExecutionError(e.to_string())))?;
 
         // Build the response based on options
         let options = options.unwrap_or_default();
         let mut response = SuiTransactionBlockResponse::new(effects.transaction_digest().clone());
+
+        println!(
+            "Executed transaction with digest: {:?}",
+            effects.transaction_digest()
+        );
 
         if options.show_effects {
             response.effects = Some(
