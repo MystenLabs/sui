@@ -10,7 +10,7 @@ use std::time::Duration;
 use futures::FutureExt;
 use futures::stream::{FuturesUnordered, StreamExt};
 use mysten_common::in_antithesis;
-use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
+use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX, spawn_monitored_task};
 use mysten_metrics::{add_server_timing, spawn_logged_monitored_task};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
@@ -23,7 +23,7 @@ use sui_config::NodeConfig;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
+use sui_types::error::{ErrorCategory, SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_grpc::{SubmitTxRequest, TxType};
 use sui_types::quorum_driver_types::{
     EffectsFinalityInfo, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
@@ -62,13 +62,7 @@ pub type QuorumTransactionEffectsResult =
 /// on top of Transaction Driver.
 /// This is used by node RPC service to support transaction submission and finality waiting.
 pub struct TransactionOrchestrator<A: Clone> {
-    validator_state: Arc<AuthorityState>,
-    pending_tx_log: Arc<WritePathPendingTransactionLog>,
-    metrics: Arc<TransactionOrchestratorMetrics>,
-    transaction_driver: Arc<TransactionDriver<A>>,
-    td_allowed_submission_list: Vec<String>,
-    td_blocked_submission_list: Vec<String>,
-    enable_early_validation: bool,
+    inner: Arc<Inner<A>>,
 }
 
 impl TransactionOrchestrator<NetworkAuthorityClient> {
@@ -129,7 +123,10 @@ where
         let pending_tx_log = Arc::new(WritePathPendingTransactionLog::new(
             parent_path.join("fullnode_pending_transactions"),
         ));
-        Self::start_task_to_recover_txes_in_log(pending_tx_log.clone(), transaction_driver.clone());
+        Inner::start_task_to_recover_txes_in_log(
+            pending_tx_log.clone(),
+            transaction_driver.clone(),
+        );
 
         let td_allowed_submission_list = node_config
             .transaction_driver_config
@@ -156,7 +153,7 @@ where
             .map(|config| config.enable_early_validation)
             .unwrap_or(true);
 
-        Self {
+        let inner = Arc::new(Inner {
             validator_state,
             pending_tx_log,
             metrics,
@@ -164,7 +161,8 @@ where
             td_allowed_submission_list,
             td_blocked_submission_list,
             enable_early_validation,
-        }
+        });
+        Self { inner }
     }
 }
 
@@ -192,23 +190,32 @@ where
         };
         let tx_digest = *request.transaction.digest();
 
-        let (response, mut executed_locally) = self
-            .execute_transaction_with_effects_waiting(request, client_addr)
-            .await?;
+        let inner = self.inner.clone();
+        let (response, mut executed_locally) = spawn_monitored_task!(async move {
+            inner
+                .execute_transaction_with_effects_waiting(request, client_addr)
+                .await
+        })
+        .await
+        .map_err(|e| QuorumDriverError::TransactionFailed {
+            category: ErrorCategory::Internal,
+            details: e.to_string(),
+        })??;
 
         if !executed_locally {
             executed_locally = if matches!(
                 request_type,
                 ExecuteTransactionRequestType::WaitForLocalExecution
             ) {
-                let executed_locally = Self::wait_for_finalized_tx_executed_locally_with_timeout(
-                    &self.validator_state,
-                    tx_digest,
-                    tx_type,
-                    &self.metrics,
-                )
-                .await
-                .is_ok();
+                let executed_locally =
+                    Inner::<A>::wait_for_finalized_tx_executed_locally_with_timeout(
+                        &self.inner.validator_state,
+                        tx_digest,
+                        tx_type,
+                        &self.inner.metrics,
+                    )
+                    .await
+                    .is_ok();
                 add_server_timing("local_execution done");
                 executed_locally
             } else {
@@ -232,7 +239,8 @@ where
             auxiliary_data,
         };
 
-        self.metrics
+        self.inner
+            .metrics
             .request_latency
             .with_label_values(&[
                 tx_type.as_str(),
@@ -259,11 +267,20 @@ where
             TxType::SingleWriter
         };
 
-        let (response, _) = self
-            .execute_transaction_with_effects_waiting(request, client_addr)
-            .await?;
+        let inner = self.inner.clone();
+        let (response, _) = spawn_monitored_task!(async move {
+            inner
+                .execute_transaction_with_effects_waiting(request, client_addr)
+                .await
+        })
+        .await
+        .map_err(|e| QuorumDriverError::TransactionFailed {
+            category: ErrorCategory::Internal,
+            details: e.to_string(),
+        })??;
 
-        self.metrics
+        self.inner
+            .metrics
             .request_latency
             .with_label_values(&[tx_type.as_str(), "execute_transaction_v3", "false"])
             .observe(timer.elapsed().as_secs_f64());
@@ -285,6 +302,44 @@ where
         })
     }
 
+    pub fn authority_state(&self) -> &Arc<AuthorityState> {
+        &self.inner.validator_state
+    }
+
+    pub fn transaction_driver(&self) -> &Arc<TransactionDriver<A>> {
+        &self.inner.transaction_driver
+    }
+
+    pub fn clone_authority_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
+        self.inner
+            .transaction_driver
+            .authority_aggregator()
+            .load_full()
+    }
+
+    pub fn load_all_pending_transactions_in_test(&self) -> SuiResult<Vec<VerifiedTransaction>> {
+        self.inner.pending_tx_log.load_all_pending_transactions()
+    }
+
+    pub fn empty_pending_tx_log_in_test(&self) -> bool {
+        self.inner.pending_tx_log.is_empty()
+    }
+}
+
+struct Inner<A: Clone> {
+    validator_state: Arc<AuthorityState>,
+    pending_tx_log: Arc<WritePathPendingTransactionLog>,
+    metrics: Arc<TransactionOrchestratorMetrics>,
+    transaction_driver: Arc<TransactionDriver<A>>,
+    td_allowed_submission_list: Vec<String>,
+    td_blocked_submission_list: Vec<String>,
+    enable_early_validation: bool,
+}
+
+impl<A> Inner<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
     /// Shared implementation for executing transactions with parallel local effects waiting
     async fn execute_transaction_with_effects_waiting(
         &self,
@@ -676,18 +731,6 @@ where
         }
     }
 
-    pub fn authority_state(&self) -> &Arc<AuthorityState> {
-        &self.validator_state
-    }
-
-    pub fn transaction_driver(&self) -> &Arc<TransactionDriver<A>> {
-        &self.transaction_driver
-    }
-
-    pub fn clone_authority_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
-        self.transaction_driver.authority_aggregator().load_full()
-    }
-
     fn update_metrics<'a>(
         &'a self,
         transaction: &Transaction,
@@ -782,14 +825,6 @@ where
                 num_recovered, num_pending_txes
             );
         });
-    }
-
-    pub fn load_all_pending_transactions_in_test(&self) -> SuiResult<Vec<VerifiedTransaction>> {
-        self.pending_tx_log.load_all_pending_transactions()
-    }
-
-    pub fn empty_pending_tx_log_in_test(&self) -> bool {
-        self.pending_tx_log.is_empty()
     }
 }
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
@@ -970,7 +1005,8 @@ where
         transaction: TransactionData,
         checks: TransactionChecks,
     ) -> Result<SimulateTransactionResult, SuiError> {
-        self.validator_state
+        self.inner
+            .validator_state
             .simulate_transaction(transaction, checks)
     }
 }
