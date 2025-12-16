@@ -1,0 +1,7 @@
+0 = &mut local_0
+1 = alias 0
+writable: 0,1
+2 = &mut call(1)
+writable: 2
+3 = &mut 2.a
+writable: 3

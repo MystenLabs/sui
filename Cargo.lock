@@ -8459,8 +8459,10 @@ dependencies = [
 name = "move-regex-borrow-graph"
 version = "0.0.1"
 dependencies = [
+ "insta",
  "itertools 0.10.5",
  "move-binary-format",
+ "move-command-line-common",
  "move-core-types",
  "petgraph 0.8.1",
  "proptest",
