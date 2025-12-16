@@ -9,21 +9,22 @@ use std::time::Duration;
 
 use futures::FutureExt;
 use futures::stream::{FuturesUnordered, StreamExt};
-use mysten_common::in_antithesis;
-use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
+use mysten_common::{backoff, in_antithesis};
+use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX, spawn_monitored_task};
 use mysten_metrics::{add_server_timing, spawn_logged_monitored_task};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
 use prometheus::{
-    HistogramVec, IntCounter, IntCounterVec, Registry, register_histogram_vec_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, Registry,
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry,
 };
 use rand::Rng;
 use sui_config::NodeConfig;
 use sui_storage::write_path_pending_tx_log::WritePathPendingTransactionLog;
 use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
+use sui_types::error::{ErrorCategory, SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_grpc::{SubmitTxRequest, TxType};
 use sui_types::quorum_driver_types::{
     EffectsFinalityInfo, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
@@ -62,13 +63,7 @@ pub type QuorumTransactionEffectsResult =
 /// on top of Transaction Driver.
 /// This is used by node RPC service to support transaction submission and finality waiting.
 pub struct TransactionOrchestrator<A: Clone> {
-    validator_state: Arc<AuthorityState>,
-    pending_tx_log: Arc<WritePathPendingTransactionLog>,
-    metrics: Arc<TransactionOrchestratorMetrics>,
-    transaction_driver: Arc<TransactionDriver<A>>,
-    td_allowed_submission_list: Vec<String>,
-    td_blocked_submission_list: Vec<String>,
-    enable_early_validation: bool,
+    inner: Arc<Inner<A>>,
 }
 
 impl TransactionOrchestrator<NetworkAuthorityClient> {
@@ -129,7 +124,10 @@ where
         let pending_tx_log = Arc::new(WritePathPendingTransactionLog::new(
             parent_path.join("fullnode_pending_transactions"),
         ));
-        Self::start_task_to_recover_txes_in_log(pending_tx_log.clone(), transaction_driver.clone());
+        Inner::start_task_to_recover_txes_in_log(
+            pending_tx_log.clone(),
+            transaction_driver.clone(),
+        );
 
         let td_allowed_submission_list = node_config
             .transaction_driver_config
@@ -156,7 +154,7 @@ where
             .map(|config| config.enable_early_validation)
             .unwrap_or(true);
 
-        Self {
+        let inner = Arc::new(Inner {
             validator_state,
             pending_tx_log,
             metrics,
@@ -164,7 +162,8 @@ where
             td_allowed_submission_list,
             td_blocked_submission_list,
             enable_early_validation,
-        }
+        });
+        Self { inner }
     }
 }
 
@@ -192,23 +191,30 @@ where
         };
         let tx_digest = *request.transaction.digest();
 
-        let (response, mut executed_locally) = self
-            .execute_transaction_with_effects_waiting(request, client_addr)
-            .await?;
+        let inner = self.inner.clone();
+        let (response, mut executed_locally) = spawn_monitored_task!(
+            Inner::<A>::execute_transaction_with_retry(inner, request, client_addr)
+        )
+        .await
+        .map_err(|e| QuorumDriverError::TransactionFailed {
+            category: ErrorCategory::Internal,
+            details: e.to_string(),
+        })??;
 
         if !executed_locally {
             executed_locally = if matches!(
                 request_type,
                 ExecuteTransactionRequestType::WaitForLocalExecution
             ) {
-                let executed_locally = Self::wait_for_finalized_tx_executed_locally_with_timeout(
-                    &self.validator_state,
-                    tx_digest,
-                    tx_type,
-                    &self.metrics,
-                )
-                .await
-                .is_ok();
+                let executed_locally =
+                    Inner::<A>::wait_for_finalized_tx_executed_locally_with_timeout(
+                        &self.inner.validator_state,
+                        tx_digest,
+                        tx_type,
+                        &self.inner.metrics,
+                    )
+                    .await
+                    .is_ok();
                 add_server_timing("local_execution done");
                 executed_locally
             } else {
@@ -232,7 +238,8 @@ where
             auxiliary_data,
         };
 
-        self.metrics
+        self.inner
+            .metrics
             .request_latency
             .with_label_values(&[
                 tx_type.as_str(),
@@ -259,11 +266,20 @@ where
             TxType::SingleWriter
         };
 
-        let (response, _) = self
-            .execute_transaction_with_effects_waiting(request, client_addr)
-            .await?;
+        let inner = self.inner.clone();
+        let (response, _) = spawn_monitored_task!(Inner::<A>::execute_transaction_with_retry(
+            inner,
+            request,
+            client_addr
+        ))
+        .await
+        .map_err(|e| QuorumDriverError::TransactionFailed {
+            category: ErrorCategory::Internal,
+            details: e.to_string(),
+        })??;
 
-        self.metrics
+        self.inner
+            .metrics
             .request_latency
             .with_label_values(&[tx_type.as_str(), "execute_transaction_v3", "false"])
             .observe(timer.elapsed().as_secs_f64());
@@ -285,11 +301,110 @@ where
         })
     }
 
+    pub fn authority_state(&self) -> &Arc<AuthorityState> {
+        &self.inner.validator_state
+    }
+
+    pub fn transaction_driver(&self) -> &Arc<TransactionDriver<A>> {
+        &self.inner.transaction_driver
+    }
+
+    pub fn clone_authority_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
+        self.inner
+            .transaction_driver
+            .authority_aggregator()
+            .load_full()
+    }
+
+    pub fn load_all_pending_transactions_in_test(&self) -> SuiResult<Vec<VerifiedTransaction>> {
+        self.inner.pending_tx_log.load_all_pending_transactions()
+    }
+
+    pub fn empty_pending_tx_log_in_test(&self) -> bool {
+        self.inner.pending_tx_log.is_empty()
+    }
+}
+
+struct Inner<A: Clone> {
+    validator_state: Arc<AuthorityState>,
+    pending_tx_log: Arc<WritePathPendingTransactionLog>,
+    metrics: Arc<TransactionOrchestratorMetrics>,
+    transaction_driver: Arc<TransactionDriver<A>>,
+    td_allowed_submission_list: Vec<String>,
+    td_blocked_submission_list: Vec<String>,
+    enable_early_validation: bool,
+}
+
+impl<A> Inner<A>
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone,
+{
+    async fn execute_transaction_with_retry(
+        inner: Arc<Inner<A>>,
+        request: ExecuteTransactionRequestV3,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), QuorumDriverError> {
+        let result = inner
+            .execute_transaction_with_effects_waiting(
+                request.clone(),
+                client_addr,
+                /* enforce_live_input_objects */ false,
+            )
+            .await;
+
+        // If the error is retriable, retry the transaction sufficiently long.
+        if let Err(e) = &result
+            && e.is_retriable()
+        {
+            spawn_monitored_task!(async move {
+                inner.metrics.background_retry_started.inc();
+                let backoff = backoff::ExponentialBackoff::new(
+                    Duration::from_secs(1),
+                    Duration::from_secs(300),
+                );
+                const MAX_RETRIES: usize = 10;
+                for (i, delay) in backoff.enumerate() {
+                    if i == MAX_RETRIES {
+                        break;
+                    }
+                    // Start to enforce live input after 3 retries,
+                    // to avoid excessively retrying transactions with non-existent input objects.
+                    let result = inner
+                        .execute_transaction_with_effects_waiting(
+                            request.clone(),
+                            client_addr,
+                            i > 3,
+                        )
+                        .await;
+                    match result {
+                        Ok(_) => break,
+                        Err(e) => {
+                            if !e.is_retriable() {
+                                break;
+                            }
+                            inner.metrics.background_retry_errors.inc();
+                            if i % 100 == 0 {
+                                debug!(
+                                    "Background retry {i} for transaction {}: {e:?}",
+                                    request.transaction.digest()
+                                );
+                            }
+                        }
+                    };
+                    sleep(delay).await;
+                }
+            });
+        }
+
+        result
+    }
+
     /// Shared implementation for executing transactions with parallel local effects waiting
     async fn execute_transaction_with_effects_waiting(
         &self,
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
+        enforce_live_input_objects: bool,
     ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), QuorumDriverError> {
         let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
         let verified_transaction = epoch_store
@@ -301,9 +416,11 @@ where
         // Early validation check against local state before submission to catch non-retriable errors
         // TODO: Consider moving this check to TransactionDriver for per-retry validation
         if self.enable_early_validation
-            && let Err(e) = self
-                .validator_state
-                .check_transaction_validity(&epoch_store, &verified_transaction)
+            && let Err(e) = self.validator_state.check_transaction_validity(
+                &epoch_store,
+                &verified_transaction,
+                enforce_live_input_objects,
+            )
         {
             let error_category = e.categorize();
             if !error_category.is_submission_retriable() {
@@ -676,18 +793,6 @@ where
         }
     }
 
-    pub fn authority_state(&self) -> &Arc<AuthorityState> {
-        &self.validator_state
-    }
-
-    pub fn transaction_driver(&self) -> &Arc<TransactionDriver<A>> {
-        &self.transaction_driver
-    }
-
-    pub fn clone_authority_aggregator(&self) -> Arc<AuthorityAggregator<A>> {
-        self.transaction_driver.authority_aggregator().load_full()
-    }
-
     fn update_metrics<'a>(
         &'a self,
         transaction: &Transaction,
@@ -783,14 +888,6 @@ where
             );
         });
     }
-
-    pub fn load_all_pending_transactions_in_test(&self) -> SuiResult<Vec<VerifiedTransaction>> {
-        self.pending_tx_log.load_all_pending_transactions()
-    }
-
-    pub fn empty_pending_tx_log_in_test(&self) -> bool {
-        self.pending_tx_log.is_empty()
-    }
 }
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 #[derive(Clone)]
@@ -815,6 +912,9 @@ pub struct TransactionOrchestratorMetrics {
     concurrent_execution: IntCounter,
 
     early_validation_rejections: IntCounterVec,
+
+    background_retry_started: IntGauge,
+    background_retry_errors: IntCounter,
 
     request_latency: HistogramVec,
     local_execution_latency: HistogramVec,
@@ -919,6 +1019,18 @@ impl TransactionOrchestratorMetrics {
                 registry,
             )
             .unwrap(),
+            background_retry_started: register_int_gauge_with_registry!(
+                "tx_orchestrator_background_retry_started",
+                "Number of background retry tasks kicked off for transactions with retriable errors",
+                registry,
+            )
+            .unwrap(),
+            background_retry_errors: register_int_counter_with_registry!(
+                "tx_orchestrator_background_retry_errors",
+                "Total number of background retry errors, by error type",
+                registry,
+            )
+            .unwrap(),
             request_latency: register_histogram_vec_with_registry!(
                 "tx_orchestrator_request_latency",
                 "Time spent in processing one Transaction Orchestrator request",
@@ -970,7 +1082,8 @@ where
         transaction: TransactionData,
         checks: TransactionChecks,
     ) -> Result<SimulateTransactionResult, SuiError> {
-        self.validator_state
+        self.inner
+            .validator_state
             .simulate_transaction(transaction, checks)
     }
 }

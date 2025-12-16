@@ -1302,6 +1302,7 @@ impl AuthorityState {
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: &VerifiedTransaction,
+        enforce_live_input_objects: bool,
     ) -> SuiResult<()> {
         if !epoch_store
             .get_reconfig_state_read_lock_guard()
@@ -1325,6 +1326,17 @@ impl AuthorityState {
                 // Only reject if transaction references an old version. Allow newer
                 // versions that may exist on validators but not yet synced to fullnode.
                 if obj_ref.1 < live_object.version() {
+                    return Err(SuiErrorKind::UserInputError {
+                        error: UserInputError::ObjectVersionUnavailableForConsumption {
+                            provided_obj_ref: *obj_ref,
+                            current_version: live_object.version(),
+                        },
+                    }
+                    .into());
+                }
+
+                if enforce_live_input_objects && live_object.version() < obj_ref.1 {
+                    // Returns a non-retriable error when the input object version is required to be live.
                     return Err(SuiErrorKind::UserInputError {
                         error: UserInputError::ObjectVersionUnavailableForConsumption {
                             provided_obj_ref: *obj_ref,
