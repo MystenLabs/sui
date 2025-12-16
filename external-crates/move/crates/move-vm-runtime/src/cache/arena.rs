@@ -107,6 +107,10 @@ impl<T> ArenaVec<T> {
             .map(|val_ref| VMPointer::from_ref(val_ref))
             .collect()
     }
+
+    pub fn drain(&mut self) -> std::vec::Drain<'_, T> {
+        self.0.drain(..)
+    }
 }
 
 impl<T> ArenaBox<T> {
