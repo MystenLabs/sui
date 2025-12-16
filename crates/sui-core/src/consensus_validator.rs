@@ -1,11 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
-    checkpoints::CheckpointServiceNotify,
-    consensus_adapter::{ConsensusOverloadChecker, NoopConsensusOverloadChecker},
-};
+use std::sync::Arc;
+
 use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
@@ -14,7 +11,6 @@ use prometheus::{
     IntCounter, IntCounterVec, Registry, register_int_counter_vec_with_registry,
     register_int_counter_with_registry,
 };
-use std::sync::Arc;
 use sui_macros::fail_point_arg;
 #[cfg(msim)]
 use sui_types::base_types::AuthorityName;
@@ -25,6 +21,12 @@ use sui_types::{
 };
 use tap::TapFallible;
 use tracing::{debug, info, instrument, warn};
+
+use crate::{
+    authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
+    checkpoints::CheckpointServiceNotify,
+    consensus_adapter::{ConsensusOverloadChecker, NoopConsensusOverloadChecker},
+};
 
 /// Validates transactions from consensus and votes on whether to execute the transactions
 /// based on their validity and the current state of the authority.
