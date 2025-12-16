@@ -9,5 +9,5 @@ pub(crate) mod move_utils;
 pub(crate) mod name_service;
 pub(crate) mod objects;
 pub mod rpc_module;
-pub(crate) mod transactions;
+pub mod transactions;
 pub mod write;

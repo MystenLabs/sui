@@ -63,9 +63,9 @@ trait QueryTransactionsApi {
     ) -> RpcResult<Page<SuiTransactionBlockResponse, String>>;
 }
 
-pub(crate) struct Transactions(pub Context);
+pub struct Transactions(pub Context);
 
-pub(crate) struct QueryTransactions(pub Context);
+pub struct QueryTransactions(pub Context);
 
 #[async_trait::async_trait]
 impl TransactionsApiServer for Transactions {
