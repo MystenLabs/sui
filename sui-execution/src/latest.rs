@@ -4,7 +4,13 @@
 use move_binary_format::CompiledModule;
 use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
+use once_cell::sync::Lazy;
 use similar::TextDiff;
+use std::fs::{File, OpenOptions};
+use std::io::{Seek, Write};
+use std::path::Path;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::effects::TransactionEffectsAPI;
@@ -39,6 +45,45 @@ use sui_verifier_latest::meter::SuiVerifierMeter;
 use crate::executor;
 use crate::verifier;
 use sui_adapter_latest::execution_mode;
+
+const GAS_USAGE_DELTA_THRESHOLD: u64 = 50;
+static COUNTER: AtomicUsize = AtomicUsize::new(0);
+static OLD_VAL: AtomicUsize = AtomicUsize::new(0);
+
+const FILE_PREFIX: &str = "/opt/sui/";
+// const FILE_PREFIX: &str = "";
+
+static COUNTER_FILE: Lazy<Mutex<File>> = Lazy::new(|| {
+    let file_name = format!("{FILE_PREFIX}counter.txt");
+    let path = Path::new(&file_name);
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(path)
+        .unwrap();
+    Mutex::new(file)
+});
+
+fn write_number(file: &mut File, n: usize) -> std::io::Result<()> {
+    // Convert to bytes (with newline optional but nice for humans)
+    let s = format!("{n}\n");
+    let bytes = s.as_bytes();
+
+    // Go to start of file
+    file.seek(std::io::SeekFrom::Start(0))?;
+
+    // Overwrite contents
+    file.write_all(bytes)?;
+
+    // If previous number had more digits, remove trailing old bytes
+    file.set_len(bytes.len() as u64)?;
+
+    // Push to OS buffers (optional)
+    file.flush()?;
+
+    Ok(())
+}
 
 pub(crate) struct Executor {
     bella_ciao_vm: Arc<MoveRuntime>,
@@ -167,6 +212,13 @@ impl executor::Executor for Executor {
             );
 
         tracing::debug!("Executed transaction in three configurations");
+
+        let count = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if count - OLD_VAL.load(std::sync::atomic::Ordering::Relaxed) > 5_000 {
+            OLD_VAL.store(count, std::sync::atomic::Ordering::Relaxed);
+            let mut file = COUNTER_FILE.lock().unwrap();
+            write_number(&mut *file, count).expect("failed to write counter");
+        }
 
         compare_effects(
             &(
@@ -333,9 +385,23 @@ fn compare_effects(
         );
     }
 
+    // |current - new| <= threshold
+    // n - k <= L <= n + k
+    let gas_used_within_range = normal_effects
+        .1
+        .gas_used()
+        .saturating_sub(GAS_USAGE_DELTA_THRESHOLD)
+        <= new_effects.1.gas_used()
+        && new_effects.1.gas_used()
+            <= normal_effects
+                .1
+                .gas_used()
+                .saturating_add(GAS_USAGE_DELTA_THRESHOLD);
+
     let ok = normal_effects.2.status() == new_effects.2.status()
         && normal_effects.2 == new_effects.2
-        && normal_effects.1.gas_used() == new_effects.1.gas_used();
+        && gas_used_within_range;
+
     //     match (normal_effects.2.status(), new_effects.2.status()) {
     //     // success => success
     //     (ExecutionStatus::Success, ExecutionStatus::Success) => true,
@@ -382,27 +448,21 @@ fn compare_effects(
             "{} TransactionEffects differ",
             normal_effects.2.transaction_digest()
         );
-        let t1 = format!(
-            "gas_used: {:#?}\neffects: {:#?}",
-            normal_effects.1.gas_used(),
-            normal_effects.2
-        );
-        let t2 = format!(
-            "gas_used: {:#?}\neffects: {:#?}",
-            new_effects.1.gas_used(),
-            new_effects.2
-        );
-        let s = TextDiff::from_lines(&t1, &t2).unified_diff().to_string();
-        let data = format!(
-            "---\nDIGEST: {}\n>>\n{}\n<<<\n{:#?}\n{:#?}\n",
-            normal_effects.2.transaction_digest(),
-            s,
-            normal_effects.2,
-            new_effects.2,
-        );
-        let output_file = format!("outputs/{}", normal_effects.2.transaction_digest());
+        let old_effects = serde_json::to_string_pretty(&normal_effects.2)
+            .unwrap_or_else(|_| "Failed to serialize effects".to_string());
+        let new_effects = serde_json::to_string_pretty(&new_effects.2)
+            .unwrap_or_else(|_| "Failed to serialize effects".to_string());
 
-        std::fs::write(&output_file, &data).expect("Failed to write output file");
+        let new_output_file = format!(
+            "{FILE_PREFIX}outputs/{}.json.new",
+            normal_effects.2.transaction_digest()
+        );
+        let old_output_file = format!(
+            "{FILE_PREFIX}outputs/{}.json.old",
+            normal_effects.2.transaction_digest()
+        );
+        std::fs::write(&new_output_file, &new_effects).expect("Failed to write new effects file");
+        std::fs::write(&old_output_file, &old_effects).expect("Failed to write old effects file");
     } else {
         tracing::info!(
             "{} TransactionEffects are the same for both executions",

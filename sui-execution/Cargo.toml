@@ -10,6 +10,7 @@ edition = "2024"
 [dependencies]
 sui-protocol-config.workspace = true
 sui-types.workspace = true
+serde_json.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-verifier-meter.workspace = true
@@ -17,6 +18,7 @@ move-trace-format.workspace = true
 move-vm-config.workspace = true
 tracing.workspace = true
 similar.workspace = true
+once_cell.workspace = true
 
 sui-adapter-latest = { path = "latest/sui-adapter" }
 sui-adapter-v0 = { path = "v0/sui-adapter" }
