@@ -17,7 +17,7 @@ use crate::{
     },
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, attributes::to_known_attributes, format_one_of, lexer::*, token_set::*},
-    shared::{ide::IDEAnnotation, string_utils::*, *},
+    shared::{ide::IDEAnnotation, stdlib_definitions::STDLIB_ADDRESS_NAME, string_utils::*, *},
 };
 
 use move_command_line_common::files::FileHash;
@@ -1481,6 +1481,17 @@ fn parse_string(context: &mut Context) -> Result<Value_, Box<Diagnostic>> {
     };
     // Add IDE annotation for string values
     if context.env.ide_mode() {
+        // Carve out: remove stdlib if IDE test mode is on to allow test reproducability
+        if context.env.ide_test_mode() {
+            println!("In test mode");
+            if let Some(pkg_name) = context.current_package {
+                println!("Pkg name: {}", pkg_name);
+                if pkg_name == STDLIB_ADDRESS_NAME || pkg_name.as_str() == "stdlib" {
+                    context.tokens.advance()?;
+                    return Ok(value_);
+                }
+            }
+        }
         let string = match value_ {
             Value_::HexString(text) => format!("x\"{}\"", text),
             Value_::ByteString(text) => format!("b\"{}\"", text),
