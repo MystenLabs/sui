@@ -16792,6 +16792,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-traffic-sim"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "prometheus",
+ "shared-crypto",
+ "sui-core",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-macros",
+ "sui-move-build",
+ "sui-protocol-config",
+ "sui-sdk",
+ "sui-simulator",
+ "sui-types",
+ "telemetry-subscribers",
+ "tempfile",
+ "test-cluster",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-transaction-builder"
 version = "0.0.0"
 dependencies = [

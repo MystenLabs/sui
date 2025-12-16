@@ -1,0 +1,28 @@
+[package]
+name = "sui-traffic-sim"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+tokio = { version = "1.36", features = ["full"] }
+tracing = "0.1"
+tempfile = "3.10"
+
+shared-crypto = { path = "../shared-crypto" }
+sui-types = { path = "../sui-types" }
+sui-core = { path = "../sui-core" }
+sui-sdk = { path = "../sui-sdk" }
+sui-json-rpc-types = { path = "../sui-json-rpc-types" }
+sui-keys = { path = "../sui-keys" }
+sui-move-build = { path = "../sui-move-build" }
+test-cluster = { path = "../test-cluster" }
+
+[dev-dependencies]
+telemetry-subscribers = { path = "../telemetry-subscribers" }
+sui-macros = { path = "../sui-macros" }
+sui-simulator = { path = "../sui-simulator" }
+sui-protocol-config = { path = "../sui-protocol-config" }
+sui-move-build = { path = "../sui-move-build" }
+prometheus = "0.13"
