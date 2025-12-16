@@ -657,6 +657,11 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         &self.store
     }
 
+    // TODO: forking: merge this with the previous one
+    pub fn store_1_mut(&mut self) -> &mut S {
+        &mut self.store
+    }
+
     pub fn keystore(&self) -> &KeyStore {
         &self.keystore
     }
