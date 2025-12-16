@@ -24,7 +24,7 @@ use crate::indexers::consistent_store::start_consistent_store;
 use crate::indexers::indexer::{IndexerConfig, start_indexer};
 use crate::seeds::{InitialSeeds, Network, fetch_owned_objects};
 use crate::server::server::start_server;
-use crate::server::types::{AdvanceClockRequest, ApiResponse, ExecuteTxRequest, ForkingStatus};
+use crate::server::{AdvanceClockRequest, ApiResponse, ExecuteTxRequest, ForkingStatus};
 
 // Define the `GIT_REVISION` const
 bin_version::git_revision!();

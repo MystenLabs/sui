@@ -26,6 +26,7 @@ use crate::{context::Context, store::ForkingStore};
 use self::error::Error;
 use std::collections::BTreeMap;
 use sui_data_store::{ObjectKey, ObjectStore};
+use sui_package_resolver::PackageStore;
 
 mod data;
 mod error;
@@ -179,6 +180,14 @@ impl ObjectsApiServer for Objects {
                         );
                         let written_objects = BTreeMap::from([(object_id.clone(), object.clone())]);
                         data_store.update_objects(written_objects, vec![]);
+                        // if this is a package, we need to add it to our package cache
+                        if object.is_package() {
+                            let pkg_store = ctx.package_resolver().package_store();
+                            pkg_store
+                                .fetch(obj.object_id().expect("to get the object's id").into())
+                                .await
+                                .expect("Failed to add package to cache");
+                        }
                         Ok(obj)
                     } else {
                         Ok(object)

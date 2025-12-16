@@ -37,7 +37,7 @@ use crate::{
         indexer::{IndexerConfig, start_indexer},
     },
     rpc::start_rpc,
-    server::types::*,
+    server::*,
     store::ForkingStore,
 };
 
