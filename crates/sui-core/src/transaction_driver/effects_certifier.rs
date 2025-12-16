@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::BTreeMap,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -59,6 +59,9 @@ const MAX_WAIT_FOR_EFFECTS_RETRY_DELAY: Duration = Duration::from_secs(2);
 /// to another validator that has already acknowledged the effects.
 const GET_FULL_EFFECTS_FALLBACK_DELAY: Duration = Duration::from_millis(200);
 
+/// Result type for get_full_effects requests.
+/// The tuple contains (effects_digest, executed_data, fast_path) where fast_path
+/// boolean indicateswhether the transaction was executed via the fast path.
 type FullEffectsResult =
     Result<(TransactionEffectsDigest, Box<ExecutedData>, bool), TransactionRequestError>;
 
@@ -156,19 +159,17 @@ impl EffectsCertifier {
                     .expect("there should be at least 1 target");
                 current_target = name;
                 full_effects_start_time = Some(Instant::now());
-                let result = self
-                    .get_full_effects_with_fallback(
-                        authority_aggregator,
-                        client,
-                        current_target,
-                        tx_digest,
-                        tx_type,
-                        consensus_position,
-                        options,
-                        acked_validators_rx,
-                    )
-                    .await;
-                (result.0, result.1)
+                self.get_full_effects_with_fallback(
+                    authority_aggregator,
+                    client,
+                    current_target,
+                    tx_digest,
+                    tx_type,
+                    consensus_position,
+                    options,
+                    acked_validators_rx,
+                )
+                .await
             },
         );
         current_target = returned_target;
@@ -325,6 +326,11 @@ impl EffectsCertifier {
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
+        let mut pending_requests: FuturesUnordered<
+            BoxFuture<'_, (AuthorityName, FullEffectsResult)>,
+        > = FuturesUnordered::new();
+
+        // Add initial request to the pending set alongside fallbacks for uniform handling
         let initial_request = self.get_full_effects(
             initial_client,
             tx_digest,
@@ -332,26 +338,20 @@ impl EffectsCertifier {
             consensus_position,
             options,
         );
-        tokio::pin!(initial_request);
+        pending_requests.push(Box::pin(
+            async move { (initial_target, initial_request.await) },
+        ));
 
         let mut fallback_delay = tokio::time::interval(GET_FULL_EFFECTS_FALLBACK_DELAY);
-        fallback_delay.tick().await;
-
-        // Track validators we've already sent requests to
-        let mut requested_validators = HashSet::new();
-        requested_validators.insert(initial_target);
-
-        let mut fallback_futures: FuturesUnordered<
-            BoxFuture<'_, (AuthorityName, FullEffectsResult)>,
-        > = FuturesUnordered::new();
 
         loop {
             tokio::select! {
-                result = &mut initial_request => {
-                    return (result, initial_target);
-                }
-
-                Some((validator, result)) = fallback_futures.next(), if !fallback_futures.is_empty() => {
+                Some((validator, result)) = pending_requests.next() => {
+                    if validator == initial_target {
+                        // Initial request completed - always return its result (success or error)
+                        return (result, validator);
+                    }
+                    // Fallback request completed
                     if result.is_ok() {
                         return (result, validator);
                     }
@@ -362,32 +362,35 @@ impl EffectsCertifier {
                 _ = fallback_delay.tick() => {
                     // Drain all available acked validators and pick one we haven't tried
                     while let Ok(acked_validator) = acked_validators_rx.try_recv() {
-                        if !requested_validators.contains(&acked_validator) {
-                            requested_validators.insert(acked_validator);
-
-                            if let Some(client) = authority_aggregator.authority_clients.get(&acked_validator) {
-                                tracing::debug!(
-                                    ?acked_validator,
-                                    "Starting fallback get_full_effects request"
-                                );
-
-                                let client = client.clone();
-                                let fut = self.get_full_effects(
-                                    client,
-                                    tx_digest,
-                                    tx_type,
-                                    consensus_position,
-                                    options,
-                                );
-
-                                fallback_futures.push(Box::pin(async move {
-                                    (acked_validator, fut.await)
-                                }));
-
-                                // Only start one fallback per interval
-                                break;
-                            }
+                        // We send ack requests to all validators, so skip if the acked validator was the initial target
+                        if acked_validator == initial_target {
+                            continue;
                         }
+
+                        let Some(client) = authority_aggregator.authority_clients.get(&acked_validator) else {
+                            continue;
+                        };
+
+                        tracing::debug!(
+                            ?acked_validator,
+                            "Starting fallback get_full_effects request"
+                        );
+
+                        let client = client.clone();
+                        let fut = self.get_full_effects(
+                            client,
+                            tx_digest,
+                            tx_type,
+                            consensus_position,
+                            options,
+                        );
+
+                        pending_requests.push(Box::pin(async move {
+                            (acked_validator, fut.await)
+                        }));
+
+                        // Only start one fallback per interval
+                        break;
                     }
                 }
             }
