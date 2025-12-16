@@ -317,8 +317,8 @@ axum = { version = "0.8", default-features = false, features = [
   "ws",
 ] }
 axum-extra = { version = "0.10", features = ["typed-header"] }
-axum-server = { git = "https://github.com/bmwill/axum-server.git", rev = "f44323e271afdd1365fd0c8b0a4c0bbdf4956cb7", version = "0.6", default-features = false, features = [
-  "tls-rustls",
+axum-server = { version = "0.8", default-features = false, features = [
+  "tls-rustls-no-provider",
 ] }
 backoff = { version = "0.4.0", features = [
   "futures",
