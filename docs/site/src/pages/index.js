@@ -49,13 +49,13 @@ export default function Home() {
               </h2>
             </div>
           </div>
-          <div className="flex flex-row flex-wrap justify-center gap-2 max-w-[1066px] mx-auto pb-16 flex-grow items-center py-4">
+          <div className="flex flex-row flex-wrap justify-center gap-2 max-w-[1066px] mx-auto pb-16 py-4">
             <HomeCard title="Developers">
               <Link
                 className={`${styles.cardLink} plausible-event-name=homepage+start+button`}
                 to="./guides/developer/getting-started/sui-install"
               >
-                Getting Started
+                Getting started
               </Link>
               <Link className={styles.cardLink} to="./guides/developer/sui-101">
                 Sui Developer Basics
@@ -67,25 +67,25 @@ export default function Home() {
                 Move
               </Link>
             </HomeCard>
-            <HomeCard title="Validators and Node Operators">
+            <HomeCard title="Validators and Node operators">
               <Link
                 className={styles.cardLink}
                 to="./guides/operator/validator/validator-config"
               >
-                Validator Configuration
+                Validator configuration
               </Link>
               <Link
                 className={styles.cardLink}
                 to="./guides/operator/sui-full-node"
               >
-                Run a Sui Full Node
+                Run a Sui Full node
                 <span className="block bg-auto bg-[url(../static/img/index/right-arrow.svg)]"></span>
               </Link>
               <Link
                 className={styles.cardLink}
                 to="./guides/operator/bridge-node-configuration"
               >
-                Sui Bridge Node Configuration
+                Sui Bridge Node configuration
               </Link>
             </HomeCard>
             <HomeCard title="About Sui">
@@ -113,13 +113,13 @@ export default function Home() {
                 className={styles.cardLink}
                 to="https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/docs"
               >
-                Sui Framework
+                Sui framework (GitHub)
               </Link>
               <Link
                 className={styles.cardLink}
                 to="https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk"
               >
-                Rust SDK
+                Rust SDK (GitHub)
               </Link>
             </HomeCard>
             <HomeCard title="Resources" aux>
@@ -127,19 +127,19 @@ export default function Home() {
                 className={styles.cardLink}
                 to="https://sui.directory/?_project_type=api%2Cdeveloper-tools%2Cinfrastructure%2Csdk"
               >
-                Sui Ecosystem
+                Sui ecosystem directory
               </Link>
               <Link className={styles.cardLink} to="/references/awesome-sui">
                 Awesome Sui
               </Link>
               <Link className={styles.cardLink} to="https://blog.sui.io/">
-                Sui Blog
+                Sui blog
               </Link>
               <Link
                 className={styles.cardLink}
                 to="guides/developer/dev-cheat-sheet"
               >
-                Sui Dev Cheat Sheet
+                Sui dev cheat sheet
               </Link>
             </HomeCard>
             <HomeCardCTA>
@@ -157,7 +157,7 @@ export default function Home() {
                 >
                   <path
                     d="M6.01312 0.5L5.05102 1.45391L8.39164 4.80332L0 4.80332L0 6.19668L8.39164 6.19668L5.05102 9.54073L6.01312 10.5L11 5.5L6.01312 0.5Z"
-                    fill="#4DA2FF"
+                    fill="#298DFF"
                   />
                 </svg>
               </Link>
