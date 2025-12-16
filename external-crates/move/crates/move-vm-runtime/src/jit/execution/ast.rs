@@ -115,7 +115,6 @@ pub struct Module {
 }
 
 impl Drop for Module {
-    #![allow(unsafe_code)]
     fn drop(&mut self) {
         // We need to manually drop the arena-allocated functions to ensure their native
         // Arc fields are correctly dropped.
