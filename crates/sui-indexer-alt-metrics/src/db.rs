@@ -66,6 +66,27 @@ impl DbConnectionStatsCollector {
                     &["reason"],
                 ),
             ),
+            (
+                MetricType::COUNTER,
+                desc(
+                    name("connect_started"),
+                    "Number of operations that have attempted to get a connection",
+                ),
+            ),
+            (
+                MetricType::GAUGE,
+                desc(
+                    name("connect_pending"),
+                    "Number of operations enqueued for an available connection",
+                ),
+            ),
+            (
+                MetricType::COUNTER,
+                desc(
+                    name("connect_completed"),
+                    "Number of operations that have completed successfully or not",
+                ),
+            ),
         ];
 
         Self { db, desc }
@@ -109,6 +130,9 @@ impl Collector for DbConnectionStatsCollector {
                     ),
                 ],
             ),
+            counter(&self.desc[7].1, stats.get_started as f64),
+            gauge(&self.desc[8].1, stats.pending_gets() as f64),
+            counter(&self.desc[9].1, stats.completed_gets() as f64),
         ]
     }
 }
