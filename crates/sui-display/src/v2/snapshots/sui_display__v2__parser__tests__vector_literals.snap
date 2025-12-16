@@ -20,4 +20,4 @@ expression: "strands(\"{ vector[1u8, 2u8, 3u8, foo.bar, baz[42u64]] \\\n        
       42u128,
   ]
 | vector@195<u256> []
-}
+}@0

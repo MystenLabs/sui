@@ -10,4 +10,4 @@ expression: "strands(\"{ vector<address> \\\n             | vector<bool> \\\n   
 | vector@76<u64> []
 | vector@90<u128> []
 | vector@105<u256> []
-}
+}@0

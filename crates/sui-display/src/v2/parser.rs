@@ -44,7 +44,11 @@ pub enum Strand<'s> {
 /// transform is provided, it is applied to the result to convert it to a string.
 #[derive(PartialEq, Eq)]
 pub struct Expr<'s> {
+    /// Byte offset in the source string where the expression starts.
+    pub(crate) offset: usize,
+
     pub(crate) alternates: Vec<Chain<'s>>,
+
     pub(crate) transform: Option<Transform>,
 }
 
@@ -335,7 +339,11 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_expr<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Expr<'s>, FormatError> {
-        match_token! { self.lexer; Tok(_, T::LBrace, _, _) => self.lexer.next() };
+        let offset = match_token! { self.lexer; Tok(_, T::LBrace, off, _) => {
+            self.lexer.next();
+            off
+        }};
+
         let mut alternates = vec![self.parse_chain(meter)?];
         let mut transform = None;
 
@@ -364,6 +372,7 @@ impl<'s> Parser<'s> {
 
         meter.alloc()?;
         Ok(Expr {
+            offset,
             alternates,
             transform,
         })
@@ -1085,7 +1094,7 @@ impl fmt::Debug for Expr<'_> {
             write!(f, ": {transform:?}")?;
         }
 
-        write!(f, "}}")
+        write!(f, "}}@{}", self.offset)
     }
 }
 
@@ -1446,6 +1455,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![C {
                     root: None,
                     accessors: vec![A::Field(ident_str!("foo"))],
@@ -1463,6 +1473,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![C {
                     root: None,
                     accessors: vec![A::Field(ident_str!("foo"))],
@@ -1480,6 +1491,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![C {
                     root: None,
                     accessors: vec![A::Field(ident_str!("foo")), A::Field(ident_str!("bar"))],
@@ -1499,6 +1511,7 @@ mod tests {
             vec![
                 S::Text("foo ".into()),
                 S::Expr(E {
+                    offset: 4,
                     alternates: vec![C {
                         root: None,
                         accessors: vec![A::Field(ident_str!("bar"))],
@@ -1518,6 +1531,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![
                     C {
                         root: None,
@@ -1545,6 +1559,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![C {
                     root: None,
                     accessors: vec![
@@ -1572,6 +1587,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![
                     C {
                         root: None,
@@ -1614,6 +1630,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![
                     C {
                         root: Some(L::Bool(true)),
@@ -1663,6 +1680,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![
                     C {
                         root: Some(L::Vector(Box::new(Vector {
@@ -1746,6 +1764,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![
                     C {
                         root: Some(L::Struct(Box::new(Struct {

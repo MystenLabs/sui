@@ -15,4 +15,4 @@ expression: "strands(\"{ 0x1::string::String { length: 42u64, value: 'foo', data
       is_locked: true,
       amount: 100u32,
   }
-}
+}@0

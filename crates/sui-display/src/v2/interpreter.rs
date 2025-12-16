@@ -59,6 +59,7 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
         // to strings.
         if let [
             P::Strand::Expr(P::Expr {
+                offset,
                 alternates,
                 transform: Some(P::Transform::Json),
             }),
@@ -69,7 +70,9 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
             };
 
             let writer = JsonWriter::new(&self.used_output, self.max_output_size, self.max_depth);
-            return v.format_json(writer);
+            return v
+                .format_json(writer)
+                .map_err(|e| e.for_expr_at_offset(*offset));
         }
 
         let mut writer = StringWriter::new(&self.used_output, self.max_output_size);
@@ -80,6 +83,7 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
                     .map_err(|_| FormatError::TooMuchOutput)?,
 
                 P::Strand::Expr(P::Expr {
+                    offset,
                     alternates,
                     transform,
                 }) => {
@@ -87,7 +91,8 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
                         return Ok(serde_json::Value::Null);
                     };
 
-                    v.format(transform.unwrap_or_default(), &mut writer)?;
+                    v.format(transform.unwrap_or_default(), &mut writer)
+                        .map_err(|e| e.for_expr_at_offset(*offset))?;
                 }
             }
         }

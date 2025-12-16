@@ -84,6 +84,10 @@ pub enum FormatError {
     #[error("Invalid transform: {0}")]
     TransformInvalid(&'static str),
 
+    /// The above error augmented with the offset of the originating expression.
+    #[error("Invalid transform for expression at offset {offset}: {reason}")]
+    TransformInvalid_ { offset: usize, reason: &'static str },
+
     #[error("Unexpected end-of-string, expected {expect}")]
     UnexpectedEos { expect: ExpectedSet },
 
@@ -143,6 +147,16 @@ pub(crate) enum Match<T> {
 }
 
 impl FormatError {
+    /// Indicate that the error occurred while processing an expression at `offset`.
+    pub(crate) fn for_expr_at_offset(self, offset: usize) -> Self {
+        match self {
+            FormatError::TransformInvalid(reason) => {
+                FormatError::TransformInvalid_ { offset, reason }
+            }
+            error => error,
+        }
+    }
+
     // Indicate that `tried` was also tried at `offset`, in case the error is related to other
     // tokens that were tried at the same location.
     pub(crate) fn also_tried(self, offset: Option<usize>, tried: ExpectedSet) -> Self {
