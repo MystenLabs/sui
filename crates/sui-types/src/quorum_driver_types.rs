@@ -65,8 +65,6 @@ pub enum QuorumDriverError {
         overloaded_stake: StakeUnit,
         errors: GroupedErrors,
     },
-    #[error("Transaction is already finalized but with different user signatures")]
-    TxAlreadyFinalizedWithDifferentUserSignatures,
     #[error(
         "Transaction is not processed because {overload_stake} of validators are overloaded and asked client to retry after {retry_after_secs}."
     )]
@@ -75,6 +73,8 @@ pub enum QuorumDriverError {
         errors: GroupedErrors,
         retry_after_secs: u64,
     },
+    #[error("Transaction is already finalized but with different user signatures")]
+    TxAlreadyFinalizedWithDifferentUserSignatures,
 
     // Wrapped error from Transaction Driver.
     #[error("Transaction processing failed. Details: {details}")]
@@ -82,6 +82,26 @@ pub enum QuorumDriverError {
         category: ErrorCategory,
         details: String,
     },
+}
+
+impl QuorumDriverError {
+    pub fn is_retriable(&self) -> bool {
+        match self {
+            QuorumDriverError::QuorumDriverInternalError { .. } => false,
+            QuorumDriverError::InvalidUserSignature { .. } => false,
+            QuorumDriverError::ObjectsDoubleUsed { .. } => false,
+            QuorumDriverError::TimeoutBeforeFinality => true,
+            QuorumDriverError::TimeoutBeforeFinalityWithErrors { .. } => true,
+            QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts { .. } => true,
+            QuorumDriverError::NonRecoverableTransactionError { .. } => false,
+            QuorumDriverError::SystemOverload { .. } => true,
+            QuorumDriverError::SystemOverloadRetryAfter { .. } => true,
+            QuorumDriverError::TxAlreadyFinalizedWithDifferentUserSignatures => false,
+            QuorumDriverError::TransactionFailed { category, .. } => {
+                category.is_submission_retriable()
+            }
+        }
+    }
 }
 
 pub type GroupedErrors = Vec<(SuiError, StakeUnit, Vec<ConciseAuthorityPublicKeyBytes>)>;
