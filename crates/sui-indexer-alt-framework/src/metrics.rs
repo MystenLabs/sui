@@ -517,7 +517,7 @@ impl IndexerMetrics {
             ).unwrap(),
             collector_reader_lo: register_int_gauge_vec_with_registry!(
                 name("collector_reader_lo"),
-                "Reader lo watermark as observed by the collector",
+                "Reader low watermark as observed by the collector",
                 &["pipeline"],
                 registry,
             )

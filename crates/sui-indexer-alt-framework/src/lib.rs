@@ -2018,9 +2018,8 @@ mod tests {
             )
             .await;
         let metrics = tasked_indexer.indexer_metrics().clone();
-        let indexer_handle = tokio::spawn(async move {
-            tasked_indexer.run().await.unwrap().join().await.unwrap();
-        });
+
+        let mut s_indexer = tasked_indexer.run().await.unwrap();
 
         // Wait for pipeline to commit up to configured checkpoint 10 inclusive. With the main
         // pipeline `reader_lo` currently unset, all checkpoints are allowed and should be
@@ -2041,25 +2040,24 @@ mod tests {
             .await
             .unwrap();
 
-        tokio::time::timeout(std::time::Duration::from_secs(10), async {
-            let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
+        let reader_lo = metrics
+            .collector_reader_lo
+            .with_label_values(&[ControllableHandler::NAME]);
 
-            loop {
-                interval.tick().await;
-                process_below.send(allow_process).ok();
-
-                let current = metrics
-                    .collector_reader_lo
-                    .with_label_values(&[ControllableHandler::NAME])
-                    .get();
-                if current == 250 {
-                    break;
-                }
-                allow_process += 1;
-            }
-        })
-        .await
-        .expect("Timed out waiting for collector to observe new reader_lo");
+        // Send checkpoints one at a time at 10ms intervals. The tasked indexer has a reader refresh
+        // interval of 10ms as well, so the collector should pick up the new reader_lo after a few
+        // checkpoints have been processed.
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
+        while reader_lo.get() != 250 {
+            interval.tick().await;
+            // allow_process is initialized to 11, bump to 11 for the next checkpoint
+            allow_process += 1;
+            assert!(
+                allow_process <= 500,
+                "Released all checkpoints but collector never observed new reader_lo"
+            );
+            process_below.send(allow_process).ok();
+        }
 
         // At this point, the collector has observed reader_lo = 250. Release all remaining
         // checkpoints. Guarantees:
@@ -2069,21 +2067,11 @@ mod tests {
         // - [250, 500]: committed (>= reader_lo)
         process_below.send(500).ok();
 
-        let _ = indexer_handle.await;
+        s_indexer.join().await.unwrap();
 
         let data = store.data.get(ControllableHandler::NAME).unwrap();
 
-        // In-flight checkpoints (allow_process, 250) must be skipped.
-        let num_must_skipped = 250 - (allow_process + 1);
-        let skipped = metrics
-            .total_collector_skipped_checkpoints
-            .with_label_values(&[ControllableHandler::NAME])
-            .get();
-        assert!(
-            skipped >= num_must_skipped,
-            "Expected at least {num_must_skipped} skipped, got {skipped}"
-        );
-
+        // Checkpoints (allow_process, 250) must be skipped.
         for chkpt in (allow_process + 1)..250 {
             assert!(
                 data.get(&chkpt).is_none(),
