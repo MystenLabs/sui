@@ -148,7 +148,8 @@ pub struct Function {
     pub(crate) locals: ArenaVec<ArenaType>,
     pub(crate) return_: ArenaVec<ArenaType>,
     pub(crate) type_parameters: ArenaVec<AbilitySet>,
-    // NOTE: This field is manually dropped in Module::drop() to prevent Arc leaks
+    // NOTE: This field is manually dropped in Function::drop() to prevent Arc leaks
+    // Any value holding a `Function` needs to ensure it is correctly dropped.
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
     pub name: VirtualTableKey,

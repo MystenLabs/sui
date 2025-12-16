@@ -104,7 +104,7 @@ impl<T> ArenaVec<T> {
             .collect()
     }
 
-    pub fn drain(&mut self) -> std::vec::Drain<'_, T>  {
+    pub fn drain(&mut self) -> std::vec::Drain<'_, T> {
         self.0.drain(..)
     }
 }
