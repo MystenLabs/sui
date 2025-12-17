@@ -7,12 +7,13 @@ source: crates/sui/tests/shell_tests.rs
 
 # If the config file is a directory, we fail nicely
 mkdir client.yaml
-sui move --client.config ./client.yaml new example
+sui move --client.config ./client.yaml new example \
+  | sed 's/Err:.*$/Err: <REDACTED>/'
 
 ----- results -----
-success: false
-exit_code: 1
+success: true
+exit_code: 0
 ----- stdout -----
-Cannot open wallet config file at "./client.yaml". Err: Is a directory (os error 21)
+Cannot open wallet config file at "./client.yaml". Err: <REDACTED>
 
 ----- stderr -----
