@@ -1453,9 +1453,6 @@ impl AuthorityPerEpochStore {
         TxValidityCheckContext {
             config: &self.protocol_config,
             epoch: self.epoch(),
-            accumulator_object_init_shared_version: self
-                .epoch_start_configuration
-                .accumulator_root_obj_initial_shared_version(),
             chain_identifier: self.get_chain_identifier(),
         }
     }

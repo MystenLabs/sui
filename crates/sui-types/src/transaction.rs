@@ -6,6 +6,9 @@ use super::{SUI_BRIDGE_OBJECT_ID, base_types::*, error::*};
 use crate::accumulator_root::{AccumulatorObjId, AccumulatorValue};
 use crate::authenticator_state::ActiveJwk;
 use crate::balance::Balance;
+use crate::coin_reservation::{
+    CoinReservationResolverTrait, ParsedDigest, ParsedObjectRefWithdrawal,
+};
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
     AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, AuthorityStrongQuorumSignInfo,
@@ -744,7 +747,11 @@ impl CallArg {
         match self {
             CallArg::Pure(_) => vec![],
             CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
-                vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
+                if ParsedDigest::is_coin_reservation_digest(&object_ref.2) {
+                    vec![]
+                } else {
+                    vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)]
+                }
             }
             CallArg::Object(ObjectArg::SharedObject {
                 id,
@@ -788,6 +795,16 @@ impl CallArg {
                 );
             }
             CallArg::Object(o) => match o {
+                ObjectArg::ImmOrOwnedObject(obj_ref)
+                    if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) =>
+                {
+                    if !config.enable_coin_reservation_obj_refs() {
+                        return Err(UserInputError::Unsupported(
+                            "coin reservation backward compatibility layer is not enabled"
+                                .to_string(),
+                        ));
+                    }
+                }
                 ObjectArg::ImmOrOwnedObject(_) => (),
                 ObjectArg::SharedObject { mutability, .. } => match mutability {
                     SharedObjectMutability::Mutable | SharedObjectMutability::Immutable => (),
@@ -1673,6 +1690,23 @@ impl TransactionKind {
         }))
     }
 
+    pub fn get_coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> + '_ {
+        let TransactionKind::ProgrammableTransaction(pt) = &self else {
+            return Either::Left(iter::empty());
+        };
+        Either::Right(pt.inputs.iter().filter_map(|input| {
+            if let CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)) = input {
+                if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) {
+                    Some(*obj_ref)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }))
+    }
+
     pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             TransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
@@ -1918,6 +1952,11 @@ pub struct TransactionDataV1 {
 }
 
 impl TransactionData {
+    pub fn as_v1(&self) -> &TransactionDataV1 {
+        match self {
+            TransactionData::V1(v1) => v1,
+        }
+    }
     fn new_system_transaction(kind: TransactionKind) -> Self {
         // assert transaction kind if a system transaction
         assert!(kind.is_system_tx());
@@ -2375,11 +2414,16 @@ pub trait TransactionDataAPI {
     /// invalid reservations.
     fn process_funds_withdrawals_for_signing(
         &self,
+        chain_identifier: ChainIdentifier,
+        coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>>;
 
     /// Like `process_funds_withdrawals_for_signing`, but must only be called on a certified
     /// transaction, i.e. one that is known to be valid.
-    fn process_funds_withdrawals_for_execution(&self) -> BTreeMap<AccumulatorObjId, u64>;
+    fn process_funds_withdrawals_for_execution(
+        &self,
+        chain_identifier: ChainIdentifier,
+    ) -> BTreeMap<AccumulatorObjId, u64>;
 
     // A cheap way to quickly check if the transaction has funds withdraws.
     fn has_funds_withdrawals(&self) -> bool;
@@ -2387,7 +2431,12 @@ pub trait TransactionDataAPI {
     // Get all the funds withdrawals args in the transaction.
     fn get_funds_withdrawals(&self) -> Vec<FundsWithdrawalArg>;
 
-    fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult;
+    fn coin_reservation_obj_refs(
+        &self,
+        chain_identifier: ChainIdentifier,
+    ) -> Vec<ParsedObjectRefWithdrawal>;
+
+    fn validity_check(&self, context: &TxValidityCheckContext<'_>) -> SuiResult;
 
     fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult;
 
@@ -2514,8 +2563,15 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn process_funds_withdrawals_for_signing(
         &self,
+        chain_identifier: ChainIdentifier,
+        coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
         let mut withdraws = self.get_funds_withdrawals();
+
+        for withdraw in self.parsed_coin_reservations(chain_identifier) {
+            let withdrawal_arg = coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw)?;
+            withdraws.push(withdrawal_arg);
+        }
 
         withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
 
@@ -2548,8 +2604,12 @@ impl TransactionDataAPI for TransactionDataV1 {
         Ok(withdraw_map)
     }
 
-    fn process_funds_withdrawals_for_execution(&self) -> BTreeMap<AccumulatorObjId, u64> {
+    fn process_funds_withdrawals_for_execution(
+        &self,
+        chain_identifier: ChainIdentifier,
+    ) -> BTreeMap<AccumulatorObjId, u64> {
         let mut withdraws = self.get_funds_withdrawals();
+
         withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
 
         // Accumulate all withdraws per account.
@@ -2577,6 +2637,23 @@ impl TransactionDataAPI for TransactionDataV1 {
             *value = value.checked_add(reserved_amount).unwrap();
         }
 
+        // It is not necessarily possible to construct a FundsWithdrawalArg for coin reservations, because
+        // the accumulator object may not exist any more. This is okay, as the scheduler will simply
+        // cancel the transaction if there are no funds available.
+        for obj in self.coin_reservation_obj_refs() {
+            // unwrap safe because of signing time checks
+            let parsed = ParsedObjectRefWithdrawal::parse(&obj, chain_identifier).unwrap();
+            let value = withdraw_map
+                // new_unchecked is safe because we verify that this is a valid accumulator object id
+                // at signing time
+                // The underlying object may have been deleted by now - this is okay. We don't need type information
+                // here, we only need the accumulator object id.
+                .entry(AccumulatorObjId::new_unchecked(parsed.unmasked_object_id))
+                .or_default();
+            // overflow checked at signing time
+            *value = value.checked_add(parsed.reservation_amount()).unwrap();
+        }
+
         withdraw_map
     }
 
@@ -2591,6 +2668,9 @@ impl TransactionDataAPI for TransactionDataV1 {
                 }
             }
         }
+        if self.coin_reservation_obj_refs().next().is_some() {
+            return true;
+        }
         false
     }
 
@@ -2598,72 +2678,115 @@ impl TransactionDataAPI for TransactionDataV1 {
         self.kind.get_funds_withdrawals().cloned().collect()
     }
 
-    fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
-        if let TransactionExpiration::ValidDuring {
-            min_epoch,
-            max_epoch,
-            min_timestamp,
-            max_timestamp,
-            ..
-        } = self.expiration()
-        {
-            if min_timestamp.is_some() || max_timestamp.is_some() {
-                return Err(UserInputError::Unsupported(
-                    "Timestamp-based transaction expiration is not yet supported".to_string(),
-                ));
-            }
+    fn coin_reservation_obj_refs(
+        &self,
+        chain_identifier: ChainIdentifier,
+    ) -> Vec<ParsedObjectRefWithdrawal> {
+        self.coin_reservation_obj_refs()
+            .filter_map(|obj_ref| ParsedObjectRefWithdrawal::parse(&obj_ref, chain_identifier))
+            .collect()
+    }
 
-            match (min_epoch, max_epoch) {
-                (Some(min), Some(max)) => {
-                    if config.enable_multi_epoch_transaction_expiration() {
-                        if !(*max == *min || *max == min.saturating_add(1)) {
+    fn validity_check(&self, context: &TxValidityCheckContext<'_>) -> SuiResult {
+        let config = context.config;
+
+        // Checks to see if the transaction has expired
+        match self.expiration() {
+            TransactionExpiration::None => (), // always valid
+            TransactionExpiration::Epoch(max_epoch) => {
+                if context.epoch > *max_epoch {
+                    return Err(SuiErrorKind::TransactionExpired.into());
+                }
+            }
+            TransactionExpiration::ValidDuring {
+                min_epoch,
+                max_epoch,
+                min_timestamp,
+                max_timestamp,
+                chain,
+                nonce: _,
+            } => {
+                if min_timestamp.is_some() || max_timestamp.is_some() {
+                    return Err(UserInputError::Unsupported(
+                        "Timestamp-based transaction expiration is not yet supported".to_string(),
+                    )
+                    .into());
+                }
+
+                // TODO: these checks can be loosened in the case where the transaction is not stateless,
+                // i.e. contains AddressOwned inputs.
+                match (min_epoch, max_epoch) {
+                    (Some(min), Some(max)) => {
+                        if config.enable_multi_epoch_transaction_expiration() {
+                            if !(*max == *min || *max == min.saturating_add(1)) {
+                                return Err(UserInputError::Unsupported(
+                                    "max_epoch must be at most min_epoch + 1".to_string(),
+                                )
+                                .into());
+                            }
+                        } else if min != max {
                             return Err(UserInputError::Unsupported(
-                                "max_epoch must be at most min_epoch + 1".to_string(),
-                            ));
+                                "min_epoch must equal max_epoch".to_string(),
+                            )
+                            .into());
                         }
-                    } else if min != max {
+                    }
+                    _ => {
                         return Err(UserInputError::Unsupported(
-                            "min_epoch must equal max_epoch".to_string(),
-                        ));
+                            "Both min_epoch and max_epoch must be specified".to_string(),
+                        )
+                        .into());
                     }
                 }
-                _ => {
-                    return Err(UserInputError::Unsupported(
-                        "Both min_epoch and max_epoch must be specified".to_string(),
-                    ));
+
+                if *chain != context.chain_identifier {
+                    return Err(UserInputError::InvalidChainId {
+                        provided: format!("{:?}", chain),
+                        expected: format!("{:?}", context.chain_identifier),
+                    }
+                    .into());
+                }
+
+                if let Some(min) = min_epoch
+                    && context.epoch < *min
+                {
+                    return Err(SuiErrorKind::TransactionExpired.into());
+                }
+                if let Some(max) = max_epoch
+                    && context.epoch > *max
+                {
+                    return Err(SuiErrorKind::TransactionExpired.into());
                 }
             }
         }
 
         if self.has_funds_withdrawals() {
+            // TODO: this check is incorrect, we should only require this if there are zero owned
+            // inputs
             fp_ensure!(
                 !self.gas().is_empty() || config.enable_address_balance_gas_payments(),
-                UserInputError::MissingGasPayment
+                UserInputError::MissingGasPayment.into()
             );
+
             fp_ensure!(
                 config.enable_accumulators(),
                 UserInputError::Unsupported("Address balance withdraw is not enabled".to_string())
+                    .into()
             );
 
             // TODO(address-balances): Use a protocol config parameter for max_withdraws.
             let max_withdraws = 10;
+            let mut num_reservations = 0;
 
-            for (count, withdraw) in self.kind.get_funds_withdrawals().enumerate() {
-                fp_ensure!(
-                    count < max_withdraws,
-                    UserInputError::InvalidWithdrawReservation {
-                        error: format!(
-                            "Maximum number of balance withdraw reservations is {max_withdraws}"
-                        ),
-                    }
-                );
-
+            for withdraw in self.kind.get_funds_withdrawals() {
+                num_reservations += 1;
                 match withdraw.withdraw_from {
                     WithdrawFrom::Sender => (),
                     WithdrawFrom::Sponsor => {
                         return Err(UserInputError::InvalidWithdrawReservation {
                             error: "Explicit sponsor withdrawals are not yet supported".to_string(),
-                        });
+                        }
+                        .into());
                     }
                 }
 
@@ -2675,15 +2798,43 @@ impl TransactionDataAPI for TransactionDataV1 {
                                 error: "Balance withdraw reservation amount must be non-zero"
                                     .to_string(),
                             }
+                            .into()
                         );
                     }
                     Reservation::EntireBalance => {
                         return Err(UserInputError::InvalidWithdrawReservation {
                             error: "Reserving the entire balance is not supported".to_string(),
-                        });
+                        }
+                        .into());
                     }
                 };
             }
+
+            for parsed in self.parsed_coin_reservations(context.chain_identifier) {
+                num_reservations += 1;
+                // coin reservations are valid for the current and next epoch, just as transactions that
+                // specify a TransactionDuring are.
+                // TODO: this check can be skipped if the transaction contains any address owned inputs.
+                if parsed.epoch_id() != context.epoch && parsed.epoch_id() + 1 != context.epoch {
+                    return Err(SuiErrorKind::TransactionExpired.into());
+                }
+                if parsed.reservation_amount() == 0 {
+                    return Err(UserInputError::InvalidWithdrawReservation {
+                        error: "Balance withdraw reservation amount must be non-zero".to_string(),
+                    }
+                    .into());
+                }
+            }
+
+            fp_ensure!(
+                num_reservations <= max_withdraws,
+                UserInputError::InvalidWithdrawReservation {
+                    error: format!(
+                        "Maximum number of balance withdraw reservations is {max_withdraws}"
+                    ),
+                }
+                .into()
+            );
         }
 
         if config.enable_accumulators()
@@ -2694,18 +2845,22 @@ impl TransactionDataAPI for TransactionDataV1 {
                 TransactionExpiration::None => {
                     // To avoid changing error behavior unnecessarily, we flag this as a missing gas payment error
                     // instead of a missing expiration error.
-                    return Err(UserInputError::MissingGasPayment);
+                    return Err(UserInputError::MissingGasPayment.into());
                 }
                 TransactionExpiration::Epoch(_) => {
                     return Err(UserInputError::InvalidExpiration {
                         error: "Address balance gas payments require ValidDuring expiration"
                             .to_string(),
-                    });
+                    }
+                    .into());
                 }
                 TransactionExpiration::ValidDuring { .. } => {}
             }
         } else {
-            fp_ensure!(!self.gas().is_empty(), UserInputError::MissingGasPayment);
+            fp_ensure!(
+                !self.gas().is_empty(),
+                UserInputError::MissingGasPayment.into()
+            );
         }
 
         let gas_len = self.gas().len();
@@ -2723,7 +2878,20 @@ impl TransactionDataAPI for TransactionDataV1 {
                 limit: "maximum number of gas payment objects".to_string(),
                 value: config.max_gas_payment_objects().to_string()
             }
+            .into()
         );
+
+        for (_, _, gas_digest) in self.gas().iter().copied() {
+            fp_ensure!(
+                ParsedDigest::try_from(gas_digest).is_err(),
+                // This is not the most appropriate error, but we can't introduce a new one
+                // since the point here is to achieve backward compatibility.
+                UserInputError::GasObjectNotOwnedObject {
+                    owner: Owner::AddressOwner(self.sender)
+                }
+                .into()
+            );
+        }
 
         if !self.is_system_tx() {
             let cost_table = SuiCostTable::new(config, self.gas_data.price);
@@ -2734,6 +2902,7 @@ impl TransactionDataAPI for TransactionDataV1 {
                 UserInputError::GasPriceTooHigh {
                     max_gas_price: config.max_gas_price(),
                 }
+                .into()
             );
 
             fp_ensure!(
@@ -2742,6 +2911,7 @@ impl TransactionDataAPI for TransactionDataV1 {
                     gas_budget: self.gas_data().budget,
                     max_budget: cost_table.max_gas_budget,
                 }
+                .into()
             );
             fp_ensure!(
                 self.gas_data.budget >= cost_table.min_transaction_cost,
@@ -2749,10 +2919,12 @@ impl TransactionDataAPI for TransactionDataV1 {
                     gas_budget: self.gas_data.budget,
                     min_budget: cost_table.min_transaction_cost,
                 }
+                .into()
             );
         }
 
-        self.validity_check_no_gas_check(config)
+        self.validity_check_no_gas_check(config)?;
+        Ok(())
     }
 
     // Keep all the logic for validity here, we need this for dry run where the gas
@@ -2846,13 +3018,36 @@ impl TransactionDataV1 {
             None
         }
     }
+
+    fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> {
+        // TODO(address-balances): add gas coin obj refs
+        self.kind.get_coin_reservation_obj_refs()
+    }
+
+    fn parsed_coin_reservations(
+        &self,
+        chain_identifier: ChainIdentifier,
+    ) -> impl Iterator<Item = ParsedObjectRefWithdrawal> {
+        self.coin_reservation_obj_refs().map(move |obj_ref| {
+            ParsedObjectRefWithdrawal::parse(&obj_ref, chain_identifier).unwrap()
+        })
+    }
 }
 
 pub struct TxValidityCheckContext<'a> {
     pub config: &'a ProtocolConfig,
     pub epoch: EpochId,
-    pub accumulator_object_init_shared_version: Option<SequenceNumber>,
     pub chain_identifier: ChainIdentifier,
+}
+
+impl<'a> TxValidityCheckContext<'a> {
+    pub fn from_cfg_for_testing(config: &'a ProtocolConfig) -> Self {
+        Self {
+            config,
+            epoch: 0,
+            chain_identifier: ChainIdentifier::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -3093,45 +3288,6 @@ impl SenderSignedData {
             .into()
         );
 
-        // Checks to see if the transaction has expired
-        match tx_data.expiration() {
-            TransactionExpiration::None => {
-                // No expiration, always valid
-            }
-            TransactionExpiration::Epoch(exp_epoch) => {
-                if *exp_epoch < context.epoch {
-                    return Err(SuiErrorKind::TransactionExpired.into());
-                }
-            }
-            TransactionExpiration::ValidDuring {
-                min_epoch,
-                max_epoch,
-                chain,
-                ..
-            } => {
-                if *chain != context.chain_identifier {
-                    return Err(SuiErrorKind::UserInputError {
-                        error: UserInputError::InvalidChainId {
-                            provided: format!("{:?}", chain),
-                            expected: format!("{:?}", context.chain_identifier),
-                        },
-                    }
-                    .into());
-                }
-
-                if let Some(min) = min_epoch
-                    && context.epoch < *min
-                {
-                    return Err(SuiErrorKind::TransactionExpired.into());
-                }
-                if let Some(max) = max_epoch
-                    && context.epoch > *max
-                {
-                    return Err(SuiErrorKind::TransactionExpired.into());
-                }
-            }
-        }
-
         // Enforce overall transaction size limit.
         let tx_size = self.serialized_size()?;
         let max_tx_size_bytes = context.config.max_tx_size_bytes();
@@ -3148,9 +3304,7 @@ impl SenderSignedData {
             .into()
         );
 
-        tx_data
-            .validity_check(context.config)
-            .map_err(Into::<SuiError>::into)?;
+        tx_data.validity_check(context)?;
 
         Ok(tx_size)
     }

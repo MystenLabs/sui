@@ -352,7 +352,7 @@ impl ExecutionScheduler {
         for (cert, env) in &certs {
             let tx_withdraws = cert
                 .transaction_data()
-                .process_funds_withdrawals_for_execution();
+                .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier());
             assert!(!tx_withdraws.is_empty());
             let accumulator_version = env
                 .assigned_versions
@@ -720,7 +720,7 @@ impl ExecutionScheduler {
         }
         let address_funds_reservations: BTreeSet<_> = certificate
             .transaction_data()
-            .process_funds_withdrawals_for_execution()
+            .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier())
             .into_keys()
             .collect();
         // All withdraws will show up as accumulator events with integer values.

@@ -2374,21 +2374,33 @@ fn test_gas_payment_limit_check() {
     protocol_config.set_correct_gas_payment_limit_check_for_testing(false);
     protocol_config.set_max_gas_payment_objects_for_testing(1);
     assert!(
-        data.validity_check(&protocol_config)
-            .unwrap_err()
-            .to_string()
-            .contains("maximum number of gas payment objects")
+        data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(
+            &protocol_config
+        ))
+        .unwrap_err()
+        .to_string()
+        .contains("maximum number of gas payment objects")
     );
 
     // 1 < 2 is true
     protocol_config.set_correct_gas_payment_limit_check_for_testing(false);
     protocol_config.set_max_gas_payment_objects_for_testing(2);
-    assert!(data.validity_check(&protocol_config).is_ok());
+    assert!(
+        data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(
+            &protocol_config
+        ))
+        .is_ok()
+    );
 
     // 1 <= 1 is true
     protocol_config.set_correct_gas_payment_limit_check_for_testing(true);
     protocol_config.set_max_gas_payment_objects_for_testing(1);
-    assert!(data.validity_check(&protocol_config).is_ok());
+    assert!(
+        data.validity_check(&TxValidityCheckContext::from_cfg_for_testing(
+            &protocol_config
+        ))
+        .is_ok()
+    );
 }
 
 #[tokio::test]

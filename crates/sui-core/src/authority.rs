@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::accumulators::balance_read::AccountBalanceRead;
+use crate::accumulators::coin_reservations::CoinReservationResolver;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
@@ -919,6 +920,7 @@ pub struct AuthorityState {
     /// The database
     input_loader: TransactionInputLoader,
     execution_cache_trait_pointers: ExecutionCacheTraitPointers,
+    coin_reservation_resolver: Arc<CoinReservationResolver>,
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
@@ -1029,7 +1031,10 @@ impl AuthorityState {
             self.get_backing_package_store().as_ref(),
         )?;
 
-        let withdraws = tx_data.process_funds_withdrawals_for_signing()?;
+        let withdraws = tx_data.process_funds_withdrawals_for_signing(
+            self.chain_identifier,
+            self.coin_reservation_resolver.as_ref(),
+        )?;
 
         self.execution_cache_trait_pointers
             .child_object_resolver
@@ -2068,8 +2073,9 @@ impl AuthorityState {
 
         // TODO: We need to move this to a more appropriate place to avoid redundant checks.
         let tx_data = certificate.data().transaction_data();
-        if let Err(e) = tx_data.validity_check(epoch_store.protocol_config()) {
-            return ExecutionOutput::Fatal(e.into());
+
+        if let Err(e) = tx_data.validity_check(&epoch_store.tx_validity_check_context()) {
+            return ExecutionOutput::Fatal(e);
         }
 
         // The cost of partially re-auditing a transaction before execution is tolerated.
@@ -3671,6 +3677,10 @@ impl AuthorityState {
                 .expect("Failed to initialize fork recovery state")
         });
 
+        let coin_reservation_resolver = Arc::new(CoinReservationResolver::new(
+            execution_cache_trait_pointers.child_object_resolver.clone(),
+        ));
+
         let state = Arc::new(AuthorityState {
             name,
             secret,
@@ -3678,6 +3688,7 @@ impl AuthorityState {
             epoch_store: ArcSwap::new(epoch_store.clone()),
             input_loader,
             execution_cache_trait_pointers,
+            coin_reservation_resolver,
             indexes,
             rpc_index,
             subscription_handler: Arc::new(SubscriptionHandler::new(prometheus_registry)),
