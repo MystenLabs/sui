@@ -157,12 +157,11 @@ impl EffectsCertifier {
                 let (name, client) = retrier
                     .next_target()
                     .expect("there should be at least 1 target");
-                current_target = name;
                 full_effects_start_time = Some(Instant::now());
                 self.get_full_effects_with_fallback(
                     authority_aggregator,
                     client,
-                    current_target,
+                    name,
                     tx_digest,
                     tx_type,
                     consensus_position,
@@ -343,19 +342,13 @@ impl EffectsCertifier {
         ));
 
         let mut fallback_delay = tokio::time::interval(GET_FULL_EFFECTS_FALLBACK_DELAY);
+        fallback_delay.reset();
 
         loop {
             tokio::select! {
                 Some((validator, result)) = pending_requests.next() => {
-                    if validator == initial_target {
-                        // Initial request completed - always return its result (success or error)
-                        return (result, validator);
-                    }
-                    // Fallback request completed
-                    if result.is_ok() {
-                        return (result, validator);
-                    }
-                    tracing::debug!(?validator, "Fallback get_full_effects failed, continuing to wait");
+                    // Return as soon as any request (including fallback)completes - the caller handles retries for errors
+                    return (result, validator);
                 }
 
                 // After delay, try to start a fallback request to an acked validator
@@ -376,9 +369,8 @@ impl EffectsCertifier {
                             "Starting fallback get_full_effects request"
                         );
 
-                        let client = client.clone();
                         let fut = self.get_full_effects(
-                            client,
+                            client.clone(),
                             tx_digest,
                             tx_type,
                             consensus_position,
