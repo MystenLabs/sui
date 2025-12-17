@@ -28,7 +28,7 @@ use sui_types::{
     digests::TransactionDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{ExecutionError, SuiErrorKind, SuiResult},
-    execution_params::{BalanceWithdrawStatus, ExecutionOrEarlyError, get_early_execution_error},
+    execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
@@ -123,7 +123,7 @@ pub fn execute_transaction_to_effects(
         &input_objects,
         &config_certificate_deny_set,
         // TODO(address-balances): Support balance withdraw status for replay
-        &BalanceWithdrawStatus::MaybeSufficient,
+        &FundsWithdrawStatus::MaybeSufficient,
     );
     let execution_params = match early_execution_error {
         Some(error) => ExecutionOrEarlyError::Err(error),

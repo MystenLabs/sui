@@ -2,8 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::accumulators::balance_read::AccountBalanceRead;
 use crate::accumulators::coin_reservations::CoinReservationResolver;
+use crate::accumulators::funds_read::AccountFundsRead;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
@@ -14,7 +14,7 @@ use crate::execution_cache::TransactionCacheRead;
 use crate::execution_cache::writeback_cache::WritebackCache;
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::SchedulingSource;
-use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
+use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
 use crate::traffic_controller::TrafficController;
@@ -72,8 +72,8 @@ use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution::ExecutionTiming;
-use sui_types::execution_params::BalanceWithdrawStatus;
 use sui_types::execution_params::ExecutionOrEarlyError;
+use sui_types::execution_params::FundsWithdrawStatus;
 use sui_types::execution_params::get_early_execution_error;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
@@ -807,9 +807,9 @@ pub struct ExecutionEnv {
     pub expected_effects_digest: Option<TransactionEffectsDigest>,
     /// The source of the scheduling of the transaction.
     pub scheduling_source: SchedulingSource,
-    /// Status of the address balance withdraw scheduling of the transaction,
-    /// including both address and object balance withdraws.
-    pub balance_withdraw_status: BalanceWithdrawStatus,
+    /// Status of the address funds withdraw scheduling of the transaction,
+    /// including both address and object funds withdraws.
+    pub funds_withdraw_status: FundsWithdrawStatus,
     /// Transactions that must finish before this transaction can be executed.
     /// Used to schedule barrier transactions after non-exclusive writes.
     pub barrier_dependencies: Vec<TransactionDigest>,
@@ -821,7 +821,7 @@ impl Default for ExecutionEnv {
             assigned_versions: Default::default(),
             expected_effects_digest: None,
             scheduling_source: SchedulingSource::NonFastPath,
-            balance_withdraw_status: BalanceWithdrawStatus::MaybeSufficient,
+            funds_withdraw_status: FundsWithdrawStatus::MaybeSufficient,
             barrier_dependencies: Default::default(),
         }
     }
@@ -850,8 +850,8 @@ impl ExecutionEnv {
         self
     }
 
-    pub fn with_insufficient_balance(mut self) -> Self {
-        self.balance_withdraw_status = BalanceWithdrawStatus::Insufficient;
+    pub fn with_insufficient_funds(mut self) -> Self {
+        self.funds_withdraw_status = FundsWithdrawStatus::Insufficient;
         self
     }
 
@@ -1038,7 +1038,7 @@ impl AuthorityState {
 
         self.execution_cache_trait_pointers
             .child_object_resolver
-            .check_balances_available(&withdraws)?;
+            .check_amounts_available(&withdraws)?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
             Some(tx_digest),
@@ -2103,7 +2103,7 @@ impl AuthorityState {
             &tx_digest,
             &input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
-            &execution_env.balance_withdraw_status,
+            &execution_env.funds_withdraw_status,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2140,7 +2140,7 @@ impl AuthorityState {
 
         if !self
             .execution_scheduler
-            .should_commit_object_balance_withdraws(
+            .should_commit_object_funds_withdraws(
                 certificate,
                 &effects,
                 &execution_env,
@@ -2437,7 +2437,7 @@ impl AuthorityState {
             // first check if the balance is sufficient, similar to how we schedule withdraws.
             // For object balance withdraws, we need to handle the case where object balance is
             // insufficient in the post-execution.
-            &BalanceWithdrawStatus::MaybeSufficient,
+            &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2645,7 +2645,7 @@ impl AuthorityState {
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
             // TODO(address-balances): Mimic withdraw scheduling and pass the result.
-            &BalanceWithdrawStatus::MaybeSufficient,
+            &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -2890,7 +2890,7 @@ impl AuthorityState {
             &checked_input_objects,
             self.config.certificate_deny_config.certificate_deny_set(),
             // TODO(address-balances): Mimic withdraw scheduling and pass the result.
-            &BalanceWithdrawStatus::MaybeSufficient,
+            &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -4041,7 +4041,7 @@ impl AuthorityState {
             ckpt_seq,
             0,
         );
-        let balance_changes = builder.collect_accumulator_changes();
+        let balance_changes = builder.collect_funds_changes();
         let epoch_store = self.epoch_store_for_testing();
         let epoch = epoch_store.epoch();
         let accumulator_root_obj_initial_shared_version = epoch_store
@@ -4114,8 +4114,8 @@ impl AuthorityState {
         assert!(effects.status().is_ok());
 
         let next_accumulator_version = accumulator_version.next();
-        self.execution_scheduler.settle_balances(BalanceSettlement {
-            balance_changes,
+        self.execution_scheduler.settle_funds(FundsSettlement {
+            funds_changes: balance_changes,
             next_accumulator_version,
         });
     }

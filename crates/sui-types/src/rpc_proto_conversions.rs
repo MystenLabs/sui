@@ -1183,7 +1183,7 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                 ExecutionErrorKind::MoveRawValueTooBig
             }
             E::InvalidLinkage => ExecutionErrorKind::InvalidLinkage,
-            E::InsufficientBalanceForWithdraw => ExecutionErrorKind::InsufficientFundsForWithdraw,
+            E::InsufficientFundsForWithdraw => ExecutionErrorKind::InsufficientFundsForWithdraw,
             E::NonExclusiveWriteInputObjectModified { id } => {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified

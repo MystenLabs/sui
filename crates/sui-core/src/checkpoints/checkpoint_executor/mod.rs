@@ -879,11 +879,11 @@ impl CheckpointExecutor {
 
                         // Check if the expected effects indicate insufficient balance
                         if let &ExecutionStatus::Failure {
-                            error: ExecutionFailureStatus::InsufficientBalanceForWithdraw,
+                            error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
                             ..
                         } = effects.status()
                         {
-                            env = env.with_insufficient_balance();
+                            env = env.with_insufficient_funds();
                         }
 
                         Some((tx_digest, (txn.clone(), env)))
