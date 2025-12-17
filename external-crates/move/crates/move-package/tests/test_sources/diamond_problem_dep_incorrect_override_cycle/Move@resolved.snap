@@ -1,4 +1,0 @@
----
-source: crates/move-package/tests/test_runner.rs
----
-Failed to resolve dependencies for package 'Root': Failed to resolve dependencies for package 'A': Failed to resolve dependencies for package 'C': Failed to resolve dependencies for package 'D': Failed to resolve dependencies for package 'B': Found cycle between packages: C -> D -> B -> C
