@@ -377,6 +377,7 @@ where
         execution_scheduler_sender,
         consensus_adapter,
         authority.get_object_cache_reader().clone(),
+        authority.get_cache_writer().clone(),
         Arc::new(ArcSwap::default()),
         consensus_committee,
         metrics,

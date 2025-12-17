@@ -1127,16 +1127,24 @@ impl AuthorityState {
             None
         };
 
-        // Check and write locks, to signed transaction, into the database
-        // The call to self.set_transaction_lock checks the lock is not conflicting,
-        // and returns ConflictingTransaction error in case there is a lock on a different
-        // existing transaction.
-        self.get_cache_writer().acquire_transaction_locks(
-            epoch_store,
-            &owned_objects,
-            tx_digest,
-            signed_transaction.clone(),
-        )?;
+        if epoch_store.protocol_config().disable_fastpath() {
+            // When disable_fastpath is enabled, validate owned object versions without acquiring
+            // locks. Locking happens post-consensus in the consensus handler. Validation still
+            // runs to prevent spam transactions with invalid object versions.
+            self.get_cache_writer()
+                .validate_owned_object_versions(&owned_objects)?;
+        } else {
+            // Check and write locks, to signed transaction, into the database
+            // The call to self.set_transaction_lock checks the lock is not conflicting,
+            // and returns ConflictingTransaction error in case there is a lock on a different
+            // existing transaction.
+            self.get_cache_writer().acquire_transaction_locks(
+                epoch_store,
+                &owned_objects,
+                tx_digest,
+                signed_transaction.clone(),
+            )?;
+        }
 
         Ok(signed_transaction)
     }
@@ -1473,10 +1481,11 @@ impl AuthorityState {
 
         self.metrics.total_cert_attempts.inc();
 
-        if !transaction.is_consensus_tx() {
+        if !transaction.is_consensus_tx() && !epoch_store.protocol_config().disable_fastpath() {
             // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
+            // When disable_fastpath is enabled, all transactions go through consensus.
             self.execution_scheduler.enqueue(
                 vec![(
                     Schedulable::Transaction(transaction.clone()),
@@ -3103,17 +3112,14 @@ impl AuthorityState {
                         .map(|type_| ObjectType::Struct(type_.clone()))
                         .unwrap_or(ObjectType::Package);
 
-                    new_owners.push((
-                        (addr, *id),
-                        ObjectInfo {
-                            object_id: *id,
-                            version: oref.1,
-                            digest: oref.2,
-                            type_,
-                            owner,
-                            previous_transaction: *effects.transaction_digest(),
-                        },
-                    ));
+                    new_owners.push(((addr, *id), ObjectInfo {
+                        object_id: *id,
+                        version: oref.1,
+                        digest: oref.2,
+                        type_,
+                        owner,
+                        previous_transaction: *effects.transaction_digest(),
+                    }));
                 }
                 Owner::ObjectOwner(owner) => {
                     let new_object = written.get(id).unwrap_or_else(

@@ -682,6 +682,11 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     mysticeti_fastpath: bool,
 
+    // If true, disable fastpath execution. All transactions go through consensus.
+    // Owned object conflict detection happens post-consensus via lock acquisition.
+    #[serde(skip_serializing_if = "is_false")]
+    disable_fastpath: bool,
+
     // Makes the event's sending module version-aware.
     #[serde(skip_serializing_if = "is_false")]
     relocate_event_module: bool,
@@ -2218,6 +2223,10 @@ impl ProtocolConfig {
 
     pub fn consensus_smart_ancestor_selection(&self) -> bool {
         self.feature_flags.consensus_smart_ancestor_selection
+    }
+
+    pub fn disable_fastpath(&self) -> bool {
+        self.feature_flags.disable_fastpath
     }
 
     pub fn consensus_round_prober_probe_accepted_rounds(&self) -> bool {
@@ -4652,6 +4661,10 @@ impl ProtocolConfig {
 
     pub fn set_mysticeti_fastpath_for_testing(&mut self, val: bool) {
         self.feature_flags.mysticeti_fastpath = val;
+    }
+
+    pub fn set_disable_fastpath_for_testing(&mut self, val: bool) {
+        self.feature_flags.disable_fastpath = val;
     }
 
     pub fn set_accept_passkey_in_multisig_for_testing(&mut self, val: bool) {
