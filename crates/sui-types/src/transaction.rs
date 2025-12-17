@@ -1330,6 +1330,17 @@ impl ProgrammableTransaction {
         Ok(())
     }
 
+    pub fn coin_reservation_obj_refs(&self) -> impl Iterator<Item = ObjectRef> + '_ {
+        self.inputs.iter().filter_map(|arg| match arg {
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref))
+                if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) =>
+            {
+                Some(*obj_ref)
+            }
+            _ => None,
+        })
+    }
+
     pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         self.inputs.iter().filter_map(|arg| match arg {
             CallArg::Pure(_)
@@ -1694,17 +1705,7 @@ impl TransactionKind {
         let TransactionKind::ProgrammableTransaction(pt) = &self else {
             return Either::Left(iter::empty());
         };
-        Either::Right(pt.inputs.iter().filter_map(|input| {
-            if let CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref)) = input {
-                if ParsedDigest::is_coin_reservation_digest(&obj_ref.2) {
-                    Some(*obj_ref)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        }))
+        Either::Right(pt.coin_reservation_obj_refs())
     }
 
     pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
@@ -2526,6 +2527,7 @@ impl TransactionDataAPI for TransactionDataV1 {
             inputs.extend(
                 self.gas()
                     .iter()
+                    .filter(|obj_ref| !ParsedDigest::is_coin_reservation_digest(&obj_ref.2))
                     .map(|obj_ref| InputObjectKind::ImmOrOwnedMoveObject(*obj_ref)),
             );
         }
@@ -4136,7 +4138,7 @@ impl ObjectReadResult {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct InputObjects {
     objects: Vec<ObjectReadResult>,
 }
