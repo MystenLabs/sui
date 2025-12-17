@@ -3605,6 +3605,7 @@ async fn try_coin_reservation_tx(
         .await
 }
 
+#[sim_test]
 async fn address_balance_stress_test() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.enable_accumulators_for_testing();
