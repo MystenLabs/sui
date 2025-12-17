@@ -2719,8 +2719,10 @@ where
 }
 
 pub fn subst_tparams(subst: &TParamSubst, ty @ sp!(loc, t_): &Type) -> Type {
-    // TODO: This function should be rewritten to find the actual list of free type parameters in
-    // each recursive Arc so that we can clone any we do not need to explicitly rebuild.
+    if all_tparams(ty).is_empty() {
+        return ty.clone();
+    }
+
     match t_.inner() {
         TI::Unit | TI::UnresolvedError | TI::Anything | TI::Void => ty.clone(),
         TI::Var(_) => panic!("ICE tvar in subst_tparams"),
@@ -2815,6 +2817,7 @@ pub fn ready_tvars(subst: &Subst, ty @ sp!(loc, t_): &Type) -> Type {
 
 pub fn instantiate(context: &mut Context, ty: &Type) -> Type {
     let keep_tanything = false;
+    instantiation_warnings(context, ty);
     instantiate_impl(context, keep_tanything, ty)
 }
 
@@ -2846,21 +2849,39 @@ fn instantiate_type_args(
 }
 
 /// Instantiates a type, applying constraints to type arguments, and binding type arguments to
-/// type variables
-/// Always makes a deep copy.
+/// type variables. May return a copy if no instantiation is needed.
 /// keep_tanything is an annoying case to handle macro signature checking, were we want to delay
 /// instantiating Anything to a type varabile until _after_ the macro is expanded
-fn instantiate_impl(context: &mut Context, keep_tanything: bool, ty @ sp!(loc, t_): &Type) -> Type {
+fn instantiate_impl(context: &mut Context, keep_tanything: bool, ty: &Type) -> Type {
+    if let Some(new_ty) = instantiate_impl_opt(context, keep_tanything, ty) {
+        new_ty
+    } else {
+        ty.clone()
+    }
+}
+
+/// Instantiates a type, or returns None if no instantiation is needed.
+/// keep_tanything is an annoying case to handle macro signature checking, were we want to delay
+/// instantiating Anything to a type varabile until _after_ the macro is expanded
+fn instantiate_impl_opt(
+    context: &mut Context,
+    keep_tanything: bool,
+    ty @ sp!(loc, t_): &Type,
+) -> Option<Type> {
+    instantiation_warnings(context, ty);
     match t_.inner() {
-        TI::Unit | TI::UnresolvedError | TI::Void => ty.clone(),
-        TI::Anything if keep_tanything => ty.clone(),
-        TI::Anything => make_tvar(context, *loc),
+        TI::Unit | TI::UnresolvedError | TI::Void => None,
+        TI::Anything if keep_tanything => None,
+        TI::Anything => Some(make_tvar(context, *loc)),
         TI::Ref(mut_, inner) => {
-            context.add_base_type_constraint(*loc, "Invalid reference type", inner.clone());
-            let ty_ = TI::Ref(*mut_, instantiate_impl(context, keep_tanything, inner)).into();
-            sp(*loc, ty_)
+            if let Some(new_inner) = instantiate_impl_opt(context, keep_tanything, inner) {
+                let ty_ = TI::Ref(*mut_, new_inner).into();
+                Some(sp(*loc, ty_))
+            } else {
+                None
+            }
         }
-        TI::Apply(abilities_opt, n, ty_args) => {
+        TI::Apply(abilities_opt, n, ty_args) if !ty_args.is_empty() => {
             let ty_ = instantiate_apply_impl(
                 context,
                 keep_tanything,
@@ -2869,25 +2890,67 @@ fn instantiate_impl(context: &mut Context, keep_tanything: bool, ty @ sp!(loc, t
                 *n,
                 ty_args.clone(),
             );
-            sp(*loc, ty_)
+            Some(sp(*loc, ty_))
         }
+        TI::Apply(_, _, _) => None,
         TI::Fun(args, result) => {
-            let ty_ = TI::Fun(
-                args.iter()
-                    .map(|t| instantiate_impl(context, keep_tanything, t))
-                    .collect(),
-                instantiate_impl(context, keep_tanything, result),
-            )
-            .into();
-            sp(*loc, ty_)
+            // Instantiate arguments and result
+            let new_args = args
+                .iter()
+                .map(|t| instantiate_impl_opt(context, keep_tanything, t))
+                .collect::<Vec<_>>();
+            let new_result = instantiate_impl_opt(context, keep_tanything, result);
+
+            // If nothing changed, return None
+            if new_args.iter().all(|t| t.is_none()) && new_result.is_none() {
+                return None;
+            }
+
+            // Otherwise, build new function type
+            let args: Vec<Type> = new_args
+                .into_iter()
+                .zip(args.iter())
+                .map(|(new_t_opt, old_t)| new_t_opt.unwrap_or_else(|| old_t.clone()))
+                .collect();
+            let result = new_result.unwrap_or_else(|| result.clone());
+            let ty_ = TI::Fun(args, result).into();
+            Some(sp(*loc, ty_))
         }
-        TI::Param(_) => ty.clone(),
+        TI::Param(_) => None,
         // instantiating a var really shouldn't happen... but it does because of macro expansion
         // We expand macros before type checking, but after the arguments to the macro are type
         // checked (otherwise we couldn't properly do method syntax macros). As a result, we are
         // substituting type variables into the macro body, and might hit one while expanding a
         // type in the macro where a type parameter's argument had a type variable.
-        TI::Var(_) => ty.clone(),
+        TI::Var(_) => None,
+    }
+}
+
+fn instantiation_warnings(context: &mut Context, ty: &Type) {
+    match &ty.value.inner() {
+        TI::Apply(_, n, ty_args) => {
+            match n {
+                sp!(_, N::TypeName_::Builtin(_)) => (),
+                sp!(_, N::TypeName_::Multiple(_)) => (),
+                sp!(_, N::TypeName_::ModuleType(m, n)) => {
+                    context.emit_warning_if_deprecated(m, n.0, None);
+                }
+            }
+            for ty_arg in ty_args {
+                instantiation_warnings(context, ty_arg);
+            }
+        }
+        TI::Ref(_, inner) => {
+            context.add_base_type_constraint(ty.loc, "Invalid reference type", inner.clone());
+            instantiation_warnings(context, inner);
+        }
+        TI::Fun(args, result) => {
+            for arg in args {
+                instantiation_warnings(context, arg);
+            }
+            instantiation_warnings(context, result);
+        }
+        _ => (),
     }
 }
 

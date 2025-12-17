@@ -113,13 +113,8 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
             TI::Apply(Some(abilities), name @ sp!(_, TypeName_::Builtin(_)), tys) => {
                 let (new_tys, tys_changed) = types_recur(context, tys);
                 if tys_changed {
-                    (
-                        sp(
-                            ty.loc,
-                            TI::Apply(Some(abilities.clone()), *name, new_tys).into(),
-                        ),
-                        true,
-                    )
+                    let new_ty = TI::Apply(Some(abilities.clone()), *name, new_tys);
+                    (sp(ty.loc, new_ty.into()), true)
                 } else {
                     (ty.clone(), false)
                 }
