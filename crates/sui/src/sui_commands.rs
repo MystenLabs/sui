@@ -173,11 +173,18 @@ pub struct SuiEnvConfig {
     /// The Sui environment to use. This must be present in the current config file.
     #[clap(long = "client.env")]
     env: Option<String>,
+    /// Create a new sui config without prompting if none exists
+    #[clap(short = 'y', long = "yes")]
+    accept_defaults: bool,
 }
 
 impl SuiEnvConfig {
     pub fn new(config: Option<PathBuf>, env: Option<String>) -> Self {
-        Self { config, env }
+        Self {
+            config,
+            env,
+            accept_defaults: false,
+        }
     }
 }
 
@@ -328,22 +335,18 @@ pub enum SuiCommand {
         /// Return command outputs in json format.
         #[clap(long, global = true)]
         json: bool,
-        #[clap(short = 'y', long = "yes")]
-        accept_defaults: bool,
     },
     /// A tool for validators and validator candidates.
     #[clap(name = "validator")]
     Validator {
         /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
-        #[clap(long = "client.config")]
-        config: Option<PathBuf>,
+        #[clap(flatten)]
+        config: SuiEnvConfig,
         #[clap(subcommand)]
         cmd: Option<SuiValidatorCommand>,
         /// Return command outputs in json format.
         #[clap(long, global = true)]
         json: bool,
-        #[clap(short = 'y', long = "yes")]
-        accept_defaults: bool,
     },
 
     /// Tool to build and test Move applications.
@@ -496,21 +499,10 @@ impl SuiCommand {
                 cmd.execute(&mut keystore).await?.print(!json);
                 Ok(())
             }
-            SuiCommand::Client {
-                config,
-                cmd,
-                json,
-                accept_defaults,
-            } => {
-                let config_path = config
-                    .config
-                    .unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config_path, accept_defaults).await?;
+            SuiCommand::Client { config, cmd, json } => {
                 if let Some(cmd) = cmd {
-                    let mut context = WalletContext::new(&config_path)?;
-                    if let Some(env_override) = config.env {
-                        context = context.with_env_override(env_override);
-                    }
+                    let mut context = get_wallet_context(&config).await?;
+
                     if let Ok(client) = context.get_client().await
                         && let Err(e) = client.check_api_version()
                     {
@@ -525,15 +517,8 @@ impl SuiCommand {
                 }
                 Ok(())
             }
-            SuiCommand::Validator {
-                config,
-                cmd,
-                json,
-                accept_defaults,
-            } => {
-                let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config_path, accept_defaults).await?;
-                let mut context = WalletContext::new(&config_path)?;
+            SuiCommand::Validator { config, cmd, json } => {
+                let mut context = get_wallet_context(&config).await?;
                 if let Some(cmd) = cmd {
                     if let Ok(client) = context.get_client().await
                         && let Err(e) = client.check_api_version()
@@ -556,6 +541,7 @@ impl SuiCommand {
                 config: client_config,
             } => {
                 let context = get_wallet_context(&client_config).await?;
+
                 match cmd {
                     sui_move::Command::Summary(mut s) if s.package_id.is_some() => {
                         let (_, client) = get_chain_id_and_client(
@@ -765,11 +751,7 @@ impl SuiCommand {
                 config,
                 replay_config,
             } => {
-                let config_path = config
-                    .config
-                    .unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config_path, /* accept_defaults */ false).await?;
-                let mut context = WalletContext::new(&config_path)?;
+                let mut context = get_wallet_context(&config).await?;
                 if let Some(env_override) = config.env {
                     context = context.with_env_override(env_override);
                 }
@@ -1516,127 +1498,81 @@ async fn genesis(
     Ok(())
 }
 
+/// If `wallet_conf_file` (or the default config file if None) doesn't exist, prompt the user and
+/// then create it (along with a new keystore file in the same directory). The prompt is skipped if
+/// `accept_defaults` is true.
 async fn prompt_if_no_config(
-    wallet_conf_path: &Path,
+    wallet_conf_file: &Path,
     accept_defaults: bool,
 ) -> Result<(), anyhow::Error> {
-    // Prompt user for connect to devnet fullnode if config does not exist.
-    if !wallet_conf_path.exists() {
-        let env = match std::env::var_os("SUI_CONFIG_WITH_RPC_URL") {
-            Some(v) => Some(SuiEnv {
-                alias: "custom".to_string(),
-                rpc: v.into_string().unwrap(),
-                ws: None,
-                basic_auth: None,
-                chain_id: None,
-            }),
-            None => {
-                if accept_defaults {
-                    print!(
-                        "Creating config file [{:?}] with default (devnet) Full node server and ed25519 key scheme.",
-                        wallet_conf_path
-                    );
-                } else {
-                    print!(
-                        "Config file [{:?}] doesn't exist, do you want to connect to a Sui Full node server [y/N]?",
-                        wallet_conf_path
-                    );
-                }
-                if accept_defaults
-                    || matches!(read_line(), Ok(line) if line.trim().to_lowercase() == "y")
-                {
-                    let url = if accept_defaults {
-                        String::new()
-                    } else {
-                        print!(
-                            "Sui Full node server URL (Defaults to Sui Testnet if not specified) : "
-                        );
-                        read_line()?
-                    };
-                    Some(if url.trim().is_empty() {
-                        SuiEnv::testnet()
-                    } else {
-                        print!("Environment alias for [{url}] : ");
-                        let alias = read_line()?;
-                        let alias = if alias.trim().is_empty() {
-                            "custom".to_string()
-                        } else {
-                            alias
-                        };
-                        SuiEnv {
-                            alias,
-                            rpc: url,
-                            ws: None,
-                            basic_auth: None,
-                            chain_id: None,
-                        }
-                    })
-                } else {
-                    None
-                }
-            }
-        };
+    if wallet_conf_file.exists() {
+        return Ok(());
+    }
 
-        if let Some(env) = env {
-            let keystore_path = match wallet_conf_path.parent() {
-                // Wallet config was created in the current directory as a relative path.
-                Some(parent) if parent.as_os_str().is_empty() => {
-                    std::env::current_dir().context("Couldn't find current directory")?
-                }
-
-                // Wallet config was given a path with some parent (could be relative or absolute).
-                Some(parent) => parent
-                    .canonicalize()
-                    .context("Could not find sui config directory")?,
-
-                // No parent component and the wallet config was the empty string, use the default
-                // config.
-                None if wallet_conf_path.as_os_str().is_empty() => sui_config_dir()?,
-
-                // Wallet config was requested at the root of the file system ...for some reason.
-                None => wallet_conf_path.to_owned(),
-            }
-            .join(SUI_KEYSTORE_FILENAME);
-
-            let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(&keystore_path)?);
-            let key_scheme = if accept_defaults {
-                SignatureScheme::ED25519
-            } else {
-                println!(
-                    "Select key scheme to generate keypair (0 for ed25519, 1 for secp256k1, 2: for secp256r1):"
-                );
-                match SignatureScheme::from_flag(read_line()?.trim()) {
-                    Ok(s) => s,
-                    Err(e) => return Err(anyhow!("{e}")),
-                }
-            };
-
-            let (new_address, key_pair, scheme, phrase) = generate_new_key(key_scheme, None, None)?;
-            keystore.import(None, key_pair).await?;
-            let alias = keystore.get_alias(&new_address)?;
-            println!(
-                "Generated new keypair and alias for address with scheme {:?} [{alias}: {new_address}]",
-                scheme.to_string()
-            );
-            println!("Secret Recovery Phrase : [{phrase}]");
-            let alias = env.alias.clone();
-            SuiClientConfig {
-                keystore,
-                external_keys: None,
-                envs: vec![env],
-                active_address: Some(new_address),
-                active_env: Some(alias),
-            }
-            .persisted(wallet_conf_path)
-            .save()?;
-
-            let context = WalletContext::new(wallet_conf_path)?;
-            let _ = context.cache_chain_id(&context.get_client().await?).await?;
+    // prompt user
+    if !accept_defaults {
+        println!(
+            "No sui config found in `{}`, create one [Y/n]?",
+            wallet_conf_file.to_string_lossy()
+        );
+        let response = read_line()?.trim().to_lowercase();
+        if !response.is_empty() && response != "y" {
+            bail!("No config found, aborting");
         }
     }
+
+    // make keystore
+    let config_dir = wallet_conf_file
+        .parent()
+        .ok_or_else(|| anyhow!("Error: {wallet_conf_file:?} is an invalid file path"))?;
+
+    let (keystore, address) =
+        create_default_keystore(&config_dir.join(SUI_KEYSTORE_FILENAME)).await?;
+
+    // make config file
+    let default_env = SuiEnv::testnet();
+    let default_env_name = default_env.alias.clone();
+    SuiClientConfig {
+        keystore,
+        envs: vec![
+            default_env,
+            SuiEnv::mainnet(),
+            SuiEnv::devnet(),
+            SuiEnv::localnet(),
+        ],
+        external_keys: None,
+        active_address: Some(address),
+        active_env: Some(default_env_name.clone()),
+    }
+    .persisted(wallet_conf_file)
+    .save()?;
+    println!("Created {wallet_conf_file:?}");
+    println!("Set active environment to {default_env_name}");
+
     Ok(())
 }
 
+/// Create a keystore with a single key at `keystore_file`; returns the created keystore and
+/// address
+async fn create_default_keystore(keystore_file: &Path) -> anyhow::Result<(Keystore, SuiAddress)> {
+    let mut keystore = Keystore::from(FileBasedKeystore::load_or_create(
+        &keystore_file.to_path_buf(),
+    )?);
+    let key_scheme = SignatureScheme::ED25519;
+    let (new_address, key_pair, scheme, phrase) = generate_new_key(key_scheme, None, None)?;
+    keystore.import(None, key_pair).await?;
+    let alias = keystore.get_alias(&new_address)?;
+
+    println!(
+        "Generated new keypair and alias for address with scheme {:?} [{alias}: {new_address}]",
+        scheme.to_string()
+    );
+    println!("  secret recovery phrase : [{phrase}]");
+
+    Ok((keystore, new_address))
+}
+
+/// Read a single line from stdin and return it
 fn read_line() -> Result<String, anyhow::Error> {
     let mut s = String::new();
     let _ = stdout().flush();
@@ -1644,14 +1580,15 @@ fn read_line() -> Result<String, anyhow::Error> {
     Ok(s.trim_end().to_string())
 }
 
-/// Get the currently configured wallet context.
+/// Get the currently configured wallet context, creating one if it doesn't exist
 async fn get_wallet_context(client_config: &SuiEnvConfig) -> Result<WalletContext, anyhow::Error> {
-    let config = client_config
+    let wallet_conf_file = client_config
         .config
         .clone()
         .unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-    prompt_if_no_config(&config, false).await?;
-    let mut context = WalletContext::new(&config)?;
+
+    prompt_if_no_config(&wallet_conf_file, client_config.accept_defaults).await?;
+    let mut context = WalletContext::new(&wallet_conf_file)?;
 
     if let Some(env_override) = &client_config.env {
         context = context.with_env_override(env_override.clone());
