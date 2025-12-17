@@ -208,9 +208,11 @@ impl PackagePath {
         _mtx: &PackageSystemLock,
     ) -> FileResult<Option<(FileHandle, ParsedManifest)>> {
         let path = self.manifest_path().to_path_buf();
-        try_load_legacy_manifest::<F>(self, default_env, is_root).map_err(|err| FileError::LegacyError {
-            file: path,
-            source: err,
+        try_load_legacy_manifest::<F>(self, default_env, is_root).map_err(|err| {
+            FileError::LegacyError {
+                file: path,
+                source: err,
+            }
         })
     }
 
