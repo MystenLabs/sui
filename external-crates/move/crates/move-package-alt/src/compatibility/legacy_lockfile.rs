@@ -3,14 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    logging::user_warning,
     package::EnvironmentName,
     schema::{MoveHeader, OriginalID, ParsedLockfile, PublishAddresses, PublishedID, RenderToml},
 };
 use anyhow::{Result, anyhow};
-use colored::Colorize;
 use std::{collections::BTreeMap, path::Path};
 use toml::Value as TV;
-use tracing::warn;
 
 use super::{legacy::LegacyEnvironment, parse_address_literal};
 
@@ -55,9 +54,8 @@ pub fn load_legacy_lockfile(
     // just mushed the lockfile fields in with the new lockfile fields. We detect this case and
     // complain loudly (and preserve the modern pins)
     if let Some(pinned) = lockfile.get("pinned") {
-        warn!(
-            "{}: Detected a modern lockfile at {lockfile_path:?} that was modified by an older CLI; some information may be lost. Be sure that all contributors are using the latest CLI.",
-            "WARNING".bold().yellow()
+        user_warning!(
+            "Detected a modern lockfile at {lockfile_path:?} that was modified by an older CLI; some information may be lost. Be sure that all contributors are using the latest CLI.",
         );
 
         let lockfile = ParsedLockfile {

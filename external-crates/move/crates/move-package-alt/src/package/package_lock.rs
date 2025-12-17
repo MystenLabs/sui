@@ -6,6 +6,7 @@ use thiserror::Error;
 use tracing::{debug, error};
 
 use crate::git::get_cache_path;
+use crate::logging::user_error;
 
 #[derive(Debug, Error)]
 pub enum LockError {
@@ -77,7 +78,7 @@ impl PackageSystemLock {
 impl Drop for PackageSystemLock {
     fn drop(&mut self) {
         if let Err(err) = fs4::fs_std::FileExt::unlock(&self.file) {
-            error!(
+            user_error!(
                 "Failed to release filesystem lock at {:?}: {err:?}",
                 self.file
             );

@@ -286,3 +286,4 @@ summary_pkg
   "summary_pkg": "0x0000000000000000000000000000000000000000000000000000000000c0ffee"
 }
 ----- stderr -----
+[NOTE] Dependencies on Sui, MoveStdlib, Bridge, DeepBook, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from `Move.toml`.
