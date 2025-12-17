@@ -89,10 +89,11 @@ impl<'s> Format<'s> {
     /// support for dynamically fetching additional objects from `store` as needed.
     ///
     /// This operation requires all field names to evaluate successfully to unique strings, and for
-    /// the overall output to be bounded by `max_output_size`, but otherwise supports partial
-    /// failures (if one of the field values fails to parse or evaluate).
+    /// the overall output to be bounded by `max_depth` and `max_output_size`, but otherwise
+    /// supports partial failures (if one of the field values fails to parse or evaluate).
     pub async fn display<S: Store<'s>>(
         &'s self,
+        max_depth: usize,
         max_output_size: usize,
         bytes: &'s [u8],
         layout: &'s MoveTypeLayout,
@@ -100,7 +101,7 @@ impl<'s> Format<'s> {
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
         // Create the interpreter and root slice
         let root = Slice { layout, bytes };
-        let interpreter = Arc::new(Interpreter::new(root, store, max_output_size));
+        let interpreter = Arc::new(Interpreter::new(root, store, max_depth, max_output_size));
         let mut output = IndexMap::new();
 
         // You think you want to factor a helper out to do the evaluation and error handling, but
@@ -197,6 +198,7 @@ mod tests {
         limits: Limits,
         bytes: &'b [u8],
         layout: &'l MoveTypeLayout,
+        max_depth: usize,
         max_output_size: usize,
         fields: impl IntoIterator<Item = (&str, &str)>,
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
@@ -211,7 +213,7 @@ mod tests {
         };
 
         Format::parse(limits, &display)?
-            .display(max_output_size, bytes, layout, store)
+            .display(max_depth, max_output_size, bytes, layout, store)
             .await
     }
 
@@ -270,6 +272,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &struct_("0x1::m::S", fields),
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -330,6 +333,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &struct_("0x1::m::S", fields),
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -387,6 +391,7 @@ mod tests {
                 Limits::default(),
                 &pending,
                 &layout,
+                usize::MAX,
                 ONE_MB,
                 formats,
             )
@@ -401,6 +406,7 @@ mod tests {
                 Limits::default(),
                 &active,
                 &layout,
+                usize::MAX,
                 ONE_MB,
                 formats,
             )
@@ -415,6 +421,7 @@ mod tests {
                 Limits::default(),
                 &complete,
                 &layout,
+                usize::MAX,
                 ONE_MB,
                 formats,
             )
@@ -515,6 +522,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &struct_("0x1::m::S", fields),
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -558,6 +566,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -604,6 +613,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &struct_("0x1::m::S", fields),
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -654,6 +664,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -693,6 +704,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -744,9 +756,17 @@ mod tests {
             ("missing", "{parent.id->['missing']}"),
         ];
 
-        let output = format(&store, Limits::default(), &bytes, &layout, ONE_MB, formats)
-            .await
-            .unwrap();
+        let output = format(
+            &store,
+            Limits::default(),
+            &bytes,
+            &layout,
+            usize::MAX,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
 
         assert_debug_snapshot!(output, @r###"
         {
@@ -817,7 +837,7 @@ mod tests {
             ..Limits::default()
         };
 
-        let output = format(&store, limits, &bytes, &layout, ONE_MB, formats)
+        let output = format(&store, limits, &bytes, &layout, usize::MAX, ONE_MB, formats)
             .await
             .unwrap();
 
@@ -891,7 +911,7 @@ mod tests {
             ..Limits::default()
         };
 
-        let output = format(&store, limits, &bytes, &layout, ONE_MB, formats)
+        let output = format(&store, limits, &bytes, &layout, usize::MAX, ONE_MB, formats)
             .await
             .unwrap();
 
@@ -969,6 +989,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1014,6 +1035,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1098,6 +1120,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1170,6 +1193,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1226,6 +1250,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1335,6 +1360,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1406,6 +1432,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1467,6 +1494,185 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_json() {
+        let bytes = bcs::to_bytes(&(
+            12u8,
+            1234u16,
+            12345678u32,
+            123456781234567890u64,
+            "hello",
+            vec![1u8, 2, 3],
+            None::<u8>,
+            Some(vec![4u32, 5u32, 6u32]),
+            (1u8, 5678u16),
+            (9u32, 10u64),
+        ))
+        .unwrap();
+
+        let layout = struct_(
+            "0x1::m::S",
+            vec![
+                ("n8", T::U8),
+                ("n16", T::U16),
+                ("n32", T::U32),
+                ("n64", T::U64),
+                ("str", T::Struct(Box::new(move_utf8_str_layout()))),
+                ("bytes", vector_(T::U8)),
+                (
+                    "none",
+                    struct_("0x1::option::Option<u8>", vec![("vec", vector_(T::U8))]),
+                ),
+                (
+                    "some",
+                    struct_(
+                        "0x1::option::Option<vector<u32>>",
+                        vec![("vec", vector_(vector_(T::U32)))],
+                    ),
+                ),
+                (
+                    "variant",
+                    enum_(
+                        "0x1::m::E",
+                        vec![("A", vec![("x", T::U8)]), ("B", vec![("y", T::U16)])],
+                    ),
+                ),
+                (
+                    "nested",
+                    struct_("0x1::m::N", vec![("a", T::U32), ("b", T::U64)]),
+                ),
+            ],
+        );
+
+        let formats = [
+            ("s8", "{n8:json}"),
+            ("l8", "{34u8:json}"),
+            ("s16", "{n16:json}"),
+            ("l16", "{5678u16:json}"),
+            ("s32", "{n32:json}"),
+            ("l32", "{87654321u32:json}"),
+            ("s64", "{n64:json}"),
+            ("l64", "{9876543210987654321u64:json}"),
+            ("sstr", "{str:json}"),
+            ("lstr", "{'goodbye':json}"),
+            ("sbytes", "{bytes:json}"),
+            ("lbytes", "{x'040506':json}"),
+            ("vbytes", "{vector[0x01u8, 0x02u8, 0x03u8]:json}"),
+            ("snone", "{none:json}"),
+            ("ssome", "{some:json}"),
+            ("lvec", "{vector[7u64, 8u64, 9u64]:json}"),
+            ("svariant", "{variant:json}"),
+            ("lvariant", "{0x1::m::E::A#0(90u8):json}"),
+            ("snested", "{nested:json}"),
+            ("lstruct", "{0x1::m::S { c: n8, d: n16 }:json}"),
+            ("lempty", "{0x1::m::Empty():json}"),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &layout,
+            usize::MAX,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "s8": Ok(
+                Number(12),
+            ),
+            "l8": Ok(
+                Number(34),
+            ),
+            "s16": Ok(
+                Number(1234),
+            ),
+            "l16": Ok(
+                Number(5678),
+            ),
+            "s32": Ok(
+                Number(12345678),
+            ),
+            "l32": Ok(
+                Number(87654321),
+            ),
+            "s64": Ok(
+                String("123456781234567890"),
+            ),
+            "l64": Ok(
+                String("9876543210987654321"),
+            ),
+            "sstr": Ok(
+                String("hello"),
+            ),
+            "lstr": Ok(
+                String("goodbye"),
+            ),
+            "sbytes": Ok(
+                String("AQID"),
+            ),
+            "lbytes": Ok(
+                String("BAUG"),
+            ),
+            "vbytes": Ok(
+                Array [
+                    Number(1),
+                    Number(2),
+                    Number(3),
+                ],
+            ),
+            "snone": Ok(
+                Null,
+            ),
+            "ssome": Ok(
+                Array [
+                    Number(4),
+                    Number(5),
+                    Number(6),
+                ],
+            ),
+            "lvec": Ok(
+                Array [
+                    String("7"),
+                    String("8"),
+                    String("9"),
+                ],
+            ),
+            "svariant": Ok(
+                Object {
+                    "@variant": String("B"),
+                    "y": Number(5678),
+                },
+            ),
+            "lvariant": Ok(
+                Object {
+                    "@variant": String("A"),
+                    "pos0": Number(90),
+                },
+            ),
+            "snested": Ok(
+                Object {
+                    "a": Number(9),
+                    "b": String("10"),
+                },
+            ),
+            "lstruct": Ok(
+                Object {
+                    "c": Number(12),
+                    "d": Number(1234),
+                },
+            ),
+            "lempty": Ok(
+                Object {},
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
     async fn test_string_hardening() {
         let bytes = bcs::to_bytes(&("ascii", "🔥", vec![0xC3u8])).unwrap();
         let layout = struct_(
@@ -1489,6 +1695,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1533,6 +1740,7 @@ mod tests {
             limits,
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1589,6 +1797,9 @@ mod tests {
                                 "hex",
                             ),
                             Literal(
+                                "json",
+                            ),
+                            Literal(
                                 "str",
                             ),
                             Literal(
@@ -1624,6 +1835,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1672,6 +1884,7 @@ mod tests {
             limits.clone(),
             &bytes,
             &T::U64,
+            usize::MAX,
             ONE_MB,
             big_field,
         )
@@ -1683,6 +1896,7 @@ mod tests {
             limits,
             &bytes,
             &T::U64,
+            usize::MAX,
             ONE_MB,
             two_fields,
         )
@@ -1700,11 +1914,54 @@ mod tests {
             Limits::default(),
             &bytes,
             &T::U64,
+            usize::MAX,
             10,
             formats,
         )
         .await;
         assert!(matches!(res, Err(Error::TooMuchOutput)));
+    }
+
+    #[tokio::test]
+    async fn test_move_value_depth_limit() {
+        let bytes = bcs::to_bytes(&42u64).unwrap();
+
+        let formats = [
+            ("leaf", "{42u64:json}"),
+            ("shallow", "{0x1::m::S(43u128):json}"),
+            (
+                "deep",
+                "{0x1::m::S(vector[vector[0x1::m::T(44u256)]]):json}",
+            ),
+        ];
+
+        let output = format(
+            &MockStore::default(),
+            Limits::default(),
+            &bytes,
+            &T::U64,
+            3,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "leaf": Ok(
+                String("42"),
+            ),
+            "shallow": Ok(
+                Object {
+                    "pos0": String("43"),
+                },
+            ),
+            "deep": Err(
+                TooDeep,
+            ),
+        }
+        "###);
     }
 
     #[tokio::test]
@@ -1726,6 +1983,7 @@ mod tests {
             limits.clone(),
             &bytes,
             &T::U64,
+            usize::MAX,
             ONE_MB,
             big_field,
         )
@@ -1737,6 +1995,7 @@ mod tests {
             limits,
             &bytes,
             &T::U64,
+            usize::MAX,
             ONE_MB,
             two_fields,
         )
@@ -1755,6 +2014,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &T::U64,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1774,6 +2034,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1788,6 +2049,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )
@@ -1802,6 +2064,7 @@ mod tests {
             Limits::default(),
             &bytes,
             &layout,
+            usize::MAX,
             ONE_MB,
             formats,
         )

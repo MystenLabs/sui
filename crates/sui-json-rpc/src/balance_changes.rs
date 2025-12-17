@@ -5,17 +5,16 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Neg;
 
 use async_trait::async_trait;
-use move_core_types::language_storage::TypeTag;
+use sui_types::balance_change::derive_balance_changes;
 use tokio::sync::RwLock;
 
 use sui_json_rpc_types::BalanceChange;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
-use sui_types::coin::Coin;
 use sui_types::digests::ObjectDigest;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas_coin::GAS;
-use sui_types::object::{Object, Owner};
+use sui_types::object::Object;
 use sui_types::storage::WriteKind;
 use sui_types::transaction::InputObjectKind;
 use tracing::instrument;
@@ -61,74 +60,41 @@ pub async fn get_balance_changes_from_effect<P: ObjectProvider<Error = E>, E>(
         .iter()
         .map(|e| e.0)
         .collect::<HashSet<_>>();
-    get_balance_changes(
-        object_provider,
-        &effects
-            .modified_at_versions()
-            .into_iter()
-            .filter_map(|(id, version)| {
-                if matches!(mocked_coin, Some(coin) if id == coin) {
-                    return None;
-                }
-                // We won't be able to get dynamic object from object provider today
-                if unwrapped_then_deleted.contains(&id) {
-                    return None;
-                }
-                Some((id, version, input_objs_to_digest.get(&id).cloned()))
-            })
-            .collect::<Vec<_>>(),
-        &all_mutated,
-    )
-    .await
-}
 
-#[instrument(skip_all)]
-pub async fn get_balance_changes<P: ObjectProvider<Error = E>, E>(
-    object_provider: &P,
-    modified_at_version: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
-    all_mutated: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
-) -> Result<Vec<BalanceChange>, E> {
-    // 1. subtract all input coins
-    let balances = fetch_coins(object_provider, modified_at_version)
-        .await?
+    let modified_at_version = effects
+        .modified_at_versions()
         .into_iter()
-        .fold(
-            BTreeMap::<_, i128>::new(),
-            |mut acc, (owner, type_, amount)| {
-                *acc.entry((owner, type_)).or_default() -= amount as i128;
-                acc
-            },
-        );
-    // 2. add all mutated coins
-    let balances = fetch_coins(object_provider, all_mutated)
-        .await?
-        .into_iter()
-        .fold(balances, |mut acc, (owner, type_, amount)| {
-            *acc.entry((owner, type_)).or_default() += amount as i128;
-            acc
-        });
-
-    Ok(balances
-        .into_iter()
-        .filter_map(|((owner, coin_type), amount)| {
-            if amount == 0 {
+        .filter_map(|(id, version)| {
+            if matches!(mocked_coin, Some(coin) if id == coin) {
                 return None;
             }
-            Some(BalanceChange {
-                owner,
-                coin_type,
-                amount,
-            })
+            // We won't be able to get dynamic object from object provider today
+            if unwrapped_then_deleted.contains(&id) {
+                return None;
+            }
+            Some((id, version, input_objs_to_digest.get(&id).cloned()))
         })
-        .collect())
+        .collect::<Vec<_>>();
+    let input_coins = fetch_coins(object_provider, &modified_at_version).await?;
+    let mutated_coins = fetch_coins(object_provider, &all_mutated).await?;
+    Ok(
+        derive_balance_changes(effects, &input_coins, &mutated_coins)
+            .into_iter()
+            .map(|change| BalanceChange {
+                owner: sui_types::object::Owner::AddressOwner(change.address),
+                coin_type: change.coin_type,
+                amount: change.amount,
+            })
+            .collect(),
+    )
 }
 
 #[instrument(skip_all)]
 async fn fetch_coins<P: ObjectProvider<Error = E>, E>(
     object_provider: &P,
     objects: &[(ObjectID, SequenceNumber, Option<ObjectDigest>)],
-) -> Result<Vec<(Owner, TypeTag, u64)>, E> {
-    let mut all_mutated_coins = vec![];
+) -> Result<Vec<Object>, E> {
+    let mut coins = vec![];
     for (id, version, digest_opt) in objects {
         // TODO: use multi get object
         let o = object_provider.get_object(id, version).await?;
@@ -143,16 +109,10 @@ async fn fetch_coins<P: ObjectProvider<Error = E>, E>(
                     "Object digest mismatch--got bad data from object_provider?"
                 )
             }
-            let [coin_type]: [TypeTag; 1] = type_.clone().into_type_params().try_into().unwrap();
-            all_mutated_coins.push((
-                o.owner.clone(),
-                coin_type,
-                // we know this is a coin, safe to unwrap
-                Coin::extract_balance_if_coin(&o).unwrap().unwrap().1,
-            ))
+            coins.push(o);
         }
     }
-    Ok(all_mutated_coins)
+    Ok(coins)
 }
 
 #[async_trait]

@@ -40,7 +40,7 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::error::SuiErrorKind;
 use sui_types::execution_params::{
-    BalanceWithdrawStatus, ExecutionOrEarlyError, get_early_execution_error,
+    ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error,
 };
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
@@ -786,7 +786,7 @@ impl LocalExec {
             &checked_input_objects,
             &HashSet::new(),
             // TODO(address-balances): Support balance withdraw status for replay
-            &BalanceWithdrawStatus::NoWithdraw,
+            &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -863,7 +863,7 @@ impl LocalExec {
             &checked_input_objects,
             &HashSet::new(),
             // TODO(address-balances): Support balance withdraw status for replay
-            &BalanceWithdrawStatus::NoWithdraw,
+            &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -979,7 +979,7 @@ impl LocalExec {
             &input_objects,
             &HashSet::new(),
             // TODO(address-balances): Support balance withdraw status for replay
-            &BalanceWithdrawStatus::NoWithdraw,
+            &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),

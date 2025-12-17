@@ -142,12 +142,52 @@ impl MoveFlavor for SuiFlavor {
     }
 
     fn validate_manifest(manifest: &ParsedManifest) -> Result<(), String> {
+        validate_modern_manifest_does_not_use_legacy_system_names(manifest)?;
         if manifest.package.edition == Some(Edition::DEVELOPMENT) {
             Err(Edition::DEVELOPMENT.unknown_edition_error().to_string())
         } else {
             Ok(())
         }
     }
+}
+
+/// We validate that a modern manifest cannot define the "legacy" system names.
+/// This is mainly to protect users
+fn validate_modern_manifest_does_not_use_legacy_system_names(
+    manifest: &ParsedManifest,
+) -> Result<(), String> {
+    // For legacy data, we do not enforce this check.
+    if manifest.legacy_data.is_some() {
+        return Ok(());
+    }
+
+    // collect all manifest deps
+    let mut dep_names = manifest
+        .dependencies
+        .keys()
+        .map(|n| n.get_ref().to_string())
+        .collect::<Vec<_>>();
+
+    // Check "dep replacements" too.
+    dep_names.extend(
+        manifest
+            .dep_replacements
+            .values()
+            .flat_map(|k| k.keys().map(|key| key.to_string()))
+            .collect::<Vec<_>>(),
+    );
+
+    let legacy_names = SuiFlavor::system_deps_names_map();
+
+    for name in dep_names {
+        if legacy_names.contains_key(&name) {
+            return Err(format!(
+                "Dependency `{name}` is a legacy system name and cannot be used. See https://docs.sui.io/guides/developer/sui-101/move-package-management#system-dependencies"
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 impl Default for BuildParams {

@@ -665,15 +665,18 @@ async fn deposit_on_sui(
         .execute_transaction_block_with_effects(signed_tx)
         .await
         .expect("Failed to execute transaction block");
-    if !resp.status_ok().unwrap() {
-        return Err(anyhow!("Transaction {:?} failed: {:?}", tx_digest, resp));
+    match &resp.status {
+        sui_json_rpc_types::SuiExecutionStatus::Success => {
+            info!(
+                ?tx_digest,
+                "Deposit transaction succeeded. Events: {:?}", resp.events
+            );
+            Ok(())
+        }
+        sui_json_rpc_types::SuiExecutionStatus::Failure { error } => {
+            Err(anyhow!("Transaction {:?} failed: {:?}", tx_digest, error))
+        }
     }
-    let events = resp.events.unwrap();
-    info!(
-        ?tx_digest,
-        "Deposit transaction succeeded. Events: {:?}", events
-    );
-    Ok(())
 }
 
 async fn claim_on_eth(

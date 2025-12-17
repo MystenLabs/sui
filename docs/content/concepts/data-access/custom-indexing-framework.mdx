@@ -35,18 +35,25 @@ The following diagram details the custom indexer architecture.
 
 ### Data sources
 
-Checkpoint data comes from various data sources, including:
+The indexing framework supports multiple data sources to give developers flexibility in how they ingest checkpoint data. These sources fall into two categories:
 
-- **Remote stores** connect to public checkpoint stores like [`https://checkpoints.mainnet.sui.io`](https://checkpoints.mainnet.sui.io/). This is the most straightforward way to get started without running your own infrastructure.
-- **Local files** allow you to process checkpoint files dumped by a local Sui full node, providing the lowest latency, but should be used for testing only as these files are not automatically cleaned up.
-- **RPC endpoints** enable direct connection to a Sui full node RPC endpoint, allowing you to use a trusted data source that you control or to connect to networks (like Devnet) that lack a remote store.
-The indexing framework supports multiple data sources to maximize flexibility.
+**Polling-based sources** periodically check for new checkpoints:
+
+- **Remote stores** connect to public checkpoint repositories such as [`https://checkpoints.mainnet.sui.io`](https://checkpoints.mainnet.sui.io/). This option offers the simplest setup and does not require you to operate any infrastructure.
+- **Local files** process checkpoint files produced by a local Sui full node. This method offers the lowest latency but is recommended only for testing because the node does not automatically clean up these files.
+- **RPC endpoints** connect directly to a Sui full node RPC endpoint. This approach lets you pull checkpoints from a trusted source you operate or access networks (like Devnet) that lack a remote store.
+
+**Push-based sources** provide real-time checkpoint data as it becomes available:
+
+- **gRPC streaming** pushes new checkpoints from full nodes as soon as they are available, providing lower latency than polling. Because streaming only emits the latest checkpoints, you must configure a polling-based fallback source to fetch historical data and ensure reliability.
+
+For configuration examples and guidance on when to use each source, see [Checkpoint Data Sources](/guides/developer/advanced/custom-indexer/indexer-data-integration.mdx#checkpoint-data-sources).
 
 ### Ingestion layer
 
 The indexing framework manages the ingestion layer, which handles the complex task of reliably fetching and distributing checkpoint data. The `Broadcaster` receives checkpoints from data sources and efficiently distributes them to multiple processing pipelines running in parallel. This is essential for indexers that run multiple different data processing workflows simultaneously. 
 
-The `Regulator` acts as a smart coordinator, controlling data flow rates by directing the `Broadcaster` on which checkpoints to fetch. It's backpressured by the high watermarks reported by subscribers, so that the `Broadcaster` doesn't fetch too many.
+`Broadcaster` applies backpressure based on the highest watermark reported by its subscribers, ensuring it does not push data faster than the slowest pipeline can process it.
 
 ### Processing layer
 

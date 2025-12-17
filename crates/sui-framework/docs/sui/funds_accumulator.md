@@ -22,6 +22,7 @@ A module for accumulating funds, i.e. Balance-like types.
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
 <b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
+<b>use</b> <a href="../std/internal.md#std_internal">std::internal</a>;
 <b>use</b> <a href="../std/option.md#std_option">std::option</a>;
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
@@ -239,7 +240,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_redeem">redeem</a>&lt;T: store&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;): T
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_redeem">redeem</a>&lt;T: store&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">sui::funds_accumulator::Withdrawal</a>&lt;T&gt;, _: <a href="../std/internal.md#std_internal_Permit">std::internal::Permit</a>&lt;T&gt;): T
 </code></pre>
 
 
@@ -248,7 +249,7 @@ Aborts with <code><a href="../sui/funds_accumulator.md#sui_funds_accumulator_EOv
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_redeem">redeem</a>&lt;/* internal */ T: store&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt;): T {
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_redeem">redeem</a>&lt;T: store&gt;(withdrawal: <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a>&lt;T&gt;, _: internal::Permit&lt;T&gt;): T {
     <b>let</b> <a href="../sui/funds_accumulator.md#sui_funds_accumulator_Withdrawal">Withdrawal</a> { owner, limit: value } = withdrawal;
     <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_impl">withdraw_impl</a>(owner, value)
 }

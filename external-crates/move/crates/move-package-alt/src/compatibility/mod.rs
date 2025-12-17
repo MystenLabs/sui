@@ -36,7 +36,21 @@ pub enum LegacySubstOrRename {
 const MODULE_REGEX: &str = r"\bmodule\s+([a-zA-Z_][\w]*)::([a-zA-Z_][\w]*)";
 
 // Compile regex once at program startup
-static MODULE_REGEX_COMPILED: Lazy<Regex> = Lazy::new(|| Regex::new(MODULE_REGEX).unwrap());
+#[cfg(not(msim))]
+fn get_module_regex() -> &'static Regex {
+    static MODULE_REGEX_COMPILED: Lazy<Regex> = Lazy::new(|| Regex::new(MODULE_REGEX).unwrap());
+    &MODULE_REGEX_COMPILED
+}
+
+// In simtests we need to use a thread local to avoid breaking determinism.
+#[cfg(msim)]
+fn get_module_regex() -> Regex {
+    thread_local! {
+        static MODULE_REGEX_COMPILED: Lazy<Regex> = Lazy::new(|| Regex::new(MODULE_REGEX).unwrap());
+    }
+
+    MODULE_REGEX_COMPILED.with(|val| (*val).clone())
+}
 
 /// This is a naive way to detect all module names that are part of the source code
 /// for a given package.
@@ -118,7 +132,7 @@ fn parse_module_names(contents: &str) -> Result<HashSet<String>> {
 
     // This matches `module a::b {}`, and `module a::b;` cases.
     // In both cases, the match is the 2nd group (so `match.get(1)`)
-    Ok(MODULE_REGEX_COMPILED
+    Ok(get_module_regex()
         .captures_iter(&clean)
         .filter_map(|cap| {
             let name = &cap[1];

@@ -1,0 +1,85 @@
+---
+title: Address-Owned Objects
+description: Address-owned objects are owned by a Sui 32-byte address, which can either be an account address or an object ID. Learn how to create and access these objects.
+keywords: [ address-owned objects, address-owned, owned objects, objects owned by address, accessing objects, accessing owned objects, address ownership ]
+---
+
+Address-owned objects are owned by a 32-byte address. 32-byte addresses are either an account address derived from a particular signature scheme or an object ID. An address-owned object is only accessible to its owner. You can transfer objects that you own to different addresses.
+
+## Create address-owned objects
+
+Use these [`transfer` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/transfer.move) functions to create address-owned objects:
+
+- Use the [`sui::transfer::transfer`](/references/framework/sui_sui/transfer#sui_transfer_transfer) function if you are defining [custom transfer rules](/guides/developer/objects/transfers/custom-rules.mdx) for the object. 
+
+- Use the [`sui::transfer::public_transfer`](/references/framework/sui_sui/transfer#sui_transfer_public_transfer) function to create an address-owned object if the object has the `store` capability.
+
+```
+public fun transfer<T: key>(obj: T, recipient: address)
+public fun public_transfer<T: key + store>(obj: T, recipient: address)
+```
+
+An object's ownership can change over the life of that object, either by adding it as a [dynamic object field](/concepts/dynamic-fields.mdx), transferring it to a different address, or making it [immutable](/guides/developer/objects/object-ownership/immutable.mdx). However, after you create an object and set its ownership, it cannot be [shared](/guides/developer/objects/object-ownership/shared.mdx).
+
+<ImportContent source="examples/move/basics/sources/object_basics.move" mode="code" fun="create" noComments />
+
+## When to use address-owned objects
+
+Use address-owned objects when you need:
+
+- Single ownership
+
+- Better performance than shared objects
+
+- Avoidance of consensus sequencing
+
+## Interact with address-owned objects
+
+You can access address-owned objects in 2 different ways depending on whether the address owner of the object corresponds to an address or an object ID.
+
+If the address owner of the object is an account address, then you can use and access it directly as an owned object during the execution of a transaction signed by that address. Other addresses cannot access owned objects in any way.
+
+If the address owner of the object corresponds to an object ID, then you must access and dynamically authenticate it during the execution of the transaction using the mechanisms defined in [Transfer to Object](/guides/developer/objects/transfers/transfer-to-object.mdx).
+
+To interact with an address-owned object through the CLI, first view the objects you own:
+
+```sh
+$ export ADDR=`sui client active-address`
+```
+```sh
+$ sui client objects $ADDR
+```
+
+You can see [`sui::transfer::public_transfer`](/references/framework/sui_sui/transfer#sui_transfer_public_transfer) function used in the [`color_object` example module](https://github.com/MystenLabs/sui/blob/main/examples/move/color_object/sources/example.move) tests. The test creates a new address-owned `ColorObject` object, then calls `public_transfer` to transfer it to the owner's address. 
+
+Save the [`color_object` example code](https://github.com/MystenLabs/sui/blob/main/examples/move/color_object/sources/example.move), then publish the `ColorObject` code on-chain using the Sui CLI:
+
+<ImportContent source="info-gas-budget.mdx" mode="snippet" />
+
+```sh
+$ sui client publish $ROOT/examples/move/color_object --gas-budget <GAS-AMOUNT>
+```
+
+Set the package object ID to the `$PACKAGE` environment variable, if you have it set. Then create a new `ColorObject`:
+
+```sh
+$ sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
+```
+
+Set the newly created object ID to `$OBJECT`. To view the objects in the current active address:
+
+```sh
+$ sui client objects $ADDR
+```
+
+You can see that it is now owned by your address by querying the object information and viewing the `Owner` field in the output:
+
+```sh
+$ sui client object $OBJECT
+```
+
+## Test address-owned objects
+
+The following test creates an address-owned object, transfers it to the owner, then verifies that the owner field is correct:
+
+<ImportContent source="examples/move/color_object/sources/example.move" mode="code" fun="test_transfer"/>

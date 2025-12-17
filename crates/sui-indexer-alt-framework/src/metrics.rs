@@ -117,6 +117,7 @@ pub struct IndexerMetrics {
     pub collector_gather_latency: HistogramVec,
     pub collector_batch_size: HistogramVec,
     pub total_collector_skipped_checkpoints: IntCounterVec,
+    pub collector_reader_lo: IntGaugeVec,
     pub committer_commit_latency: HistogramVec,
     pub committer_tx_rows: HistogramVec,
     pub watermark_gather_latency: HistogramVec,
@@ -514,6 +515,13 @@ impl IndexerMetrics {
                 &["pipeline"],
                 registry,
             ).unwrap(),
+            collector_reader_lo: register_int_gauge_vec_with_registry!(
+                name("collector_reader_lo"),
+                "Reader low watermark as observed by the collector",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
             committer_commit_latency: register_histogram_vec_with_registry!(
                 name("committer_commit_latency"),
                 "Time taken to write a batch of rows to the database by this committer",

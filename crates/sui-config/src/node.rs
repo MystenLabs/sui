@@ -741,6 +741,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Arden".to_string(),
         "FanTV".to_string(),
         "EveFrontier".to_string(),
+        "TestEveFrontier".to_string(),
         "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz".to_string(), // Decot, external partner
     ]);
     map.insert(Chain::Mainnet, providers.clone());

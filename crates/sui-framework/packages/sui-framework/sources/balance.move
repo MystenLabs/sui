@@ -106,7 +106,7 @@ public fun send_funds<T>(balance: Balance<T>, recipient: address) {
 /// Redeem a `Withdrawal<Balance<T>>` to get the underlying `Balance<T>` from an address's funds
 /// accumulator.
 public fun redeem_funds<T>(withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>): Balance<T> {
-    withdrawal.redeem()
+    withdrawal.redeem(internal::permit())
 }
 
 /// Create a `Withdrawal<Balance<T>>` from an object to withdraw funds from it.

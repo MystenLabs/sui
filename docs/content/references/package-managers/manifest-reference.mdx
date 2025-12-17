@@ -1,0 +1,52 @@
+---
+title: Manifest Reference
+description: Explore examples of package manifest files.
+keywords: [ move, move reference, package management, package manager, move packages, move package management ]
+pagination_prev: null
+---
+
+This section provides sample manifest files for you to use as templates in your project.
+
+For a basic project that only depends on `sui` and `std`, the minimal lockfile is:
+
+```toml
+[package]
+name = "example"
+```
+
+For a package that has a `mvr` dependency and a git dependency with different Mainnet and Testnet branches:
+
+<!-- TODO: usdc doesn't actually have different tags; find a package that does -->
+
+```toml
+[package]
+name = "example"
+
+[dependencies]
+ascii = { r.mvr = "@potatoes/ascii" }
+usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "packages/usdc", rev = "releases/testnet" }
+
+[dep-replacements.mainnet]
+usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "packages/usdc", rev = "releases/mainnet" }
+```
+
+For a package that defines a `testnet_alpha` environment:
+
+```toml
+[package]
+name = "example"
+
+[environments]
+testnet_alpha = "4c78adac"
+
+[dependencies]
+ascii = { r.mvr = "@potatoes/ascii" }
+usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "packages/usdc", rev = "releases/testnet" }
+
+[dep-replacements.mainnet]
+usdc = { git = "https://github.com/circlefin/stablecoin-sui.git", subdir = "packages/usdc", rev = "releases/testnet" }
+
+[dep-replacements.testnet_alpha]
+ascii = { use-environment = "ascii" }
+usdc = { use-environment = "testnet" }
+```

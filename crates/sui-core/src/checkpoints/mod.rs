@@ -6,7 +6,7 @@ pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 
-use crate::accumulators::AccumulatorSettlementTxBuilder;
+use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::authority::AuthorityState;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority_client::{AuthorityAPI, make_network_authority_clients_with_network_config};
@@ -19,7 +19,7 @@ pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;
 use crate::execution_cache::TransactionCacheRead;
 
-use crate::execution_scheduler::balance_withdraw_scheduler::BalanceSettlement;
+use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
 use crate::global_state_hasher::GlobalStateHasher;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use consensus_core::CommitRef;
@@ -286,6 +286,15 @@ impl CheckpointStoreTables {
                     KeyType::uniform(1),
                     watermarks_config.with_relocation_filter(|_, _| Decision::Remove),
                 ),
+            ),
+            (
+                "full_checkpoint_content_v2",
+                config_u64.clone().with_config(apply_relocation_filter(
+                    override_dirty_keys_config.clone(),
+                    pruner_watermarks.checkpoint_id.clone(),
+                    |sequence_number: CheckpointSequenceNumber| sequence_number,
+                    true,
+                )),
             ),
         ];
         Self::open_tables_read_write(
@@ -1486,9 +1495,9 @@ impl CheckpointBuilder {
             tx_index_offset,
         );
 
-        let accumulator_changes = builder.collect_accumulator_changes();
+        let funds_changes = builder.collect_funds_changes();
         let num_updates = builder.num_updates();
-        let (settlement_txns, barrier_tx) = builder.build_tx(
+        let settlement_txns = builder.build_tx(
             self.epoch_store.protocol_config(),
             epoch,
             accumulator_root_obj_initial_shared_version,
@@ -1498,7 +1507,6 @@ impl CheckpointBuilder {
 
         let settlement_txns: Vec<_> = settlement_txns
             .into_iter()
-            .chain(std::iter::once(barrier_tx))
             .map(|tx| {
                 VerifiedExecutableTransaction::new_system(
                     VerifiedTransaction::new_system_transaction(tx),
@@ -1518,26 +1526,42 @@ impl CheckpointBuilder {
         self.epoch_store
             .notify_settlement_transactions_ready(tx_key, settlement_txns);
 
-        let settlement_effects = loop {
-            match tokio::time::timeout(Duration::from_secs(5), async {
-                self.effects_store
-                    .notify_read_executed_effects(
-                        "CheckpointBuilder::notify_read_settlement_effects",
-                        &settlement_digests,
-                    )
-                    .await
-            })
-            .await
-            {
-                Ok(effects) => break effects,
-                Err(_) => {
-                    debug_fatal!(
-                        "Timeout waiting for settlement transactions to be executed {:?}, retrying...",
-                        tx_key
-                    );
-                }
-            }
-        };
+        let settlement_effects = wait_for_effects_with_retry(
+            self.effects_store.as_ref(),
+            "CheckpointBuilder::notify_read_settlement_effects",
+            &settlement_digests,
+            tx_key,
+        )
+        .await;
+
+        let barrier_tx = accumulators::build_accumulator_barrier_tx(
+            epoch,
+            accumulator_root_obj_initial_shared_version,
+            checkpoint_height,
+            &settlement_effects,
+        );
+
+        let barrier_tx = VerifiedExecutableTransaction::new_system(
+            VerifiedTransaction::new_system_transaction(barrier_tx),
+            self.epoch_store.epoch(),
+        );
+        let barrier_digest = *barrier_tx.digest();
+
+        self.epoch_store
+            .notify_barrier_transaction_ready(tx_key, barrier_tx);
+
+        let barrier_effects = wait_for_effects_with_retry(
+            self.effects_store.as_ref(),
+            "CheckpointBuilder::notify_read_barrier_effects",
+            &[barrier_digest],
+            tx_key,
+        )
+        .await;
+
+        let settlement_effects: Vec<_> = settlement_effects
+            .into_iter()
+            .chain(barrier_effects)
+            .collect();
 
         let mut next_accumulator_version = None;
         for fx in settlement_effects.iter() {
@@ -1559,15 +1583,13 @@ impl CheckpointBuilder {
                 next_accumulator_version = Some(version);
             }
         }
-        let settlements = BalanceSettlement {
+        let settlements = FundsSettlement {
             next_accumulator_version: next_accumulator_version
                 .expect("Accumulator root object should be mutated in the settlement transactions"),
-            balance_changes: accumulator_changes,
+            funds_changes,
         };
 
-        self.state
-            .execution_scheduler()
-            .settle_balances(settlements);
+        self.state.execution_scheduler().settle_funds(settlements);
 
         (tx_key, settlement_effects)
     }
@@ -2465,6 +2487,31 @@ impl CheckpointBuilder {
                 if let Some(tx) = tx {
                     assert!(!tx.transaction_data().is_consensus_commit_prologue());
                 }
+            }
+        }
+    }
+}
+
+async fn wait_for_effects_with_retry(
+    effects_store: &dyn TransactionCacheRead,
+    task_name: &'static str,
+    digests: &[TransactionDigest],
+    tx_key: TransactionKey,
+) -> Vec<TransactionEffects> {
+    loop {
+        match tokio::time::timeout(Duration::from_secs(5), async {
+            effects_store
+                .notify_read_executed_effects(task_name, digests)
+                .await
+        })
+        .await
+        {
+            Ok(effects) => break effects,
+            Err(_) => {
+                debug_fatal!(
+                    "Timeout waiting for transactions to be executed {:?}, retrying...",
+                    tx_key
+                );
             }
         }
     }
@@ -3486,6 +3533,7 @@ mod tests {
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        protocol_config.disable_accumulators_for_testing();
         protocol_config.set_min_checkpoint_interval_ms_for_testing(100);
         let state = TestAuthorityBuilder::new()
             .with_protocol_config(protocol_config)
@@ -3810,6 +3858,10 @@ mod tests {
             &self,
             _digest: &TransactionDigest,
         ) -> Option<Vec<sui_types::storage::ObjectKey>> {
+            unimplemented!()
+        }
+
+        fn transaction_executed_in_last_epoch(&self, _: &TransactionDigest, _: EpochId) -> bool {
             unimplemented!()
         }
     }

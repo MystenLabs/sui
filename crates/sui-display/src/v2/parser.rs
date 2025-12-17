@@ -136,6 +136,7 @@ pub enum Transform {
     Base64(Base64Modifier),
     Bcs(Base64Modifier),
     Hex,
+    Json,
     #[default]
     Str,
     Timestamp,
@@ -269,7 +270,8 @@ macro_rules! match_token_opt {
 ///   xform    ::= 'str'
 ///              | 'hex'
 ///              | 'base64' xmod?
-///              | 'bcs'
+///              | 'bcs' xmod?
+///              | 'json'
 ///              | 'timestamp'
 ///              | 'url'
 ///
@@ -947,6 +949,11 @@ impl<'s> Parser<'s> {
                 Transform::Hex
             },
 
+            Lit(_, T::Ident, _, "json") => {
+                self.lexer.next();
+                Transform::Json
+            },
+
             Lit(_, T::Ident, _, "str") => {
                 self.lexer.next();
                 Transform::Str
@@ -1001,13 +1008,13 @@ impl<'s> Parser<'s> {
 
 impl Base64Modifier {
     /// Use a standard Base64 encoding.
-    const EMPTY: Self = Self(0);
+    pub(crate) const EMPTY: Self = Self(0);
 
     /// Use the URL-safe character set.
-    const URL: Self = Self(1 << 1);
+    pub(crate) const URL: Self = Self(1 << 1);
 
     /// Don't add padding characters.
-    const NOPAD: Self = Self(1 << 2);
+    pub(crate) const NOPAD: Self = Self(1 << 2);
 
     pub fn standard(&self) -> bool {
         self.0 == Self::EMPTY.0
@@ -1205,6 +1212,7 @@ impl fmt::Debug for Transform {
             Transform::Base64(xmod) => write!(f, "base64{xmod:?}"),
             Transform::Bcs(xmod) => write!(f, "bcs{xmod:?}"),
             Transform::Hex => write!(f, "hex"),
+            Transform::Json => write!(f, "json"),
             Transform::Str => write!(f, "str"),
             Transform::Timestamp => write!(f, "ts"),
             Transform::Url => write!(f, "url"),

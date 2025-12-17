@@ -26,12 +26,25 @@ Control how checkpoint data is fetched and distributed:
 let ingestion_config = IngestionConfig {
     // Buffer size across all downstream workers (default: 5000)
     checkpoint_buffer_size: 10000,
-    
+
     // Concurrent checkpoint fetches (default: 200)
     ingest_concurrency: 500,
-    
+
     // Retry interval for missing checkpoints in ms (default: 200)
     retry_interval_ms: 100,
+
+    // gRPC streaming configuration (applies when --streaming-url is provided)
+    // Initial batch size after streaming connection failure (default: 10)
+    streaming_backoff_initial_batch_size: 20,
+
+    // Maximum batch size after repeated streaming failures (default: 10000)
+    streaming_backoff_max_batch_size: 20000,
+
+    // Timeout for streaming connection in ms (default: 5000)
+    streaming_connection_timeout_ms: 10000,
+
+    // Timeout for streaming operations (peek/next) in ms (default: 5000)
+    streaming_statement_timeout_ms: 10000,
 };
 ```
 
@@ -40,6 +53,10 @@ let ingestion_config = IngestionConfig {
 - `checkpoint_buffer_size`: Increase for high-throughput scenarios, decrease to reduce memory usage.
 - `ingest_concurrency`: Higher values improve ingestion speed but increase network/storage load.
 - `retry_interval_ms`: Lower values reduce latency for live data, higher values reduce unnecessary retries.
+- `streaming_backoff_initial_batch_size`: Number of checkpoints to process via polling after the initial streaming failure. Lower values restore streaming faster, higher values reduce connection attempts.
+- `streaming_backoff_max_batch_size`: Maximum checkpoints to process via polling after repeated failures. The batch size increases exponentially from the initial size up to this maximum. Higher values reduce connection attempts during prolonged outages.
+- `streaming_connection_timeout_ms`: Time to wait for streaming connection establishment. Increase for slower networks.
+- `streaming_statement_timeout_ms`: Time to wait for streaming data operations. Increase if checkpoints are large or network is slow.
 
 ### Database connection configuration
 

@@ -8218,7 +8218,8 @@ dependencies = [
  "move-ir-types",
  "move-model",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stackless-bytecode",
  "move-stackless-bytecode-2",
  "move-symbol-pool",
@@ -8375,41 +8376,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-package"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "colored",
- "dunce",
- "itertools 0.10.5",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-bytecode-utils",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-disassembler",
- "move-docgen",
- "move-model-2",
- "move-symbol-pool",
- "named-lock",
- "once_cell",
- "petgraph 0.8.1",
- "regex",
- "serde",
- "serde_yaml 0.8.26",
- "sha2 0.9.9",
- "tempfile",
- "toml 0.5.11",
- "toml_edit 0.22.24",
- "treeline",
- "vfs",
- "walkdir",
- "whoami",
-]
-
-[[package]]
 name = "move-package-alt"
 version = "0.1.0"
 dependencies = [
@@ -8493,8 +8459,10 @@ dependencies = [
 name = "move-regex-borrow-graph"
 version = "0.0.1"
 dependencies = [
+ "insta",
  "itertools 0.10.5",
  "move-binary-format",
+ "move-command-line-common",
  "move-core-types",
  "petgraph 0.8.1",
  "proptest",
@@ -13517,6 +13485,7 @@ dependencies = [
  "sui-data-store",
  "sui-execution",
  "sui-faucet",
+ "sui-futures",
  "sui-genesis-builder",
  "sui-indexer-alt",
  "sui-indexer-alt-consistent-store",
@@ -13550,7 +13519,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tikv-jemalloc-ctl",
  "tokio",
- "tokio-util 0.7.13",
  "toml 0.7.4",
  "toml_edit 0.19.10",
  "tower 0.5.2",
@@ -13613,7 +13581,6 @@ dependencies = [
  "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v0",
  "move-core-types",
- "move-package",
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime-v0",
@@ -13980,7 +13947,6 @@ dependencies = [
  "sui-indexer-alt-metrics",
  "telemetry-subscribers",
  "tokio",
- "tokio-util 0.7.13",
  "tracing",
  "url",
 ]
@@ -14021,7 +13987,6 @@ dependencies = [
  "sui-rpc",
  "sui-types",
  "tokio",
- "tokio-util 0.7.13",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -14144,7 +14109,6 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
- "move-package",
  "move-symbol-pool",
  "mysten-common",
  "mysten-metrics",
@@ -14202,6 +14166,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
+ "tokio-util 0.7.13",
  "tracing",
  "twox-hash",
  "typed-store",
@@ -14231,7 +14196,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=fca0ea3a409a71f9be5235711d706507d8d390f3#fca0ea3a409a71f9be5235711d706507d8d390f3"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=339c2272fd5b8fb4e1fa6662cfa9acdbb0d05704#339c2272fd5b8fb4e1fa6662cfa9acdbb0d05704"
 dependencies = [
  "ark-bn254",
  "ark-ff",
@@ -14633,6 +14598,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-futures"
+version = "1.63.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "tap",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-genesis-builder"
 version = "0.0.0"
 dependencies = [
@@ -14902,7 +14879,6 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "tokio",
- "tokio-util 0.7.13",
  "toml 0.7.4",
  "tracing",
  "url",
@@ -14953,6 +14929,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sui-default-config",
+ "sui-futures",
  "sui-indexer-alt-consistent-api",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-metrics",
@@ -14962,7 +14939,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
- "tokio-util 0.7.13",
  "toml 0.7.4",
  "tonic 0.14.2",
  "tonic-health",
@@ -14996,6 +14972,7 @@ dependencies = [
  "shared-crypto",
  "simulacrum",
  "sui-field-count",
+ "sui-futures",
  "sui-indexer-alt",
  "sui-indexer-alt-consistent-api",
  "sui-indexer-alt-consistent-store",
@@ -15020,7 +14997,6 @@ dependencies = [
  "tempfile",
  "test-cluster",
  "tokio",
- "tokio-util 0.7.13",
  "tonic 0.14.2",
  "tracing",
  "url",
@@ -15035,6 +15011,7 @@ dependencies = [
  "axum 0.8.3",
  "backoff",
  "bb8",
+ "bytes",
  "chrono",
  "clap",
  "dashmap 5.5.3",
@@ -15050,6 +15027,7 @@ dependencies = [
  "scoped-futures",
  "serde",
  "sui-field-count",
+ "sui-futures",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
  "sui-pg-db",
@@ -15064,7 +15042,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
- "tokio-util 0.7.13",
  "tonic 0.14.2",
  "tracing",
  "tracing-subscriber",
@@ -15119,6 +15096,7 @@ dependencies = [
  "shared-crypto",
  "sui-default-config",
  "sui-display",
+ "sui-futures",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-reader",
  "sui-indexer-alt-schema",
@@ -15134,7 +15112,6 @@ dependencies = [
  "telemetry-subscribers",
  "thiserror 1.0.69",
  "tokio",
- "tokio-util 0.7.13",
  "toml 0.7.4",
  "tonic 0.14.2",
  "tower-http",
@@ -15173,6 +15150,7 @@ dependencies = [
  "serde_with",
  "sui-default-config",
  "sui-display",
+ "sui-futures",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-reader",
  "sui-indexer-alt-schema",
@@ -15190,7 +15168,6 @@ dependencies = [
  "telemetry-subscribers",
  "thiserror 1.0.69",
  "tokio",
- "tokio-util 0.7.13",
  "toml 0.7.4",
  "tower 0.4.13",
  "tower-http",
@@ -15208,9 +15185,9 @@ dependencies = [
  "clap",
  "prometheus",
  "prometheus-closure-metric",
+ "sui-futures",
  "sui-pg-db",
  "tokio",
- "tokio-util 0.7.13",
  "tracing",
 ]
 
@@ -15245,6 +15222,7 @@ dependencies = [
  "prometheus",
  "prost-types 0.14.1",
  "serde_json",
+ "sui-futures",
  "sui-indexer-alt-consistent-api",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
@@ -15258,7 +15236,6 @@ dependencies = [
  "sui-types",
  "thiserror 1.0.69",
  "tokio",
- "tokio-util 0.7.13",
  "tonic 0.14.2",
  "tracing",
  "url",
@@ -15281,7 +15258,7 @@ dependencies = [
  "sui-core",
  "sui-data-ingestion-core",
  "sui-field-count",
- "sui-indexer-alt-framework",
+ "sui-futures",
  "sui-indexer-alt-schema",
  "sui-pg-db",
  "sui-snapshot",
@@ -16058,7 +16035,6 @@ version = "1.63.0"
 dependencies = [
  "anyhow",
  "move-core-types",
- "move-package",
  "move-symbol-pool",
  "sui-framework-snapshot",
  "sui-json-rpc-types",
@@ -16348,8 +16324,8 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=fca0ea3a409a71f9be5235711d706507d8d390f3#fca0ea3a409a71f9be5235711d706507d8d390f3"
+version = "0.1.1"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=339c2272fd5b8fb4e1fa6662cfa9acdbb0d05704#339c2272fd5b8fb4e1fa6662cfa9acdbb0d05704"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16435,7 +16411,7 @@ dependencies = [
  "reqwest 0.12.9",
  "serde",
  "serde_json",
- "sui-indexer-alt-framework",
+ "sui-futures",
  "telemetry-subscribers",
  "tokio",
  "tokio-postgres",
@@ -16533,8 +16509,8 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk-types"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=fca0ea3a409a71f9be5235711d706507d8d390f3#fca0ea3a409a71f9be5235711d706507d8d390f3"
+version = "0.1.1"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=339c2272fd5b8fb4e1fa6662cfa9acdbb0d05704#339c2272fd5b8fb4e1fa6662cfa9acdbb0d05704"
 dependencies = [
  "base64ct",
  "bcs",
@@ -16653,7 +16629,7 @@ dependencies = [
  "serde_json",
  "sui-config",
  "sui-core",
- "sui-indexer-alt-framework",
+ "sui-futures",
  "sui-protocol-config",
  "sui-storage",
  "sui-types",

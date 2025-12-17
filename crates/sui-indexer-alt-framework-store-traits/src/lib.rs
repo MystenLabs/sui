@@ -11,6 +11,14 @@ use std::time::Duration;
 /// operations, agnostic of the underlying store implementation.
 #[async_trait]
 pub trait Connection: Send {
+    /// If no existing watermark record exists, initializes it with `default_next_checkpoint`.
+    /// Returns the committer watermark `checkpoint_hi_inclusive`.
+    async fn init_watermark(
+        &mut self,
+        pipeline_task: &str,
+        default_next_checkpoint: u64,
+    ) -> anyhow::Result<Option<u64>>;
+
     /// Given a `pipeline_task` representing either a pipeline name or a pipeline with an associated
     /// task (formatted as `{pipeline}{Store::DELIMITER}{task}`), return the committer watermark
     /// from the `Store`. The indexer fetches this value for each pipeline added to determine which
@@ -109,7 +117,7 @@ pub trait TransactionalStore: Store {
 /// Represents the highest checkpoint for some pipeline that has been processed by the indexer
 /// framework. When read from the `Store`, this represents the inclusive upper bound checkpoint of
 /// data that has been written to the Store for a pipeline.
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct CommitterWatermark {
     pub epoch_hi_inclusive: u64,
     pub checkpoint_hi_inclusive: u64,
@@ -129,7 +137,7 @@ pub struct ReaderWatermark {
 
 /// A watermark that represents the bounds for the region that the pruner is allowed to prune, and
 /// the time in milliseconds the pruner must wait before it can begin pruning data.
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct PrunerWatermark {
     /// The remaining time in milliseconds that the pruner must wait before it can begin pruning.
     ///

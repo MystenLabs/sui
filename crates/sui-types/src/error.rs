@@ -271,6 +271,8 @@ pub enum UserInputError {
     AlreadyExecutedInSoftBundleError { digest: TransactionDigest },
     #[error("At least one certificate in Soft Bundle has already been processed")]
     CertificateAlreadyProcessed,
+    #[error("Transaction {digest} was already executed")]
+    TransactionAlreadyExecuted { digest: TransactionDigest },
     #[error(
         "Gas price for transaction {digest} in Soft Bundle mismatch: want {expected}, have {actual}"
     )]

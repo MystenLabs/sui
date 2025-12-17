@@ -83,7 +83,7 @@ impl ProgressStore for DynamoDBProgressStore {
         if self.is_backfill && !checkpoint_number.is_multiple_of(1000) {
             return Ok(());
         }
-        if task_name == "bigtable"
+        if task_name.starts_with("bigtable")
             && let Some(ref mut bigtable_store) = self.bigtable_store
         {
             bigtable_store

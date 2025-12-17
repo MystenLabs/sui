@@ -1,0 +1,5 @@
+[package]
+name = "modern_using_legacy_name"
+
+[dependencies]
+DeepBook = { git = "bar", rev = "any" }

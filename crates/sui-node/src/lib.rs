@@ -1430,7 +1430,6 @@ impl SuiNode {
             let epoch_store = epoch_store.clone();
             let sui_tx_validator = SuiTxValidator::new(
                 state.clone(),
-                consensus_adapter.clone(),
                 checkpoint_service.clone(),
                 sui_tx_validator_metrics.clone(),
             );

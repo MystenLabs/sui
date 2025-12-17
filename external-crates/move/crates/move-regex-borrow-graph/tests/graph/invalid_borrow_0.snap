@@ -1,0 +1,5 @@
+---
+source: crates/move-regex-borrow-graph/tests/borrow_graph_tests.rs
+---
+Writability check failed at line 4:
+  Ref 1 is writable

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    ops::Deref,
     sync::{
         Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
@@ -9,10 +10,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use dashmap::DashMap;
-
 use anyhow::ensure;
 use async_trait::async_trait;
+use dashmap::DashMap;
 use scoped_futures::ScopedBoxFuture;
 use tokio::time::Duration;
 
@@ -84,6 +84,40 @@ pub struct MockConnection<'c>(pub &'c MockStore);
 
 #[async_trait]
 impl Connection for MockConnection<'_> {
+    async fn init_watermark(
+        &mut self,
+        pipeline_task: &str,
+        default_next_checkpoint: u64,
+    ) -> anyhow::Result<Option<u64>> {
+        let Some(checkpoint_hi_inclusive) = default_next_checkpoint.checked_sub(1) else {
+            // Do not create a watermark record with checkpoint_hi_inclusive = -1.
+            return Ok(self
+                .committer_watermark(pipeline_task)
+                .await?
+                .map(|w| w.checkpoint_hi_inclusive));
+        };
+
+        let &MockWatermark {
+            checkpoint_hi_inclusive,
+            ..
+        } = self
+            .0
+            .watermarks
+            .entry(pipeline_task.to_string())
+            .or_insert(MockWatermark {
+                epoch_hi_inclusive: 0,
+                checkpoint_hi_inclusive,
+                tx_hi: 0,
+                timestamp_ms_hi_inclusive: 0,
+                reader_lo: default_next_checkpoint,
+                pruner_timestamp: 0,
+                pruner_hi: default_next_checkpoint,
+            })
+            .deref();
+
+        Ok(Some(checkpoint_hi_inclusive))
+    }
+
     async fn committer_watermark(
         &mut self,
         pipeline_task: &str,

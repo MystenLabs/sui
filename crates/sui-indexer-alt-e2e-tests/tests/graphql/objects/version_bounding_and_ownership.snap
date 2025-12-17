@@ -1054,16 +1054,16 @@ Response: {
               {
                 "contents": {
                   "json": {
-                    "balance": "200",
-                    "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4"
+                    "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4",
+                    "balance": "200"
                   }
                 }
               },
               {
                 "contents": {
                   "json": {
-                    "balance": "100",
-                    "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c"
+                    "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c",
+                    "balance": "100"
                   }
                 }
               }
@@ -1094,16 +1094,16 @@ Response: {
           {
             "contents": {
               "json": {
-                "balance": "200",
-                "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4"
+                "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4",
+                "balance": "200"
               }
             }
           },
           {
             "contents": {
               "json": {
-                "balance": "100",
-                "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c"
+                "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c",
+                "balance": "100"
               }
             }
           }
@@ -1134,32 +1134,32 @@ Response: {
               {
                 "contents": {
                   "json": {
-                    "balance": "400",
-                    "id": "0x97efd2fb46a4563c069da5a47ec050344518b8ab6fea0a0a371321dbe64d6b30"
+                    "id": "0x97efd2fb46a4563c069da5a47ec050344518b8ab6fea0a0a371321dbe64d6b30",
+                    "balance": "400"
                   }
                 }
               },
               {
                 "contents": {
                   "json": {
-                    "balance": "300",
-                    "id": "0xcf9c57ebaf391a8207db3e296a4230a8a004c9baa8075f99f2e2911202cf56ab"
+                    "id": "0xcf9c57ebaf391a8207db3e296a4230a8a004c9baa8075f99f2e2911202cf56ab",
+                    "balance": "300"
                   }
                 }
               },
               {
                 "contents": {
                   "json": {
-                    "balance": "200",
-                    "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4"
+                    "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4",
+                    "balance": "200"
                   }
                 }
               },
               {
                 "contents": {
                   "json": {
-                    "balance": "100",
-                    "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c"
+                    "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c",
+                    "balance": "100"
                   }
                 }
               }
@@ -1190,32 +1190,32 @@ Response: {
           {
             "contents": {
               "json": {
-                "balance": "400",
-                "id": "0x97efd2fb46a4563c069da5a47ec050344518b8ab6fea0a0a371321dbe64d6b30"
+                "id": "0x97efd2fb46a4563c069da5a47ec050344518b8ab6fea0a0a371321dbe64d6b30",
+                "balance": "400"
               }
             }
           },
           {
             "contents": {
               "json": {
-                "balance": "300",
-                "id": "0xcf9c57ebaf391a8207db3e296a4230a8a004c9baa8075f99f2e2911202cf56ab"
+                "id": "0xcf9c57ebaf391a8207db3e296a4230a8a004c9baa8075f99f2e2911202cf56ab",
+                "balance": "300"
               }
             }
           },
           {
             "contents": {
               "json": {
-                "balance": "200",
-                "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4"
+                "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4",
+                "balance": "200"
               }
             }
           },
           {
             "contents": {
               "json": {
-                "balance": "100",
-                "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c"
+                "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c",
+                "balance": "100"
               }
             }
           }
@@ -1244,32 +1244,32 @@ Response: {
           {
             "contents": {
               "json": {
-                "balance": "400",
-                "id": "0x97efd2fb46a4563c069da5a47ec050344518b8ab6fea0a0a371321dbe64d6b30"
+                "id": "0x97efd2fb46a4563c069da5a47ec050344518b8ab6fea0a0a371321dbe64d6b30",
+                "balance": "400"
               }
             }
           },
           {
             "contents": {
               "json": {
-                "balance": "300",
-                "id": "0xcf9c57ebaf391a8207db3e296a4230a8a004c9baa8075f99f2e2911202cf56ab"
+                "id": "0xcf9c57ebaf391a8207db3e296a4230a8a004c9baa8075f99f2e2911202cf56ab",
+                "balance": "300"
               }
             }
           },
           {
             "contents": {
               "json": {
-                "balance": "200",
-                "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4"
+                "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4",
+                "balance": "200"
               }
             }
           },
           {
             "contents": {
               "json": {
-                "balance": "100",
-                "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c"
+                "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c",
+                "balance": "100"
               }
             }
           }
@@ -1298,8 +1298,8 @@ Response: {
           {
             "contents": {
               "json": {
-                "balance": "400",
-                "id": "0x97efd2fb46a4563c069da5a47ec050344518b8ab6fea0a0a371321dbe64d6b30"
+                "id": "0x97efd2fb46a4563c069da5a47ec050344518b8ab6fea0a0a371321dbe64d6b30",
+                "balance": "400"
               }
             },
             "objects": {
@@ -1307,8 +1307,8 @@ Response: {
                 {
                   "contents": {
                     "json": {
-                      "balance": "500",
-                      "id": "0x4c09eff9e21a3740b8d465208463bcf7ce1daf73dc05148169b258c91fa1c9ad"
+                      "id": "0x4c09eff9e21a3740b8d465208463bcf7ce1daf73dc05148169b258c91fa1c9ad",
+                      "balance": "500"
                     }
                   }
                 }
@@ -1334,8 +1334,8 @@ Response: {
           {
             "contents": {
               "json": {
-                "balance": "300",
-                "id": "0xcf9c57ebaf391a8207db3e296a4230a8a004c9baa8075f99f2e2911202cf56ab"
+                "id": "0xcf9c57ebaf391a8207db3e296a4230a8a004c9baa8075f99f2e2911202cf56ab",
+                "balance": "300"
               }
             },
             "objects": {
@@ -1354,8 +1354,8 @@ Response: {
           {
             "contents": {
               "json": {
-                "balance": "200",
-                "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4"
+                "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4",
+                "balance": "200"
               }
             },
             "objects": {
@@ -1374,8 +1374,8 @@ Response: {
           {
             "contents": {
               "json": {
-                "balance": "100",
-                "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c"
+                "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c",
+                "balance": "100"
               }
             },
             "objects": {
@@ -1401,32 +1401,32 @@ Response: {
             {
               "contents": {
                 "json": {
-                  "balance": "400",
-                  "id": "0x97efd2fb46a4563c069da5a47ec050344518b8ab6fea0a0a371321dbe64d6b30"
+                  "id": "0x97efd2fb46a4563c069da5a47ec050344518b8ab6fea0a0a371321dbe64d6b30",
+                  "balance": "400"
                 }
               }
             },
             {
               "contents": {
                 "json": {
-                  "balance": "300",
-                  "id": "0xcf9c57ebaf391a8207db3e296a4230a8a004c9baa8075f99f2e2911202cf56ab"
+                  "id": "0xcf9c57ebaf391a8207db3e296a4230a8a004c9baa8075f99f2e2911202cf56ab",
+                  "balance": "300"
                 }
               }
             },
             {
               "contents": {
                 "json": {
-                  "balance": "200",
-                  "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4"
+                  "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4",
+                  "balance": "200"
                 }
               }
             },
             {
               "contents": {
                 "json": {
-                  "balance": "100",
-                  "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c"
+                  "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c",
+                  "balance": "100"
                 }
               }
             }
@@ -1458,8 +1458,8 @@ Response: {
               {
                 "contents": {
                   "json": {
-                    "balance": "299999979432280",
-                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                    "balance": "299999979432280"
                   }
                 },
                 "objects": {
@@ -1467,32 +1467,32 @@ Response: {
                     {
                       "contents": {
                         "json": {
-                          "balance": "400",
-                          "id": "0x97efd2fb46a4563c069da5a47ec050344518b8ab6fea0a0a371321dbe64d6b30"
+                          "id": "0x97efd2fb46a4563c069da5a47ec050344518b8ab6fea0a0a371321dbe64d6b30",
+                          "balance": "400"
                         }
                       }
                     },
                     {
                       "contents": {
                         "json": {
-                          "balance": "300",
-                          "id": "0xcf9c57ebaf391a8207db3e296a4230a8a004c9baa8075f99f2e2911202cf56ab"
+                          "id": "0xcf9c57ebaf391a8207db3e296a4230a8a004c9baa8075f99f2e2911202cf56ab",
+                          "balance": "300"
                         }
                       }
                     },
                     {
                       "contents": {
                         "json": {
-                          "balance": "200",
-                          "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4"
+                          "id": "0x920fe6f98abfb0992e570f2152578ab767f20a386b85c5d18be09a8a989f05b4",
+                          "balance": "200"
                         }
                       }
                     },
                     {
                       "contents": {
                         "json": {
-                          "balance": "100",
-                          "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c"
+                          "id": "0x224a6337ca57793df1ed3a51ac388e92f5eebaa836bd4b95f3db93da42409d1c",
+                          "balance": "100"
                         }
                       }
                     }
@@ -1520,8 +1520,8 @@ Response: {
                   "json": {
                     "id": "0x5abebcecdc019e17d101bd669203ecc4a4f6d0bee5b58f7de8045d6acf1ffbd7",
                     "package": "0x0b40bb70727507f81606597beecfb5f3b66850adba91f0cf1246f175fcd3f602",
-                    "policy": 0,
-                    "version": "2"
+                    "version": "2",
+                    "policy": 0
                   }
                 },
                 "objects": {
@@ -1555,8 +1555,8 @@ Response: {
           {
             "contents": {
               "json": {
-                "balance": "600",
-                "id": "0x7586c892d59c3ba060c4afd279c17d20afe67fd013fc89fec30d0fb7daa2a68d"
+                "id": "0x7586c892d59c3ba060c4afd279c17d20afe67fd013fc89fec30d0fb7daa2a68d",
+                "balance": "600"
               }
             }
           }

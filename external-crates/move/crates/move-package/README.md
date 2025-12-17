@@ -4,6 +4,8 @@ title: Move Package
 custom_edit_url: https://github.com/move-language/move/edit/main/language/tools/move-package/README.md
 ---
 
+> ⚠️ This crate is deprecated and will be replaced by [move-package-alt](../move-package-alt).
+
 # Summary
 
 The Move package crate contains the logic for parsing, resolving, and

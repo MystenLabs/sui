@@ -27,21 +27,24 @@ use crate::v2::value::Struct;
 use crate::v2::value::Value;
 use crate::v2::value::Vector;
 use crate::v2::visitor::extractor::Extractor;
-use crate::v2::writer::BoundedWriter;
+use crate::v2::writer::JsonWriter;
+use crate::v2::writer::StringWriter;
 
 /// The interpreter is responsible for evaluating expressions inside format strings into values.
 pub(crate) struct Interpreter<'s, S: Store<'s>> {
     root: Slice<'s>,
     store: S,
+    max_depth: usize,
     max_output_size: usize,
     used_output: AtomicUsize,
 }
 
 impl<'s, S: Store<'s>> Interpreter<'s, S> {
-    pub(crate) fn new(root: Slice<'s>, store: S, max_output_size: usize) -> Self {
+    pub(crate) fn new(root: Slice<'s>, store: S, max_depth: usize, max_output_size: usize) -> Self {
         Self {
             root,
             store,
+            max_depth,
             max_output_size,
             used_output: AtomicUsize::new(0),
         }
@@ -52,9 +55,24 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
         &self,
         strands: &'s [P::Strand<'s>],
     ) -> Result<serde_json::Value, FormatError> {
-        // TODO(amnn): Support nested display and JSON transform.
-        let mut writer = BoundedWriter::new(&self.used_output, self.max_output_size);
+        // Detect and handle JSON transforms as a special case because they do not always evaluate
+        // to strings.
+        if let [
+            P::Strand::Expr(P::Expr {
+                alternates,
+                transform: Some(P::Transform::Json),
+            }),
+        ] = &strands
+        {
+            let Some(v) = self.eval_alts(alternates).await? else {
+                return Ok(serde_json::Value::Null);
+            };
 
+            let writer = JsonWriter::new(&self.used_output, self.max_output_size, self.max_depth);
+            return v.format_json(writer);
+        }
+
+        let mut writer = StringWriter::new(&self.used_output, self.max_output_size);
         for strand in strands {
             match strand {
                 P::Strand::Text(s) => writer

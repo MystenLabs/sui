@@ -149,13 +149,13 @@ async fn main() -> anyhow::Result<()> {
                     .execute_transaction_block_with_effects(tx)
                     .await
                     .expect("Failed to execute transaction block with effects");
-                if resp.status_ok().unwrap() {
-                    println!("Sui Transaction succeeded: {:?}", resp.digest);
-                } else {
-                    println!(
-                        "Sui Transaction failed: {:?}. Effects: {:?}",
-                        resp.digest, resp.effects
-                    );
+                match &resp.status {
+                    sui_json_rpc_types::SuiExecutionStatus::Success => {
+                        println!("Sui Transaction succeeded");
+                    }
+                    sui_json_rpc_types::SuiExecutionStatus::Failure { error } => {
+                        println!("Sui Transaction failed: {:?}", error);
+                    }
                 }
                 return Ok(());
             }

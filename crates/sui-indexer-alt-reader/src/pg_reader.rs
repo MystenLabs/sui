@@ -14,7 +14,6 @@ use diesel::query_dsl::methods::LimitDsl;
 use diesel_async::RunQueryDsl;
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use url::Url;
 
@@ -28,7 +27,6 @@ pub use sui_pg_db as db;
 pub struct PgReader {
     db: Option<db::Db>,
     metrics: Arc<DbReaderMetrics>,
-    cancel: CancellationToken,
 }
 
 pub struct Connection<'p> {
@@ -46,7 +44,6 @@ impl PgReader {
         database_url: Option<Url>,
         db_args: db::DbArgs,
         registry: &Registry,
-        cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
         let db = if let Some(database_url) = database_url {
             let db = db::Db::for_read(database_url, db_args)
@@ -67,11 +64,7 @@ impl PgReader {
 
         let metrics = DbReaderMetrics::new(prefix, registry);
 
-        Ok(Self {
-            db,
-            metrics,
-            cancel,
-        })
+        Ok(Self { db, metrics })
     }
 
     /// Create a data loader backed by this reader.
@@ -84,25 +77,22 @@ impl PgReader {
         self.db.is_some()
     }
 
-    /// Acquire a connection to the database. This can potentially fail if the service is cancelled
-    /// while the connection is being acquired.
+    /// Acquire a connection to the database. This can fail if a database has not been configured
+    /// to connect to.
     pub async fn connect(&self) -> anyhow::Result<Connection<'_>> {
         let Some(db) = &self.db else {
             bail!("No database to connect to");
         };
 
-        tokio::select! {
-            _ = self.cancel.cancelled() => {
-                bail!("Cancelled while connecting to the database");
-            }
+        let conn = db
+            .connect()
+            .await
+            .context("Failed to connect to database")?;
 
-            conn = db.connect() => {
-                Ok(Connection {
-                    conn: conn.context("Failed to connect to database")?,
-                    metrics: self.metrics.clone(),
-                })
-            }
-        }
+        Ok(Connection {
+            conn,
+            metrics: self.metrics.clone(),
+        })
     }
 }
 

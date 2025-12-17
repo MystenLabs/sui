@@ -282,6 +282,23 @@ impl IndexStoreTables {
 
         Ok(())
     }
+
+    pub fn get_dynamic_fields_iterator(
+        &self,
+        object: ObjectID,
+        cursor: Option<ObjectID>,
+    ) -> impl Iterator<Item = Result<(ObjectID, DynamicFieldInfo), TypedStoreError>> + '_ {
+        debug!(?object, "get_dynamic_fields");
+        // The object id 0 is the smallest possible
+        let iter_lower_bound = (object, cursor.unwrap_or(ObjectID::ZERO));
+        let iter_upper_bound = (object, ObjectID::MAX);
+        self.dynamic_field_index
+            .safe_iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
+            // skip an extra b/c the cursor is exclusive
+            .skip(usize::from(cursor.is_some()))
+            .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0.0 == object))
+            .map_ok(|((_, c), object_info)| (c, object_info))
+    }
 }
 
 pub struct IndexStore {
@@ -1446,18 +1463,7 @@ impl IndexStore {
         cursor: Option<ObjectID>,
     ) -> SuiResult<impl Iterator<Item = Result<(ObjectID, DynamicFieldInfo), TypedStoreError>> + '_>
     {
-        debug!(?object, "get_dynamic_fields");
-        // The object id 0 is the smallest possible
-        let iter_lower_bound = (object, cursor.unwrap_or(ObjectID::ZERO));
-        let iter_upper_bound = (object, ObjectID::MAX);
-        Ok(self
-            .tables
-            .dynamic_field_index
-            .safe_iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
-            // skip an extra b/c the cursor is exclusive
-            .skip(usize::from(cursor.is_some()))
-            .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0.0 == object))
-            .map_ok(|((_, c), object_info)| (c, object_info)))
+        Ok(self.tables.get_dynamic_fields_iterator(object, cursor))
     }
 
     #[instrument(skip(self))]
@@ -1648,16 +1654,26 @@ impl IndexStore {
     /// cache miss, we go to the database (expensive) and update the cache. Notice that db read is
     /// done with `spawn_blocking` as that is expected to block
     #[instrument(skip(self))]
-    pub fn get_balance(&self, owner: SuiAddress, coin_type: TypeTag) -> SuiResult<TotalBalance> {
+    pub fn get_coin_object_balance(
+        &self,
+        owner: SuiAddress,
+        coin_type: TypeTag,
+    ) -> SuiResult<TotalBalance> {
         let force_disable_cache = read_size_from_env(ENV_VAR_DISABLE_INDEX_CACHE).unwrap_or(0) > 0;
         let cloned_coin_type = coin_type.clone();
         let metrics_cloned = self.metrics.clone();
         let coin_index_cloned = self.tables.coin_index_2.clone();
         if force_disable_cache {
-            Self::get_balance_from_db(metrics_cloned, coin_index_cloned, owner, cloned_coin_type)
-                .map_err(|e| {
+            return Self::get_balance_from_db(
+                metrics_cloned,
+                coin_index_cloned,
+                owner,
+                cloned_coin_type,
+            )
+            .map_err(|e| {
                 SuiErrorKind::ExecutionError(format!("Failed to read balance frm DB: {:?}", e))
-            })?;
+                    .into()
+            });
         }
 
         self.metrics.balance_lookup_from_total.inc();
@@ -1701,7 +1717,7 @@ impl IndexStore {
     /// `get_Balance()` queries. Notice that db read is performed with `spawn_blocking` as that is
     /// expected to block
     #[instrument(skip(self))]
-    pub fn get_all_balance(
+    pub fn get_all_coin_object_balances(
         &self,
         owner: SuiAddress,
     ) -> SuiResult<Arc<HashMap<TypeTag, TotalBalance>>> {
@@ -1709,14 +1725,14 @@ impl IndexStore {
         let metrics_cloned = self.metrics.clone();
         let coin_index_cloned = self.tables.coin_index_2.clone();
         if force_disable_cache {
-            Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner).map_err(
-                |e| {
+            return Self::get_all_balances_from_db(metrics_cloned, coin_index_cloned, owner)
+                .map_err(|e| {
                     SuiErrorKind::ExecutionError(format!(
                         "Failed to read all balance from DB: {:?}",
                         e
                     ))
-                },
-            )?;
+                    .into()
+                });
         }
 
         self.metrics.all_balance_lookup_from_total.inc();
@@ -1947,12 +1963,12 @@ mod tests {
             address,
             GAS::type_tag(),
         )?;
-        let balance = index_store.get_balance(address, GAS::type_tag())?;
+        let balance = index_store.get_coin_object_balance(address, GAS::type_tag())?;
         assert_eq!(balance, balance_from_db);
         assert_eq!(balance.balance, 1000);
         assert_eq!(balance.num_coins, 10);
 
-        let all_balance = index_store.get_all_balance(address)?;
+        let all_balance = index_store.get_all_coin_object_balances(address)?;
         let balance = all_balance.get(&GAS::type_tag()).unwrap();
         assert_eq!(*balance, balance_from_db);
         assert_eq!(balance.balance, 1000);
@@ -1988,7 +2004,7 @@ mod tests {
             address,
             GAS::type_tag(),
         )?;
-        let balance = index_store.get_balance(address, GAS::type_tag())?;
+        let balance = index_store.get_coin_object_balance(address, GAS::type_tag())?;
         assert_eq!(balance, balance_from_db);
         assert_eq!(balance.balance, 700);
         assert_eq!(balance.num_coins, 7);
@@ -1998,10 +2014,10 @@ mod tests {
             .caches
             .per_coin_type_balance
             .invalidate(&(address, GAS::type_tag()));
-        let all_balance = index_store.get_all_balance(address)?;
+        let all_balance = index_store.get_all_coin_object_balances(address)?;
         assert_eq!(all_balance.get(&GAS::type_tag()).unwrap().balance, 700);
         assert_eq!(all_balance.get(&GAS::type_tag()).unwrap().num_coins, 7);
-        let balance = index_store.get_balance(address, GAS::type_tag())?;
+        let balance = index_store.get_coin_object_balance(address, GAS::type_tag())?;
         assert_eq!(balance, balance_from_db);
         assert_eq!(balance.balance, 700);
         assert_eq!(balance.num_coins, 7);

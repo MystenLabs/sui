@@ -279,6 +279,8 @@ const MAX_PROTOCOL_VERSION: u64 = 105;
 // Version 104: Framework update: CoinRegistry follow up for Coin methods
 //              Enable all non-zero PCRs parsing for nitro attestation native function in Devnet and Testnet.
 // Version 105: Framework update: address aliases
+//              Enable address balances on devnet
+//              Enable multi-epoch transaction expiration.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -767,6 +769,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
 
+    // Enable coin reservation
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_reservation_obj_refs: bool,
+
     // If true, create the root accumulator object in the change epoch transaction.
     // This must be enabled and shipped before `enable_accumulators` is set to true.
     #[serde(skip_serializing_if = "is_false")]
@@ -779,6 +785,10 @@ struct FeatureFlags {
     // Enable address balance gas payments
     #[serde(skip_serializing_if = "is_false")]
     enable_address_balance_gas_payments: bool,
+
+    // Enable multi-epoch transaction expiration (max 1 epoch difference)
+    #[serde(skip_serializing_if = "is_false")]
+    enable_multi_epoch_transaction_expiration: bool,
 
     // Enable statically type checked ptb execution
     #[serde(skip_serializing_if = "is_false")]
@@ -2035,12 +2045,20 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators
     }
 
+    pub fn enable_coin_reservation_obj_refs(&self) -> bool {
+        self.feature_flags.enable_coin_reservation_obj_refs
+    }
+
     pub fn create_root_accumulator_object(&self) -> bool {
         self.feature_flags.create_root_accumulator_object
     }
 
     pub fn enable_address_balance_gas_payments(&self) -> bool {
         self.feature_flags.enable_address_balance_gas_payments
+    }
+
+    pub fn enable_multi_epoch_transaction_expiration(&self) -> bool {
+        self.feature_flags.enable_multi_epoch_transaction_expiration
     }
 
     pub fn enable_authenticated_event_streams(&self) -> bool {
@@ -2430,6 +2448,10 @@ impl ProtocolConfig {
             // TODO: when flag for disabling CertifiedTransaction is added, add assertion for it here.
         }
         address_aliases
+    }
+
+    pub fn enable_object_funds_withdraw(&self) -> bool {
+        self.feature_flags.enable_object_funds_withdraw
     }
 }
 
@@ -4227,7 +4249,7 @@ impl ProtocolConfig {
                 95 => {
                     cfg.type_name_id_base_cost = Some(52);
 
-                    // Reudce the frequency of checkpoint splitting under high TPS.
+                    // Reduce the frequency of checkpoint splitting under high TPS.
                     cfg.max_transactions_per_checkpoint = Some(20_000);
                 }
                 96 => {
@@ -4320,7 +4342,15 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .include_cancelled_randomness_txns_in_prologue = true;
                 }
-                105 => {}
+                105 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_accumulators = true;
+                        cfg.feature_flags.enable_address_balance_gas_payments = true;
+                        cfg.feature_flags.enable_authenticated_event_streams = true;
+                        cfg.feature_flags.enable_object_funds_withdraw = true;
+                    }
+                    cfg.feature_flags.enable_multi_epoch_transaction_expiration = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4622,8 +4652,21 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators = true;
     }
 
+    pub fn disable_accumulators_for_testing(&mut self) {
+        self.feature_flags.enable_accumulators = false;
+        self.feature_flags.enable_address_balance_gas_payments = false;
+    }
+
+    pub fn enable_coin_reservation_for_testing(&mut self) {
+        self.feature_flags.enable_coin_reservation_obj_refs = true;
+    }
+
     pub fn create_root_accumulator_object_for_testing(&mut self) {
         self.feature_flags.create_root_accumulator_object = true;
+    }
+
+    pub fn disable_create_root_accumulator_object_for_testing(&mut self) {
+        self.feature_flags.create_root_accumulator_object = false;
     }
 
     pub fn enable_address_balance_gas_payments_for_testing(&mut self) {
@@ -4632,11 +4675,23 @@ impl ProtocolConfig {
         self.feature_flags.enable_address_balance_gas_payments = true;
     }
 
+    pub fn disable_address_balance_gas_payments_for_testing(&mut self) {
+        self.feature_flags.enable_address_balance_gas_payments = false;
+    }
+
+    pub fn enable_multi_epoch_transaction_expiration_for_testing(&mut self) {
+        self.feature_flags.enable_multi_epoch_transaction_expiration = true;
+    }
+
     pub fn enable_authenticated_event_streams_for_testing(&mut self) {
         self.enable_accumulators_for_testing();
         self.feature_flags.enable_authenticated_event_streams = true;
         self.feature_flags
             .include_checkpoint_artifacts_digest_in_summary = true;
+    }
+
+    pub fn disable_authenticated_event_streams_for_testing(&mut self) {
+        self.feature_flags.enable_authenticated_event_streams = false;
     }
 
     pub fn enable_non_exclusive_writes_for_testing(&mut self) {

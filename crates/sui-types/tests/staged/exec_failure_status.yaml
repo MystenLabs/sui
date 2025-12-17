@@ -39,6 +39,6 @@
 37: MoveVectorElemTooBig
 38: MoveRawValueTooBig
 39: InvalidLinkage
-40: InsufficientBalanceForWithdraw
+40: InsufficientFundsForWithdraw
 41: NonExclusiveWriteInputObjectModified
 42: DuplicateModuleName

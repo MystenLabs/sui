@@ -153,7 +153,6 @@ pub async fn submit(
     let signatures = signed_tx
         .tx_signatures()
         .iter()
-        .cloned()
         .map(UserSignature::from)
         .collect();
 

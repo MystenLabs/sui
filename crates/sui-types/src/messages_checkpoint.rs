@@ -613,7 +613,8 @@ pub struct CheckpointTransactionContents {
     pub digest: ExecutionDigests,
 
     /// Each signature is paired with the version of the AddressAliases object
-    /// that was used to verify it.
+    /// that was used to verify it. Signatures always appear here in the same
+    /// order as the `required_signers` of the input `Transaction`.
     pub user_signatures: Vec<(GenericSignature, Option<SequenceNumber>)>,
 }
 
@@ -829,6 +830,34 @@ impl CheckpointContentsView<'_> {
                 .get(index)
                 .map(|sigs| sigs.iter().map(|sig| (sig.clone(), None)).collect()),
             Self::V2(v) => v.get(index).map(|t| t.user_signatures.clone()),
+        }
+    }
+
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<
+        Item = (
+            &ExecutionDigests,
+            impl Iterator<Item = (&GenericSignature, Option<SequenceNumber>)>,
+        ),
+    > {
+        match self {
+            Self::V1 {
+                transactions,
+                user_signatures,
+            } => itertools::Either::Left(transactions.iter().zip(user_signatures.iter()).map(
+                |(digests, signatures)| {
+                    let signatures_iter =
+                        itertools::Either::Left(signatures.iter().map(|s| (s, None)));
+                    (digests, signatures_iter)
+                },
+            )),
+            Self::V2(v) => itertools::Either::Right(v.iter().map(|t| {
+                (
+                    &t.digest,
+                    itertools::Either::Right(t.user_signatures.iter().map(|(s, v)| (s, *v))),
+                )
+            })),
         }
     }
 }

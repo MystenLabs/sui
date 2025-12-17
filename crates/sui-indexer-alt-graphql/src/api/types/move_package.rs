@@ -131,13 +131,13 @@ impl MovePackage {
     }
 
     /// The version of this package that this content comes from.
-    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
-        self.super_.version(ctx).await
+    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
+        self.super_.version(ctx).await.ok()?
     }
 
     /// 32-byte hash that identifies the package's contents, encoded in Base58.
-    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
-        self.super_.digest(ctx).await
+    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Option<Result<String, RpcError>> {
+        self.super_.digest(ctx).await.ok()?
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
@@ -296,15 +296,16 @@ impl MovePackage {
         version: Option<UInt53>,
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
-    ) -> Result<Option<Object>, RpcError<object::Error>> {
+    ) -> Option<Result<Object, RpcError<object::Error>>> {
         self.super_
             .object_at(ctx, version, root_version, checkpoint)
             .await
+            .ok()?
     }
 
     /// The Base64-encoded BCS serialization of this package, as an `Object`.
-    pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError> {
-        self.super_.object_bcs(ctx).await
+    pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Option<Result<Base64, RpcError>> {
+        self.super_.object_bcs(ctx).await.ok()?
     }
 
     /// Paginate all versions of this package treated as an object, after this one.
@@ -316,10 +317,11 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, Object>>, RpcError> {
+    ) -> Option<Result<Connection<String, Object>, RpcError>> {
         self.super_
             .object_versions_after(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// Paginate all versions of this package treated as an object, before this one.
@@ -331,15 +333,16 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, Object>>, RpcError> {
+    ) -> Option<Result<Connection<String, Object>, RpcError>> {
         self.super_
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// The object's owner kind.
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Result<Option<Owner>, RpcError> {
-        self.super_.owner(ctx).await
+    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<Result<Owner, RpcError>> {
+        self.super_.owner(ctx).await.ok()?
     }
 
     /// Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
@@ -382,25 +385,24 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("MovePackage", "packageVersionsAfter");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+        let version = self.version(ctx).await.ok()??;
 
-        let Some(version) = self.super_.version(ctx).await? else {
-            return Ok(None);
-        };
+        let result = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("MovePackage", "packageVersionsAfter");
+            let page = Page::from_params(limits, first, after, last, before)?;
+            let version = version?;
 
-        // Apply any filter that was supplied to the query, but add an additional version
-        // lowerbound constraint.
-        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
-            after_version: Some(version),
-            ..VersionFilter::default()
-        }) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+            // Apply any filter that was supplied to the query, but add an additional version
+            // lowerbound constraint.
+            let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
+                after_version: Some(version),
+                ..VersionFilter::default()
+            }) else {
+                return Ok(Connection::new(false, false));
+            };
 
-        Ok(Some(
             MovePackage::paginate_by_version(
                 ctx,
                 self.super_.super_.scope.clone(),
@@ -408,8 +410,11 @@ impl MovePackage {
                 self.super_.super_.address,
                 filter,
             )
-            .await?,
-        ))
+            .await
+        }
+        .await;
+
+        Some(result)
     }
 
     /// Paginate all versions of this package before this one.
@@ -421,25 +426,24 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("MovePackage", "packageVersionsBefore");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+        let version = self.version(ctx).await.ok()??;
 
-        let Some(version) = self.super_.version(ctx).await? else {
-            return Ok(None);
-        };
+        let result = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("MovePackage", "packageVersionsBefore");
+            let page = Page::from_params(limits, first, after, last, before)?;
+            let version = version?;
 
-        // Apply any filter that was supplied to the query, but add an additional version
-        // upperbound constraint.
-        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
-            before_version: Some(version),
-            ..VersionFilter::default()
-        }) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+            // Apply any filter that was supplied to the query, but add an additional version
+            // upperbound constraint.
+            let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
+                before_version: Some(version),
+                ..VersionFilter::default()
+            }) else {
+                return Ok(Connection::new(false, false));
+            };
 
-        Ok(Some(
             MovePackage::paginate_by_version(
                 ctx,
                 self.super_.super_.scope.clone(),
@@ -447,16 +451,19 @@ impl MovePackage {
                 self.super_.super_.address,
                 filter,
             )
-            .await?,
-        ))
+            .await
+        }
+        .await;
+
+        Some(result)
     }
 
     /// The transaction that created this version of the object.
     pub(crate) async fn previous_transaction(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Transaction>, RpcError> {
-        self.super_.previous_transaction(ctx).await
+    ) -> Option<Result<Transaction, RpcError>> {
+        self.super_.previous_transaction(ctx).await.ok()?
     }
 
     /// The transitive dependencies of this package.
@@ -481,8 +488,8 @@ impl MovePackage {
     pub(crate) async fn storage_rebate(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<BigInt>, RpcError> {
-        self.super_.storage_rebate(ctx).await
+    ) -> Option<Result<BigInt, RpcError>> {
+        self.super_.storage_rebate(ctx).await.ok()?
     }
 
     /// The transactions that sent objects to this object.
@@ -494,10 +501,11 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CTransaction>,
         filter: Option<TransactionFilter>,
-    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
         self.super_
             .received_transactions(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// A table identifying which versions of a package introduced each of its types.
@@ -549,7 +557,7 @@ impl MovePackage {
         object: &Object,
         ctx: &Context<'_>,
     ) -> Result<Option<Self>, RpcError> {
-        let Some(super_contents) = object.contents(ctx).await?.as_ref() else {
+        let Some(super_contents) = object.contents(ctx).await? else {
             return Ok(None);
         };
 
@@ -881,7 +889,7 @@ impl MovePackage {
     ) -> Result<&Option<NativeMovePackage>, RpcError> {
         self.native
             .get_or_try_init(async || {
-                let Some(contents) = self.super_.contents(ctx).await?.as_ref() else {
+                let Some(contents) = self.super_.contents(ctx).await? else {
                     return Ok(None);
                 };
 

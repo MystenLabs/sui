@@ -59,6 +59,7 @@ tempfile.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tokio-stream.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 twox-hash.workspace = true
 
@@ -69,7 +70,6 @@ fastcrypto-zkp.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
-move-package.workspace = true
 move-symbol-pool.workspace = true
 mysten-common.workspace = true
 mysten-network.workspace = true

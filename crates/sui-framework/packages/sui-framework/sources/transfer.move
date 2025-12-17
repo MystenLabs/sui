@@ -64,8 +64,6 @@ public fun public_transfer<T: key + store>(obj: T, recipient: address) {
     transfer_impl(obj, recipient)
 }
 
-/// NOT YET SUPPORTED ON MAINNET. The function will abort with `ENotSupported` if used on a network
-/// where party objects are not yet supported.
 /// Transfer ownership of `obj` to the `party`. This transfer behaves similar to both
 /// `transfer` and `share_object`. It is similar to `transfer` in that the object is authorized for
 /// use only by the recipient(s), in this case the `party`. This means that only the members
@@ -82,8 +80,6 @@ public fun party_transfer<T: key>(obj: T, party: sui::party::Party) {
     party_transfer_impl(obj, default, addresses, permissions)
 }
 
-/// NOT YET SUPPORTED ON MAINNET. The function will abort with `ENotSupported` if used on a network
-/// where party objects are not yet supported.
 /// Transfer ownership of `obj` to the `party`. This transfer behaves similar to both
 /// `transfer` and `share_object`. It is similar to `transfer` in that the object is authorized for
 /// use only by the recipient(s), in this case the `party`. This means that only the members

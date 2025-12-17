@@ -196,7 +196,7 @@ The sequential pipeline consists of only two main components, making it signific
 
 ![Sequential pipeline diagram](./images/sequential.png)
 
-The ingestion layer (`Regulator` + `Broadcaster`) and `Processor` components use identical backpressure mechanisms, `FANOUT` parallel processing, and `processor()` implementations to the concurrent pipeline.
+The `Broadcaster` and `Processor` components use identical backpressure mechanisms, `FANOUT` parallel processing, and `processor()` implementations to the concurrent pipeline.
 
 The key difference is the dramatically simplified pipeline core with just a single `Committer` component that handles ordering, batching, and database commits. Concurrent pipelines, in contrast, have five separate components in addition to the `Processor`: `Collector`, `Committer`, `CommitterWatermark`, `ReaderWatermark`, and `Pruner`.
 
@@ -256,17 +256,17 @@ Without regulation, missing checkpoints can cause deadlocks in situations such a
 1. Buffer becomes full and cannot refetch checkpoint 100 when available.
 1. Pipeline becomes permanently stuck.
 
-To avoid this pitfall, you can use watermark progress reporting. After successful commits, instruct the pipelines to send `(pipeline_name, highest_committed_checkpoint)` to the regulator via the `ingest_hi_tx` channel.
+To avoid this pitfall, you can use watermark progress reporting. After successful commits, instruct the pipelines to send `(pipeline_name, highest_committed_checkpoint)` to the broadcaster via the `commit_hi_tx` channel.
 
 <ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/sequential/committer.rs" tag="send" />
     
-The `Regulator` receives updates by listening on `ingest_hi_rx`. It then calculates the ingestion boundary across all pipelines (`min_subscriber_watermark + buffer_size`).
+The `Broadcaster` receives updates by listening on `commit_hi_rx`. It then calculates the ingestion boundary across all pipelines (`min_subscriber_watermark + buffer_size`).
 
-<ImportContent source="crates/sui-indexer-alt-framework/src/ingestion/regulator.rs" tag="regulator" />
+<ImportContent source="crates/sui-indexer-alt-framework/src/ingestion/broadcaster.rs" tag="regulator" />
 
 This approach prevents deadlocks in the following ways:
 
-- The `Regulator` only fetches checkpoints up to the calculated boundary.
+- The `Broadcaster` only fetches checkpoints up to the calculated boundary.
 - No pipeline falls too far behind the ingestion front.
 - Guarantees buffer space remains available to retry missing checkpoints.
 
@@ -445,10 +445,6 @@ With the component architecture detailed, let's examine how the pipeline prevent
 
 Each channel has a fixed buffer size that automatically blocks when full:
 
-**`Regulator` to `Broadcaster`**: `ingest_concurrency` slots → `Regulator` stops signaling new fetches.
-
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/mod.rs" struct="IngestionConfig" highlight="ingest_concurrency" />
-    
 **`Broadcaster` to `Processor`**: `checkpoint_buffer_size` slots → `Broadcaster` blocks, upstream pressure.
 
 <ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/mod.rs" struct="IngestionConfig" highlight="checkpoint_buffer_size" />   
@@ -473,9 +469,9 @@ Database connection limits are also in place. The `Committer` blocks when all co
 
 #### Application-level coordination
 
-`Watermark` feedback provides application-level coordination by reporting progress to the `Regulator` through `Watermark` updates. Further coordination is provided through bounded ingestion, where the `Regulator` only signals fetches within a bounded range ahead of the current watermark.
+`Watermark` feedback provides application-level coordination by reporting progress to the `Broadcaster` through `Watermark` updates. Further coordination is provided through bounded ingestion, where the `Broadcaster` only signals fetches within a bounded range ahead of the current watermark.
 
-<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/regulator.rs" tag="bound" /> 
+<ImportContent mode="code" source="crates/sui-indexer-alt-framework/src/ingestion/broadcaster.rs" tag="bound" /> 
     
 Finally, memory protection ensures the entire system operates within predictable memory bounds.
 
@@ -489,8 +485,7 @@ Basic example: Slow database scenario
     - `Committer` channel fills up (cannot commit fast enough).
     - `Collector` stops sending to `Committer` (channel full).
     - `Processor` workers stop sending to `Collector` (channel full).
-    - `Broadcaster` stops sending to `Processors` (channel full).
-    - `Regulator` stops requesting new checkpoints (channel full).
+    - `Broadcaster` stops fetching new checkpoints and sending to `Processors` (channel full).
 1. **End result**:
     - Indexer automatically slows to 50 checkpoints per second, matching database capacity.
     - Memory stays bounded, no runaway growth.

@@ -348,6 +348,9 @@ struct CachedCommittedData {
     executed_effects_digests:
         MonotonicCache<TransactionDigest, PointCacheItem<TransactionEffectsDigest>>,
 
+    transaction_executed_in_last_epoch:
+        MonotonicCache<(EpochId, TransactionDigest), PointCacheItem<()>>,
+
     // Objects that were read at transaction signing time - allows us to access them again at
     // execution time with a single lock / hash lookup
     _transaction_objects: MokaCache<TransactionDigest, Vec<Object>>,
@@ -385,6 +388,10 @@ impl CachedCommittedData {
             ))
             .build();
 
+        let transaction_executed_in_last_epoch = MonotonicCache::new(
+            randomize_cache_capacity_in_tests(config.executed_effect_cache_size()),
+        );
+
         Self {
             object_cache,
             marker_cache,
@@ -392,6 +399,7 @@ impl CachedCommittedData {
             transaction_effects,
             transaction_events,
             executed_effects_digests,
+            transaction_executed_in_last_epoch,
             _transaction_objects: transaction_objects,
         }
     }
@@ -403,6 +411,7 @@ impl CachedCommittedData {
         self.transaction_effects.invalidate_all();
         self.transaction_events.invalidate_all();
         self.executed_effects_digests.invalidate_all();
+        self.transaction_executed_in_last_epoch.invalidate_all();
         self._transaction_objects.invalidate_all();
 
         assert_empty(&self.object_cache);
@@ -411,6 +420,7 @@ impl CachedCommittedData {
         assert!(self.transaction_effects.is_empty());
         assert!(self.transaction_events.is_empty());
         assert!(self.executed_effects_digests.is_empty());
+        assert!(self.transaction_executed_in_last_epoch.is_empty());
         assert_empty(&self._transaction_objects);
     }
 }
@@ -547,6 +557,12 @@ impl WritebackCache {
             self.backpressure_manager.clone(),
         );
         std::mem::swap(self, &mut new);
+    }
+
+    pub fn evict_executed_effects_from_cache_for_testing(&self, tx_digest: &TransactionDigest) {
+        self.cached.executed_effects_digests.invalidate(tx_digest);
+        self.cached.transaction_events.invalidate(tx_digest);
+        self.cached.transactions.invalidate(tx_digest);
     }
 
     fn write_object_entry(
@@ -898,6 +914,13 @@ impl WritebackCache {
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
         let tx_digest = *tx_outputs.transaction.digest();
         trace!(?tx_digest, "writing transaction outputs to cache");
+
+        assert!(
+            !self.transaction_executed_in_last_epoch(&tx_digest, epoch_id),
+            "Transaction {:?} was already executed in epoch {}",
+            tx_digest,
+            epoch_id.saturating_sub(1)
+        );
 
         self.dirty.fastpath_transaction_outputs.remove(&tx_digest);
 
@@ -2080,6 +2103,44 @@ impl TransactionCacheRead for WritebackCache {
                 results
             },
         )
+    }
+
+    fn transaction_executed_in_last_epoch(
+        &self,
+        digest: &TransactionDigest,
+        current_epoch: EpochId,
+    ) -> bool {
+        if current_epoch == 0 {
+            return false;
+        }
+        let last_epoch = current_epoch - 1;
+        let cache_key = (last_epoch, *digest);
+
+        let ticket = self
+            .cached
+            .transaction_executed_in_last_epoch
+            .get_ticket_for_read(&cache_key);
+
+        if let Some(cached) = self
+            .cached
+            .transaction_executed_in_last_epoch
+            .get(&cache_key)
+        {
+            return cached.lock().is_some();
+        }
+
+        let was_executed = self
+            .store
+            .perpetual_tables
+            .was_transaction_executed_in_last_epoch(digest, current_epoch);
+
+        let value = if was_executed { Some(()) } else { None };
+        self.cached
+            .transaction_executed_in_last_epoch
+            .insert(&cache_key, value, ticket)
+            .ok();
+
+        was_executed
     }
 
     fn notify_read_executed_effects_digests<'a>(

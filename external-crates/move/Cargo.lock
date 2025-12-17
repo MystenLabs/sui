@@ -2435,7 +2435,8 @@ dependencies = [
  "move-ir-types",
  "move-model",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stackless-bytecode",
  "move-stackless-bytecode-2",
  "move-stdlib",
@@ -2758,8 +2759,11 @@ dependencies = [
 name = "move-regex-borrow-graph"
 version = "0.0.1"
 dependencies = [
+ "datatest-stable",
+ "insta",
  "itertools 0.10.5",
  "move-binary-format",
+ "move-command-line-common",
  "move-core-types",
  "petgraph",
  "proptest",
