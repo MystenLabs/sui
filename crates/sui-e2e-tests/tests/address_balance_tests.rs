@@ -3613,7 +3613,7 @@ async fn address_balance_stress_test() {
 
     let test_cluster = Arc::new(
         TestClusterBuilder::new()
-            .with_epoch_duration_ms(3000)
+            .with_epoch_duration_ms(10000)
             .with_num_validators(7)
             .build()
             .await,
@@ -3716,7 +3716,7 @@ async fn address_balance_stress_test() {
 
             let handle = tokio::spawn(async move {
                 let start_time = std::time::Instant::now();
-                let duration = std::time::Duration::from_secs(30);
+                let duration = std::time::Duration::from_secs(60);
                 let mut current_gas = gas_obj;
 
                 while start_time.elapsed() < duration {
