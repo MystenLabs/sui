@@ -821,7 +821,7 @@ fn is_legacy_system_dep_name(name: &str, system_deps_names: &BTreeSet<&SystemDep
 fn to_modern_system_dep_name(name: &str) -> SystemDepName {
     match name {
         "Sui" => "sui".to_string(),
-        "MoveStdlib" => "stdlib".to_string(),
+        "MoveStdlib" => "std".to_string(),
         "Bridge" => "bridge".to_string(),
         "DeepBook" => "deepbook".to_string(),
         "SuiSystem" => "sui_system".to_string(),
