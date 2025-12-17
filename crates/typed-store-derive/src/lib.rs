@@ -376,7 +376,8 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                             typed_store::tidehunter_util::add_key_space(
                                 &mut builder,
                                 stringify!(#cf_names),
-                                &cf_configs[stringify!(#cf_names)],
+                                cf_configs.get(stringify!(#cf_names))
+                                    .unwrap_or_else(|| panic!("Missing tidehunter configuration for table {} from database {}", stringify!(#cf_names), stringify!(#name))),
                             ),
                         )*
                     );
