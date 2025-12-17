@@ -30,7 +30,7 @@ use move_package::source_package::parsed_manifest::Dependencies;
 /// Interval for checking if the parent process is still alive (in seconds)
 const PARENT_LIVENESS_MONITORING_INTERVAL_SECS: u64 = 10;
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum RunnerState {
     Run(BTreeSet<PathBuf>),
     Wait,
@@ -38,8 +38,18 @@ pub enum RunnerState {
 }
 
 /// Data used during symbolication running and symbolication info updating
+#[derive(allocative::Allocative)]
 pub struct SymbolicatorRunner {
+    /// SKIP REASON: Condvar from std::sync has no heap allocations (synchronization primitive only)
+    #[allocative(skip)]
     mtx_cvar: Arc<(Mutex<RunnerState>, Condvar)>,
+}
+
+// Manual DeepSizeOf - skip Condvar (sync primitive with no heap allocation)
+impl deepsize::DeepSizeOf for SymbolicatorRunner {
+    fn deep_size_of_children(&self, _context: &mut deepsize::Context) -> usize {
+        0 // Condvar is a synchronization primitive with no heap allocations
+    }
 }
 
 impl SymbolicatorRunner {
@@ -164,6 +174,22 @@ impl SymbolicatorRunner {
                                         // until we know we actually need it
                                         let mut old_symbols_map = symbols_map.lock().unwrap();
                                         old_symbols_map.insert(pkg_path.clone(), new_symbols);
+
+                                        // Log memory usage after insertion
+                                        eprintln!("[MEMORY] ========================================");
+                                        eprintln!("[MEMORY] Symbolication complete - logging all caches");
+                                        eprintln!("[MEMORY] ========================================");
+                                        crate::memory_stats::log_symbols_map_total(old_symbols_map.iter());
+
+                                        // Also log the pkg_deps cache
+                                        eprintln!("[MEMORY] ========================================");
+                                        eprintln!("[MEMORY] Now logging pkg_deps cache");
+                                        eprintln!("[MEMORY] ========================================");
+                                        let pkg_deps_locked = packages_info.lock().unwrap();
+                                        eprintln!("[MEMORY] pkg_deps has {} pkg_info entries and {} compiled_dep_pkgs entries",
+                                            pkg_deps_locked.pkg_info.len(),
+                                            pkg_deps_locked.compiled_dep_pkgs.len());
+                                        crate::memory_stats::log_cached_packages_memory(&pkg_deps_locked);
                                     }
                                     // set/reset (previous) diagnostics
                                     if let Err(err) = sender.send(Ok(lsp_diagnostics)) {

@@ -400,6 +400,19 @@ pub enum StatusCode {
 }
 }
 
+impl allocative::Allocative for StatusCode {
+    fn visit<'a, 'b: 'a>(&self, _visitor: &'a mut allocative::Visitor<'b>) {
+        // StatusCode is an enum with no heap allocations
+    }
+}
+
+impl deepsize::DeepSizeOf for StatusCode {
+    fn deep_size_of_children(&self, _context: &mut deepsize::Context) -> usize {
+        // StatusCode is an enum, no heap allocations
+        0
+    }
+}
+
 impl StatusCode {
     /// Return the status type for this status code
     pub fn status_type(self) -> StatusType {

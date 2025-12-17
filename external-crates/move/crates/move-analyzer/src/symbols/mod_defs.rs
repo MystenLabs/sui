@@ -18,7 +18,7 @@ use move_compiler::{
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 
-#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct ModuleDefs {
     /// File where this module is located
     pub fhash: FileHash,
@@ -46,13 +46,13 @@ pub struct ModuleDefs {
 }
 
 /// Definition of a module member
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct MemberDef {
     pub name_loc: Loc,
     pub info: MemberDefInfo,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum MemberDefInfo {
     Struct {
         field_defs: Vec<FieldDef>,
@@ -68,14 +68,14 @@ pub enum MemberDefInfo {
 }
 
 /// Definition of a struct field
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct FieldDef {
     pub name: Symbol,
     pub loc: Loc,
 }
 
 /// Information about call sites relevant to the IDE
-#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct CallInfo {
     /// Is it a dot call?
     pub dot_call: bool,
@@ -93,18 +93,26 @@ pub struct CallInfo {
 /// If no imports are present, we insert the new import before the first
 /// module member (or before its doc comment if it exists), pushing
 /// this member down but keeping its original tabulation.
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, allocative::Allocative)]
 pub struct AutoImportInsertionInfo {
     // Kind of auto-import insertion
     pub kind: AutoImportInsertionKind,
     // Position in file where insertion should start
+    #[allocative(skip)]
     pub pos: Position,
     // Tabulation in number of spaces
     pub tabulation: usize,
 }
 
+impl deepsize::DeepSizeOf for AutoImportInsertionInfo {
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        // Position is Copy with no heap allocation
+        self.kind.deep_size_of_children(context)
+    }
+}
+
 /// Module-level definitions and other module-related info
-#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum AutoImportInsertionKind {
     AfterLastImport,
     BeforeFirstMember, // when no imports exist

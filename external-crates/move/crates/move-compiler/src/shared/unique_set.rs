@@ -6,7 +6,7 @@ use super::{unique_map::UniqueMap, *};
 use std::{cmp::Ordering, fmt::Debug, iter::IntoIterator};
 
 /// Unique set wrapper around `UniqueMap` where the value of the map is not needed
-#[derive(Clone)]
+#[derive(Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct UniqueSet<T: TName>(UniqueMap<T, ()>);
 
 impl<T: TName> Default for UniqueSet<T> {

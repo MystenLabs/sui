@@ -42,7 +42,7 @@ use std::{borrow::Cow, cmp::Ordering, fmt, num::NonZeroU64, ops::Deref};
 ///
 /// [`as_str()`]: crate::Symbol::as_str
 /// [`Display`]: std::fmt::Display
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Symbol(NonZeroU64);
 
 /// The `Tag` signifies what sort of Symbol it is

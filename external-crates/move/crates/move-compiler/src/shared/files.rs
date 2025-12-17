@@ -28,6 +28,25 @@ pub struct MappedFiles {
     file_name_mapping: BTreeMap<FileHash, PathBuf>,
 }
 
+impl allocative::Allocative for MappedFiles {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut allocative::Visitor<'b>) {
+        let mut visitor = visitor.enter_self_sized::<Self>();
+        // SimpleFiles doesn't implement Allocative, so we skip it
+        self.file_mapping.visit(&mut visitor);
+        self.file_name_mapping.visit(&mut visitor);
+        visitor.exit();
+    }
+}
+
+impl deepsize::DeepSizeOf for MappedFiles {
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        // SimpleFiles doesn't implement DeepSizeOf
+        // Estimate based on file mapping and name mapping
+        self.file_mapping.deep_size_of_children(context)
+            + self.file_name_mapping.deep_size_of_children(context)
+    }
+}
+
 /// A file, the line:column start, and line:column end that corresponds to a `Loc`
 #[allow(dead_code)]
 pub struct FilePositionSpan {

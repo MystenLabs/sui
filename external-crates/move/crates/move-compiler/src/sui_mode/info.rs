@@ -24,7 +24,7 @@ use crate::{
 use move_ir_types::location::Loc;
 use move_proc_macros::growing_stack;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum UIDHolder {
     /// is `sui::object::UID``
     IsUID,
@@ -34,7 +34,7 @@ pub enum UIDHolder {
     Indirect { field: Field, ty: Loc, uid: Loc },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum TransferKind {
     /// The object has store
     PublicTransfer(Loc),
@@ -53,7 +53,7 @@ pub struct SuiInfo {
 }
 
 /// Same as `SuiInfo` but for a given module (store per-module in `ProgramInfo`).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct SuiModInfo {
     pub uid_holders: BTreeMap<DatatypeName, UIDHolder>,
     pub transferred: BTreeMap<DatatypeName, TransferKind>,

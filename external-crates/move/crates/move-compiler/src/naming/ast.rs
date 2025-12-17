@@ -31,20 +31,21 @@ use std::{
 // Program
 //**************************************************************************************************
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Program {
     pub info: NamingProgramInfo,
     /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
+    #[allocative(skip)]
     pub warning_filters_table: Arc<WarningFiltersTable>,
     pub inner: Program_,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Program_ {
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum Neighbor_ {
     Dependency,
     Friend,
@@ -55,7 +56,7 @@ pub type Neighbor = Spanned<Neighbor_>;
 // Use Funs
 //**************************************************************************************************
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum UseFunKind {
     Explicit,
     // From a function declaration in the module
@@ -64,7 +65,7 @@ pub enum UseFunKind {
     UseAlias,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct UseFun {
     pub doc: DocComment,
     pub loc: Loc,
@@ -87,7 +88,7 @@ pub type ResolvedUseFuns = BTreeMap<TypeName, UniqueMap<Name, UseFun>>;
 // Color for scopes of use funs and variables
 pub type Color = u16;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct UseFuns {
     pub color: Color,
     pub resolved: ResolvedUseFuns,
@@ -98,7 +99,7 @@ pub struct UseFuns {
 // Syntax Methods
 //**************************************************************************************************
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum SyntaxMethodKind_ {
     Index,
     IndexMut,
@@ -110,7 +111,7 @@ pub enum SyntaxMethodKind_ {
 
 pub type SyntaxMethodKind = Spanned<SyntaxMethodKind_>;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct SyntaxMethod {
     pub loc: Loc,
     pub visibility: Visibility,
@@ -120,13 +121,13 @@ pub struct SyntaxMethod {
     // We don't track usage because we require these to be public.
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct IndexSyntaxMethods {
     pub index_mut: Option<Box<SyntaxMethod>>,
     pub index: Option<Box<SyntaxMethod>>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Default, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct SyntaxMethodEntry {
     pub index: Option<Box<IndexSyntaxMethods>>,
 }
@@ -138,7 +139,7 @@ pub type SyntaxMethods = BTreeMap<TypeName, SyntaxMethodEntry>;
 // Std Library Definitions
 //**************************************************************************************************
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct StdlibDefinitions {
     pub functions: BTreeMap<StdlibName, (ModuleIdent, FunctionName)>,
     pub types: BTreeMap<StdlibName, Type>,
@@ -148,14 +149,16 @@ pub struct StdlibDefinitions {
 // Modules
 //**************************************************************************************************
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct ModuleDefinition {
     pub doc: DocComment,
     pub loc: Loc,
+    #[allocative(skip)]
     pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     /// The named address map used by this module during `expansion`.
+    #[allocative(skip)]
     pub named_address_map: Arc<NamedAddressMap>,
     pub attributes: Attributes,
     pub target_kind: TargetKind,
@@ -173,15 +176,16 @@ pub struct ModuleDefinition {
 // Data Types
 //**************************************************************************************************
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct DatatypeTypeParameter {
     pub param: TParam,
     pub is_phantom: bool,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct StructDefinition {
     pub doc: DocComment,
+    #[allocative(skip)]
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
@@ -192,15 +196,16 @@ pub struct StructDefinition {
     pub fields: StructFields,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum StructFields {
     Defined(/* positional */ bool, Fields<(DocComment, Type)>),
     Native(Loc),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct EnumDefinition {
     pub doc: DocComment,
+    #[allocative(skip)]
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
@@ -211,7 +216,7 @@ pub struct EnumDefinition {
     pub variants: UniqueMap<VariantName, VariantDefinition>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct VariantDefinition {
     pub doc: DocComment,
     // index in the original order as defined in the source file
@@ -220,7 +225,7 @@ pub struct VariantDefinition {
     pub fields: VariantFields,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum VariantFields {
     Defined(/* positional */ bool, Fields<(DocComment, Type)>),
     Empty,
@@ -230,24 +235,25 @@ pub enum VariantFields {
 // Functions
 //**************************************************************************************************
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct FunctionSignature {
     pub type_parameters: Vec<TParam>,
     pub parameters: Vec<(Mutability, Var, Type)>,
     pub return_type: Type,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum FunctionBody_ {
     Defined(Sequence),
     Native,
 }
 pub type FunctionBody = Spanned<FunctionBody_>;
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Function {
     pub doc: DocComment,
     pub loc: Loc,
+    #[allocative(skip)]
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
@@ -263,9 +269,10 @@ pub struct Function {
 // Constants
 //**************************************************************************************************
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Constant {
     pub doc: DocComment,
+    #[allocative(skip)]
     pub warning_filter: WarningFilters,
     // index in the original order as defined in the source file
     pub index: usize,
@@ -279,7 +286,7 @@ pub struct Constant {
 // Types
 //**************************************************************************************************
 
-#[derive(Debug, PartialEq, Clone, Copy, PartialOrd, Eq, Ord)]
+#[derive(Debug, PartialEq, Clone, Copy, PartialOrd, Eq, Ord, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum BuiltinTypeName_ {
     // address
     Address,
@@ -304,7 +311,7 @@ pub enum BuiltinTypeName_ {
 }
 pub type BuiltinTypeName = Spanned<BuiltinTypeName_>;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum TypeName_ {
     // exp-list/tuple type
@@ -314,20 +321,20 @@ pub enum TypeName_ {
 }
 pub type TypeName = Spanned<TypeName_>;
 
-#[derive(Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Copy, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct TParamID(pub u64);
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct TParam {
     pub id: TParamID,
     pub user_specified_name: Name,
     pub abilities: AbilitySet,
 }
 
-#[derive(Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Copy, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct TVar(pub u64);
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum Type_ {
     Unit,
@@ -346,7 +353,7 @@ pub type Type = Spanned<Type_>;
 // Expressions
 //**************************************************************************************************
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone, PartialOrd, Ord)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, PartialOrd, Ord, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Var_ {
     pub name: Symbol,
     pub id: u16,
@@ -354,13 +361,13 @@ pub struct Var_ {
 }
 pub type Var = Spanned<Var_>;
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, PartialOrd, Ord, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct BlockLabel {
     pub label: Var,
     pub is_implicit: bool,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum LValue_ {
     Ignore,
@@ -379,7 +386,7 @@ pub type LValueList = Spanned<LValueList_>;
 pub type LambdaLValues_ = Vec<(LValueList, Option<Type>)>;
 pub type LambdaLValues = Spanned<LambdaLValues_>;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum ExpDotted_ {
     Exp(Box<Exp>),
     Dot(Box<ExpDotted>, /* dot loation */ Loc, Field),
@@ -388,7 +395,7 @@ pub enum ExpDotted_ {
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum BuiltinFunction_ {
     Freeze(Option<Type>),
@@ -396,14 +403,14 @@ pub enum BuiltinFunction_ {
 }
 pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum NominalBlockUsage {
     Return,
     Break,
     Continue,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Lambda {
     pub parameters: LambdaLValues,
     pub return_type: Option<Type>,
@@ -418,20 +425,20 @@ pub struct Lambda {
     pub extra_annotations: Vec<Spanned<(Vec<Type>, Type)>>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Block {
     pub name: Option<BlockLabel>,
     pub from_macro_argument: Option<MacroArgument>,
     pub seq: Sequence,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum MacroArgument {
     Lambda(Loc),
     Substituted(Loc),
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
@@ -505,7 +512,7 @@ pub type Exp = Spanned<Exp_>;
 
 pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum SequenceItem_ {
     Seq(Box<Exp>),
@@ -514,7 +521,7 @@ pub enum SequenceItem_ {
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct MatchArm_ {
     pub pattern: MatchPattern,
     pub binders: Vec<(Mutability, Var)>,
@@ -526,7 +533,7 @@ pub struct MatchArm_ {
 
 pub type MatchArm = Spanned<MatchArm_>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum MatchPattern_ {
     Variant(
         ModuleIdent,

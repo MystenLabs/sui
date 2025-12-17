@@ -86,7 +86,7 @@ struct WarningFiltersScopeNode {
     prev: WarningFiltersScope_,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 /// An intern table for warning filters. The underlying `Box` is not moved, so the pointer to the
 /// filter is stable.
 /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
@@ -99,14 +99,29 @@ pub struct WarningFilters(*const WarningFiltersBuilder);
 unsafe impl Send for WarningFilters {}
 unsafe impl Sync for WarningFilters {}
 
-#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
+impl allocative::Allocative for WarningFilters {
+    fn visit<'a, 'b: 'a>(&self, _visitor: &'a mut allocative::Visitor<'b>) {
+        // Raw pointer - no heap allocation to track here
+        // The actual data is tracked through WarningFiltersTable
+    }
+}
+
+impl deepsize::DeepSizeOf for WarningFilters {
+    fn deep_size_of_children(&self, _context: &mut deepsize::Context) -> usize {
+        // Raw pointer - no heap allocation to track here
+        // The actual data is tracked through WarningFiltersTable
+        0
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash, allocative::Allocative, deepsize::DeepSizeOf)]
 /// Used to filter out diagnostics, specifically used for warning suppression
 pub struct WarningFiltersBuilder {
     filters: BTreeMap<ExternalPrefix, UnprefixedWarningFilters>,
     for_dependency: bool, // if false, the filters are used for source code
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Hash, allocative::Allocative, deepsize::DeepSizeOf)]
 /// Filters split by category and code
 enum UnprefixedWarningFilters {
     /// Remove all warnings

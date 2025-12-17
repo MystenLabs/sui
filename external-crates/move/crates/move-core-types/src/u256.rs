@@ -95,6 +95,19 @@ impl fmt::Display for U256FromStrError {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, PartialOrd, Ord, Default)]
 pub struct U256(PrimitiveU256);
 
+impl allocative::Allocative for U256 {
+    fn visit<'a, 'b: 'a>(&self, _visitor: &'a mut allocative::Visitor<'b>) {
+        // U256 is stack-only, no heap allocations to track
+    }
+}
+
+impl deepsize::DeepSizeOf for U256 {
+    fn deep_size_of_children(&self, _context: &mut deepsize::Context) -> usize {
+        // U256 is stack-only, no heap allocations
+        0
+    }
+}
+
 impl fmt::Display for U256 {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         self.0.fmt(f)

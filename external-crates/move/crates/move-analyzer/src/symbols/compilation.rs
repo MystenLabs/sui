@@ -52,7 +52,7 @@ use move_package::{
 pub const MANIFEST_FILE_NAME: &str = "Move.toml";
 
 /// Top-level cache to contain info about compiled/analyzer packages
-#[derive(Clone)]
+#[derive(Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct CachedPackages {
     /// Cached info about user packages, keyed on the package path.
     /// The `None` value indicates that the package is not cached,
@@ -66,14 +66,14 @@ pub struct CachedPackages {
 }
 
 /// Information about parsed definitions
-#[derive(Clone)]
+#[derive(Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct ParsedDefinitions {
     pub source_definitions: Vec<P::PackageDefinition>,
     pub lib_definitions: Vec<P::PackageDefinition>,
 }
 
 /// Information about compiled program (ASTs at different levels)
-#[derive(Clone)]
+#[derive(Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct CompiledProgram {
     pub parsed_definitions: ParsedDefinitions,
     pub typed_modules: UniqueMap<ModuleIdent, ModuleDefinition>,
@@ -107,7 +107,7 @@ pub struct CompiledPkgInfo {
 
 /// Precomputed information about the package and its dependencies
 /// cached with the purpose of being re-used during the analysis.
-#[derive(Clone)]
+#[derive(Clone, allocative::Allocative)]
 pub struct CachedPkgInfo {
     /// Hash of the manifest file for a given package
     pub manifest_hash: Option<FileHash>,
@@ -130,7 +130,26 @@ pub struct CachedPkgInfo {
     /// Compiler analysis info (cached)
     pub compiler_analysis_info: Option<CompilerAnalysisInfo>,
     /// IDE diagnostics related to the package
+    /// SKIP REASON: lsp_types::Diagnostic from external lsp-types crate, cannot modify
+    #[allocative(skip)]
     pub lsp_diags: Arc<BTreeMap<PathBuf, Vec<Diagnostic>>>,
+}
+
+// Manual DeepSizeOf - skip lsp_diags (external lsp-types)
+impl deepsize::DeepSizeOf for CachedPkgInfo {
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        self.manifest_hash.deep_size_of_children(context) +
+        self.dep_hashes.deep_size_of_children(context) +
+        self.deps.deep_size_of_children(context) +
+        self.dep_names.deep_size_of_children(context) +
+        self.deps_symbols_data.deep_size_of_children(context) +
+        self.program.deep_size_of_children(context) +
+        self.file_paths.deep_size_of_children(context) +
+        self.user_file_hashes.deep_size_of_children(context) +
+        self.edition.deep_size_of_children(context) +
+        self.compiler_analysis_info.deep_size_of_children(context)
+        // Skip lsp_diags - lsp_types::Diagnostic is external
+    }
 }
 
 /// Package data used during compilation and analysis
@@ -153,7 +172,7 @@ pub struct AnalyzedPkgInfo {
 }
 
 /// Data used during symbols computation
-#[derive(Clone)]
+#[derive(Clone, allocative::Allocative)]
 pub struct SymbolsComputationData {
     /// Outermost definitions in a module (structs, consts, functions), keyed on a ModuleIdent
     /// string
@@ -166,7 +185,21 @@ pub struct SymbolsComputationData {
     pub def_info: BTreeMap<Loc, DefInfo>,
     /// Module name lengths in access paths for a given module (needs to be appropriately
     /// set before the module processing starts) keyed on a ModuleIdent string
+    /// SKIP REASON: lsp_types::Position from external lsp-types crate, cannot modify
+    #[allocative(skip)]
     pub mod_to_alias_lengths: BTreeMap<String, BTreeMap<Position, usize>>,
+}
+
+// Manual DeepSizeOf - measure BTreeMap structure but skip Position type impl
+impl deepsize::DeepSizeOf for SymbolsComputationData {
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        self.mod_outer_defs.deep_size_of_children(context) +
+        self.use_defs.deep_size_of_children(context) +
+        self.references.deep_size_of_children(context) +
+        self.def_info.deep_size_of_children(context)
+        // Skip mod_to_alias_lengths - lsp_types::Position is external
+        // Position is 8 bytes (2 u32s), no heap - minimal impact
+    }
 }
 
 /// Mapped files and associated (meta) data

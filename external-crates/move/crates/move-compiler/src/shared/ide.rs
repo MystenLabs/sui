@@ -51,7 +51,7 @@ pub enum IDEAnnotation {
     EllipsisMatchEntries(Box<EllipsisMatchEntries>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct MacroCallInfo {
     /// Module where the macro is defined
     pub module: E::ModuleIdent,
@@ -65,13 +65,13 @@ pub struct MacroCallInfo {
     pub by_value_args: Vec<T::SequenceItem>,
 }
 
-#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct AutocompleteMethod {
     pub method_name: Symbol,
     pub target_function: (E::ModuleIdent, P::FunctionName),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct DotAutocompleteInfo {
     /// Methods that are valid auto-completes
     pub methods: Vec<AutocompleteMethod>,
@@ -79,7 +79,7 @@ pub struct DotAutocompleteInfo {
     pub fields: Vec<(Symbol, N::Type)>,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct AliasAutocompleteInfo {
     /// Numerical addresses that are valid autocompletes
     pub addresses: BTreeMap<Symbol, NumericalAddress>,

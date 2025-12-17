@@ -377,7 +377,7 @@ pub fn parse_address_impl(tok: ValueToken, contents: &str) -> Result<ParsedAddre
     })
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Clone, Copy)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Clone, Copy, allocative::Allocative, deepsize::DeepSizeOf)]
 #[repr(u32)]
 /// Number format enum, the u32 value represents the base
 pub enum NumberFormat {

@@ -18,7 +18,7 @@ use std::{collections::BTreeSet, fmt, hash::Hash};
 
 macro_rules! new_name {
     ($n:ident) => {
-        #[derive(Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy)]
+        #[derive(Debug, Hash, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, allocative::Allocative, deepsize::DeepSizeOf)]
         pub struct $n(pub Name);
 
         impl TName for $n {
@@ -65,20 +65,20 @@ macro_rules! new_name {
 // Program
 //**************************************************************************************************
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Program {
     pub named_address_maps: NamedAddressMaps,
     pub source_definitions: Vec<PackageDefinition>,
     pub lib_definitions: Vec<PackageDefinition>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum ExternalTargetKind {
     Library,
     SkippedSource,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 /// Specifies a source target or dependency
 pub enum TargetKind {
     /// A source module. If is_root_package is false, some warnings might be suppressed.
@@ -89,7 +89,7 @@ pub enum TargetKind {
     External(ExternalTargetKind),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct PackageDefinition<Def = Definition> {
     pub package: Option<Symbol>,
     pub named_address_map: NamedAddressMapIndex,
@@ -97,17 +97,17 @@ pub struct PackageDefinition<Def = Definition> {
     pub target_kind: TargetKind,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum Definition {
     Module(ModuleDefinition),
     Address(AddressDefinition),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct DocComment(pub(crate) Option<Spanned<String>>);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct AddressDefinition {
     pub attributes: Vec<Attributes>,
     pub loc: Loc,
@@ -115,7 +115,7 @@ pub struct AddressDefinition {
     pub modules: Vec<ModuleDefinition>,
 }
 
-#[derive(Debug, PartialEq, Clone, Eq)]
+#[derive(Debug, PartialEq, Clone, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum Use {
     ModuleUse(ModuleIdent, ModuleUse),
     NestedModuleUses(LeadingNameAccess, Vec<(ModuleName, ModuleUse)>),
@@ -137,7 +137,7 @@ pub enum Use {
     },
 }
 
-#[derive(Debug, PartialEq, Clone, Eq)]
+#[derive(Debug, PartialEq, Clone, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum ModuleUse {
     Module(Option<ModuleName>),
     Members(Vec<(Name, Option<Name>)>),
@@ -152,7 +152,7 @@ pub enum ModuleUse {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct UseDecl {
     pub doc: DocComment,
     pub loc: Loc,
@@ -164,7 +164,7 @@ pub struct UseDecl {
 // Attributes
 //**************************************************************************************************
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum AttributeValue_ {
     Value(Value),
@@ -173,7 +173,7 @@ pub enum AttributeValue_ {
 
 pub type AttributeValue = Spanned<AttributeValue_>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum ParsedAttribute_ {
     Name(Name),
     Assigned(Name, Box<AttributeValue>),
@@ -182,7 +182,7 @@ pub enum ParsedAttribute_ {
 
 pub type ParsedAttribute = Spanned<ParsedAttribute_>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum ExpectedFailureKind_ {
     Empty,
     Name(Name),
@@ -192,7 +192,7 @@ pub enum ExpectedFailureKind_ {
 
 pub type ExpectedFailureKind = Spanned<ExpectedFailureKind_>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum Attribute_ {
     BytecodeInstruction,
@@ -231,7 +231,7 @@ pub enum Attribute_ {
 
 pub type Attribute = Spanned<Attribute_>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Attributes_(pub Vec<Attribute>);
 
 pub type Attributes = Spanned<Attributes_>;
@@ -242,7 +242,7 @@ pub type Attributes = Spanned<Attributes_>;
 
 new_name!(ModuleName);
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, allocative::Allocative, deepsize::DeepSizeOf)]
 /// Specifies a name at the beginning of an access chain. Could be
 /// - A module name
 /// - A named address
@@ -254,20 +254,20 @@ pub enum LeadingNameAccess_ {
 }
 pub type LeadingNameAccess = Spanned<LeadingNameAccess_>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct ModuleIdent_ {
     pub address: LeadingNameAccess,
     pub module: ModuleName,
 }
 pub type ModuleIdent = Spanned<ModuleIdent_>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum ModuleDefinitionMode {
     Braces,
     Semicolon,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct ModuleDefinition {
     pub doc: DocComment,
     pub attributes: Vec<Attributes>,
@@ -282,7 +282,7 @@ pub struct ModuleDefinition {
     pub members: Vec<ModuleMember>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum ModuleMember {
     Function(Function),
     Struct(StructDefinition),
@@ -297,7 +297,7 @@ pub enum ModuleMember {
 // Friends
 //**************************************************************************************************
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct FriendDecl {
     pub attributes: Vec<Attributes>,
     pub loc: Loc,
@@ -313,14 +313,14 @@ new_name!(DatatypeName);
 
 pub type ResourceLoc = Option<Loc>;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct DatatypeTypeParameter {
     pub is_phantom: bool,
     pub name: Name,
     pub constraints: Vec<Ability>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct StructDefinition {
     pub doc: DocComment,
     pub attributes: Vec<Attributes>,
@@ -331,7 +331,7 @@ pub struct StructDefinition {
     pub fields: StructFields,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum StructFields {
     Named(Vec<(DocComment, Field, Type)>),
     Native(Loc),
@@ -340,7 +340,7 @@ pub enum StructFields {
 
 new_name!(VariantName);
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct EnumDefinition {
     pub doc: DocComment,
     pub attributes: Vec<Attributes>,
@@ -351,7 +351,7 @@ pub struct EnumDefinition {
     pub variants: Vec<VariantDefinition>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct VariantDefinition {
     pub doc: DocComment,
     pub loc: Loc,
@@ -359,7 +359,7 @@ pub struct VariantDefinition {
     pub fields: VariantFields,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum VariantFields {
     Named(Vec<(DocComment, Field, Type)>),
     Positional(Vec<(DocComment, Type)>),
@@ -377,14 +377,14 @@ pub const ENTRY_MODIFIER: &str = "entry";
 pub const EXTEND_MODIFIER: &str = "extend";
 pub const MACRO_MODIFIER: &str = "macro";
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct FunctionSignature {
     pub type_parameters: Vec<(Name, Vec<Ability>)>,
     pub parameters: Vec<(Mutability, Var, Type)>,
     pub return_type: Type,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum Visibility {
     Public(Loc),
     Friend(Loc),
@@ -392,14 +392,14 @@ pub enum Visibility {
     Internal,
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum FunctionBody_ {
     Defined(Sequence),
     Native,
 }
 pub type FunctionBody = Spanned<FunctionBody_>;
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 // (public?) foo<T1(: copyable?), ..., TN(: copyable?)>(x1: t1, ..., xn: tn): t1 * ... * tn {
 //    body
 //  }
@@ -422,7 +422,7 @@ pub struct Function {
 
 new_name!(ConstantName);
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Constant {
     pub doc: DocComment,
     pub attributes: Vec<Attributes>,
@@ -437,7 +437,7 @@ pub struct Constant {
 //**************************************************************************************************
 
 // A single name with optional type arguments that may be a macro call.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct PathEntry {
     pub name: Name,
     pub tyargs: Option<Spanned<Vec<Type>>>,
@@ -447,7 +447,7 @@ pub struct PathEntry {
 // A path root.
 // For now these should never have tyargs or macro call set (though the type arguments will be
 // used for enums).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct RootPathEntry {
     pub name: LeadingNameAccess,
     pub tyargs: Option<Spanned<Vec<Type>>>,
@@ -455,7 +455,7 @@ pub struct RootPathEntry {
 }
 
 // INVARIANT: entries should be non-zero, or this should be converted to a `SingleName`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct NamePath {
     pub root: RootPathEntry,
     pub entries: Vec<PathEntry>,
@@ -465,7 +465,7 @@ pub struct NamePath {
 
 // See the NameAccess trait below for usage.
 // INVARIANT: never push onto a Single. A Single is a final form, demoted from a Path.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum NameAccessChain_ {
     Single(PathEntry),
     Path(NamePath),
@@ -476,7 +476,7 @@ pub type NameAccessChain = Spanned<NameAccessChain_>;
 // Types
 //**************************************************************************************************
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum Ability_ {
     Copy,
     Drop,
@@ -485,7 +485,7 @@ pub enum Ability_ {
 }
 pub type Ability = Spanned<Ability_>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum Type_ {
     // N
     // N<t1, ... , tn>
@@ -513,13 +513,13 @@ new_name!(Var);
 // Some with loc if the local had a `mut` prefix
 pub type Mutability = Option<Loc>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum FieldBindings {
     Named(Vec<Ellipsis<(Field, Bind)>>),
     Positional(Vec<Ellipsis<Bind>>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum Bind_ {
     // mut x
     // x
@@ -540,7 +540,7 @@ pub type BindWithRangeList = Spanned<Vec<BindWithRange>>;
 pub type LambdaBindings_ = Vec<(BindList, Option<Type>)>;
 pub type LambdaBindings = Spanned<LambdaBindings_>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum Value_ {
     // @<num>
     Address(LeadingNameAccess),
@@ -557,14 +557,14 @@ pub enum Value_ {
 }
 pub type Value = Spanned<Value_>;
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum UnaryOp_ {
     // !
     Not,
 }
 pub type UnaryOp = Spanned<UnaryOp_>;
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum BinOp_ {
     // Int ops
     // +
@@ -616,7 +616,7 @@ pub enum BinOp_ {
 }
 pub type BinOp = Spanned<BinOp_>;
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum QuantKind_ {
     Forall,
     Exists,
@@ -627,7 +627,7 @@ pub type QuantKind = Spanned<QuantKind_>;
 
 new_name!(BlockLabel);
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
@@ -746,7 +746,7 @@ pub type Sequence = (
     Option<Loc>,
     Box<Option<Exp>>,
 );
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum SequenceItem_ {
     // e;
@@ -760,7 +760,7 @@ pub enum SequenceItem_ {
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct MatchArm_ {
     pub pattern: MatchPattern,
     pub guard: Option<Box<Exp>>,
@@ -769,13 +769,13 @@ pub struct MatchArm_ {
 
 pub type MatchArm = Spanned<MatchArm_>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum Ellipsis<T> {
     Binder(T),
     Ellipsis(Loc),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum MatchPattern_ {
     // T<t1, ..., tn>(pat1, ..., patn)
     PositionalConstructor(NameAccessChain, Spanned<Vec<Ellipsis<MatchPattern>>>),

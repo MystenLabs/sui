@@ -16,7 +16,7 @@ pub enum ParsedAddress {
 
 /// Numerical address represents non-named address values
 /// or the assigned value of a named address
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct NumericalAddress {
     /// the number for the address
     bytes: AccountAddress,

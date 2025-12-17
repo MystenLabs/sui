@@ -19,7 +19,7 @@ use super::unique_set::UniqueSet;
 // Types
 // -------------------------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum KnownAttribute {
     BytecodeInstruction(BytecodeInstructionAttribute),
     DefinesPrimitive(DefinesPrimitiveAttribute),
@@ -34,7 +34,7 @@ pub enum KnownAttribute {
 
 /// A full summary of all attribute kinds, used for looking up an individual attribute and
 /// organizing them into sets.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum AttributeKind_ {
     Allow,
     BytecodeInstruction,
@@ -56,22 +56,22 @@ pub type AttributeKind = Spanned<AttributeKind_>;
 // Individual Attributes
 // -----------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 /// It is a fake native function that actually compiles to a bytecode instruction
 pub struct BytecodeInstructionAttribute;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct DefinesPrimitiveAttribute {
     pub name: Name,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 /// Deprecated spec only annotation
 pub struct DeprecationAttribute {
     pub note: Option<Vec<u8>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum DiagnosticAttribute {
     Allow {
         allow_set: BTreeSet<(Option<Name>, Name)>,
@@ -81,28 +81,28 @@ pub enum DiagnosticAttribute {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct ErrorAttribute {
     pub code: Option<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct ExternalAttribute {
     pub attrs: ExternalAttributeEntries,
 }
 
 // Sets a mode, such as "test" or "verify", which will only be build when compiled in that mode.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct ModeAttribute {
     pub modes: UniqueSet<Name>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct SyntaxAttribute {
     pub kind: Name,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum TestingAttribute {
     // Is a test that will be run
     Test,
@@ -112,7 +112,7 @@ pub enum TestingAttribute {
     RandTest,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum ExpectedFailure {
     Expected,
@@ -124,7 +124,7 @@ pub enum ExpectedFailure {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum MinorCode_ {
     Value(u64),
@@ -137,7 +137,7 @@ pub type MinorCode = Spanned<MinorCode_>;
 // External Attributes
 // -----------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum ExternalAttributeValue_ {
     Value(Value),
     Address(Address),
@@ -146,7 +146,7 @@ pub enum ExternalAttributeValue_ {
 }
 pub type ExternalAttributeValue = Spanned<ExternalAttributeValue_>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum ExternalAttributeEntry_ {
     Name(Name),
     Assigned(Name, Box<ExternalAttributeValue>),
@@ -161,7 +161,7 @@ pub type ExternalAttributeEntries = UniqueMap<Name, ExternalAttributeEntry>;
 // Attribute Positions
 // -----------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum AttributePosition {
     AddressBlock,
     Module,

@@ -10,6 +10,7 @@ publish = false
 edition = "2024"
 
 [dependencies]
+allocative.workspace = true
 anyhow.workspace = true
 bcs.workspace = true
 colored.workspace = true
@@ -20,6 +21,7 @@ once_cell.workspace = true
 packed_struct.workspace = true
 serde.workspace = true
 sha2.workspace = true
+deepsize.workspace = true
 vfs.workspace = true
 walkdir.workspace = true
 

@@ -16,7 +16,7 @@ use std::sync::Arc;
 // Types
 // -------------------------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct StdlibName(Symbol, Symbol);
 
 // -------------------------------------------------------------------------------------------------

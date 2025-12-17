@@ -13,6 +13,7 @@ pub mod completions;
 pub mod context;
 pub mod diagnostics;
 pub mod inlay_hints;
+pub mod memory_stats;
 pub mod symbols;
 pub mod utils;
 pub mod vfs;

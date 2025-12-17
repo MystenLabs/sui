@@ -21,7 +21,7 @@ use std::{
 /// if the space concerns turn out to not be an issue.
 pub type ByteIndex = u32;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Hash, allocative::Allocative, deepsize::DeepSizeOf)]
 /// The `Loc` struct is used to define a location in a file; where the file is considered to be a
 /// vector of bytes, and the range for a given `Loc` is defined by start and end index into that
 /// byte vector
@@ -116,7 +116,7 @@ impl Ord for Loc {
 // Spanned
 //**************************************************************************************************
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Spanned<T> {
     pub loc: Loc,
     pub value: T,

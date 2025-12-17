@@ -16,7 +16,7 @@ use move_compiler::shared::files::MappedFiles;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct UseDef {
     /// Column where the (use) identifier location starts on a given line (use this field for
     /// sorting uses on the line)
@@ -31,18 +31,26 @@ pub struct UseDef {
 
 type LineOffset = u32;
 /// Maps a line number to a list of use-def-s on a given line (use-def set is sorted by col_start)
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct UseDefMap(BTreeMap<LineOffset, BTreeSet<UseDef>>);
 
 /// Location of a use's identifier
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Copy)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Copy, allocative::Allocative)]
 pub struct UseLoc {
     /// File where this use identifier starts
     pub fhash: FileHash,
     /// Location where this use identifier starts
+    #[allocative(skip)]
     pub start: Position,
     /// Column (on the same line as start)  where this use identifier ends
     pub col_end: u32,
+}
+
+impl deepsize::DeepSizeOf for UseLoc {
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        // Position is Copy with no heap allocation
+        self.fhash.deep_size_of_children(context)
+    }
 }
 
 pub type References = BTreeMap<Loc, BTreeSet<UseLoc>>;

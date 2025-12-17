@@ -10,7 +10,7 @@ use std::{convert::TryFrom, fmt, str::FromStr};
 use crate::gas_algebra::AbstractMemorySize;
 
 /// A struct that represents an account address.
-#[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Clone, Copy)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Hash, Clone, Copy, allocative::Allocative, deepsize::DeepSizeOf)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(proptest_derive::Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(arbitrary::Arbitrary))]
 pub struct AccountAddress([u8; AccountAddress::LENGTH]);

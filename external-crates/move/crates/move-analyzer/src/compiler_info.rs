@@ -9,7 +9,7 @@ use move_ir_types::location::Loc;
 
 /// Compiler information used during symbolication analysis.
 /// This is cached and used during typing analysis.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct CompilerAnalysisInfo {
     /// Macro call information
     pub macro_info: BTreeMap<Loc, CI::MacroCallInfo>,
@@ -21,7 +21,7 @@ pub struct CompilerAnalysisInfo {
 
 /// Compiler information used for IDE autocomplete features.
 /// This is NOT cached, only kept in Symbols for IDE requests.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct CompilerAutocompleteInfo {
     /// Dot autocomplete information (obj.method)
     pub dot_autocomplete_info: BTreeMap<FileHash, BTreeMap<Loc, CI::DotAutocompleteInfo>>,

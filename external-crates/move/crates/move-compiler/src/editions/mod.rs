@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 // types
 //**************************************************************************************************
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Edition {
     pub edition: Symbol,
     pub release: Option<Symbol>,

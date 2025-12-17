@@ -103,12 +103,13 @@ enum PassResult {
     Compilation(Vec<AnnotatedCompiledUnit>, /* warnings */ Diagnostics),
 }
 
-#[derive(Clone)]
+#[derive(Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct PreCompiledProgramInfo(BTreeMap<E::ModuleIdent, Arc<PreCompiledModuleInfo>>);
 
-#[derive(Clone)]
+#[derive(Clone, allocative::Allocative)]
 pub struct PreCompiledModuleInfo {
     pub file_name: Symbol,
+    #[allocative(skip)]
     pub file_content: Arc<str>,
     /// to extract macros in typing/translate.rs (need function bodies for this)
     pub macro_definitions: Option<(N::UseFuns, UniqueMap<FunctionName, N::Function>)>,
@@ -116,7 +117,19 @@ pub struct PreCompiledModuleInfo {
     /// various information needed throughout the compilation process
     pub info: ModuleInfo,
     /// for transactional test runner in move-transactional-test-runner/src/framework.rs
+    #[allocative(skip)]
     pub compiled_unit: Option<AnnotatedCompiledUnit>,
+}
+
+// Manual DeepSizeOf impl - Arc<str> and AnnotatedCompiledUnit need special handling
+impl deepsize::DeepSizeOf for PreCompiledModuleInfo {
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        self.file_name.deep_size_of_children(context)
+            + self.file_content.len() // Arc<str> heap allocation
+            + self.macro_definitions.deep_size_of_children(context)
+            + self.info.deep_size_of_children(context)
+            // Skip compiled_unit - external bytecode type
+    }
 }
 pub enum Visitor {
     TypingVisitor(TypingVisitorObj),

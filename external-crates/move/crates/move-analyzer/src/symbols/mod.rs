@@ -109,7 +109,7 @@ pub mod runner;
 pub mod use_def;
 
 /// Result of the symbolication process
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct Symbols {
     /// A map from def locations to all the references (uses)
     pub references: References,

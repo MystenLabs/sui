@@ -33,6 +33,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "250f629c0161ad8107cf89319e990051fae62832fd343083bea452d93e2205fd"
 
 [[package]]
+name = "allocative"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fac2ce611db8b8cee9b2aa886ca03c924e9da5e5295d0dbd0526e5d0b0710f7"
+dependencies = [
+ "allocative_derive",
+ "ctor",
+]
+
+[[package]]
+name = "allocative_derive"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe233a377643e0fc1a56421d7c90acdec45c291b30345eb9f08e8d0ddce5a4ab"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.98",
+]
+
+[[package]]
 name = "allocator-api2"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -816,6 +837,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43da5946c66ffcc7745f48db692ffbb10a83bfe0afd96235c5c2a4fb23994929"
 
 [[package]]
+name = "ctor"
+version = "0.1.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d2301688392eb071b0bf1a37be05c469d3cc4dbbd95df672fe28ab021e6a096"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "curve25519-dalek-fiat"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -872,6 +903,26 @@ dependencies = [
  "libtest-mimic",
  "regex",
  "walkdir",
+]
+
+[[package]]
+name = "deepsize"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cdb987ec36f6bf7bfbea3f928b75590b736fc42af8e54d97592481351b2b96c"
+dependencies = [
+ "deepsize_derive",
+]
+
+[[package]]
+name = "deepsize_derive"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "990101d41f3bc8c1a45641024377ee284ecc338e5ecf3ea0f0e236d897c72796"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2009,11 +2060,13 @@ version = "0.0.1"
 name = "move-analyzer"
 version = "1.0.0"
 dependencies = [
+ "allocative",
  "anyhow",
  "clap 4.5.28",
  "codespan-reporting",
  "crossbeam",
  "datatest-stable",
+ "deepsize",
  "dunce",
  "im",
  "itertools 0.10.5",
@@ -2221,9 +2274,11 @@ dependencies = [
 name = "move-command-line-common"
 version = "0.1.0"
 dependencies = [
+ "allocative",
  "anyhow",
  "bcs",
  "colored",
+ "deepsize",
  "dirs-next",
  "hex",
  "insta",
@@ -2242,11 +2297,14 @@ dependencies = [
 name = "move-compiler"
 version = "0.0.1"
 dependencies = [
+ "allocative",
  "anyhow",
  "bcs",
  "clap 4.5.28",
+ "codespan",
  "codespan-reporting",
  "datatest-stable",
+ "deepsize",
  "dunce",
  "hex",
  "insta",
@@ -2287,9 +2345,11 @@ dependencies = [
 name = "move-core-types"
 version = "0.0.4"
 dependencies = [
+ "allocative",
  "anyhow",
  "arbitrary",
  "bcs",
+ "deepsize",
  "enum-compat-util",
  "ethnum",
  "hex",
@@ -2492,6 +2552,8 @@ dependencies = [
 name = "move-ir-types"
 version = "0.1.0"
 dependencies = [
+ "allocative",
+ "deepsize",
  "hex",
  "move-command-line-common",
  "move-core-types",
@@ -2809,6 +2871,8 @@ dependencies = [
 name = "move-symbol-pool"
 version = "0.1.0"
 dependencies = [
+ "allocative",
+ "deepsize",
  "once_cell",
  "phf",
  "serde",

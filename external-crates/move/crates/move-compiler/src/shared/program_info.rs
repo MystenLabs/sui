@@ -23,7 +23,7 @@ use move_core_types::runtime_value;
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct FunctionInfo {
     pub doc: DocComment,
     pub index: usize,
@@ -36,7 +36,7 @@ pub struct FunctionInfo {
     pub signature: FunctionSignature,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative)]
 pub struct ConstantInfo {
     pub doc: DocComment,
     pub index: usize,
@@ -44,10 +44,22 @@ pub struct ConstantInfo {
     pub defined_loc: Loc,
     pub signature: Type,
     // Set after compilation
+    #[allocative(skip)]
     pub value: OnceLock<runtime_value::MoveValue>,
 }
 
-#[derive(Debug, Clone)]
+// Manual DeepSizeOf - skip OnceLock field (external std type)
+impl deepsize::DeepSizeOf for ConstantInfo {
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        self.doc.deep_size_of_children(context) +
+        self.attributes.deep_size_of_children(context) +
+        self.defined_loc.deep_size_of_children(context) +
+        self.signature.deep_size_of_children(context)
+        // Skip value: OnceLock is external std type
+    }
+}
+
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct ModuleInfo {
     pub doc: DocComment,
     pub defined_loc: Loc,
@@ -67,7 +79,7 @@ pub struct ModuleInfo {
     pub sui_info: Option<SuiModInfo>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct ProgramInfo<const AFTER_TYPING: bool> {
     pub modules: UniqueMap<ModuleIdent, ModuleInfo>,
 }

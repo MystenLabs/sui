@@ -10,6 +10,7 @@ publish = ["crates-io"]
 edition = "2024"
 
 [dependencies]
+allocative.workspace = true
 anyhow.workspace = true
 hex.workspace = true
 once_cell.workspace = true
@@ -30,6 +31,7 @@ bcs.workspace = true
 leb128.workspace = true
 thiserror.workspace = true
 serde_with.workspace = true
+deepsize.workspace = true
 indexmap.workspace = true
 
 [dev-dependencies]

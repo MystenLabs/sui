@@ -33,10 +33,30 @@ pub const MOVE_STRUCT_FIELDS: &str = "fields";
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MoveStruct(pub Vec<MoveValue>);
 
+impl allocative::Allocative for MoveStruct {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut allocative::Visitor<'b>) {
+        let mut visitor = visitor.enter_self_sized::<Self>();
+        for value in &self.0 {
+            value.visit(&mut visitor);
+        }
+        visitor.exit();
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MoveVariant {
     pub tag: u16,
     pub fields: Vec<MoveValue>,
+}
+
+impl allocative::Allocative for MoveVariant {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut allocative::Visitor<'b>) {
+        let mut visitor = visitor.enter_self_sized::<Self>();
+        for value in &self.fields {
+            value.visit(&mut visitor);
+        }
+        visitor.exit();
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -54,6 +74,31 @@ pub enum MoveValue {
     U32(u32),
     U256(u256::U256),
     Variant(MoveVariant),
+}
+
+impl allocative::Allocative for MoveValue {
+    fn visit<'a, 'b: 'a>(&self, visitor: &'a mut allocative::Visitor<'b>) {
+        let mut visitor = visitor.enter_self_sized::<Self>();
+        match self {
+            MoveValue::U8(_)
+            | MoveValue::U16(_)
+            | MoveValue::U32(_)
+            | MoveValue::U64(_)
+            | MoveValue::U128(_)
+            | MoveValue::Bool(_) => {}
+            MoveValue::Address(a) => a.visit(&mut visitor),
+            MoveValue::Signer(a) => a.visit(&mut visitor),
+            MoveValue::U256(u) => u.visit(&mut visitor),
+            MoveValue::Vector(v) => {
+                for value in v {
+                    value.visit(&mut visitor);
+                }
+            }
+            MoveValue::Struct(s) => s.visit(&mut visitor),
+            MoveValue::Variant(v) => v.visit(&mut visitor),
+        }
+        visitor.exit();
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

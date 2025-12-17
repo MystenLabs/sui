@@ -102,8 +102,8 @@ pub fn parse_named_address(s: &str) -> anyhow::Result<(String, NumericalAddress)
 //**************************************************************************************************
 
 pub trait TName: Eq + Ord + Clone {
-    type Key: Ord + Clone;
-    type Loc: Copy;
+    type Key: Ord + Clone + allocative::Allocative + deepsize::DeepSizeOf;
+    type Loc: Copy + allocative::Allocative + deepsize::DeepSizeOf;
     fn drop_loc(self) -> (Self::Loc, Self::Key);
     fn add_loc(loc: Self::Loc, key: Self::Key) -> Self;
     fn borrow(&self) -> (&Self::Loc, &Self::Key);
@@ -178,10 +178,10 @@ pub fn shortest_cycle<'a, T: Ord + Hash>(
 
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct NamedAddressMapIndex(usize);
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct NamedAddressMaps(Vec<Arc<NamedAddressMap>>);
 
 impl Default for NamedAddressMaps {

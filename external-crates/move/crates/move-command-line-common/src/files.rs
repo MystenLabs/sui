@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, path::Path};
 use vfs::{VfsPath, VfsResult, error::VfsErrorKind};
 
 /// Result of sha256 hash of a file's contents.
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct FileHash(pub [u8; 32]);
 
 impl FileHash {

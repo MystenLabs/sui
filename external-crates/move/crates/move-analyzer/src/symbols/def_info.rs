@@ -21,7 +21,7 @@ use move_compiler::{
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 #[allow(clippy::large_enum_variant)]
 pub enum DefInfo {
     /// Type of an identifier
@@ -140,15 +140,16 @@ pub enum DefInfo {
         Option<String>,
     ),
 }
+
 /// Type of a function
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum FunType {
     Macro,
     Entry,
     Regular,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct VariantInfo {
     pub name: Name,
     pub empty: bool,

@@ -3789,6 +3789,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "deepsize"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cdb987ec36f6bf7bfbea3f928b75590b736fc42af8e54d97592481351b2b96c"
+dependencies = [
+ "deepsize_derive",
+]
+
+[[package]]
+name = "deepsize_derive"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "990101d41f3bc8c1a45641024377ee284ecc338e5ecf3ea0f0e236d897c72796"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "der"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7845,10 +7865,12 @@ version = "0.0.1"
 name = "move-analyzer"
 version = "1.0.0"
 dependencies = [
+ "allocative",
  "anyhow",
  "clap",
  "codespan-reporting",
  "crossbeam",
+ "deepsize",
  "dunce",
  "im",
  "itertools 0.10.5",
@@ -8046,9 +8068,11 @@ dependencies = [
 name = "move-command-line-common"
 version = "0.1.0"
 dependencies = [
+ "allocative",
  "anyhow",
  "bcs",
  "colored",
+ "deepsize",
  "dirs-next",
  "hex",
  "insta",
@@ -8066,10 +8090,13 @@ dependencies = [
 name = "move-compiler"
 version = "0.0.1"
 dependencies = [
+ "allocative",
  "anyhow",
  "bcs",
  "clap",
+ "codespan",
  "codespan-reporting",
+ "deepsize",
  "dunce",
  "hex",
  "insta",
@@ -8101,9 +8128,11 @@ dependencies = [
 name = "move-core-types"
 version = "0.0.4"
 dependencies = [
+ "allocative",
  "anyhow",
  "arbitrary",
  "bcs",
+ "deepsize",
  "enum-compat-util",
  "ethnum",
  "hex",
@@ -8266,6 +8295,8 @@ dependencies = [
 name = "move-ir-types"
 version = "0.1.0"
 dependencies = [
+ "allocative",
+ "deepsize",
  "hex",
  "move-command-line-common",
  "move-core-types",
@@ -8534,6 +8565,8 @@ dependencies = [
 name = "move-symbol-pool"
 version = "0.1.0"
 dependencies = [
+ "allocative",
+ "deepsize",
  "once_cell",
  "phf",
  "serde",
@@ -18601,7 +18634,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

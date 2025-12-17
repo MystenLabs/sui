@@ -10,7 +10,7 @@ use std::fmt;
 use move_compiler::{expansion::ast::ModuleIdent, parser::ast as P, shared::Name};
 use move_ir_types::location::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct CursorContext {
     /// Set during typing analysis
     pub module: Option<ModuleIdent>,
@@ -23,21 +23,21 @@ pub struct CursorContext {
     pub loc: Loc,
 }
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum ChainCompletionKind {
     Type,
     Function,
     All,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, allocative::Allocative, deepsize::DeepSizeOf)]
 pub struct ChainInfo {
     pub chain: P::NameAccessChain,
     pub kind: ChainCompletionKind,
     pub inside_use: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum CursorPosition {
     Exp(P::Exp),
     SeqItem(P::SequenceItem),
@@ -56,7 +56,7 @@ pub enum CursorPosition {
     FunctionTypeParameter((Name, Vec<P::Ability>)),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, allocative::Allocative, deepsize::DeepSizeOf)]
 pub enum CursorDefinition {
     Function(P::FunctionName),
     Constant(P::ConstantName),
