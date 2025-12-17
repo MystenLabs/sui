@@ -8184,7 +8184,8 @@ dependencies = [
  "move-ir-types",
  "move-model",
  "move-model-2",
- "move-package",
+ "move-package-alt",
+ "move-package-alt-compilation",
  "move-stackless-bytecode",
  "move-stackless-bytecode-2",
  "move-symbol-pool",
@@ -8338,41 +8339,6 @@ dependencies = [
  "pretty_simple",
  "serde",
  "vfs",
-]
-
-[[package]]
-name = "move-package"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "colored",
- "dunce",
- "itertools 0.10.5",
- "move-binary-format",
- "move-bytecode-source-map",
- "move-bytecode-utils",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-disassembler",
- "move-docgen",
- "move-model-2",
- "move-symbol-pool",
- "named-lock",
- "once_cell",
- "petgraph 0.8.1",
- "regex",
- "serde",
- "serde_yaml 0.8.26",
- "sha2 0.9.9",
- "tempfile",
- "toml 0.5.11",
- "toml_edit 0.22.24",
- "treeline",
- "vfs",
- "walkdir",
- "whoami",
 ]
 
 [[package]]
@@ -13616,7 +13582,6 @@ dependencies = [
  "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v0",
  "move-core-types",
- "move-package",
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime-v0",
@@ -14145,7 +14110,6 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
- "move-package",
  "move-symbol-pool",
  "mysten-common",
  "mysten-metrics",
@@ -16076,7 +16040,6 @@ version = "1.63.0"
 dependencies = [
  "anyhow",
  "move-core-types",
- "move-package",
  "move-symbol-pool",
  "sui-framework-snapshot",
  "sui-json-rpc-types",

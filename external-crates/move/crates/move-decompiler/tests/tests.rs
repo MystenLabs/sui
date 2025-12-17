@@ -4,16 +4,13 @@
 use move_decompiler::{generate_from_model, testing::structuring_unit_test};
 
 use move_command_line_common::insta_assert;
-use move_package::{BuildConfig, compilation::model_builder};
+use move_package_alt::package::RootPackage;
+use move_package_alt_compilation::{build_config::BuildConfig, model_builder};
 use move_symbol_pool::Symbol;
 
 use tempfile::TempDir;
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    io::BufRead,
-    path::Path,
-};
+use std::{collections::BTreeSet, io::BufRead, path::Path};
 
 // -------------------------------------------------------------------------------------------------
 // Structuring Unit Tests
@@ -38,15 +35,20 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
     let output_dir = TempDir::new()?;
 
     let config = BuildConfig {
-        dev_mode: true,
         install_dir: Some(output_dir.path().to_path_buf()),
         force_recompilation: false,
         ..Default::default()
     };
 
     let mut writer = Vec::new();
-    let resolved_package = config.resolution_graph_for_package(pkg_dir, None, &mut writer)?;
-    let model = model_builder::build(resolved_package, &mut writer)?;
+    let env = move_package_alt::flavor::vanilla::default_environment();
+    let root_pkg = RootPackage::<move_package_alt::flavor::Vanilla>::load_sync(
+        pkg_dir.to_path_buf(),
+        env,
+        config.mode_set(),
+    )?;
+
+    let model = model_builder::build(&mut writer, &root_pkg, &config)?;
 
     let bytecode = move_stackless_bytecode_2::from_model(&model, /* optimize */ true)?;
 
@@ -86,17 +88,22 @@ fn run_full_test(file_path: &Path) -> datatest_stable::Result<()> {
     let output_dir = TempDir::new()?;
 
     let config = BuildConfig {
-        dev_mode: true,
         install_dir: Some(output_dir.path().to_path_buf()),
         force_recompilation: false,
-        implicit_dependencies: BTreeMap::new(),
         ..Default::default()
     };
 
     let mut writer = Vec::new();
-    let resolved_package = config.resolution_graph_for_package(pkg_dir, None, &mut writer)?;
-    let root_pkg = resolved_package.root_package();
-    let model = model_builder::build(resolved_package, &mut writer)?;
+    let env = move_package_alt::flavor::vanilla::default_environment();
+    let loaded_root_pkg = RootPackage::<move_package_alt::flavor::Vanilla>::load_sync(
+        pkg_dir.to_path_buf(),
+        env,
+        config.mode_set(),
+    )?;
+    let root_pkg_info = loaded_root_pkg.package_info();
+    let root_pkg = root_pkg_info.display_name();
+
+    let model = model_builder::build(&mut writer, &loaded_root_pkg, &config)?;
 
     let output_path = output_dir.path().join("output");
 
