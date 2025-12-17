@@ -112,6 +112,14 @@ impl<'r> Page<'r> {
         }
     }
 
+    pub(super) fn limit(&self) -> usize {
+        self.limit
+    }
+
+    pub(super) fn is_from_front(&self) -> bool {
+        self.is_from_front
+    }
+
     fn paginate_from_front<K, V, E>(
         &self,
         mut iter: FwdIter<'_, K, V>,
