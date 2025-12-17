@@ -2,8 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::accumulators::balance_read::AccountFundsRead;
 use crate::accumulators::coin_reservations::CoinReservationResolver;
+use crate::accumulators::funds_read::AccountFundsRead;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
