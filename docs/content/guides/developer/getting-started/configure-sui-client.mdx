@@ -36,7 +36,7 @@ If a previous Sui installation stored a `client.yaml` file locally, you will rec
 
 :::
 
-The prompt asks if you want to create the `client.yaml` file, select `Y` or press enter (you can also skip the prompt by passing `-y`).
+The prompt asks if you want to create the `client.yaml` file, select `Y` or press enter. You can skip the prompt with `sui client -y`.
 
 ```
 No sui config found in `~/.sui/sui_config/client.yaml`, create one [Y/n]?
@@ -65,9 +65,9 @@ It will not be visible again once the CLI history disappears.
 
 Your Sui client is now configured. By default, Sui stores this information in either the `~/.sui/sui_config/client.yaml` file (macOS/Linux) or `%USERPROFILE%\.sui\sui_config\client.yaml` file (Windows). You can store a `client.yaml` file in a different location, if preferred, and specify its location with the `--client.config` flag.
 
-The `client.yaml` contains the configuration for connecting to different Sui networks (testnet, mainnet, devnet, and localnet), as well as your current "active environment", which is tells the CLI which network to use if you don't explicitly provide one.
+The `client.yaml` contains the configuration for connecting to different Sui networks (Testnet, Mainnet, Devnet, and Localnet), as well as your current active environment, which tells the CLI which network to use when you don't explicitly specify one.
 
-You can modify your configuration (for example by adding new RPC endpoints or changing your active environment) using the `sui client` subtools; see `sui client --help` for more information.
+You can modify your configuration using the `sui client` subcommands. See the output of `sui client --help` for more information.
 
 Sui stores the key for the Sui address in a separate file, `~/.sui/sui_config/sui.keystore` (macOS/Linux) or `%USERPROFILE/.sui/sui_config/sui.keystore` (Windows). Learn more about Sui addresses in [Create a Sui Address](/guides/developer/getting-started/get-address.mdx).
 
