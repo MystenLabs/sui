@@ -73,7 +73,6 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
         state.get_transaction_cache_reader().clone(),
         tx_ready_certificates,
         &state.epoch_store_for_testing(),
-        state.get_chain_identifier(),
         state.metrics.clone(),
     ));
     TestEnv {

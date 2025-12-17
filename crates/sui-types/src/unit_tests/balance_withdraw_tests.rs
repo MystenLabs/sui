@@ -7,8 +7,9 @@ use sui_protocol_config::ProtocolConfig;
 
 use crate::{
     accumulator_root::AccumulatorValue,
-    base_types::{ObjectRef, SuiAddress, random_object_ref},
-    coin_reservation::CoinReservationResolverTrait,
+    base_types::{SuiAddress, random_object_ref},
+    coin_reservation::{CoinReservationResolverTrait, ParsedObjectRefWithdrawal},
+    digests::ChainIdentifier,
     error::UserInputResult,
     gas_coin::GAS,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -31,7 +32,7 @@ impl CoinReservationResolverTrait for NoImpl {
     fn resolve_funds_withdrawal(
         &self,
         _: SuiAddress,
-        _: ObjectRef,
+        _: ParsedObjectRefWithdrawal,
     ) -> UserInputResult<FundsWithdrawalArg> {
         unimplemented!("these tests do not use coin reservations")
     }
@@ -46,7 +47,9 @@ fn test_withdraw_max_amount() {
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     assert!(tx.has_funds_withdrawals());
-    let withdraws = tx.process_funds_withdrawals_for_signing(&NoImpl).unwrap();
+    let withdraws = tx
+        .process_funds_withdrawals_for_signing(ChainIdentifier::default(), &NoImpl)
+        .unwrap();
     let account_id = AccumulatorValue::get_field_id(
         sender,
         &WithdrawalTypeArg::Balance(GAS::type_tag().into())
@@ -68,7 +71,9 @@ fn test_multiple_withdraws_same_account() {
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     assert!(tx.has_funds_withdrawals());
-    let withdraws = tx.process_funds_withdrawals_for_signing(&NoImpl).unwrap();
+    let withdraws = tx
+        .process_funds_withdrawals_for_signing(ChainIdentifier::default(), &NoImpl)
+        .unwrap();
     let account_id = AccumulatorValue::get_field_id(
         sender,
         &WithdrawalTypeArg::Balance(GAS::type_tag().into())
@@ -90,7 +95,9 @@ fn test_multiple_withdraws_different_accounts() {
     let tx =
         TransactionData::new_programmable(sender, vec![random_object_ref()], ptb.finish(), 1, 1);
     assert!(tx.has_funds_withdrawals());
-    let withdraws = tx.process_funds_withdrawals_for_signing(&NoImpl).unwrap();
+    let withdraws = tx
+        .process_funds_withdrawals_for_signing(ChainIdentifier::default(), &NoImpl)
+        .unwrap();
     let account_id1 = AccumulatorValue::get_field_id(
         sender,
         &WithdrawalTypeArg::Balance(GAS::type_tag().into())

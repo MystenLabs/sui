@@ -29,7 +29,7 @@ use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
     base_types::{FullObjectID, ObjectID},
-    digests::{ChainIdentifier, TransactionDigest},
+    digests::TransactionDigest,
     effects::{AccumulatorOperation, AccumulatorValue, TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
@@ -97,7 +97,6 @@ pub struct ExecutionScheduler {
     address_balance_withdraw_scheduler: Arc<Mutex<Option<BalanceWithdrawScheduler>>>,
     object_balance_withdraw_scheduler:
         Arc<Mutex<Option<Box<dyn ObjectBalanceWithdrawSchedulerTrait>>>>,
-    chain_identifier: ChainIdentifier,
     metrics: Arc<AuthorityMetrics>,
 }
 
@@ -138,7 +137,6 @@ impl ExecutionScheduler {
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        chain_identifier: ChainIdentifier,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         tracing::info!("Creating new ExecutionScheduler");
@@ -159,7 +157,6 @@ impl ExecutionScheduler {
             object_balance_withdraw_scheduler: Arc::new(Mutex::new(
                 object_balance_withdraw_scheduler,
             )),
-            chain_identifier,
             metrics,
         }
     }
@@ -355,7 +352,7 @@ impl ExecutionScheduler {
         for (cert, env) in &certs {
             let tx_withdraws = cert
                 .transaction_data()
-                .process_funds_withdrawals_for_execution(self.chain_identifier);
+                .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier());
             assert!(!tx_withdraws.is_empty());
             let accumulator_version = env
                 .assigned_versions
@@ -867,7 +864,6 @@ mod test {
             state.get_transaction_cache_reader().clone(),
             tx_ready_certificates,
             &state.epoch_store_for_testing(),
-            state.get_chain_identifier(),
             state.metrics.clone(),
         );
 

@@ -52,7 +52,7 @@ pub trait CoinReservationResolverTrait {
         &self,
         // Note: must be the sender. We do not support sponsorship.
         sender: SuiAddress,
-        coin_reservation: ObjectRef,
+        coin_reservation: ParsedObjectRefWithdrawal,
     ) -> UserInputResult<FundsWithdrawalArg>;
 }
 

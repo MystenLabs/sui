@@ -1031,8 +1031,10 @@ impl AuthorityState {
             self.get_backing_package_store().as_ref(),
         )?;
 
-        let withdraws = tx_data
-            .process_funds_withdrawals_for_signing(self.coin_reservation_resolver.as_ref())?;
+        let withdraws = tx_data.process_funds_withdrawals_for_signing(
+            self.chain_identifier,
+            self.coin_reservation_resolver.as_ref(),
+        )?;
 
         self.execution_cache_trait_pointers
             .child_object_resolver
@@ -3632,7 +3634,6 @@ impl AuthorityState {
                 .clone(),
             tx_ready_certificates,
             &epoch_store,
-            chain_identifier,
             metrics.clone(),
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
@@ -3678,7 +3679,6 @@ impl AuthorityState {
 
         let coin_reservation_resolver = Arc::new(CoinReservationResolver::new(
             execution_cache_trait_pointers.child_object_resolver.clone(),
-            chain_identifier,
         ));
 
         let state = Arc::new(AuthorityState {

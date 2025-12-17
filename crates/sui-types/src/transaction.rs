@@ -2414,6 +2414,7 @@ pub trait TransactionDataAPI {
     /// invalid reservations.
     fn process_funds_withdrawals_for_signing(
         &self,
+        chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>>;
 
@@ -2562,11 +2563,12 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn process_funds_withdrawals_for_signing(
         &self,
+        chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, u64>> {
         let mut withdraws = self.get_funds_withdrawals();
 
-        for withdraw in self.coin_reservation_obj_refs() {
+        for withdraw in self.parsed_coin_reservations(chain_identifier) {
             let withdrawal_arg = coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw)?;
             withdraws.push(withdrawal_arg);
         }
