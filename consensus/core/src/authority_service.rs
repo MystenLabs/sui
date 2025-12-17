@@ -178,7 +178,6 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             info!("Block with wrong authority from {}: {}", peer, e);
             return Err(e);
         }
-        let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // Reject blocks failing validations.
         let (verified_block, reject_txn_votes) = self
