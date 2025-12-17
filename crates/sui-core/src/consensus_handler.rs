@@ -49,7 +49,8 @@ use sui_types::{
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
-        SenderSignedData, TransactionKey, VerifiedCertificate, VerifiedTransaction, WithAliases,
+        InputObjectKind, SenderSignedData, TransactionDataAPI, TransactionKey, VerifiedCertificate,
+        VerifiedTransaction, WithAliases,
     },
 };
 use tokio::task::JoinSet;
@@ -81,7 +82,7 @@ use crate::{
         randomness::{DkgStatus, RandomnessManager},
         reconfiguration::ReconfigState,
     },
-    execution_cache::ObjectCacheRead,
+    execution_cache::{ExecutionCacheWrite, ObjectCacheRead},
     execution_scheduler::{ExecutionScheduler, SchedulingSource},
     post_consensus_tx_reorder::PostConsensusTxReorder,
     scoring_decision::update_low_scoring_authorities,
@@ -154,6 +155,7 @@ impl ConsensusHandlerInitializer {
             self.state.execution_scheduler().clone(),
             self.consensus_adapter.clone(),
             self.state.get_object_cache_reader().clone(),
+            self.state.get_cache_writer().clone(),
             self.low_scoring_authorities.clone(),
             consensus_committee,
             self.state.metrics.clone(),
@@ -527,6 +529,9 @@ pub struct ConsensusHandler<C> {
     checkpoint_service: Arc<C>,
     /// cache reader is needed when determining the next version to assign for shared objects.
     cache_reader: Arc<dyn ObjectCacheRead>,
+    /// cache writer is needed for post-consensus owned object conflict detection
+    /// when disable_fastpath is enabled.
+    cache_writer: Arc<dyn ExecutionCacheWrite>,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// The consensus committee used to do stake computations for deciding set of low scoring authorities
@@ -560,6 +565,7 @@ impl<C> ConsensusHandler<C> {
         execution_scheduler: Arc<ExecutionScheduler>,
         consensus_adapter: Arc<ConsensusAdapter>,
         cache_reader: Arc<dyn ObjectCacheRead>,
+        cache_writer: Arc<dyn ExecutionCacheWrite>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
@@ -585,6 +591,7 @@ impl<C> ConsensusHandler<C> {
             last_consensus_stats,
             checkpoint_service,
             cache_reader,
+            cache_writer,
             low_scoring_authorities,
             committee,
             metrics,
@@ -617,6 +624,7 @@ impl<C> ConsensusHandler<C> {
         execution_scheduler_sender: ExecutionSchedulerSender,
         consensus_adapter: Arc<ConsensusAdapter>,
         cache_reader: Arc<dyn ObjectCacheRead>,
+        cache_writer: Arc<dyn ExecutionCacheWrite>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
@@ -633,6 +641,7 @@ impl<C> ConsensusHandler<C> {
             last_consensus_stats,
             checkpoint_service,
             cache_reader,
+            cache_writer,
             low_scoring_authorities,
             committee,
             metrics,
@@ -2009,6 +2018,45 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // TODO(fastpath): Handle unlocking.
                     continue;
                 }
+                // When fastpath is disabled, perform post-consensus owned object conflict detection
+                // BEFORE setting Finalized status. If lock acquisition fails, the transaction has
+                // invalid/conflicting owned inputs and should be dropped.
+                if self.epoch_store.protocol_config().disable_fastpath()
+                    && let Some(tx) = parsed.transaction.kind.as_user_transaction()
+                    && let Ok(input_objects) = tx.transaction_data().input_objects()
+                {
+                    let owned_object_refs: Vec<_> = input_objects
+                        .iter()
+                        .filter_map(|obj| match obj {
+                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => Some(*obj_ref),
+                            _ => None,
+                        })
+                        .collect();
+
+                    if !owned_object_refs.is_empty()
+                        && let Err(error) = self.cache_writer.acquire_transaction_locks(
+                            &self.epoch_store,
+                            &owned_object_refs,
+                            *tx.digest(),
+                            None,
+                        )
+                    {
+                        debug!(
+                            "Dropping transaction {:?} due to invalid owned object inputs: {:?}",
+                            tx.digest(),
+                            error
+                        );
+                        self.epoch_store.set_consensus_tx_status(
+                            position,
+                            ConsensusTxStatus::DroppedInvalidOwnedInputs,
+                        );
+                        // Store the detailed error so clients can get
+                        // ObjectVersionUnavailableForConsumption with correct versions
+                        self.epoch_store.set_rejection_vote_reason(position, &error);
+                        continue;
+                    }
+                }
+
                 if matches!(
                     parsed.transaction.kind,
                     ConsensusTransactionKind::UserTransaction(_)
@@ -2823,7 +2871,11 @@ impl ConsensusBlockHandler {
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         Self {
-            enabled: epoch_store.protocol_config().mysticeti_fastpath(),
+            // Disable mysticeti fastpath execution when disable_fastpath is enabled,
+            // ensuring all transactions go through normal consensus commit path
+            // where post-consensus conflict detection runs.
+            enabled: epoch_store.protocol_config().mysticeti_fastpath()
+                && !epoch_store.protocol_config().disable_fastpath(),
             epoch_store,
             execution_scheduler_sender,
             backpressure_subscriber,
@@ -3078,6 +3130,7 @@ mod tests {
             state.execution_scheduler().clone(),
             consensus_adapter,
             state.get_object_cache_reader().clone(),
+            state.get_cache_writer().clone(),
             Arc::new(ArcSwap::default()),
             consensus_committee.clone(),
             metrics,
@@ -3094,14 +3147,11 @@ mod tests {
             } else {
                 shared_objects.get(i / 2).unwrap().clone()
             };
-            let transaction = test_user_transaction(
-                &state,
-                sender,
-                &keypair,
-                gas_object.clone(),
-                vec![input_object],
-            )
-            .await;
+            let transaction =
+                test_user_transaction(&state, sender, &keypair, gas_object.clone(), vec![
+                    input_object,
+                ])
+                .await;
             user_transactions.push(transaction);
         }
 
@@ -3285,14 +3335,11 @@ mod tests {
             } else {
                 shared_objects.get(i / 2).unwrap().clone()
             };
-            let transaction = test_user_transaction(
-                &state,
-                sender,
-                &keypair,
-                gas_object.clone(),
-                vec![input_object],
-            )
-            .await;
+            let transaction =
+                test_user_transaction(&state, sender, &keypair, gas_object.clone(), vec![
+                    input_object,
+                ])
+                .await;
             transactions.push(transaction);
         }
 
@@ -3408,13 +3455,10 @@ mod tests {
     fn test_order_by_gas_price() {
         let mut v = vec![user_txn(42), user_txn(100)];
         PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
-        assert_eq!(
-            to_short_strings(v),
-            vec![
-                "transaction(100)".to_string(),
-                "transaction(42)".to_string(),
-            ]
-        );
+        assert_eq!(to_short_strings(v), vec![
+            "transaction(100)".to_string(),
+            "transaction(42)".to_string(),
+        ]);
 
         let mut v = vec![
             user_txn(1200),
@@ -3425,17 +3469,14 @@ mod tests {
             user_txn(1000),
         ];
         PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
-        assert_eq!(
-            to_short_strings(v),
-            vec![
-                "transaction(1200)".to_string(),
-                "transaction(1000)".to_string(),
-                "transaction(1000)".to_string(),
-                "transaction(100)".to_string(),
-                "transaction(42)".to_string(),
-                "transaction(12)".to_string(),
-            ]
-        );
+        assert_eq!(to_short_strings(v), vec![
+            "transaction(1200)".to_string(),
+            "transaction(1000)".to_string(),
+            "transaction(1000)".to_string(),
+            "transaction(100)".to_string(),
+            "transaction(42)".to_string(),
+            "transaction(12)".to_string(),
+        ]);
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -3521,6 +3562,7 @@ mod tests {
             state.execution_scheduler().clone(),
             consensus_adapter,
             state.get_object_cache_reader().clone(),
+            state.get_cache_writer().clone(),
             Arc::new(ArcSwap::default()),
             consensus_committee.clone(),
             metrics,
@@ -3641,6 +3683,7 @@ mod tests {
             state.execution_scheduler().clone(),
             consensus_adapter,
             state.get_object_cache_reader().clone(),
+            state.get_cache_writer().clone(),
             Arc::new(ArcSwap::default()),
             consensus_committee.clone(),
             metrics,

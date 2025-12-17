@@ -2291,6 +2291,10 @@ impl ExecutionCacheWrite for WritebackCache {
         )
     }
 
+    fn validate_owned_object_versions(&self, owned_input_objects: &[ObjectRef]) -> SuiResult {
+        ObjectLocks::validate_owned_object_versions(self, owned_input_objects)
+    }
+
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
         WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs);
     }

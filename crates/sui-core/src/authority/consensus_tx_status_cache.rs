@@ -26,6 +26,9 @@ pub(crate) enum ConsensusTxStatus {
     Rejected,
     // Transaction is finalized post commit.
     Finalized,
+    // Transaction had invalid owned object inputs (stale version/digest or conflicting)
+    // and was dropped without execution. Only used when disable_fastpath is enabled.
+    DroppedInvalidOwnedInputs,
 }
 
 #[derive(Debug, Clone)]
@@ -122,7 +125,9 @@ impl ConsensusTxStatusCache {
                     }
                     // This happens when statuses arrive out-of-order, and is a no-op.
                     (
-                        ConsensusTxStatus::Rejected | ConsensusTxStatus::Finalized,
+                        ConsensusTxStatus::Rejected
+                        | ConsensusTxStatus::Finalized
+                        | ConsensusTxStatus::DroppedInvalidOwnedInputs,
                         ConsensusTxStatus::FastpathCertified,
                     ) => {
                         return;
