@@ -94,6 +94,7 @@ pub fn load_nitro_attestation_internal(
         &attestation_bytes,
         is_upgraded(context)?,
         is_all_nonzero_pcrs_included(context)?,
+        is_all_nonzero_pcrs_included(context)?,
     ) {
         Ok((signature, signed_message, payload)) => {
             let cert_chain_length = payload.get_cert_chain_length();

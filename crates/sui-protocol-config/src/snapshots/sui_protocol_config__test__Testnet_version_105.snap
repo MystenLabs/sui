@@ -1,6 +1,7 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
+snapshot_kind: text
 ---
 version: 105
 feature_flags:
@@ -50,6 +51,7 @@ feature_flags:
   enable_nitro_attestation: true
   enable_nitro_attestation_upgraded_parsing: true
   enable_nitro_attestation_all_nonzero_pcrs_parsing: true
+  enable_nitro_attestation_always_include_required_pcrs_parsing: true
   reject_mutable_random_on_entry_functions: true
   per_object_congestion_control_mode:
     ExecutionTimeEstimate:
