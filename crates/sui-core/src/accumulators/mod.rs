@@ -35,6 +35,7 @@ pub mod funds_read;
 // provides balance read functionality for RPC
 pub mod balances;
 pub mod coin_reservations;
+pub(crate) mod transaction_rewriting;
 
 /// Merged value is the value stored inside accumulator objects.
 /// Each mergeable Move type will map to a single variant as its representation.

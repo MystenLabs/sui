@@ -52,6 +52,12 @@ pub mod checked {
         Unmetered,
         Coins(Vec<ObjectRef>),
         AddressBalance(SuiAddress),
+        // Used by the compatibility layer, which unavoidably allows users to specify both
+        // real and fake coins at the same time.
+        Mixed {
+            address_balance_gas_payer: SuiAddress,
+            gas_coins: Vec<ObjectRef>,
+        },
     }
 
     impl PaymentMethod {
@@ -97,7 +103,9 @@ pub mod checked {
         //       Explore way to remove it.
         pub(crate) fn gas_coins(&self) -> impl Iterator<Item = &'_ ObjectRef> {
             match &self.payment_method {
-                PaymentMethod::Coins(gas_coins) => Either::Left(gas_coins.iter()),
+                PaymentMethod::Coins(gas_coins) | PaymentMethod::Mixed { gas_coins, .. } => {
+                    Either::Left(gas_coins.iter())
+                }
                 PaymentMethod::AddressBalance(_) | PaymentMethod::Unmetered => {
                     Either::Right(std::iter::empty())
                 }
