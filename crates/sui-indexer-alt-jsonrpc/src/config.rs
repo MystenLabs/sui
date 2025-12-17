@@ -303,7 +303,7 @@ impl NodeConfig {
 
         HttpClientBuilder::default()
             .max_request_size(self.max_request_size)
-            .set_headers(headers.clone())
+            .set_headers(headers)
             .build(&fullnode_rpc_url)
             .context("Failed to initialize fullnode RPC client")
     }
