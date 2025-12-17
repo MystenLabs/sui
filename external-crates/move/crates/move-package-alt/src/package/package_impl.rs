@@ -88,7 +88,7 @@ impl<F: MoveFlavor> Package<F> {
 
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
-        let legacy_manifest = path.read_legacy_manifest(env, dep.is_root(), mtx)?;
+        let legacy_manifest = path.read_legacy_manifest::<F>(env, dep.is_root(), mtx)?;
         let (file_handle, manifest) = if let Some(result) = legacy_manifest {
             result
         } else {
