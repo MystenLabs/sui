@@ -7,7 +7,7 @@ source: crates/sui/tests/shell_tests.rs
 
 # If the config file doesn't exist, we prompt and then create it
 # This is the same as skip.sh except we write <enter> on stdin and don't pass -y
-echo "" | sui client --client.config ./client.yaml envs \
+echo "" | sui move --client.config ./client.yaml new example \
   | sed 's/Generated new keypair.*$/Generated new keypair <REDACTED>/g' \
   | sed 's/recovery phrase : \[.*\]/recovery phrase : <REDACTED>/g'
 
@@ -26,14 +26,6 @@ Generated new keypair <REDACTED>
   secret recovery phrase : <REDACTED>
 Created "./client.yaml"
 Set active environment to testnet
-╭─────────┬─────────────────────────────────────┬────────╮
-│ alias   │ url                                 │ active │
-├─────────┼─────────────────────────────────────┼────────┤
-│ testnet │ https://fullnode.testnet.sui.io:443 │ *      │
-│ mainnet │ https://fullnode.mainnet.sui.io:443 │        │
-│ devnet  │ https://fullnode.devnet.sui.io:443  │        │
-│ local   │ http://127.0.0.1:9000               │        │
-╰─────────┴─────────────────────────────────────┴────────╯
 ---
 keystore:
   File: "./sui.keystore"
@@ -64,4 +56,3 @@ check for keystore:
 sui.keystore
 
 ----- stderr -----
-[warning] Client/Server api version mismatch, client api version : 1.63.0, server api version : 1.62.0

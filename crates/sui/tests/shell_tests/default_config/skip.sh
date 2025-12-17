@@ -3,7 +3,7 @@
 
 # If `-y` is passed and the config file doesn't exist, it is created
 # This is the same as prompt.sh except we pass -y instead of writing <enter> on stdin
-sui client --client.config ./client.yaml -y envs \
+sui move --client.config ./client.yaml -y new example \
   | sed 's/Generated new keypair.*$/Generated new keypair <REDACTED>/g' \
   | sed 's/recovery phrase : \[.*\]/recovery phrase : <REDACTED>/g'
 
