@@ -219,7 +219,7 @@ impl AddAssign<U256> for U256 {
     }
 }
 
-// Ignores underflows
+// Ignores underflow
 impl Sub<U256> for U256 {
     type Output = Self;
 
@@ -329,7 +329,7 @@ impl U256 {
         self.0.leading_zeros()
     }
 
-    // Unchecked downcasting. Values as truncated if larger than target max
+    // Unchecked downcasing. Values as truncated if larger than target max
     pub fn unchecked_as_u8(&self) -> u8 {
         self.0.low_u128() as u8
     }
@@ -428,7 +428,7 @@ impl U256 {
         Self(self.0.overflowing_mul(rhs.0).0)
     }
 
-    /// Implementation of widenining multiply
+    /// Implementation of widening multiply
     /// https://github.com/rust-random/rand/blob/master/src/distributions/utils.rs
     #[inline(always)]
     fn wmul(self, b: Self) -> (Self, Self) {
