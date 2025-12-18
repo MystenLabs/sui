@@ -151,7 +151,9 @@ async fn main() -> Result<()> {
                     "amount": amount,
                 })),
             )
-            .await?
+            .await?;
+
+            send_command(&server_url, "advance-checkpoint", None).await?
         }
     }
 
