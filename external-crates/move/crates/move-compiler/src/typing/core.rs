@@ -3310,7 +3310,10 @@ fn join_impl(
                 k2
             );
             let (subst, tys) = join_impl_types(counter, subst, case, tys1, tys2)?;
-            Ok((subst, sp(*rhs_loc, TI::Apply(k2.clone(), n2.clone(), tys).into())))
+            Ok((
+                subst,
+                sp(*rhs_loc, TI::Apply(k2.clone(), n2.clone(), tys).into()),
+            ))
         }
         (TI::Fun(a1, _), TI::Fun(a2, _)) if a1.len() != a2.len() => {
             Err(TypingError::FunArityMismatch(

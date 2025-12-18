@@ -2199,3 +2199,21 @@ impl AstDebug for LambdaLValues_ {
         w.write("| ");
     }
 }
+
+// *************************************************************************************************
+// Size Tests
+// *************************************************************************************************
+
+#[test]
+fn naming_ast_sizes() {
+    assert!(
+        std::mem::size_of::<TypeName>() == 104,
+        "TypeName size changed"
+    );
+    assert!(
+        std::mem::size_of::<TypeInner>() == 160,
+        "TypeInner size changed"
+    );
+    assert!(std::mem::size_of::<Type_>() == 8, "Type_ size changed");
+    assert!(std::mem::size_of::<Type>() == 48, "Type size changed");
+}
