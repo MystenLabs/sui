@@ -83,21 +83,24 @@ impl Epoch {
         last: Option<u64>,
         before: Option<CCheckpoint>,
         filter: Option<CheckpointFilter>,
-    ) -> Result<Option<Connection<String, Checkpoint>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Epoch", "checkpoints");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Checkpoint>, RpcError>> {
+        let checkpoints = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("Epoch", "checkpoints");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(filter) = filter.unwrap_or_default().intersect(CheckpointFilter {
-            at_epoch: Some(self.epoch_id.into()),
-            ..Default::default()
-        }) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+            let Some(filter) = filter.unwrap_or_default().intersect(CheckpointFilter {
+                at_epoch: Some(self.epoch_id.into()),
+                ..Default::default()
+            }) else {
+                return Ok(Connection::new(false, false));
+            };
 
-        Ok(Some(
-            Checkpoint::paginate(ctx, self.scope.clone(), page, filter).await?,
-        ))
+            Checkpoint::paginate(ctx, self.scope.clone(), page, filter).await
+        }
+        .await;
+
+        Some(checkpoints)
     }
 
     /// State of the Coin DenyList object (0x403) at the start of this epoch.
@@ -160,37 +163,40 @@ impl Epoch {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
-        let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
-            return Ok(None);
-        };
-        let Some(checkpoint_viewed_at_exclusive_bound) =
-            self.scope.checkpoint_viewed_at_exclusive_bound()
-        else {
-            return Ok(None);
-        };
+    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+        let transactions = async {
+            let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
+                return Ok(Connection::new(false, false));
+            };
+            let Some(checkpoint_viewed_at_exclusive_bound) =
+                self.scope.checkpoint_viewed_at_exclusive_bound()
+            else {
+                return Ok(Connection::new(false, false));
+            };
 
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Epoch", "transactions");
-        let page = Page::from_params(limits, first, after, last, before)?;
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("Epoch", "transactions");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        let cp_lo_exclusive = (start.cp_lo as u64).checked_sub(1);
-        let cp_hi = end.as_ref().map_or_else(
-            || checkpoint_viewed_at_exclusive_bound,
-            |end| end.cp_hi as u64,
-        );
+            let cp_lo_exclusive = (start.cp_lo as u64).checked_sub(1);
+            let cp_hi = end.as_ref().map_or_else(
+                || checkpoint_viewed_at_exclusive_bound,
+                |end| end.cp_hi as u64,
+            );
 
-        let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
-            after_checkpoint: cp_lo_exclusive.map(UInt53::from),
-            before_checkpoint: Some(UInt53::from(cp_hi)),
-            ..Default::default()
-        }) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+            let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
+                after_checkpoint: cp_lo_exclusive.map(UInt53::from),
+                before_checkpoint: Some(UInt53::from(cp_hi)),
+                ..Default::default()
+            }) else {
+                return Ok(Connection::new(false, false));
+            };
 
-        Ok(Some(
-            Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
-        ))
+            Transaction::paginate(ctx, self.scope.clone(), page, filter).await
+        }
+        .await;
+
+        Some(transactions)
     }
 
     /// The system packages used by all transactions in this epoch.
@@ -201,24 +207,27 @@ impl Epoch {
         after: Option<CSysPackage>,
         last: Option<u64>,
         before: Option<CSysPackage>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Epoch", "systemPackages");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+        let system_packages = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("Epoch", "systemPackages");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(contents) = self.start(ctx).await.map_err(upcast)? else {
-            return Ok(None);
-        };
+            let Some(contents) = self.start(ctx).await.map_err(upcast)? else {
+                return Ok(Connection::new(false, false));
+            };
 
-        Ok(Some(
             MovePackage::paginate_system_packages(
                 ctx,
                 self.scope.clone(),
                 page,
                 contents.cp_lo as u64,
             )
-            .await?,
-        ))
+            .await
+        }
+        .await;
+
+        Some(system_packages)
     }
 
     /// The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).

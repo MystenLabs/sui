@@ -46,18 +46,22 @@ impl ValidatorSet {
         after: Option<CValidator>,
         last: Option<u64>,
         before: Option<CValidator>,
-    ) -> Result<Option<Connection<String, Validator>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("ValidatorSet", "activeValidators");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Validator>, RpcError>> {
+        let active_validators = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("ValidatorSet", "activeValidators");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        page.paginate_indices(self.contents.native.active_validators.len(), |idx| {
-            Ok(Validator {
-                contents: Arc::clone(&self.contents),
-                idx,
+            page.paginate_indices(self.contents.native.active_validators.len(), |idx| {
+                Ok(Validator {
+                    contents: Arc::clone(&self.contents),
+                    idx,
+                })
             })
-        })
-        .map(Some)
+        }
+        .await;
+
+        Some(active_validators)
     }
 
     /// Object ID of the `Table` storing the inactive staking pools.
