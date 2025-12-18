@@ -23,7 +23,7 @@ use crate::metrics::RpcMetrics;
 /// A bundle of different interfaces to data, for use by JSON-RPC method implementations.
 #[derive(Clone)]
 pub(crate) struct Context {
-    /// TODO consistent reader doc comment
+    /// Access to the Consistent Store.
     consistent_reader: ConsistentReader,
 
     /// Direct access to the database, for running SQL queries.
@@ -102,7 +102,7 @@ impl Context {
         })
     }
 
-    /// For performing reads against the consistent store.
+    /// For performing reads against the Consistent Store.
     pub(crate) fn consistent_reader(&self) -> &ConsistentReader {
         &self.consistent_reader
     }
@@ -117,9 +117,8 @@ impl Context {
         &self.pg_loader
     }
 
-    /// For performing point look-ups on the kv store.
-    /// Depends on the configuration of the indexer, the kv store may be backed by
-    /// eitherBigtable or Postgres.
+    /// For performing point look-ups on the kv store. Depends on the configuration of the indexer,
+    /// the kv store may be backed by either Bigtable or Postgres.
     pub(crate) fn kv_loader(&self) -> &KvLoader {
         &self.kv_loader
     }

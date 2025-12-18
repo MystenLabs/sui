@@ -145,6 +145,8 @@ impl CoinsApiServer for Coins {
 
         let consistent_reader = ctx.consistent_reader();
 
+        // Coin balances are stored as bitwise negation, so iterating in regular (forward) order
+        // yields highest balances first.
         let results = consistent_reader
             .list_owned_objects(
                 None, /* checkpoint */
@@ -236,6 +238,8 @@ impl CoinsApiServer for Coins {
                 all_balances.push(Balance {
                     coin_type: edge.value.0.to_canonical_string(/* with_prefix */ true),
                     total_balance: edge.value.1 as u128,
+                    // The Consistent Store does not track coin object counts, so the rpc will
+                    // always return 1.
                     coin_object_count: 1,
                     locked_balance: HashMap::new(),
                 });
@@ -279,7 +283,8 @@ impl CoinsApiServer for Coins {
         Ok(Balance {
             coin_type: type_tag.to_canonical_string(/* with_prefix */ true),
             total_balance: total_balance as u128,
-            coin_object_count: 0,
+            // Harcoded value since the Consistent Store does not track coin object counts.
+            coin_object_count: 1,
             locked_balance: HashMap::new(),
         })
     }

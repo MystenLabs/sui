@@ -1,12 +1,12 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 21 tasks
+processed 20 tasks
 
 init:
 A: object(0,0), B: object(0,1)
 
-task 1, lines 6-8:
+task 1, lines 16-18:
 //# programmable --sender A --inputs 120000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -14,7 +14,7 @@ created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 10-12:
+task 2, lines 20-22:
 //# programmable --sender A --inputs 34000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -22,7 +22,7 @@ created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3, lines 14-16:
+task 3, lines 24-26:
 //# programmable --sender A --inputs 5600 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -30,7 +30,7 @@ created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, lines 18-20:
+task 4, lines 28-30:
 //# programmable --sender A --inputs 780 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -38,7 +38,7 @@ created: object(4,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5, lines 22-24:
+task 5, lines 32-34:
 //# programmable --sender A --inputs 90 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -46,7 +46,7 @@ created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, lines 26-28:
+task 6, lines 36-38:
 //# programmable --sender A --inputs 10 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -54,7 +54,7 @@ created: object(6,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7, lines 30-32:
+task 7, lines 40-42:
 //# programmable --sender A --inputs 20 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -62,7 +62,7 @@ created: object(7,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8, lines 35-37:
+task 8, lines 45-47:
 //# programmable --sender A --inputs 30 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -70,7 +70,7 @@ created: object(8,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 9, line 39:
+task 9, line 49:
 //# view-object 4,0
 Owner: Account Address ( A )
 Version: 5
@@ -85,7 +85,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 10, line 41:
+task 10, line 51:
 //# view-object 5,0
 Owner: Account Address ( A )
 Version: 6
@@ -100,7 +100,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 11, line 43:
+task 11, line 53:
 //# view-object 6,0
 Owner: Account Address ( A )
 Version: 7
@@ -115,7 +115,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 12, line 45:
+task 12, line 55:
 //# view-object 7,0
 Owner: Account Address ( A )
 Version: 8
@@ -130,11 +130,11 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
     },
 }
 
-task 13, line 47:
+task 13, line 57:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 14, lines 49-53:
+task 14, lines 59-63:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
@@ -166,13 +166,13 @@ Response: {
         "previousTransaction": "8UGYtJqAwB4cqdMjrA3h65rHyoEpL588hqpVTcave9sM"
       }
     ],
-    "nextCursor": "IF5PlQz/Ossw/lQGqmgFHqiufbA8uQxjnRs7973jy0o3AQAAAAAAAAAEAAAAAAAAAA==",
+    "nextCursor": "zAEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAANzdWkAAAAAAAAAA1NVSQAAAAAAAAAAAf///////3svfQaO78l6Y0qMcems7F7buATW52J9XRSPgvdCXes1Wkw=",
     "hasNextPage": true
   }
 }
 
-task 15, lines 55-59:
-//# run-jsonrpc --cursors bcs(bcs(@{obj_2_0}),1,4)
+task 15, lines 65-69:
+//# run-jsonrpc --cursors bcs(bin(0u8,@{A},0x2::coin::Coin<0x2::sui::SUI>,1u8,!34000,@{obj_2_0}))
 Response: {
   "jsonrpc": "2.0",
   "id": 1,
@@ -232,8 +232,8 @@ Response: {
   }
 }
 
-task 16, lines 61-65:
-//# run-jsonrpc --cursors bcs(bcs(@{obj_7_0}),1,1)
+task 16, lines 71-75:
+//# run-jsonrpc --cursors bcs(bin(0u8,@{A},0x2::coin::Coin<0x2::sui::SUI>,1u8,!20,@{obj_7_0}))
 Response: {
   "jsonrpc": "2.0",
   "id": 2,
@@ -269,7 +269,7 @@ Response: {
   }
 }
 
-task 17, lines 67-69:
+task 17, lines 77-79:
 //# programmable --sender A --inputs 500 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
@@ -277,12 +277,12 @@ created: object(17,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 18, line 71:
+task 18, line 81:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 19, lines 73-77:
-//# run-jsonrpc --cursors bcs(bcs(@{obj_1_0}),2,4)
+task 19, lines 83-87:
+//# run-jsonrpc --cursors bcs(bin(0u8,@{A},0x2::coin::Coin<0x2::sui::SUI>,1u8,!120000,@{obj_1_0}))
 Response: {
   "jsonrpc": "2.0",
   "id": 3,
