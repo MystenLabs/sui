@@ -2,11 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::borrow::Cow;
-use std::fmt::Write as _;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
 
-use futures::future::Either;
 use futures::future::OptionFuture;
 use futures::future::join_all;
 use futures::join;
@@ -19,108 +16,59 @@ use sui_types::dynamic_field::visitor::FieldVisitor;
 
 use crate::v2::error::FormatError;
 use crate::v2::parser as P;
-use crate::v2::value::Accessor;
-use crate::v2::value::Enum;
-use crate::v2::value::Fields;
-use crate::v2::value::Slice;
-use crate::v2::value::Store;
-use crate::v2::value::Struct;
-use crate::v2::value::Value;
-use crate::v2::value::Vector;
+use crate::v2::value as V;
 use crate::v2::visitor::extractor::Extractor;
-use crate::v2::writer::JsonWriter;
-use crate::v2::writer::StringWriter;
 
 /// The interpreter is responsible for evaluating expressions inside format strings into values.
-pub(crate) struct Interpreter<'s, S: Store<'s>> {
-    root: Slice<'s>,
+pub(crate) struct Interpreter<'s, S: V::Store<'s>> {
+    root: V::Slice<'s>,
     store: S,
-    max_depth: usize,
-    max_output_size: usize,
-    used_output: AtomicUsize,
 }
 
-impl<'s, S: Store<'s>> Interpreter<'s, S> {
-    pub(crate) fn new(root: Slice<'s>, store: S, max_depth: usize, max_output_size: usize) -> Self {
-        Self {
-            root,
-            store,
-            max_depth,
-            max_output_size,
-            used_output: AtomicUsize::new(0),
-        }
+impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
+    pub(crate) fn new(root: V::Slice<'s>, store: S) -> Self {
+        Self { root, store }
     }
 
     /// Entrypoint to evaluate a single format string, represented as a sequence of its strands.
-    pub(crate) async fn eval(
+    /// Returns evaluated strands that can then be formatted.
+    pub(crate) async fn eval_strands(
         &self,
         strands: &'s [P::Strand<'s>],
-    ) -> Result<serde_json::Value, FormatError> {
-        // Detect and handle JSON transforms as a special case because they do not always evaluate
-        // to strings.
-        if let [
-            P::Strand::Expr(P::Expr {
-                offset,
-                alternates,
-                transform: Some(P::Transform::Json),
-            }),
-        ] = &strands
-        {
-            let Some(v) = self.eval_alts(alternates).await? else {
-                return Ok(serde_json::Value::Null);
-            };
-
-            let writer = JsonWriter::new(&self.used_output, self.max_output_size, self.max_depth);
-            return v
-                .format_json(writer)
-                .map_err(|e| e.for_expr_at_offset(*offset));
-        }
-
-        // Evaluate all strands concurrently
-        let evaluated = join_all(strands.iter().map(|strand| async move {
+    ) -> Result<Option<Vec<V::Strand<'s>>>, FormatError> {
+        join_all(strands.iter().map(|strand| async move {
             match strand {
-                P::Strand::Text(s) => Either::Left(s),
+                P::Strand::Text(s) => Ok(Some(V::Strand::Text(s))),
                 P::Strand::Expr(P::Expr {
                     offset,
                     alternates,
                     transform,
-                }) => Either::Right(
-                    self.eval_alts(alternates)
-                        .await
-                        .map(|v| v.map(|v| (v, transform.unwrap_or_default(), *offset))),
-                ),
-            }
-        }))
-        .await;
-
-        // Format all results into the output
-        let mut writer = StringWriter::new(&self.used_output, self.max_output_size);
-        for result in evaluated {
-            match result {
-                Either::Left(s) => writer
-                    .write_str(s)
-                    .map_err(|_| FormatError::TooMuchOutput)?,
-
-                Either::Right(result) => {
-                    let Some((value, transform, offset)) = result? else {
-                        return Ok(serde_json::Value::Null);
-                    };
-
-                    value
-                        .format(transform, &mut writer)
-                        .map_err(|e| e.for_expr_at_offset(offset))?;
+                }) => {
+                    let transform = transform.unwrap_or_default();
+                    Ok(self
+                        .eval_alts(alternates)
+                        .await?
+                        .map(move |value| V::Strand::Value {
+                            value,
+                            transform,
+                            offset: *offset,
+                        }))
                 }
             }
-        }
-
-        Ok(serde_json::Value::String(writer.finish()))
+        }))
+        .await
+        .into_iter()
+        .collect()
     }
 
     /// Evaluate each `chain` in turn until one succeeds (produces a non-`None` value).
     ///
     /// Returns the result from the first chain that produces a value, or `Ok(None)` if none do.
     /// Propagates any errors encountered during evaluation.
-    async fn eval_alts(&self, alts: &'s [P::Chain<'s>]) -> Result<Option<Value<'s>>, FormatError> {
+    async fn eval_alts(
+        &self,
+        alts: &'s [P::Chain<'s>],
+    ) -> Result<Option<V::Value<'s>>, FormatError> {
         for chain in alts {
             if let Some(v) = self.eval_chain(chain).await? {
                 return Ok(Some(v));
@@ -140,9 +88,12 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
     /// describing exists.
     ///
     /// Any errors encountered during evaluation are propagated.
-    async fn eval_chain(&self, chain: &'s P::Chain<'s>) -> Result<Option<Value<'s>>, FormatError> {
-        use Accessor as A;
-        use Value as V;
+    async fn eval_chain(
+        &self,
+        chain: &'s P::Chain<'s>,
+    ) -> Result<Option<V::Value<'s>>, FormatError> {
+        use V::Accessor as A;
+        use V::Value as VV;
 
         // Evaluate the root (if it is provided) and the accessors, concurrently.
         let root: OptionFuture<_> = chain
@@ -160,7 +111,7 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
             Some(Err(e)) => return Err(e),
 
             // If a root was not provided, the object being displayed is the root.
-            None => V::Slice(self.root),
+            None => VV::Slice(self.root),
         };
 
         let Some(mut accessors) = accessors
@@ -173,7 +124,7 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
         accessors.reverse();
         while let Some(accessor) = accessors.last() {
             match (root, accessor) {
-                (V::Address(a), A::DFIndex(i)) => {
+                (VV::Address(a), A::DFIndex(i)) => {
                     let bytes = bcs::to_bytes(&i)?;
                     let type_ = i.type_();
                     let df_id = derive_dynamic_field_id(a, &type_, &bytes)?;
@@ -198,13 +149,13 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
                     }
 
                     accessors.pop();
-                    root = V::Slice(Slice {
+                    root = VV::Slice(V::Slice {
                         bytes: field.value_bytes,
                         layout: field.value_layout,
                     });
                 }
 
-                (V::Address(a), A::DOFIndex(i)) => {
+                (VV::Address(a), A::DOFIndex(i)) => {
                     let bytes = bcs::to_bytes(&i)?;
                     let type_ = DynamicFieldInfo::dynamic_object_field_wrapper(i.type_()).into();
                     let df_id = derive_dynamic_field_id(a, &type_, &bytes)?;
@@ -242,31 +193,31 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
                     };
 
                     accessors.pop();
-                    root = V::Slice(slice);
+                    root = VV::Slice(slice);
                 }
 
                 // Fetch a single byte from a byte array, as long as the accessor evaluates to a
                 // numeric index.
-                (V::Bytes(bs), accessor) => {
+                (VV::Bytes(bs), accessor) => {
                     let Some(&b) = accessor.as_numeric_index().and_then(|i| bs.get(i as usize))
                     else {
                         return Ok(None);
                     };
 
                     accessors.pop();
-                    root = V::U8(b);
+                    root = VV::U8(b);
                 }
 
                 // `V::String` corresponds to `std::string::String` in Move, which contains a
                 // single `bytes` field.
-                (V::String(s), A::Field(f)) if *f == "bytes" => {
+                (VV::String(s), A::Field(f)) if *f == "bytes" => {
                     accessors.pop();
-                    root = V::Bytes(s)
+                    root = VV::Bytes(s)
                 }
 
                 // Fetch an element from a vector literal, as long as the accessor evaluates to a
                 // numeric index.
-                (V::Vector(mut xs), accessor) => {
+                (VV::Vector(mut xs), accessor) => {
                     let Some(i) = accessor.as_numeric_index() else {
                         return Ok(None);
                     };
@@ -280,7 +231,7 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
                 }
 
                 // Fetch a field from a struct or enum literal.
-                (V::Struct(Struct { fields, .. }) | V::Enum(Enum { fields, .. }), a) => {
+                (VV::Struct(V::Struct { fields, .. }) | VV::Enum(V::Enum { fields, .. }), a) => {
                     let Some(value) = fields.get(a) else {
                         return Ok(None);
                     };
@@ -292,7 +243,7 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
                 // Use the remaining accessors to extract a value from a slice of a serialized
                 // value. This can consume multiple accessors, but will pause if it encounters a
                 // dynamic (object) field access.
-                (V::Slice(slice), _) => {
+                (VV::Slice(slice), _) => {
                     let Some(value) = Extractor::deserialize_slice(slice, &mut accessors)? else {
                         return Ok(None);
                     };
@@ -302,15 +253,15 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
 
                 // Scalar values do not support accessors.
                 (
-                    V::Address(_)
-                    | V::Bool(_)
-                    | V::String(_)
-                    | V::U8(_)
-                    | V::U16(_)
-                    | V::U32(_)
-                    | V::U64(_)
-                    | V::U128(_)
-                    | V::U256(_),
+                    VV::Address(_)
+                    | VV::Bool(_)
+                    | VV::String(_)
+                    | VV::U8(_)
+                    | VV::U16(_)
+                    | VV::U32(_)
+                    | VV::U64(_)
+                    | VV::U128(_)
+                    | VV::U256(_),
                     _,
                 ) => return Ok(None),
             }
@@ -326,9 +277,9 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
     async fn eval_accessor(
         &self,
         acc: &'s P::Accessor<'s>,
-    ) -> Result<Option<Accessor<'s>>, FormatError> {
-        use Accessor as VA;
+    ) -> Result<Option<V::Accessor<'s>>, FormatError> {
         use P::Accessor as PA;
+        use V::Accessor as VA;
 
         Ok(match acc {
             PA::Field(f) => Some(VA::Field(f.as_str())),
@@ -346,24 +297,24 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
     async fn eval_literal(
         &self,
         lit: &'s P::Literal<'s>,
-    ) -> Result<Option<Value<'s>>, FormatError> {
+    ) -> Result<Option<V::Value<'s>>, FormatError> {
         use P::Literal as L;
-        use Value as V;
+        use V::Value as VV;
 
         Ok(match lit {
-            L::Address(a) => Some(V::Address(*a)),
-            L::Bool(b) => Some(V::Bool(*b)),
-            L::U8(n) => Some(V::U8(*n)),
-            L::U16(n) => Some(V::U16(*n)),
-            L::U32(n) => Some(V::U32(*n)),
-            L::U64(n) => Some(V::U64(*n)),
-            L::U128(n) => Some(V::U128(*n)),
-            L::U256(n) => Some(V::U256(*n)),
-            L::ByteArray(bs) => Some(V::Bytes(bs.into())),
+            L::Address(a) => Some(VV::Address(*a)),
+            L::Bool(b) => Some(VV::Bool(*b)),
+            L::U8(n) => Some(VV::U8(*n)),
+            L::U16(n) => Some(VV::U16(*n)),
+            L::U32(n) => Some(VV::U32(*n)),
+            L::U64(n) => Some(VV::U64(*n)),
+            L::U128(n) => Some(VV::U128(*n)),
+            L::U256(n) => Some(VV::U256(*n)),
+            L::ByteArray(bs) => Some(VV::Bytes(bs.into())),
 
             L::String(s) => match s.clone() {
-                Cow::Borrowed(s) => Some(V::String(Cow::Borrowed(s.as_bytes()))),
-                Cow::Owned(s) => Some(V::String(Cow::Owned(s.into_bytes()))),
+                Cow::Borrowed(s) => Some(VV::String(Cow::Borrowed(s.as_bytes()))),
+                Cow::Owned(s) => Some(VV::String(Cow::Owned(s.into_bytes()))),
             },
 
             L::Vector(v) => self.eval_chains(&v.elements).await.and_then(|elements| {
@@ -392,18 +343,18 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
                     }
                 }
 
-                Ok(Some(V::Vector(Vector { type_, elements })))
+                Ok(Some(VV::Vector(V::Vector { type_, elements })))
             })?,
 
             L::Struct(s) => self.eval_fields(&s.fields).await?.map(|fields| {
-                V::Struct(Struct {
+                VV::Struct(V::Struct {
                     type_: &s.type_,
                     fields,
                 })
             }),
 
             L::Enum(e) => self.eval_fields(&e.fields).await?.map(|fields| {
-                V::Enum(Enum {
+                VV::Enum(V::Enum {
                     type_: &e.type_,
                     variant_name: e.variant_name,
                     variant_index: e.variant_index,
@@ -420,13 +371,13 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
     async fn eval_fields(
         &self,
         field: &'s P::Fields<'s>,
-    ) -> Result<Option<Fields<'s>>, FormatError> {
+    ) -> Result<Option<V::Fields<'s>>, FormatError> {
         Ok(match field {
-            P::Fields::Positional(fs) => self.eval_chains(fs).await?.map(Fields::Positional),
+            P::Fields::Positional(fs) => self.eval_chains(fs).await?.map(V::Fields::Positional),
             P::Fields::Named(fs) => self
                 .eval_chains(fs.iter().map(|(_, f)| f))
                 .await?
-                .map(|vs| Fields::Named(fs.iter().map(|(n, _)| *n).zip(vs).collect())),
+                .map(|vs| V::Fields::Named(fs.iter().map(|(n, _)| *n).zip(vs).collect())),
         })
     }
 
@@ -437,7 +388,7 @@ impl<'s, S: Store<'s>> Interpreter<'s, S> {
     async fn eval_chains(
         &self,
         chains: impl IntoIterator<Item = &'s P::Chain<'s>>,
-    ) -> Result<Option<Vec<Value<'s>>>, FormatError> {
+    ) -> Result<Option<Vec<V::Value<'s>>>, FormatError> {
         let values = chains
             .into_iter()
             .map(|chain| Box::pin(self.eval_chain(chain)));

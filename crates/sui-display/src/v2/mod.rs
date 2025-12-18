@@ -28,7 +28,6 @@ pub(crate) mod parser;
 pub(crate) mod peek;
 pub mod value;
 pub(crate) mod visitor;
-
 pub(crate) mod writer;
 
 /// Format strings extracted from a `Display` object on-chain.
@@ -99,9 +98,10 @@ impl<'s> Format<'s> {
         layout: &'s MoveTypeLayout,
         store: S,
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
-        // Create the interpreter and root slice
+        // Create the interpreter, writer and root slice
         let root = Slice { layout, bytes };
-        let interpreter = Arc::new(Interpreter::new(root, store, max_depth, max_output_size));
+        let interpreter = Arc::new(Interpreter::new(root, store));
+        let writer = Arc::new(Writer::new(max_depth, max_output_size));
         let mut output = IndexMap::new();
 
         // You think you want to factor a helper out to do the evaluation and error handling, but
@@ -109,13 +109,20 @@ impl<'s> Format<'s> {
 
         let names = try_join_all(self.fields.iter().map(|kvp| {
             let interpreter = interpreter.clone();
+            let writer = writer.clone();
             async move {
                 let strands = match kvp.key.val.as_ref() {
                     Ok(strands) => strands,
                     Err(e) => return Ok(Err(e.clone())),
                 };
 
-                match interpreter.eval(strands).await {
+                let evaluated = match interpreter.eval_strands(strands).await {
+                    Ok(Some(v)) => v,
+                    Ok(None) => return Ok(Ok(serde_json::Value::Null)),
+                    Err(e) => return Ok(Err(e)),
+                };
+
+                match writer.write(evaluated) {
                     Err(FormatError::TooMuchOutput) => Err(Error::TooMuchOutput),
                     other => Ok(other),
                 }
@@ -124,13 +131,20 @@ impl<'s> Format<'s> {
 
         let values = try_join_all(self.fields.iter().map(|kvp| {
             let interpreter = interpreter.clone();
+            let writer = writer.clone();
             async move {
                 let strands = match kvp.val.val.as_ref() {
                     Ok(strands) => strands,
                     Err(e) => return Ok(Err(e.clone())),
                 };
 
-                match interpreter.eval(strands).await {
+                let evaluated = match interpreter.eval_strands(strands).await {
+                    Ok(Some(v)) => v,
+                    Ok(None) => return Ok(Ok(serde_json::Value::Null)),
+                    Err(e) => return Ok(Err(e)),
+                };
+
+                match writer.write(evaluated) {
                     Err(FormatError::TooMuchOutput) => Err(Error::TooMuchOutput),
                     other => Ok(other),
                 }
