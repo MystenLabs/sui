@@ -950,6 +950,10 @@ struct FeatureFlags {
     // If true, disable entry point signature check.
     #[serde(skip_serializing_if = "is_false")]
     disable_entry_point_signature_check: bool,
+
+    // If true, split checkpoints in consensus handler.
+    #[serde(skip_serializing_if = "is_false")]
+    split_checkpoints_in_consensus_handler: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2514,6 +2518,10 @@ impl ProtocolConfig {
     pub fn consensus_skip_gced_blocks_in_direct_finalization(&self) -> bool {
         self.feature_flags
             .consensus_skip_gced_blocks_in_direct_finalization
+    }
+    
+    pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
+        self.feature_flags.split_checkpoints_in_consensus_handler
     }
 }
 
@@ -4824,6 +4832,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_object_funds_withdraw_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_object_funds_withdraw = val;
+    }
+
+    pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
+        self.feature_flags.split_checkpoints_in_consensus_handler = val;
     }
 }
 
