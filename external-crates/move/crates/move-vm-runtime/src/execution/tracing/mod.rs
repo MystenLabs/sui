@@ -19,21 +19,16 @@ pub mod tracer;
 /// });
 /// ```
 #[cfg(feature = "tracing")]
+pub(crate) const TRACING_ENABLED: bool = true;
+
+#[cfg(not(feature = "tracing"))]
+pub(crate) const TRACING_ENABLED: bool = false;
+
 macro_rules! trace {
     ($tracer:expr, |$param:ident| $body:expr) => {
-        if let Some($param) = $tracer.as_mut() {
+        if crate::execution::tracing::TRACING_ENABLED && let Some($param) = $tracer.as_mut() {
             $body
         }
-    };
-}
-
-/// No-op version.
-#[cfg(not(feature = "tracing"))]
-macro_rules! trace {
-    ($tracer:expr, |$param:ident| $body:expr) => {
-        // Intentionally empty - tracing disabled at compile time
-        // The $body is captured but never expanded, so no code is generated
-        let _ = &$tracer; // Suppress unused warning without evaluating
     };
 }
 
