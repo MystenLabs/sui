@@ -177,6 +177,7 @@ pub enum TypeName_ {
 }
 pub type TypeName = Spanned<TypeName_>;
 
+// TODO: Arc this for memory efficiency
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum BaseType_ {

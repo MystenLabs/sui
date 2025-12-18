@@ -7,7 +7,10 @@ use crate::{
     editions::FeatureGate,
     expansion::ast::Value_,
     ice,
-    naming::ast::{BuiltinTypeName_, FunctionSignature, Type, Type_, TypeName_},
+    naming::ast::{
+        ANYTHING_TYPE, BuiltinTypeName_, FunctionSignature, Type, TypeInner, TypeName_,
+        UNRESOLVED_ERROR_TYPE,
+    },
     parser::ast::Ability_,
     shared::{ide::IDEAnnotation, string_utils::debug_print},
     typing::{
@@ -54,69 +57,110 @@ fn types(context: &mut Context, ss: &mut Vec<Type>) {
 }
 
 pub fn type_(context: &mut Context, ty: &mut Type) {
-    use Type_::*;
-    match &mut ty.value {
-        Anything | UnresolvedError | Param(_) | Unit | Void => (),
-        Ref(_, b) => type_(context, b),
-        Var(tvar) => {
-            debug_print!(context.debug().type_elaboration, ("before" => Var(*tvar)));
-            let ty_tvar = sp(ty.loc, Var(*tvar));
-            let replacement = core::unfold_type(&context.subst, ty_tvar);
-            debug_print!(context.debug().type_elaboration, ("resolved" => replacement));
-            let replacement = match replacement {
-                sp!(loc, Var(_)) => {
-                    let diag = ice!((ty.loc, "ICE unfold_type failed to expand type inf. var"));
-                    context.add_diag(diag);
-                    sp(loc, UnresolvedError)
+    fn types_recur(context: &mut Context, tys: &[Type]) -> (Vec<Type>, bool) {
+        let mut changed = false;
+        let mut new_tys = vec![];
+        for t in tys.iter() {
+            let (new_t, t_changed) = type_recur(context, t);
+            changed |= t_changed;
+            new_tys.push(new_t);
+        }
+        (new_tys, changed)
+    }
+
+    #[growing_stack]
+    fn type_recur(context: &mut Context, ty: &Type) -> (Type, bool) {
+        use TypeInner as TI;
+        match ty.value.inner() {
+            TI::Anything | TI::UnresolvedError | TI::Param(_) | TI::Unit | TI::Void => {
+                (ty.clone(), false)
+            }
+            TI::Ref(mut_, b) => {
+                let (b, changed) = type_recur(context, b);
+                if changed {
+                    (sp(ty.loc, TI::Ref(*mut_, b).into()), true)
+                } else {
+                    (ty.clone(), false)
                 }
-                sp!(loc, Anything) => {
-                    let msg = "Could not infer this type. Try adding an annotation";
-                    context.add_diag(diag!(TypeSafety::UninferredType, (ty.loc, msg)));
-                    sp(loc, UnresolvedError)
+            }
+            tv @ TI::Var(_) => {
+                debug_print!(context.debug().type_elaboration, ("before" => tv));
+                let replacement = core::unfold_type(&context.subst, ty);
+                debug_print!(context.debug().type_elaboration, ("resolved" => replacement));
+                let loc = replacement.loc;
+                let replacement = match replacement.value.inner() {
+                    TI::Var(_) => {
+                        let diag = ice!((ty.loc, "ICE unfold_type failed to expand type inf. var"));
+                        context.add_diag(diag);
+                        sp(loc, UNRESOLVED_ERROR_TYPE.clone())
+                    }
+                    TI::Anything => {
+                        let msg = "Could not infer this type. Try adding an annotation";
+                        context.add_diag(diag!(TypeSafety::UninferredType, (ty.loc, msg)));
+                        sp(loc, UNRESOLVED_ERROR_TYPE.clone())
+                    }
+                    TI::Fun(_, _) if !context.in_macro_function => {
+                        // catch this here for better location infomration (the tvar instead of the fun)
+                        unexpected_lambda_type(context, ty.loc);
+                        sp(loc, UNRESOLVED_ERROR_TYPE.clone())
+                    }
+                    _ => replacement,
+                };
+                let (replacement, _changed) = type_recur(context, &replacement);
+                debug_print!(context.debug().type_elaboration, ("after" => replacement));
+                (replacement, true)
+            }
+            TI::Apply(Some(abilities), name @ sp!(_, TypeName_::Builtin(_)), tys) => {
+                let (new_tys, tys_changed) = types_recur(context, tys);
+                if tys_changed {
+                    let new_ty = TI::Apply(Some(abilities.clone()), *name, new_tys);
+                    (sp(ty.loc, new_ty.into()), true)
+                } else {
+                    (ty.clone(), false)
                 }
-                sp!(loc, Fun(_, _)) if !context.in_macro_function => {
-                    // catch this here for better location infomration (the tvar instead of the fun)
+            }
+            TI::Apply(Some(_), _, _) => {
+                let diag = ice!((
+                    ty.loc,
+                    format!("ICE expanding pre-expanded type {}", debug_display!(ty))
+                ));
+                context.add_diag(diag);
+                (sp(ty.loc, UNRESOLVED_ERROR_TYPE.clone()), true)
+            }
+            TI::Apply(None, name, tys) => {
+                let abilities = core::infer_abilities(context.info(), &context.subst, ty);
+                let (new_tys, _) = types_recur(context, tys);
+                let ty = sp(
+                    ty.loc,
+                    TI::Apply(Some(abilities.clone()), *name, new_tys).into(),
+                );
+                (ty, true)
+            }
+            TI::Fun(args, result) => {
+                if context.in_macro_function {
+                    let mut changed = false;
+
+                    let (new_args, args_changed) = types_recur(context, args);
+                    changed |= args_changed;
+                    let (new_result, result_changed) = type_recur(context, result);
+                    changed |= result_changed;
+
+                    if changed {
+                        (sp(ty.loc, TI::Fun(new_args, new_result).into()), true)
+                    } else {
+                        (ty.clone(), false)
+                    }
+                } else {
                     unexpected_lambda_type(context, ty.loc);
-                    sp(loc, UnresolvedError)
-                }
-                t => t,
-            };
-            *ty = replacement;
-            type_(context, ty);
-            debug_print!(context.debug().type_elaboration, ("after" => ty));
-        }
-        Apply(Some(_), sp!(_, TypeName_::Builtin(_)), tys) => types(context, tys),
-        aty @ Apply(Some(_), _, _) => {
-            let diag = ice!((
-                ty.loc,
-                format!("ICE expanding pre-expanded type {}", debug_display!(aty))
-            ));
-            context.add_diag(diag);
-            *ty = sp(ty.loc, UnresolvedError)
-        }
-        Apply(None, _, _) => {
-            let abilities = core::infer_abilities(context.info(), &context.subst, ty.clone());
-            match &mut ty.value {
-                Apply(abilities_opt, _, tys) => {
-                    *abilities_opt = Some(abilities);
-                    types(context, tys);
-                }
-                _ => {
-                    let diag = ice!((ty.loc, "ICE type-apply switched to non-apply"));
-                    context.add_diag(diag);
-                    *ty = sp(ty.loc, UnresolvedError)
+                    (sp(ty.loc, UNRESOLVED_ERROR_TYPE.clone()), true)
                 }
             }
         }
-        Fun(args, result) => {
-            if context.in_macro_function {
-                types(context, args);
-                type_(context, result);
-            } else {
-                unexpected_lambda_type(context, ty.loc);
-                *ty = sp(ty.loc, UnresolvedError)
-            }
-        }
+    }
+
+    let (new_ty, changed) = type_recur(context, ty);
+    if changed {
+        *ty = new_ty;
     }
 }
 
@@ -157,31 +201,30 @@ fn sequence_item(context: &mut Context, item: &mut T::SequenceItem) {
 #[growing_stack]
 pub fn exp(context: &mut Context, e: &mut T::Exp) {
     use T::UnannotatedExp_ as E;
+    use TypeInner as TI;
+
+    fn expand_type_for_errors(context: &mut Context, ty: &Type) {
+        let mut unfolded_type = core::unfold_type(&context.subst, ty);
+        match unfolded_type.value.inner() {
+            TI::Anything => (),
+            _ => {
+                // report errors if there is an uninferred type argument somewhere
+                type_(context, &mut unfolded_type);
+            }
+        }
+    }
+
     match &e.exp.value {
         // dont expand the type for return, abort, break, or continue
         E::Give(_, _) | E::Continue(_) | E::Return(_) | E::Abort(_) => {
-            let t = e.ty.clone();
-            match core::unfold_type(&context.subst, t) {
-                sp!(_, Type_::Anything) => (),
-                mut t => {
-                    // report errors if there is an uninferred type argument somewhere
-                    type_(context, &mut t);
-                }
-            }
-            e.ty = sp(e.ty.loc, Type_::Anything)
+            expand_type_for_errors(context, &e.ty);
+            e.ty = sp(e.ty.loc, ANYTHING_TYPE.clone())
         }
         E::Loop {
             has_break: false, ..
         } => {
-            let t = e.ty.clone();
-            match core::unfold_type(&context.subst, t) {
-                sp!(_, Type_::Anything) => (),
-                mut t => {
-                    // report errors if there is an uninferred type argument somewhere
-                    type_(context, &mut t);
-                }
-            }
-            e.ty = sp(e.ty.loc, Type_::Anything)
+            expand_type_for_errors(context, &e.ty);
+            e.ty = sp(e.ty.loc, ANYTHING_TYPE.clone())
         }
         _ => type_(context, &mut e.ty),
     }
@@ -189,7 +232,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         E::Use(v) => {
             let from_user = false;
             let var = *v;
-            let abs = core::infer_abilities(context.info(), &context.subst, e.ty.clone());
+            let abs = core::infer_abilities(context.info(), &context.subst, &e.ty);
             e.exp.value = if abs.has_ability_(Ability_::Copy) {
                 E::Copy { from_user, var }
             } else {
@@ -384,16 +427,17 @@ fn inferred_string_value(
 ) -> Option<T::Exp> {
     use BuiltinTypeName_ as BT;
     use T::UnannotatedExp_ as E;
+    use TypeInner as TI;
     use TypeName_ as TN;
     let diag_note =
         || "String literals must be linked against the standard library to be constructed";
 
-    match &ty.value {
-        Type_::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Vector))), args)
+    match &ty.value.inner() {
+        TI::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Vector))), args)
             if args.len() == 1
                 && matches!(
-                    args[0],
-                    sp!(_, Type_::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U8))), _))
+                    args[0].value.inner(),
+                    TI::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U8))), _)
                 ) =>
         {
             Some(T::exp(
@@ -401,7 +445,7 @@ fn inferred_string_value(
                 sp(value_loc, E::Value(sp(value_loc, Value_::Bytearray(value)))),
             ))
         }
-        Type_::Apply(_, sp!(_, name), args) if args.is_empty() => {
+        TI::Apply(_, sp!(_, name), args) if args.is_empty() => {
             let possibles = context.outer.get_stdlib_string_info();
 
             let possible = possibles
@@ -480,6 +524,8 @@ fn match_arm(context: &mut Context, sp!(_, arm_): &mut T::MatchArm) {
 
 fn pat(context: &mut Context, p: &mut T::MatchPattern) {
     use T::UnannotatedPat_ as P;
+    use TypeInner as TI;
+
     type_(context, &mut p.ty);
     match &mut p.pat.value {
         P::Variant(_, _, _, bts, fields) | P::BorrowVariant(_, _, _, _, bts, fields) => {
@@ -497,16 +543,16 @@ fn pat(context: &mut Context, p: &mut T::MatchPattern) {
             }
         }
         P::Literal(sp!(vloc, Value_::InferredNum(v))) => {
-            let num_ty: &Type = match &p.ty.value {
-                Type_::Ref(_, inner) => inner,
-                Type_::Unit
-                | Type_::Param(_)
-                | Type_::Apply(_, _, _)
-                | Type_::Fun(_, _)
-                | Type_::Var(_)
-                | Type_::Anything
-                | Type_::UnresolvedError
-                | Type_::Void => &p.ty,
+            let num_ty: &Type = match &p.ty.value.inner() {
+                TI::Ref(_, inner) => inner,
+                TI::Unit
+                | TI::Param(_)
+                | TI::Apply(_, _, _)
+                | TI::Fun(_, _)
+                | TI::Var(_)
+                | TI::Anything
+                | TI::UnresolvedError
+                | TI::Void => &p.ty,
             };
             if let Some(value) = inferred_numerical_value(context, p.pat.loc, *v, num_ty) {
                 p.pat.value = P::Literal(sp(*vloc, value));
@@ -531,6 +577,8 @@ fn lvalues(context: &mut Context, binds: &mut T::LValueList) {
 
 fn lvalue(context: &mut Context, b: &mut T::LValue) {
     use T::LValue_ as L;
+    use TypeInner as TI;
+
     match &mut b.value {
         L::Ignore => (),
         L::Var {
@@ -539,10 +587,9 @@ fn lvalue(context: &mut Context, b: &mut T::LValue) {
             ..
         } => {
             // silence type inference error for unused bindings
-            if let Type_::Var(tvar) = &ty.value {
-                let ty_tvar = sp(ty.loc, Type_::Var(*tvar));
-                let replacement = core::unfold_type(&context.subst, ty_tvar);
-                if let sp!(_, Type_::Anything) = replacement {
+            if let TI::Var(_) = &ty.value.inner() {
+                let replacement = core::unfold_type(&context.subst, ty);
+                if let TI::Anything = replacement.value.inner() {
                     b.value = L::Ignore;
                     return;
                 }
