@@ -1242,7 +1242,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
             }
             N::TypeInner::Apply(_, sp!(_, type_name), tyargs) => {
                 if let N::TypeName_::ModuleType(mod_ident, struct_name) = type_name {
-                    self.add_datatype_use_def(mod_ident, struct_name);
+                    self.add_datatype_use_def(&mod_ident, struct_name);
                 } // otherwise nothing to be done for other type names
                 for t in tyargs.iter() {
                     self.visit_type(exp_loc, t);

@@ -331,7 +331,7 @@ fn type_name(context: &mut Context, sp!(loc, tn_): &N::TypeName) {
     match tn_ {
         N::TypeName_::Multiple(_) | N::TypeName_::Builtin(_) => (),
         N::TypeName_::ModuleType(m, _) => {
-            context.add_usage(*m, *loc);
+            context.add_usage(m.as_ref().clone(), *loc);
         }
     }
 }

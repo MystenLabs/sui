@@ -542,8 +542,8 @@ fn add_drop_ability_tip(context: &Context, diag: &mut Diagnostic, st: SingleType
             (None, &owned_abilities, ty_args.clone())
         }
         T::Apply(_, sp!(_, TN::ModuleType(m, s)), ty_args) => {
-            let decl_loc = context.datatype_decl_loc(m, s);
-            let declared_abilities = context.datatype_declared_abilities(m, s);
+            let decl_loc = context.datatype_decl_loc(&m, s);
+            let declared_abilities = context.datatype_declared_abilities(&m, s);
             (Some(decl_loc), declared_abilities, ty_args.clone())
         }
         t => panic!(
@@ -616,6 +616,6 @@ fn type_name_to_naming_type_name_(tn_: TypeName_) -> N::TypeName_ {
     use TypeName_ as TN;
     match tn_ {
         TN::Builtin(b) => NTN::Builtin(b),
-        TN::ModuleType(m, n) => NTN::ModuleType(m, n),
+        TN::ModuleType(m, n) => NTN::ModuleType(m.into(), n),
     }
 }

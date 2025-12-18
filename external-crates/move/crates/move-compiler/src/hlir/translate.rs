@@ -659,7 +659,7 @@ fn type_name(sp!(loc, ntn_): &N::TypeName) -> H::TypeName {
             loc.end()
         ),
         NT::Builtin(bt) => HT::Builtin(*bt),
-        NT::ModuleType(m, s) => HT::ModuleType(*m, *s),
+        NT::ModuleType(m, s) => HT::ModuleType(m.as_ref().clone(), *s),
     };
     sp(*loc, tn_)
 }

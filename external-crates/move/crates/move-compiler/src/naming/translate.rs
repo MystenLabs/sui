@@ -2001,7 +2001,7 @@ fn use_funs(context: &mut Context, eufs: E::UseFuns) -> N::UseFuns {
         .flat_map(|e| explicit_use_fun(context, e))
         .collect();
     for (tn, method, nuf) in resolved_vec {
-        let methods = resolved.entry(tn).or_default();
+        let methods = resolved.entry(tn.clone()).or_default();
         let nuf_loc = nuf.loc;
         if let Err((_, prev)) = methods.add(method, nuf) {
             let msg = format!("Duplicate 'use fun' for '{}.{}'", tn, method);
@@ -2069,7 +2069,7 @@ fn explicit_use_fun(
     };
     let tn_opt = match tn_opt {
         ResolvedType::BuiltinType(bt_) => Some(N::TypeName_::Builtin(sp(ty.loc, bt_))),
-        ResolvedType::ModuleType(mt) => Some(N::TypeName_::ModuleType(mt.mident(), mt.name())),
+        ResolvedType::ModuleType(mt) => Some(N::TypeName_::ModuleType(mt.mident().into(), mt.name())),
         ResolvedType::Unbound => {
             assert!(context.env.has_errors());
             None
@@ -2099,14 +2099,14 @@ fn explicit_use_fun(
         }
     };
     let tn_ = tn_opt?;
-    let tn = sp(ty.loc, tn_);
+    let tn = sp(ty.loc, tn_.into());
     let target_function = m_f_opt?;
     let use_fun = N::UseFun {
         doc,
         loc,
         attributes,
         is_public,
-        tname: tn,
+        tname: tn.clone(),
         target_function,
         kind: N::UseFunKind::Explicit,
         used: is_public.is_some(), // suppress unused warning for public use funs
@@ -2289,12 +2289,12 @@ fn resolve_stdlib_type(context: &mut Context, ma: E::ModuleAccess_) -> Option<N:
     };
     let (decl_loc, tn, arity) = match *mt {
         ResolvedDatatype::Struct(stype) => {
-            let tn = sp(stype.decl_loc, NN::ModuleType(stype.mident, stype.name));
+            let tn = sp(stype.decl_loc, NN::ModuleType(stype.mident.into(), stype.name));
             let arity = stype.tyarg_arity;
             (stype.decl_loc, tn, arity)
         }
         ResolvedDatatype::Enum(etype) => {
-            let tn = sp(etype.decl_loc, NN::ModuleType(etype.mident, etype.name));
+            let tn = sp(etype.decl_loc, NN::ModuleType(etype.mident.into(), etype.name));
             let arity = etype.tyarg_arity;
             (etype.decl_loc, tn, arity)
         }
@@ -2773,12 +2773,12 @@ fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -
                 RT::ModuleType(mt) => {
                     let (tn, arity) = match mt {
                         ResolvedDatatype::Struct(stype) => {
-                            let tn = sp(original_loc, NN::ModuleType(stype.mident, stype.name));
+                            let tn = sp(original_loc, NN::ModuleType(stype.mident.into(), stype.name));
                             let arity = stype.tyarg_arity;
                             (tn, arity)
                         }
                         ResolvedDatatype::Enum(etype) => {
-                            let tn = sp(original_loc, NN::ModuleType(etype.mident, etype.name));
+                            let tn = sp(original_loc, NN::ModuleType(etype.mident.into(), etype.name));
                             let arity = etype.tyarg_arity;
                             (tn, arity)
                         }
