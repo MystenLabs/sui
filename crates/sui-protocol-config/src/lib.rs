@@ -955,6 +955,10 @@ struct FeatureFlags {
     // If true, convert withdrawal compatibility PTB arguments to coins at the start of the PTB.
     #[serde(skip_serializing_if = "is_false")]
     convert_withdrawal_compatibility_ptb_arguments: bool,
+
+    // If true, split checkpoints in consensus handler.
+    #[serde(skip_serializing_if = "is_false")]
+    split_checkpoints_in_consensus_handler: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2527,6 +2531,10 @@ impl ProtocolConfig {
     pub fn convert_withdrawal_compatibility_ptb_arguments(&self) -> bool {
         self.feature_flags
             .convert_withdrawal_compatibility_ptb_arguments
+    }
+    
+    pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
+        self.feature_flags.split_checkpoints_in_consensus_handler
     }
 }
 
@@ -4856,6 +4864,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_object_funds_withdraw_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_object_funds_withdraw = val;
+    }
+
+    pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
+        self.feature_flags.split_checkpoints_in_consensus_handler = val;
     }
 }
 
