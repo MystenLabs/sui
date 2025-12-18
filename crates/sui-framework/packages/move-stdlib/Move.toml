@@ -1,7 +1,5 @@
 [package]
 name = "MoveStdlib"
-version = "1.6.0"
-published-at = "0x1"
 edition = "2024.beta"
 
 [addresses]
