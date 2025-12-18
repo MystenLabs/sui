@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{StreamExt as _, join, stream::FuturesUnordered};
+use futures::{StreamExt as _, future::BoxFuture, stream::FuturesUnordered};
 use mysten_common::{backoff::ExponentialBackoff, debug_fatal};
 use sui_types::{
     base_types::{AuthorityName, ConciseableName as _},
@@ -22,7 +22,11 @@ use sui_types::{
     },
     quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
-use tokio::time::{sleep, timeout};
+use tokio::{
+    join,
+    sync::mpsc::{Receiver, Sender, channel},
+    time::{sleep, timeout},
+};
 use tracing::instrument;
 
 use crate::{
@@ -49,6 +53,18 @@ mod effects_certifier_tests;
 const WAIT_FOR_EFFECTS_TIMEOUT: Duration = Duration::from_secs(10);
 
 const MAX_WAIT_FOR_EFFECTS_RETRY_DELAY: Duration = Duration::from_secs(2);
+
+/// Delay before starting a speculative get_full_effects request to a fallback validator.
+/// If the first validator hasn't responded within this time, we start a parallel request
+/// to another validator that has already acknowledged the effects.
+const GET_FULL_EFFECTS_FALLBACK_DELAY: Duration = Duration::from_millis(200);
+
+/// Result type for get_full_effects requests.
+/// The tuple contains (effects_digest, executed_data, fast_path) where fast_path
+/// boolean indicateswhether the transaction was executed via the fast path.
+type FullEffectsResult =
+    Result<(TransactionEffectsDigest, Box<ExecutedData>, bool), TransactionRequestError>;
+
 pub(crate) struct EffectsCertifier {
     metrics: Arc<TransactionDriverMetrics>,
 }
@@ -108,11 +124,18 @@ impl EffectsCertifier {
         );
         let ping_type = get_ping_type(&tx_digest, tx_type);
 
+        // Channel for wait_for_acknowledgments to notify which validators have acked.
+        // These validators are known to have executed the transaction, making them good
+        // fallback candidates for get_full_effects if the initial validator is slow.
+        // Bounded by committee size since each validator sends at most one ack.
+        let (acked_validators_tx, acked_validators_rx) =
+            channel(authority_aggregator.committee.num_members());
+
         // Setting this to None at first because if the full effects are already provided,
         // we do not need to record the latency. We track the time in this function instead of inside
         // get_full_effects so that we could record differently depending on whether the result is byzantine.
         let mut full_effects_start_time = None;
-        let (acknowledgments_result, mut full_effects_result) = join!(
+        let (acknowledgments_result, (mut full_effects_result, returned_target)) = join!(
             self.wait_for_acknowledgments(
                 authority_aggregator,
                 client_monitor,
@@ -121,6 +144,7 @@ impl EffectsCertifier {
                 consensus_position,
                 options,
                 current_target,
+                acked_validators_tx,
             ),
             async {
                 // No need to send a full effects request if it is already provided.
@@ -128,17 +152,26 @@ impl EffectsCertifier {
                     // In this branch, current_target is the authority providing the full effects,
                     // so it is consistent. This is not used though because current_target is
                     // only used with failed full effects query.
-                    return Ok(full_effects);
+                    return (Ok(full_effects), current_target);
                 }
                 let (name, client) = retrier
                     .next_target()
                     .expect("there should be at least 1 target");
-                current_target = name;
                 full_effects_start_time = Some(Instant::now());
-                self.get_full_effects(client, tx_digest, tx_type, consensus_position, options)
-                    .await
+                self.get_full_effects_with_fallback(
+                    authority_aggregator,
+                    client,
+                    name,
+                    tx_digest,
+                    tx_type,
+                    consensus_position,
+                    options,
+                    acked_validators_rx,
+                )
+                .await
             },
         );
+        current_target = returned_target;
 
         // If the consensus position got rejected, effects certification will see the failure and gather
         // error messages to explain the rejection.
@@ -219,7 +252,7 @@ impl EffectsCertifier {
         tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
-    ) -> Result<(TransactionEffectsDigest, Box<ExecutedData>, bool), TransactionRequestError>
+    ) -> FullEffectsResult
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
@@ -269,6 +302,93 @@ impl EffectsCertifier {
         }
     }
 
+    /// Gets full effects from a validator, with speculative fallback to other validators.
+    ///
+    /// If the initial validator doesn't respond within GET_FULL_EFFECTS_FALLBACK_DELAY,
+    /// we start parallel requests to validators that have already acknowledged the effects
+    /// (received via the acked_validators channel from wait_for_acknowledgments).
+    ///
+    /// This prevents slow validators from blocking the entire operation when faster
+    /// validators are available, while still preferring the initial validator if it responds quickly.
+    #[instrument(level = "debug", skip_all, fields(tx_digest = ?tx_digest, initial_validator = ?initial_target))]
+    async fn get_full_effects_with_fallback<A>(
+        &self,
+        authority_aggregator: &Arc<AuthorityAggregator<A>>,
+        initial_client: Arc<SafeClient<A>>,
+        initial_target: AuthorityName,
+        tx_digest: Option<TransactionDigest>,
+        tx_type: TxType,
+        consensus_position: Option<ConsensusPosition>,
+        options: &SubmitTransactionOptions,
+        mut acked_validators_rx: Receiver<AuthorityName>,
+    ) -> (FullEffectsResult, AuthorityName)
+    where
+        A: AuthorityAPI + Send + Sync + 'static + Clone,
+    {
+        let mut pending_requests: FuturesUnordered<
+            BoxFuture<'_, (AuthorityName, FullEffectsResult)>,
+        > = FuturesUnordered::new();
+
+        // Add initial request to the pending set alongside fallbacks for uniform handling
+        let initial_request = self.get_full_effects(
+            initial_client,
+            tx_digest,
+            tx_type,
+            consensus_position,
+            options,
+        );
+        pending_requests.push(Box::pin(
+            async move { (initial_target, initial_request.await) },
+        ));
+
+        let mut fallback_delay = tokio::time::interval(GET_FULL_EFFECTS_FALLBACK_DELAY);
+        fallback_delay.reset();
+
+        loop {
+            tokio::select! {
+                Some((validator, result)) = pending_requests.next() => {
+                    // Return as soon as any request (including fallback)completes - the caller handles retries for errors
+                    return (result, validator);
+                }
+
+                // After delay, try to start a fallback request to an acked validator
+                _ = fallback_delay.tick() => {
+                    // Drain all available acked validators and pick one we haven't tried
+                    while let Ok(acked_validator) = acked_validators_rx.try_recv() {
+                        // We send ack requests to all validators, so skip if the acked validator was the initial target
+                        if acked_validator == initial_target {
+                            continue;
+                        }
+
+                        let Some(client) = authority_aggregator.authority_clients.get(&acked_validator) else {
+                            continue;
+                        };
+
+                        tracing::debug!(
+                            ?acked_validator,
+                            "Starting fallback get_full_effects request"
+                        );
+
+                        let fut = self.get_full_effects(
+                            client.clone(),
+                            tx_digest,
+                            tx_type,
+                            consensus_position,
+                            options,
+                        );
+
+                        pending_requests.push(Box::pin(async move {
+                            (acked_validator, fut.await)
+                        }));
+
+                        // Only start one fallback per interval
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     #[instrument(level = "debug", skip_all, err(level = "debug"), ret, fields(consensus_position = ?consensus_position))]
     async fn wait_for_acknowledgments<A>(
         &self,
@@ -279,6 +399,7 @@ impl EffectsCertifier {
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
         submitted_tx_to_validator: AuthorityName,
+        acked_validators_tx: Sender<AuthorityName>,
     ) -> Result<TransactionEffectsDigest, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -369,6 +490,13 @@ impl EffectsCertifier {
                     details: _,
                     fast_path,
                 }) => {
+                    // Notify that this validator has successfully executed the transaction.
+                    // This allows get_full_effects_with_fallback to use this validator as a
+                    // fallback if the initial validator is slow.
+                    // Using try_send since the channel is bounded by committee size and we don't
+                    // want to block - if the channel is somehow full, it's fine to skip.
+                    let _ = acked_validators_tx.try_send(name);
+
                     if fast_path {
                         if tx_type != TxType::SingleWriter {
                             tracing::warn!(
