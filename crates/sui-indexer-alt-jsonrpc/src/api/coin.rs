@@ -87,8 +87,8 @@ trait DelegationCoinsApi {
     ) -> RpcResult<Balance>;
 }
 
-pub(crate) struct Coins(pub Context);
-pub(crate) struct DelegationCoins(HttpClient);
+pub struct Coins(pub Context);
+pub struct DelegationCoins(HttpClient);
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
