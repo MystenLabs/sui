@@ -1483,9 +1483,7 @@ fn parse_string(context: &mut Context) -> Result<Value_, Box<Diagnostic>> {
     if context.env.ide_mode() {
         // Carve out: remove stdlib if IDE test mode is on to allow test reproducability
         if context.env.ide_test_mode() {
-            println!("In test mode");
             if let Some(pkg_name) = context.current_package {
-                println!("Pkg name: {}", pkg_name);
                 if pkg_name == STDLIB_ADDRESS_NAME || pkg_name.as_str() == "stdlib" {
                     context.tokens.advance()?;
                     return Ok(value_);
