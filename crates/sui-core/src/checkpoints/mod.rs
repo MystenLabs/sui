@@ -1755,9 +1755,7 @@ impl CheckpointBuilder {
         Ok((tx_effects, tx_roots))
     }
 
-    // This function is used to extract the consensus commit prologue digest and effects from the root
-    // transactions.
-    // This function can only be used when prepend_prologue_tx_in_consensus_commit_in_checkpoints is enabled.
+    // Extracts the consensus commit prologue digest and effects from the root transactions.
     // The consensus commit prologue is expected to be the first transaction in the roots.
     fn extract_consensus_commit_prologue(
         &self,
@@ -1769,10 +1767,9 @@ impl CheckpointBuilder {
             return Ok(None);
         }
 
-        // Reads the first transaction in the roots, and checks whether it is a consensus commit prologue
-        // transaction.
-        // When prepend_prologue_tx_in_consensus_commit_in_checkpoints is enabled, the consensus commit prologue
-        // transaction should be the first transaction in the roots written by the consensus handler.
+        // Reads the first transaction in the roots, and checks whether it is a consensus commit
+        // prologue transaction. The consensus commit prologue transaction should be the first
+        // transaction in the roots written by the consensus handler.
         let first_tx = self
             .state
             .get_transaction_cache_reader()
@@ -2411,7 +2408,7 @@ impl CheckpointBuilder {
         Ok(results)
     }
 
-    // This function is used to check the invariants of the consensus commit prologue transactions in the checkpoint
+    // Checks the invariants of the consensus commit prologue transactions in the checkpoint
     // in simtest.
     #[cfg(msim)]
     fn expensive_consensus_commit_prologue_invariants_check(
