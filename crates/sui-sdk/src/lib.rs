@@ -275,7 +275,7 @@ impl SuiClientBuilder {
 
         let mut http_builder = HttpClientBuilder::default()
             .max_request_size(2 << 30)
-            .set_headers(headers.clone())
+            .set_headers(headers)
             .request_timeout(self.request_timeout);
 
         if let Some(max_concurrent_requests) = self.max_concurrent_requests {

@@ -10,10 +10,7 @@ use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 
-use crate::{
-    config::NodeConfig,
-    error::{client_error_to_error_object, invalid_params},
-};
+use crate::error::{client_error_to_error_object, invalid_params};
 
 use super::rpc_module::RpcModule;
 
@@ -54,9 +51,8 @@ pub enum Error {
 }
 
 impl Write {
-    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> anyhow::Result<Self> {
-        let client = config.client(fullnode_rpc_url)?;
-        Ok(Self(client))
+    pub(crate) fn new(client: HttpClient) -> Self {
+        Self(client)
     }
 }
 
