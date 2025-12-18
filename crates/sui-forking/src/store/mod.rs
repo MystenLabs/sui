@@ -11,9 +11,8 @@ use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use simulacrum::SimulatorStore;
 use sui_config::genesis;
 use sui_types::{
-    base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
-    crypto::{AccountKeyPair, AuthorityKeyPair},
     digests::{ObjectDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     error::{SuiError, SuiErrorKind},
@@ -385,50 +384,6 @@ impl ParentSync for ForkingStore {
         _object_id: ObjectID,
     ) -> Option<sui_types::base_types::ObjectRef> {
         panic!("Never called in newer protocol versions")
-    }
-}
-
-#[derive(Debug)]
-pub struct KeyStore {
-    validator_keys: BTreeMap<AuthorityName, AuthorityKeyPair>,
-    #[allow(unused)]
-    account_keys: BTreeMap<SuiAddress, AccountKeyPair>,
-}
-
-impl KeyStore {
-    pub fn from_network_config(
-        network_config: &sui_swarm_config::network_config::NetworkConfig,
-    ) -> Self {
-        use fastcrypto::traits::KeyPair;
-
-        let validator_keys = network_config
-            .validator_configs()
-            .iter()
-            .map(|config| {
-                (
-                    config.protocol_public_key(),
-                    config.protocol_key_pair().copy(),
-                )
-            })
-            .collect();
-
-        let account_keys = network_config
-            .account_keys
-            .iter()
-            .map(|key| (key.public().into(), key.copy()))
-            .collect();
-        Self {
-            validator_keys,
-            account_keys,
-        }
-    }
-
-    pub fn validator(&self, name: &AuthorityName) -> Option<&AuthorityKeyPair> {
-        self.validator_keys.get(name)
-    }
-
-    pub fn accounts(&self) -> impl Iterator<Item = (&SuiAddress, &AccountKeyPair)> {
-        self.account_keys.iter()
     }
 }
 

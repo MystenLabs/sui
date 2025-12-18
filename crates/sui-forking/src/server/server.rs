@@ -57,8 +57,8 @@ pub struct AppState {
     pub context: crate::context::Context,
     pub transaction_count: Arc<AtomicUsize>,
     pub forked_at_checkpoint: u64,
-    pub chain: Chain,
-    pub protocol_config: ProtocolConfig,
+    pub _chain: Chain,
+    pub _protocol_config: ProtocolConfig,
 }
 
 impl AppState {
@@ -72,8 +72,8 @@ impl AppState {
             context,
             transaction_count: Arc::new(AtomicUsize::new(0)),
             forked_at_checkpoint: 0,
-            chain,
-            protocol_config,
+            _chain: chain,
+            _protocol_config: protocol_config,
         }
     }
 }

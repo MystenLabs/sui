@@ -1,13 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use rand::rngs::OsRng;
-use tokio::sync::RwLock;
 
-use simulacrum::Simulacrum;
 use sui_indexer_alt_jsonrpc::api::rpc_module::RpcModule;
 use sui_json_rpc_types::ProtocolConfigResponse;
 use sui_open_rpc::Module;
@@ -15,10 +10,9 @@ use sui_open_rpc_macros::open_rpc;
 use sui_types::{
     digests::ChainIdentifier,
     sui_serde::BigInt,
-    supported_protocol_versions::{Chain, ProtocolConfig},
+    supported_protocol_versions::ProtocolConfig,
 };
 
-use crate::store::ForkingStore;
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
 #[rpc(server, client, namespace = "sui")]
@@ -32,28 +26,14 @@ pub trait ReadApi {
         /// An optional protocol version specifier. If omitted, the latest protocol config table for the node will be returned.
         version: Option<BigInt<u64>>,
     ) -> RpcResult<ProtocolConfigResponse>;
-
-    // /// Return the object information for a specified object
-    // #[method(name = "getObject")]
-    // async fn get_object(
-    //     &self,
-    //     /// the ID of the queried object
-    //     object_id: ObjectID,
-    //     /// options for specifying the content to be returned
-    //     options: Option<SuiObjectDataOptions>,
-    // ) -> RpcResult<SuiObjectResponse>;
 }
 
-pub(crate) struct Read {
-    pub simulacrum: Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>,
-    pub protocol_version: u64,
-    pub chain: Chain,
-}
+pub(crate) struct Read(pub crate::context::Context);
 
 #[async_trait::async_trait]
 impl ReadApiServer for Read {
     async fn get_chain_identifier(&self) -> RpcResult<String> {
-        let simulacrum = self.simulacrum.read().await;
+        let simulacrum = self.0.simulacrum.read().await;
         let chain_id: ChainIdentifier = simulacrum
             .store()
             .get_checkpoint_by_sequence_number(0)
@@ -70,61 +50,11 @@ impl ReadApiServer for Read {
         version: Option<BigInt<u64>>,
     ) -> RpcResult<ProtocolConfigResponse> {
         let protocol_config =
-            ProtocolConfig::get_for_version(self.protocol_version.into(), self.chain);
+            ProtocolConfig::get_for_version(self.0.protocol_version.into(), self.0.chain);
         let response = ProtocolConfigResponse::from(protocol_config);
 
         Ok(response)
     }
-
-    //    async fn get_object(
-    //        &self,
-    //        object_id: ObjectID,
-    //        options: Option<SuiObjectDataOptions>,
-    //    ) -> RpcResult<SuiObjectResponse> {
-    //        println!("Trying to get object: {}", object_id);
-    //        let simulacrum = self.simulacrum.read().await;
-    //        let object = simulacrum.store().get_object(&object_id).ok_or_else(|| {
-    //            RpcResult::Err(SuiObjectResponse::new_with_error(
-    //                sui_types::error::SuiObjectResponseError::NotExists { object_id },
-    //            ))
-    //        })?;
-    //    let bcs: OptionFuture<_> = options
-    //        .show_bcs
-    //        .then(|| object_data::<SuiRawData>(ctx, &object))
-    //        .into();
-    //
-    //        let type_ = None;
-    //        let owner = None;
-    //        let previous_transaction = None;
-    //        let storage_rebate = None;
-    //        let display = None;
-    //        let content = None;
-    //        let bcs = object.
-    //
-    // Ok(SuiObjectData {
-    //        object_id: object.id(),
-    //        version: object.version(),
-    //        digest: object.digest(),
-    //        type_,
-    //        owner,
-    //        previous_transaction,
-    //        storage_rebate,
-    //        display,
-    //        content,
-    //        bcs,
-    //    })
-    //
-    //
-    //        let response = SuiObjectResponse::from_object(
-    //            object,
-    //            options.unwrap_or_default(),
-    //            simulacrum.store().as_ref(),
-    //        )
-    //        .unwrap();
-    //        // .map_err(|e| invalid_params(format!("Failed to construct object response: {}", e)))?;
-    //
-    //        Ok(response)
-    //    }
 }
 
 impl RpcModule for Read {

@@ -1,14 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
 
 use fastcrypto::encoding::Base64;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use rand::rngs::OsRng;
-use tokio::sync::RwLock;
 
-use simulacrum::Simulacrum;
 use sui_indexer_alt_jsonrpc::{api::rpc_module::RpcModule, error::invalid_params};
 use sui_json_rpc_types::{
     DryRunTransactionBlockResponse, SuiTransactionBlockEffects, SuiTransactionBlockResponse,
@@ -22,7 +18,6 @@ use sui_types::{
     transaction::{Transaction, TransactionData},
 };
 
-use crate::store::ForkingStore;
 
 #[open_rpc(namespace = "sui", tag = "Write API")]
 #[rpc(server, client, namespace = "sui")]
@@ -52,7 +47,7 @@ pub trait WriteApi {
     ) -> RpcResult<DryRunTransactionBlockResponse>;
 }
 
-pub(crate) struct Write(pub Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>);
+pub(crate) struct Write(pub crate::context::Context);
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -92,7 +87,7 @@ impl WriteApiServer for Write {
         let transaction = Transaction::from_data(tx_data, vec![]);
 
         // Execute the transaction using Simulacrum
-        let mut simulacrum = self.0.write().await;
+        let mut simulacrum = self.0.simulacrum.write().await;
         let (effects, _execution_error) = simulacrum
             .execute_transaction_impersonating(transaction.transaction_data().clone())
             .map_err(|e| invalid_params(Error::ExecutionError(e.to_string())))?;
