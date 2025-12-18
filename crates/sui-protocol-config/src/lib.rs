@@ -917,6 +917,10 @@ struct FeatureFlags {
     // If true, enable object funds withdraw.
     #[serde(skip_serializing_if = "is_false")]
     enable_object_funds_withdraw: bool,
+
+    // If true, split checkpoints in consensus handler.
+    #[serde(skip_serializing_if = "is_false")]
+    split_checkpoints_in_consensus_handler: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2452,6 +2456,10 @@ impl ProtocolConfig {
 
     pub fn enable_object_funds_withdraw(&self) -> bool {
         self.feature_flags.enable_object_funds_withdraw
+    }
+
+    pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
+        self.feature_flags.split_checkpoints_in_consensus_handler
     }
 }
 
@@ -4736,6 +4744,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_object_funds_withdraw_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_object_funds_withdraw = val;
+    }
+
+    pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
+        self.feature_flags.split_checkpoints_in_consensus_handler = val;
     }
 }
 
