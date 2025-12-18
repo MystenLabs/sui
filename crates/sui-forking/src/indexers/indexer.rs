@@ -73,7 +73,7 @@ pub(crate) async fn start_indexer(
     )
     .await?;
 
-    let pipelines: Vec<_> = indexer.pipelines().collect();
+    let _pipelines: Vec<_> = indexer.pipelines().collect();
     let service = indexer.run().await.context("Failed to start indexer")?;
 
     Ok(service)

@@ -26,6 +26,7 @@ use crate::{context::Context, store::ForkingStore};
 use self::error::Error;
 use std::collections::BTreeMap;
 use sui_data_store::{ObjectKey, ObjectStore};
+use tracing::{error, info};
 
 mod data;
 mod error;
@@ -253,10 +254,7 @@ impl ObjectsApiServer for Objects {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse> {
         let Self(Context {
-            pg_context: ctx,
-            simulacrum,
-            at_checkpoint,
-            ..
+            pg_context: ctx, ..
         }) = self;
 
         let options = options.unwrap_or_default();
@@ -276,10 +274,7 @@ impl ObjectsApiServer for Objects {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
         let Self(Context {
-            pg_context: ctx,
-            simulacrum,
-            at_checkpoint,
-            ..
+            pg_context: ctx, ..
         }) = self;
 
         let config = &ctx.config().objects;
@@ -343,7 +338,7 @@ impl QueryObjectsApiServer for QueryObjects {
                         move_obj.clone().into(),
                     ));
                     let type_tag: sui_types::TypeTag = move_obj.type_().clone().into();
-                    println!(
+                    info!(
                         "Trying to fetch package {:?} from package resolver",
                         object_id
                     );
@@ -405,6 +400,7 @@ async fn insert_package_into_db(
     use sui_indexer_alt_schema::schema::kv_packages;
 
     let Some(package) = object.data.try_as_package() else {
+        error!("Object {} is not a package", object.id());
         anyhow::bail!("Object is not a package");
     };
 
@@ -431,7 +427,7 @@ async fn insert_package_into_db(
         .execute(&mut conn)
         .await?;
 
-    println!(
+    info!(
         "Inserted package {} version {} into kv_packages table",
         package.id(),
         package_version

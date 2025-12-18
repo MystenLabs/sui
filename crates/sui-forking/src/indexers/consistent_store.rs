@@ -14,21 +14,14 @@ pub(crate) struct ConsistentStoreConfig {
     rocksdb_path: PathBuf,
     indexer_args: IndexerArgs,
     client_args: ClientArgs,
-    version: &'static str,
 }
 
 impl ConsistentStoreConfig {
-    pub fn new(
-        rocksdb_path: PathBuf,
-        indexer_args: IndexerArgs,
-        client_args: ClientArgs,
-        version: &'static str,
-    ) -> Self {
+    pub fn new(rocksdb_path: PathBuf, indexer_args: IndexerArgs, client_args: ClientArgs) -> Self {
         Self {
             rocksdb_path,
             indexer_args,
             client_args,
-            version,
         }
     }
 }
@@ -36,12 +29,12 @@ impl ConsistentStoreConfig {
 pub(crate) async fn start_consistent_store(
     config: ConsistentStoreConfig,
     registry: &Registry,
+    version: &'static str,
 ) -> anyhow::Result<Service> {
     let ConsistentStoreConfig {
         rocksdb_path,
         indexer_args,
         client_args,
-        version,
     } = config;
     let service_config = ServiceConfig::for_test();
     let rpc_args = RpcArgs::default();
@@ -50,7 +43,7 @@ pub(crate) async fn start_consistent_store(
         indexer_args,
         client_args,
         rpc_args,
-        config.version,
+        version,
         service_config,
         registry,
     )

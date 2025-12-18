@@ -317,7 +317,7 @@ pub async fn start_server(
         ..Default::default()
     };
 
-    let mut rpc = RpcService::new(rpc_args, &registry)
+    let rpc = RpcService::new(rpc_args, &registry)
         .context("Failed to create RPC service")
         .unwrap();
 
@@ -382,7 +382,7 @@ pub async fn start_server(
         tokio::signal::ctrl_c()
             .await
             .expect("Failed to install CTRL+C signal handler");
-        println!("\nReceived CTRL+C, shutting down gracefully...");
+        info!("\nReceived CTRL+C, shutting down gracefully...");
     };
 
     // Serve with graceful shutdown
@@ -394,7 +394,7 @@ pub async fn start_server(
     rpc_handle.abort();
     indexer_handle.abort();
 
-    println!("Server shutdown complete");
+    info!("Server shutdown complete");
 
     Ok(())
 }
@@ -411,10 +411,10 @@ async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> 
         rocksdb_db_path.clone(),
         indexer_config.indexer_args.clone(),
         indexer_config.client_args.clone(),
-        version,
     );
     let indexer = start_indexer(indexer_config, &registry).await?;
-    let consistent_store = start_consistent_store(consistent_store_config, &registry).await?;
+    let consistent_store =
+        start_consistent_store(consistent_store_config, &registry, version).await?;
 
     match indexer.attach(consistent_store).main().await {
         Ok(()) | Err(sui_futures::service::Error::Terminated) => {}
@@ -435,7 +435,7 @@ fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> 
     // Connect to the 'postgres' database (not your target database)
     let mut conn = PgConnection::establish(&db_url)?;
 
-    println!("Dropping and recreating database sui_indexer_alt...");
+    info!("Dropping and recreating database sui_indexer_alt...");
     // // Drop the database
     diesel::sql_query("DROP DATABASE IF EXISTS sui_indexer_alt").execute(&mut conn)?;
 
@@ -443,28 +443,4 @@ fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> 
     diesel::sql_query("CREATE DATABASE sui_indexer_alt").execute(&mut conn)?;
 
     Ok(())
-}
-
-async fn get_genesis_for_chain(chain: Chain) -> Genesis {
-    let url = match chain {
-        Chain::Mainnet => {
-            "https://github.com/MystenLabs/sui-genesis/raw/refs/heads/main/mainnet/genesis.blob"
-        }
-        Chain::Testnet => {
-            "https://github.com/MystenLabs/sui-genesis/raw/refs/heads/main/testnet/genesis.blob"
-        }
-        _ => {
-            panic!("Unsupported chain for genesis retrieval");
-        }
-    };
-
-    let response = reqwest::get(url)
-        .await
-        .expect("Failed to fetch genesis blob");
-    let bytes = response
-        .bytes()
-        .await
-        .expect("Failed to read genesis blob bytes");
-    let genesis: Genesis = bcs::from_bytes(&bytes).expect("Failed to deserialize genesis blob");
-    genesis
 }

@@ -18,21 +18,27 @@ pub struct Args {
 pub enum Commands {
     /// Start the forking server
     Start {
+        /// Port to bind the server. Default is 3001
         #[clap(long, default_value = PORT)]
         port: u16,
 
+        /// Host IP address to bind the server. Default is localhost.
         #[clap(long, default_value = IP)]
         host: String,
 
+        /// Checkpoint to fork from. If not provided, forks from the latest checkpoint.
         #[clap(long)]
         checkpoint: Option<u64>,
 
+        /// Network to fork from (e.g., mainnet, testnet, devnet, or a custom one).
         #[clap(long, default_value = "mainnet")]
         network: String,
 
+        /// Optional data directory for storing forked data
         #[clap(long)]
         data_dir: Option<String>,
 
+        /// Initial accounts to restore with their owned objects
         #[clap(flatten)]
         accounts: InitialSeeds,
     },
