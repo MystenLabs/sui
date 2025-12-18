@@ -15,6 +15,7 @@ const-str.workspace = true
 cynic.workspace = true
 cynic-codegen.workspace = true
 diesel = { workspace = true, features = ["chrono", "postgres"] }
+diesel-async = { workspace = true }
 fastcrypto.workspace = true
 futures.workspace = true
 jsonrpsee.workspace = true
