@@ -125,45 +125,50 @@ impl MoveModule {
         after: Option<CDatatype>,
         last: Option<u64>,
         before: Option<CDatatype>,
-    ) -> Result<Option<Connection<String, MoveDatatype>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("MoveModule", "datatypes");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MoveDatatype>, RpcError>> {
+        let datatypes = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("MoveModule", "datatypes");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(contents) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+            let Some(contents) = self.contents(ctx).await?.as_ref() else {
+                return Ok(Connection::new(false, false));
+            };
 
-        let datatype_range = contents.parsed.datatypes(
-            page.after().map(|c| c.as_ref()),
-            page.before().map(|c| c.as_ref()),
-        );
+            let datatype_range = contents.parsed.datatypes(
+                page.after().map(|c| c.as_ref()),
+                page.before().map(|c| c.as_ref()),
+            );
 
-        let mut conn = Connection::new(false, false);
-        let datatypes = if page.is_from_front() {
-            datatype_range.take(page.limit()).collect()
-        } else {
-            let mut datatypes: Vec<_> = datatype_range.rev().take(page.limit()).collect();
-            datatypes.reverse();
-            datatypes
-        };
+            let mut conn = Connection::new(false, false);
+            let datatypes = if page.is_from_front() {
+                datatype_range.take(page.limit()).collect()
+            } else {
+                let mut datatypes: Vec<_> = datatype_range.rev().take(page.limit()).collect();
+                datatypes.reverse();
+                datatypes
+            };
 
-        conn.has_previous_page = datatypes
-            .first()
-            .is_some_and(|fst| contents.parsed.datatypes(None, Some(fst)).next().is_some());
+            conn.has_previous_page = datatypes
+                .first()
+                .is_some_and(|fst| contents.parsed.datatypes(None, Some(fst)).next().is_some());
 
-        conn.has_next_page = datatypes
-            .last()
-            .is_some_and(|lst| contents.parsed.datatypes(Some(lst), None).next().is_some());
+            conn.has_next_page = datatypes
+                .last()
+                .is_some_and(|lst| contents.parsed.datatypes(Some(lst), None).next().is_some());
 
-        for datatype_name in datatypes {
-            conn.edges.push(Edge::new(
-                JsonCursor::new(datatype_name.to_owned()).encode_cursor(),
-                MoveDatatype::with_fq_name(self.clone(), datatype_name.to_owned()),
-            ));
+            for datatype_name in datatypes {
+                conn.edges.push(Edge::new(
+                    JsonCursor::new(datatype_name.to_owned()).encode_cursor(),
+                    MoveDatatype::with_fq_name(self.clone(), datatype_name.to_owned()),
+                ));
+            }
+
+            Ok(conn)
         }
+        .await;
 
-        Ok(Some(conn))
+        Some(datatypes)
     }
 
     /// Textual representation of the module's bytecode.
@@ -211,45 +216,50 @@ impl MoveModule {
         after: Option<CEnum>,
         last: Option<u64>,
         before: Option<CEnum>,
-    ) -> Result<Option<Connection<String, MoveEnum>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("MoveModule", "enums");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MoveEnum>, RpcError>> {
+        let enums = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("MoveModule", "enums");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(contents) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+            let Some(contents) = self.contents(ctx).await?.as_ref() else {
+                return Ok(Connection::new(false, false));
+            };
 
-        let enum_range = contents.parsed.enums(
-            page.after().map(|c| c.as_ref()),
-            page.before().map(|c| c.as_ref()),
-        );
+            let enum_range = contents.parsed.enums(
+                page.after().map(|c| c.as_ref()),
+                page.before().map(|c| c.as_ref()),
+            );
 
-        let mut conn = Connection::new(false, false);
-        let enums = if page.is_from_front() {
-            enum_range.take(page.limit()).collect()
-        } else {
-            let mut enums: Vec<_> = enum_range.rev().take(page.limit()).collect();
-            enums.reverse();
-            enums
-        };
+            let mut conn = Connection::new(false, false);
+            let enums = if page.is_from_front() {
+                enum_range.take(page.limit()).collect()
+            } else {
+                let mut enums: Vec<_> = enum_range.rev().take(page.limit()).collect();
+                enums.reverse();
+                enums
+            };
 
-        conn.has_previous_page = enums
-            .first()
-            .is_some_and(|fst| contents.parsed.enums(None, Some(fst)).next().is_some());
+            conn.has_previous_page = enums
+                .first()
+                .is_some_and(|fst| contents.parsed.enums(None, Some(fst)).next().is_some());
 
-        conn.has_next_page = enums
-            .last()
-            .is_some_and(|lst| contents.parsed.enums(Some(lst), None).next().is_some());
+            conn.has_next_page = enums
+                .last()
+                .is_some_and(|lst| contents.parsed.enums(Some(lst), None).next().is_some());
 
-        for enum_name in enums {
-            conn.edges.push(Edge::new(
-                JsonCursor::new(enum_name.to_owned()).encode_cursor(),
-                MoveEnum::with_fq_name(self.clone(), enum_name.to_owned()),
-            ));
+            for enum_name in enums {
+                conn.edges.push(Edge::new(
+                    JsonCursor::new(enum_name.to_owned()).encode_cursor(),
+                    MoveEnum::with_fq_name(self.clone(), enum_name.to_owned()),
+                ));
+            }
+
+            Ok(conn)
         }
+        .await;
 
-        Ok(Some(conn))
+        Some(enums)
     }
 
     /// Bytecode format version.
@@ -269,34 +279,38 @@ impl MoveModule {
         after: Option<CFriend>,
         last: Option<u64>,
         before: Option<CFriend>,
-    ) -> Result<Option<Connection<String, MoveModule>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("MoveModule", "friends");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MoveModule>, RpcError>> {
+        let friends = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("MoveModule", "friends");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(contents) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+            let Some(contents) = self.contents(ctx).await?.as_ref() else {
+                return Ok(Connection::new(false, false));
+            };
 
-        let bytecode = contents.parsed.bytecode();
-        let runtime_id = *bytecode.self_id().address();
+            let bytecode = contents.parsed.bytecode();
+            let runtime_id = *bytecode.self_id().address();
 
-        let friends = bytecode.friend_decls();
-        page.paginate_indices(friends.len(), |i| {
-            let decl = &friends[i];
-            let friend_pkg = bytecode.address_identifier_at(decl.address);
-            let friend_mod = bytecode.identifier_at(decl.name);
+            let friends = bytecode.friend_decls();
+            page.paginate_indices(friends.len(), |i| {
+                let decl = &friends[i];
+                let friend_pkg = bytecode.address_identifier_at(decl.address);
+                let friend_mod = bytecode.identifier_at(decl.name);
 
-            if *friend_pkg != runtime_id {
-                return Err(anyhow!("Cross-package friend modules").into());
-            }
+                if *friend_pkg != runtime_id {
+                    return Err(anyhow!("Cross-package friend modules").into());
+                }
 
-            Ok(MoveModule::with_fq_name(
-                self.package.clone(),
-                friend_mod.to_string(),
-            ))
-        })
-        .map(Some)
+                Ok(MoveModule::with_fq_name(
+                    self.package.clone(),
+                    friend_mod.to_string(),
+                ))
+            })
+        }
+        .await;
+
+        Some(friends)
     }
 
     /// The function named `name` in this module.
@@ -328,45 +342,50 @@ impl MoveModule {
         after: Option<CFunction>,
         last: Option<u64>,
         before: Option<CFunction>,
-    ) -> Result<Option<Connection<String, MoveFunction>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("MoveModule", "functions");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MoveFunction>, RpcError>> {
+        let functions = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("MoveModule", "functions");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(contents) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+            let Some(contents) = self.contents(ctx).await?.as_ref() else {
+                return Ok(Connection::new(false, false));
+            };
 
-        let function_range = contents.parsed.functions(
-            page.after().map(|c| c.as_ref()),
-            page.before().map(|c| c.as_ref()),
-        );
+            let function_range = contents.parsed.functions(
+                page.after().map(|c| c.as_ref()),
+                page.before().map(|c| c.as_ref()),
+            );
 
-        let mut conn = Connection::new(false, false);
-        let functions = if page.is_from_front() {
-            function_range.take(page.limit()).collect()
-        } else {
-            let mut functions: Vec<_> = function_range.rev().take(page.limit()).collect();
-            functions.reverse();
-            functions
-        };
+            let mut conn = Connection::new(false, false);
+            let functions = if page.is_from_front() {
+                function_range.take(page.limit()).collect()
+            } else {
+                let mut functions: Vec<_> = function_range.rev().take(page.limit()).collect();
+                functions.reverse();
+                functions
+            };
 
-        conn.has_previous_page = functions
-            .first()
-            .is_some_and(|fst| contents.parsed.functions(None, Some(fst)).next().is_some());
+            conn.has_previous_page = functions
+                .first()
+                .is_some_and(|fst| contents.parsed.functions(None, Some(fst)).next().is_some());
 
-        conn.has_next_page = functions
-            .last()
-            .is_some_and(|lst| contents.parsed.functions(Some(lst), None).next().is_some());
+            conn.has_next_page = functions
+                .last()
+                .is_some_and(|lst| contents.parsed.functions(Some(lst), None).next().is_some());
 
-        for function in functions {
-            conn.edges.push(Edge::new(
-                JsonCursor::new(function.to_owned()).encode_cursor(),
-                MoveFunction::with_fq_name(self.clone(), function.to_owned()),
-            ));
+            for function in functions {
+                conn.edges.push(Edge::new(
+                    JsonCursor::new(function.to_owned()).encode_cursor(),
+                    MoveFunction::with_fq_name(self.clone(), function.to_owned()),
+                ));
+            }
+
+            Ok(conn)
         }
+        .await;
 
-        Ok(Some(conn))
+        Some(functions)
     }
 
     /// The struct named `name` in this module.
@@ -398,45 +417,50 @@ impl MoveModule {
         after: Option<CStruct>,
         last: Option<u64>,
         before: Option<CStruct>,
-    ) -> Result<Option<Connection<String, MoveStruct>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("MoveModule", "structs");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MoveStruct>, RpcError>> {
+        let structs = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("MoveModule", "structs");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(contents) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+            let Some(contents) = self.contents(ctx).await?.as_ref() else {
+                return Ok(Connection::new(false, false));
+            };
 
-        let struct_range = contents.parsed.structs(
-            page.after().map(|c| c.as_ref()),
-            page.before().map(|c| c.as_ref()),
-        );
+            let struct_range = contents.parsed.structs(
+                page.after().map(|c| c.as_ref()),
+                page.before().map(|c| c.as_ref()),
+            );
 
-        let mut conn = Connection::new(false, false);
-        let structs = if page.is_from_front() {
-            struct_range.take(page.limit()).collect()
-        } else {
-            let mut structs: Vec<_> = struct_range.rev().take(page.limit()).collect();
-            structs.reverse();
-            structs
-        };
+            let mut conn = Connection::new(false, false);
+            let structs = if page.is_from_front() {
+                struct_range.take(page.limit()).collect()
+            } else {
+                let mut structs: Vec<_> = struct_range.rev().take(page.limit()).collect();
+                structs.reverse();
+                structs
+            };
 
-        conn.has_previous_page = structs
-            .first()
-            .is_some_and(|fst| contents.parsed.structs(None, Some(fst)).next().is_some());
+            conn.has_previous_page = structs
+                .first()
+                .is_some_and(|fst| contents.parsed.structs(None, Some(fst)).next().is_some());
 
-        conn.has_next_page = structs
-            .last()
-            .is_some_and(|lst| contents.parsed.structs(Some(lst), None).next().is_some());
+            conn.has_next_page = structs
+                .last()
+                .is_some_and(|lst| contents.parsed.structs(Some(lst), None).next().is_some());
 
-        for struct_name in structs {
-            conn.edges.push(Edge::new(
-                JsonCursor::new(struct_name.to_owned()).encode_cursor(),
-                MoveStruct::with_fq_name(self.clone(), struct_name.to_owned()),
-            ));
+            for struct_name in structs {
+                conn.edges.push(Edge::new(
+                    JsonCursor::new(struct_name.to_owned()).encode_cursor(),
+                    MoveStruct::with_fq_name(self.clone(), struct_name.to_owned()),
+                ));
+            }
+
+            Ok(conn)
         }
+        .await;
 
-        Ok(Some(conn))
+        Some(structs)
     }
 }
 

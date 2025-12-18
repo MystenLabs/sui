@@ -199,58 +199,63 @@ impl MovePackage {
         after: Option<CModule>,
         last: Option<u64>,
         before: Option<CModule>,
-    ) -> Result<Option<Connection<String, MoveModule>>, RpcError> {
+    ) -> Option<Result<Connection<String, MoveModule>, RpcError>> {
         use std::ops::Bound as B;
 
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("MovePackage", "modules");
-        let page = Page::from_params(limits, first, after, last, before)?;
+        let modules = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("MovePackage", "modules");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(parsed) = self.parsed(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+            let Some(parsed) = self.parsed(ctx).await?.as_ref() else {
+                return Ok(Connection::new(false, false));
+            };
 
-        let module_range = parsed
-            .modules()
-            .range::<String, _>((
-                page.after().map_or(B::Unbounded, |a| B::Excluded(&**a)),
-                page.before().map_or(B::Unbounded, |b| B::Excluded(&**b)),
-            ))
-            .map(|(name, _)| name.clone());
-
-        let mut conn = Connection::new(false, false);
-        let modules = if page.is_from_front() {
-            module_range.take(page.limit()).collect()
-        } else {
-            let mut ms: Vec<_> = module_range.rev().take(page.limit()).collect();
-            ms.reverse();
-            ms
-        };
-
-        conn.has_previous_page = modules.first().is_some_and(|fst| {
-            parsed
+            let module_range = parsed
                 .modules()
-                .range::<String, _>((B::Unbounded, B::Excluded(fst)))
-                .next()
-                .is_some()
-        });
+                .range::<String, _>((
+                    page.after().map_or(B::Unbounded, |a| B::Excluded(&**a)),
+                    page.before().map_or(B::Unbounded, |b| B::Excluded(&**b)),
+                ))
+                .map(|(name, _)| name.clone());
 
-        conn.has_next_page = modules.last().is_some_and(|lst| {
-            parsed
-                .modules()
-                .range::<String, _>((B::Excluded(lst), B::Unbounded))
-                .next()
-                .is_some()
-        });
+            let mut conn = Connection::new(false, false);
+            let modules = if page.is_from_front() {
+                module_range.take(page.limit()).collect()
+            } else {
+                let mut ms: Vec<_> = module_range.rev().take(page.limit()).collect();
+                ms.reverse();
+                ms
+            };
 
-        for module in modules {
-            conn.edges.push(Edge::new(
-                JsonCursor::new(module.clone()).encode_cursor(),
-                MoveModule::with_fq_name(self.clone(), module),
-            ));
+            conn.has_previous_page = modules.first().is_some_and(|fst| {
+                parsed
+                    .modules()
+                    .range::<String, _>((B::Unbounded, B::Excluded(fst)))
+                    .next()
+                    .is_some()
+            });
+
+            conn.has_next_page = modules.last().is_some_and(|lst| {
+                parsed
+                    .modules()
+                    .range::<String, _>((B::Excluded(lst), B::Unbounded))
+                    .next()
+                    .is_some()
+            });
+
+            for module in modules {
+                conn.edges.push(Edge::new(
+                    JsonCursor::new(module.clone()).encode_cursor(),
+                    MoveModule::with_fq_name(self.clone(), module),
+                ));
+            }
+
+            Ok(conn)
         }
+        .await;
 
-        Ok(Some(conn))
+        Some(modules)
     }
 
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module name, followed by module bytes), in alphabetic order by module name.
