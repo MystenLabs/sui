@@ -1657,43 +1657,33 @@ impl CheckpointBuilder {
                 .in_monitored_scope("CheckpointNotifyRead")
                 .await;
 
-            let consensus_commit_prologue = if self
-                .epoch_store
-                .protocol_config()
-                .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
-            {
-                // If the roots contains consensus commit prologue transaction, we want to extract it,
-                // and put it to the front of the checkpoint.
+            // If the roots contains consensus commit prologue transaction, we want to extract it,
+            // and put it to the front of the checkpoint.
+            let consensus_commit_prologue =
+                self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
 
-                let consensus_commit_prologue =
-                    self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
+            // Get the unincluded dependencies of the consensus commit prologue. We should expect no
+            // other dependencies that haven't been included in any previous checkpoints.
+            if let Some((ccp_digest, ccp_effects)) = &consensus_commit_prologue {
+                let unsorted_ccp = self.complete_checkpoint_effects(
+                    vec![ccp_effects.clone()],
+                    &mut effects_in_current_checkpoint,
+                )?;
 
-                // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
-                // other dependencies that haven't been included in any previous checkpoints.
-                if let Some((ccp_digest, ccp_effects)) = &consensus_commit_prologue {
-                    let unsorted_ccp = self.complete_checkpoint_effects(
-                        vec![ccp_effects.clone()],
-                        &mut effects_in_current_checkpoint,
-                    )?;
-
-                    // No other dependencies of this consensus commit prologue that haven't been included
-                    // in any previous checkpoint.
-                    if unsorted_ccp.len() != 1 {
-                        fatal!(
-                            "Expected 1 consensus commit prologue, got {:?}",
-                            unsorted_ccp
-                                .iter()
-                                .map(|e| e.transaction_digest())
-                                .collect::<Vec<_>>()
-                        );
-                    }
-                    assert_eq!(unsorted_ccp.len(), 1);
-                    assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
+                // No other dependencies of this consensus commit prologue that haven't been included
+                // in any previous checkpoint.
+                if unsorted_ccp.len() != 1 {
+                    fatal!(
+                        "Expected 1 consensus commit prologue, got {:?}",
+                        unsorted_ccp
+                            .iter()
+                            .map(|e| e.transaction_digest())
+                            .collect::<Vec<_>>()
+                    );
                 }
-                consensus_commit_prologue
-            } else {
-                None
-            };
+                assert_eq!(unsorted_ccp.len(), 1);
+                assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
+            }
 
             let unsorted =
                 self.complete_checkpoint_effects(root_effects, &mut effects_in_current_checkpoint)?;
@@ -1757,9 +1747,7 @@ impl CheckpointBuilder {
         Ok((tx_effects, tx_roots))
     }
 
-    // This function is used to extract the consensus commit prologue digest and effects from the root
-    // transactions.
-    // This function can only be used when prepend_prologue_tx_in_consensus_commit_in_checkpoints is enabled.
+    // Extracts the consensus commit prologue digest and effects from the root transactions.
     // The consensus commit prologue is expected to be the first transaction in the roots.
     fn extract_consensus_commit_prologue(
         &self,
@@ -1771,10 +1759,9 @@ impl CheckpointBuilder {
             return Ok(None);
         }
 
-        // Reads the first transaction in the roots, and checks whether it is a consensus commit prologue
-        // transaction.
-        // When prepend_prologue_tx_in_consensus_commit_in_checkpoints is enabled, the consensus commit prologue
-        // transaction should be the first transaction in the roots written by the consensus handler.
+        // Reads the first transaction in the roots, and checks whether it is a consensus commit
+        // prologue transaction. The consensus commit prologue transaction should be the first
+        // transaction in the roots written by the consensus handler.
         let first_tx = self
             .state
             .get_transaction_cache_reader()
@@ -2413,7 +2400,7 @@ impl CheckpointBuilder {
         Ok(results)
     }
 
-    // This function is used to check the invariants of the consensus commit prologue transactions in the checkpoint
+    // Checks the invariants of the consensus commit prologue transactions in the checkpoint
     // in simtest.
     #[cfg(msim)]
     fn expensive_consensus_commit_prologue_invariants_check(
@@ -2421,14 +2408,6 @@ impl CheckpointBuilder {
         root_digests: &[TransactionDigest],
         sorted: &[TransactionEffects],
     ) {
-        if !self
-            .epoch_store
-            .protocol_config()
-            .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
-        {
-            return;
-        }
-
         // Gets all the consensus commit prologue transactions from the roots.
         let root_txs = self
             .state
