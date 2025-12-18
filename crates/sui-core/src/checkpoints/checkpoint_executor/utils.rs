@@ -58,10 +58,10 @@ pub(super) fn stream_synced_checkpoints(
                     state.panic_timeout,
                 )
                 .await;
-                info!(
-                    "received synced checkpoint: {:?}",
-                    checkpoint.sequence_number
-                );
+                // info!(
+                //     "received synced checkpoint: {:?}",
+                //     checkpoint.sequence_number
+                // );
                 if checkpoint.end_of_epoch_data.is_some() {
                     Some((checkpoint, None))
                 } else {

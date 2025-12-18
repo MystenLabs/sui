@@ -17,6 +17,7 @@ pub mod consensus_manager;
 pub mod consensus_throughput_calculator;
 pub(crate) mod consensus_types;
 pub mod consensus_validator;
+pub mod custom_broadcaster;
 pub mod db_checkpoint_handler;
 pub mod epoch;
 pub mod execution_cache;
