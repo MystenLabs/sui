@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "105",
+              "maxSupportedProtocolVersion": "106",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -9026,7 +9026,8 @@
               "AccumulatorRootCreate",
               "CoinRegistryCreate",
               "DisplayRegistryCreate",
-              "AddressAliasStateCreate"
+              "AddressAliasStateCreate",
+              "WriteAccumulatorStorageCost"
             ]
           },
           {

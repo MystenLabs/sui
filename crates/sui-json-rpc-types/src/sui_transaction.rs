@@ -623,6 +623,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::AddressAliasStateCreate => {
                                 SuiEndOfEpochTransactionKind::AddressAliasStateCreate
                             }
+                            EndOfEpochTransactionKind::WriteAccumulatorStorageCost(_) => {
+                                SuiEndOfEpochTransactionKind::WriteAccumulatorStorageCost
+                            }
                         })
                         .collect(),
                 })
@@ -1791,6 +1794,7 @@ pub enum SuiEndOfEpochTransactionKind {
     CoinRegistryCreate,
     DisplayRegistryCreate,
     AddressAliasStateCreate,
+    WriteAccumulatorStorageCost,
 }
 
 #[serde_as]
