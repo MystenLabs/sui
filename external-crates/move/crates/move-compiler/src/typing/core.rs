@@ -2719,7 +2719,7 @@ where
 }
 
 pub fn subst_tparams(subst: &TParamSubst, ty @ sp!(loc, t_): &Type) -> Type {
-    if all_tparams(ty).is_empty() {
+    if !has_tparams(ty) {
         return ty.clone();
     }
 
@@ -2763,6 +2763,17 @@ pub fn all_tparams(sp!(_, t_): &Type) -> BTreeSet<TParam> {
             }
             tparams
         }
+    }
+}
+
+pub fn has_tparams(sp!(_, t_): &Type) -> bool {
+    match t_.inner() {
+        TI::Unit | TI::UnresolvedError | TI::Anything | TI::Void => false,
+        TI::Var(_) => panic!("ICE tvar in has_tparams"),
+        TI::Ref(_, t) => has_tparams(t),
+        TI::Param(_) => true,
+        TI::Apply(_, _, ty_args) => ty_args.iter().any(has_tparams),
+        TI::Fun(args, result) => args.iter().any(has_tparams) || has_tparams(result),
     }
 }
 
