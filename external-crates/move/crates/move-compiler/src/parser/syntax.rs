@@ -1482,22 +1482,24 @@ fn parse_string(context: &mut Context) -> Result<Value_, Box<Diagnostic>> {
     // Add IDE annotation for string values
     if context.env.ide_mode() {
         // Carve out: remove stdlib if IDE test mode is on to allow test reproducability
-        if context.env.ide_test_mode() {
-            if let Some(pkg_name) = context.current_package {
-                if pkg_name == STDLIB_ADDRESS_NAME || pkg_name.as_str() == "stdlib" {
-                    context.tokens.advance()?;
-                    return Ok(value_);
-                }
-            }
-        }
-        let string = match value_ {
-            Value_::HexString(text) => format!("x\"{}\"", text),
-            Value_::ByteString(text) => format!("b\"{}\"", text),
-            Value_::String(text) => format!("\"{}\"", text),
-            _ => unreachable!(),
+        let test_with_stdlib = if context.env.ide_test_mode()
+            && let Some(pkg_name) = context.current_package
+            && (pkg_name == STDLIB_ADDRESS_NAME || pkg_name.as_str() == "stdlib")
+        {
+            true
+        } else {
+            false
         };
-        let info = IDEAnnotation::StringValue(Box::new(string));
-        context.reporter.add_ide_annotation(loc, info);
+        if !test_with_stdlib {
+            let string = match value_ {
+                Value_::HexString(text) => format!("x\"{}\"", text),
+                Value_::ByteString(text) => format!("b\"{}\"", text),
+                Value_::String(text) => format!("\"{}\"", text),
+                _ => unreachable!(),
+            };
+            let info = IDEAnnotation::StringValue(Box::new(string));
+            context.reporter.add_ide_annotation(loc, info);
+        }
     }
     context.tokens.advance()?;
     Ok(value_)
