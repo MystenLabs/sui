@@ -1061,3 +1061,77 @@ async fn test_simulate_transaction_balance_changes() {
     }
     "###);
 }
+
+/// Test that `doGasSelection: true` allows simulating a transaction without specifying gas_payment.
+/// The server auto-selects gas coins and estimates the budget.
+#[tokio::test]
+async fn test_simulate_transaction_with_gas_selection() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    let sender = validator_cluster.get_address_0();
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Transaction WITHOUT gas_payment - server should auto-select gas with doGasSelection: true
+    let tx_json = json!({
+        "sender": sender.to_string(),
+        "kind": {
+            "programmable_transaction": {
+                "inputs": [
+                    { "literal": 1000000 },
+                    { "literal": recipient.to_string() }
+                ],
+                "commands": [
+                    {
+                        "split_coins": {
+                            "coin": { "kind": "GAS" },
+                            "amounts": [{ "kind": "INPUT", "input": 0 }]
+                        }
+                    },
+                    {
+                        "transfer_objects": {
+                            "objects": [{ "kind": "RESULT", "result": 0, "subresult": 0 }],
+                            "address": { "kind": "INPUT", "input": 1 }
+                        }
+                    }
+                ]
+            }
+        }
+    });
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txJson: JSON!) {
+                simulateTransaction(transaction: $txJson, doGasSelection: true) {
+                    effects {
+                        status
+                        transaction {
+                            gasInput {
+                                gasBudget
+                            }
+                        }
+                    }
+                    error
+                }
+            }
+        "#,
+            json!({ "txJson": tx_json }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    insta::assert_json_snapshot!(result.pointer("/data/simulateTransaction"), @r#"
+    {
+      "effects": {
+        "status": "SUCCESS",
+        "transaction": {
+          "gasInput": {
+            "gasBudget": "156976000"
+          }
+        }
+      },
+      "error": null
+    }
+    "#);
+}
