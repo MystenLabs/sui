@@ -1,7 +1,12 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use std::path::PathBuf;
+
 use anyhow::Context;
 use prometheus::Registry;
 use reqwest::Url;
-use std::path::PathBuf;
+
 use sui_futures::service::Service;
 use sui_indexer_alt::{config::IndexerConfig as IndexerAltConfig, setup_indexer};
 use sui_indexer_alt_framework::{
@@ -9,8 +14,6 @@ use sui_indexer_alt_framework::{
     ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
 };
 use sui_pg_db::DbArgs;
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 
 /// Configuration for the indexer.
 pub(crate) struct IndexerConfig {

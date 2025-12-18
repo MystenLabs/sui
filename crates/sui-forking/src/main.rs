@@ -7,22 +7,16 @@ mod seeds;
 mod server;
 mod store;
 
-use std::env::temp_dir;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 use anyhow::Result;
 use clap::Parser;
 use tracing::info;
 
-use sui_indexer_alt_consistent_store::config::ServiceConfig;
-use sui_pg_db::DbArgs;
 use sui_types::supported_protocol_versions::Chain;
 
 use crate::cli::{Args, Commands};
-use crate::indexers::consistent_store::start_consistent_store;
-use crate::indexers::indexer::{IndexerConfig, start_indexer};
-use crate::seeds::{InitialSeeds, Network, fetch_owned_objects};
+use crate::seeds::{Network, fetch_owned_objects};
 use crate::server::server::start_server;
 use crate::server::{AdvanceClockRequest, ApiResponse, ExecuteTxRequest, ForkingStatus};
 

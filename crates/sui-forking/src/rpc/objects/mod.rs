@@ -26,7 +26,6 @@ use crate::{context::Context, store::ForkingStore};
 use self::error::Error;
 use std::collections::BTreeMap;
 use sui_data_store::{ObjectKey, ObjectStore};
-use sui_package_resolver::PackageStore;
 
 mod data;
 mod error;
@@ -131,9 +130,8 @@ impl ObjectsApiServer for Objects {
         let Self(Context {
             pg_context: ctx,
             simulacrum,
-            protocol_version,
-            chain,
             at_checkpoint,
+            ..
         }) = self;
 
         let options = options.unwrap_or_default();
@@ -143,6 +141,7 @@ impl ObjectsApiServer for Objects {
         if obj.is_none() {
             println!("Object not found locally: {:?}", object_id);
 
+            // try fetching from indexer first
             let object = response::live_object(ctx, object_id, &options).await?;
 
             // If the object does not exist locally, try to fetch it from the RPC data store
@@ -180,13 +179,15 @@ impl ObjectsApiServer for Objects {
                         );
                         let written_objects = BTreeMap::from([(object_id.clone(), object.clone())]);
                         data_store.update_objects(written_objects, vec![]);
-                        // if this is a package, we need to add it to our package cache
+
+                        // If this is a package, insert it into kv_packages table
                         if object.is_package() {
-                            let pkg_store = ctx.package_resolver().package_store();
-                            pkg_store
-                                .fetch(obj.object_id().expect("to get the object's id").into())
-                                .await
-                                .expect("Failed to add package to cache");
+                            let Self(Context { db_writer, .. }) = self;
+                            if let Err(e) =
+                                insert_package_into_db(db_writer, &object, *at_checkpoint).await
+                            {
+                                eprintln!("Failed to insert package into DB: {:?}", e);
+                            }
                         }
                         Ok(obj)
                     } else {
@@ -217,9 +218,8 @@ impl ObjectsApiServer for Objects {
         let Self(Context {
             pg_context: ctx,
             simulacrum,
-            protocol_version,
-            chain,
             at_checkpoint,
+            ..
         }) = self;
         let config = &ctx.config().objects;
         if object_ids.len() > config.max_multi_get_objects {
@@ -255,9 +255,8 @@ impl ObjectsApiServer for Objects {
         let Self(Context {
             pg_context: ctx,
             simulacrum,
-            protocol_version,
-            chain,
             at_checkpoint,
+            ..
         }) = self;
 
         let options = options.unwrap_or_default();
@@ -279,9 +278,8 @@ impl ObjectsApiServer for Objects {
         let Self(Context {
             pg_context: ctx,
             simulacrum,
-            protocol_version,
-            chain,
             at_checkpoint,
+            ..
         }) = self;
 
         let config = &ctx.config().objects;
@@ -324,9 +322,8 @@ impl QueryObjectsApiServer for QueryObjects {
         let Self(Context {
             pg_context: ctx,
             simulacrum,
-            protocol_version,
-            chain,
             at_checkpoint,
+            ..
         }) = self;
 
         let simulacrum = simulacrum.read().await;
@@ -395,6 +392,52 @@ impl QueryObjectsApiServer for QueryObjects {
             has_next_page: false,
         })
     }
+}
+
+/// Insert a package object into the kv_packages table
+async fn insert_package_into_db(
+    db_writer: &sui_pg_db::Db,
+    object: &Object,
+    checkpoint: u64,
+) -> anyhow::Result<()> {
+    use diesel::prelude::*;
+    use diesel_async::RunQueryDsl;
+    use sui_indexer_alt_schema::schema::kv_packages;
+
+    let Some(package) = object.data.try_as_package() else {
+        anyhow::bail!("Object is not a package");
+    };
+
+    let package_id = package.id().to_vec();
+    let package_version = object.version().value() as i64;
+    let original_id = package.original_package_id().to_vec();
+    let is_system_package = sui_types::is_system_package(package.id());
+    let serialized_object = bcs::to_bytes(object)?;
+    let cp_sequence_number = checkpoint as i64;
+
+    let mut conn = db_writer.connect().await?;
+
+    diesel::insert_into(kv_packages::table)
+        .values((
+            kv_packages::package_id.eq(package_id),
+            kv_packages::package_version.eq(package_version),
+            kv_packages::original_id.eq(original_id),
+            kv_packages::is_system_package.eq(is_system_package),
+            kv_packages::serialized_object.eq(serialized_object),
+            kv_packages::cp_sequence_number.eq(cp_sequence_number),
+        ))
+        .on_conflict((kv_packages::package_id, kv_packages::package_version))
+        .do_nothing()
+        .execute(&mut conn)
+        .await?;
+
+    println!(
+        "Inserted package {} version {} into kv_packages table",
+        package.id(),
+        package_version
+    );
+
+    Ok(())
 }
 
 impl RpcModule for Objects {

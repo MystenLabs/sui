@@ -6,32 +6,15 @@ pub mod objects;
 pub mod read;
 pub mod write;
 
-use std::sync::Arc;
-
 use anyhow::Context as _;
-use prometheus::Registry;
-use rand::rngs::OsRng;
-use reqwest::Url;
-use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 
-use simulacrum::Simulacrum;
-use sui_indexer_alt_jsonrpc::NodeArgs;
-use sui_indexer_alt_jsonrpc::RpcArgs;
 use sui_indexer_alt_jsonrpc::RpcService;
-use sui_indexer_alt_jsonrpc::config::RpcConfig;
-use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
-use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
-use sui_pg_db::DbArgs;
-use sui_types::supported_protocol_versions::Chain;
-
-use crate::context;
-use crate::context::Context;
-use crate::store::ForkingStore;
-use sui_indexer_alt_jsonrpc::context::Context as PgContext;
+use sui_indexer_alt_jsonrpc::api::coin::Coins;
 use sui_indexer_alt_metrics::MetricsService;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
+use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
+
+use crate::context::Context;
 
 pub(crate) async fn start_rpc(
     context: Context,
@@ -44,6 +27,7 @@ pub(crate) async fn start_rpc(
         pg_context.pg_reader().clone(),
         pg_context.package_resolver().package_store().clone(),
     );
+    rpc.add_module(Coins(context.pg_context.clone()))?;
     rpc.add_module(objects::Objects(context.clone()))?;
     rpc.add_module(objects::QueryObjects(context.clone()))?;
     rpc.add_module(read::Read {
@@ -63,11 +47,6 @@ pub(crate) async fn start_rpc(
     rpc.add_module(
         sui_indexer_alt_jsonrpc::api::transactions::QueryTransactions(context.pg_context.clone()),
     )?;
-    // rpc.add_module(sui_indexer_alt_jsonrpc::api::checkpoints::Checkpoints(
-    // context.clone(),
-    // ))?;
-    // rpc.add_module(Coins(context.clone()))?;
-    // let s_system_package_task = system_package_task.run();
 
     let s_metrics = metrics.run().await?;
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;

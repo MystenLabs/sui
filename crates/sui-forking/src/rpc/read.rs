@@ -3,28 +3,19 @@
 
 use std::sync::Arc;
 
-use fastcrypto::encoding::Base64;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use rand::rngs::OsRng;
 use tokio::sync::RwLock;
 
 use simulacrum::Simulacrum;
-use sui_indexer_alt_jsonrpc::{api::rpc_module::RpcModule, error::invalid_params};
-use sui_json_rpc_types::{
-    DryRunTransactionBlockResponse, ProtocolConfigResponse, SuiObjectData, SuiObjectDataOptions,
-    SuiObjectResponse, SuiTransactionBlock, SuiTransactionBlockEffects,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-};
+use sui_indexer_alt_jsonrpc::api::rpc_module::RpcModule;
+use sui_json_rpc_types::ProtocolConfigResponse;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::{
-    base_types::ObjectID,
     digests::ChainIdentifier,
-    quorum_driver_types::ExecuteTransactionRequestType,
     sui_serde::BigInt,
-    supported_protocol_versions::{self, Chain, ProtocolConfig},
-    transaction::{Transaction, TransactionData},
+    supported_protocol_versions::{Chain, ProtocolConfig},
 };
 
 use crate::store::ForkingStore;
@@ -57,20 +48,6 @@ pub(crate) struct Read {
     pub simulacrum: Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>,
     pub protocol_version: u64,
     pub chain: Chain,
-}
-
-impl Read {
-    pub fn new(
-        simulacrum: Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>,
-        protocol_version: u64,
-        chain: Chain,
-    ) -> Self {
-        Self {
-            simulacrum,
-            protocol_version,
-            chain,
-        }
-    }
 }
 
 #[async_trait::async_trait]

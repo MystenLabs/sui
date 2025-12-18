@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{
     net::SocketAddr,
     path::PathBuf,
@@ -14,17 +17,26 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
+use diesel::pg::PgConnection;
 use diesel::prelude::*;
-use rand::rngs::OsRng;
+use prometheus::Registry;
+use reqwest::Url;
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use simulacrum::{AdvanceEpochConfig, Simulacrum, SimulacrumBuilder};
+use mysten_common::tempdir;
+use simulacrum::{AdvanceEpochConfig, SimulacrumBuilder};
+use sui_config::genesis::Genesis;
+use sui_data_store::Node;
+use sui_indexer_alt_jsonrpc::{RpcArgs, RpcService, config::RpcConfig};
+use sui_indexer_alt_metrics::MetricsService;
+use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
+use sui_pg_db::{Db, DbArgs};
 use sui_types::{
     base_types::SuiAddress,
     supported_protocol_versions::{
-        Chain::{self, Mainnet},
+        Chain::{self},
         ProtocolConfig,
     },
     transaction::Transaction,
@@ -33,7 +45,7 @@ use sui_types::{
 use crate::{
     graphql::GraphQLClient,
     indexers::{
-        consistent_store::{self, ConsistentStoreConfig, start_consistent_store},
+        consistent_store::{ConsistentStoreConfig, start_consistent_store},
         indexer::{IndexerConfig, start_indexer},
     },
     rpc::start_rpc,
@@ -41,6 +53,7 @@ use crate::{
     store::ForkingStore,
 };
 
+/// The shared state for the forking server
 pub struct AppState {
     pub context: crate::context::Context,
     pub transaction_count: Arc<AtomicUsize>,
@@ -279,13 +292,13 @@ pub async fn start_server(
     let database_url = Url::parse("postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt")?;
 
     let rpc_data_store = Arc::new(
-        crate::store::data_store::new_rpc_data_store(Node::Testnet, version)
+        crate::store::rpc_data_store::new_rpc_data_store(Node::Testnet, version)
             .expect("Failed to create RPC data store"),
     );
     let mut simulacrum = SimulacrumBuilder::new()
         .with_chain(chain)
         .with_protocol_version(protocol_version.into())
-        .with_store_creator(|genesis| {
+        .build_with_store_creator(|genesis| {
             ForkingStore::new(genesis, at_checkpoint, rpc_data_store.clone())
         });
 
@@ -298,14 +311,20 @@ pub async fn start_server(
 
     let metrics_args = sui_indexer_alt_metrics::MetricsArgs::default();
     let metrics = MetricsService::new(metrics_args, registry.clone());
-    let rpc_args = RpcArgs::default();
+    let rpc_listen_address = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let rpc_args = RpcArgs {
+        rpc_listen_address,
+        ..Default::default()
+    };
 
     let mut rpc = RpcService::new(rpc_args, &registry)
         .context("Failed to create RPC service")
         .unwrap();
 
+    println!("RPC listening on {}", rpc_listen_address);
+
     let pg_context = sui_indexer_alt_jsonrpc::context::Context::new(
-        Some(database_url),
+        Some(database_url.clone()),
         None,
         DbArgs::default(),
         BigtableArgs::default(),
@@ -315,9 +334,16 @@ pub async fn start_server(
     )
     .await
     .expect("Failed to create PG context");
+
+    // Create a write connection to the database for inserting packages
+    let db_writer = Db::for_write(database_url, DbArgs::default())
+        .await
+        .expect("Failed to create DB writer");
+
     let context = crate::context::Context {
         pg_context,
         simulacrum,
+        db_writer,
         at_checkpoint,
         chain,
         protocol_version,
@@ -404,18 +430,6 @@ async fn start_indexers(data_ingestion_path: PathBuf, version: &'static str) -> 
 
     Ok(())
 }
-
-use diesel::pg::PgConnection;
-use mysten_common::tempdir;
-use prometheus::Registry;
-use reqwest::Url;
-use sui_config::genesis::Genesis;
-use sui_data_store::Node;
-use sui_indexer_alt_jsonrpc::{RpcArgs, RpcService, config::RpcConfig};
-use sui_indexer_alt_metrics::MetricsService;
-use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
-use sui_pg_db::DbArgs;
-use tokio_util::sync::CancellationToken;
 
 fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Connect to the 'postgres' database (not your target database)

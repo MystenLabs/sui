@@ -5,11 +5,7 @@ use anyhow::{Context, Result, anyhow};
 use clap::Parser;
 use cynic::QueryBuilder;
 use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
-use std::{collections::BTreeSet, path::PathBuf};
-use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    object::Object,
-};
+use sui_types::{base_types::SuiAddress, object::Object};
 
 #[derive(Parser, Clone, Debug)]
 pub struct InitialSeeds {

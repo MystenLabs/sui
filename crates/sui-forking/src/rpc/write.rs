@@ -11,8 +11,8 @@ use tokio::sync::RwLock;
 use simulacrum::Simulacrum;
 use sui_indexer_alt_jsonrpc::{api::rpc_module::RpcModule, error::invalid_params};
 use sui_json_rpc_types::{
-    DryRunTransactionBlockResponse, SuiTransactionBlock, SuiTransactionBlockEffects,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    DryRunTransactionBlockResponse, SuiTransactionBlockEffects, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
@@ -70,12 +70,6 @@ pub enum Error {
     NotImplemented(String),
 }
 
-impl Write {
-    pub fn new(simulacrum: Arc<RwLock<Simulacrum<OsRng, ForkingStore>>>) -> Self {
-        Self(simulacrum)
-    }
-}
-
 #[async_trait::async_trait]
 impl WriteApiServer for Write {
     async fn execute_transaction_block(
@@ -102,6 +96,8 @@ impl WriteApiServer for Write {
         let (effects, _execution_error) = simulacrum
             .execute_transaction_impersonating(transaction.transaction_data().clone())
             .map_err(|e| invalid_params(Error::ExecutionError(e.to_string())))?;
+
+        simulacrum.create_checkpoint();
 
         // Build the response based on options
         let options = options.unwrap_or_default();

@@ -1,16 +1,14 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use std::path::PathBuf;
+
 use anyhow::Context;
 use prometheus::Registry;
-use reqwest::Url;
-use std::path::{Path, PathBuf};
+
 use sui_futures::service::Service;
-use sui_indexer_alt::{config::IndexerConfig as IndexerAltConfig, setup_indexer};
 use sui_indexer_alt_consistent_store::{args::RpcArgs, config::ServiceConfig, start_service};
-use sui_indexer_alt_framework::{
-    IndexerArgs,
-    ingestion::{self, ClientArgs},
-};
-use sui_pg_db::DbArgs;
-use tokio::task::JoinHandle;
+use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs};
 
 pub(crate) struct ConsistentStoreConfig {
     rocksdb_path: PathBuf,

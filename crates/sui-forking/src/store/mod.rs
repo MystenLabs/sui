@@ -2,40 +2,38 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
+use simulacrum::SimulatorStore;
 use sui_config::genesis;
-use sui_types::error::SuiErrorKind;
-use sui_types::storage::{
-    PackageObject, TrackingBackingStore, get_module, load_package_object_from_object_store,
-};
 use sui_types::{
     base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
     crypto::{AccountKeyPair, AuthorityKeyPair},
     digests::{ObjectDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    error::SuiError,
+    error::{SuiError, SuiErrorKind},
     messages_checkpoint::{
         CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
         VerifiedCheckpoint,
     },
     object::{Object, Owner},
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
+    storage::{
+        BackingPackageStore, ChildObjectResolver, ObjectStore, PackageObject, ParentSync,
+        get_module, load_package_object_from_object_store,
+    },
     transaction::VerifiedTransaction,
 };
 
-use simulacrum::SimulatorStore;
-use std::sync::Arc;
 use sui_data_store::ObjectStore as _;
 use sui_data_store::stores::{DataStore, FileSystemStore, LruMemoryStore, ReadThroughStore};
 
-pub mod data_store;
+pub mod rpc_data_store;
 
-// #[derive(Debug)]
 pub struct ForkingStore {
     // Checkpoint data
     checkpoints: BTreeMap<CheckpointSequenceNumber, VerifiedCheckpoint>,
