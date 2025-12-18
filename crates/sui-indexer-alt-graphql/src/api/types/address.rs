@@ -151,16 +151,15 @@ impl Address {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Option<Result<Connection<String, Balance>, RpcError<balance::Error>>> {
-        let pagination: &PaginationConfig = match ctx.data() {
-            Ok(p) => p,
-            Err(e) => return Some(Err(RpcError::from(e))),
-        };
-        let limits = pagination.limits("IAddressable", "balances");
-        let page = match Page::from_params(limits, first, after, last, before) {
-            Ok(page) => page,
-            Err(e) => return Some(Err(RpcError::from(e))),
-        };
-        Some(Balance::paginate(ctx, self.scope.clone(), self.address, page).await)
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("IAddressable", "balances");
+                let page = Page::from_params(limits, first, after, last, before)?;
+                Balance::paginate(ctx, self.scope.clone(), self.address, page).await
+            }
+            .await,
+        )
     }
 
     /// The domain explicitly configured as the default SuiNS name for this address.
@@ -295,37 +294,34 @@ impl Address {
         before: Option<object::CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
     ) -> Option<Result<Connection<String, MoveObject>, RpcError<object::Error>>> {
-        let pagination: &PaginationConfig = match ctx.data() {
-            Ok(p) => p,
-            Err(e) => return Some(Err(RpcError::from(e))),
-        };
-        let limits = pagination.limits("IAddressable", "objects");
-        let page = match Page::from_params(limits, first, after, last, before) {
-            Ok(page) => page,
-            Err(e) => return Some(Err(RpcError::from(e))),
-        };
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("IAddressable", "objects");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        // Create a filter that constrains to ADDRESS kind and this owner
-        let Some(filter) = filter.unwrap_or_default().intersect(ObjectFilter {
-            owner_kind: Some(OwnerKind::Address),
-            owner: Some(self.address.into()),
-            ..Default::default()
-        }) else {
-            return Some(Ok(Connection::new(false, false)));
-        };
+                // Create a filter that constrains to ADDRESS kind and this owner
+                let Some(filter) = filter.unwrap_or_default().intersect(ObjectFilter {
+                    owner_kind: Some(OwnerKind::Address),
+                    owner: Some(self.address.into()),
+                    ..Default::default()
+                }) else {
+                    return Ok(Connection::new(false, false));
+                };
 
-        let objects = match Object::paginate_live(ctx, self.scope.clone(), page, filter).await {
-            Ok(objects) => objects,
-            Err(e) => return Some(Err(e)),
-        };
-        let mut move_objects = Connection::new(objects.has_previous_page, objects.has_next_page);
+                let objects = Object::paginate_live(ctx, self.scope.clone(), page, filter).await?;
+                let mut move_objects =
+                    Connection::new(objects.has_previous_page, objects.has_next_page);
 
-        for edge in objects.edges {
-            let move_obj = MoveObject::from_super(edge.node);
-            move_objects.edges.push(Edge::new(edge.cursor, move_obj));
-        }
+                for edge in objects.edges {
+                    let move_obj = MoveObject::from_super(edge.node);
+                    move_objects.edges.push(Edge::new(edge.cursor, move_obj));
+                }
 
-        Some(Ok(move_objects))
+                Ok(move_objects)
+            }
+            .await,
+        )
     }
 
     /// Transactions associated with this address.
@@ -340,34 +336,37 @@ impl Address {
         before: Option<CTransaction>,
         relation: Option<AddressTransactionRelationship>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Address", "transactions");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Address", "transactions");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        // Default relation to SENT if not provided
-        let relation = relation.unwrap_or(AddressTransactionRelationship::Sent);
+                // Default relation to SENT if not provided
+                let relation = relation.unwrap_or(AddressTransactionRelationship::Sent);
 
-        // Create address-specific filter based on relationship
-        let address_filter = match relation {
-            AddressTransactionRelationship::Sent => TransactionFilter {
-                sent_address: Some(self.address.into()),
-                ..Default::default()
-            },
-            AddressTransactionRelationship::Affected => TransactionFilter {
-                affected_address: Some(self.address.into()),
-                ..Default::default()
-            },
-        };
+                // Create address-specific filter based on relationship
+                let address_filter = match relation {
+                    AddressTransactionRelationship::Sent => TransactionFilter {
+                        sent_address: Some(self.address.into()),
+                        ..Default::default()
+                    },
+                    AddressTransactionRelationship::Affected => TransactionFilter {
+                        affected_address: Some(self.address.into()),
+                        ..Default::default()
+                    },
+                };
 
-        // Intersect with user-provided filter
-        let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+                // Intersect with user-provided filter
+                let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
+                    return Ok(Connection::new(false, false));
+                };
 
-        Transaction::paginate(ctx, self.scope.clone(), page, filter)
-            .await
-            .map(Some)
+                Transaction::paginate(ctx, self.scope.clone(), page, filter).await
+            }
+            .await,
+        )
     }
 }
 
