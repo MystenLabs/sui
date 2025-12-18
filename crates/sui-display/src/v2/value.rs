@@ -50,6 +50,17 @@ pub trait Store<'s> {
     async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<Slice<'s>>>;
 }
 
+/// Result of evaluating a single strand of a Display v2 format string.
+#[derive(Clone)]
+pub enum Strand<'s> {
+    Text(&'s str),
+    Value {
+        offset: usize,
+        value: Value<'s>,
+        transform: Transform,
+    },
+}
+
 /// Value representation used during evaluation by the Display v2 interpreter.
 #[derive(Clone)]
 pub enum Value<'s> {
