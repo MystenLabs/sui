@@ -160,8 +160,21 @@ impl SimulacrumBuilder<OsRng> {
     }
 }
 
+impl Default for SimulacrumBuilder<OsRng> {
+    fn default() -> Self {
+        Self {
+            rng: OsRng,
+            protocol_version: None,
+            chain: None,
+            chain_start_timestamp_ms: 1,
+            accounts: vec![],
+            committee_size: NonZeroUsize::new(1).unwrap(),
+        }
+    }
+}
+
 impl<R> SimulacrumBuilder<R> {
-    /// Set a custom RNG for deterministic chain creation.
+    /// Set a custom RNG
     pub fn with_rng<NewR>(self, rng: NewR) -> SimulacrumBuilder<NewR> {
         SimulacrumBuilder {
             rng,
@@ -207,7 +220,7 @@ impl<R> SimulacrumBuilder<R> {
     ///
     /// The `store_creator` function receives the genesis configuration and should return
     /// an initialized store instance.
-    pub fn with_store_creator<S, F>(mut self, store_creator: F) -> Simulacrum<R, S>
+    pub fn build_with_store_creator<S, F>(mut self, store_creator: F) -> Simulacrum<R, S>
     where
         R: rand::RngCore + rand::CryptoRng,
         S: SimulatorStore,
@@ -240,7 +253,7 @@ impl<R> SimulacrumBuilder<R> {
     where
         R: rand::RngCore + rand::CryptoRng,
     {
-        self.with_store_creator(|genesis| InMemoryStore::new(genesis))
+        self.build_with_store_creator(InMemoryStore::new)
     }
 }
 
