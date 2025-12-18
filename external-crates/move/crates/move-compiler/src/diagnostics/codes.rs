@@ -363,6 +363,7 @@ codes!(
         MissingMatchArms: { msg: "IDE missing match arms", severity: Note },
         EllipsisExpansion: { msg: "IDE ellipsis expansion", severity: Note },
         PathAutocomplete: { msg: "IDE path autocomplete", severity: Note },
+        StringValue: { msg: "IDE string value", severity: Note },
     ],
 );
 

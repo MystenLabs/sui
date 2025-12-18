@@ -17,7 +17,7 @@ use crate::{
     },
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, attributes::to_known_attributes, format_one_of, lexer::*, token_set::*},
-    shared::{string_utils::*, *},
+    shared::{ide::IDEAnnotation, stdlib_definitions::STDLIB_ADDRESS_NAME, string_utils::*, *},
 };
 
 use move_command_line_common::files::FileHash;
@@ -1467,6 +1467,7 @@ fn parse_string(context: &mut Context) -> Result<Value_, Box<Diagnostic>> {
         return Err(unexpected_token_error(context.tokens, "a string value"));
     }
     let s = context.tokens.content();
+    let loc = context.tokens.current_token_loc();
     let value_ = if s.starts_with("x\"") {
         let text = Symbol::from(&s[2..s.len() - 1]);
         Value_::HexString(text)
@@ -1478,6 +1479,28 @@ fn parse_string(context: &mut Context) -> Result<Value_, Box<Diagnostic>> {
         let text = Symbol::from(&s[1..s.len() - 1]);
         Value_::String(text)
     };
+    // Add IDE annotation for string values
+    if context.env.ide_mode() {
+        // Carve out: remove stdlib if IDE test mode is on to allow test reproducability
+        let test_with_stdlib = if context.env.ide_test_mode()
+            && let Some(pkg_name) = context.current_package
+            && (pkg_name == STDLIB_ADDRESS_NAME || pkg_name.as_str() == "stdlib")
+        {
+            true
+        } else {
+            false
+        };
+        if !test_with_stdlib {
+            let string = match value_ {
+                Value_::HexString(text) => format!("x\"{}\"", text),
+                Value_::ByteString(text) => format!("b\"{}\"", text),
+                Value_::String(text) => format!("\"{}\"", text),
+                _ => unreachable!(),
+            };
+            let info = IDEAnnotation::StringValue(Box::new(string));
+            context.reporter.add_ide_annotation(loc, info);
+        }
+    }
     context.tokens.advance()?;
     Ok(value_)
 }
