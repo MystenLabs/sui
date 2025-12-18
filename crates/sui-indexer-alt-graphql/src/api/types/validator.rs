@@ -302,26 +302,30 @@ impl Validator {
         before: Option<CAddr>,
         last: Option<u64>,
         after: Option<CAddr>,
-    ) -> Result<Option<Connection<String, Validator>>, RpcError> {
-        let Some(report_records) = self
-            .contents
-            .report_records
-            .get(&self.validator().metadata.sui_address)
-        else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+    ) -> Option<Result<Connection<String, Validator>, RpcError>> {
+        let report_records = async {
+            let Some(report_records) = self
+                .contents
+                .report_records
+                .get(&self.validator().metadata.sui_address)
+            else {
+                return Ok(Connection::new(false, false));
+            };
 
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Validator", "reportRecords");
-        let page = Page::from_params(limits, first, after, last, before)?;
-        page.paginate_indices(report_records.len(), |i| {
-            let idx = report_records[i];
-            Ok(Validator {
-                contents: Arc::clone(&self.contents),
-                idx,
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("Validator", "reportRecords");
+            let page = Page::from_params(limits, first, after, last, before)?;
+            page.paginate_indices(report_records.len(), |i| {
+                let idx = report_records[i];
+                Ok(Validator {
+                    contents: Arc::clone(&self.contents),
+                    idx,
+                })
             })
-        })
-        .map(Some)
+        }
+        .await;
+
+        Some(report_records)
     }
 }
 
