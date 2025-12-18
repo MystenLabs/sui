@@ -3,7 +3,6 @@
 use std::time::Duration;
 
 use anyhow::Context as _;
-use serde::de::DeserializeOwned;
 use sui_indexer_alt_jsonrpc::context::Context;
 use sui_indexer_alt_reader::object_versions::LatestObjectVersionKey;
 use sui_types::base_types::ObjectID;
@@ -64,14 +63,14 @@ pub async fn load_live(
     Ok(object)
 }
 
-/// Fetch the latest version of the object at ID `object_id`, and deserialize its contents as a
-/// Rust type `T`, assuming that it exists and is a Move object (not a package).
-pub async fn load_live_deserialized<T: DeserializeOwned>(
-    ctx: &Context,
-    object_id: ObjectID,
-) -> Result<T, anyhow::Error> {
-    let object = load_live(ctx, object_id).await?.context("No data found")?;
-
-    let move_object = object.data.try_as_move().context("Not a Move object")?;
-    bcs::from_bytes(move_object.contents()).context("Failed to deserialize Move value")
-}
+// /// Fetch the latest version of the object at ID `object_id`, and deserialize its contents as a
+// /// Rust type `T`, assuming that it exists and is a Move object (not a package).
+// pub async fn load_live_deserialized<T: DeserializeOwned>(
+//     ctx: &Context,
+//     object_id: ObjectID,
+// ) -> Result<T, anyhow::Error> {
+//     let object = load_live(ctx, object_id).await?.context("No data found")?;
+//
+//     let move_object = object.data.try_as_move().context("Not a Move object")?;
+//     bcs::from_bytes(move_object.contents()).context("Failed to deserialize Move value")
+// }

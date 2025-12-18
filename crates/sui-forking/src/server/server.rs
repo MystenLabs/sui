@@ -65,13 +65,13 @@ impl AppState {
     pub async fn new(
         context: crate::context::Context,
         chain: Chain,
-        at_checkpoint: u64,
+        forked_at_checkpoint: u64,
         protocol_config: ProtocolConfig,
     ) -> Self {
         Self {
             context,
             transaction_count: Arc::new(AtomicUsize::new(0)),
-            forked_at_checkpoint: 0,
+            forked_at_checkpoint,
             _chain: chain,
             _protocol_config: protocol_config,
         }

@@ -30,11 +30,6 @@ struct GraphQLError {
 }
 
 #[derive(Debug, Deserialize)]
-struct CheckpointResponse {
-    checkpoint: CheckpointData,
-}
-
-#[derive(Debug, Deserialize)]
 struct LatestCheckpointResponse {
     checkpoint: CheckpointNumberProtocolVersion,
 }
@@ -44,12 +39,6 @@ struct LatestCheckpointResponse {
 struct CheckpointNumberProtocolVersion {
     sequence_number: u64,
     query: QueryData,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CheckpointData {
-    pub content_bcs: String,
 }
 
 #[derive(Debug, Deserialize)]

@@ -8,11 +8,8 @@ use sui_json_rpc_types::ProtocolConfigResponse;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::{
-    digests::ChainIdentifier,
-    sui_serde::BigInt,
-    supported_protocol_versions::ProtocolConfig,
+    digests::ChainIdentifier, sui_serde::BigInt, supported_protocol_versions::ProtocolConfig,
 };
-
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
 #[rpc(server, client, namespace = "sui")]
@@ -49,8 +46,11 @@ impl ReadApiServer for Read {
         &self,
         version: Option<BigInt<u64>>,
     ) -> RpcResult<ProtocolConfigResponse> {
-        let protocol_config =
-            ProtocolConfig::get_for_version(self.0.protocol_version.into(), self.0.chain);
+        let protocol_version = match version {
+            Some(v) => (*v).into(),
+            None => self.0.protocol_version.into(),
+        };
+        let protocol_config = ProtocolConfig::get_for_version(protocol_version, self.0.chain);
         let response = ProtocolConfigResponse::from(protocol_config);
 
         Ok(response)

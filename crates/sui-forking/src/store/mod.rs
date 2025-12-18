@@ -148,15 +148,15 @@ impl ForkingStore {
     }
 
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {
-        // println!("Live objects in store: {:?}", self.live_objects.keys());
         let version = self.live_objects.get(id);
 
         if let Some(version) = version {
             self.get_object_at_version(id, *version)
         }
+        // TODO: forking
         // Fallback to RPC data store if object not found in local store
         else {
-            let objs = self
+            let _objs = self
                 .rpc_data_store
                 .get_objects(&vec![sui_data_store::ObjectKey {
                     object_id: *id,

@@ -3,12 +3,11 @@
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
-    #[error("Object filter contains more than the maximum {max} type filters")]
-    FilterTooBig { max: usize },
-
-    #[error("Object filter nested deeper than maximum of {max}")]
-    FilterTooDeep { max: usize },
-
+    // #[error("Object filter contains more than the maximum {max} type filters")]
+    // FilterTooBig { max: usize },
+    //
+    // #[error("Object filter nested deeper than maximum of {max}")]
+    // FilterTooDeep { max: usize },
     #[error("Pagination issue: {0}")]
     Pagination(#[from] sui_indexer_alt_jsonrpc::paginate::Error),
 

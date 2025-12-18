@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-
 use fastcrypto::encoding::Base64;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 
@@ -17,7 +16,7 @@ use sui_types::{
     quorum_driver_types::ExecuteTransactionRequestType,
     transaction::{Transaction, TransactionData},
 };
-
+use tracing::info;
 
 #[open_rpc(namespace = "sui", tag = "Write API")]
 #[rpc(server, client, namespace = "sui")]
@@ -70,7 +69,7 @@ impl WriteApiServer for Write {
     async fn execute_transaction_block(
         &self,
         tx_bytes: Base64,
-        signatures: Vec<Base64>,
+        _signatures: Vec<Base64>,
         options: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
@@ -98,7 +97,7 @@ impl WriteApiServer for Write {
         let options = options.unwrap_or_default();
         let mut response = SuiTransactionBlockResponse::new(effects.transaction_digest().clone());
 
-        println!(
+        info!(
             "Executed transaction with digest: {:?}",
             effects.transaction_digest()
         );

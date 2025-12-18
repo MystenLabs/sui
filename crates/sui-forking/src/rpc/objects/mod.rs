@@ -140,14 +140,14 @@ impl ObjectsApiServer for Objects {
         let data_store: &mut ForkingStore = simulacrum.store_1_mut();
         let obj = data_store.get_object(&object_id);
         if obj.is_none() {
-            println!("Object not found locally: {:?}", object_id);
+            info!("Object not found locally: {:?}", object_id);
 
             // try fetching from indexer first
             let object = response::live_object(ctx, object_id, &options).await?;
 
             // If the object does not exist locally, try to fetch it from the RPC data store
             if let Some(SuiObjectResponseError::NotExists { object_id }) = &object.error {
-                println!("Need to fetch object from rpc ");
+                info!("Need to fetch object from rpc ");
                 {
                     let obj = data_store
                         .get_rpc_data_store()
@@ -161,7 +161,7 @@ impl ObjectsApiServer for Objects {
                     let obj = obj.into_iter().next().unwrap();
 
                     if let Some((ref object, _version)) = obj {
-                        println!("Fetched object from rpc: {:?}", object.id());
+                        info!("Fetched object from rpc: {:?}", object.id());
                         let obj = SuiObjectResponse::new_with_data(
                             response::object_data_with_options(
                                 ctx,
@@ -204,11 +204,6 @@ impl ObjectsApiServer for Objects {
             );
             Ok(obj)
         }
-        // Ok(response::live_object(ctx, object_id, &options)
-        //     .await
-        //     .with_internal_context(|| {
-        //         format!("Failed to get object {object_id} at latest version")
-        //     })?)
     }
 
     async fn multi_get_objects(
@@ -217,10 +212,7 @@ impl ObjectsApiServer for Objects {
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
         let Self(Context {
-            pg_context: ctx,
-            simulacrum,
-            at_checkpoint,
-            ..
+            pg_context: ctx, ..
         }) = self;
         let config = &ctx.config().objects;
         if object_ids.len() > config.max_multi_get_objects {
@@ -310,18 +302,21 @@ impl QueryObjectsApiServer for QueryObjects {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        query: Option<SuiObjectResponseQuery>,
-        cursor: Option<String>,
-        limit: Option<usize>,
+        _query: Option<SuiObjectResponseQuery>,
+        _cursor: Option<String>,
+        _limit: Option<usize>,
     ) -> RpcResult<Page<SuiObjectResponse, String>> {
         let Self(Context {
             pg_context: ctx,
             simulacrum,
-            at_checkpoint,
             ..
         }) = self;
 
         let simulacrum = simulacrum.read().await;
+
+        // TODO: this only works if all owned objects are stored locally in the simulacrum
+        // we probably need to fetch from the RPC data store if not found locally, but it's tricky
+        // if we're trying to get owned objects at a past checkpoint (older than 1h)
         let owned_objs = simulacrum.store_1().owned_objects(address);
 
         let mut data = vec![];

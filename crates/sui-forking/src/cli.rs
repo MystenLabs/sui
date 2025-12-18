@@ -1,10 +1,13 @@
-use crate::seeds::InitialSeeds;
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// use crate::seeds::InitialSeeds;
 use clap::{Parser, Subcommand};
 use sui_types::base_types::SuiAddress;
 
 const PORT: &str = "3001";
 const IP: &str = "127.0.0.1";
-const DEFAULT_ADDRESS: &str = "127.0.0.1:3001";
+const DEFAULT_ADDRESS: &str = "http://127.0.0.1:3001";
 
 #[derive(Parser, Debug)]
 #[clap(name = "sui-forking")]
@@ -37,10 +40,9 @@ pub enum Commands {
         /// Optional data directory for storing forked data
         #[clap(long)]
         data_dir: Option<String>,
-
-        /// Initial accounts to restore with their owned objects
-        #[clap(flatten)]
-        accounts: InitialSeeds,
+        // /// Initial accounts to restore with their owned objects
+        // #[clap(flatten)]
+        // accounts: InitialSeeds,
     },
     /// Advance checkpoint by 1
     AdvanceCheckpoint {

@@ -1,13 +1,14 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 mod cli;
 mod context;
 mod graphql;
 mod indexers;
 mod rpc;
-mod seeds;
+// mod seeds;
 mod server;
 mod store;
-
-use std::str::FromStr;
 
 use anyhow::Result;
 use clap::Parser;
@@ -16,9 +17,10 @@ use tracing::info;
 use sui_types::supported_protocol_versions::Chain;
 
 use crate::cli::{Args, Commands};
-use crate::seeds::{Network, fetch_owned_objects};
+// use crate::seeds::Network;
 use crate::server::server::start_server;
 use crate::server::{AdvanceClockRequest, ApiResponse, ExecuteTxRequest, ForkingStatus};
+use std::path::PathBuf;
 
 // Define the `GIT_REVISION` const
 bin_version::git_revision!();
@@ -70,37 +72,32 @@ async fn main() -> Result<()> {
             port,
             network,
             data_dir,
-            accounts,
+            // accounts,
         } => {
-            let info = if let Some(c) = checkpoint {
-                format!(
-                    "Starting forking server for {} at checkpoint {c} at address {}:{}",
-                    network, host, port
-                )
-            } else {
-                format!(
-                    "Starting forking server for {} at latest checkpoint at address {}:{}",
-                    network, host, port
-                )
-            };
-            let graphql_endpoint = Network::from_str(&network)?;
             let chain = match network.as_str() {
                 "mainnet" => Chain::Mainnet,
                 "testnet" => Chain::Testnet,
-                "devnet" => Chain::Unknown,
-                _ => {
-                    panic!("Unsupported network: {}", network);
-                }
+                _ => Chain::Unknown,
             };
 
-            let mut seeds = vec![];
-            for addr in accounts.accounts.iter() {
-                let owned_objects = fetch_owned_objects(&graphql_endpoint, *addr).await?;
-                seeds.extend(owned_objects);
-            }
-            info!("Downloaded seeds for {} accounts", accounts.accounts.len());
+            // let mut seeds = vec![];
+            // let graphql_endpoint = Network::from_str(&network)?;
+            // for addr in accounts.accounts.iter() {
+            //     let owned_objects = fetch_owned_objects(&graphql_endpoint, *addr).await?;
+            //     seeds.extend(owned_objects);
+            // }
+            // info!("Downloaded seeds for {} accounts", accounts.accounts.len());
             info!("Starting forking server...");
-            let data_ingestion_path = mysten_common::tempdir().unwrap().keep();
+
+            let data_ingestion_path = if let Some(data_dir) = data_dir {
+                let path = PathBuf::from(data_dir);
+                if !path.exists() {
+                    std::fs::create_dir_all(&path).expect("Failed to create data directory");
+                }
+                path
+            } else {
+                mysten_common::tempdir().unwrap().keep()
+            };
             start_server(chain, checkpoint, host, port, data_ingestion_path, VERSION).await?
         }
         Commands::AdvanceCheckpoint { server_url } => {
