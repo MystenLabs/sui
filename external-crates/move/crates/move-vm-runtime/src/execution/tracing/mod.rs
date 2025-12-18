@@ -26,10 +26,8 @@ pub(crate) const TRACING_ENABLED: bool = false;
 
 macro_rules! trace {
     ($tracer:expr, |$param:ident| $body:expr) => {
-        if crate::execution::tracing::TRACING_ENABLED {
-            if let Some($param) = $tracer.as_mut() {
-                $body
-            }
+        if crate::execution::tracing::TRACING_ENABLED && let Some($param) = $tracer.as_mut() {
+            $body
         }
     };
 }
