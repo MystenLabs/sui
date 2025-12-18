@@ -137,7 +137,7 @@ impl ObjectsApiServer for Objects {
 
         let options = options.unwrap_or_default();
         let mut simulacrum = simulacrum.write().await;
-        let mut data_store: &mut ForkingStore = simulacrum.store_1_mut();
+        let data_store: &mut ForkingStore = simulacrum.store_1_mut();
         let obj = data_store.get_object(&object_id);
         if obj.is_none() {
             println!("Object not found locally: {:?}", object_id);

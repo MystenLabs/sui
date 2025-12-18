@@ -27,7 +27,6 @@ use tracing::info;
 
 use mysten_common::tempdir;
 use simulacrum::{AdvanceEpochConfig, SimulacrumBuilder};
-use sui_config::genesis::Genesis;
 use sui_data_store::Node;
 use sui_indexer_alt_jsonrpc::{RpcArgs, RpcService, config::RpcConfig};
 use sui_indexer_alt_metrics::MetricsService;
