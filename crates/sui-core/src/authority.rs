@@ -3119,14 +3119,17 @@ impl AuthorityState {
                         .map(|type_| ObjectType::Struct(type_.clone()))
                         .unwrap_or(ObjectType::Package);
 
-                    new_owners.push(((addr, *id), ObjectInfo {
-                        object_id: *id,
-                        version: oref.1,
-                        digest: oref.2,
-                        type_,
-                        owner,
-                        previous_transaction: *effects.transaction_digest(),
-                    }));
+                    new_owners.push((
+                        (addr, *id),
+                        ObjectInfo {
+                            object_id: *id,
+                            version: oref.1,
+                            digest: oref.2,
+                            type_,
+                            owner,
+                            previous_transaction: *effects.transaction_digest(),
+                        },
+                    ));
                 }
                 Owner::ObjectOwner(owner) => {
                     let new_object = written.get(id).unwrap_or_else(

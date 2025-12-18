@@ -2021,7 +2021,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // When pre-consensus locking is disabled, perform post-consensus owned object
                 // conflict detection BEFORE setting Finalized status. If lock acquisition fails,
                 // the transaction has invalid/conflicting owned inputs and should be dropped.
-                if self.epoch_store.protocol_config().disable_preconsensus_locking()
+                if self
+                    .epoch_store
+                    .protocol_config()
+                    .disable_preconsensus_locking()
                     && let Some(tx) = parsed.transaction.kind.as_user_transaction()
                     && let Ok(input_objects) = tx.transaction_data().input_objects()
                 {
@@ -3146,11 +3149,14 @@ mod tests {
             } else {
                 shared_objects.get(i / 2).unwrap().clone()
             };
-            let transaction =
-                test_user_transaction(&state, sender, &keypair, gas_object.clone(), vec![
-                    input_object,
-                ])
-                .await;
+            let transaction = test_user_transaction(
+                &state,
+                sender,
+                &keypair,
+                gas_object.clone(),
+                vec![input_object],
+            )
+            .await;
             user_transactions.push(transaction);
         }
 
@@ -3315,11 +3321,14 @@ mod tests {
             } else {
                 shared_objects.get(i / 2).unwrap().clone()
             };
-            let transaction =
-                test_user_transaction(&state, sender, &keypair, gas_object.clone(), vec![
-                    input_object,
-                ])
-                .await;
+            let transaction = test_user_transaction(
+                &state,
+                sender,
+                &keypair,
+                gas_object.clone(),
+                vec![input_object],
+            )
+            .await;
             transactions.push(transaction);
         }
 
@@ -3435,10 +3444,13 @@ mod tests {
     fn test_order_by_gas_price() {
         let mut v = vec![user_txn(42), user_txn(100)];
         PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
-        assert_eq!(to_short_strings(v), vec![
-            "transaction(100)".to_string(),
-            "transaction(42)".to_string(),
-        ]);
+        assert_eq!(
+            to_short_strings(v),
+            vec![
+                "transaction(100)".to_string(),
+                "transaction(42)".to_string(),
+            ]
+        );
 
         let mut v = vec![
             user_txn(1200),
@@ -3449,14 +3461,17 @@ mod tests {
             user_txn(1000),
         ];
         PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
-        assert_eq!(to_short_strings(v), vec![
-            "transaction(1200)".to_string(),
-            "transaction(1000)".to_string(),
-            "transaction(1000)".to_string(),
-            "transaction(100)".to_string(),
-            "transaction(42)".to_string(),
-            "transaction(12)".to_string(),
-        ]);
+        assert_eq!(
+            to_short_strings(v),
+            vec![
+                "transaction(1200)".to_string(),
+                "transaction(1000)".to_string(),
+                "transaction(1000)".to_string(),
+                "transaction(100)".to_string(),
+                "transaction(42)".to_string(),
+                "transaction(12)".to_string(),
+            ]
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]
