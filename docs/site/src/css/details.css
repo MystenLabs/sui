@@ -2,7 +2,7 @@
    wrapper look like the built-in Docusaurus Details component. */
 .theme-doc-markdown details,
 .markdown details {
-  @apply p-6 border border-solid border-sui-gray-65 rounded-lg bg-sui-gray-45 dark:bg-sui-gray-90;
+  @apply p-6 border border-solid border-sui-gray-65 rounded-lg bg-sui-gray-80 dark:bg-sui-gray-90;
 }
 
 /* Summary row */

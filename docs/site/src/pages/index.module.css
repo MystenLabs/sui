@@ -47,7 +47,7 @@
   border-top: solid 1px var(--sui-line);
   border-bottom: solid 1px var(--sui-line);
   padding: .5rem 0;
-  color: var(--sui-gray);
+  color: var(--sui-white);
   position: relative;
 }
 
