@@ -1337,6 +1337,7 @@
                 "deprecate_global_storage_ops": false,
                 "deprecate_global_storage_ops_during_deserialization": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
+                "disable_preconsensus_locking": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
                 "disallow_new_modules_in_deps_only_packages": false,

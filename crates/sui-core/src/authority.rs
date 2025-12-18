@@ -1127,10 +1127,13 @@ impl AuthorityState {
             None
         };
 
-        if epoch_store.protocol_config().disable_fastpath() {
-            // When disable_fastpath is enabled, validate owned object versions without acquiring
-            // locks. Locking happens post-consensus in the consensus handler. Validation still
-            // runs to prevent spam transactions with invalid object versions.
+        if epoch_store.protocol_config().disable_preconsensus_locking() {
+            // When disable_preconsensus_locking is enabled, validate owned object versions without
+            // acquiring locks. Locking happens post-consensus in the consensus handler. Validation
+            // still runs to prevent spam transactions with invalid object versions.
+            // Note: We don't store the signed transaction here because with disable_preconsensus_locking,
+            // transactions go through Mysticeti consensus which provides ordering and certification.
+            // The QD flow that requires signed transaction storage is not used and will be removed in the future.
             self.get_cache_writer()
                 .validate_owned_object_versions(&owned_objects)?;
         } else {
@@ -1481,11 +1484,15 @@ impl AuthorityState {
 
         self.metrics.total_cert_attempts.inc();
 
-        if !transaction.is_consensus_tx() && !epoch_store.protocol_config().disable_fastpath() {
+        if !transaction.is_consensus_tx()
+            && !epoch_store.protocol_config().disable_preconsensus_locking()
+        {
             // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
-            // For owned object transactions, they can be enqueued for execution immediately.
-            // When disable_fastpath is enabled, all transactions go through consensus.
+            // For owned object transactions, they can be enqueued for execution immediately
+            // ONLY when disable_preconsensus_locking is false (QD/original fastpath mode).
+            // When disable_preconsensus_locking is true (MFP mode), all transactions including
+            // owned object transactions go through consensus for ordering and execution scheduling.
             self.execution_scheduler.enqueue(
                 vec![(
                     Schedulable::Transaction(transaction.clone()),
