@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use backoff::backoff::Backoff;
 use fastcrypto::traits::ToFromBytes;
 use futures::future::AbortHandle;
 use futures::future::join_all;
@@ -36,6 +37,7 @@ use sui_types::{base_types::*, object::Owner};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
+use tracing::{info, warn};
 
 use anyhow::anyhow;
 use clap::ValueEnum;
@@ -1001,6 +1003,65 @@ pub async fn download_formal_snapshot(
     Ok(())
 }
 
+/// Fetches a checkpoint with retry logic and exponential backoff.
+/// This makes checkpoint downloads more resilient to transient network errors.
+async fn fetch_checkpoint_with_retry(
+    client: &dyn object_store::ObjectStore,
+    checkpoint_seq: u64,
+    max_retries: usize,
+) -> Result<(Arc<sui_types::full_checkpoint_content::CheckpointData>, usize)> {
+    let mut backoff = backoff::ExponentialBackoff {
+        initial_interval: Duration::from_millis(500),
+        max_interval: Duration::from_secs(30),
+        max_elapsed_time: Some(Duration::from_secs(300)), // 5 minutes total
+        multiplier: 2.0,
+        ..Default::default()
+    };
+
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
+
+        match CheckpointReader::fetch_from_object_store(client, checkpoint_seq).await {
+            Ok(result) => {
+                if attempt > 1 {
+                    info!(
+                        "Successfully fetched checkpoint {} after {} attempts",
+                        checkpoint_seq, attempt
+                    );
+                }
+                return Ok(result);
+            }
+            Err(err) => {
+                if attempt >= max_retries {
+                    warn!(
+                        "Failed to fetch checkpoint {} after {} attempts: {:?}",
+                        checkpoint_seq, max_retries, err
+                    );
+                    return Err(err);
+                }
+
+                match backoff.next_backoff() {
+                    Some(duration) => {
+                        warn!(
+                            "Failed to fetch checkpoint {} (attempt {}/{}): {:?}. Retrying in {:?}...",
+                            checkpoint_seq, attempt, max_retries, err, duration
+                        );
+                        tokio::time::sleep(duration).await;
+                    }
+                    None => {
+                        warn!(
+                            "Failed to fetch checkpoint {} after {} attempts (backoff exhausted): {:?}",
+                            checkpoint_seq, attempt, err
+                        );
+                        return Err(err);
+                    }
+                }
+            }
+        }
+    }
+}
+
 async fn backfill_epoch_transaction_digests(
     perpetual_db: Arc<AuthorityPerpetualTables>,
     epoch: EpochId,
@@ -1075,9 +1136,19 @@ async fn backfill_epoch_transaction_digests(
     // Use reduced concurrency for backfill to avoid overwhelming the remote server
     // when running in parallel with snapshot download
     let backfill_concurrency = (concurrency / 4).max(1);
+    let max_retries = 10; // Allow up to 10 retries per checkpoint
 
+    info!(
+        "Starting checkpoint backfill with concurrency={}, max_retries={} for {} checkpoints",
+        backfill_concurrency, max_retries, num_checkpoints
+    );
+
+    let client = Arc::new(client);
     futures::stream::iter(checkpoints_to_fetch)
-        .map(|sq| CheckpointReader::fetch_from_object_store(&client, sq))
+        .map(|sq| {
+            let client = client.clone();
+            async move { fetch_checkpoint_with_retry(client.as_ref(), sq, max_retries).await }
+        })
         .buffer_unordered(backfill_concurrency)
         .try_for_each(|checkpoint| {
             let perpetual_db = perpetual_db.clone();
