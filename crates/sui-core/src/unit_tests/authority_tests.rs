@@ -1358,6 +1358,13 @@ async fn test_handle_transfer_transaction_unknown_sender() {
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_ok() {
+    // This test verifies QD-path lock behavior, so disable_preconsensus_locking must be false.
+    // QD tests will eventually be removed when the QD path is fully deprecated.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();

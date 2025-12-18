@@ -530,7 +530,7 @@ pub struct ConsensusHandler<C> {
     /// cache reader is needed when determining the next version to assign for shared objects.
     cache_reader: Arc<dyn ObjectCacheRead>,
     /// cache writer is needed for post-consensus owned object conflict detection
-    /// when disable_fastpath is enabled.
+    /// when disable_preconsensus_locking is enabled.
     cache_writer: Arc<dyn ExecutionCacheWrite>,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
@@ -2018,10 +2018,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // TODO(fastpath): Handle unlocking.
                     continue;
                 }
-                // When fastpath is disabled, perform post-consensus owned object conflict detection
-                // BEFORE setting Finalized status. If lock acquisition fails, the transaction has
-                // invalid/conflicting owned inputs and should be dropped.
-                if self.epoch_store.protocol_config().disable_fastpath()
+                // When pre-consensus locking is disabled, perform post-consensus owned object
+                // conflict detection BEFORE setting Finalized status. If lock acquisition fails,
+                // the transaction has invalid/conflicting owned inputs and should be dropped.
+                if self.epoch_store.protocol_config().disable_preconsensus_locking()
                     && let Some(tx) = parsed.transaction.kind.as_user_transaction()
                     && let Ok(input_objects) = tx.transaction_data().input_objects()
                 {
@@ -2871,11 +2871,11 @@ impl ConsensusBlockHandler {
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         Self {
-            // Disable mysticeti fastpath execution when disable_fastpath is enabled,
+            // Disable mysticeti fastpath execution when disable_preconsensus_locking is enabled,
             // ensuring all transactions go through normal consensus commit path
             // where post-consensus conflict detection runs.
             enabled: epoch_store.protocol_config().mysticeti_fastpath()
-                && !epoch_store.protocol_config().disable_fastpath(),
+                && !epoch_store.protocol_config().disable_preconsensus_locking(),
             epoch_store,
             execution_scheduler_sender,
             backpressure_subscriber,

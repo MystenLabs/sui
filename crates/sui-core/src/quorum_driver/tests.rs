@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use sui_macros::{register_fail_point, sim_test};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::{AccountKeyPair, deterministic_random_account_key, get_key_pair};
@@ -232,6 +233,13 @@ async fn test_quorum_driver_update_validators_and_max_retry_times() {
 
 #[tokio::test]
 async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
+    // This test requires preconsensus locking to be enabled because it tests ObjectLockConflict
+    // errors which only happen with preconsensus locking.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let gas_objects = generate_test_gas_objects();
     let (sender, keypair): (SuiAddress, AccountKeyPair) = deterministic_random_account_key();
     let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);

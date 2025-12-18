@@ -614,7 +614,7 @@ pub trait ExecutionCacheWrite: Send + Sync {
     ) -> SuiResult;
 
     /// Validate owned object versions and digests without acquiring locks.
-    /// Used when disable_fastpath is enabled to validate objects without locking,
+    /// Used when disable_preconsensus_locking is enabled to validate objects without locking,
     /// since locking happens post-consensus in that mode.
     fn validate_owned_object_versions(&self, owned_input_objects: &[ObjectRef]) -> SuiResult;
 

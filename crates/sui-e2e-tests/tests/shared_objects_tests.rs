@@ -11,10 +11,12 @@ use sui_config::node::AuthorityOverloadConfig;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::{register_fail_point_async, sim_test};
+use sui_protocol_config::ProtocolConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::{
     TestTransactionBuilder, publish_basics_package, publish_basics_package_and_make_counter,
 };
+use sui_types::crypto::get_key_pair;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
@@ -22,6 +24,7 @@ use sui_types::messages_grpc::{LayoutGenerationOption, ObjectInfoRequest};
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
+use tracing::info;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
@@ -340,15 +343,10 @@ async fn call_shared_object_contract() {
     for gas in objects {
         // Ensure the value of the counter is `0`.
         let transaction = TestTransactionBuilder::new(sender, gas, rgp)
-            .move_call(
-                package_id,
-                "counter",
-                "assert_value",
-                vec![
-                    CallArg::Object(counter_object_arg_imm),
-                    CallArg::Pure(0u64.to_le_bytes().to_vec()),
-                ],
-            )
+            .move_call(package_id, "counter", "assert_value", vec![
+                CallArg::Object(counter_object_arg_imm),
+                CallArg::Pure(0u64.to_le_bytes().to_vec()),
+            ])
             .build();
         let effects = test_cluster
             .sign_and_execute_transaction(&transaction)
@@ -401,19 +399,14 @@ async fn call_shared_object_contract() {
         let transaction = test_cluster
             .test_transaction_builder()
             .await
-            .move_call(
-                package_id,
-                "counter",
-                "assert_value",
-                vec![
-                    CallArg::Object(if imm {
-                        counter_object_arg_imm
-                    } else {
-                        counter_object_arg
-                    }),
-                    CallArg::Pure(1u64.to_le_bytes().to_vec()),
-                ],
-            )
+            .move_call(package_id, "counter", "assert_value", vec![
+                CallArg::Object(if imm {
+                    counter_object_arg_imm
+                } else {
+                    counter_object_arg
+                }),
+                CallArg::Pure(1u64.to_le_bytes().to_vec()),
+            ])
             .build();
         let effects = test_cluster
             .sign_and_execute_transaction(&transaction)
@@ -433,12 +426,9 @@ async fn call_shared_object_contract() {
     let transaction = test_cluster
         .test_transaction_builder()
         .await
-        .move_call(
-            package_id,
-            "counter",
-            "increment",
-            vec![CallArg::Object(counter_object_arg_imm)],
-        )
+        .move_call(package_id, "counter", "increment", vec![CallArg::Object(
+            counter_object_arg_imm,
+        )])
         .build();
     let effects = test_cluster
         .wallet
@@ -678,4 +668,133 @@ async fn replay_shared_object_transaction() {
 
         version = Some(curr);
     }
+}
+
+/// Test that when disable_preconsensus_locking is enabled, conflicting owned object transactions
+/// are handled correctly through post-consensus conflict detection.
+/// The first transaction in consensus order should succeed, and the second should be
+/// dropped with DroppedInvalidOwnedInputs status (not "object locked until next epoch").
+#[sim_test]
+async fn test_disable_preconsensus_locking_conflicting_owned_transactions() {
+    // Enable disable_preconsensus_locking to route all transactions through consensus
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(true);
+        config
+    });
+
+    // Create cluster with multiple gas coins for the sender
+    let test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![AccountConfig {
+            address: None,
+            gas_amounts: vec![DEFAULT_GAS_AMOUNT; 3], // 3 gas coins
+        }])
+        .build()
+        .await;
+
+    let accounts_and_gas = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+    let sender = accounts_and_gas[0].0;
+    let mut gas_coins: Vec<_> = accounts_and_gas[0].1.clone();
+
+    // The coin we'll try to double-spend (use for both transactions)
+    let contested_coin = gas_coins.pop().unwrap();
+    let gas_coin_1 = gas_coins.pop().unwrap();
+    let gas_coin_2 = gas_coins.pop().unwrap();
+
+    let rgp = test_cluster.get_reference_gas_price().await;
+
+    // Create two recipients
+    let recipient1 = get_key_pair::<sui_types::crypto::AccountKeyPair>().0;
+    let recipient2 = get_key_pair::<sui_types::crypto::AccountKeyPair>().0;
+
+    info!(
+        "Creating two conflicting transactions for coin {:?}",
+        contested_coin.0
+    );
+
+    // Transaction 1: Transfer contested_coin to recipient1
+    let tx1 = TestTransactionBuilder::new(sender, gas_coin_1, rgp)
+        .transfer(
+            sui_types::base_types::FullObjectRef::from_fastpath_ref(contested_coin),
+            recipient1,
+        )
+        .build();
+    let signed_tx1 = test_cluster.wallet.sign_transaction(&tx1).await;
+
+    // Transaction 2: Transfer the SAME contested_coin to recipient2
+    let tx2 = TestTransactionBuilder::new(sender, gas_coin_2, rgp)
+        .transfer(
+            sui_types::base_types::FullObjectRef::from_fastpath_ref(contested_coin),
+            recipient2,
+        )
+        .build();
+    let signed_tx2 = test_cluster.wallet.sign_transaction(&tx2).await;
+
+    info!(
+        "Submitting conflicting transactions: tx1={:?}, tx2={:?}",
+        signed_tx1.digest(),
+        signed_tx2.digest()
+    );
+
+    // Submit both transactions concurrently using execute_transaction_may_fail
+    // since one is expected to fail due to conflicting owned object inputs
+    let (result1, result2) = join!(
+        test_cluster
+            .wallet
+            .execute_transaction_may_fail(signed_tx1.clone()),
+        test_cluster
+            .wallet
+            .execute_transaction_may_fail(signed_tx2.clone()),
+    );
+
+    info!("tx1 result: {:?}", result1.as_ref().map(|r| r.status_ok()));
+    info!("tx2 result: {:?}", result2.as_ref().map(|r| r.status_ok()));
+
+    // Count successes and failures
+    let tx1_success = result1
+        .as_ref()
+        .is_ok_and(|r| r.status_ok().unwrap_or(false));
+    let tx2_success = result2
+        .as_ref()
+        .is_ok_and(|r| r.status_ok().unwrap_or(false));
+    let tx1_rejected = result1.is_err();
+    let tx2_rejected = result2.is_err();
+
+    info!(
+        "tx1_success: {}, tx1_rejected: {}, tx2_success: {}, tx2_rejected: {}",
+        tx1_success, tx1_rejected, tx2_success, tx2_rejected
+    );
+
+    // Exactly one should succeed (the one that gets ordered first in consensus)
+    assert!(
+        tx1_success || tx2_success,
+        "At least one transaction should succeed"
+    );
+
+    // Exactly one should be rejected
+    assert!(
+        tx1_rejected || tx2_rejected,
+        "At least one transaction should be rejected"
+    );
+
+    // The critical assertion: the rejection error should be about
+    // "not available for consumption" (ObjectVersionUnavailableForConsumption),
+    // NOT "object locked until next epoch" (ObjectLockConflict).
+    let rejected_error = if tx1_rejected {
+        result1.unwrap_err().to_string()
+    } else {
+        result2.unwrap_err().to_string()
+    };
+
+    info!("Rejected transaction error: {}", rejected_error);
+
+    // Verify it's the right error type - ObjectVersionUnavailableForConsumption
+    assert!(
+        rejected_error.contains("not available for consumption"),
+        "Expected 'not available for consumption' error, got: {}",
+        rejected_error
+    );
 }

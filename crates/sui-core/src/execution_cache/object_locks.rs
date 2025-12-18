@@ -242,7 +242,7 @@ impl ObjectLocks {
             }
         }
 
-        // TODO(disable_fastpath): Quarantine this code path when disable_fastpath is enabled.
+        // TODO(disable_preconsensus_locking): Quarantine this code path when disable_preconsensus_locking is enabled.
         // commit all writes to DB
         epoch_store
             .tables()?
@@ -255,7 +255,7 @@ impl ObjectLocks {
     }
 
     /// Validates owned object versions and digests without acquiring locks.
-    /// Used when disable_fastpath is enabled to validate objects before signing,
+    /// Used when disable_preconsensus_locking is enabled to validate objects before signing,
     /// since actual locking happens post-consensus in that mode.
     #[instrument(level = "debug", skip_all)]
     pub(crate) fn validate_owned_object_versions(
