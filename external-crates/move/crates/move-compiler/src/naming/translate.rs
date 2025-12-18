@@ -2099,7 +2099,7 @@ fn explicit_use_fun(
         }
     };
     let tn_ = tn_opt?;
-    let tn = sp(ty.loc, tn_.into());
+    let tn = sp(ty.loc, tn_);
     let target_function = m_f_opt?;
     let use_fun = N::UseFun {
         doc,

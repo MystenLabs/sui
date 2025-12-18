@@ -822,7 +822,7 @@ impl TypeName_ {
     pub fn datatype_name(&self) -> Option<(ModuleIdent, DatatypeName)> {
         match self {
             TypeName_::Builtin(_) | TypeName_::Multiple(_) => None,
-            TypeName_::ModuleType(mident, n) => Some((mident.as_ref().clone(), *n)),
+            TypeName_::ModuleType(mident, n) => Some((*mident.as_ref(), *n)),
         }
     }
 }
@@ -1087,8 +1087,8 @@ impl Clone for TypeName_ {
         use TypeName_::*;
         match self {
             Multiple(n) => Multiple(*n),
-            Builtin(b) => Builtin(b.clone()),
-            ModuleType(m, n) => ModuleType(Arc::clone(m), n.clone()),
+            Builtin(b) => Builtin(*b),
+            ModuleType(m, n) => ModuleType(Arc::clone(m), *n),
         }
     }
 }

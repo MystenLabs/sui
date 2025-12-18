@@ -152,10 +152,10 @@ fn all_uid_holders(
                     .map(|(t, _is_phantom)| visit_ty(info, visited, uid_holders, t))
                     .fold(None, merge_uid_holder_opt);
                 let tn_holder = if let N::TypeName_::ModuleType(m, n) = &tn.value {
-                    visit_decl(info, visited, uid_holders, m.as_ref().clone(), *n);
+                    visit_decl(info, visited, uid_holders, *m.as_ref(), *n);
                     uid_holders
-                        .get(&m)
-                        .and_then(|m_uid_holders| m_uid_holders.get(&n).copied())
+                        .get(m)
+                        .and_then(|m_uid_holders| m_uid_holders.get(n).copied())
                 } else {
                     None
                 };
