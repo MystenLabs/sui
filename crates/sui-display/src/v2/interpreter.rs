@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::borrow::Cow;
+use std::mem;
 use std::sync::Arc;
 
+use dashmap::DashMap;
+use dashmap::mapref::entry::Entry;
 use futures::future::OptionFuture;
 use futures::future::join_all;
 use futures::join;
@@ -20,20 +23,31 @@ use crate::v2::value as V;
 use crate::v2::visitor::extractor::Extractor;
 
 /// The interpreter is responsible for evaluating expressions inside format strings into values.
-pub(crate) struct Interpreter<'s, S: V::Store<'s>> {
-    root: V::Slice<'s>,
+pub(crate) struct Interpreter<S: V::Store> {
     store: S,
+
+    /// Cache of the objects that have been fetched so far. This cache is never evicted -- it is
+    /// used to keep objects alive for the lifetime of the interpreter.
+    cache: DashMap<AccountAddress, Option<Arc<V::OwnedSlice>>>,
+
+    root: V::OwnedSlice,
 }
 
-impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
-    pub(crate) fn new(root: V::Slice<'s>, store: S) -> Self {
-        Self { root, store }
+impl<S: V::Store> Interpreter<S> {
+    /// Create a new interpreter instance. `root` is its contents (bytes and layout). `store` is
+    /// used to fetch additional objects as needed.
+    pub(crate) fn new(root: V::OwnedSlice, store: S) -> Self {
+        Self {
+            store,
+            cache: DashMap::new(),
+            root,
+        }
     }
 
     /// Entrypoint to evaluate a single format string, represented as a sequence of its strands.
     /// Returns evaluated strands that can then be formatted.
-    pub(crate) async fn eval_strands(
-        &self,
+    pub(crate) async fn eval_strands<'s>(
+        &'s self,
         strands: &'s [P::Strand<'s>],
     ) -> Result<Option<Vec<V::Strand<'s>>>, FormatError> {
         join_all(strands.iter().map(|strand| async move {
@@ -65,8 +79,8 @@ impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
     ///
     /// Returns the result from the first chain that produces a value, or `Ok(None)` if none do.
     /// Propagates any errors encountered during evaluation.
-    async fn eval_alts(
-        &self,
+    async fn eval_alts<'s>(
+        &'s self,
         alts: &'s [P::Chain<'s>],
     ) -> Result<Option<V::Value<'s>>, FormatError> {
         for chain in alts {
@@ -88,8 +102,8 @@ impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
     /// describing exists.
     ///
     /// Any errors encountered during evaluation are propagated.
-    async fn eval_chain(
-        &self,
+    pub(crate) async fn eval_chain<'s>(
+        &'s self,
         chain: &'s P::Chain<'s>,
     ) -> Result<Option<V::Value<'s>>, FormatError> {
         use V::Accessor as A;
@@ -111,7 +125,7 @@ impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
             Some(Err(e)) => return Err(e),
 
             // If a root was not provided, the object being displayed is the root.
-            None => VV::Slice(self.root),
+            None => VV::Slice(self.root.as_slice()),
         };
 
         let Some(mut accessors) = accessors
@@ -129,16 +143,11 @@ impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
                     let type_ = i.type_();
                     let df_id = derive_dynamic_field_id(a, &type_, &bytes)?;
 
-                    let Some(field) = self
-                        .store
-                        .object(df_id.into())
-                        .await
-                        .map_err(|e| FormatError::Store(Arc::new(e)))?
-                    else {
+                    let Some(slice) = self.object(df_id.into()).await? else {
                         return Ok(None);
                     };
 
-                    let field = match FieldVisitor::deserialize(field.bytes, field.layout) {
+                    let field = match FieldVisitor::deserialize(slice.bytes, slice.layout) {
                         Ok(f) => f,
                         Err(DFV::Error::Visitor(e)) => return Err(FormatError::Visitor(e)),
                         Err(_) => return Ok(None),
@@ -160,16 +169,11 @@ impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
                     let type_ = DynamicFieldInfo::dynamic_object_field_wrapper(i.type_()).into();
                     let df_id = derive_dynamic_field_id(a, &type_, &bytes)?;
 
-                    let Some(field) = self
-                        .store
-                        .object(df_id.into())
-                        .await
-                        .map_err(|e| FormatError::Store(Arc::new(e)))?
-                    else {
+                    let Some(slice) = self.object(df_id.into()).await? else {
                         return Ok(None);
                     };
 
-                    let field = match FieldVisitor::deserialize(field.bytes, field.layout) {
+                    let field = match FieldVisitor::deserialize(slice.bytes, slice.layout) {
                         Ok(f) => f,
                         Err(DFV::Error::Visitor(e)) => return Err(FormatError::Visitor(e)),
                         Err(_) => return Ok(None),
@@ -183,17 +187,12 @@ impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
                         return Ok(None);
                     };
 
-                    let Some(slice) = self
-                        .store
-                        .object(id)
-                        .await
-                        .map_err(|e| FormatError::Store(Arc::new(e)))?
-                    else {
+                    let Some(value_slice) = self.object(id).await? else {
                         return Ok(None);
                     };
 
                     accessors.pop();
-                    root = VV::Slice(slice);
+                    root = VV::Slice(value_slice);
                 }
 
                 // Fetch a single byte from a byte array, as long as the accessor evaluates to a
@@ -274,8 +273,8 @@ impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
     ///
     /// Returns `Ok(Some(value))` if the accessor evaluates to a value, otherwise it propagates
     /// errors or `None` values.
-    async fn eval_accessor(
-        &self,
+    async fn eval_accessor<'s>(
+        &'s self,
         acc: &'s P::Accessor<'s>,
     ) -> Result<Option<V::Accessor<'s>>, FormatError> {
         use P::Accessor as PA;
@@ -294,8 +293,8 @@ impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
     ///
     /// Returns `Ok(Some(value))` if all parts of the literal evaluate to `Ok(Some(value))`,
     /// otherwise it propagates errors or `None` values.
-    async fn eval_literal(
-        &self,
+    async fn eval_literal<'s>(
+        &'s self,
         lit: &'s P::Literal<'s>,
     ) -> Result<Option<V::Value<'s>>, FormatError> {
         use P::Literal as L;
@@ -368,8 +367,8 @@ impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
     ///
     /// Returns `Ok(Some(fields))` if all the field values evaluate to `Ok(Some(value))`, otherwise
     /// it propagates errors or `None` values.
-    async fn eval_fields(
-        &self,
+    async fn eval_fields<'s>(
+        &'s self,
         field: &'s P::Fields<'s>,
     ) -> Result<Option<V::Fields<'s>>, FormatError> {
         Ok(match field {
@@ -385,8 +384,8 @@ impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
     ///
     /// If all chains evaluate to `Ok(Some(value))`, returns `Some(vec![value, ...])`, otherwise it
     /// propagates errors or `None` values.
-    async fn eval_chains(
-        &self,
+    async fn eval_chains<'s>(
+        &'s self,
         chains: impl IntoIterator<Item = &'s P::Chain<'s>>,
     ) -> Result<Option<Vec<V::Value<'s>>>, FormatError> {
         let values = chains
@@ -394,5 +393,35 @@ impl<'s, S: V::Store<'s>> Interpreter<'s, S> {
             .map(|chain| Box::pin(self.eval_chain(chain)));
 
         join_all(values).await.into_iter().collect()
+    }
+
+    /// Fetch an object from the store, caching the result.
+    ///
+    /// Returns a `Slice<'s>` that borrows from the cached data. The returned slice is guaranteed
+    /// to remain valid for the lifetime 's because the cache (and the Arc it contains) lives for
+    /// the entire lifetime of the Interpreter.
+    async fn object<'s>(&'s self, id: AccountAddress) -> Result<Option<V::Slice<'s>>, FormatError> {
+        let entry = match self.cache.entry(id) {
+            Entry::Occupied(entry) => entry,
+            Entry::Vacant(entry) => entry.insert_entry(
+                self.store
+                    .object(id)
+                    .await
+                    .map_err(|e| FormatError::Store(Arc::new(e)))?
+                    .map(Arc::new),
+            ),
+        };
+
+        let Some(owned) = entry.get().as_ref() else {
+            return Ok(None);
+        };
+
+        // SAFETY: Extending the lifetime of the slice from the reference (local to this
+        // scope), to the lifetime of the interpreter.  This is safe because the reference is
+        // pointing into an Arc that is owned by the interpreter.
+        let slice = owned.as_slice();
+        Ok(Some(unsafe {
+            mem::transmute::<V::Slice<'_>, V::Slice<'s>>(slice)
+        }))
     }
 }
