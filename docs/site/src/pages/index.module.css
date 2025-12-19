@@ -8,7 +8,9 @@
   text-align: center;
   position: relative;
   overflow: hidden;
+  background-color: #001129;
 }
+
 .heroText {
   display: flex;
   flex-direction: column;
@@ -20,9 +22,9 @@
 }
 
 .card, .cardCTA {
-  background-color: rgba(247, 247, 248, .05);
+  background-color: rgba(23, 89, 196, 0.15);
   border: 1px solid;
-  border-color: var(--sui-line);
+  border-color: rgba(143, 203, 255, 0.3);
   display: flex;
   flex-direction: column;
   padding: 1.25rem;
@@ -30,6 +32,7 @@
   border-radius: 30px;
   height: 16rem;
 }
+
 .cardCTA {
   height: 100%;
   justify-content: center;
@@ -44,16 +47,17 @@
 .cardLink {
   display: flex;
   justify-content: flex-start;
-  border-top: solid 1px var(--sui-line);
-  border-bottom: solid 1px var(--sui-line);
+  border-top: solid 1px rgba(143, 203, 255, 0.2);
+  border-bottom: solid 1px rgba(143, 203, 255, 0.2);
   padding: .5rem 0;
-  color: var(--sui-white);
+  color: #ffffff;
   position: relative;
 }
 
 .cardLink:first-child {
   border-top: none;
 }
+
 .cardLink:last-child {
   border-bottom: none;
 }
@@ -61,16 +65,18 @@
 .cardLink:after {
   position: absolute;
   right: 0;
-  content: url("data:image/svg+xml,%3Csvg width='18' height='19' viewBox='0 0 18 19' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 5.5H14V14.5' stroke='%23ABBDCC' stroke-width='2'/%3E%3Cpath d='M14 5.5L3 16.5' stroke='%23ABBDCC' stroke-width='2'/%3E%3C/svg%3E");
+  content: url("data:image/svg+xml,%3Csvg width='18' height='19' viewBox='0 0 18 19' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 5.5H14V14.5' stroke='%238FCBFF' stroke-width='2'/%3E%3Cpath d='M14 5.5L3 16.5' stroke='%238FCBFF' stroke-width='2'/%3E%3C/svg%3E");
   width: 18px;
   height: 18px;
-}
-.cardLink:after:hover svg path {
-  stroke: var(--sui-primary);
 }
 
 .cardLink:hover {
   text-decoration: none;
+  color: #DDF2FF;
+}
+
+.cardLink:hover:after {
+  content: url("data:image/svg+xml,%3Csvg width='18' height='19' viewBox='0 0 18 19' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 5.5H14V14.5' stroke='%23DDF2FF' stroke-width='2'/%3E%3Cpath d='M14 5.5L3 16.5' stroke='%23DDF2FF' stroke-width='2'/%3E%3C/svg%3E");
 }
 
 .cardCTALink {
@@ -80,6 +86,7 @@
   height: 100%;
   justify-content: center;
   align-items: center;
+  color: #ffffff;
 }
 
 .buttons {
@@ -97,7 +104,8 @@
 }
 
 .cardB {
-  background-color: rgba(247, 247, 248, .05);
+  background-color: rgba(23, 89, 196, 0.15);
+  border: 1px solid rgba(143, 203, 255, 0.3);
   padding: 1.7rem;
   font-family: var(--headerFont);
   font-size: 1.5rem;
@@ -105,16 +113,22 @@
   line-height: 1.75rem;
   letter-spacing: -0.04em;
   text-align: left;
-  color: var(--sui-white);
+  color: #ffffff;
   border-radius: 36px;
   display: flex;
   flex-direction: column;
   row-gap: 1.5rem;
 }
+
 .cardB svg {
   width: 32px;
   height: 32px;
 }
+
+.cardB svg path {
+  fill: #8FCBFF;
+}
+
 .cardB span {
   max-width: 19rem;
 }
@@ -152,7 +166,7 @@
   flex-direction: row;
   justify-content: flex-start;
   padding: 2.5rem 0;
-  border-bottom: solid 1px var(--sui-line);
+  border-bottom: solid 1px rgba(143, 203, 255, 0.2);
 }
 
 .TwoColItem:last-child {
@@ -161,19 +175,18 @@
 
 .TwoColItem span {
   flex: 4;
-  color: var(--sui-white);
+  color: #ffffff;
   font-family: var(--headerFont);
   font-size: 2rem;
   font-weight: 400;
   line-height: 2.125rem;
   letter-spacing: -0.04em;
   text-align: left;
-
 }
 
 .TwoColItem p {
   flex: 8;
-  color: var(--sui-gray);
+  color: #DDF2FF;
   font-family: Inter;
   font-size: 1.125rem;
   font-weight: 500;
@@ -182,7 +195,6 @@
   text-align: left;
   margin: 0;
 }
-
 
 @media screen and (max-width: 996px) {
   .sectionHeader {
