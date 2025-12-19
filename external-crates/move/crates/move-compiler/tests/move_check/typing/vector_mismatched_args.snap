@@ -8,11 +8,11 @@ info:
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/vector_mismatched_args.move:7:9
   │
-7 │         vector[0, false];
-  │         ^^^^^^^^^^^^^^^^
-  │         │      │  │
-  │         │      │  Found: 'bool'. It is not compatible with the other type.
-  │         │      Found: integer. It is not compatible with the other type.
+7 │         vector[0u64, false];
+  │         ^^^^^^^^^^^^^^^^^^^
+  │         │      │     │
+  │         │      │     Found: 'bool'. It is not compatible with the other type.
+  │         │      Found: 'u64'. It is not compatible with the other type.
   │         Invalid 'vector' instantiation. Incompatible argument
 
 error[E04007]: incompatible types
@@ -28,11 +28,11 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/vector_mismatched_args.move:9:9
   │
-9 │         vector[0, @0];
-  │         ^^^^^^^^^^^^^
-  │         │      │  │
-  │         │      │  Found: 'address'. It is not compatible with the other type.
-  │         │      Found: integer. It is not compatible with the other type.
+9 │         vector[0u64, @0];
+  │         ^^^^^^^^^^^^^^^^
+  │         │      │     │
+  │         │      │     Found: 'address'. It is not compatible with the other type.
+  │         │      Found: 'u64'. It is not compatible with the other type.
   │         Invalid 'vector' instantiation. Incompatible argument
 
 error[E04007]: incompatible types
@@ -48,9 +48,9 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/vector_mismatched_args.move:11:9
    │
-11 │         vector[&0, &false];
-   │         ^^^^^^^^^^^^^^^^^^
-   │         │       │   │
-   │         │       │   Found: 'bool'. It is not compatible with the other type.
-   │         │       Found: integer. It is not compatible with the other type.
+11 │         vector[&0u64, &false];
+   │         ^^^^^^^^^^^^^^^^^^^^^
+   │         │       │      │
+   │         │       │      Found: 'bool'. It is not compatible with the other type.
+   │         │       Found: 'u64'. It is not compatible with the other type.
    │         Invalid 'vector' instantiation. Incompatible argument

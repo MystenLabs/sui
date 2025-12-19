@@ -12,14 +12,14 @@ module 0x42::M {
         if (cond) bar() + 1;
         // (if (cond) bar()) + 1;
         // so error about wrong argument to +
-        if (cond) { foo() } + 1;
+        if (cond) { foo() } + 1u64;
 
         // while (cond) (bar() + 1);
         // so error about invalid loop body type
         while (cond) bar() + 2;
         // (while (cond) foo()) + 2
         // so error about wrong argument to +
-        while (cond) { foo() } + 2;
+        while (cond) { foo() } + 2u64;
 
         // loop (bar() + 1);
         // so error about invalid loop body type

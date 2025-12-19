@@ -10,7 +10,7 @@ module 0x42::m {
         match (abc) {
             ABC::C(x) => x,
             ABC::A(x) => x,
-            ABC::B => 1,
+            ABC::B => 1u64,
         }
     }
 

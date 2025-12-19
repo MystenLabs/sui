@@ -1,6 +1,6 @@
 module 0x8675309::M {
     fun t1() {
-        let a = 0;
+        let a = 0u64;
         let r1 = &mut a;
         let r2 = &mut a;
         *r2 = 2;

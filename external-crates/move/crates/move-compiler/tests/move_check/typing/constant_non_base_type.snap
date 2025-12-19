@@ -23,8 +23,8 @@ error[E04013]: invalid statement or expression in constant
 error[E04006]: invalid subtype
   ┌─ tests/move_check/typing/constant_non_base_type.move:4:15
   │
-4 │     const C2: &mut u64 = &0;
-  │               ^^^^^^^^   -- Given: '&{integer}'
+4 │     const C2: &mut u64 = &0u64;
+  │               ^^^^^^^^   ----- Given: '&u64'
   │               │           
   │               Invalid constant signature
   │               Expected: '&mut u64'
@@ -32,7 +32,7 @@ error[E04006]: invalid subtype
 error[E04012]: invalid type for constant
   ┌─ tests/move_check/typing/constant_non_base_type.move:4:15
   │
-4 │     const C2: &mut u64 = &0;
+4 │     const C2: &mut u64 = &0u64;
   │               ^^^^^^^^
   │               │
   │               Unpermitted constant type
@@ -41,8 +41,8 @@ error[E04012]: invalid type for constant
 error[E04013]: invalid statement or expression in constant
   ┌─ tests/move_check/typing/constant_non_base_type.move:4:26
   │
-4 │     const C2: &mut u64 = &0;
-  │                          ^^ References (and reference operations) are not supported in constants
+4 │     const C2: &mut u64 = &0u64;
+  │                          ^^^^^ References (and reference operations) are not supported in constants
 
 error[E04012]: invalid type for constant
   ┌─ tests/move_check/typing/constant_non_base_type.move:5:15

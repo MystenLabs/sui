@@ -36,35 +36,35 @@ fun simple_all_functions() {
     let counter3 = new(&mut scenario);
     let id3 = object::id(&counter3);
     // add fields
-    add(&mut id, 0, counter1);
+    add(&mut id, 0u64, counter1);
     add(&mut id, b"", counter2);
     add(&mut id, false, counter3);
     // check they exist
-    assert!(exists_(&id, 0));
+    assert!(exists_(&id, 0u64));
     assert!(exists_(&id, b""));
     assert!(exists_(&id, false));
     // check the IDs
-    assert!(field_id(&id, 0).borrow() == &id1);
+    assert!(field_id(&id, 0u64).borrow() == &id1);
     assert!(field_id(&id, b"").borrow() == &id2);
     assert!(field_id(&id, false).borrow() == &id3);
     // check the values
-    assert!(count(borrow(&id, 0)) == 0);
+    assert!(count(borrow(&id, 0u64)) == 0);
     assert!(count(borrow(&id, b"")) == 0);
     assert!(count(borrow(&id, false)) == 0);
     // mutate them
-    bump(borrow_mut(&mut id, 0));
+    bump(borrow_mut(&mut id, 0u64));
     bump(bump(borrow_mut(&mut id, b"")));
     bump(bump(bump(borrow_mut(&mut id, false))));
     // check the new value
-    assert!(count(borrow(&id, 0)) == 1);
+    assert!(count(borrow(&id, 0u64)) == 1);
     assert!(count(borrow(&id, b"")) == 2);
     assert!(count(borrow(&id, false)) == 3);
     // remove the value and check it
-    assert!(destroy(remove(&mut id, 0)) == 1);
+    assert!(destroy(remove(&mut id, 0u64)) == 1);
     assert!(destroy(remove(&mut id, b"")) == 2);
     assert!(destroy(remove(&mut id, false)) == 3);
     // verify that they are not there
-    assert!(!exists_(&id, 0));
+    assert!(!exists_(&id, 0u64));
     assert!(!exists_(&id, b""));
     assert!(!exists_(&id, false));
     scenario.end();
@@ -109,7 +109,7 @@ fun borrow_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    add(&mut id, 0, new(&mut scenario));
+    add(&mut id, 0u64, new(&mut scenario));
     borrow<u64, Fake>(&id, 0);
     abort 42
 }
@@ -130,7 +130,7 @@ fun borrow_mut_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    add(&mut id, 0, new(&mut scenario));
+    add(&mut id, 0u64, new(&mut scenario));
     borrow_mut<u64, Fake>(&mut id, 0);
     abort 42
 }
@@ -151,7 +151,7 @@ fun remove_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    add(&mut id, 0, new(&mut scenario));
+    add(&mut id, 0u64, new(&mut scenario));
     let Fake { id } = remove<u64, Fake>(&mut id, 0);
     id.delete();
     abort 42
@@ -163,7 +163,7 @@ fun sanity_check_exists() {
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     assert!(!exists_<u64>(&id, 0));
-    add(&mut id, 0, new(&mut scenario));
+    add(&mut id, 0u64, new(&mut scenario));
     assert!(exists_<u64>(&id, 0));
     assert!(!exists_<u8>(&id, 0));
     scenario.end();
@@ -177,7 +177,7 @@ fun sanity_check_exists_with_type() {
     let mut id = scenario.new_object();
     assert!(!exists_with_type<u64, Counter>(&id, 0));
     assert!(!exists_with_type<u64, Fake>(&id, 0));
-    add(&mut id, 0, new(&mut scenario));
+    add(&mut id, 0u64, new(&mut scenario));
     assert!(exists_with_type<u64, Counter>(&id, 0));
     assert!(!exists_with_type<u8, Counter>(&id, 0));
     assert!(!exists_with_type<u8, Fake>(&id, 0));
@@ -191,7 +191,7 @@ fun delete_uid_with_fields() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    add(&mut id, 0, new(&mut scenario));
+    add(&mut id, 0u64, new(&mut scenario));
     assert!(exists_<u64>(&id, 0));
     scenario.end();
     id.delete();
@@ -204,16 +204,16 @@ fun transfer_object() {
     let mut scenario = test_scenario::begin(sender);
     let mut id1 = scenario.new_object();
     let mut id2 = scenario.new_object();
-    add(&mut id1, 0, new(&mut scenario));
+    add(&mut id1, 0u64, new(&mut scenario));
     assert!(exists_<u64>(&id1, 0));
     assert!(!exists_<u64>(&id2, 0));
-    bump(borrow_mut(&mut id1, 0));
-    let c: Counter = remove(&mut id1, 0);
-    add(&mut id2, 0, c);
+    bump(borrow_mut(&mut id1, 0u64));
+    let c: Counter = remove(&mut id1, 0u64);
+    add(&mut id2, 0u64, c);
     assert!(!exists_<u64>(&id1, 0));
     assert!(exists_<u64>(&id2, 0));
-    bump(borrow_mut(&mut id2, 0));
-    assert!(count(borrow(&id2, 0)) == 2);
+    bump(borrow_mut(&mut id2, 0u64));
+    assert!(count(borrow(&id2, 0u64)) == 2);
     scenario.end();
     id1.delete();
     id2.delete();

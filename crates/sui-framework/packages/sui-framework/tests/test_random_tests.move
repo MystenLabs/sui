@@ -72,7 +72,7 @@ fun test_next_u8_in_range() {
     let tests = 10;
     while (i < bounds.length()) {
         let upper_bound = bounds[i];
-        let mut j = 0;
+        let mut j = 0u64;
         while (j < tests) {
             assert!(random.next_u8_in_range(upper_bound) < upper_bound);
             j = j + 1;
@@ -107,7 +107,7 @@ fun test_next_u16_in_range() {
         let mut j = 0;
         while (j < tests) {
             assert!(random.next_u16_in_range(upper_bound) < upper_bound);
-            j = j + 1;
+            j = j + 1u64;
         };
         i = i + 1;
     }
@@ -139,7 +139,7 @@ fun test_next_u32_in_range() {
         let mut j = 0;
         while (j < tests) {
             assert!(random.next_u32_in_range(upper_bound) < upper_bound);
-            j = j + 1;
+            j = j + 1u64;
         };
         i = i + 1;
     }
@@ -171,7 +171,7 @@ fun test_next_u64_in_range() {
         let mut j = 0;
         while (j < tests) {
             assert!(random.next_u64_in_range(upper_bound) < upper_bound);
-            j = j + 1;
+            j = j + 1u64;
         };
         i = i + 1;
     }
@@ -203,7 +203,7 @@ fun test_next_u128_in_range() {
         let mut j = 0;
         while (j < tests) {
             assert!(random.next_u128_in_range(upper_bound) < upper_bound);
-            j = j + 1;
+            j = j + 1u64;
         };
         i = i + 1;
     }
@@ -259,7 +259,7 @@ fun test_next_u256_in_range() {
         let mut j = 0;
         while (j < tests) {
             assert!(random.next_u256_in_range(upper_bound) < upper_bound);
-            j = j + 1;
+            j = j + 1u64;
         };
         i = i + 1;
     }

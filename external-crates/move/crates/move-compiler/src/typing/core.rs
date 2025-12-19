@@ -2396,30 +2396,50 @@ pub fn solve_constraints(context: &mut Context) {
         match constraint {
             VarConstraint::Num(loc) => {
                 let tvar = sp(loc, TI::Var(var).into());
-                let ty_ = unfold_type(&subst, &tvar).value;
-                match ty_.inner() {
-                    TI::UnresolvedError | TI::Anything => {
-                        let next_subst =
-                            join(&mut context.tvar_counter, subst, &Type_::u64(loc), &tvar)
-                                .unwrap()
-                                .0;
-                        subst = next_subst;
-                    }
-                    _ => (),
+                let unfolded_ty_ = unfold_type(&subst, &tvar).value;
+                let ti = unfolded_ty_.inner();
+                // Check if we never resolved the type, and emit a warning
+                if matches!(ti, TI::Anything) {
+                    let msg = "Could not determine a concrete type for this numeric \
+                                       literal, so defaulting to 'u64'";
+                    let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
+                    diag.add_note(
+                        "To avoid this warning, add an explicit type annotation, \
+                                           e.g., '<num>u64'",
+                    );
+                    context.add_diag(diag);
+                }
+                // If type is still unresolved, default to u64
+                if matches!(ti, TI::UnresolvedError | TI::Anything) {
+                    let next_subst =
+                        join(&mut context.tvar_counter, subst, &Type_::u64(loc), &tvar)
+                            .unwrap()
+                            .0;
+                    subst = next_subst;
                 }
             }
             VarConstraint::String(loc) => {
                 let tvar = sp(loc, TI::Var(var).into());
-                let ty_ = unfold_type(&subst, &tvar).value;
-                match ty_.inner() {
-                    TI::UnresolvedError | TI::Anything => {
-                        let ty = Type_::vector(loc, Type_::u8(loc));
-                        let next_subst = join(&mut context.tvar_counter, subst, &ty, &tvar)
-                            .unwrap()
-                            .0;
-                        subst = next_subst;
-                    }
-                    _ => (),
+                let unfolded_ty_ = unfold_type(&subst, &tvar).value;
+                let ti = unfolded_ty_.inner();
+                // Check if we never resolved the type, and emit a warning
+                if matches!(ti, TI::Anything) {
+                    let msg = "Could not determine a concrete type for this string \
+                                       literal, so defaulting to 'vector<u8>'";
+                    let mut diag = diag!(TypeSafety::MissingLiteralType, (loc, msg));
+                    diag.add_note(
+                        "To avoid this warning, add an explicit annotation, \
+                                       e.g., 'b\"<const>\"'",
+                    );
+                    context.add_diag(diag);
+                }
+                // If type is still unresolved, default to vector<u8>
+                if matches!(ti, TI::UnresolvedError | TI::Anything) {
+                    let ty = Type_::vector(loc, Type_::u8(loc));
+                    let next_subst = join(&mut context.tvar_counter, subst, &ty, &tvar)
+                        .unwrap()
+                        .0;
+                    subst = next_subst;
                 }
             }
             VarConstraint::Divergent(loc) => {

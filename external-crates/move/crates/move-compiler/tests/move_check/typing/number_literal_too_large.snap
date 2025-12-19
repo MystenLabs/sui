@@ -5,15 +5,11 @@ info:
   edition: legacy
   lint: false
 ---
-error[E04021]: invalid number after type inference
+error[E01006]: invalid number literal
   ┌─ tests/move_check/typing/number_literal_too_large.move:3:9
   │
-3 │         340282366920938463463374607431768211455;
-  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  │         │
-  │         Invalid numerical literal
-  │         Annotating the literal might help inference: '340282366920938463463374607431768211455u128'
-  │         Expected a literal of type 'u64', but the value is too large.
+3 │         340282366920938463463374607431768211455u64;
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'u64'
 
 error[E04021]: invalid number after type inference
   ┌─ tests/move_check/typing/number_literal_too_large.move:5:10
@@ -87,12 +83,8 @@ error[E04021]: invalid number after type inference
    │          Invalid numerical literal
    │          Annotating the literal might help inference: '3402534025534025u64'
 
-error[E04021]: invalid number after type inference
+error[E01006]: invalid number literal
    ┌─ tests/move_check/typing/number_literal_too_large.move:24:9
    │
-24 │         340282366920938463463374607431768211455607431768211455;
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │         │
-   │         Invalid numerical literal
-   │         Annotating the literal might help inference: '340282366920938463463374607431768211455607431768211455u256'
-   │         Expected a literal of type 'u64', but the value is too large.
+24 │         340282366920938463463374607431768211455607431768211455u64;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid number literal. The given literal is too large to fit into 'u64'

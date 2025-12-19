@@ -34,8 +34,8 @@ module test::m {
             wrapped: wrapped(ctx),
             many: vector[wrapped(ctx), wrapped(ctx)],
         };
-        field::add(&mut s.id, KEY, 0);
-        field::add(&mut s.other, KEY, 0);
+        field::add(&mut s.id, KEY, 0u64);
+        field::add(&mut s.other, KEY, 0u64);
         s
     }
 
@@ -44,8 +44,8 @@ module test::m {
             id: object::new(ctx),
             other: object::new(ctx),
         };
-        field::add(&mut w.id, KEY, 0);
-        field::add(&mut w.other, KEY, 0);
+        field::add(&mut w.id, KEY, 0u64);
+        field::add(&mut w.other, KEY, 0u64);
         w
     }
 

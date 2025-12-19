@@ -14,7 +14,7 @@ module 0x42::m {
 
     public fun t2(): u64 {
         let o: Option<u64> = Option::None;
-        let _y = &10;
+        let _y = &10u64;
         match (o) {
             Option::Some(n) if (_y == 5) => n,
             Option::None => 1,

@@ -6,14 +6,14 @@ module 0x8675309::M {
     struct G<T> has drop { f: T }
 
     fun t0(r: &R, r_mut: &mut R, s: S, s_ref: &S, s_mut: &mut S) {
-        (0 == 1: bool);
+        (0 == 1u64: bool);
         (0 == (1: u8): bool);
         ((0: u8) == 1: bool);
         (0 == (1: u128): bool);
         ((0: u128) == 1: bool);
-        (&0 == &1: bool);
+        (&0u64 == &1: bool);
         (true == false: bool);
-        (0x0 == 0x1: bool);
+        (0x0 == 0x1u64: bool);
         (&s == s_ref: bool);
         (&mut s == s_ref: bool);
         (&mut s == s_mut: bool);

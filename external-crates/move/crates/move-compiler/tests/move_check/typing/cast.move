@@ -1,8 +1,8 @@
 module 0x8675309::M {
     fun t0(x8: u8, x64: u64, x128: u128) {
-        let _: u8 = (0 as u8);
-        let _: u64 = (0 as u64);
-        let _: u128 = (0 as u128);
+        let _: u8 = (0u64 as u8);
+        let _: u64 = (0u64 as u64);
+        let _: u128 = (0u64 as u128);
 
         let _: u8 = (x8 as u8);
         let _: u64 = (x64 as u64);

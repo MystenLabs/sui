@@ -7,7 +7,7 @@ module a::m {
 
     public fun t1() {
         if (true) true else true;
-        if (foo()) 0 else 0;
+        if (foo()) 0u64 else 0;
         if (!foo()) b"" else x"";
     }
 

@@ -35,6 +35,6 @@ module 0x42::M {
 
         // Assign to a name that starts with A-Z
         // Should fail with unbound local even though it is not a valid local name
-        Y = 0;
+        Y = 0u64;
     }
 }

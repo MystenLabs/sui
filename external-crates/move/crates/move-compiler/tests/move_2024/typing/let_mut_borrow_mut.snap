@@ -17,7 +17,7 @@ error[E04024]: invalid usage of immutable variable
 error[E04024]: invalid usage of immutable variable
   ┌─ tests/move_2024/typing/let_mut_borrow_mut.move:8:13
   │
-4 │         let y = 0;
+4 │         let y = 0u64;
   │             - To use the variable mutably, it must be declared 'mut', e.g. 'mut y'
   ·
 8 │         foo(&mut y);

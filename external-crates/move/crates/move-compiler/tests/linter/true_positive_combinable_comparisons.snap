@@ -1112,16 +1112,16 @@ warning[Lint W01012]: comparison operations condition can be simplified
 warning[Lint W01012]: comparison operations condition can be simplified
     ┌─ tests/linter/true_positive_combinable_comparisons.move:150:26
     │
-150 │     const Values: bool = 5 > 3 || 5 == 3;
-    │                          ^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
+150 │     const Values: bool = 5 > 3u64 || 5 == 3u64;
+    │                          ^^^^^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>='
     │
     = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W01012]: comparison operations condition can be simplified
     ┌─ tests/linter/true_positive_combinable_comparisons.move:153:9
     │
-153 │         5 != 3 && 5 > 3
-    │         ^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>'
+153 │         5 != 3u64 && 5 > 3u64
+    │         ^^^^^^^^^^^^^^^^^^^^^ This comparison simplifies to the operation '>'
     │
     = This warning can be suppressed with '#[allow(lint(combinable_comparisons))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
