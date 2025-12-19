@@ -687,7 +687,6 @@ impl SuiValue {
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 SequenceNumber::from_u64(0)
             }
-            //obj.version(),
             Owner::Shared {
                 initial_shared_version,
             } => initial_shared_version,
