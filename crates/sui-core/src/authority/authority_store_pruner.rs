@@ -688,7 +688,7 @@ impl AuthorityStorePruner {
         }
         perpetual_db.objects.db.start_relocation()?;
         checkpoint_store.tables.watermarks.db.start_relocation()?;
-        Self::prune_executed_tx_digests_th(perpetual_db, checkpoint_store)?;
+        // Self::prune_executed_tx_digests_th(perpetual_db, checkpoint_store)?;
         Ok(())
     }
 
