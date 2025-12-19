@@ -1664,6 +1664,12 @@ pkg_b = { local = "../pkg_b" }"#,
     }
 
     #[test(tokio::test)]
+    /// ```mermaid
+    /// graph LR
+    ///     root -->|rename_from="a"| a
+    /// ```
+    ///
+    /// In this scenario, we make sure that a package cannot define a dependency with the same name as itself.
     async fn dependency_with_same_name_as_package() {
         let scenario = TestPackageGraph::new(["root", "a"])
             .add_dep("root", "a", |dep| dep.name("root").rename_from("a"))
@@ -1672,5 +1678,40 @@ pkg_b = { local = "../pkg_b" }"#,
         let root_err = scenario.root_package_err("root").await;
 
         assert_snapshot!(root_err, @r#"Error while loading dependency <ROOT>/root: You cannot have a dependency with the same name as the package. Rename the dependency, which will require adding `rename-from="root"`"#);
+    }
+
+    #[test(tokio::test)]
+    /// ```mermaid
+    /// graph LR
+    ///     root -->|use_env="default_alpha"| a
+    /// ```
+    ///
+    /// In this scenario, we make sure that root uses `a` with the addresses defined for `default_alpha`, not `default`.
+    async fn use_env_should_use_the_correct_environment() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_package("a", |pkg| {
+                pkg.add_env("default_alpha", DEFAULT_ENV_ID)
+                    .publish(OriginalID::from(1), PublishedID::from(1), None)
+                    .publish_in_env(
+                        "default_alpha",
+                        DEFAULT_ENV_ID,
+                        OriginalID::from(2),
+                        PublishedID::from(2),
+                        None,
+                    )
+            })
+            .add_dep("root", "a", |dep| {
+                dep.in_env(DEFAULT_ENV_NAME).use_env("default_alpha")
+            })
+            .build();
+
+        let loaded = scenario.root_package("root").await;
+
+        let named_addresses = loaded.package_info().named_addresses().unwrap();
+
+        assert_eq!(
+            named_addresses.get("a").unwrap(),
+            &NamedAddress::Defined(OriginalID::from(2))
+        );
     }
 }
