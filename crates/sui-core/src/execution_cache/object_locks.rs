@@ -202,7 +202,7 @@ impl ObjectLocks {
         owned_input_objects: &[ObjectRef],
         tx_digest: TransactionDigest,
         signed_transaction: Option<VerifiedSignedTransaction>,
-    ) -> SuiResult {
+    ) -> SuiResult<Vec<(ObjectRef, LockDetails)>> {
         // First validate all object versions match live objects
         Self::validate_owned_object_versions(cache, owned_input_objects)?;
 
@@ -242,20 +242,25 @@ impl ObjectLocks {
             }
         }
 
-        // TODO(disable_preconsensus_locking): Quarantine this code path when disable_preconsensus_locking is enabled.
-        // commit all writes to DB
-        epoch_store
-            .tables()?
-            .write_transaction_locks(signed_transaction, locks_to_write.iter().cloned())?;
+        // When preconsensus locking is disabled, locks are buffered in ConsensusCommitOutput
+        // and written as part of the consensus commit batch. The in-memory cache is kept for
+        // conflict detection within the same consensus commit.
+        // When preconsensus locking is enabled, write locks to DB immediately.
+        if !epoch_store.protocol_config().disable_preconsensus_locking() {
+            // commit all writes to DB
+            epoch_store
+                .tables()?
+                .write_transaction_locks(signed_transaction, locks_to_write.iter().cloned())?;
 
-        // remove pending locks from unbounded storage
-        self.clear_cached_locks(&locks_to_write);
+            // remove pending locks from unbounded storage
+            self.clear_cached_locks(&locks_to_write);
+        }
 
-        Ok(())
+        Ok(locks_to_write)
     }
 
     /// Validates owned object versions and digests without acquiring locks.
-    /// Used when disable_preconsensus_locking is enabled to validate objects before signing,
+    /// Used when preconsensus locking is disabled to validate objects before signing,
     /// since actual locking happens post-consensus in that mode.
     #[instrument(level = "debug", skip_all)]
     pub(crate) fn validate_owned_object_versions(

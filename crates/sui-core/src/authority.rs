@@ -1128,7 +1128,7 @@ impl AuthorityState {
         };
 
         if epoch_store.protocol_config().disable_preconsensus_locking() {
-            // When disable_preconsensus_locking is enabled, validate owned object versions without
+            // When preconsensus locking is disabled, validate owned object versions without
             // acquiring locks. Locking happens post-consensus in the consensus handler. Validation
             // still runs to prevent spam transactions with invalid object versions.
             // Note: We don't store the signed transaction here because with disable_preconsensus_locking,
@@ -1141,7 +1141,9 @@ impl AuthorityState {
             // The call to self.set_transaction_lock checks the lock is not conflicting,
             // and returns ConflictingTransaction error in case there is a lock on a different
             // existing transaction.
-            self.get_cache_writer().acquire_transaction_locks(
+            // When preconsensus locking is enabled, locks are written to DB
+            // immediately, so we ignore the returned locks here.
+            let _ = self.get_cache_writer().acquire_transaction_locks(
                 epoch_store,
                 &owned_objects,
                 tx_digest,
@@ -3119,17 +3121,14 @@ impl AuthorityState {
                         .map(|type_| ObjectType::Struct(type_.clone()))
                         .unwrap_or(ObjectType::Package);
 
-                    new_owners.push((
-                        (addr, *id),
-                        ObjectInfo {
-                            object_id: *id,
-                            version: oref.1,
-                            digest: oref.2,
-                            type_,
-                            owner,
-                            previous_transaction: *effects.transaction_digest(),
-                        },
-                    ));
+                    new_owners.push(((addr, *id), ObjectInfo {
+                        object_id: *id,
+                        version: oref.1,
+                        digest: oref.2,
+                        type_,
+                        owner,
+                        previous_transaction: *effects.transaction_digest(),
+                    }));
                 }
                 Owner::ObjectOwner(owner) => {
                     let new_object = written.get(id).unwrap_or_else(

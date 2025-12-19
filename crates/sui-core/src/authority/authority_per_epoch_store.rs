@@ -2272,6 +2272,19 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
+    /// Checks if a transaction has been assigned to a checkpoint by the builder.
+    /// This is used during crash recovery to avoid dropping transactions that were
+    /// already included in a checkpoint but whose effects weren't persisted.
+    pub fn is_transaction_in_pending_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        Ok(self
+            .tables()?
+            .builder_digest_to_checkpoint
+            .contains_key(digest)?)
+    }
+
     // For each key in objects_to_init, return the next version for that key as recorded in the
     // next_shared_object_versions table.
     //
