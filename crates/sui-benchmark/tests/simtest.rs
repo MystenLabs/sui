@@ -343,11 +343,10 @@ mod test {
     }
 
     // Tests load with aggressive pruning and compaction.
-    #[ignore]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_with_prune_and_compact() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000, 0).await;
+        let test_cluster = build_test_cluster(4, 10000, 0).await;
 
         let node_state = test_cluster.fullnode_handle.sui_node.clone().state();
         register_fail_point_async("prune-and-compact", move || {
@@ -480,7 +479,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_checkpoint_pruning() {
-        let test_cluster = build_test_cluster(10, 1000, 0).await;
+        let test_cluster = build_test_cluster(10, 10000, 0).await;
         test_simulated_load(test_cluster.clone(), 30).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
