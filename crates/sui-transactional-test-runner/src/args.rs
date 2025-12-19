@@ -452,7 +452,7 @@ impl SuiExtraValueArgs {
         parser: &mut MoveCLParser<'a, ValueToken, I>,
     ) -> anyhow::Result<Self> {
         let (fake_id, version) = Self::parse_receiving_or_object_value(parser, "owned")?;
-        Ok(SuiExtraValueArgs::Object(fake_id, version))
+        Ok(SuiExtraValueArgs::Owned(fake_id, version))
     }
 
     fn parse_read_shared_value<'a, I: Iterator<Item = (ValueToken, &'a str)>>(
