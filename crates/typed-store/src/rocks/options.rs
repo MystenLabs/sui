@@ -38,6 +38,8 @@ pub struct ReadWriteOptions {
     /// When set, debug log the hash of the key and value bytes when inserting to
     /// this table.
     pub log_value_hash: bool,
+    /// Whether to sync to disk on every write.
+    pub sync_writes: bool,
 }
 
 impl ReadWriteOptions {
@@ -56,6 +58,11 @@ impl ReadWriteOptions {
         self.log_value_hash = log_value_hash;
         self
     }
+
+    pub fn set_sync_writes(mut self, sync_writes: bool) -> Self {
+        self.sync_writes = sync_writes;
+        self
+    }
 }
 
 impl Default for ReadWriteOptions {
@@ -63,6 +70,7 @@ impl Default for ReadWriteOptions {
         Self {
             ignore_range_deletions: true,
             log_value_hash: false,
+            sync_writes: false,
         }
     }
 }
@@ -267,6 +275,11 @@ impl DBOptions {
         self.options.set_hard_pending_compaction_bytes_limit(0);
         self.options.set_level_zero_slowdown_writes_trigger(512);
         self.options.set_level_zero_stop_writes_trigger(1024);
+        self
+    }
+
+    pub fn set_sync_writes(mut self, sync_writes: bool) -> DBOptions {
+        self.rw_options.sync_writes = sync_writes;
         self
     }
 
