@@ -63,8 +63,8 @@ criterion_group!(
         loops,
         natives,
         transfers,
-        vector,
         cross_module,
+        // vector,
 );
 
 criterion_main!(vm_benches);
