@@ -52,6 +52,7 @@
   padding: .5rem 0;
   color: #ffffff;
   position: relative;
+  font-family: var(--headerFont);
 }
 
 .cardLink:first-child {
@@ -87,6 +88,7 @@
   justify-content: center;
   align-items: center;
   color: #ffffff;
+  font-family: var(--headerFont);
 }
 
 .buttons {
@@ -187,7 +189,7 @@
 .TwoColItem p {
   flex: 8;
   color: #DDF2FF;
-  font-family: Inter;
+  font-family: var(--primaryFont);
   font-size: 1.125rem;
   font-weight: 500;
   line-height: 1.6875rem;
