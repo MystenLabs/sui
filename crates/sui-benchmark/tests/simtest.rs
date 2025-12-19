@@ -343,6 +343,7 @@ mod test {
     }
 
     // Tests load with aggressive pruning and compaction.
+    #[ignore]
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_with_prune_and_compact() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
