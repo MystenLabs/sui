@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::coin_balance_tests;
+module sui::balance_tests;
 
 use std::unit_test::destroy;
 use sui::balance;
@@ -36,6 +36,26 @@ fun type_morphing() {
     let coin = balance.into_coin(scenario.ctx());
     pay::keep(coin, scenario.ctx());
     scenario.end();
+}
+
+public struct MY_COIN has drop {}
+
+#[test]
+fun max_supply() {
+    let mut supply = balance::create_supply(MY_COIN {});
+    supply.increase_supply(std::u64::max_value!() - 1).destroy_for_testing();
+    supply.increase_supply(1).destroy_for_testing();
+
+    destroy(supply);
+}
+
+#[test, expected_failure(abort_code = sui::balance::EOverflow)]
+fun max_supply_overflow_fail() {
+    let mut supply = balance::create_supply(MY_COIN {});
+    supply.increase_supply(std::u64::max_value!()).destroy_for_testing();
+    supply.increase_supply(1).destroy_for_testing(); // custom error code, not arithmetic error
+
+    abort
 }
 
 #[test]
