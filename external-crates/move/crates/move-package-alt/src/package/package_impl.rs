@@ -118,6 +118,16 @@ impl<F: MoveFlavor> Package<F> {
 
         let deps = Self::deps_from_manifest(&file_handle, &manifest, env).await?;
 
+        // Fail if any of the deps has the same name as the package
+        if deps
+            .iter()
+            .any(|dep| dep.name() == manifest.package.name.as_ref())
+        {
+            return Err(PackageError::DependencyWithSameNameAsPackage {
+                name: manifest.package.name.as_ref().to_string(),
+            });
+        }
+
         // compute the digest (TODO: this should only compute over the environment specific data)
         let digest = Self::compute_digest(&deps);
 

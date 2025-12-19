@@ -1662,4 +1662,15 @@ pkg_b = { local = "../pkg_b" }"#,
 
         assert_eq!(package_names, ["a", "b", "c2", "root"]);
     }
+
+    #[test(tokio::test)]
+    async fn dependency_with_same_name_as_package() {
+        let scenario = TestPackageGraph::new(["root", "a"])
+            .add_dep("root", "a", |dep| dep.name("root").rename_from("a"))
+            .build();
+
+        let root_err = scenario.root_package_err("root").await;
+
+        assert_snapshot!(root_err, @r#"Error while loading dependency <ROOT>/root: You cannot have a dependency with the same name as the package. Rename the dependency, which will require adding `rename-from="root"`"#);
+    }
 }
