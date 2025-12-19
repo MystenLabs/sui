@@ -3094,7 +3094,15 @@ impl AuthorityPerEpochStore {
         let mut epoch_close_time = self.epoch_close_time.write();
         if epoch_close_time.is_none() {
             // Only update it the first time epoch is closed.
-            *epoch_close_time = Some(Instant::now());
+            let close_time = Instant::now();
+            let time_since_epoch_open = close_time.duration_since(self.epoch_open_time);
+            info!(
+                "Closing user certs for epoch {} after {:?} since epoch open. \
+                 Validators will reject new transactions until reconfiguration completes.",
+                self.epoch(),
+                time_since_epoch_open
+            );
+            *epoch_close_time = Some(close_time);
 
             self.user_certs_closed_notify
                 .notify()

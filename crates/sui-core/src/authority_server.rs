@@ -627,9 +627,16 @@ impl ValidatorService {
                         && let SuiErrorKind::ValidatorHaltedAtEpochEnd = err.as_inner()
                     {
                         max_retries -= 1;
+                        let epoch_store = state.load_epoch_store_one_call_per_task();
+                        let time_since_epoch_open =
+                            epoch_store.epoch_open_time.elapsed().as_millis();
 
                         debug!(
-                            "ValidatorHaltedAtEpochEnd. Will retry after validator reconfigures"
+                            "ValidatorHaltedAtEpochEnd at epoch {}. Epoch open for {}ms. \
+                             Will retry after validator reconfigures to epoch {}",
+                            epoch_store.epoch(),
+                            time_since_epoch_open,
+                            next_epoch
                         );
 
                         if let Ok(Ok(new_epoch)) =
@@ -637,6 +644,10 @@ impl ValidatorService {
                         {
                             assert_reachable!("retry submission at epoch end");
                             if new_epoch == next_epoch {
+                                debug!(
+                                    "Successfully reconfigured to epoch {}. Retrying transaction.",
+                                    new_epoch
+                                );
                                 continue;
                             }
 
@@ -644,6 +655,11 @@ impl ValidatorService {
                                 "expected epoch {} after reconfiguration. got {}",
                                 next_epoch,
                                 new_epoch
+                            );
+                        } else {
+                            debug!(
+                                "Timed out waiting for reconfiguration to epoch {}",
+                                next_epoch
                             );
                         }
                     }
@@ -1204,10 +1220,23 @@ impl ValidatorService {
         {
             // code block within reconfiguration lock
             let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
+            let reconfig_state_debug = format!("{:?}", *reconfiguration_lock);
             if !reconfiguration_lock.should_accept_user_certs() {
+                debug!(
+                    epoch = epoch_store.epoch(),
+                    reconfig_state = %reconfig_state_debug,
+                    "handle_submit_to_consensus_for_position: rejecting because epoch is closing"
+                );
                 self.metrics.num_rejected_cert_in_epoch_boundary.inc();
                 return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
             }
+
+            debug!(
+                epoch = epoch_store.epoch(),
+                reconfig_state = %reconfig_state_debug,
+                num_txns = consensus_transactions.len(),
+                "handle_submit_to_consensus_for_position: submitting to consensus"
+            );
 
             // Submit to consensus and wait for position, we do not check if tx
             // has been processed by consensus already as this method is called

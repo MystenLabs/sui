@@ -1247,6 +1247,35 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> SuiResult<()> {
+        self.handle_vote_transaction_impl(
+            epoch_store,
+            transaction,
+            true, /* check_epoch_close */
+        )
+    }
+
+    /// Same as handle_vote_transaction but skips the epoch closing check.
+    /// This is used during consensus voting where the transaction is already in a consensus block
+    /// and should be allowed to complete even during epoch close.
+    #[instrument(level = "trace", skip_all, fields(tx_digest = ?transaction.digest()))]
+    pub(crate) fn handle_vote_transaction_for_consensus(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        transaction: VerifiedTransaction,
+    ) -> SuiResult<()> {
+        self.handle_vote_transaction_impl(
+            epoch_store,
+            transaction,
+            false, /* check_epoch_close */
+        )
+    }
+
+    fn handle_vote_transaction_impl(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        transaction: VerifiedTransaction,
+        check_epoch_close: bool,
+    ) -> SuiResult<()> {
         debug!("handle_vote_transaction");
 
         let _metrics_guard = self
@@ -1258,11 +1287,23 @@ impl AuthorityState {
         // The should_accept_user_certs check here is best effort, because
         // between a validator signs a tx and a cert is formed, the validator
         // could close the window.
-        if !epoch_store
-            .get_reconfig_state_read_lock_guard()
-            .should_accept_user_certs()
-        {
-            return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
+        // When voting on transactions already in consensus blocks (check_epoch_close = false),
+        // we skip this check to allow transactions to complete during epoch transition.
+        if check_epoch_close {
+            let reconfig_guard = epoch_store.get_reconfig_state_read_lock_guard();
+            let should_accept = reconfig_guard.should_accept_user_certs();
+            let reconfig_state_debug = format!("{:?}", *reconfig_guard);
+            drop(reconfig_guard);
+
+            if !should_accept {
+                debug!(
+                    tx_digest = ?transaction.digest(),
+                    epoch = epoch_store.epoch(),
+                    reconfig_state = %reconfig_state_debug,
+                    "handle_vote_transaction: rejecting transaction because epoch is closing"
+                );
+                return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
+            }
         }
 
         // Accept finalized transactions, instead of voting to reject them.
