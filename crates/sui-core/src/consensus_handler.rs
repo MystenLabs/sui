@@ -89,6 +89,13 @@ use crate::{
     traffic_controller::{TrafficController, policies::TrafficTally},
 };
 
+/// Output from filtering consensus transactions.
+/// Contains the filtered transactions and any owned object locks acquired post-consensus.
+struct FilteredConsensusOutput {
+    transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
+    owned_object_locks: Vec<(ObjectRef, TransactionDigest)>,
+}
+
 pub struct ConsensusHandlerInitializer {
     state: Arc<AuthorityState>,
     checkpoint_service: Arc<CheckpointService>,
@@ -863,7 +870,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .clone(),
         };
 
-        let (transactions, owned_object_locks) = self.filter_consensus_txns(
+        let FilteredConsensusOutput {
+            transactions,
+            owned_object_locks,
+        } = self.filter_consensus_txns(
             state.initial_reconfig_state.clone(),
             &commit_info,
             &consensus_commit,
@@ -1952,18 +1962,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     // Filters out rejected or deprecated transactions.
-    // Returns (transactions, owned_object_locks) where owned_object_locks are collected
-    // when precsonsensus locking is disabled.
+    // Returns FilteredConsensusOutput containing transactions and owned_object_locks
+    // (collected when preconsensus locking is disabled).
     #[instrument(level = "trace", skip_all)]
     fn filter_consensus_txns(
         &mut self,
         initial_reconfig_state: ReconfigState,
         commit_info: &ConsensusCommitInfo,
         consensus_commit: &impl ConsensusCommitAPI,
-    ) -> (
-        Vec<(SequencedConsensusTransactionKind, u32)>,
-        Vec<(ObjectRef, TransactionDigest)>,
-    ) {
+    ) -> FilteredConsensusOutput {
         let mut transactions = Vec::new();
         let mut owned_object_locks: Vec<(ObjectRef, TransactionDigest)> = Vec::new();
         let epoch = self.epoch_store.epoch();
@@ -2060,8 +2067,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // Check if this transaction was already executed (has effects).
                     // This covers both checkpoint-synced transactions and locally-executed
                     // transactions that were in pending checkpoints before a crash.
-                    let already_executed =
-                        self.transaction_cache_reader.is_tx_already_executed(tx.digest());
+                    let already_executed = self
+                        .transaction_cache_reader
+                        .is_tx_already_executed(tx.digest());
 
                     // Also check if transaction was already assigned to a checkpoint.
                     // This handles crash recovery where checkpoint summary was persisted
@@ -2278,7 +2286,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .add(num_rejected_user_transactions[i.value()] as i64);
         }
 
-        (transactions, owned_object_locks)
+        FilteredConsensusOutput {
+            transactions,
+            owned_object_locks,
+        }
     }
 
     fn deduplicate_consensus_txns(
@@ -3208,11 +3219,14 @@ mod tests {
             } else {
                 shared_objects.get(i / 2).unwrap().clone()
             };
-            let transaction =
-                test_user_transaction(&state, sender, &keypair, gas_object.clone(), vec![
-                    input_object,
-                ])
-                .await;
+            let transaction = test_user_transaction(
+                &state,
+                sender,
+                &keypair,
+                gas_object.clone(),
+                vec![input_object],
+            )
+            .await;
             user_transactions.push(transaction);
         }
 
@@ -3396,11 +3410,14 @@ mod tests {
             } else {
                 shared_objects.get(i / 2).unwrap().clone()
             };
-            let transaction =
-                test_user_transaction(&state, sender, &keypair, gas_object.clone(), vec![
-                    input_object,
-                ])
-                .await;
+            let transaction = test_user_transaction(
+                &state,
+                sender,
+                &keypair,
+                gas_object.clone(),
+                vec![input_object],
+            )
+            .await;
             transactions.push(transaction);
         }
 
@@ -3516,10 +3533,13 @@ mod tests {
     fn test_order_by_gas_price() {
         let mut v = vec![user_txn(42), user_txn(100)];
         PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
-        assert_eq!(to_short_strings(v), vec![
-            "transaction(100)".to_string(),
-            "transaction(42)".to_string(),
-        ]);
+        assert_eq!(
+            to_short_strings(v),
+            vec![
+                "transaction(100)".to_string(),
+                "transaction(42)".to_string(),
+            ]
+        );
 
         let mut v = vec![
             user_txn(1200),
@@ -3530,14 +3550,17 @@ mod tests {
             user_txn(1000),
         ];
         PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
-        assert_eq!(to_short_strings(v), vec![
-            "transaction(1200)".to_string(),
-            "transaction(1000)".to_string(),
-            "transaction(1000)".to_string(),
-            "transaction(100)".to_string(),
-            "transaction(42)".to_string(),
-            "transaction(12)".to_string(),
-        ]);
+        assert_eq!(
+            to_short_strings(v),
+            vec![
+                "transaction(1200)".to_string(),
+                "transaction(1000)".to_string(),
+                "transaction(1000)".to_string(),
+                "transaction(100)".to_string(),
+                "transaction(42)".to_string(),
+                "transaction(12)".to_string(),
+            ]
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]
