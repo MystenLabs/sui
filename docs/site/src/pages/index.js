@@ -43,8 +43,7 @@ export default function Home() {
         <div 
           className="overflow-hidden min-h-screen flex flex-col bg-cover bg-center bg-no-repeat"
           style={{
-            backgroundImage: 'url(/img/sui-gradient.png)',
-            backgroundColor: '#00060F'
+            backgroundColor: '#000000';
           }}
         >
           <div className="w-full mt-8 mb-4 mx-auto">
