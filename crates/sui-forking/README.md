@@ -17,9 +17,11 @@ A development tool that enables testing and developing against a local Sui netwo
 - Develop locally while maintaining consistency with production state
 - Run integration tests against forked network state
 
-:important:
+**Important Note**
 Unlike a standard local Sui network with validators, the forking tool runs in lock-step mode where each transaction is executed sequentially and creates a checkpoint.
 That means that you have full control over the advancement of checkpoints, time, and epochs to simulate different scenarios.
+
+Moreover, currently only forking from the last known checkpoint is supported. You cannot specify an arbitrary checkpoint number to fork from.
 
 ## Usage
 
@@ -118,6 +120,7 @@ sui client ptb --move-call 0x65d106ccd0feddc4183dcaa92decafd3376ee9b34315aae938d
 
 ## Limitations
 
+- Only forking from the latest checkpoint is supported, not arbitrary checkpoints.
 - Sequential execution: Transactions are executed one at a time, no parallelism.
 - Staking and related operations are not supported.
 - One validator, single authority network.
@@ -125,6 +128,7 @@ sui client ptb --move-call 0x65d106ccd0feddc4183dcaa92decafd3376ee9b34315aae938d
 - If it forks at checkpoint X, you cannot depend on objects created after checkpoint X. You'll need to restart the network at that checkpoint or a later one.
 - Currently, it does not save state. You will lose all changes when you stop the local network.
 - It requires Postgres DB for storing the local network state; a `sui-indexer-alt` DB is needed.
+
 
 ## Related Tools
 
