@@ -1,0 +1,156 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 24 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-45:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 8360000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 47-48:
+//# programmable --sender A
+//> test::m::make_owned();
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 50-51:
+//# programmable --sender A
+//> test::m::make_shared();
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 53-54:
+//# programmable --sender A
+//> test::m::make_party();
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 56-57:
+//# programmable --sender A
+//> test::m::make_immutable();
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 59-60:
+//# programmable --sender A --inputs object(2,0)
+//> test::m::make_object_owned(Input(0));
+created: object(6,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 3435200,  storage_rebate: 2189484, non_refundable_storage_fee: 22116
+
+task 7, lines 62-64:
+//# programmable --sender A --inputs owned(3,0) --dev-inspect
+// use shared as owned
+//> test::m::obj_mut(Input(0));
+mutated: object(_), object(3,0)
+gas summary: computation_cost: 500000, storage_cost: 2211600,  storage_rebate: 1211364, non_refundable_storage_fee: 12236
+
+task 8, lines 66-68:
+//# programmable --sender A --inputs owned(4,0) --dev-inspect
+// use party as owned
+//> test::m::obj_mut(Input(0))
+mutated: object(_), object(4,0)
+gas summary: computation_cost: 500000, storage_cost: 2211600,  storage_rebate: 1211364, non_refundable_storage_fee: 12236
+
+task 9, lines 70-72:
+//# programmable --sender A --inputs owned(6,0) --dev-inspect
+// use object owned as owned
+//> test::m::obj_mut(Input(0))
+mutated: object(_), object(6,0)
+gas summary: computation_cost: 500000, storage_cost: 2211600,  storage_rebate: 1211364, non_refundable_storage_fee: 12236
+
+task 10, lines 74-76:
+//# programmable --sender A --inputs receiving(3,0) --dev-inspect
+// use shared as receiving
+//> test::m::drop_receiving(Input(0))
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 11, lines 78-80:
+//# programmable --sender A --inputs receiving(4,0) --dev-inspect
+// use party as receiving
+//> test::m::drop_receiving(Input(0))
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 12, lines 82-84:
+//# programmable --sender A --inputs receiving(5,0) --dev-inspect
+// use imm as receiving
+//> test::m::drop_receiving(Input(0))
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 13, lines 86-88:
+//# programmable --sender A --inputs mutshared(2,0) --dev-inspect
+// use owned as shared
+//> test::m::obj_mut(Input(0));
+Error: Error checking transaction input objects: Could not find the referenced object object(2,0) at version None
+
+task 14, lines 90-92:
+//# programmable --sender A --inputs mutshared(5,0) --dev-inspect
+// use imm as shared
+//> test::m::obj_mut(Input(0));
+Error: Error checking transaction input objects: Could not find the referenced object object(5,0) at version None
+
+task 15, lines 94-96:
+//# programmable --sender A --inputs mutshared(6,0) --dev-inspect
+// use object owned as shared
+//> test::m::obj_mut(Input(0));
+Error: Error checking transaction input objects: Could not find the referenced object object(6,0) at version None
+
+task 16, lines 98-100:
+//# programmable --sender A --inputs immshared(2,0) --dev-inspect
+// use owned as imm shared
+//> test::m::obj_mut(Input(0));
+Error: Error checking transaction input objects: Could not find the referenced object object(2,0) at version None
+
+task 17, lines 102-104:
+//# programmable --sender A --inputs immshared(5,0) --dev-inspect
+// use imm as imm shared
+//> test::m::obj_mut(Input(0));
+Error: Error checking transaction input objects: Could not find the referenced object object(5,0) at version None
+
+task 18, lines 106-108:
+//# programmable --sender A --inputs immshared(6,0) --dev-inspect
+// use object owned as imm shared
+//> test::m::obj_mut(Input(0));
+Error: Error checking transaction input objects: Could not find the referenced object object(6,0) at version None
+
+task 19, lines 110-112:
+//# programmable --sender A --inputs nonexclusive(2,0) --dev-inspect
+// use owned as non-exclusive write
+//> test::m::obj_mut(Input(0));
+Error: Error checking transaction input objects: Feature is not supported: User transactions cannot use SharedObjectMutability::NonExclusiveWrite
+
+task 20, lines 114-116:
+//# programmable --sender A --inputs nonexclusive(3,0) --dev-inspect
+// use shared as non-exclusive write
+//> test::m::obj_mut(Input(0));
+Error: Error checking transaction input objects: Feature is not supported: User transactions cannot use SharedObjectMutability::NonExclusiveWrite
+
+task 21, lines 118-120:
+//# programmable --sender A --inputs nonexclusive(4,0) --dev-inspect
+// use party as non-exclusive write
+//> test::m::obj_mut(Input(0));
+Error: Error checking transaction input objects: Feature is not supported: User transactions cannot use SharedObjectMutability::NonExclusiveWrite
+
+task 22, lines 122-124:
+//# programmable --sender A --inputs nonexclusive(5,0) --dev-inspect
+// use imm as non-exclusive write
+//> test::m::obj_mut(Input(0));
+Error: Error checking transaction input objects: Feature is not supported: User transactions cannot use SharedObjectMutability::NonExclusiveWrite
+
+task 23, lines 126-128:
+//# programmable --sender A --inputs nonexclusive(6,0) --dev-inspect
+// use object owned as non-exclusive write
+//> test::m::obj_mut(Input(0));
+Error: Error checking transaction input objects: Feature is not supported: User transactions cannot use SharedObjectMutability::NonExclusiveWrite
