@@ -33,6 +33,7 @@ fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<Pat
     add_path(SourcePackageLayout::Scripts);
 
     if config.test_mode {
+        add_path(SourcePackageLayout::Examples);
         add_path(SourcePackageLayout::Tests);
     }
 
