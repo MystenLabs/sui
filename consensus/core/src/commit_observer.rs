@@ -167,13 +167,12 @@ impl CommitObserver {
         };
 
         let last_commit_index = last_commit.index();
-        if last_commit_index == replay_after_commit_index {
+        if last_commit_index <= replay_after_commit_index {
             info!(
-                "Nothing to recover for commit observer - replay is requested immediately after last commit index {last_commit_index}"
+                "Nothing to recover for commit observer - replay ({replay_after_commit_index}) is requested after last commit index ({last_commit_index})"
             );
             return;
         }
-        assert!(last_commit_index > replay_after_commit_index);
 
         info!(
             "Recovering commit observer in the range [{}..={last_commit_index}]",
