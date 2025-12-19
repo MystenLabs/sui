@@ -11,7 +11,7 @@ use tracing::debug;
 use super::paths::{EphemeralPubfilePath, OutputPath, PackagePath};
 use super::{EnvironmentID, manifest::Manifest};
 use crate::graph::PackageInfo;
-use crate::package::block_on;
+use crate::package::package_loader::{LoadType, PackageConfig, PackageLoader};
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{
     Environment, LocalPub, LockfileDependencyInfo, ModeName, PackageID, ParsedEphemeralPubs,
@@ -24,55 +24,6 @@ use crate::{
     package::EnvironmentName,
     schema::ParsedLockfile,
 };
-
-#[derive(Clone, Debug)]
-pub struct PackageConfig {
-    /// The path to read all input files from (e.g. lockfiles, pubfiles, etc). If this path is
-    /// different from `output_path`, the package system won't touch any files here Note that in
-    /// the case of ephemeral loads, `self.load_type.ephemeral_file` may also be read
-    input_path: PathBuf,
-
-    /// The chain ID to build for
-    chain_id: EnvironmentID,
-
-    /// The ephemeral or persistent environment to load for
-    load_type: LoadType,
-
-    /// The directory to write all output files into (e.g. updated lockfiles, etc)
-    /// Note that in the case of ephemeral loads, `self.load_type.ephemeral_file` may also be
-    /// written
-    output_path: PathBuf,
-
-    /// The modes to load for
-    modes: Vec<ModeName>,
-
-    /// Repin the dependencies even if the lockfile is up-to-date
-    pub(crate) force_repin: bool,
-
-    /// Use the lockfile even if the manifest digests are out of date
-    pub(crate) ignore_digests: bool,
-    // TODO: The directory to use for the git cache (defaults to `~/.move`)
-    // cache_dir: Option<PathBuf>,
-    // TODO: `--allow-dirty`
-}
-
-#[derive(Clone, Debug)]
-pub enum LoadType {
-    Persistent {
-        env: EnvironmentName,
-    },
-    Ephemeral {
-        /// The environment to build for. If it is `None`, the value in `ephemeral_file` will be
-        /// used; if that file also doesn't exist, then the load will fail
-        build_env: Option<EnvironmentName>,
-
-        /// The ephemeral file to use for addresses, relative to the current working directory (not
-        /// to `input_path`). This file will be written if the package is published (i.e. if
-        /// [RootPackage::write_publish_data] is called). It does not have to exist a priori, but
-        /// if it does, the addresses will be used.
-        ephemeral_file: EphemeralPubfilePath,
-    },
-}
 
 /// A package that is defined as the root of a Move project.
 ///
@@ -105,30 +56,6 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     mutex: PackageSystemLock,
 }
 
-impl PackageConfig {
-    fn persistent(path: impl AsRef<Path>, env: Environment, modes: Vec<ModeName>) -> Self {
-        Self {
-            input_path: path.as_ref().to_path_buf(),
-            chain_id: env.id,
-            load_type: LoadType::Persistent { env: env.name },
-            output_path: path.as_ref().to_path_buf(),
-            modes,
-            force_repin: false,
-            ignore_digests: false,
-        }
-    }
-}
-
-impl LoadType {
-    /// return `Some(path)` if `self` is a valid ephemeral load, or None if it is a persistent load
-    fn ephemeral_file(&self) -> Option<&EphemeralPubfilePath> {
-        match self {
-            LoadType::Persistent { .. } => None,
-            LoadType::Ephemeral { ephemeral_file, .. } => Some(ephemeral_file),
-        }
-    }
-}
-
 /// Root package is the "public" entrypoint for operations with the package management.
 /// It's like a facade for all functionality, controlled by this.
 impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
@@ -156,14 +83,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         env: Environment,
         modes: Vec<ModeName>,
     ) -> PackageResult<Self> {
-        let config = PackageConfig::persistent(path, env, modes);
-
-        Self::validate_and_construct(config).await
+        PackageLoader::new(path, env).modes(modes).load().await
     }
 
     /// A synchronous version of `load` that can be used to load a package while blocking in place.
     pub fn load_sync(path: PathBuf, env: Environment, modes: Vec<ModeName>) -> PackageResult<Self> {
-        block_on!(Self::load(path.as_path(), env, modes))
+        PackageLoader::new(path, env).modes(modes).load_sync()
     }
 
     /// Load the root package from `root` in environment `build_env`, but replace all the addresses
@@ -181,41 +106,27 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         pubfile_path: impl AsRef<Path>,
         modes: Vec<ModeName>,
     ) -> PackageResult<Self> {
-        let ephemeral_file = EphemeralPubfilePath::new(pubfile_path)?;
-        let config = PackageConfig {
-            input_path: root.as_ref().to_path_buf(),
-            chain_id,
-            load_type: LoadType::Ephemeral {
-                build_env,
-                ephemeral_file,
-            },
-            output_path: root.as_ref().to_path_buf(),
-            modes,
-            force_repin: false,
-            ignore_digests: false,
-        };
-
-        Self::validate_and_construct(config).await
+        PackageLoader::new_ephemeral(root, build_env, chain_id, pubfile_path)
+            .modes(modes)
+            .load()
+            .await
     }
 
     /// Loads the root package from path and builds a dependency graph from the manifests.
     /// This forcefully re-pins all dependencies even if the manifest digests match. Note that it
     /// does not write to the lockfile; you should call [Self::save_to_disk] to save the results.
     ///
-    /// TODO: We should load from lockfiles instead of manifests for deps.
     /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
     pub async fn load_force_repin(
         path: impl AsRef<Path>,
         env: Environment,
         modes: Vec<ModeName>,
     ) -> PackageResult<Self> {
-        let mut config = PackageConfig::persistent(path, env, modes);
-        config.force_repin = true;
-        /*
-        let graph = PackageGraph::<F>::load_from_manifests(&package_path, &env).await?;
-        */
-
-        Self::validate_and_construct(config).await
+        PackageLoader::new(path, env)
+            .modes(modes)
+            .force_repin(true)
+            .load()
+            .await
     }
 
     /// Loads the root lockfile only, ignoring all manifests. Returns an error if the lockfile
@@ -230,9 +141,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         env: Environment,
         modes: Vec<ModeName>,
     ) -> PackageResult<Self> {
-        let mut config = PackageConfig::persistent(path, env, modes);
-        config.ignore_digests = true;
-        Self::validate_and_construct(config).await
+        PackageLoader::new(path, env)
+            .modes(modes)
+            .ignore_digests(true)
+            .load()
+            .await
     }
 
     /// The metadata for the root package in [PackageInfo] form
@@ -251,7 +164,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let input_path = PackagePath::new(config.input_path.clone())?;
         let mutex = input_path.lock()?;
 
-        let ephemeral_file = config.load_type.ephemeral_file().cloned();
+        let ephemeral_file = config
+            .load_type
+            .ephemeral_file()
+            .map(|path| EphemeralPubfilePath::new(path))
+            .transpose()?;
+
         let output_path = OutputPath::new(config.output_path.clone())?;
 
         debug!(
@@ -264,13 +182,13 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
         debug!("loading unfiltered graph");
         let unfiltered_graph = if config.force_repin {
-            PackageGraph::<F>::load_from_manifests(&input_path, &env, &mutex).await?
+            PackageGraph::<F>::load_from_manifests(&input_path, &env, &mutex, &config).await?
         } else if config.ignore_digests {
-            PackageGraph::<F>::load_from_lockfile_ignore_digests(&input_path, &env, &mutex)
+            PackageGraph::<F>::load_from_lockfile_ignore_digests(&input_path, &env, &mutex, &config)
                 .await?
                 .unwrap()
         } else {
-            PackageGraph::<F>::load(&input_path, &env, &mutex).await?
+            PackageGraph::<F>::load(&input_path, &env, &mutex, &config).await?
         };
 
         debug!("filtering graph");
@@ -317,8 +235,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 build_env,
                 ephemeral_file,
             } => {
+                let mut ephemeral_file = EphemeralPubfilePath::new(ephemeral_file)?;
                 let ephemeral =
-                    Self::load_ephemeral_pubfile(build_env, &config.chain_id, ephemeral_file)?;
+                    Self::load_ephemeral_pubfile(build_env, &config.chain_id, &mut ephemeral_file)?;
                 (
                     Environment::new(ephemeral.build_env.clone(), config.chain_id.clone()),
                     Some(ephemeral),
