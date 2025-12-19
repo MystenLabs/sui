@@ -7873,7 +7873,6 @@ dependencies = [
  "move-package-alt",
  "move-package-alt-compilation",
  "move-symbol-pool",
- "once_cell",
  "serde",
  "serde_json",
  "sha2 0.9.9",
@@ -8074,7 +8073,6 @@ dependencies = [
  "insta",
  "move-binary-format",
  "move-core-types",
- "once_cell",
  "packed_struct",
  "serde",
  "sha2 0.9.9",
@@ -8105,7 +8103,6 @@ dependencies = [
  "move-ir-types",
  "move-proc-macros",
  "move-symbol-pool",
- "once_cell",
  "petgraph 0.8.1",
  "rayon",
  "regex",
@@ -8131,7 +8128,6 @@ dependencies = [
  "leb128",
  "move-proc-macros",
  "num",
- "once_cell",
  "primitive-types 0.10.1",
  "proptest",
  "proptest-derive",
@@ -8232,7 +8228,6 @@ dependencies = [
  "move-model-2",
  "move-symbol-pool",
  "num",
- "once_cell",
  "regex",
  "serde",
 ]
@@ -8291,7 +8286,6 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-symbol-pool",
- "once_cell",
  "serde",
 ]
 
@@ -8313,7 +8307,6 @@ dependencies = [
  "move-ir-types",
  "move-symbol-pool",
  "num",
- "once_cell",
  "regex",
  "serde",
 ]
@@ -8364,7 +8357,6 @@ dependencies = [
  "move-core-types",
  "move-symbol-pool",
  "named-lock",
- "once_cell",
  "path-clean",
  "petgraph 0.8.1",
  "pretty_assertions",
@@ -8403,7 +8395,6 @@ dependencies = [
  "move-model-2",
  "move-package-alt",
  "move-symbol-pool",
- "once_cell",
  "petgraph 0.8.1",
  "serde",
  "serde_yaml 0.8.26",
@@ -8558,7 +8549,6 @@ dependencies = [
 name = "move-symbol-pool"
 version = "0.1.0"
 dependencies = [
- "once_cell",
  "phf",
  "serde",
 ]
@@ -8597,7 +8587,6 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
- "once_cell",
  "rayon",
  "regex",
  "tempfile",
@@ -8631,7 +8620,6 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
- "once_cell",
  "rand 0.8.5",
  "rayon",
  "regex",
@@ -8642,7 +8630,6 @@ name = "move-vm-config"
 version = "0.1.0"
 dependencies = [
  "move-binary-format",
- "once_cell",
 ]
 
 [[package]]
@@ -8651,7 +8638,6 @@ version = "0.1.0"
 dependencies = [
  "move-trace-format",
  "move-vm-config",
- "once_cell",
  "serde",
  "serde_json",
  "tracing",
@@ -8669,7 +8655,6 @@ dependencies = [
  "move-trace-format",
  "move-vm-config",
  "move-vm-types",
- "once_cell",
  "parking_lot 0.11.2",
  "smallvec",
  "tracing",
@@ -8735,7 +8720,6 @@ dependencies = [
  "move-core-types",
  "move-vm-profiler",
  "move-vm-types",
- "once_cell",
  "serde",
 ]
 
