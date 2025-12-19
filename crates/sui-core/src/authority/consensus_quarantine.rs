@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::{
-    AuthorityEpochTables, EncG, ExecutionIndicesWithStats, PkG,
+    AuthorityEpochTables, EncG, ExecutionIndicesWithStats, LockDetails, LockDetailsWrapper, PkG,
 };
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::BuilderCheckpointSummary;
@@ -17,7 +17,7 @@ use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque, hash_map};
 use sui_types::authenticator_state::ActiveJwk;
-use sui_types::base_types::{AuthorityName, SequenceNumber};
+use sui_types::base_types::{AuthorityName, ObjectRef, SequenceNumber};
 use sui_types::crypto::RandomnessRound;
 use sui_types::error::SuiResult;
 use sui_types::executable_transaction::{
@@ -96,6 +96,9 @@ pub(crate) struct ConsensusCommitOutput {
         u64, /* generation */
         Vec<(ExecutionTimeObservationKey, Duration)>,
     )>,
+
+    // Owned object locks acquired post-consensus (when disable_preconsensus_locking=true)
+    owned_object_locks: Option<Vec<(ObjectRef, LockDetails)>>,
 }
 
 impl ConsensusCommitOutput {
@@ -254,6 +257,11 @@ impl ConsensusCommitOutput {
         self.congestion_control_randomness_object_debts = object_debts;
     }
 
+    pub fn set_owned_object_locks(&mut self, locks: Vec<(ObjectRef, LockDetails)>) {
+        assert!(self.owned_object_locks.is_none());
+        self.owned_object_locks = Some(locks);
+    }
+
     pub fn write_to_batch(
         self,
         epoch_store: &AuthorityPerEpochStore,
@@ -273,10 +281,10 @@ impl ConsensusCommitOutput {
         )?;
 
         if let Some(reconfig_state) = &self.reconfig_state {
-            batch.insert_batch(
-                &tables.reconfig_state,
-                [(RECONFIG_STATE_INDEX, reconfig_state)],
-            )?;
+            batch.insert_batch(&tables.reconfig_state, [(
+                RECONFIG_STATE_INDEX,
+                reconfig_state,
+            )])?;
         }
 
         let consensus_commit_stats = self
@@ -284,13 +292,22 @@ impl ConsensusCommitOutput {
             .expect("consensus_commit_stats must be set");
         let round = consensus_commit_stats.index.last_committed_round;
 
-        batch.insert_batch(
-            &tables.last_consensus_stats,
-            [(LAST_CONSENSUS_STATS_ADDR, consensus_commit_stats)],
-        )?;
+        batch.insert_batch(&tables.last_consensus_stats, [(
+            LAST_CONSENSUS_STATS_ADDR,
+            consensus_commit_stats,
+        )])?;
 
         if let Some(next_versions) = self.next_shared_object_versions {
             batch.insert_batch(&tables.next_shared_object_versions_v2, next_versions)?;
+        }
+
+        if let Some(locks) = self.owned_object_locks {
+            batch.insert_batch(
+                &tables.owned_object_locked_transactions,
+                locks
+                    .into_iter()
+                    .map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
+            )?;
         }
 
         batch.delete_batch(
@@ -319,10 +336,10 @@ impl ConsensusCommitOutput {
 
         if let Some((round, commit_timestamp)) = self.next_randomness_round {
             batch.insert_batch(&tables.randomness_next_round, [(SINGLETON_KEY, round)])?;
-            batch.insert_batch(
-                &tables.randomness_last_round_timestamp,
-                [(SINGLETON_KEY, commit_timestamp)],
-            )?;
+            batch.insert_batch(&tables.randomness_last_round_timestamp, [(
+                SINGLETON_KEY,
+                commit_timestamp,
+            )])?;
         }
 
         batch.insert_batch(&tables.dkg_confirmations_v2, self.dkg_confirmations)?;
@@ -495,6 +512,9 @@ pub(crate) struct ConsensusOutputQuarantine {
 
     processed_consensus_messages: RefCountedHashMap<SequencedConsensusTransactionKey, ()>,
 
+    // Owned object locks acquired post-consensus
+    owned_object_locks: RefCountedHashMap<ObjectRef, LockDetails>,
+
     metrics: Arc<EpochMetrics>,
 }
 
@@ -513,6 +533,7 @@ impl ConsensusOutputQuarantine {
             processed_consensus_messages: RefCountedHashMap::new(),
             congestion_control_randomness_object_debts: RefCountedHashMap::new(),
             congestion_control_object_debts: RefCountedHashMap::new(),
+            owned_object_locks: RefCountedHashMap::new(),
             metrics: authority_metrics,
         }
     }
@@ -530,6 +551,7 @@ impl ConsensusOutputQuarantine {
         self.insert_shared_object_next_versions(&output);
         self.insert_congestion_control_debts(&output);
         self.insert_processed_consensus_messages(&output);
+        self.insert_owned_object_locks(&output);
         self.output_queue.push_back(output);
 
         self.metrics
@@ -624,10 +646,10 @@ impl ConsensusOutputQuarantine {
                 contents.iter().map(|tx| (tx.transaction, seq)),
             )?;
 
-            batch.insert_batch(
-                &tables.builder_checkpoint_summary_v2,
-                [(seq, &builder_summary)],
-            )?;
+            batch.insert_batch(&tables.builder_checkpoint_summary_v2, [(
+                seq,
+                &builder_summary,
+            )])?;
 
             let checkpoint_height = builder_summary
                 .checkpoint_height
@@ -672,6 +694,7 @@ impl ConsensusOutputQuarantine {
                 self.remove_shared_object_next_versions(&output);
                 self.remove_processed_consensus_messages(&output);
                 self.remove_congestion_control_debts(&output);
+                self.remove_owned_object_locks(&output);
 
                 output.write_to_batch(epoch_store, batch)?;
             } else {
@@ -746,6 +769,22 @@ impl ConsensusOutputQuarantine {
                         object_id
                     );
                 }
+            }
+        }
+    }
+
+    fn insert_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
+        if let Some(locks) = output.owned_object_locks.as_ref() {
+            for (obj_ref, lock) in locks {
+                self.owned_object_locks.insert(*obj_ref, *lock);
+            }
+        }
+    }
+
+    fn remove_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
+        if let Some(locks) = output.owned_object_locks.as_ref() {
+            for (obj_ref, _) in locks {
+                self.owned_object_locks.remove(obj_ref);
             }
         }
     }

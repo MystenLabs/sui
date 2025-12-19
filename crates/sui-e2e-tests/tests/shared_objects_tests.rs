@@ -343,15 +343,10 @@ async fn call_shared_object_contract() {
     for gas in objects {
         // Ensure the value of the counter is `0`.
         let transaction = TestTransactionBuilder::new(sender, gas, rgp)
-            .move_call(
-                package_id,
-                "counter",
-                "assert_value",
-                vec![
-                    CallArg::Object(counter_object_arg_imm),
-                    CallArg::Pure(0u64.to_le_bytes().to_vec()),
-                ],
-            )
+            .move_call(package_id, "counter", "assert_value", vec![
+                CallArg::Object(counter_object_arg_imm),
+                CallArg::Pure(0u64.to_le_bytes().to_vec()),
+            ])
             .build();
         let effects = test_cluster
             .sign_and_execute_transaction(&transaction)
@@ -404,19 +399,14 @@ async fn call_shared_object_contract() {
         let transaction = test_cluster
             .test_transaction_builder()
             .await
-            .move_call(
-                package_id,
-                "counter",
-                "assert_value",
-                vec![
-                    CallArg::Object(if imm {
-                        counter_object_arg_imm
-                    } else {
-                        counter_object_arg
-                    }),
-                    CallArg::Pure(1u64.to_le_bytes().to_vec()),
-                ],
-            )
+            .move_call(package_id, "counter", "assert_value", vec![
+                CallArg::Object(if imm {
+                    counter_object_arg_imm
+                } else {
+                    counter_object_arg
+                }),
+                CallArg::Pure(1u64.to_le_bytes().to_vec()),
+            ])
             .build();
         let effects = test_cluster
             .sign_and_execute_transaction(&transaction)
@@ -436,12 +426,9 @@ async fn call_shared_object_contract() {
     let transaction = test_cluster
         .test_transaction_builder()
         .await
-        .move_call(
-            package_id,
-            "counter",
-            "increment",
-            vec![CallArg::Object(counter_object_arg_imm)],
-        )
+        .move_call(package_id, "counter", "increment", vec![CallArg::Object(
+            counter_object_arg_imm,
+        )])
         .build();
     let effects = test_cluster
         .wallet
@@ -683,7 +670,7 @@ async fn replay_shared_object_transaction() {
     }
 }
 
-/// Test that when disable_preconsensus_locking is enabled, conflicting owned object transactions
+/// Test that when preconsensus locking is disabled, conflicting owned object transactions
 /// are handled correctly through post-consensus conflict detection.
 /// The first transaction in consensus order should succeed, and the second should be
 /// dropped with DroppedInvalidOwnedInputs status (not "object locked until next epoch").

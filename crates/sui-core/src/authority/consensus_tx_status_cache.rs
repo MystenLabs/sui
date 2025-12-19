@@ -27,7 +27,7 @@ pub(crate) enum ConsensusTxStatus {
     // Transaction is finalized post commit.
     Finalized,
     // Transaction had invalid owned object inputs (stale version/digest or conflicting)
-    // and was dropped without execution. Only used when disable_preconsensus_locking is enabled.
+    // and was dropped without execution. Only used when preconsensus locking is disabled.
     DroppedInvalidOwnedInputs,
 }
 
