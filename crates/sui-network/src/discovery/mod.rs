@@ -250,7 +250,20 @@ impl DiscoveryEventLoop {
     ) {
         for peer_info in trusted_peer_change_event.new_peers {
             debug!(?peer_info, "Add committee member as preferred peer.");
-            self.network.known_peers().insert(peer_info);
+            if let Some(old_peer_info) = self.network.known_peers().insert(peer_info.clone())
+                && old_peer_info.address != peer_info.address
+                && let Some(address) = peer_info.address.first().cloned()
+            {
+                // Forcibly reconnect to the peer if its address(es) changed.
+                let _ = self.network.disconnect(peer_info.peer_id);
+                let network = self.network.clone();
+                self.tasks.spawn(async move {
+                    // If this fails, ConnectionManager will retry.
+                    let _ = network
+                        .connect_with_peer_id(address, peer_info.peer_id)
+                        .await;
+                });
+            }
         }
     }
 
