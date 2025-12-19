@@ -6,7 +6,6 @@ use std::sync::Arc;
 use futures::future::try_join_all;
 use futures::join;
 use indexmap::IndexMap;
-use move_core_types::annotated_value::MoveTypeLayout;
 use sui_types::collection_types::Entry;
 use sui_types::collection_types::VecMap;
 
@@ -19,6 +18,7 @@ use crate::v2::parser::Parser;
 use crate::v2::parser::Strand;
 use crate::v2::value::Slice;
 use crate::v2::value::Store;
+use crate::v2::writer::Writer;
 
 pub mod error;
 pub(crate) mod interpreter;
@@ -84,22 +84,20 @@ impl<'s> Format<'s> {
         Ok(Self { fields })
     }
 
-    /// Render the object provided as its `bytes` and `layout`, using this Display format, and with
-    /// support for dynamically fetching additional objects from `store` as needed.
+    /// Render the object provided as a `slice`, using this Display format, and with support for
+    /// dynamically fetching additional objects from `store` as needed.
     ///
     /// This operation requires all field names to evaluate successfully to unique strings, and for
     /// the overall output to be bounded by `max_depth` and `max_output_size`, but otherwise
     /// supports partial failures (if one of the field values fails to parse or evaluate).
-    pub async fn display<S: Store<'s>>(
+    pub async fn display<S: Store>(
         &'s self,
         max_depth: usize,
         max_output_size: usize,
-        bytes: &'s [u8],
-        layout: &'s MoveTypeLayout,
+        root: OwnedSlice,
         store: S,
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
         // Create the interpreter, writer and root slice
-        let root = Slice { layout, bytes };
         let interpreter = Arc::new(Interpreter::new(root, store));
         let writer = Arc::new(Writer::new(max_depth, max_output_size));
         let mut output = IndexMap::new();
@@ -193,6 +191,7 @@ mod tests {
     use insta::assert_debug_snapshot;
     use move_core_types::account_address::AccountAddress;
     use move_core_types::annotated_value::MoveTypeLayout as T;
+    use move_core_types::annotated_value::MoveTypeLayout;
     use move_core_types::u256::U256;
     use serde::Serialize;
     use sui_types::base_types::move_ascii_str_layout;
@@ -213,11 +212,11 @@ mod tests {
     const ONE_MB: usize = 1024 * 1024;
 
     /// Helper to parse display fields and render them against the provided object.
-    async fn format<'b, 'l>(
-        store: &MockStore,
+    async fn format(
+        store: MockStore,
         limits: Limits,
-        bytes: &'b [u8],
-        layout: &'l MoveTypeLayout,
+        bytes: Vec<u8>,
+        layout: MoveTypeLayout,
         max_depth: usize,
         max_output_size: usize,
         fields: impl IntoIterator<Item = (&str, &str)>,
@@ -232,8 +231,9 @@ mod tests {
                 .collect(),
         };
 
+        let root = OwnedSlice { bytes, layout };
         Format::parse(limits, &display)?
-            .display(max_depth, max_output_size, bytes, layout, store)
+            .display(max_depth, max_output_size, root, store)
             .await
     }
 
@@ -288,10 +288,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &struct_("0x1::m::S", fields),
+            bytes,
+            struct_("0x1::m::S", fields),
             usize::MAX,
             ONE_MB,
             formats,
@@ -349,10 +349,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &struct_("0x1::m::S", fields),
+            bytes,
+            struct_("0x1::m::S", fields),
             usize::MAX,
             ONE_MB,
             formats,
@@ -407,10 +407,10 @@ mod tests {
         let pending = bcs::to_bytes(&Status::Pending("waiting")).unwrap();
         outputs.push(
             format(
-                &MockStore::default(),
+                MockStore::default(),
                 Limits::default(),
-                &pending,
-                &layout,
+                pending,
+                layout.clone(),
                 usize::MAX,
                 ONE_MB,
                 formats,
@@ -422,10 +422,10 @@ mod tests {
         let active = bcs::to_bytes(&Status::Active(42)).unwrap();
         outputs.push(
             format(
-                &MockStore::default(),
+                MockStore::default(),
                 Limits::default(),
-                &active,
-                &layout,
+                active,
+                layout.clone(),
                 usize::MAX,
                 ONE_MB,
                 formats,
@@ -437,10 +437,10 @@ mod tests {
         let complete = bcs::to_bytes(&Status::Done(100, 999)).unwrap();
         outputs.push(
             format(
-                &MockStore::default(),
+                MockStore::default(),
                 Limits::default(),
-                &complete,
-                &layout,
+                complete,
+                layout,
                 usize::MAX,
                 ONE_MB,
                 formats,
@@ -538,10 +538,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &struct_("0x1::m::S", fields),
+            bytes,
+            struct_("0x1::m::S", fields),
             usize::MAX,
             ONE_MB,
             formats,
@@ -582,10 +582,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -629,10 +629,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &struct_("0x1::m::S", fields),
+            bytes,
+            struct_("0x1::m::S", fields),
             usize::MAX,
             ONE_MB,
             formats,
@@ -680,10 +680,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -720,10 +720,10 @@ mod tests {
         let formats = [("some", "{a | 42u64}"), ("none", "{b | 43u64}")];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -786,10 +786,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -861,10 +861,10 @@ mod tests {
         ];
 
         let output = format(
-            &store,
+            store,
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -941,7 +941,7 @@ mod tests {
             ..Limits::default()
         };
 
-        let output = format(&store, limits, &bytes, &layout, usize::MAX, ONE_MB, formats)
+        let output = format(store, limits, bytes, layout, usize::MAX, ONE_MB, formats)
             .await
             .unwrap();
 
@@ -1015,7 +1015,7 @@ mod tests {
             ..Limits::default()
         };
 
-        let output = format(&store, limits, &bytes, &layout, usize::MAX, ONE_MB, formats)
+        let output = format(store, limits, bytes, layout, usize::MAX, ONE_MB, formats)
             .await
             .unwrap();
 
@@ -1089,10 +1089,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1135,10 +1135,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1221,10 +1221,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1294,10 +1294,10 @@ mod tests {
         )];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1351,10 +1351,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1461,10 +1461,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1533,10 +1533,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1673,10 +1673,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1796,10 +1796,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1842,10 +1842,10 @@ mod tests {
         };
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             limits,
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1937,10 +1937,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1989,10 +1989,10 @@ mod tests {
         let two_fields = [("f", "{a | b | c | d | e}"), ("g", "{f | g | h | i | j}")];
 
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             limits.clone(),
-            &bytes,
-            &T::U64,
+            bytes.clone(),
+            T::U64,
             usize::MAX,
             ONE_MB,
             big_field,
@@ -2001,10 +2001,10 @@ mod tests {
         assert!(matches!(res, Err(Error::TooBig)));
 
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             limits,
-            &bytes,
-            &T::U64,
+            bytes,
+            T::U64,
             usize::MAX,
             ONE_MB,
             two_fields,
@@ -2019,10 +2019,10 @@ mod tests {
         let formats = [("x", "012345"), ("y", "67890"), ("z", "ABCDE")];
 
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &T::U64,
+            bytes,
+            T::U64,
             usize::MAX,
             10,
             formats,
@@ -2045,10 +2045,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &T::U64,
+            bytes,
+            T::U64,
             3,
             ONE_MB,
             formats,
@@ -2088,10 +2088,10 @@ mod tests {
         let two_fields = [("f1", "{a->[b]}"), ("f2", "{c->[d]}"), ("f3", "{e=>[f]}")];
 
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             limits.clone(),
-            &bytes,
-            &T::U64,
+            bytes.clone(),
+            T::U64,
             usize::MAX,
             ONE_MB,
             big_field,
@@ -2100,10 +2100,10 @@ mod tests {
         assert!(matches!(res, Err(Error::TooManyLoads)));
 
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             limits,
-            &bytes,
-            &T::U64,
+            bytes,
+            T::U64,
             usize::MAX,
             ONE_MB,
             two_fields,
@@ -2119,10 +2119,10 @@ mod tests {
         // Name evaluates to null when the field doesn't exist
         let formats = [("name {missing}", "value")];
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &T::U64,
+            bytes,
+            T::U64,
             usize::MAX,
             ONE_MB,
             formats,
@@ -2139,10 +2139,10 @@ mod tests {
         let formats = [("field", "value1"), ("field", "value2")];
         let bytes = bcs::to_bytes(&(42u64, 43u64)).unwrap();
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout.clone(),
             usize::MAX,
             ONE_MB,
             formats,
@@ -2154,10 +2154,10 @@ mod tests {
         let formats = [("{a}", "value1"), ("{b}", "value2")];
         let bytes = bcs::to_bytes(&(42u64, 42u64)).unwrap();
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout.clone(),
             usize::MAX,
             ONE_MB,
             formats,
@@ -2169,10 +2169,10 @@ mod tests {
         let formats = [("f42", "value1"), ("f{a}", "value2")];
         let bytes = bcs::to_bytes(&(42u64, 43u64)).unwrap();
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout.clone(),
             usize::MAX,
             ONE_MB,
             formats,

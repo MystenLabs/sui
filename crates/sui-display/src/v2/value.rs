@@ -42,12 +42,13 @@ use crate::v2::parser::Transform;
 use crate::v2::writer::JsonWriter;
 use crate::v2::writer::StringWriter;
 
-/// Dynamically load objects by their ID. The output should be a `Slice` containing references to
-/// the raw BCS bytes and the corresponding `MoveTypeLayout` for the object. This implies the
-/// `Store` acts as a pool of cached objects.
+/// Dynamically load objects by their ID, returning the object's owned data.
+///
+/// The `Store` trait is responsible only for fetching object data -- lifetime management
+/// and caching are handled by the `Interpreter`.
 #[async_trait]
-pub trait Store<'s> {
-    async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<Slice<'s>>>;
+pub trait Store {
+    async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<OwnedSlice>>;
 }
 
 /// Result of evaluating a single strand of a Display v2 format string.
@@ -108,6 +109,13 @@ pub enum Accessor<'s> {
 pub struct Slice<'s> {
     pub(crate) layout: &'s MoveTypeLayout,
     pub(crate) bytes: &'s [u8],
+}
+
+/// An owned version of `Slice`.
+#[derive(Clone)]
+pub struct OwnedSlice {
+    pub layout: MoveTypeLayout,
+    pub bytes: Vec<u8>,
 }
 
 /// An evaluated vector literal.
@@ -423,9 +431,25 @@ impl<'s> Accessor<'s> {
     }
 }
 
+impl OwnedSlice {
+    pub(crate) fn as_slice(&self) -> Slice<'_> {
+        Slice {
+            layout: &self.layout,
+            bytes: &self.bytes,
+        }
+    }
+}
+
 impl Slice<'_> {
     fn format_json(self, w: JsonWriter<'_>) -> Result<serde_json::Value, FormatError> {
         A::MoveValue::visit_deserialize(self.bytes, self.layout, &mut RV::RpcVisitor::new(w))
+    }
+
+    pub(crate) fn to_owned_slice(self) -> OwnedSlice {
+        OwnedSlice {
+            layout: self.layout.clone(),
+            bytes: self.bytes.to_vec(),
+        }
     }
 }
 
@@ -756,7 +780,7 @@ pub(crate) mod tests {
     /// Mock Store implementation for testing.
     #[derive(Default)]
     pub struct MockStore {
-        data: BTreeMap<AccountAddress, (Vec<u8>, MoveTypeLayout)>,
+        data: BTreeMap<AccountAddress, OwnedSlice>,
     }
 
     impl MockStore {
@@ -782,14 +806,14 @@ pub(crate) mod tests {
             let value_type = TypeTag::from(&value_layout);
             let df_id = derive_dynamic_field_id(parent, &name_type, &name_bytes).unwrap();
 
-            let field_bytes = bcs::to_bytes(&Field {
+            let bytes = bcs::to_bytes(&Field {
                 id: UID::new(df_id),
                 name,
                 value,
             })
             .unwrap();
 
-            let field_layout = L::Struct(Box::new(S {
+            let layout = L::Struct(Box::new(S {
                 type_: DynamicFieldInfo::dynamic_field_type(name_type, value_type),
                 fields: vec![
                     F::new(I::new("id").unwrap(), L::Struct(Box::new(UID::layout()))),
@@ -798,7 +822,7 @@ pub(crate) mod tests {
                 ],
             }));
 
-            self.data.insert(df_id.into(), (field_bytes, field_layout));
+            self.data.insert(df_id.into(), OwnedSlice { layout, bytes });
             self
         }
 
@@ -850,23 +874,26 @@ pub(crate) mod tests {
                 ],
             }));
 
-            self.data.insert(dof_id.into(), (field_bytes, field_layout));
-            self.data.insert(val_id, (value_bytes, value_layout));
+            let field = OwnedSlice {
+                layout: field_layout,
+                bytes: field_bytes,
+            };
+
+            let value = OwnedSlice {
+                layout: value_layout,
+                bytes: value_bytes,
+            };
+
+            self.data.insert(dof_id.into(), field);
+            self.data.insert(val_id, value);
             self
         }
     }
 
     #[async_trait]
-    impl<'s> Store<'s> for &'s MockStore {
-        async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<Slice<'s>>> {
-            let Some((bytes, layout)) = self.data.get(&id) else {
-                return Ok(None);
-            };
-
-            Ok(Some(Slice {
-                layout,
-                bytes: bytes.as_slice(),
-            }))
+    impl Store for MockStore {
+        async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<OwnedSlice>> {
+            Ok(self.data.get(&id).cloned())
         }
     }
 
