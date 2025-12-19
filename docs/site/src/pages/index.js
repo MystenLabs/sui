@@ -40,10 +40,10 @@ export default function Home() {
         />
       </Head>
       <Layout>
-        <div 
+      <div 
           className="overflow-hidden min-h-screen flex flex-col bg-cover bg-center bg-no-repeat"
           style={{
-            backgroundColor: '#000000';
+            backgroundColor: '#000000',
           }}
         >
           <div className="w-full mt-8 mb-4 mx-auto">
