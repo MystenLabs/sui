@@ -22,9 +22,9 @@
 }
 
 .card, .cardCTA {
-  background-color: #001129;
+  background-color: #131518;
   border: 1px solid;
-  border-color: #298DFF;
+  border-color: #343940;
   display: flex;
   flex-direction: column;
   padding: 1.25rem;
@@ -47,8 +47,8 @@
 .cardLink {
   display: flex;
   justify-content: flex-start;
-  border-top: solid 1px #298DFF;
-  border-bottom: solid 1px #298DFF;
+  border-top: solid 1px #343940;
+  border-bottom: solid 1px #343940;
   padding: .5rem 0;
   color: #ffffff;
   position: relative;
@@ -105,7 +105,7 @@
 
 .cardB {
   background-color: #131518;
-  border: 1px solid #298DFF;
+  border: 1px solid #343940;
   padding: 1.7rem;
   font-family: var(--headerFont);
   font-size: 1.5rem;
@@ -166,7 +166,7 @@
   flex-direction: row;
   justify-content: flex-start;
   padding: 2.5rem 0;
-  border-bottom: solid 1px #298DFF;
+  border-bottom: solid 1px #343940;
 }
 
 .TwoColItem:last-child {
