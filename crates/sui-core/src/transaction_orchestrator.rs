@@ -377,18 +377,40 @@ where
                         )
                         .await;
                     match result {
-                        Ok(_) => break,
+                        Ok(_) => {
+                            inner
+                                .metrics
+                                .background_retry_attempts
+                                .with_label_values(&["success"])
+                                .inc();
+                            debug!(
+                                "Background retry {i} for transaction {} succeeded",
+                                request.transaction.digest()
+                            );
+                            break;
+                        }
                         Err(e) => {
                             if !e.is_retriable() {
-                                break;
-                            }
-                            inner.metrics.background_retry_errors.inc();
-                            if i % 100 == 0 {
+                                inner
+                                    .metrics
+                                    .background_retry_attempts
+                                    .with_label_values(&["non-retriable"])
+                                    .inc();
                                 debug!(
-                                    "Background retry {i} for transaction {}: {e:?}",
+                                    "Background retry {i} for transaction {} has non-retriable error: {e:?}. Terminating...",
                                     request.transaction.digest()
                                 );
+                                break;
                             }
+                            inner
+                                .metrics
+                                .background_retry_attempts
+                                .with_label_values(&["retriable"])
+                                .inc();
+                            debug!(
+                                "Background retry {i} for transaction {} has retriable error: {e:?}. Continuing...",
+                                request.transaction.digest()
+                            );
                         }
                     };
                     sleep(delay).await;
@@ -914,7 +936,7 @@ pub struct TransactionOrchestratorMetrics {
     early_validation_rejections: IntCounterVec,
 
     background_retry_started: IntGauge,
-    background_retry_errors: IntCounter,
+    background_retry_attempts: IntCounterVec,
 
     request_latency: HistogramVec,
     local_execution_latency: HistogramVec,
@@ -1025,9 +1047,10 @@ impl TransactionOrchestratorMetrics {
                 registry,
             )
             .unwrap(),
-            background_retry_errors: register_int_counter_with_registry!(
-                "tx_orchestrator_background_retry_errors",
-                "Total number of background retry errors, by error type",
+            background_retry_attempts: register_int_counter_vec_with_registry!(
+                "tx_orchestrator_background_retry_attempts",
+                "Total number of background retry attempts, by status",
+                &["status"],
                 registry,
             )
             .unwrap(),
