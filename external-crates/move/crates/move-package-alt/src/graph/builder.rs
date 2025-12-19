@@ -306,10 +306,9 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
         for dep in pinned {
-            let fetched = self.cache.fetch(dep.as_ref(), env, mtx).await?;
-
             // We retain the defined environment name, but we assign a consistent chain id (environmentID).
             let new_env = Environment::new(dep.use_environment().clone(), env.id().clone());
+            let fetched = self.cache.fetch(dep.as_ref(), &new_env, mtx).await?;
 
             let future = self.add_transitive_manifest_deps(
                 fetched.clone(),
