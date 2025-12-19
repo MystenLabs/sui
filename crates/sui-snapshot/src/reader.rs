@@ -30,7 +30,7 @@ use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, Live
 use sui_indexer_alt_framework::task::TrySpawnStreamExt;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::object_store::http::HttpDownloaderBuilder;
-use sui_storage::object_store::util::{copy_files, path_to_filesystem};
+use sui_storage::object_store::util::path_to_filesystem;
 use sui_storage::object_store::{ObjectStoreGetExt, ObjectStoreListExt, ObjectStorePutExt};
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use sui_types::global_state_hash::GlobalStateHash;
@@ -268,15 +268,38 @@ impl StateSnapshotReaderV1 {
                 .unwrap(),
             ),
         );
-        copy_files(
-            &src_files,
-            &dest_files,
-            &remote_object_store,
-            &local_object_store,
-            download_concurrency,
-            Some(progress_bar.clone()),
-        )
-        .await?;
+
+        // Download ref files with retry logic to handle transient network errors
+        info!("Downloading {} reference files with retry support", src_files.len());
+        let file_pairs: Vec<_> = src_files.into_iter().zip(dest_files.into_iter()).collect();
+        futures::stream::iter(file_pairs)
+            .map(|(src, dest)| {
+                let remote_store = remote_object_store.clone();
+                let local_store = local_object_store.clone();
+                let progress = progress_bar.clone();
+                async move {
+                    debug!("Downloading reference file: {} with retry support", src);
+                    let result = Self::copy_file_with_retry(
+                        &src,
+                        &dest,
+                        &remote_store,
+                        &local_store,
+                        max_retries,
+                    )
+                    .await;
+
+                    if let Err(ref e) = result {
+                        error!("Failed to download reference file {}: {:?}", src, e);
+                    }
+
+                    progress.inc(1);
+                    progress.set_message(format!("file: {}", dest));
+                    result
+                }
+            })
+            .buffer_unordered(download_concurrency.get())
+            .try_for_each(|_| futures::future::ready(Ok(())))
+            .await?;
         progress_bar.finish_with_message("Missing ref files download complete");
         Ok(StateSnapshotReaderV1 {
             epoch,
