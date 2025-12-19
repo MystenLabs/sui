@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::mmr::apply_stream_updates;
 use super::{AuthenticatedEvent, AuthenticatedEventsClient, ClientConfig, ClientError};
-use crate::mmr::apply_stream_updates;
 use futures::stream::Stream;
 use mysten_common::debug_fatal;
 use std::sync::Arc;
@@ -112,15 +112,8 @@ impl EventStreamState {
 
         if let Some(last_event) = parsed_events.last() {
             let last_checkpoint = last_event.checkpoint;
-            if last_checkpoint > self.last_verified_checkpoint
-                && let Err(e) = self.verify_events(last_checkpoint, &parsed_events).await
-            {
-                debug_fatal!(
-                    "Failed to verify events up to checkpoint {}: {:?}",
-                    last_checkpoint,
-                    e
-                );
-                return Err(e);
+            if last_checkpoint > self.last_verified_checkpoint {
+                self.verify_events(last_checkpoint, &parsed_events).await?;
             }
             self.current_checkpoint = last_checkpoint + 1;
         }

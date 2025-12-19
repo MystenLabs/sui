@@ -35,6 +35,7 @@ base64.workspace = true
 sui-name-service.workspace = true
 fastcrypto.workspace = true
 sui-types.workspace = true
+sui-macros.workspace = true
 mysten-network.workspace = true
 sui-protocol-config.workspace = true
 sui-package-resolver.workspace = true

@@ -16580,6 +16580,7 @@ dependencies = [
  "serde_with",
  "sui-config",
  "sui-crypto",
+ "sui-macros",
  "sui-name-service",
  "sui-package-resolver",
  "sui-protocol-config",

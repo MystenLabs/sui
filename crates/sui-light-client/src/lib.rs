@@ -12,8 +12,6 @@ pub mod package_store;
 
 pub mod graphql;
 
-pub mod mmr;
-
 pub mod verifier;
 
 pub mod authenticated_events;

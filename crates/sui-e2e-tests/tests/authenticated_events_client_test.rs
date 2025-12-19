@@ -627,6 +627,53 @@ async fn test_client_stream_nonexistent_stream() {
 }
 
 #[sim_test]
+async fn test_client_detects_corrupted_event_data() {
+    use sui_macros::register_fail_point_if;
+
+    let test_cluster = setup_test_cluster().await;
+    let package_id = publish_auth_event_package(&test_cluster).await;
+    let sender = test_cluster.wallet.config.keystore.addresses()[0];
+    let stream_id = SuiAddress::from(package_id);
+
+    register_fail_point_if("corrupt_authenticated_event", || true);
+
+    let genesis_committee = get_genesis_committee(&test_cluster).await;
+    let client_with_corruption = Arc::new(
+        AuthenticatedEventsClient::new(test_cluster.rpc_url(), genesis_committee)
+            .await
+            .unwrap(),
+    );
+
+    let mut corrupted_stream = Box::pin(
+        client_with_corruption
+            .clone()
+            .stream_events(stream_id)
+            .await
+            .unwrap(),
+    );
+
+    emit_events(&test_cluster, package_id, sender, 5).await;
+
+    let mut error_detected = false;
+    while let Some(result) = corrupted_stream.next().await {
+        if let Err(e) = result {
+            assert!(
+                format!("{:?}", e).contains("MMR verification failed"),
+                "Expected MMR verification error, got: {:?}",
+                e
+            );
+            error_detected = true;
+            break;
+        }
+    }
+
+    assert!(
+        error_detected,
+        "Client should detect corrupted event data via MMR mismatch"
+    );
+}
+
+#[sim_test]
 async fn test_client_pagination_limit_forward_progress() {
     let test_cluster = setup_test_cluster().await;
     let package_id = publish_auth_event_package(&test_cluster).await;

@@ -3,6 +3,7 @@
 
 mod converters;
 mod epoch_cache;
+pub mod mmr;
 mod stream;
 
 use crate::proof::base::{Proof, ProofContents, ProofTarget, ProofVerifier};
@@ -470,6 +471,8 @@ impl AuthenticatedEventsClient {
         Ok(committee)
     }
 
+    // TODO: Move trust ratcheting to a shared module since it will be useful for all light clients,
+    // not just authenticated events.
     async fn trust_ratchet_to_checkpoint(&self, checkpoint: u64) -> Result<(), ClientError> {
         loop {
             let (is_in_completed_epoch, current_epoch, current_committee, current_epoch_start) = {
@@ -549,8 +552,7 @@ impl AuthenticatedEventsClient {
         let object: sui_types::object::Object = bcs::from_bytes(object_data_bytes)?;
         let stream_head = Self::extract_stream_head_from_object(&object)?;
 
-        self.verify_ocs_inclusion_proof(&committee, &response)
-            .await?;
+        self.verify_ocs_inclusion_proof(&committee, &response)?;
 
         Ok(stream_head)
     }
@@ -678,7 +680,7 @@ impl AuthenticatedEventsClient {
         Ok(Some((end_of_epoch_checkpoint_seq, next_committee)))
     }
 
-    async fn verify_ocs_inclusion_proof(
+    fn verify_ocs_inclusion_proof(
         &self,
         committee: &Committee,
         response: &sui_rpc_api::grpc::alpha::proof_service_proto::GetObjectInclusionProofResponse,
