@@ -59,10 +59,9 @@ impl ConsensusAuthority {
         transaction_verifier: Arc<dyn TransactionVerifier>,
         commit_consumer: CommitConsumerArgs,
         registry: Registry,
-        // A counter that keeps track of how many times the authority node has been booted while the binary
-        // or the component that is calling the `ConsensusAuthority` has been running. It's mostly useful to
-        // make decisions on whether amnesia recovery should run or not. When `boot_counter` is 0, then `ConsensusAuthority`
-        // will initiate the process of amnesia recovery if that's enabled in the parameters.
+        // A counter that keeps track of how many times the consensus authority has been booted while the process
+        // has been running. It's useful for making decisions on whether amnesia recovery should run.
+        // When `boot_counter` is 0, `ConsensusAuthority` will initiate the process of amnesia recovery if that's enabled in the parameters.
         boot_counter: u64,
     ) -> Self {
         match network_type {
@@ -134,14 +133,13 @@ impl<N> AuthorityNode<N>
 where
     N: NetworkManager<AuthorityService<ChannelCoreThreadDispatcher>>,
 {
+    // See comments above ConsensusAuthority::start() for details on the input.
     pub(crate) async fn start(
         epoch_start_timestamp_ms: u64,
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
         protocol_config: ProtocolConfig,
-        // To avoid accidentally leaking the private key, the protocol key pair should only be
-        // kept in Core.
         protocol_keypair: ProtocolKeyPair,
         network_keypair: NetworkKeyPair,
         clock: Arc<Clock>,
@@ -232,12 +230,16 @@ where
             spawn_logged_monitored_task!(proposed_block_handler.run(), "proposed_block_handler");
 
         let sync_last_known_own_block = boot_counter == 0
-            && dag_state.read().highest_accepted_round() == 0
             && !context
                 .parameters
                 .sync_last_known_own_block_timeout
                 .is_zero();
-        info!("Sync last known own block: {sync_last_known_own_block}");
+        info!(
+            "Sync last known own block: {}. Boot count: {}. Timeout: {:?}.",
+            sync_last_known_own_block,
+            boot_counter,
+            context.parameters.sync_last_known_own_block_timeout
+        );
 
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
 
@@ -258,6 +260,8 @@ where
 
         let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
+        // To avoid accidentally leaking the private key, the protocol key pair should only be
+        // kept in Core.
         let core = Core::new(
             context.clone(),
             leader_schedule,
