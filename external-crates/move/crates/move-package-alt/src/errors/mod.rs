@@ -119,7 +119,9 @@ pub enum PackageError {
         valid: String,
     },
 
-    #[error("You cannot have a dependency with the same name as the package. Rename the dependency, which will require adding `rename-from=\"{name}\"`")]
+    #[error(
+        "You cannot have a dependency with the same name as the package. Rename the dependency, which will require adding `rename-from=\"{name}\"`"
+    )]
     DependencyWithSameNameAsPackage { name: String },
 }
 

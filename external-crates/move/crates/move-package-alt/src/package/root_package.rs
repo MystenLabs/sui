@@ -1663,7 +1663,6 @@ pkg_b = { local = "../pkg_b" }"#,
         assert_eq!(package_names, ["a", "b", "c2", "root"]);
     }
 
-
     #[test(tokio::test)]
     async fn dependency_with_same_name_as_package() {
         let scenario = TestPackageGraph::new(["root", "a"])
