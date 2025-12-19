@@ -281,10 +281,10 @@ impl ConsensusCommitOutput {
         )?;
 
         if let Some(reconfig_state) = &self.reconfig_state {
-            batch.insert_batch(&tables.reconfig_state, [(
-                RECONFIG_STATE_INDEX,
-                reconfig_state,
-            )])?;
+            batch.insert_batch(
+                &tables.reconfig_state,
+                [(RECONFIG_STATE_INDEX, reconfig_state)],
+            )?;
         }
 
         let consensus_commit_stats = self
@@ -292,10 +292,10 @@ impl ConsensusCommitOutput {
             .expect("consensus_commit_stats must be set");
         let round = consensus_commit_stats.index.last_committed_round;
 
-        batch.insert_batch(&tables.last_consensus_stats, [(
-            LAST_CONSENSUS_STATS_ADDR,
-            consensus_commit_stats,
-        )])?;
+        batch.insert_batch(
+            &tables.last_consensus_stats,
+            [(LAST_CONSENSUS_STATS_ADDR, consensus_commit_stats)],
+        )?;
 
         if let Some(next_versions) = self.next_shared_object_versions {
             batch.insert_batch(&tables.next_shared_object_versions_v2, next_versions)?;
@@ -336,10 +336,10 @@ impl ConsensusCommitOutput {
 
         if let Some((round, commit_timestamp)) = self.next_randomness_round {
             batch.insert_batch(&tables.randomness_next_round, [(SINGLETON_KEY, round)])?;
-            batch.insert_batch(&tables.randomness_last_round_timestamp, [(
-                SINGLETON_KEY,
-                commit_timestamp,
-            )])?;
+            batch.insert_batch(
+                &tables.randomness_last_round_timestamp,
+                [(SINGLETON_KEY, commit_timestamp)],
+            )?;
         }
 
         batch.insert_batch(&tables.dkg_confirmations_v2, self.dkg_confirmations)?;
@@ -646,10 +646,10 @@ impl ConsensusOutputQuarantine {
                 contents.iter().map(|tx| (tx.transaction, seq)),
             )?;
 
-            batch.insert_batch(&tables.builder_checkpoint_summary_v2, [(
-                seq,
-                &builder_summary,
-            )])?;
+            batch.insert_batch(
+                &tables.builder_checkpoint_summary_v2,
+                [(seq, &builder_summary)],
+            )?;
 
             let checkpoint_height = builder_summary
                 .checkpoint_height

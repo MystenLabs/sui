@@ -183,9 +183,10 @@ impl<'a> TestAuthorityBuilder<'a> {
         // If no protocol_config is provided, the caller is responsible for setting up
         // any necessary protocol config overrides (e.g., disable_preconsensus_locking=false
         // for tests that use the Quorum Driver flow with extract_cert).
-        let _guard = self.protocol_config.clone().map(|config| {
-            ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone())
-        });
+        let _guard = self
+            .protocol_config
+            .clone()
+            .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
 
         let mut local_network_config_builder =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
