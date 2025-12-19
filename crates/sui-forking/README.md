@@ -25,6 +25,17 @@ Moreover, currently only forking from the last known checkpoint is supported. Yo
 
 ## Usage
 
+### Build from source
+To build the `sui-forking` tool from source, ensure you have Rust and Cargo installed, then run:
+
+```bash
+git clone https://github.com/MystenLabs/sui.git
+cd sui/crates/sui-forking
+cargo build
+```
+
+Now use the `sui-forking` binary located in `sui/target/debug/sui-forking`.
+
 ### Starting a Local Forked Network
 
 Start a local forked network at the latest checkpoint:
@@ -34,7 +45,8 @@ sui-forking start --network testnet
 ```
 
 This command:
-- Starts a local network on port 8123 (default)
+- Starts a local "server" on port 8123 (default) - this is used to interact with the internal network, e.g., advance-checkpoints, request gas, advance-clock, advance-epoch, etc.
+- Starts a local Sui network on port 3000 (default) - this is the (now deprecated) JSON RPC endpoint for interacting with the local network
 - Allows you to execute transactions against this local state and fetches objects on-demand from the real network
 
 #### Options
@@ -128,6 +140,7 @@ sui client ptb --move-call 0x65d106ccd0feddc4183dcaa92decafd3376ee9b34315aae938d
 - If it forks at checkpoint X, you cannot depend on objects created after checkpoint X. You'll need to restart the network at that checkpoint or a later one.
 - Currently, it does not save state. You will lose all changes when you stop the local network.
 - It requires Postgres DB for storing the local network state; a `sui-indexer-alt` DB is needed.
+- Random object is not supported yet.
 
 
 ## Related Tools
