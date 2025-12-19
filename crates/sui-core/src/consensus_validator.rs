@@ -245,8 +245,11 @@ impl SuiTxValidator {
             return Err(SuiErrorKind::AliasesChanged.into());
         }
 
+        // Use the consensus-specific variant that skips the epoch closing check.
+        // Transactions in consensus blocks were accepted before the epoch closed,
+        // so they should be allowed to complete even during epoch transition.
         self.authority_state
-            .handle_vote_transaction(epoch_store, verified_tx.into_tx())?;
+            .handle_vote_transaction_for_consensus(epoch_store, verified_tx.into_tx())?;
 
         Ok(())
     }
