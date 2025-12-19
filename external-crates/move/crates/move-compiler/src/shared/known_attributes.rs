@@ -4,10 +4,7 @@
 use crate::{
     expansion::ast::{Address, ModuleAccess, ModuleIdent, Value},
     shared::{
-        AstDebug, Name, TName,
-        ast_debug::AstWriter,
-        unique_map::UniqueMap,
-        unique_set::UniqueSet,
+        AstDebug, Name, TName, ast_debug::AstWriter, unique_map::UniqueMap, unique_set::UniqueSet,
     },
 };
 
