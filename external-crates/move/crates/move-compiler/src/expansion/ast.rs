@@ -1930,8 +1930,9 @@ impl AstDebug for Mutability {
 
 #[test]
 fn expansion_ast_sizes() {
-    assert!(
-        std::mem::size_of::<ModuleIdent>() == 216,
+    assert_eq!(
+        std::mem::size_of::<ModuleIdent>(),
+        216,
         "ModuleIdent size changed"
     );
 }
