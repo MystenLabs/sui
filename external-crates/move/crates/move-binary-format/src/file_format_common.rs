@@ -657,6 +657,12 @@ pub fn instruction_opcode(instruction: &Bytecode) -> Opcodes {
     }
 }
 
+impl Into<Opcodes> for &Bytecode {
+    fn into(self) -> Opcodes {
+        instruction_opcode(self)
+    }
+}
+
 /// The encoding of the instruction is the serialized form of it, but disregarding the
 /// serialization of the instruction's argument(s).
 pub fn instruction_key(instruction: &Bytecode) -> u8 {
