@@ -9,7 +9,7 @@ use crate::{
     logging::user_note,
     package::{
         EnvironmentName, Package, lockfile::Lockfiles, package_lock::PackageSystemLock,
-        paths::PackagePath,
+        paths::PackagePath, root_package::PackageConfig,
     },
     schema::{Environment, PackageID, PackageName},
 };
@@ -57,14 +57,16 @@ struct PackageCache<F: MoveFlavor> {
     cache: Mutex<BTreeMap<PathBuf, Arc<OnceCell<Option<Arc<Package<F>>>>>>>,
 }
 
-pub struct PackageGraphBuilder<F: MoveFlavor> {
+pub struct PackageGraphBuilder<'a, F: MoveFlavor> {
     cache: PackageCache<F>,
+    config: &'a PackageConfig,
 }
 
-impl<F: MoveFlavor> PackageGraphBuilder<F> {
-    pub fn new() -> Self {
+impl<F: MoveFlavor> PackageGraphBuilder<'a, F> {
+    pub fn new(config: &'a PackageConfig) -> Self {
         Self {
             cache: PackageCache::new(),
+            config,
         }
     }
 
@@ -351,6 +353,7 @@ impl<F: MoveFlavor> PackageCache<F> {
         dep: &Pinned,
         env: &Environment,
         mtx: &PackageSystemLock,
+        config: &PackageConfig,
     ) -> PackageResult<Arc<Package<F>>> {
         let cell = self
             .cache

@@ -128,19 +128,6 @@ impl GitTree {
         self.path_to_repo.join(&self.path_in_repo)
     }
 
-    /// Ensure that the files are downloaded to `self.path_to_tree()`. Fails if there was already a
-    /// dirty checkout there (call [Self::fetch_allow_dirty] if you don't want to
-    /// fail). Returns `self.path_to_tree()`.
-    pub async fn fetch(&self) -> GitResult<PathBuf> {
-        self.checkout_repo(false).await
-    }
-
-    /// Ensure that there are files downloaded to `self.path_to_tree()`. Has no effect if
-    /// `self.path_to_tree()` already exists. Returns `self.path_to_tree()`
-    pub async fn fetch_allow_dirty(&self) -> GitResult<PathBuf> {
-        self.checkout_repo(true).await
-    }
-
     /// The url of the repository for this commit
     pub fn repo_url(&self) -> &str {
         &self.repo
@@ -176,7 +163,7 @@ impl GitTree {
     /// given sha.
     ///
     /// Fails if `allow_dirty` is false and a dirty checkout of the directory already exists
-    async fn checkout_repo(&self, allow_dirty: bool) -> GitResult<PathBuf> {
+    pub async fn checkout_repo(&self, allow_dirty: bool) -> GitResult<PathBuf> {
         // Checking out at `<repo>_<sha>` is sequential to prevent corruptions.
         let _lock =
             PackageSystemLock::new_for_git(&self.repo_id()).map_err(GitError::LockingError)?;

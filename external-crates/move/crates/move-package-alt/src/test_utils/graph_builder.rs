@@ -57,8 +57,10 @@ use crate::{
         vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME, default_environment},
     },
     package::{
-        EnvironmentID, EnvironmentName, RootPackage, package_lock::PackageSystemLock,
+        EnvironmentID, EnvironmentName, RootPackage,
+        package_lock::PackageSystemLock,
         paths::PackagePath,
+        root_package::{LoadType, PackageConfig},
     },
     schema::{Environment, ModeName, OriginalID, PublishAddresses, PublishedID},
     test_utils::{Project, project},
@@ -748,11 +750,30 @@ impl Scenario {
         &self,
         package: impl AsRef<str>,
     ) -> PackageResult<PackageGraph<Vanilla>> {
-        let path = PackagePath::new(self.path_for(package)).unwrap();
+        let path = PackagePath::new(self.path_for(&package)).unwrap();
+
+        let config = PackageConfig {
+            input_path: self.path_for(&package),
+            chain_id: DEFAULT_ENV_ID.to_owned(),
+            load_type: LoadType::Persistent {
+                env: DEFAULT_ENV_NAME.to_owned(),
+            },
+            output_path: self.path_for(&package),
+            modes: vec![],
+            force_repin: false,
+            ignore_digests: false,
+            cache_dir: None,
+            allow_dirty: false,
+        };
         let mtx = path.lock().unwrap();
 
-        PackageGraph::<Vanilla>::load_from_manifests(&path, &vanilla::default_environment(), &mtx)
-            .await
+        PackageGraph::<Vanilla>::load_from_manifests(
+            &path,
+            &vanilla::default_environment(),
+            &mtx,
+            &config,
+        )
+        .await
     }
 
     /// Loads the root package for `package` in the default environment and with no modes
