@@ -1,17 +1,17 @@
 :root {
   --sui-cards-border-color: transparent;
-  --sui-cards-background: #F5F8FA;
-  --sui-cards-header: #4DA2FF;
-  --sui-cards-copy: #91A3B1;
-  --sui-cards-background-hover: #EBF1F5;
+  --sui-cards-background: #F4F5F7;
+  --sui-cards-header: #298DFF;
+  --sui-cards-copy: #6C7584;
+  --sui-cards-background-hover: #E0E2E6;
 }
 
 [data-theme='dark'] {
-    --sui-cards-border-color: rgba(247, 247, 248, 0.05);
-    --sui-cards-background: rgba(247, 247, 248, 0.05);
-    --sui-cards-background-hover: rgba(247, 247, 248, 0.15);
-    --sui-cards-header: #4DA2FF;
-    --sui-cards-copy: #ABBDCC;
+    --sui-cards-border-color: #343940;
+    --sui-cards-background: #222529;
+    --sui-cards-background-hover: #343940;
+    --sui-cards-header: #5CA9FF;
+    --sui-cards-copy: #89919F;
 }
 
 .card {
@@ -62,9 +62,9 @@
   bottom: 2.5rem;
   width: 2px;
   background: linear-gradient(180deg, 
-    #0b93f6 0%, 
-    #e3e3e3 50%, 
-    #2a2f3a 100%
+    #298DFF 0%, 
+    #E0E2E6 50%, 
+    #343940 100%
   );
   opacity: 0.2;
   z-index: 0;
@@ -74,11 +74,11 @@
 .step-card-container > div[class*='card_'] {
   position: relative;
   padding: 1.25rem 1.5rem 1.25rem 4.5rem !important;
-  border: 1px solid rgba(229, 231, 235, 0.8) !important;
+  border: 1px solid #E0E2E6 !important;
   border-radius: 0.625rem !important;
   background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.9) 0%, 
-    rgba(249, 250, 251, 0.9) 100%
+    #ffffff 0%, 
+    #F4F5F7 100%
   ) !important;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   overflow: visible !important;
@@ -98,12 +98,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0b93f6;
+  background: #298DFF;
   color: #ffffff;
   font-weight: 700;
   font-size: 0.813rem;
   border-radius: 0.5rem;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 12px rgba(41, 141, 255, 0.3);
   z-index: 2;
   transition: all 0.3s ease;
 }
@@ -116,9 +116,9 @@
   width: 3px;
   height: 100%;
   background: linear-gradient(180deg, 
-    #0b93f6 0%, 
-    rgba(11, 147, 246, 0.4) 50%,
-    rgba(11, 147, 246, 0) 100%
+    #298DFF 0%, 
+    #5CA9FF 50%,
+    rgba(41, 141, 255, 0) 100%
   );
   opacity: 0;
   transition: opacity 0.3s ease;
@@ -126,20 +126,20 @@
 }
 
 .step-card-container > div[class*='card_']:hover {
-  border-color: rgba(99, 102, 241, 0.3) !important;
+  border-color: #8FCBFF !important;
   background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 1) 0%, 
-    rgba(249, 250, 251, 1) 100%
+    #ffffff 0%, 
+    #F4F5F7 100%
   ) !important;
   box-shadow: 
-    0 4px 16px rgba(99, 102, 241, 0.12),
-    0 0 0 1px rgba(99, 102, 241, 0.1) !important;
+    0 4px 16px rgba(41, 141, 255, 0.12),
+    0 0 0 1px #8FCBFF !important;
   transform: translateX(4px) !important;
 }
 
 .step-card-container > div[class*='card_']:hover::before {
   transform: translateY(-50%) scale(1.1);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+  box-shadow: 0 6px 20px rgba(41, 141, 255, 0.4);
 }
 
 .step-card-container > div[class*='card_']:hover::after {
@@ -155,7 +155,7 @@
 .step-card-container div[class*='card__copy'] {
   font-size: 0.875rem;
   line-height: 1.5;
-  color: rgba(55, 65, 81, 0.9);
+  color: #4B515B;
 }
 
 /* Dark mode */
@@ -164,26 +164,26 @@
 }
 
 [data-theme='dark'] .step-card-container > div[class*='card_'] {
-  border-color: rgba(55, 65, 81, 0.8) !important;
+  border-color: #343940 !important;
   background: linear-gradient(135deg, 
-    rgba(31, 41, 55, 0.9) 0%, 
-    rgba(17, 24, 39, 0.9) 100%
+    #222529 0%, 
+    #131518 100%
   ) !important;
 }
 
 [data-theme='dark'] .step-card-container > div[class*='card_']:hover {
-  border-color: rgba(99, 102, 241, 0.4) !important;
+  border-color: #5CA9FF !important;
   background: linear-gradient(135deg, 
-    rgba(31, 41, 55, 1) 0%, 
-    rgba(17, 24, 39, 1) 100%
+    #222529 0%, 
+    #131518 100%
   ) !important;
   box-shadow: 
-    0 4px 16px rgba(99, 102, 241, 0.2),
-    0 0 0 1px rgba(99, 102, 241, 0.15) !important;
+    0 4px 16px rgba(41, 141, 255, 0.2),
+    0 0 0 1px #5CA9FF !important;
 }
 
 [data-theme='dark'] .step-card-container div[class*='card__copy'] {
-  color: rgba(229, 231, 235, 0.9);
+  color: #E0E2E6;
 }
 
 /* Responsive */
@@ -217,11 +217,11 @@
 .card-container > a[class*='card_'] {
   position: relative;
   padding: 1.25rem 1.5rem !important;
-  border: 1px solid rgba(227, 227, 227, 0.6) !important;
+  border: 1px solid #E0E2E6 !important;
   border-radius: 0.625rem !important;
   background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.9) 0%, 
-    rgba(249, 250, 251, 0.9) 100%
+    #ffffff 0%, 
+    #F4F5F7 100%
   ) !important;
   backdrop-filter: blur(10px);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -239,9 +239,9 @@
   width: 3px;
   height: 100%;
   background: linear-gradient(180deg,
-    #0b93f6 0%, 
-    rgba(11, 147, 246, 0.4) 50%,
-    rgba(11, 147, 246, 0) 100%);
+    #298DFF 0%, 
+    #5CA9FF 50%,
+    rgba(41, 141, 255, 0) 100%);
   opacity: 0;
   transition: opacity 0.3s ease;
   border-radius: 0.625rem 0 0 0.625rem;
@@ -249,13 +249,13 @@
 
 .card-container > div[class*='card_']:hover,
 .card-container > a[class*='card_']:hover {
-  border-color: rgba(11, 147, 246, 0.3) !important;
+  border-color: #8FCBFF !important;
   background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 1) 0%, 
-    rgba(249, 250, 251, 1) 100%
+    #ffffff 0%, 
+    #F4F5F7 100%
   ) !important;
   box-shadow: 
-    0 4px 12px rgba(11, 147, 246, 0.12),
+    0 4px 12px rgba(41, 141, 255, 0.12),
     0 2px 4px rgba(0, 0, 0, 0.04) !important;
   transform: translateY(-2px) !important;
 }
@@ -274,34 +274,34 @@
 .card-container div[class*='card__copy'] {
   font-size: 0.875rem;
   line-height: 1.5;
-  color: rgba(42, 47, 58, 0.85);
+  color: #4B515B;
 }
 
 /* Dark mode */
 [data-theme='dark'] .card-container > div[class*='card_'],
 [data-theme='dark'] .card-container > a[class*='card_'] {
-  border-color: rgba(227, 227, 227, 0.1) !important;
+  border-color: #343940 !important;
   background: linear-gradient(135deg, 
-    rgba(42, 47, 58, 0.9) 0%, 
-    rgba(31, 41, 55, 0.9) 100%
+    #222529 0%, 
+    #131518 100%
   ) !important;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
 }
 
 [data-theme='dark'] .card-container > div[class*='card_']:hover,
 [data-theme='dark'] .card-container > a[class*='card_']:hover {
-  border-color: rgba(11, 147, 246, 0.4) !important;
+  border-color: #5CA9FF !important;
   background: linear-gradient(135deg, 
-    rgba(42, 47, 58, 1) 0%, 
-    rgba(31, 41, 55, 1) 100%
+    #222529 0%, 
+    #131518 100%
   ) !important;
   box-shadow: 
-    0 4px 12px rgba(11, 147, 246, 0.2),
+    0 4px 12px rgba(41, 141, 255, 0.2),
     0 2px 4px rgba(0, 0, 0, 0.15) !important;
 }
 
 [data-theme='dark'] .card-container div[class*='card__copy'] {
-  color: rgba(227, 227, 227, 0.85);
+  color: #E0E2E6;
 }
 
 /* Responsive */
