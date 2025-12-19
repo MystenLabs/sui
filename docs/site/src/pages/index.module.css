@@ -29,7 +29,7 @@
   flex-direction: column;
   padding: 1.25rem;
   justify-content: space-between;
-  border-radius: 30px;
+  border-radius: 2px;
   height: 16rem;
 }
 
@@ -66,7 +66,7 @@
 .cardLink:after {
   position: absolute;
   right: 0;
-  content: url("data:image/svg+xml,%3Csvg width='18' height='19' viewBox='0 0 18 19' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 5.5H14V14.5' stroke='%238FCBFF' stroke-width='2'/%3E%3Cpath d='M14 5.5L3 16.5' stroke='%238FCBFF' stroke-width='2'/%3E%3C/svg%3E");
+  content: url("data:image/svg+xml,%3Csvg width='18' height='19' viewBox='0 0 18 19' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 5.5H14V14.5' stroke='%23298DFF' stroke-width='2'/%3E%3Cpath d='M14 5.5L3 16.5' stroke='%23298DFF' stroke-width='2'/%3E%3C/svg%3E");
   width: 18px;
   height: 18px;
 }
@@ -77,7 +77,7 @@
 }
 
 .cardLink:hover:after {
-  content: url("data:image/svg+xml,%3Csvg width='18' height='19' viewBox='0 0 18 19' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 5.5H14V14.5' stroke='%23DDF2FF' stroke-width='2'/%3E%3Cpath d='M14 5.5L3 16.5' stroke='%23DDF2FF' stroke-width='2'/%3E%3C/svg%3E");
+  content: url("data:image/svg+xml,%3Csvg width='18' height='19' viewBox='0 0 18 19' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 5.5H14V14.5' stroke='%235CA9FF' stroke-width='2'/%3E%3Cpath d='M14 5.5L3 16.5' stroke='%235CA9FF' stroke-width='2'/%3E%3C/svg%3E");
 }
 
 .cardCTALink {
@@ -116,7 +116,7 @@
   letter-spacing: -0.04em;
   text-align: left;
   color: #ffffff;
-  border-radius: 36px;
+  border-radius: 2px;
   display: flex;
   flex-direction: column;
   row-gap: 1.5rem;
@@ -128,7 +128,7 @@
 }
 
 .cardB svg path {
-  fill: #8FCBFF;
+  fill: #298DFF;
 }
 
 .cardB span {
