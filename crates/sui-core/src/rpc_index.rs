@@ -620,7 +620,7 @@ impl IndexStoreTables {
             self.index_transactions(&checkpoint_data, &mut batch, load_events)?;
 
             batch
-                .write_opt(&(bulk_ingestion_write_options()))
+                .write_opt(bulk_ingestion_write_options())
                 .map_err(StorageError::from)
         })?;
 
@@ -1742,7 +1742,7 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
         // data we need to hold in memory doesn't grow unbounded.
         if self.batch.size_in_bytes() >= self.batch_size_limit {
             std::mem::replace(&mut self.batch, self.tables.owner.batch())
-                .write_opt(&bulk_ingestion_write_options())?;
+                .write_opt(bulk_ingestion_write_options())?;
         }
 
         Ok(())
@@ -1753,7 +1753,7 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
             &self.tables.balance,
             std::mem::take(&mut self.balance_changes),
         )?;
-        self.batch.write_opt(&bulk_ingestion_write_options())?;
+        self.batch.write_opt(bulk_ingestion_write_options())?;
         Ok(())
     }
 }
