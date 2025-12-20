@@ -1399,7 +1399,6 @@ mod tests {
     use super::Chain as C;
     use super::Expr as E;
     use super::Literal as L;
-    use super::Parser;
     use super::Strand as S;
     use super::*;
 

@@ -208,15 +208,16 @@ impl<'s> Format<'s> {
 
 #[cfg(test)]
 mod tests {
-    use std::{str::FromStr, sync::atomic::AtomicUsize};
+    use std::str::FromStr;
+    use std::sync::atomic::AtomicUsize;
 
     use base64::Engine as _;
     use base64::engine::general_purpose::STANDARD;
     use insta::assert_debug_snapshot;
     use insta::assert_json_snapshot;
     use move_core_types::account_address::AccountAddress;
-    use move_core_types::annotated_value::MoveTypeLayout as T;
     use move_core_types::annotated_value::MoveTypeLayout;
+    use move_core_types::annotated_value::MoveTypeLayout as L;
     use move_core_types::u256::U256;
     use serde::Serialize;
     use sui_types::base_types::move_ascii_str_layout;
@@ -314,12 +315,12 @@ mod tests {
         let layout = struct_(
             "0x1::m::S",
             vec![
-                ("addr", T::Address),
-                ("none", optional_(T::Bool)),
-                ("some", optional_(T::Bool)),
-                ("posn", struct_("0x1::m::P", vec![("pos0", T::U8)])),
-                ("nums", vector_(T::U64)),
-                ("kvps", vec_map(T::U32, T::U32)),
+                ("addr", L::Address),
+                ("none", optional_(L::Bool)),
+                ("some", optional_(L::Bool)),
+                ("posn", struct_("0x1::m::P", vec![("pos0", L::U8)])),
+                ("nums", vector_(L::U64)),
+                ("kvps", vec_map(L::U32, L::U32)),
             ],
         );
 
@@ -367,7 +368,7 @@ mod tests {
                 "parent",
                 struct_(
                     "0x1::m::Parent",
-                    vec![("id", T::Struct(Box::new(UID::layout())))],
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
                 ),
             )],
         );
@@ -378,21 +379,21 @@ mod tests {
             .with_dynamic_field(
                 parent,
                 "df_key",
-                T::Struct(Box::new(move_utf8_str_layout())),
+                L::Struct(Box::new(move_utf8_str_layout())),
                 (10u64, 20u64),
-                struct_("0x1::m::Inner", vec![("x", T::U64), ("y", T::U64)]),
+                struct_("0x1::m::Inner", vec![("x", L::U64), ("y", L::U64)]),
             )
             .with_dynamic_object_field(
                 parent,
                 "dof_key",
-                T::Struct(Box::new(move_utf8_str_layout())),
+                L::Struct(Box::new(move_utf8_str_layout())),
                 (child, 100u64, 200u64),
                 struct_(
                     "0x1::m::Child",
                     vec![
-                        ("id", T::Struct(Box::new(UID::layout()))),
-                        ("x", T::U64),
-                        ("y", T::U64),
+                        ("id", L::Struct(Box::new(UID::layout()))),
+                        ("x", L::U64),
+                        ("y", L::U64),
                     ],
                 ),
             );
@@ -454,19 +455,19 @@ mod tests {
         .unwrap();
 
         let fields = vec![
-            ("addr", T::Address),
-            ("id", T::Struct(Box::new(ID::layout()))),
-            ("uid", T::Struct(Box::new(UID::layout()))),
-            ("flag", T::Bool),
-            ("n8", T::U8),
-            ("n16", T::U16),
-            ("n32", T::U32),
-            ("n64", T::U64),
-            ("n128", T::U128),
-            ("n256", T::U256),
-            ("ascii", T::Struct(Box::new(move_ascii_str_layout()))),
-            ("utf8", T::Struct(Box::new(move_ascii_str_layout()))),
-            ("url", T::Struct(Box::new(url_layout()))),
+            ("addr", L::Address),
+            ("id", L::Struct(Box::new(ID::layout()))),
+            ("uid", L::Struct(Box::new(UID::layout()))),
+            ("flag", L::Bool),
+            ("n8", L::U8),
+            ("n16", L::U16),
+            ("n32", L::U32),
+            ("n64", L::U64),
+            ("n128", L::U128),
+            ("n256", L::U256),
+            ("ascii", L::Struct(Box::new(move_ascii_str_layout()))),
+            ("utf8", L::Struct(Box::new(move_ascii_str_layout()))),
+            ("url", L::Struct(Box::new(url_layout()))),
         ];
 
         let formats = [
@@ -535,8 +536,8 @@ mod tests {
             bcs::to_bytes(&(vec![2u64, 1u64, 0u64], vec!["first", "second", "third"])).unwrap();
 
         let fields = vec![
-            ("ns", vector_(T::U64)),
-            ("ss", vector_(T::Struct(Box::new(move_ascii_str_layout())))),
+            ("ns", vector_(L::U64)),
+            ("ss", vector_(L::Struct(Box::new(move_ascii_str_layout())))),
         ];
 
         let formats = [
@@ -586,10 +587,10 @@ mod tests {
             vec![
                 (
                     "Pending",
-                    vec![("message", T::Struct(Box::new(move_ascii_str_layout())))],
+                    vec![("message", L::Struct(Box::new(move_ascii_str_layout())))],
                 ),
-                ("Active", vec![("progress", T::U32)]),
-                ("Done", vec![("count", T::U128), ("timestamp", T::U64)]),
+                ("Active", vec![("progress", L::U32)]),
+                ("Done", vec![("count", L::U128), ("timestamp", L::U64)]),
             ],
         );
 
@@ -697,22 +698,22 @@ mod tests {
         let inner = struct_(
             "0x1::m::Inner",
             vec![
-                ("value", T::U64),
-                ("label", T::Struct(Box::new(move_ascii_str_layout()))),
+                ("value", L::U64),
+                ("label", L::Struct(Box::new(move_ascii_str_layout()))),
             ],
         );
 
         let item = struct_(
             "0x1::m::Item",
             vec![
-                ("id", T::U32),
-                ("name", T::Struct(Box::new(move_ascii_str_layout()))),
+                ("id", L::U32),
+                ("name", L::Struct(Box::new(move_ascii_str_layout()))),
             ],
         );
 
         let tuple = struct_(
             "0x1::m::Tuple",
-            vec![("pos0", T::U64), ("pos1", T::U64), ("pos2", T::U64)],
+            vec![("pos0", L::U64), ("pos1", L::U64), ("pos2", L::U64)],
         );
 
         let option = enum_(
@@ -770,7 +771,7 @@ mod tests {
     #[tokio::test]
     async fn test_format_string_bytes() {
         let bytes = bcs::to_bytes("ABC").unwrap();
-        let layout = T::Struct(Box::new(move_ascii_str_layout()));
+        let layout = L::Struct(Box::new(move_ascii_str_layout()));
 
         let formats = vec![
             ("serialized", "{bytes[0u64]}"),
@@ -808,7 +809,7 @@ mod tests {
     #[tokio::test]
     async fn test_format_missing_fields() {
         let bytes = bcs::to_bytes(&(42u64, vec![10u64, 20u64, 30u64])).unwrap();
-        let fields = vec![("num", T::U64), ("nums", vector_(T::U64))];
+        let fields = vec![("num", L::U64), ("nums", vector_(L::U64))];
 
         let formats = [
             // Scalars produce empty responses on any field access
@@ -867,7 +868,7 @@ mod tests {
     #[tokio::test]
     async fn test_format_alternates() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
-        let layout = struct_("0x1::m::S", vec![("bar", T::U64)]);
+        let layout = struct_("0x1::m::S", vec![("bar", L::U64)]);
 
         let formats = [
             ("succeeds", "{bar | baz}"),
@@ -911,7 +912,7 @@ mod tests {
         let bytes = bcs::to_bytes(&(Some(100u64), None::<u64>)).unwrap();
         let layout = struct_(
             "0x1::m::S",
-            vec![("a", optional_(T::U64)), ("b", optional_(T::U64))],
+            vec![("a", optional_(L::U64)), ("b", optional_(L::U64))],
         );
 
         let formats = [("some", "{a | 42u64}"), ("none", "{b | 43u64}")];
@@ -944,7 +945,7 @@ mod tests {
     async fn test_format_optional_auto_dereference() {
         let inner = struct_(
             "0x1::m::Inner",
-            vec![("data", T::U64), ("optional_data", optional_(T::U64))],
+            vec![("data", L::U64), ("optional_data", optional_(L::U64))],
         );
 
         let layout = struct_(
@@ -953,8 +954,8 @@ mod tests {
                 ("some_inner", optional_(inner.clone())),
                 ("none_inner", optional_(inner.clone())),
                 ("partial_inner", optional_(inner)),
-                ("some_value", optional_(T::U64)),
-                ("none_value", optional_(T::U64)),
+                ("some_value", optional_(L::U64)),
+                ("none_value", optional_(L::U64)),
             ],
         );
 
@@ -1034,7 +1035,7 @@ mod tests {
                 "parent",
                 struct_(
                     "0x1::m::Parent",
-                    vec![("id", T::Struct(Box::new(UID::layout())))],
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
                 ),
             )],
         );
@@ -1043,9 +1044,9 @@ mod tests {
         let store = MockStore::default().with_dynamic_field(
             parent,
             "key",
-            T::Struct(Box::new(move_utf8_str_layout())),
+            L::Struct(Box::new(move_utf8_str_layout())),
             (42u64, 43u64),
-            struct_("0x1::m::Inner", vec![("x", T::U64), ("y", T::U64)]),
+            struct_("0x1::m::Inner", vec![("x", L::U64), ("y", L::U64)]),
         );
 
         let formats = [
@@ -1104,7 +1105,7 @@ mod tests {
                 "parent",
                 struct_(
                     "0x1::m::Parent",
-                    vec![("id", T::Struct(Box::new(UID::layout())))],
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
                 ),
             )],
         );
@@ -1112,14 +1113,14 @@ mod tests {
         let store = MockStore::default().with_dynamic_object_field(
             parent,
             "key",
-            T::Struct(Box::new(move_utf8_str_layout())),
+            L::Struct(Box::new(move_utf8_str_layout())),
             (child, 100u64, 200u64),
             struct_(
                 "0x1::m::Child",
                 vec![
-                    ("id", T::Struct(Box::new(UID::layout()))),
-                    ("x", T::U64),
-                    ("y", T::U64),
+                    ("id", L::Struct(Box::new(UID::layout()))),
+                    ("x", L::U64),
+                    ("y", L::U64),
                 ],
             ),
         );
@@ -1177,7 +1178,7 @@ mod tests {
                 "parent",
                 struct_(
                     "0x1::m::Parent",
-                    vec![("id", T::Struct(Box::new(UID::layout())))],
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
                 ),
             )],
         );
@@ -1186,19 +1187,19 @@ mod tests {
             .with_dynamic_object_field(
                 parent,
                 "L1",
-                T::Struct(Box::new(move_utf8_str_layout())),
+                L::Struct(Box::new(move_utf8_str_layout())),
                 (child, 100u64),
                 struct_(
                     "0x1::m::Child",
-                    vec![("id", T::Struct(Box::new(UID::layout()))), ("data", T::U64)],
+                    vec![("id", L::Struct(Box::new(UID::layout()))), ("data", L::U64)],
                 ),
             )
             .with_dynamic_field(
                 child,
                 "L2",
-                T::Struct(Box::new(move_utf8_str_layout())),
+                L::Struct(Box::new(move_utf8_str_layout())),
                 (10u64, 20u64),
-                struct_("0x1::m::Inner", vec![("x", T::U64), ("y", T::U64)]),
+                struct_("0x1::m::Inner", vec![("x", L::U64), ("y", L::U64)]),
             );
 
         let formats = [
@@ -1236,12 +1237,12 @@ mod tests {
         let key = struct_(
             "0x42::m::Key",
             vec![
-                ("id", T::U64),
-                ("name", T::Struct(Box::new(move_ascii_str_layout()))),
+                ("id", L::U64),
+                ("name", L::Struct(Box::new(move_ascii_str_layout()))),
             ],
         );
 
-        let val = struct_("0x42::m::Value", vec![("data", T::U32)]);
+        let val = struct_("0x42::m::Value", vec![("data", L::U32)]);
 
         // Create test data: VecMap with 3 entries
         let bytes = bcs::to_bytes(&VecMap {
@@ -1310,7 +1311,7 @@ mod tests {
     #[tokio::test]
     async fn test_format_timestamp() {
         let bytes = bcs::to_bytes(&1681318800000u64).unwrap();
-        let layout = struct_("0x1::m::S", vec![("timestamp", T::U64)]);
+        let layout = struct_("0x1::m::S", vec![("timestamp", L::U64)]);
 
         let formats = [
             ("epoch", "{0u64:ts}"),
@@ -1381,15 +1382,15 @@ mod tests {
         let layout = struct_(
             "0x1::m::S",
             vec![
-                ("n8", T::U8),
-                ("n16", T::U16),
-                ("n32", T::U32),
-                ("n64", T::U64),
-                ("n128", T::U128),
-                ("n256", T::U256),
-                ("addr", T::Address),
-                ("bytes", vector_(T::U8)),
-                ("str", T::Struct(Box::new(move_ascii_str_layout()))),
+                ("n8", L::U8),
+                ("n16", L::U16),
+                ("n32", L::U32),
+                ("n64", L::U64),
+                ("n128", L::U128),
+                ("n256", L::U256),
+                ("addr", L::Address),
+                ("bytes", vector_(L::U8)),
+                ("str", L::Struct(Box::new(move_ascii_str_layout()))),
             ],
         );
 
@@ -1467,10 +1468,10 @@ mod tests {
         let layout = struct_(
             "0x1::m::S",
             vec![
-                ("num", T::U32),
-                ("str", T::Struct(Box::new(move_ascii_str_layout()))),
-                ("emoji", T::Struct(Box::new(move_utf8_str_layout()))),
-                ("bytes", T::Struct(Box::new(url_layout()))),
+                ("num", L::U32),
+                ("str", L::Struct(Box::new(move_ascii_str_layout()))),
+                ("emoji", L::Struct(Box::new(move_utf8_str_layout()))),
+                ("bytes", L::Struct(Box::new(url_layout()))),
             ],
         );
 
@@ -1503,7 +1504,7 @@ mod tests {
     #[tokio::test]
     async fn test_format_base64() {
         let bytes = bcs::to_bytes(&00u8).unwrap();
-        let layout = struct_("0x1::m::S", vec![("dummy_field", T::Bool)]);
+        let layout = struct_("0x1::m::S", vec![("dummy_field", L::Bool)]);
 
         let formats = [
             ("byte", "{0u8:base64}"),
@@ -1617,12 +1618,12 @@ mod tests {
         let layout = struct_(
             "0x1::m::S",
             vec![
-                ("n8", T::U8),
-                ("n16", T::U16),
-                ("n32", T::U32),
-                ("n64", T::U64),
-                ("str", T::Struct(Box::new(move_utf8_str_layout()))),
-                ("bytes", vector_(T::U8)),
+                ("n8", L::U8),
+                ("n16", L::U16),
+                ("n32", L::U32),
+                ("n64", L::U64),
+                ("str", L::Struct(Box::new(move_utf8_str_layout()))),
+                ("bytes", vector_(L::U8)),
             ],
         );
 
@@ -1685,7 +1686,7 @@ mod tests {
     #[tokio::test]
     async fn test_format_bcs_modifiers() {
         let bytes = bcs::to_bytes(&00u8).unwrap();
-        let layout = struct_("0x1::m::S", vec![("dummy_field", T::Bool)]);
+        let layout = struct_("0x1::m::S", vec![("dummy_field", L::Bool)]);
 
         let formats = [
             ("byte", "{0u8:bcs}"),
@@ -1803,33 +1804,33 @@ mod tests {
         let layout = struct_(
             "0x1::m::S",
             vec![
-                ("n8", T::U8),
-                ("n16", T::U16),
-                ("n32", T::U32),
-                ("n64", T::U64),
-                ("str", T::Struct(Box::new(move_utf8_str_layout()))),
-                ("bytes", vector_(T::U8)),
+                ("n8", L::U8),
+                ("n16", L::U16),
+                ("n32", L::U32),
+                ("n64", L::U64),
+                ("str", L::Struct(Box::new(move_utf8_str_layout()))),
+                ("bytes", vector_(L::U8)),
                 (
                     "none",
-                    struct_("0x1::option::Option<u8>", vec![("vec", vector_(T::U8))]),
+                    struct_("0x1::option::Option<u8>", vec![("vec", vector_(L::U8))]),
                 ),
                 (
                     "some",
                     struct_(
                         "0x1::option::Option<vector<u32>>",
-                        vec![("vec", vector_(vector_(T::U32)))],
+                        vec![("vec", vector_(vector_(L::U32)))],
                     ),
                 ),
                 (
                     "variant",
                     enum_(
                         "0x1::m::E",
-                        vec![("A", vec![("x", T::U8)]), ("B", vec![("y", T::U16)])],
+                        vec![("A", vec![("x", L::U8)]), ("B", vec![("y", L::U16)])],
                     ),
                 ),
                 (
                     "nested",
-                    struct_("0x1::m::N", vec![("a", T::U32), ("b", T::U64)]),
+                    struct_("0x1::m::N", vec![("a", L::U32), ("b", L::U64)]),
                 ),
             ],
         );
@@ -1969,9 +1970,9 @@ mod tests {
         let layout = struct_(
             "0x1::m::S",
             vec![
-                ("ascii", T::Struct(Box::new(move_utf8_str_layout()))),
-                ("utf8", T::Struct(Box::new(move_utf8_str_layout()))),
-                ("invalid", T::Struct(Box::new(move_utf8_str_layout()))),
+                ("ascii", L::Struct(Box::new(move_utf8_str_layout()))),
+                ("utf8", L::Struct(Box::new(move_utf8_str_layout()))),
+                ("invalid", L::Struct(Box::new(move_utf8_str_layout()))),
             ],
         );
 
@@ -2014,7 +2015,7 @@ mod tests {
     #[tokio::test]
     async fn test_format_field_errors() {
         let bytes = bcs::to_bytes(&0u8).unwrap();
-        let layout = struct_("0x1::m::S", vec![("byte", T::U8)]);
+        let layout = struct_("0x1::m::S", vec![("byte", L::U8)]);
 
         let formats = [
             ("parsing_error", "{42"),
@@ -2114,7 +2115,7 @@ mod tests {
     #[tokio::test]
     async fn test_format_vector_literal_type_mismatch() {
         let bytes = bcs::to_bytes(&0u8).unwrap();
-        let layout = struct_("0x1::m::S", vec![("byte", T::U8)]);
+        let layout = struct_("0x1::m::S", vec![("byte", L::U8)]);
 
         let formats = [
             ("between_literals", "{vector[42u8, 42u64]:bcs}"),
@@ -2178,7 +2179,7 @@ mod tests {
             MockStore::default(),
             limits.clone(),
             bytes.clone(),
-            T::U64,
+            L::U64,
             usize::MAX,
             ONE_MB,
             big_field,
@@ -2190,7 +2191,7 @@ mod tests {
             MockStore::default(),
             limits,
             bytes,
-            T::U64,
+            L::U64,
             usize::MAX,
             ONE_MB,
             two_fields,
@@ -2208,7 +2209,7 @@ mod tests {
             MockStore::default(),
             Limits::default(),
             bytes,
-            T::U64,
+            L::U64,
             usize::MAX,
             10,
             formats,
@@ -2234,7 +2235,7 @@ mod tests {
             MockStore::default(),
             Limits::default(),
             bytes,
-            T::U64,
+            L::U64,
             3,
             ONE_MB,
             formats,
@@ -2277,7 +2278,7 @@ mod tests {
             MockStore::default(),
             limits.clone(),
             bytes.clone(),
-            T::U64,
+            L::U64,
             usize::MAX,
             ONE_MB,
             big_field,
@@ -2289,7 +2290,7 @@ mod tests {
             MockStore::default(),
             limits,
             bytes,
-            T::U64,
+            L::U64,
             usize::MAX,
             ONE_MB,
             two_fields,
@@ -2308,7 +2309,7 @@ mod tests {
             MockStore::default(),
             Limits::default(),
             bytes,
-            T::U64,
+            L::U64,
             usize::MAX,
             ONE_MB,
             formats,
@@ -2319,7 +2320,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_format_duplicate_name() {
-        let layout = struct_("0x1::m::S", vec![("a", T::U64), ("b", T::U64)]);
+        let layout = struct_("0x1::m::S", vec![("a", L::U64), ("b", L::U64)]);
 
         // Static duplicate: same literal name
         let formats = [("field", "value1"), ("field", "value2")];
