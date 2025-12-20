@@ -2036,6 +2036,74 @@ impl AuthorityPerEpochStore {
         Ok(self.tables()?.transaction_cert_signatures.get(tx_digest)?)
     }
 
+    /// Gets owned object locks, checking quarantine first then falling back to DB.
+    /// Used for post-consensus conflict detection when preconsensus locking is disabled.
+    /// After crash recovery, quarantine is empty so we naturally fall back to DB.
+    pub fn get_owned_object_locks(
+        &self,
+        obj_refs: &[ObjectRef],
+    ) -> SuiResult<Vec<Option<LockDetails>>> {
+        let tables = self.tables()?;
+        self.consensus_quarantine
+            .read()
+            .get_owned_object_locks(&tables, obj_refs)
+    }
+
+    /// Attempts to acquire owned object locks for a transaction post-consensus.
+    /// This is used when preconsensus locking is disabled.
+    ///
+    /// Checks for conflicts against:
+    /// 1. Existing locks in quarantine (from earlier consensus commits in this epoch)
+    /// 2. Existing locks in DB (from crash recovery)
+    /// 3. Intra-commit conflicts (locks acquired by earlier transactions in the same commit)
+    ///
+    /// Returns the new locks to add if successful, or an error message if there's a conflict.
+    pub fn try_acquire_owned_object_locks_post_consensus(
+        &self,
+        owned_object_refs: &[ObjectRef],
+        tx_digest: TransactionDigest,
+        current_commit_locks: &[(ObjectRef, LockDetails)],
+    ) -> Result<Vec<(ObjectRef, LockDetails)>, String> {
+        if owned_object_refs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Check quarantine and DB for existing locks
+        let existing_locks = self
+            .get_owned_object_locks(owned_object_refs)
+            .unwrap_or_default();
+
+        // Check for conflicts with existing locks (from earlier commits or crash recovery)
+        for (lock, obj_ref) in existing_locks.iter().zip(owned_object_refs) {
+            if let Some(locked_tx_digest) = lock
+                && *locked_tx_digest != tx_digest
+            {
+                return Err(format!(
+                    "Object {:?} already locked by transaction {:?}, conflicting with {:?}",
+                    obj_ref, locked_tx_digest, tx_digest
+                ));
+            }
+        }
+
+        // Check for intra-commit conflicts (transactions processed earlier in the same commit)
+        for obj_ref in owned_object_refs {
+            for (locked_ref, locked_tx) in current_commit_locks {
+                if locked_ref == obj_ref && *locked_tx != tx_digest {
+                    return Err(format!(
+                        "Object {:?} already locked by transaction {:?} in same commit, conflicting with {:?}",
+                        obj_ref, locked_tx, tx_digest
+                    ));
+                }
+            }
+        }
+
+        // No conflicts - return the new locks to add
+        Ok(owned_object_refs
+            .iter()
+            .map(|obj_ref| (*obj_ref, tx_digest))
+            .collect())
+    }
+
     /// Resolves InputObjectKinds into InputKeys. `assigned_versions` is used to map shared inputs
     /// to specific object versions.
     pub(crate) fn get_input_object_keys(
@@ -2152,7 +2220,7 @@ impl AuthorityPerEpochStore {
         Ok(result)
     }
 
-    /// Called when transaction outputs are committed to disk
+    /// Called when transaction outputs are committed to disk.
     #[instrument(level = "trace", skip_all)]
     pub fn handle_finalized_checkpoint(
         &self,
@@ -2270,19 +2338,6 @@ impl AuthorityPerEpochStore {
             .multi_get(digests)?
             .into_iter()
             .collect())
-    }
-
-    /// Checks if a transaction has been assigned to a checkpoint by the builder.
-    /// This is used during crash recovery to avoid dropping transactions that were
-    /// already included in a checkpoint but whose effects weren't persisted.
-    pub fn is_transaction_in_pending_checkpoint(
-        &self,
-        digest: &TransactionDigest,
-    ) -> SuiResult<bool> {
-        Ok(self
-            .tables()?
-            .builder_digest_to_checkpoint
-            .contains_key(digest)?)
     }
 
     // For each key in objects_to_init, return the next version for that key as recorded in the

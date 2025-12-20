@@ -98,7 +98,7 @@ pub(crate) struct ConsensusCommitOutput {
     )>,
 
     // Owned object locks acquired post-consensus (when disable_preconsensus_locking=true)
-    owned_object_locks: Option<Vec<(ObjectRef, LockDetails)>>,
+    owned_object_locks: Vec<(ObjectRef, LockDetails)>,
 }
 
 impl ConsensusCommitOutput {
@@ -258,8 +258,8 @@ impl ConsensusCommitOutput {
     }
 
     pub fn set_owned_object_locks(&mut self, locks: Vec<(ObjectRef, LockDetails)>) {
-        assert!(self.owned_object_locks.is_none());
-        self.owned_object_locks = Some(locks);
+        assert!(self.owned_object_locks.is_empty());
+        self.owned_object_locks = locks;
     }
 
     pub fn write_to_batch(
@@ -301,10 +301,10 @@ impl ConsensusCommitOutput {
             batch.insert_batch(&tables.next_shared_object_versions_v2, next_versions)?;
         }
 
-        if let Some(locks) = self.owned_object_locks {
+        if !self.owned_object_locks.is_empty() {
             batch.insert_batch(
                 &tables.owned_object_locked_transactions,
-                locks
+                self.owned_object_locks
                     .into_iter()
                     .map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
             )?;
@@ -512,8 +512,8 @@ pub(crate) struct ConsensusOutputQuarantine {
 
     processed_consensus_messages: RefCountedHashMap<SequencedConsensusTransactionKey, ()>,
 
-    // Owned object locks acquired post-consensus
-    owned_object_locks: RefCountedHashMap<ObjectRef, LockDetails>,
+    // Owned object locks acquired post-consensus.
+    owned_object_locks: HashMap<ObjectRef, LockDetails>,
 
     metrics: Arc<EpochMetrics>,
 }
@@ -533,7 +533,7 @@ impl ConsensusOutputQuarantine {
             processed_consensus_messages: RefCountedHashMap::new(),
             congestion_control_randomness_object_debts: RefCountedHashMap::new(),
             congestion_control_object_debts: RefCountedHashMap::new(),
-            owned_object_locks: RefCountedHashMap::new(),
+            owned_object_locks: HashMap::new(),
             metrics: authority_metrics,
         }
     }
@@ -774,18 +774,14 @@ impl ConsensusOutputQuarantine {
     }
 
     fn insert_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
-        if let Some(locks) = output.owned_object_locks.as_ref() {
-            for (obj_ref, lock) in locks {
-                self.owned_object_locks.insert(*obj_ref, *lock);
-            }
+        for (obj_ref, lock) in &output.owned_object_locks {
+            self.owned_object_locks.insert(*obj_ref, *lock);
         }
     }
 
     fn remove_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
-        if let Some(locks) = output.owned_object_locks.as_ref() {
-            for (obj_ref, _) in locks {
-                self.owned_object_locks.remove(obj_ref);
-            }
+        for (obj_ref, _) in &output.owned_object_locks {
+            self.owned_object_locks.remove(obj_ref);
         }
     }
 }
@@ -842,6 +838,31 @@ impl ConsensusOutputQuarantine {
                 tables
                     .next_shared_object_versions_v2
                     .multi_get(object_keys)
+                    .expect("db error")
+            },
+        ))
+    }
+
+    /// Gets owned object locks, checking quarantine first then falling back to DB.
+    /// Used for post-consensus conflict detection when preconsensus locking is disabled.
+    /// After crash recovery, quarantine is empty so we naturally fall back to DB.
+    pub(super) fn get_owned_object_locks(
+        &self,
+        tables: &AuthorityEpochTables,
+        obj_refs: &[ObjectRef],
+    ) -> SuiResult<Vec<Option<LockDetails>>> {
+        Ok(do_fallback_lookup(
+            obj_refs,
+            |obj_ref| {
+                if let Some(lock) = self.owned_object_locks.get(obj_ref) {
+                    CacheResult::Hit(Some(*lock))
+                } else {
+                    CacheResult::Miss
+                }
+            },
+            |obj_refs| {
+                tables
+                    .multi_get_locked_transactions(obj_refs)
                     .expect("db error")
             },
         ))

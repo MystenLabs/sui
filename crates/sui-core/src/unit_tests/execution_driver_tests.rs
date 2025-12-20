@@ -907,6 +907,13 @@ async fn test_authority_txn_signing_pushback() {
 // Tests that when validator is in load shedding mode, it can pushback txn execution correctly.
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_authority_txn_execution_pushback() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     telemetry_subscribers::init_for_testing();
 
     // Create one sender, one recipient addresses, and 2 gas objects.

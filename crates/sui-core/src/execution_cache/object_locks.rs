@@ -146,7 +146,7 @@ impl ObjectLocks {
         Ok(())
     }
 
-    fn clear_cached_locks(&self, locks: &[(ObjectRef, LockDetails)]) {
+    pub(crate) fn clear_cached_locks(&self, locks: &[(ObjectRef, LockDetails)]) {
         for (obj_ref, lock) in locks {
             let entry = self.locked_transactions.entry(*obj_ref);
             let mut occupied = match entry {
@@ -202,7 +202,7 @@ impl ObjectLocks {
         owned_input_objects: &[ObjectRef],
         tx_digest: TransactionDigest,
         signed_transaction: Option<VerifiedSignedTransaction>,
-    ) -> SuiResult<Vec<(ObjectRef, LockDetails)>> {
+    ) -> SuiResult {
         // First validate all object versions match live objects
         Self::validate_owned_object_versions(cache, owned_input_objects)?;
 
@@ -242,21 +242,15 @@ impl ObjectLocks {
             }
         }
 
-        // When preconsensus locking is disabled, locks are buffered in ConsensusCommitOutput
-        // and written as part of the consensus commit batch. The in-memory cache is kept for
-        // conflict detection within the same consensus commit.
-        // When preconsensus locking is enabled, write locks to DB immediately.
-        if !epoch_store.protocol_config().disable_preconsensus_locking() {
-            // commit all writes to DB
-            epoch_store
-                .tables()?
-                .write_transaction_locks(signed_transaction, locks_to_write.iter().cloned())?;
+        // commit all writes to DB
+        epoch_store
+            .tables()?
+            .write_transaction_locks(signed_transaction, locks_to_write.iter().cloned())?;
 
-            // remove pending locks from unbounded storage
-            self.clear_cached_locks(&locks_to_write);
-        }
+        // remove pending locks from unbounded storage
+        self.clear_cached_locks(&locks_to_write);
 
-        Ok(locks_to_write)
+        Ok(())
     }
 
     /// Validates owned object versions and digests without acquiring locks.

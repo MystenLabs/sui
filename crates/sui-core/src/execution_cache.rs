@@ -605,15 +605,13 @@ pub trait ExecutionCacheWrite: Send + Sync {
     fn write_fastpath_transaction_outputs(&self, tx_outputs: Arc<TransactionOutputs>);
 
     /// Attempt to acquire object locks for all of the owned input locks.
-    /// Returns the acquired locks, which may need to be buffered for batch writing
-    /// when preconsensus locking is disabled.
     fn acquire_transaction_locks(
         &self,
         epoch_store: &AuthorityPerEpochStore,
         owned_input_objects: &[ObjectRef],
         tx_digest: TransactionDigest,
         signed_transaction: Option<VerifiedSignedTransaction>,
-    ) -> SuiResult<Vec<(ObjectRef, TransactionDigest)>>;
+    ) -> SuiResult;
 
     /// Validate owned object versions and digests without acquiring locks.
     /// Used when preconsensus locking is disabled to validate objects without locking,

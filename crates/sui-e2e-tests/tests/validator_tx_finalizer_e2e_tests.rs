@@ -3,6 +3,8 @@
 
 use std::time::Duration;
 use sui_macros::sim_test;
+#[cfg(msim)]
+use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::publish_basics_package_and_make_counter;
 use sui_types::base_types::dbg_addr;
 use test_cluster::TestClusterBuilder;
@@ -87,6 +89,13 @@ async fn test_validator_tx_finalizer_consensus_tx() {
 #[cfg(msim)]
 #[sim_test]
 async fn test_validator_tx_finalizer_equivocation() {
+    // This test verifies equivocation detection via preconsensus locking,
+    // which only applies when disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let cluster = TestClusterBuilder::new()
         .with_num_validators(7)
         // Make epoch duration large enough so that reconfig is never triggered.

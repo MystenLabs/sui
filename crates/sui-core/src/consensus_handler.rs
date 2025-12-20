@@ -82,7 +82,7 @@ use crate::{
         randomness::{DkgStatus, RandomnessManager},
         reconfiguration::ReconfigState,
     },
-    execution_cache::{ExecutionCacheWrite, ObjectCacheRead, TransactionCacheRead},
+    execution_cache::ObjectCacheRead,
     execution_scheduler::{ExecutionScheduler, SchedulingSource},
     post_consensus_tx_reorder::PostConsensusTxReorder,
     scoring_decision::update_low_scoring_authorities,
@@ -162,8 +162,6 @@ impl ConsensusHandlerInitializer {
             self.state.execution_scheduler().clone(),
             self.consensus_adapter.clone(),
             self.state.get_object_cache_reader().clone(),
-            self.state.get_cache_writer().clone(),
-            self.state.get_transaction_cache_reader().clone(),
             self.low_scoring_authorities.clone(),
             consensus_committee,
             self.state.metrics.clone(),
@@ -537,13 +535,6 @@ pub struct ConsensusHandler<C> {
     checkpoint_service: Arc<C>,
     /// cache reader is needed when determining the next version to assign for shared objects.
     cache_reader: Arc<dyn ObjectCacheRead>,
-    /// cache writer is needed for post-consensus owned object conflict detection
-    /// when preconsensus locking is disabled.
-    cache_writer: Arc<dyn ExecutionCacheWrite>,
-    /// transaction cache reader is needed to check if a transaction was already executed,
-    /// which is used during crash recovery to skip post-consensus lock acquisition
-    /// for transactions that were executed before the crash.
-    transaction_cache_reader: Arc<dyn TransactionCacheRead>,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// The consensus committee used to do stake computations for deciding set of low scoring authorities
@@ -577,8 +568,6 @@ impl<C> ConsensusHandler<C> {
         execution_scheduler: Arc<ExecutionScheduler>,
         consensus_adapter: Arc<ConsensusAdapter>,
         cache_reader: Arc<dyn ObjectCacheRead>,
-        cache_writer: Arc<dyn ExecutionCacheWrite>,
-        transaction_cache_reader: Arc<dyn TransactionCacheRead>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
@@ -604,8 +593,6 @@ impl<C> ConsensusHandler<C> {
             last_consensus_stats,
             checkpoint_service,
             cache_reader,
-            cache_writer,
-            transaction_cache_reader,
             low_scoring_authorities,
             committee,
             metrics,
@@ -638,8 +625,6 @@ impl<C> ConsensusHandler<C> {
         execution_scheduler_sender: ExecutionSchedulerSender,
         consensus_adapter: Arc<ConsensusAdapter>,
         cache_reader: Arc<dyn ObjectCacheRead>,
-        cache_writer: Arc<dyn ExecutionCacheWrite>,
-        transaction_cache_reader: Arc<dyn TransactionCacheRead>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
@@ -656,8 +641,6 @@ impl<C> ConsensusHandler<C> {
             last_consensus_stats,
             checkpoint_service,
             cache_reader,
-            cache_writer,
-            transaction_cache_reader,
             low_scoring_authorities,
             committee,
             metrics,
@@ -2047,16 +2030,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // When pre-consensus locking is disabled, perform post-consensus owned object
                 // conflict detection BEFORE setting Finalized status. If lock acquisition fails,
                 // the transaction has invalid/conflicting owned inputs and should be dropped.
-                //
-                // During crash recovery, transactions may have already been executed (either via
-                // checkpoint sync or locally before the crash). Skip lock acquisition for already
-                // executed transactions to avoid incorrectly dropping them due to stale object
-                // versions (which were advanced by prior execution).
-                //
-                // Additionally, check if the transaction was already assigned to a checkpoint
-                // (in builder_digest_to_checkpoint). This handles the case where checkpoint
-                // summary was persisted but transaction effects weren't - we must not drop
-                // these transactions or we'll get checkpoint mismatch errors.
                 if self
                     .epoch_store
                     .protocol_config()
@@ -2064,63 +2037,31 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     && let Some(tx) = parsed.transaction.kind.as_user_transaction()
                     && let Ok(input_objects) = tx.transaction_data().input_objects()
                 {
-                    // Check if this transaction was already executed (has effects).
-                    // This covers both checkpoint-synced transactions and locally-executed
-                    // transactions that were in pending checkpoints before a crash.
-                    let already_executed = self
-                        .transaction_cache_reader
-                        .is_tx_already_executed(tx.digest());
+                    let owned_object_refs: Vec<_> = input_objects
+                        .iter()
+                        .filter_map(|obj| match obj {
+                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => Some(*obj_ref),
+                            _ => None,
+                        })
+                        .collect();
 
-                    // Also check if transaction was already assigned to a checkpoint.
-                    // This handles crash recovery where checkpoint summary was persisted
-                    // but effects weren't.
-                    let in_pending_checkpoint = self
+                    match self
                         .epoch_store
-                        .is_transaction_in_pending_checkpoint(tx.digest())
-                        .unwrap_or(false);
-
-                    if already_executed || in_pending_checkpoint {
-                        debug!(
-                            "Skipping lock acquisition for transaction {:?} (already_executed={}, in_pending_checkpoint={})",
-                            tx.digest(),
-                            already_executed,
-                            in_pending_checkpoint
-                        );
-                    } else {
-                        let owned_object_refs: Vec<_> = input_objects
-                            .iter()
-                            .filter_map(|obj| match obj {
-                                InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => Some(*obj_ref),
-                                _ => None,
-                            })
-                            .collect();
-
-                        if !owned_object_refs.is_empty() {
-                            match self.cache_writer.acquire_transaction_locks(
-                                &self.epoch_store,
-                                &owned_object_refs,
-                                *tx.digest(),
-                                None,
-                            ) {
-                                Ok(locks) => {
-                                    owned_object_locks.extend(locks);
-                                }
-                                Err(error) => {
-                                    debug!(
-                                        "Dropping transaction {:?} due to invalid owned object inputs: {:?}",
-                                        tx.digest(),
-                                        error
-                                    );
-                                    self.epoch_store.set_consensus_tx_status(
-                                        position,
-                                        ConsensusTxStatus::DroppedInvalidOwnedInputs,
-                                    );
-                                    // Store the detailed error so clients can get
-                                    // ObjectVersionUnavailableForConsumption with correct versions
-                                    self.epoch_store.set_rejection_vote_reason(position, &error);
-                                    continue;
-                                }
-                            }
+                        .try_acquire_owned_object_locks_post_consensus(
+                            &owned_object_refs,
+                            *tx.digest(),
+                            &owned_object_locks,
+                        ) {
+                        Ok(new_locks) => {
+                            owned_object_locks.extend(new_locks);
+                        }
+                        Err(conflict_msg) => {
+                            debug!("Dropping transaction {:?}: {}", tx.digest(), conflict_msg);
+                            self.epoch_store.set_consensus_tx_status(
+                                position,
+                                ConsensusTxStatus::DroppedInvalidOwnedInputs,
+                            );
+                            continue;
                         }
                     }
                 }
@@ -3201,8 +3142,6 @@ mod tests {
             state.execution_scheduler().clone(),
             consensus_adapter,
             state.get_object_cache_reader().clone(),
-            state.get_cache_writer().clone(),
-            state.get_transaction_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
             consensus_committee.clone(),
             metrics,
@@ -3646,8 +3585,6 @@ mod tests {
             state.execution_scheduler().clone(),
             consensus_adapter,
             state.get_object_cache_reader().clone(),
-            state.get_cache_writer().clone(),
-            state.get_transaction_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
             consensus_committee.clone(),
             metrics,
@@ -3768,8 +3705,6 @@ mod tests {
             state.execution_scheduler().clone(),
             consensus_adapter,
             state.get_object_cache_reader().clone(),
-            state.get_cache_writer().clone(),
-            state.get_transaction_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
             consensus_committee.clone(),
             metrics,

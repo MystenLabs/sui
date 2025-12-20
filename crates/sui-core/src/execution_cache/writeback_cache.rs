@@ -2281,7 +2281,7 @@ impl ExecutionCacheWrite for WritebackCache {
         owned_input_objects: &[ObjectRef],
         tx_digest: TransactionDigest,
         signed_transaction: Option<VerifiedSignedTransaction>,
-    ) -> SuiResult<Vec<(ObjectRef, TransactionDigest)>> {
+    ) -> SuiResult {
         self.object_locks.acquire_transaction_locks(
             self,
             epoch_store,

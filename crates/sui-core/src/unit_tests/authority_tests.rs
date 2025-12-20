@@ -2094,6 +2094,13 @@ async fn test_handle_move_transaction() {
 
 #[sim_test]
 async fn test_conflicting_transactions() {
+    // This test verifies preconsensus lock conflict detection, which only applies
+    // when disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient1 = dbg_addr(2);
     let recipient2 = dbg_addr(3);
@@ -2415,6 +2422,13 @@ async fn test_type_argument_dependencies() {
 
 #[tokio::test]
 async fn test_handle_confirmation_transaction_receiver_equal_sender() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let (address, key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -2443,6 +2457,13 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
 
 #[tokio::test]
 async fn test_handle_confirmation_transaction_ok() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -2507,6 +2528,13 @@ async fn test_handle_confirmation_transaction_ok() {
 
 #[tokio::test]
 async fn test_handle_confirmation_transaction_idempotent() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -2637,6 +2665,13 @@ async fn test_move_call_mutable_object_not_mutated() {
 
 #[tokio::test]
 async fn test_move_call_insufficient_gas() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     // This test attempts to trigger a transaction execution that would fail due to insufficient gas.
     // We want to ensure that even though the transaction failed to execute, all objects
     // are mutated properly.
@@ -3005,6 +3040,13 @@ async fn test_authority_persist() {
 
 #[tokio::test]
 async fn test_idempotent_reversed_confirmation() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     // In this test we exercise the case where an authority first receive the certificate,
     // and then receive the raw transaction latter. We should still ensure idempotent
     // response and be able to get back the same result.
@@ -3267,6 +3309,13 @@ async fn test_genesis_sui_system_state_object() {
 
 #[tokio::test]
 async fn test_transfer_sui_no_amount() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
@@ -3320,6 +3369,13 @@ async fn test_transfer_sui_no_amount() {
 
 #[tokio::test]
 async fn test_transfer_sui_with_amount() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
@@ -3367,6 +3423,13 @@ async fn test_transfer_sui_with_amount() {
 
 #[tokio::test]
 async fn test_clear_cache_reverts_transfer_sui() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     // This test checks that transfers are reverted after cache is cleared
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let (recipient, _sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -3423,6 +3486,13 @@ fn build_and_commit(
 
 #[tokio::test]
 async fn test_clear_cache_reverts_wrap_move_call() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (authority_state, object_basics) =
@@ -3499,6 +3569,13 @@ async fn test_clear_cache_reverts_wrap_move_call() {
 
 #[tokio::test]
 async fn test_clear_cache_reverts_unwrap_move_call() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (authority_state, object_basics) =
@@ -3770,6 +3847,13 @@ async fn test_dynamic_object_field_address_name_parsing() {
 
 #[tokio::test]
 async fn test_clear_cache_removes_added_ofield() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (authority_state, object_basics) =
@@ -3876,6 +3960,13 @@ async fn test_clear_cache_removes_added_ofield() {
 
 #[tokio::test]
 async fn test_clear_cache_reverts_removed_ofield() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (authority_state, object_basics) =
@@ -3996,6 +4087,13 @@ async fn test_clear_cache_reverts_removed_ofield() {
 
 #[tokio::test]
 async fn test_iter_live_object_set() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let (receiver, _): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
