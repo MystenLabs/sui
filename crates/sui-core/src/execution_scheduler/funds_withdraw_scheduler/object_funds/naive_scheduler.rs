@@ -60,7 +60,7 @@ impl NaiveObjectFundsWithdrawScheduler {
             // which means this transaction is not committed yet,
             // so the settlement transaction at the end of the same consensus commit cannot have settled yet.
             // That is, we must be blocked by this transaction in order to make progress.
-            let funds = self.funds_read.get_latest_account_amount(obj_id);
+            let (funds, _version) = self.funds_read.get_latest_account_amount(obj_id);
             let unsettled_withdraw = self
                 .inner
                 .read()
