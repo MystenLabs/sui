@@ -643,7 +643,6 @@ impl<K, V> DBMap<K, V> {
         DBBatch::new(
             &self.db,
             batch,
-            &self.opts,
             &self.db_metrics,
             &self.write_sample_interval,
         )
@@ -1176,7 +1175,6 @@ pub enum StorageWriteBatch {
 pub struct DBBatch {
     database: Arc<Database>,
     batch: StorageWriteBatch,
-    options: ReadWriteOptions,
     db_metrics: Arc<DBMetrics>,
     write_sample_interval: SamplingInterval,
 }
@@ -1188,14 +1186,12 @@ impl DBBatch {
     pub fn new(
         dbref: &Arc<Database>,
         batch: StorageWriteBatch,
-        options: &ReadWriteOptions,
         db_metrics: &Arc<DBMetrics>,
         write_sample_interval: &SamplingInterval,
     ) -> Self {
         DBBatch {
             database: dbref.clone(),
             batch,
-            options: options.clone(),
             db_metrics: db_metrics.clone(),
             write_sample_interval: write_sample_interval.clone(),
         }
@@ -1204,15 +1200,14 @@ impl DBBatch {
     /// Consume the batch and write its operations to the database
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
-        self.write_opt(rocksdb::WriteOptions::default())
+        let mut write_options = rocksdb::WriteOptions::default();
+        write_options.set_sync(true);
+        self.write_opt(write_options)
     }
 
     /// Consume the batch and write its operations to the database with custom write options
     #[instrument(level = "trace", skip_all, err)]
-    pub fn write_opt(
-        self,
-        mut write_options: rocksdb::WriteOptions,
-    ) -> Result<(), TypedStoreError> {
+    pub fn write_opt(self, write_options: rocksdb::WriteOptions) -> Result<(), TypedStoreError> {
         let db_name = self.database.db_name();
         let timer = self
             .db_metrics
@@ -1228,9 +1223,6 @@ impl DBBatch {
             None
         };
 
-        if self.options.sync_writes {
-            write_options.set_sync(true);
-        }
         self.database
             .write_opt_internal(self.batch, &write_options)?;
 
