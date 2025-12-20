@@ -317,8 +317,8 @@ axum = { version = "0.8", default-features = false, features = [
   "ws",
 ] }
 axum-extra = { version = "0.10", features = ["typed-header"] }
-axum-server = { git = "https://github.com/bmwill/axum-server.git", rev = "f44323e271afdd1365fd0c8b0a4c0bbdf4956cb7", version = "0.6", default-features = false, features = [
-  "tls-rustls",
+axum-server = { version = "0.8", default-features = false, features = [
+  "tls-rustls-no-provider",
 ] }
 backoff = { version = "0.4.0", features = [
   "futures",
@@ -439,8 +439,8 @@ moka = { version = "0.12", default-features = false, features = [
   "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "427147994705914a2f5afa42bc140794e31113b9", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "427147994705914a2f5afa42bc140794e31113b9", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9d787303d855f6cec92eb94933717d4ee1963548", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9d787303d855f6cec92eb94933717d4ee1963548", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }

@@ -274,11 +274,11 @@ mod tests {
         }
 
         let app = axum::Router::new().route("/", axum::routing::get(handler));
-        let listener = std::net::TcpListener::bind("localhost:0").unwrap();
+        let listener = tokio::net::TcpListener::bind("localhost:0").await.unwrap();
         let server_address = listener.local_addr().unwrap();
         let acceptor = TlsAcceptor::new(tls_config);
         let _server = tokio::spawn(async move {
-            axum_server::Server::from_tcp(listener)
+            axum_server::Server::<std::net::SocketAddr>::from_listener(listener)
                 .acceptor(acceptor)
                 .serve(app.into_make_service())
                 .await
