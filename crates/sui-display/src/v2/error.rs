@@ -32,7 +32,7 @@ pub enum Error {
     NameInvalid(String),
 
     #[error("Error evaluating name pattern {0:?}: {1}")]
-    NameError(String, FormatError),
+    NameEvaluation(String, FormatError),
 
     #[error("Display contains too many elements")]
     TooBig,

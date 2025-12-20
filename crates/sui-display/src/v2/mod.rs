@@ -10,26 +10,28 @@ use sui_types::collection_types::Entry;
 use sui_types::collection_types::VecMap;
 
 use crate::v2::error::Error;
-use crate::v2::error::FormatError;
-use crate::v2::interpreter::Interpreter;
-use crate::v2::meter::Limits;
 use crate::v2::meter::Meter;
 use crate::v2::parser::Chain;
 use crate::v2::parser::Parser;
 use crate::v2::parser::Strand;
-use crate::v2::value::Store;
-use crate::v2::value::Value;
 use crate::v2::writer::Writer;
 
-pub mod error;
-pub mod interpreter;
-pub mod lexer;
-pub mod meter;
-pub mod parser;
-pub(crate) mod peek;
-pub mod value;
-pub(crate) mod visitor;
-pub(crate) mod writer;
+mod error;
+mod interpreter;
+mod lexer;
+mod meter;
+mod parser;
+mod peek;
+mod value;
+mod visitor;
+mod writer;
+
+pub use crate::v2::error::FormatError;
+pub use crate::v2::interpreter::Interpreter;
+pub use crate::v2::meter::Limits;
+pub use crate::v2::value::OwnedSlice;
+pub use crate::v2::value::Store;
+pub use crate::v2::value::Value;
 
 /// A path into a Move value, to extract a sub-slice.
 pub struct Extract<'s>(Chain<'s>);
@@ -191,7 +193,7 @@ impl<'s> Format<'s> {
                 Ok(JSON::String(n)) => n,
                 Ok(JSON::Null) => return Err(Error::NameEmpty(src.to_owned())),
                 Ok(_) => return Err(Error::NameInvalid(src.to_owned())),
-                Err(e) => return Err(Error::NameError(src.to_owned(), e)),
+                Err(e) => return Err(Error::NameEvaluation(src.to_owned(), e)),
             };
 
             match output.entry(n) {
@@ -226,8 +228,6 @@ mod tests {
     use sui_types::id::ID;
     use sui_types::id::UID;
 
-    use crate::v2::error::FormatError;
-    use crate::v2::value::OwnedSlice;
     use crate::v2::value::tests::MockStore;
     use crate::v2::value::tests::enum_;
     use crate::v2::value::tests::optional_;
