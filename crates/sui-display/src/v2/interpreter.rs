@@ -23,7 +23,7 @@ use crate::v2::value as V;
 use crate::v2::visitor::extractor::Extractor;
 
 /// The interpreter is responsible for evaluating expressions inside format strings into values.
-pub(crate) struct Interpreter<S: V::Store> {
+pub struct Interpreter<S: V::Store> {
     store: S,
 
     /// Cache of the objects that have been fetched so far. This cache is never evicted -- it is
@@ -34,9 +34,10 @@ pub(crate) struct Interpreter<S: V::Store> {
 }
 
 impl<S: V::Store> Interpreter<S> {
-    /// Create a new interpreter instance. `root` is its contents (bytes and layout). `store` is
-    /// used to fetch additional objects as needed.
-    pub(crate) fn new(root: V::OwnedSlice, store: S) -> Self {
+    /// Create a new interpreter instance. `root` is the contents (bytes and layout) of an object
+    /// that acts as the root of all field accesses. `store` is used to fetch additional objects as
+    /// needed.
+    pub fn new(root: V::OwnedSlice, store: S) -> Self {
         Self {
             store,
             cache: DashMap::new(),

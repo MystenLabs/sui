@@ -444,13 +444,6 @@ impl Slice<'_> {
     fn format_json(self, w: JsonWriter<'_>) -> Result<serde_json::Value, FormatError> {
         A::MoveValue::visit_deserialize(self.bytes, self.layout, &mut RV::RpcVisitor::new(w))
     }
-
-    pub(crate) fn to_owned_slice(self) -> OwnedSlice {
-        OwnedSlice {
-            layout: self.layout.clone(),
-            bytes: self.bytes.to_vec(),
-        }
-    }
 }
 
 impl Vector<'_> {
@@ -778,7 +771,7 @@ pub(crate) mod tests {
     use super::*;
 
     /// Mock Store implementation for testing.
-    #[derive(Default)]
+    #[derive(Default, Clone)]
     pub struct MockStore {
         data: BTreeMap<AccountAddress, OwnedSlice>,
     }
@@ -939,6 +932,22 @@ pub(crate) mod tests {
         struct_(
             &format!("0x1::option::Option<{type_}>"),
             vec![("vec", vector_(layout))],
+        )
+    }
+
+    pub fn vec_map(key: MoveTypeLayout, value: MoveTypeLayout) -> MoveTypeLayout {
+        let key_type = TypeTag::from(&key);
+        let value_type = TypeTag::from(&value);
+
+        struct_(
+            &format!("0x2::vec_map::VecMap<{key_type}, {value_type}>"),
+            vec![(
+                "contents",
+                vector_(struct_(
+                    &format!("0x2::vec_map::Entry<{key_type}, {value_type}>"),
+                    vec![("key", key), ("value", value)],
+                )),
+            )],
         )
     }
 

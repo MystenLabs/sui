@@ -288,22 +288,34 @@ macro_rules! match_token_opt {
 ///  b64mod    ::= 'url' | 'nopad'
 ///
 impl<'s> Parser<'s> {
-    /// Construct a new parser, consuming input from the `src` string.
-    pub(crate) fn new(src: &'s str) -> Self {
-        Self {
-            lexer: Lexer::new(src).peekable2(),
-        }
-    }
-
-    /// Entrypoint into the parser, parsing the root non-terminal -- `format`.
-    pub(crate) fn run<'b>(
+    /// Entrypoint into the parser, parsing the `format` non-terminal, and ensuring there is no
+    /// remaining input.
+    pub(crate) fn format<'b>(
         src: &'s str,
         meter: &mut Meter<'b>,
     ) -> Result<Vec<Strand<'s>>, FormatError> {
-        Self::new(src).parse_format(meter)
+        let mut parser = Self {
+            lexer: Lexer::new_for_text(src).peekable2(),
+        };
+
+        let strands = parser.parse_format(meter)?;
+        parser.parse_eos()?;
+        Ok(strands)
     }
 
-    fn parse_format<'b>(mut self, meter: &mut Meter<'b>) -> Result<Vec<Strand<'s>>, FormatError> {
+    /// Entrypoint into the parser, parsing the `chain` non-terminal, and ensuring there is no
+    /// remaining input.
+    pub(crate) fn chain<'b>(src: &'s str, meter: &mut Meter<'b>) -> Result<Chain<'s>, FormatError> {
+        let mut parser = Self {
+            lexer: Lexer::new_for_expr(src).peekable2(),
+        };
+
+        let chain = parser.parse_chain(meter)?;
+        parser.parse_eos()?;
+        Ok(chain)
+    }
+
+    fn parse_format<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Vec<Strand<'s>>, FormatError> {
         let mut strands = vec![];
         while self.lexer.peek().is_some() {
             strands.push(self.parse_strand(meter)?);
@@ -1018,6 +1030,15 @@ impl<'s> Parser<'s> {
 
         Ok(xmod)
     }
+
+    /// Parse end-of-string. Any remaining input is considered an error.
+    fn parse_eos(&mut self) -> Result<(), FormatError> {
+        if let Some(lex) = self.lexer.next() {
+            Err(FormatError::UnexpectedRemaining(lex.detach()))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl Base64Modifier {
@@ -1387,7 +1408,7 @@ mod tests {
         let mut budget = limits.budget();
         let mut meter = Meter::new(limits.max_depth, &mut budget);
 
-        let strands = match Parser::run(src, &mut meter) {
+        let strands = match Parser::format(src, &mut meter) {
             Ok(strands) => strands,
             Err(e) => return format!("Error: {e}"),
         };
@@ -1410,7 +1431,7 @@ mod tests {
         let mut budget = limits.budget();
         let mut meter = Meter::new(limits.max_depth, &mut budget);
 
-        let strands = Parser::new(src).parse_format(&mut meter).unwrap();
+        let strands = Parser::format(src, &mut meter).unwrap();
         (
             usize::MAX - budget.nodes,
             usize::MAX - budget.loads,
@@ -1428,7 +1449,7 @@ mod tests {
         let mut budget = limits.budget();
         let mut meter = Meter::new(limits.max_depth, &mut budget);
 
-        Parser::new(src).parse_format(&mut meter)
+        Parser::format(src, &mut meter)
     }
 
     #[test]

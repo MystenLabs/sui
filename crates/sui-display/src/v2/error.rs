@@ -91,6 +91,9 @@ pub enum FormatError {
     #[error("Unexpected end-of-string, expected {expect}")]
     UnexpectedEos { expect: ExpectedSet },
 
+    #[error("Unexpected {0}, expected end-of-string")]
+    UnexpectedRemaining(OwnedLexeme),
+
     #[error("Unexpected {actual}, expected {expect}")]
     UnexpectedToken {
         actual: OwnedLexeme,
