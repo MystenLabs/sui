@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anemo::types::PeerAffinity;
 use anemo::types::PeerInfo;
 use anemo::{Network, Peer, PeerId, Request, Response, types::PeerEvent};
 use fastcrypto::ed25519::{Ed25519PublicKey, Ed25519Signature};
@@ -13,7 +14,7 @@ use std::{
     sync::{Arc, RwLock},
     time::Duration,
 };
-use sui_config::p2p::{AccessType, DiscoveryConfig, P2pConfig, SeedPeer};
+use sui_config::p2p::{AccessType, DiscoveryConfig, P2pConfig};
 use sui_types::crypto::{NetworkKeyPair, Signer, ToFromBytes, VerifyingKey};
 use sui_types::digests::Digest;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
@@ -114,7 +115,8 @@ pub struct TrustedPeerChangeEvent {
 struct DiscoveryEventLoop {
     config: P2pConfig,
     discovery_config: Arc<DiscoveryConfig>,
-    allowlisted_peers: Arc<HashMap<PeerId, Option<Multiaddr>>>,
+    configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
+    unidentified_seed_peers: Vec<anemo::types::Address>,
     network: Network,
     keypair: NetworkKeyPair,
     tasks: JoinSet<()>,
@@ -201,35 +203,9 @@ impl DiscoveryEventLoop {
     }
 
     fn configure_preferred_peers(&mut self) {
-        for (peer_id, address) in self
-            .discovery_config
-            .allowlisted_peers
-            .iter()
-            .map(|sp| (sp.peer_id, sp.address.clone()))
-            .chain(self.config.seed_peers.iter().filter_map(|ap| {
-                ap.peer_id
-                    .map(|peer_id| (peer_id, Some(ap.address.clone())))
-            }))
-        {
-            let anemo_address = if let Some(address) = address {
-                let Ok(address) = address.to_anemo_address() else {
-                    debug!(p2p_address=?address, "Can't convert p2p address to anemo address");
-                    continue;
-                };
-                Some(address)
-            } else {
-                None
-            };
-
-            // TODO: once we have `PeerAffinity::Allowlisted` we should update allowlisted peers'
-            // affinity.
-            let peer_info = anemo::types::PeerInfo {
-                peer_id,
-                affinity: anemo::types::PeerAffinity::High,
-                address: anemo_address.into_iter().collect(),
-            };
+        for peer_info in self.configured_peers.values() {
             debug!(?peer_info, "Add configured preferred peer");
-            self.network.known_peers().insert(peer_info);
+            self.network.known_peers().insert(peer_info.clone());
         }
     }
 
@@ -242,7 +218,7 @@ impl DiscoveryEventLoop {
         }
     }
 
-    // TODO: we don't boot out old committee member yets, however we may want to do this
+    // TODO: we don't boot out old committee members yet, however we may want to do this
     // in the future along with other network management work.
     fn handle_trusted_peer_change_event(
         &mut self,
@@ -282,7 +258,7 @@ impl DiscoveryEventLoop {
                         peer,
                         self.state.clone(),
                         self.metrics.clone(),
-                        self.allowlisted_peers.clone(),
+                        self.configured_peers.clone(),
                     ));
                 }
             }
@@ -309,7 +285,7 @@ impl DiscoveryEventLoop {
                 self.discovery_config.clone(),
                 self.state.clone(),
                 self.metrics.clone(),
-                self.allowlisted_peers.clone(),
+                self.configured_peers.clone(),
             ));
 
         // Cull old peers older than a day
@@ -364,16 +340,23 @@ impl DiscoveryEventLoop {
         }
 
         // If we aren't connected to anything and we aren't presently trying to connect to anyone
-        // we need to try the seed peers
+        // we need to try the configured peers with High affinity (seed peers)
+        let has_peers_to_dial = || {
+            self.configured_peers
+                .values()
+                .any(|p| p.affinity == PeerAffinity::High)
+                || !self.unidentified_seed_peers.is_empty()
+        };
         if self.dial_seed_peers_task.is_none()
             && state.connected_peers.is_empty()
             && self.pending_dials.is_empty()
-            && !self.config.seed_peers.is_empty()
+            && has_peers_to_dial()
         {
             let abort_handle = self.tasks.spawn(try_to_connect_to_seed_peers(
                 self.network.clone(),
                 self.discovery_config.clone(),
-                self.config.seed_peers.clone(),
+                self.configured_peers.clone(),
+                self.unidentified_seed_peers.clone(),
             ));
 
             self.dial_seed_peers_task = Some(abort_handle);
@@ -407,37 +390,61 @@ async fn try_to_connect_to_peer(network: Network, info: NodeInfo) {
 async fn try_to_connect_to_seed_peers(
     network: Network,
     config: Arc<DiscoveryConfig>,
-    seed_peers: Vec<SeedPeer>,
+    configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
+    unidentified_seed_peers: Vec<anemo::types::Address>,
 ) {
-    debug!(?seed_peers, "Connecting to seed peers");
+    let high_affinity_peers: Vec<_> = configured_peers
+        .values()
+        .filter(|p| p.affinity == PeerAffinity::High)
+        .cloned()
+        .collect();
+    debug!(
+        ?high_affinity_peers,
+        ?unidentified_seed_peers,
+        "Connecting to seed peers"
+    );
     let network = &network;
 
-    futures::stream::iter(seed_peers.into_iter().filter_map(|seed| {
-        seed.address
-            .to_anemo_address()
-            .ok()
-            .map(|address| (seed, address))
-    }))
-    .for_each_concurrent(
-        config.target_concurrent_connections(),
-        |(seed, address)| async move {
-            // Ignore the result and just log the error  if there is one
-            let _ = if let Some(peer_id) = seed.peer_id {
-                network.connect_with_peer_id(address, peer_id).await
-            } else {
-                network.connect(address).await
-            }
-            .tap_err(|e| debug!("error dialing multiaddr '{}': {e}", seed.address));
-        },
-    )
-    .await;
+    // Attempt connection to all high-affinity and seed peers.
+    let with_peer_id = high_affinity_peers.into_iter().flat_map(|peer_info| {
+        peer_info
+            .address
+            .into_iter()
+            .map(move |addr| (Some(peer_info.peer_id), addr))
+    });
+    let without_peer_id = unidentified_seed_peers.into_iter().map(|addr| (None, addr));
+    futures::stream::iter(with_peer_id.chain(without_peer_id))
+        .for_each_concurrent(
+            config.target_concurrent_connections(),
+            |(peer_id, address)| async move {
+                // Ignore the result and just log the error if there is one
+                let _ = if let Some(peer_id) = peer_id {
+                    network
+                        .connect_with_peer_id(address.clone(), peer_id)
+                        .await
+                        .tap_err(|e| {
+                            debug!(
+                                "error dialing peer {} at '{}': {e}",
+                                peer_id.short_display(4),
+                                address
+                            )
+                        })
+                } else {
+                    network
+                        .connect(address.clone())
+                        .await
+                        .tap_err(|e| debug!("error dialing address '{}': {e}", address))
+                };
+            },
+        )
+        .await;
 }
 
 async fn query_peer_for_their_known_peers(
     peer: Peer,
     state: Arc<RwLock<State>>,
     metrics: Metrics,
-    allowlisted_peers: Arc<HashMap<PeerId, Option<Multiaddr>>>,
+    configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
 ) {
     let mut client = DiscoveryClient::new(peer);
 
@@ -459,7 +466,7 @@ async fn query_peer_for_their_known_peers(
             },
         );
     if let Some(found_peers) = found_peers {
-        update_known_peers(state, metrics, found_peers, allowlisted_peers);
+        update_known_peers(state, metrics, found_peers, configured_peers);
     }
 }
 
@@ -468,7 +475,7 @@ async fn query_connected_peers_for_their_known_peers(
     config: Arc<DiscoveryConfig>,
     state: Arc<RwLock<State>>,
     metrics: Metrics,
-    allowlisted_peers: Arc<HashMap<PeerId, Option<Multiaddr>>>,
+    configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
 ) {
     use rand::seq::IteratorRandom;
 
@@ -507,14 +514,14 @@ async fn query_connected_peers_for_their_known_peers(
         .collect::<Vec<_>>()
         .await;
 
-    update_known_peers(state, metrics, found_peers, allowlisted_peers);
+    update_known_peers(state, metrics, found_peers, configured_peers);
 }
 
 fn update_known_peers(
     state: Arc<RwLock<State>>,
     metrics: Metrics,
     found_peers: Vec<SignedNodeInfo>,
-    allowlisted_peers: Arc<HashMap<PeerId, Option<Multiaddr>>>,
+    configured_peers: Arc<HashMap<PeerId, PeerInfo>>,
 ) {
     use std::collections::hash_map::Entry;
 
@@ -536,9 +543,9 @@ fn update_known_peers(
             continue;
         }
 
-        // If Peer is Private, and not in our allowlist, skip it.
+        // If Peer is Private, and not in our configured peers, skip it.
         if peer_info.access_type == AccessType::Private
-            && !allowlisted_peers.contains_key(&peer_info.peer_id)
+            && !configured_peers.contains_key(&peer_info.peer_id)
         {
             continue;
         }
