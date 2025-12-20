@@ -151,6 +151,13 @@ async fn do_test_passive_reconfig(chain: Option<Chain>) {
 // Test that transaction locks from previous epochs could be overridden.
 #[sim_test]
 async fn test_expired_locks() {
+    // This test verifies preconsensus lock conflict detection and epoch-based lock expiry,
+    // which only applies when disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(10000)
         .build()

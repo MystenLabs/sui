@@ -1141,9 +1141,7 @@ impl AuthorityState {
             // The call to self.set_transaction_lock checks the lock is not conflicting,
             // and returns ConflictingTransaction error in case there is a lock on a different
             // existing transaction.
-            // When preconsensus locking is enabled, locks are written to DB
-            // immediately, so we ignore the returned locks here.
-            let _ = self.get_cache_writer().acquire_transaction_locks(
+            self.get_cache_writer().acquire_transaction_locks(
                 epoch_store,
                 &owned_objects,
                 tx_digest,
