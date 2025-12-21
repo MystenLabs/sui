@@ -3517,6 +3517,14 @@ type ServiceConfig {
 	"""
 	maxDisplayFieldDepth: Int
 	"""
+	Maximum number of components in a Display v2 format string.
+	"""
+	maxDisplayFormatNodes: Int
+	"""
+	Maximum number of objects that can be loaded while evaluating a display.
+	"""
+	maxDisplayObjectLoads: Int
+	"""
 	Maximum output size of a display output.
 	"""
 	maxDisplayOutputSize: Int
