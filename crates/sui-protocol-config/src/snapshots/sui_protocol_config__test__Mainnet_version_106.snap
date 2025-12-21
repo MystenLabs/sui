@@ -217,6 +217,7 @@ storage_rebate_rate: 9900
 storage_fund_reinvest_rate: 500
 reward_slashing_rate: 10000
 storage_gas_price: 76
+accumulator_object_storage_cost: 7600
 max_transactions_per_checkpoint: 20000
 max_checkpoint_size_bytes: 31457280
 buffer_stake_for_protocol_upgrade_bps: 5000

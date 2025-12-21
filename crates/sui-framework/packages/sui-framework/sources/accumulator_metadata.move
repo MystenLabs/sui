@@ -148,6 +148,11 @@ public struct AccumulatorObjectCountKey has copy, drop, store {}
 
 /// Records changes in the net count of accumulator objects. Called by the barrier transaction
 /// as part of accumulator settlement.
+///
+/// This value is copied to the Sui system state object at end-of-epoch by the
+/// WriteAccumulatorStorageCost transaction, for use in storage fund accounting. Copying once
+/// at end-of-epoch lets us avoid depending on the Sui system state object in the settlement
+/// barrier transaction.
 #[allow(unused_function)]
 fun record_accumulator_object_changes(
     accumulator_root: &mut AccumulatorRoot,

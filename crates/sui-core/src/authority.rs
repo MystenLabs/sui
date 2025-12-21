@@ -5786,16 +5786,16 @@ impl AuthorityState {
                 }
             };
 
-        const ACCUMULATOR_OBJECT_APPROXIMATE_SIZE: u64 = 100;
-        let storage_gas_price = epoch_store.protocol_config().storage_gas_price();
-        let storage_cost = object_count
-            .saturating_mul(ACCUMULATOR_OBJECT_APPROXIMATE_SIZE)
-            .saturating_mul(storage_gas_price);
+        let storage_cost = object_count.saturating_mul(
+            epoch_store
+                .protocol_config()
+                .accumulator_object_storage_cost(),
+        );
 
         let tx = EndOfEpochTransactionKind::new_write_accumulator_storage_cost(storage_cost);
         info!(
             object_count,
-            storage_gas_price, storage_cost, "Creating WriteAccumulatorStorageCost tx"
+            storage_cost, "Creating WriteAccumulatorStorageCost tx"
         );
         Some(tx)
     }

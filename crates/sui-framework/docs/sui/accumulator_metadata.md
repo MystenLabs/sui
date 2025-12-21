@@ -469,6 +469,11 @@ Destroy an owner field.
 Records changes in the net count of accumulator objects. Called by the barrier transaction
 as part of accumulator settlement.
 
+This value is copied to the Sui system state object at end-of-epoch by the
+WriteAccumulatorStorageCost transaction, for use in storage fund accounting. Copying once
+at end-of-epoch lets us avoid depending on the Sui system state object in the settlement
+barrier transaction.
+
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_record_accumulator_object_changes">record_accumulator_object_changes</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, objects_created: u64, objects_destroyed: u64)
 </code></pre>

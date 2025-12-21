@@ -1341,6 +1341,9 @@ pub struct ProtocolConfig {
     /// Unit gas price, Mist per internal gas unit.
     storage_gas_price: Option<u64>,
 
+    /// Per-object storage cost for accumulator objects, used during end-of-epoch accounting.
+    accumulator_object_storage_cost: Option<u64>,
+
     // === Core Protocol ===
     /// Max number of transactions per checkpoint.
     /// Note that this is a protocol constant and not a config as validators must have this set to
@@ -2676,6 +2679,7 @@ impl ProtocolConfig {
             storage_fund_reinvest_rate: Some(500),
             reward_slashing_rate: Some(5000),
             storage_gas_price: Some(1),
+            accumulator_object_storage_cost: None,
             max_transactions_per_checkpoint: Some(10_000),
             max_checkpoint_size_bytes: Some(30 * 1024 * 1024),
 
@@ -4347,6 +4351,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.enable_multi_epoch_transaction_expiration = true;
                 }
                 106 => {
+                    // est. 100 bytes per object * 76 (storage_gas_price)
+                    cfg.accumulator_object_storage_cost = Some(7600);
+
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_accumulators = true;
                         cfg.feature_flags.enable_address_balance_gas_payments = true;
