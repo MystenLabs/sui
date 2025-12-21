@@ -108,8 +108,7 @@ Nitro Attestation Document defined for AWS.
 <code><a href="../sui/nitro_attestation.md#sui_nitro_attestation_pcrs">pcrs</a>: vector&lt;<a href="../sui/nitro_attestation.md#sui_nitro_attestation_PCREntry">sui::nitro_attestation::PCREntry</a>&gt;</code>
 </dt>
 <dd>
- A list of PCREntry containing the index and the PCR bytes. In devnet and testnet, all-zero
- PCRs are excluded.
+ A list of PCREntry containing the index and the PCR bytes.
  <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where>.
 </dd>
 <dt>
