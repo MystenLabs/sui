@@ -91,6 +91,14 @@ async fn test_transaction_expiration() {
 // may not always be tested.
 #[sim_test]
 async fn reconfig_with_revert_end_to_end_test() {
+    // This test relies on owned object transactions being executed immediately upon receiving
+    // the certificate (fastpath behavior), which only applies when disable_preconsensus_locking=false.
+    // With disable_preconsensus_locking=true, transactions go through consensus first.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let test_cluster = TestClusterBuilder::new().build().await;
     let authorities = test_cluster.swarm.validator_node_handles();
     let rgp = test_cluster.get_reference_gas_price().await;
