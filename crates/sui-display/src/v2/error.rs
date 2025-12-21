@@ -56,7 +56,7 @@ pub enum FormatError {
     #[error("Invalid {0}")]
     InvalidIdentifier(OwnedLexeme),
 
-    #[error("Invalid {what} at offset {offset}: {err}")]
+    #[error("Invalid {what} at byte offset {offset}: {err}")]
     InvalidNumber {
         what: &'static str,
         offset: usize,
@@ -85,7 +85,7 @@ pub enum FormatError {
     TransformInvalid(&'static str),
 
     /// The above error augmented with the offset of the originating expression.
-    #[error("Invalid transform for expression at offset {offset}: {reason}")]
+    #[error("Invalid transform for expression at byte offset {offset}: {reason}")]
     TransformInvalid_ { offset: usize, reason: &'static str },
 
     #[error("Unexpected end-of-string, expected {expect}")]
@@ -97,14 +97,14 @@ pub enum FormatError {
         expect: ExpectedSet,
     },
 
-    #[error("Vector at offset {offset} requires 1 type parameter, found {arity}")]
+    #[error("Vector at byte offset {offset} requires 1 type parameter, found {arity}")]
     VectorArity { offset: usize, arity: usize },
 
     #[error("Internal error: vector without element type")]
     VectorNoType,
 
     #[error(
-        "Vector at offset {offset}, could have element type {} or {}",
+        "Vector at byte offset {offset}, could have element type {} or {}",
         .this.to_canonical_display(true),
         .that.to_canonical_display(true),
     )]

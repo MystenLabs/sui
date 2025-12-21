@@ -337,7 +337,7 @@ impl fmt::Display for OwnedLexeme {
             }
         }?;
 
-        write!(f, " at offset {}", self.2)
+        write!(f, " at byte offset {}", self.2)
     }
 }
 
