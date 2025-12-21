@@ -521,6 +521,14 @@ async fn access_clock_object_test() {
 
 #[sim_test]
 async fn shared_object_sync() {
+    // This test relies on submitting transactions to only some validators and checking that
+    // other validators don't have the object yet. With disable_preconsensus_locking=true,
+    // all transactions go through consensus, so all validators will have the object.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let test_cluster = TestClusterBuilder::new()
         // Set the threshold high enough so it won't be triggered.
         .with_authority_overload_config(AuthorityOverloadConfig {
