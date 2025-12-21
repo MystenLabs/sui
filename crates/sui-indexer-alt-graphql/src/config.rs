@@ -143,7 +143,13 @@ pub struct Limits {
     /// Maximum depth of nested field access supported in display outputs.
     pub max_display_field_depth: usize,
 
-    /// Maximumm output size of a display output.
+    /// Maximum number of components in a Display v2 format string.
+    pub max_display_format_nodes: usize,
+
+    /// Maximum number of objects that can be loaded while evaluating a display.
+    pub max_display_object_loads: usize,
+
+    /// Maximum output size of a display output.
     pub max_display_output_size: usize,
 
     /// Maximum output size of a disassembled Move module, in bytes.
@@ -176,6 +182,8 @@ pub struct LimitsLayer {
     pub max_move_value_depth: Option<usize>,
     pub max_move_value_bound: Option<usize>,
     pub max_display_field_depth: Option<usize>,
+    pub max_display_format_nodes: Option<usize>,
+    pub max_display_object_loads: Option<usize>,
     pub max_display_output_size: Option<usize>,
     pub max_disassembled_module_size: Option<usize>,
     pub max_rich_queries: Option<usize>,
@@ -314,6 +322,14 @@ impl Limits {
             max_move_value_depth: self.max_move_value_depth,
         }
     }
+
+    pub(crate) fn display(&self) -> sui_display::v2::Limits {
+        sui_display::v2::Limits {
+            max_depth: self.max_display_field_depth,
+            max_nodes: self.max_display_format_nodes,
+            max_loads: self.max_display_object_loads,
+        }
+    }
 }
 
 impl LimitsLayer {
@@ -353,6 +369,12 @@ impl LimitsLayer {
             max_display_field_depth: self
                 .max_display_field_depth
                 .unwrap_or(base.max_display_field_depth),
+            max_display_format_nodes: self
+                .max_display_format_nodes
+                .unwrap_or(base.max_display_format_nodes),
+            max_display_object_loads: self
+                .max_display_object_loads
+                .unwrap_or(base.max_display_object_loads),
             max_display_output_size: self
                 .max_display_output_size
                 .unwrap_or(base.max_display_output_size),
@@ -425,6 +447,8 @@ impl From<Limits> for LimitsLayer {
             max_move_value_depth: Some(value.max_move_value_depth),
             max_move_value_bound: Some(value.max_move_value_bound),
             max_display_field_depth: Some(value.max_display_field_depth),
+            max_display_format_nodes: Some(value.max_display_format_nodes),
+            max_display_object_loads: Some(value.max_display_object_loads),
             max_display_output_size: Some(value.max_display_output_size),
             max_disassembled_module_size: Some(value.max_disassembled_module_size),
             max_rich_queries: Some(value.max_rich_queries),
@@ -487,6 +511,8 @@ impl Default for Limits {
             max_across_protocol(ProtocolConfig::max_move_value_depth_as_option)
                 .unwrap_or(u32::MAX as u64) as usize;
 
+        let display_limits = sui_display::v2::Limits::default();
+
         Self {
             // This default was picked as the sum of pre- and post- quorum timeouts from
             // [sui_core::authority_aggregator::TimeoutConfig], with a 10% buffer.
@@ -512,7 +538,9 @@ impl Default for Limits {
             max_type_nodes,
             max_move_value_depth,
             max_move_value_bound: 1024 * 1024,
-            max_display_field_depth: 10,
+            max_display_field_depth: display_limits.max_depth,
+            max_display_format_nodes: display_limits.max_nodes,
+            max_display_object_loads: display_limits.max_loads,
             max_display_output_size: 1024 * 1024,
             max_disassembled_module_size: 1024 * 1024,
             max_rich_queries: 21,
