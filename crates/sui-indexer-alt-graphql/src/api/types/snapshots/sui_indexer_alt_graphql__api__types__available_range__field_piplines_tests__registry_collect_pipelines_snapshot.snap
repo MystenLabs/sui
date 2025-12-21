@@ -1092,6 +1092,9 @@ MoveValue.bcs
 MoveValue.display
   => {}
 
+MoveValue.extract
+  => {}
+
 MoveValue.json
   => {}
 

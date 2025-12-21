@@ -11,6 +11,8 @@ use async_graphql::Object;
 use async_graphql::Value;
 use async_graphql::dataloader::DataLoader;
 use async_graphql::indexmap::IndexMap;
+use async_trait::async_trait;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::annotated_visitor as AV;
 use sui_indexer_alt_reader::displays::DisplayKey;
@@ -25,14 +27,25 @@ use crate::api::scalars::base64::Base64;
 use crate::api::scalars::json::Json;
 use crate::api::types::display::Display;
 use crate::api::types::move_type::MoveType;
+use crate::api::types::object::Object;
 use crate::config::Limits;
 use crate::error::RpcError;
+use crate::error::bad_user_input;
 use crate::error::resource_exhausted;
+use crate::error::upcast;
+use crate::scope::Scope;
 
 #[derive(Clone)]
 pub(crate) struct MoveValue {
     pub(crate) type_: MoveType,
     pub(crate) native: Vec<u8>,
+}
+
+/// Store implementation that fetches objects for dynamic field/object field resolution during
+/// path extraction. The Interpreter handles caching.
+struct DisplayStore<'f, 'r> {
+    ctx: &'f Context<'r>,
+    scope: &'f Scope,
 }
 
 struct JsonVisitor {
@@ -43,6 +56,15 @@ struct JsonVisitor {
 struct JsonWriter<'b> {
     size_budget: &'b mut usize,
     depth_budget: usize,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum Error {
+    #[error("Path error: {0}")]
+    Path(sui_display::v2::FormatError),
+
+    #[error("Extracted value is not a slice of existing on-chain data")]
+    NotASlice,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -123,6 +145,51 @@ impl MoveValue {
         .transpose()
     }
 
+    /// Extract a nested value at the given path.
+    ///
+    /// `path` is a Display v2 'chain' expression, allowing access to nested, named and positional fields, vector indices, VecMap keys, and dynamic (object) field accesses.
+    async fn extract(
+        &self,
+        ctx: &Context<'_>,
+        path: String,
+    ) -> Result<Option<MoveValue>, RpcError<Error>> {
+        let limits: &Limits = ctx.data()?;
+        let extract =
+            sui_display::v2::Extract::parse(limits.display(), &path).map_err(path_error)?;
+
+        let Some(layout) = self.type_.layout_impl().await.map_err(upcast)? else {
+            return Ok(None);
+        };
+
+        // Create a store for dynamic field resolution
+        let store = DisplayStore::new(ctx, &self.type_.scope);
+
+        // Create an interpreter that combines the root value with the store
+        let root = sui_display::v2::OwnedSlice {
+            bytes: self.native.clone(),
+            layout,
+        };
+
+        // Evaluate the extraction and convert to an owned slice
+        let interpreter = sui_display::v2::Interpreter::new(root, store);
+        let Some(value) = extract.extract(&interpreter).await.map_err(path_error)? else {
+            return Ok(None);
+        };
+
+        let Some(sui_display::v2::OwnedSlice {
+            layout,
+            bytes: native,
+        }) = value.into_owned_slice()
+        else {
+            return Err(bad_user_input(Error::NotASlice));
+        };
+
+        // TODO: MoveType from layout.
+        let type_ = MoveType::from_native(TypeTag::from(&layout), self.type_.scope.clone());
+
+        Ok(Some(MoveValue { type_, native }))
+    }
+
     /// Representation of a Move value in JSON, where:
     ///
     /// - Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
@@ -167,6 +234,12 @@ impl MoveValue {
     }
 }
 
+impl<'f, 'r> DisplayStore<'f, 'r> {
+    fn new(ctx: &'f Context<'r>, scope: &'f Scope) -> Self {
+        Self { ctx, scope }
+    }
+}
+
 impl JsonVisitor {
     fn new(limits: &Limits) -> Self {
         Self {
@@ -199,6 +272,58 @@ impl JsonWriter<'_> {
 
         *self.size_budget -= size;
         Ok(())
+    }
+}
+
+#[async_trait]
+impl<'f, 'r> sui_display::v2::Store for DisplayStore<'f, 'r> {
+    async fn object(
+        &self,
+        id: AccountAddress,
+    ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
+        // NOTE: We can't use `anyhow::Context` here because `RpcError` doesn't implement
+        // `std::error::Error`.
+        let object = if let Some(version) = self.scope.root_version() {
+            Object::version_bounded(self.ctx, self.scope.clone(), id.into(), version.into())
+                .await
+                .map_err(|e| anyhow!("Failed to fetch object: {e:?}"))?
+        } else {
+            Object::latest(self.ctx, self.scope.clone(), id.into())
+                .await
+                .map_err(|e| anyhow!("Failed to fetch object: {e:?}"))?
+        };
+
+        let Some(object) = object else {
+            return Ok(None);
+        };
+
+        let Some(native) = object
+            .contents(self.ctx)
+            .await
+            .map_err(|e| anyhow!("Failed to get object contents: {e:?}"))?
+        else {
+            return Ok(None);
+        };
+
+        let Some(move_object) = native.data.try_as_move() else {
+            return Ok(None);
+        };
+
+        let type_ = MoveType::from_native(
+            move_object.type_().clone().into(),
+            object.super_.scope.clone(),
+        );
+
+        let Some(layout) = type_
+            .layout_impl()
+            .await
+            .map_err(|e| anyhow!("Failed to get layout: {e:?}"))?
+        else {
+            return Ok(None);
+        };
+
+        let bytes = move_object.contents().to_owned();
+        Ok(Some(sui_display::v2::OwnedSlice { layout, bytes }))
     }
 }
 
@@ -291,5 +416,26 @@ impl From<OV::Error> for VisitorError {
 impl From<RV::Error> for VisitorError {
     fn from(RV::Error: RV::Error) -> Self {
         VisitorError::UnexpectedType
+    }
+}
+
+fn path_error(e: sui_display::v2::FormatError) -> RpcError<Error> {
+    use sui_display::v2::FormatError as FE;
+    match &e {
+        FE::InvalidHexCharacter(_)
+        | FE::InvalidIdentifier(_)
+        | FE::InvalidNumber { .. }
+        | FE::OddHexLiteral(_)
+        | FE::TransformInvalid(_)
+        | FE::TransformInvalid_ { .. }
+        | FE::UnexpectedEos { .. }
+        | FE::UnexpectedRemaining(_)
+        | FE::UnexpectedToken { .. }
+        | FE::VectorArity { .. }
+        | FE::VectorNoType
+        | FE::VectorTypeMismatch { .. } => bad_user_input(Error::Path(e)),
+
+        FE::TooBig | FE::TooDeep | FE::TooManyLoads | FE::TooMuchOutput => resource_exhausted(e),
+        FE::Bcs(_) | FE::Visitor(_) | FE::Store(_) => anyhow!(e).into(),
     }
 }

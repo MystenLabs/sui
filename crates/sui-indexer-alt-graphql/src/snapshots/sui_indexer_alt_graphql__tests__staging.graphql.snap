@@ -2606,6 +2606,12 @@ type MoveValue {
 	"""
 	display: Display
 	"""
+	Extract a nested value at the given path.
+	
+	`path` is a Display v2 'chain' expression, allowing access to nested, named and positional fields, vector indices, VecMap keys, and dynamic (object) field accesses.
+	"""
+	extract(path: String!): MoveValue
+	"""
 	Representation of a Move value in JSON, where:
 	
 	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.
