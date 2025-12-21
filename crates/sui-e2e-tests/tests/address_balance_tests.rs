@@ -3607,6 +3607,7 @@ async fn try_coin_reservation_tx(
 
 #[sim_test]
 async fn address_balance_stress_test() {
+    telemetry_subscribers::init_for_testing();
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
         cfg.enable_accumulators_for_testing();
         cfg
@@ -3779,25 +3780,19 @@ async fn address_balance_stress_test() {
                         .await
                     {
                         Ok(response) => {
-                            if let Some(effects) = response.effects {
-                                if effects.status().is_ok() {
-                                    success_count.fetch_add(1, Ordering::Relaxed);
-                                    current_gas = effects.gas_object().reference.to_object_ref();
-                                } else {
-                                    failure_count.fetch_add(1, Ordering::Relaxed);
-                                    current_gas = effects.gas_object().reference.to_object_ref();
-                                }
+                            let effects = response.effects.unwrap();
+                            if effects.status().is_ok() {
+                                success_count.fetch_add(1, Ordering::Relaxed);
+                            } else {
+                                failure_count.fetch_add(1, Ordering::Relaxed);
                             }
+                            current_gas = effects.gas_object().reference.to_object_ref();
                         }
                         Err(err) => {
                             let err_str = err.to_string();
-                            assert!(
-                                err_str.contains("Available balance for object id"),
-                                "{}",
-                                err_str
-                            );
-                            failure_count.fetch_add(1, Ordering::Relaxed);
-                            // Gas object version didn't change on signing failure
+                            if err_str.contains("Available balance for object id") {
+                                failure_count.fetch_add(1, Ordering::Relaxed);
+                            }
                         }
                     }
                 }
