@@ -446,6 +446,45 @@ impl Slice<'_> {
     }
 }
 
+impl Value<'_> {
+    /// Convert this value into an owned slice.
+    ///
+    /// This operation returns `None` if the value contains compound literals (struct, enum, vector
+    /// literals), since their layouts are not guaranteed to be valid.
+    pub fn into_owned_slice(self) -> Option<OwnedSlice> {
+        let layout = self.layout()?;
+        let bytes = bcs::to_bytes(&self).ok()?;
+        Some(OwnedSlice { layout, bytes })
+    }
+
+    /// Compute the type layout for this value, if possible.
+    ///
+    /// Returns `None` for compound literals (Struct, Enum, Vector) since we cannot reliably
+    /// compute their layouts without access to the full type information.
+    fn layout(&self) -> Option<MoveTypeLayout> {
+        use MoveTypeLayout as L;
+
+        match self {
+            Value::Slice(s) => Some(s.layout.clone()),
+
+            Value::Address(_) => Some(L::Address),
+            Value::Bool(_) => Some(L::Bool),
+            Value::U8(_) => Some(L::U8),
+            Value::U16(_) => Some(L::U16),
+            Value::U32(_) => Some(L::U32),
+            Value::U64(_) => Some(L::U64),
+            Value::U128(_) => Some(L::U128),
+            Value::U256(_) => Some(L::U256),
+
+            Value::Bytes(_) => Some(L::Vector(Box::new(L::U8))),
+            Value::String(_) => Some(L::Struct(Box::new(move_utf8_str_layout()))),
+
+            // Compound literals: cannot compute layout
+            Value::Enum(_) | Value::Struct(_) | Value::Vector(_) => None,
+        }
+    }
+}
+
 impl Vector<'_> {
     fn type_(&self) -> TypeTag {
         TypeTag::Vector(Box::new(self.type_.clone().into_owned()))

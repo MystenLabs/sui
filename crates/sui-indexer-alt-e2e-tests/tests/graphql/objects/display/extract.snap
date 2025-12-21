@@ -1,0 +1,390 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 14 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-66:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 11878800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 68-70:
+//# programmable --sender A --inputs @A
+//> 0: test::mod::example();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2401600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 72-74:
+//# programmable --sender A --inputs @A
+//> 0: test::mod::versioned();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4164800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 76-77:
+//# programmable --sender A --inputs object(3,1)
+//> 0: test::mod::upgrade(Input(0))
+created: object(4,0)
+mutated: object(0,0), object(3,1)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 4172400,  storage_rebate: 4123152, non_refundable_storage_fee: 41648
+
+task 5, lines 79-80:
+//# programmable --sender A --inputs object(2,0)
+//> 0: test::mod::add_df(Input(0))
+created: object(5,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 3876000,  storage_rebate: 2377584, non_refundable_storage_fee: 24016
+
+task 6, lines 82-83:
+//# programmable --sender A --inputs object(2,0)
+//> 0: test::mod::add_dof(Input(0))
+created: object(6,0), object(6,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6406800,  storage_rebate: 2377584, non_refundable_storage_fee: 24016
+
+task 7, line 85:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 8, lines 87-131:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Foo"
+          },
+          "json": {
+            "id": "0x77c44171e6ff9bf6a978d9faaa3436465fa68e2b25816b63db70fb198df296b4",
+            "bar": [
+              {
+                "@variant": "Baz",
+                "pos0": "42"
+              },
+              {
+                "@variant": "Qux",
+                "val": "hello"
+              },
+              {
+                "@variant": "Quy",
+                "opt": 7
+              },
+              {
+                "@variant": "Quy",
+                "opt": null
+              }
+            ]
+          },
+          "bar": {
+            "type": {
+              "repr": "vector<0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar>"
+            },
+            "json": [
+              {
+                "@variant": "Baz",
+                "pos0": "42"
+              },
+              {
+                "@variant": "Qux",
+                "val": "hello"
+              },
+              {
+                "@variant": "Quy",
+                "opt": 7
+              },
+              {
+                "@variant": "Quy",
+                "opt": null
+              }
+            ]
+          },
+          "baz": {
+            "type": {
+              "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar"
+            },
+            "json": {
+              "@variant": "Baz",
+              "pos0": "42"
+            }
+          },
+          "qux": {
+            "type": {
+              "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar"
+            },
+            "json": {
+              "@variant": "Qux",
+              "val": "hello"
+            }
+          },
+          "quySome": {
+            "type": {
+              "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar"
+            },
+            "json": {
+              "@variant": "Quy",
+              "opt": 7
+            }
+          },
+          "quyNone": {
+            "type": {
+              "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar"
+            },
+            "json": {
+              "@variant": "Quy",
+              "opt": null
+            }
+          },
+          "bazField": {
+            "type": {
+              "repr": "u64"
+            },
+            "json": "42"
+          },
+          "quxField": {
+            "type": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+            },
+            "json": "hello"
+          },
+          "quySomeField": {
+            "type": {
+              "repr": "u16"
+            },
+            "json": 7
+          },
+          "df": {
+            "type": {
+              "repr": "u128"
+            },
+            "json": "100"
+          },
+          "dof": {
+            "type": {
+              "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Quz"
+            },
+            "json": {
+              "id": "0xa86069c3ad72aed295f40bfedd6eed78f353c72ed5dda3306674039aa06f6937",
+              "map": {
+                "contents": [
+                  {
+                    "key": "hello",
+                    "value": "101"
+                  },
+                  {
+                    "key": "world",
+                    "value": "102"
+                  }
+                ]
+              }
+            }
+          },
+          "dofHello": {
+            "type": {
+              "repr": "u128"
+            },
+            "json": "101"
+          },
+          "dofWorld": {
+            "type": {
+              "repr": "u128"
+            },
+            "json": "102"
+          },
+          "outOfBounds": null,
+          "quyNoneField": null,
+          "quyNoneInnerField": null,
+          "outOfBoundsField": null,
+          "fieldDoesntExist": null,
+          "dfDoesntExist": null,
+          "dofDoesntExist": null,
+          "dfOnNotAnID": null
+        }
+      }
+    }
+  }
+}
+
+task 9, lines 133-153:
+//# run-graphql
+Response: {
+  "data": {
+    "versioned": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "NQ=="
+      },
+      "nodes": [
+        {
+          "version": 4,
+          "asMoveObject": {
+            "contents": {
+              "extract": {
+                "type": {
+                  "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar"
+                },
+                "json": {
+                  "@variant": "Baz",
+                  "pos0": "42"
+                }
+              }
+            }
+          }
+        },
+        {
+          "version": 5,
+          "asMoveObject": {
+            "contents": {
+              "extract": {
+                "type": {
+                  "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar"
+                },
+                "json": {
+                  "@variant": "Qux",
+                  "val": "upgraded"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 10, lines 155-164:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": null
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Path error: Unexpected end-of-string, expected one of an identifier, or a decimal number",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "asMoveObject",
+        "contents",
+        "parseError"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 11, lines 166-175:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": null
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Format is nested too deeply",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "asMoveObject",
+        "contents",
+        "tooDeep"
+      ],
+      "extensions": {
+        "code": "RESOURCE_EXHAUSTED"
+      }
+    }
+  ]
+}
+
+task 12, lines 177-186:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": null
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Display tries to load too many objects",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "asMoveObject",
+        "contents",
+        "tooManyLoads"
+      ],
+      "extensions": {
+        "code": "RESOURCE_EXHAUSTED"
+      }
+    }
+  ]
+}
+
+task 13, lines 188-197:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": null
+      }
+    }
+  },
+  "errors": [
+    {
+      "message": "Extracted value is not a slice of existing on-chain data",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "asMoveObject",
+        "contents",
+        "notASlice"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}

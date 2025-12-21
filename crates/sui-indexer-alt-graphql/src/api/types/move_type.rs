@@ -37,7 +37,7 @@ pub(crate) enum MoveAbility {
 #[derive(Clone)]
 pub(crate) struct MoveType {
     native: TypeInput,
-    scope: Scope,
+    pub(crate) scope: Scope,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
