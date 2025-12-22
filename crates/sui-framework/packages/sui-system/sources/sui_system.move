@@ -675,13 +675,13 @@ fun store_execution_time_estimates_v2(
 }
 
 /// Key for storing the storage cost for accumulator objects, computed at end of epoch.
-public struct AccumulatorStorageCostKey has copy, drop, store {}
+public struct AccumulatorStorageCostKey() has copy, drop, store;
 
 /// Returns the storage fund amount for accumulator objects stored in extra_fields.
 /// Returns 0 if no value has been stored.
 fun get_accumulator_storage_fund_amount(wrapper: &mut SuiSystemState): u64 {
     let extra_fields = wrapper.load_system_state().extra_fields();
-    let key = AccumulatorStorageCostKey {};
+    let key = AccumulatorStorageCostKey();
     if (extra_fields.contains(key)) {
         *extra_fields.borrow(key)
     } else {
@@ -700,7 +700,7 @@ fun write_accumulator_storage_cost(
 ) {
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
     let extra_fields = wrapper.load_system_state_mut().extra_fields_mut();
-    let key = AccumulatorStorageCostKey {};
+    let key = AccumulatorStorageCostKey();
     if (extra_fields.contains(key)) {
         let existing: &mut u64 = extra_fields.borrow_mut(key);
         *existing = storage_cost;

@@ -1821,7 +1821,7 @@ Returns 0 if no value has been stored.
 
 <pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_get_accumulator_storage_fund_amount">get_accumulator_storage_fund_amount</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): u64 {
     <b>let</b> extra_fields = wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state">load_system_state</a>().extra_fields();
-    <b>let</b> key = <a href="../sui_system/sui_system.md#sui_system_sui_system_AccumulatorStorageCostKey">AccumulatorStorageCostKey</a> {};
+    <b>let</b> key = <a href="../sui_system/sui_system.md#sui_system_sui_system_AccumulatorStorageCostKey">AccumulatorStorageCostKey</a>();
     <b>if</b> (extra_fields.contains(key)) {
         *extra_fields.borrow(key)
     } <b>else</b> {
@@ -1859,7 +1859,7 @@ that will be used by advance_epoch.
 ) {
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui_system/sui_system.md#sui_system_sui_system_ENotSystemAddress">ENotSystemAddress</a>);
     <b>let</b> extra_fields = wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>().extra_fields_mut();
-    <b>let</b> key = <a href="../sui_system/sui_system.md#sui_system_sui_system_AccumulatorStorageCostKey">AccumulatorStorageCostKey</a> {};
+    <b>let</b> key = <a href="../sui_system/sui_system.md#sui_system_sui_system_AccumulatorStorageCostKey">AccumulatorStorageCostKey</a>();
     <b>if</b> (extra_fields.contains(key)) {
         <b>let</b> existing: &<b>mut</b> u64 = extra_fields.borrow_mut(key);
         *existing = storage_cost;

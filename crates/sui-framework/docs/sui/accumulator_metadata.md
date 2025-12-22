@@ -489,7 +489,7 @@ barrier transaction.
     objects_created: u64,
     objects_destroyed: u64,
 ) {
-    <b>let</b> key = <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_AccumulatorObjectCountKey">AccumulatorObjectCountKey</a> {};
+    <b>let</b> key = <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_AccumulatorObjectCountKey">AccumulatorObjectCountKey</a>();
     <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_">dynamic_field::exists_</a>(accumulator_root.id_mut(), key)) {
         <b>let</b> current_count: &<b>mut</b> u64 = <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(accumulator_root.id_mut(), key);
         <b>assert</b>!(*current_count + objects_created &gt;= objects_destroyed, <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_EInvariantViolation">EInvariantViolation</a>);
@@ -522,7 +522,7 @@ Returns the current count of accumulator objects stored as a dynamic field.
 
 
 <pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_get_accumulator_object_count">get_accumulator_object_count</a>(accumulator_root: &AccumulatorRoot): u64 {
-    <b>let</b> key = <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_AccumulatorObjectCountKey">AccumulatorObjectCountKey</a> {};
+    <b>let</b> key = <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_AccumulatorObjectCountKey">AccumulatorObjectCountKey</a>();
     <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_">dynamic_field::exists_</a>(accumulator_root.id(), key)) {
         *<a href="../sui/dynamic_field.md#sui_dynamic_field_borrow">dynamic_field::borrow</a>(accumulator_root.id(), key)
     } <b>else</b> {

@@ -201,8 +201,11 @@ impl AccumulatorOwner {
 /// Rust version of the Move sui::accumulator_metadata::AccumulatorObjectCountKey type.
 /// This is used as a dynamic field key to store the net count of accumulator objects
 /// as a dynamic field on the accumulator root object.
+///
+/// There is no u8 in the Move definition, however empty structs in Move
+/// are represented as a single byte 0 in the serialized data.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
-pub struct AccumulatorObjectCountKey;
+pub struct AccumulatorObjectCountKey(u8);
 
 impl MoveTypeTagTrait for AccumulatorObjectCountKey {
     fn get_type_tag() -> TypeTag {
@@ -219,7 +222,7 @@ impl MoveTypeTagTrait for AccumulatorObjectCountKey {
 pub fn get_accumulator_object_count(object_store: &dyn ObjectStore) -> SuiResult<Option<u64>> {
     DynamicFieldKey(
         SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-        AccumulatorObjectCountKey,
+        AccumulatorObjectCountKey(0),
         AccumulatorObjectCountKey::get_type_tag(),
     )
     .into_unbounded_id()?
