@@ -2411,6 +2411,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             K::CoinRegistryCreate => message.with_kind(Kind::CoinRegistryCreate),
             K::DisplayRegistryCreate => message.with_kind(Kind::DisplayRegistryCreate),
             K::AddressAliasStateCreate => message.with_kind(Kind::AddressAliasStateCreate),
+            K::WriteAccumulatorStorageCost(_) => {
+                todo!("WriteAccumulatorStorageCost needs to be added to proto in sui-apis")
+            }
         }
     }
 }

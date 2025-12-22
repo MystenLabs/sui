@@ -8,6 +8,7 @@ title: Module `sui::accumulator_metadata`
 -  [Struct `Owner`](#sui_accumulator_metadata_Owner)
 -  [Struct `MetadataKey`](#sui_accumulator_metadata_MetadataKey)
 -  [Struct `Metadata`](#sui_accumulator_metadata_Metadata)
+-  [Struct `AccumulatorObjectCountKey`](#sui_accumulator_metadata_AccumulatorObjectCountKey)
 -  [Constants](#@Constants_0)
 -  [Function `accumulator_root_owner_exists`](#sui_accumulator_metadata_accumulator_root_owner_exists)
 -  [Function `accumulator_root_borrow_owner_mut`](#sui_accumulator_metadata_accumulator_root_borrow_owner_mut)
@@ -18,6 +19,8 @@ title: Module `sui::accumulator_metadata`
 -  [Function `accumulator_owner_attach_metadata`](#sui_accumulator_metadata_accumulator_owner_attach_metadata)
 -  [Function `accumulator_owner_detach_metadata`](#sui_accumulator_metadata_accumulator_owner_detach_metadata)
 -  [Function `accumulator_owner_destroy`](#sui_accumulator_metadata_accumulator_owner_destroy)
+-  [Function `record_accumulator_object_changes`](#sui_accumulator_metadata_record_accumulator_object_changes)
+-  [Function `get_accumulator_object_count`](#sui_accumulator_metadata_get_accumulator_object_count)
 
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
@@ -153,6 +156,28 @@ A metadata field for a balance field with type T.
 <dd>
  Any per-balance fields we wish to add in the future.
 </dd>
+</dl>
+
+
+</details>
+
+<a name="sui_accumulator_metadata_AccumulatorObjectCountKey"></a>
+
+## Struct `AccumulatorObjectCountKey`
+
+Key for storing the net count of accumulator objects as a dynamic field on the accumulator root.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_AccumulatorObjectCountKey">AccumulatorObjectCountKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
 </dl>
 
 
@@ -430,6 +455,79 @@ Destroy an owner field.
 <pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_accumulator_owner_destroy">accumulator_owner_destroy</a>(this: <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Owner">Owner</a>) {
     <b>let</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_Owner">Owner</a> { balances, .. } = this;
     balances.destroy_empty();
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_accumulator_metadata_record_accumulator_object_changes"></a>
+
+## Function `record_accumulator_object_changes`
+
+Records changes in the net count of accumulator objects. Called by the barrier transaction
+as part of accumulator settlement.
+
+This value is copied to the Sui system state object at end-of-epoch by the
+WriteAccumulatorStorageCost transaction, for use in storage fund accounting. Copying once
+at end-of-epoch lets us avoid depending on the Sui system state object in the settlement
+barrier transaction.
+
+
+<pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_record_accumulator_object_changes">record_accumulator_object_changes</a>(accumulator_root: &<b>mut</b> <a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, objects_created: u64, objects_destroyed: u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_record_accumulator_object_changes">record_accumulator_object_changes</a>(
+    accumulator_root: &<b>mut</b> AccumulatorRoot,
+    objects_created: u64,
+    objects_destroyed: u64,
+) {
+    <b>let</b> key = <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_AccumulatorObjectCountKey">AccumulatorObjectCountKey</a>();
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_">dynamic_field::exists_</a>(accumulator_root.id_mut(), key)) {
+        <b>let</b> current_count: &<b>mut</b> u64 = <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">dynamic_field::borrow_mut</a>(accumulator_root.id_mut(), key);
+        <b>assert</b>!(*current_count + objects_created &gt;= objects_destroyed, <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_EInvariantViolation">EInvariantViolation</a>);
+        *current_count = *current_count + objects_created - objects_destroyed;
+    } <b>else</b> {
+        <b>assert</b>!(objects_created &gt;= objects_destroyed, <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_EInvariantViolation">EInvariantViolation</a>);
+        <a href="../sui/dynamic_field.md#sui_dynamic_field_add">dynamic_field::add</a>(accumulator_root.id_mut(), key, objects_created - objects_destroyed);
+    };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_accumulator_metadata_get_accumulator_object_count"></a>
+
+## Function `get_accumulator_object_count`
+
+Returns the current count of accumulator objects stored as a dynamic field.
+
+
+<pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_get_accumulator_object_count">get_accumulator_object_count</a>(accumulator_root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_get_accumulator_object_count">get_accumulator_object_count</a>(accumulator_root: &AccumulatorRoot): u64 {
+    <b>let</b> key = <a href="../sui/accumulator_metadata.md#sui_accumulator_metadata_AccumulatorObjectCountKey">AccumulatorObjectCountKey</a>();
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_">dynamic_field::exists_</a>(accumulator_root.id(), key)) {
+        *<a href="../sui/dynamic_field.md#sui_dynamic_field_borrow">dynamic_field::borrow</a>(accumulator_root.id(), key)
+    } <b>else</b> {
+        0
+    }
 }
 </code></pre>
 

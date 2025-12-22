@@ -663,6 +663,9 @@ mod checked {
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
                             panic!("EndOfEpochTransactionKind::AccumulatorRootCreate should not exist in v2");
                         }
+                        EndOfEpochTransactionKind::WriteAccumulatorStorageCost(_) => {
+                            panic!("EndOfEpochTransactionKind::WriteAccumulatorStorageCost should not exist in v2");
+                        }
                         EndOfEpochTransactionKind::CoinRegistryCreate => {
                             panic!("EndOfEpochTransactionKind::CoinRegistryCreate should not exist in v2");
                         }

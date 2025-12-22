@@ -71,6 +71,8 @@ title: Module `sui_system::sui_system_state_inner`
 -  [Function `store_execution_time_estimates_v2`](#sui_system_sui_system_state_inner_store_execution_time_estimates_v2)
 -  [Function `validators`](#sui_system_sui_system_state_inner_validators)
 -  [Function `validators_mut`](#sui_system_sui_system_state_inner_validators_mut)
+-  [Function `extra_fields`](#sui_system_sui_system_state_inner_extra_fields)
+-  [Function `extra_fields_mut`](#sui_system_sui_system_state_inner_extra_fields_mut)
 -  [Macro function `mul_div`](#sui_system_sui_system_state_inner_mul_div)
 
 
@@ -219,7 +221,7 @@ A list of system config parameters.
  for this many epochs before being kicked out.
 </dd>
 <dt>
-<code>extra_fields: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
+<code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
 </dt>
 <dd>
  Any extra fields that's not defined statically.
@@ -303,7 +305,7 @@ Added <code>min_validator_count</code>.
  for this many epochs before being kicked out.
 </dd>
 <dt>
-<code>extra_fields: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
+<code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
 </dt>
 <dd>
  Any extra fields that's not defined statically.
@@ -431,7 +433,7 @@ The top-level object containing all information of the Sui system.
  Unix timestamp of the current epoch start
 </dd>
 <dt>
-<code>extra_fields: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
+<code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
 </dt>
 <dd>
  Any extra fields that's not defined statically.
@@ -559,7 +561,7 @@ Uses SystemParametersV2 as the parameters.
  Unix timestamp of the current epoch start
 </dd>
 <dt>
-<code>extra_fields: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
+<code><a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>: <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a></code>
 </dt>
 <dd>
  Any extra fields that's not defined statically.
@@ -837,7 +839,7 @@ This function will be called only once in genesis.
         safe_mode_storage_rebates: 0,
         safe_mode_non_refundable_storage_fee: 0,
         <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>,
-        extra_fields: bag::new(ctx),
+        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>: bag::new(ctx),
     };
     system_state
 }
@@ -881,7 +883,7 @@ This function will be called only once in genesis.
         validator_low_stake_threshold,
         validator_very_low_stake_threshold,
         validator_low_stake_grace_period,
-        extra_fields: bag::new(ctx),
+        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>: bag::new(ctx),
     }
 }
 </code></pre>
@@ -922,7 +924,7 @@ This function will be called only once in genesis.
         safe_mode_storage_rebates,
         safe_mode_non_refundable_storage_fee,
         <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>,
-        extra_fields: state_extra_fields,
+        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>: state_extra_fields,
     } = self;
     <b>let</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SystemParameters">SystemParameters</a> {
         epoch_duration_ms,
@@ -932,7 +934,7 @@ This function will be called only once in genesis.
         validator_low_stake_threshold,
         validator_very_low_stake_threshold,
         validator_low_stake_grace_period,
-        extra_fields: param_extra_fields,
+        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>: param_extra_fields,
     } = parameters;
     <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a> {
         <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a>,
@@ -949,7 +951,7 @@ This function will be called only once in genesis.
             validator_low_stake_threshold,
             validator_very_low_stake_threshold,
             validator_low_stake_grace_period,
-            extra_fields: param_extra_fields,
+            <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>: param_extra_fields,
         },
         reference_gas_price,
         validator_report_records,
@@ -960,7 +962,7 @@ This function will be called only once in genesis.
         safe_mode_storage_rebates,
         safe_mode_non_refundable_storage_fee,
         <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>,
-        extra_fields: state_extra_fields,
+        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>: state_extra_fields,
     }
 }
 </code></pre>
@@ -2162,7 +2164,7 @@ gas coins.
 4. Update all validators.
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, new_epoch: u64, next_protocol_version: u64, storage_reward: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, computation_reward: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, storage_rebate_amount: u64, non_refundable_storage_fee_amount: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, new_epoch: u64, next_protocol_version: u64, storage_reward: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, computation_reward: <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, storage_rebate_amount: u64, non_refundable_storage_fee_amount: u64, storage_fund_reinvest_rate: u64, reward_slashing_rate: u64, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>: u64, accumulator_storage_fund_amount: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -2184,6 +2186,7 @@ gas coins.
     storage_fund_reinvest_rate: u64,
     reward_slashing_rate: u64, // how much rewards are slashed to punish a <a href="../sui_system/validator.md#sui_system_validator">validator</a>, in bps.
     <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>: u64, // Timestamp of the <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a> start
+    accumulator_storage_fund_amount: u64, // Storage fund amount <b>for</b> accumulator objects
     ctx: &<b>mut</b> TxContext,
 ): Balance&lt;SUI&gt; {
     <b>let</b> prev_epoch_start_timestamp = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>;
@@ -2210,7 +2213,7 @@ gas coins.
         non_refundable_storage_fee_amount + self.safe_mode_non_refundable_storage_fee;
     self.safe_mode_non_refundable_storage_fee = 0;
     <b>let</b> total_validators_stake = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>.total_stake();
-    <b>let</b> storage_fund_balance = self.<a href="../sui_system/storage_fund.md#sui_system_storage_fund">storage_fund</a>.total_balance();
+    <b>let</b> storage_fund_balance = self.<a href="../sui_system/storage_fund.md#sui_system_storage_fund">storage_fund</a>.total_balance() + accumulator_storage_fund_amount;
     <b>let</b> total_stake = storage_fund_balance + total_validators_stake;
     <b>let</b> storage_charge = storage_reward.value();
     <b>let</b> computation_charge = computation_reward.value();
@@ -2787,10 +2790,10 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
     estimates: vector&lt;u8&gt;,
 ) {
-    <b>if</b> (self.extra_fields.contains(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>)) {
-        self.extra_fields.remove&lt;_, vector&lt;u8&gt;&gt;(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>);
+    <b>if</b> (self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>.contains(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>)) {
+        self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>.remove&lt;_, vector&lt;u8&gt;&gt;(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>);
     };
-    self.extra_fields.add(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>, estimates);
+    self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>.add(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>, estimates);
 }
 </code></pre>
 
@@ -2817,30 +2820,30 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
     estimate_chunks: vector&lt;vector&lt;u8&gt;&gt;,
 ) {
-    <b>if</b> (self.extra_fields.contains(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>)) {
-        self.extra_fields.remove&lt;_, vector&lt;u8&gt;&gt;(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>);
+    <b>if</b> (self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>.contains(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>)) {
+        self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>.remove&lt;_, vector&lt;u8&gt;&gt;(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>);
     };
-    <b>if</b> (self.extra_fields.contains(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>)) {
+    <b>if</b> (self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>.contains(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>)) {
         <b>let</b> existing_chunk_count: u64 = self
-            .extra_fields
+            .<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>
             .remove&lt;_, u64&gt;(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>);
         <b>let</b> <b>mut</b> chunk_idx = 0;
         <b>while</b> (chunk_idx &lt; existing_chunk_count) {
             <b>let</b> chunk_key = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ExecutionTimeObservationChunkKey">ExecutionTimeObservationChunkKey</a> { chunk_index: chunk_idx };
-            <b>if</b> (self.extra_fields.contains(chunk_key)) {
-                self.extra_fields.remove&lt;<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ExecutionTimeObservationChunkKey">ExecutionTimeObservationChunkKey</a>, vector&lt;u8&gt;&gt;(chunk_key);
+            <b>if</b> (self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>.contains(chunk_key)) {
+                self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>.remove&lt;<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ExecutionTimeObservationChunkKey">ExecutionTimeObservationChunkKey</a>, vector&lt;u8&gt;&gt;(chunk_key);
             };
             chunk_idx = chunk_idx + 1;
         };
     };
     <b>let</b> total_chunks = estimate_chunks.length();
     <b>if</b> (total_chunks &gt; 0) {
-        self.extra_fields.add(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>, total_chunks);
+        self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>.add(<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY</a>, total_chunks);
         <b>let</b> <b>mut</b> i = 0;
         <b>while</b> (i &lt; total_chunks) {
             <b>let</b> chunk_key = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ExecutionTimeObservationChunkKey">ExecutionTimeObservationChunkKey</a> { chunk_index: i };
             <b>let</b> chunk_data = estimate_chunks[i];
-            self.extra_fields.add(chunk_key, chunk_data);
+            self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>.add(chunk_key, chunk_data);
             i = i + 1;
         };
     };
@@ -2893,6 +2896,54 @@ Return the current validator set
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators_mut">validators_mut</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): &<b>mut</b> ValidatorSet {
     &<b>mut</b> self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_validators">validators</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_state_inner_extra_fields"></a>
+
+## Function `extra_fields`
+
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>(self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>): &<a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>(self: &<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): &Bag {
+    &self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_state_inner_extra_fields_mut"></a>
+
+## Function `extra_fields_mut`
+
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields_mut">extra_fields_mut</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>): &<b>mut</b> <a href="../sui/bag.md#sui_bag_Bag">sui::bag::Bag</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields_mut">extra_fields_mut</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>): &<b>mut</b> Bag {
+    &<b>mut</b> self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extra_fields">extra_fields</a>
 }
 </code></pre>
 

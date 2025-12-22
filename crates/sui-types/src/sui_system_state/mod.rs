@@ -4,6 +4,7 @@
 use self::sui_system_state_inner_v1::{SuiSystemStateInnerV1, ValidatorV1};
 use self::sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary};
 use crate::base_types::ObjectID;
+use crate::collection_types::Bag;
 use crate::committee::CommitteeWithNetworkMetadata;
 use crate::dynamic_field::{
     Field, get_dynamic_field_from_store, get_dynamic_field_object_from_store,
@@ -52,7 +53,7 @@ pub const SUI_SYSTEM_STATE_SIM_TEST_SHALLOW_V2: u64 = 18446744073709551606; // u
 pub const SUI_SYSTEM_STATE_SIM_TEST_DEEP_V2: u64 = 18446744073709551607; // u64::MAX - 8
 
 /// Rust version of the Move sui::sui_system::SuiSystemState type
-/// This repreents the object with 0x5 ID.
+/// This represents the object with 0x5 ID.
 /// In Rust, this type should be rarely used since it's just a thin
 /// wrapper used to access the inner object.
 /// Within this module, we use it to determine the current version of the system state inner object type,
@@ -173,6 +174,7 @@ pub trait SuiSystemStateTrait {
     fn system_state_version(&self) -> u64;
     fn epoch_start_timestamp_ms(&self) -> u64;
     fn epoch_duration_ms(&self) -> u64;
+    fn extra_fields(&self) -> &Bag;
     fn safe_mode(&self) -> bool;
     fn safe_mode_gas_cost_summary(&self) -> GasCostSummary;
     fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams);

@@ -1557,6 +1557,7 @@ impl CheckpointBuilder {
             tx_key,
         )
         .await;
+        debug!("barrier effects: {:#?}", barrier_effects); //TODO-DNS
 
         let settlement_effects: Vec<_> = settlement_effects
             .into_iter()

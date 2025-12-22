@@ -910,7 +910,16 @@ validators
 validators_mut
 	public(package) fun
 	0x3::sui_system_state_inner
+extra_fields
+	public(package) fun
+	0x3::sui_system_state_inner
+extra_fields_mut
+	public(package) fun
+	0x3::sui_system_state_inner
 SuiSystemState
+	public struct
+	0x3::sui_system
+AccumulatorStorageCostKey
 	public struct
 	0x3::sui_system
 create
@@ -1064,6 +1073,12 @@ store_execution_time_estimates
 	fun
 	0x3::sui_system
 store_execution_time_estimates_v2
+	fun
+	0x3::sui_system
+get_accumulator_storage_fund_amount
+	fun
+	0x3::sui_system
+write_accumulator_storage_cost
 	fun
 	0x3::sui_system
 GenesisValidatorMetadata
@@ -1597,6 +1612,9 @@ MetadataKey
 Metadata
 	public struct
 	0x2::accumulator_metadata
+AccumulatorObjectCountKey
+	public struct
+	0x2::accumulator_metadata
 accumulator_root_owner_exists
 	fun
 	0x2::accumulator_metadata
@@ -1622,6 +1640,12 @@ accumulator_owner_detach_metadata
 	fun
 	0x2::accumulator_metadata
 accumulator_owner_destroy
+	fun
+	0x2::accumulator_metadata
+record_accumulator_object_changes
+	fun
+	0x2::accumulator_metadata
+get_accumulator_object_count
 	fun
 	0x2::accumulator_metadata
 blake2b256
