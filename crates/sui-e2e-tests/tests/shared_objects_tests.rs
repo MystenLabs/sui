@@ -644,7 +644,7 @@ async fn replay_shared_object_transaction() {
 /// Test that when preconsensus locking is disabled, conflicting owned object transactions
 /// are handled correctly through post-consensus conflict detection.
 /// The first transaction in consensus order should succeed, and the second should be
-/// dropped with DroppedInvalidOwnedInputs status (not "object locked until next epoch").
+/// dropped with ObjectVersionUnavailableForConsumption status (not "object locked until next epoch").
 #[sim_test]
 async fn test_disable_preconsensus_locking_conflicting_owned_transactions() {
     // Enable disable_preconsensus_locking to route all transactions through consensus

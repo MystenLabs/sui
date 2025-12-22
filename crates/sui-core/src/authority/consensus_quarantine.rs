@@ -98,7 +98,7 @@ pub(crate) struct ConsensusCommitOutput {
     )>,
 
     // Owned object locks acquired post-consensus (when disable_preconsensus_locking=true)
-    owned_object_locks: Vec<(ObjectRef, LockDetails)>,
+    owned_object_locks: HashMap<ObjectRef, LockDetails>,
 }
 
 impl ConsensusCommitOutput {
@@ -257,7 +257,7 @@ impl ConsensusCommitOutput {
         self.congestion_control_randomness_object_debts = object_debts;
     }
 
-    pub fn set_owned_object_locks(&mut self, locks: Vec<(ObjectRef, LockDetails)>) {
+    pub fn set_owned_object_locks(&mut self, locks: HashMap<ObjectRef, LockDetails>) {
         assert!(self.owned_object_locks.is_empty());
         self.owned_object_locks = locks;
     }
@@ -780,7 +780,7 @@ impl ConsensusOutputQuarantine {
     }
 
     fn remove_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
-        for (obj_ref, _) in &output.owned_object_locks {
+        for obj_ref in output.owned_object_locks.keys() {
             self.owned_object_locks.remove(obj_ref);
         }
     }

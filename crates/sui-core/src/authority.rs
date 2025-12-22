@@ -1130,17 +1130,17 @@ impl AuthorityState {
         if epoch_store.protocol_config().disable_preconsensus_locking() {
             // When preconsensus locking is disabled, validate owned object versions without
             // acquiring locks. Locking happens post-consensus in the consensus handler. Validation
-            // still runs to prevent spam transactions with invalid object versions.
-            // Note: We don't store the signed transaction here because with disable_preconsensus_locking,
-            // transactions go through Mysticeti consensus which provides ordering and certification.
-            // The QD flow that requires signed transaction storage is not used and will be removed in the future.
+            // still runs to prevent spam transactions with invalid object versions, and is necessary
+            // to handle recently created objects.
+            //
+            // Note: No signed transaction or locks are stored, unlike acquire_transaction_locks().
             self.get_cache_writer()
                 .validate_owned_object_versions(&owned_objects)?;
         } else {
-            // Check and write locks, to signed transaction, into the database
-            // The call to self.set_transaction_lock checks the lock is not conflicting,
-            // and returns ConflictingTransaction error in case there is a lock on a different
-            // existing transaction.
+            // Check and write locks and signed transaction, into the epoch store.
+            // The call to acquire_transaction_locks() checks that the locks are not conflicting,
+            // and returns ObjectLockConflict error in case there is a lock from a different
+            // transaction on an object.
             self.get_cache_writer().acquire_transaction_locks(
                 epoch_store,
                 &owned_objects,
@@ -1489,10 +1489,11 @@ impl AuthorityState {
         {
             // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
+            //
             // For owned object transactions, they can be enqueued for execution immediately
             // ONLY when disable_preconsensus_locking is false (QD/original fastpath mode).
             // When disable_preconsensus_locking is true (MFP mode), all transactions including
-            // owned object transactions go through consensus for ordering and execution scheduling.
+            // owned object transactions must go through consensus before enqueuing for execution.
             self.execution_scheduler.enqueue(
                 vec![(
                     Schedulable::Transaction(transaction.clone()),
