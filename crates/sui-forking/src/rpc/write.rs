@@ -5,7 +5,6 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use tracing::info;
 
-use crate::rpc::objects::insert_package_into_db;
 use crate::store::ForkingStore;
 
 use sui_indexer_alt_jsonrpc::{api::rpc_module::RpcModule, error::invalid_params};
@@ -97,11 +96,7 @@ impl WriteApiServer for Write {
             .map(|o| match o {
                 sui_types::transaction::InputObjectKind::MovePackage(object_id) => object_id,
                 sui_types::transaction::InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => obj_ref.0,
-                sui_types::transaction::InputObjectKind::SharedMoveObject {
-                    id,
-                    initial_shared_version,
-                    mutability,
-                } => id,
+                sui_types::transaction::InputObjectKind::SharedMoveObject { id, .. } => id,
             })
             .collect();
 

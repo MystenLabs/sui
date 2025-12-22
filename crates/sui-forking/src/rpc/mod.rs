@@ -33,8 +33,6 @@ pub(crate) async fn fetch_and_cache_object_from_rpc(
     object_id: &ObjectID,
 ) -> Result<Object, anyhow::Error> {
     let Context {
-        pg_context: ctx,
-        simulacrum,
         at_checkpoint,
         db_writer,
         ..

@@ -5,8 +5,7 @@ use filter::SuiObjectResponseQuery;
 use futures::future;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use sui_json_rpc_types::{
-    Page, SuiData, SuiGetPastObjectRequest, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
-    SuiPastObjectResponse,
+    Page, SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
 };
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
@@ -233,7 +232,7 @@ impl ObjectsApiServer for Objects {
             .await
             .into_iter()
             .zip(object_ids)
-            .map(|(r, o)| r)
+            .map(|(r, _)| r)
             .collect::<Result<Vec<_>, _>>()?)
     }
 
@@ -345,6 +344,9 @@ impl QueryObjectsApiServer for QueryObjects {
 
         let simulacrum = simulacrum.read().await;
 
+        let query = query.unwrap_or_default();
+        let options = query.options.unwrap_or_default();
+
         // TODO: this only works if all owned objects are stored locally in the simulacrum
         // we probably need to fetch from the RPC data store if not found locally, but it's tricky
         // if we're trying to get owned objects at a past checkpoint (older than 1h)
@@ -352,61 +354,15 @@ impl QueryObjectsApiServer for QueryObjects {
 
         let mut data = vec![];
         for object in owned_objs {
-            let object_id = object.id();
-            let version = object.version();
-            let digest = object.digest();
-            let owner = object.owner().clone();
-            let type_ = sui_types::base_types::ObjectType::from(object);
-            println!("Processing owned object: {:?}", object_id);
-            println!("Type: {:?}", type_);
-
-            let (bcs, content) = match &object.data {
-                sui_types::object::Data::Move(move_obj) => {
-                    let bcs = Some(sui_json_rpc_types::SuiRawData::MoveObject(
-                        move_obj.clone().into(),
-                    ));
-                    let type_tag: sui_types::TypeTag = move_obj.type_().clone().into();
-                    info!(
-                        "Trying to fetch package {:?} from package resolver",
-                        object_id
-                    );
-                    let layout_result = ctx.package_resolver().type_layout(type_tag.clone()).await;
-                    println!("Layout result: {:?}", layout_result);
-
-                    let content = match layout_result {
-                        Ok(move_core_types::annotated_value::MoveTypeLayout::Struct(layout)) => {
-                            sui_json_rpc_types::SuiParsedData::try_from_object(
-                                move_obj.clone(),
-                                *layout,
-                            )
-                            .ok()
-                        }
-                        _ => None,
-                    };
-
-                    (bcs, content)
+            // Apply filter if provided
+            if let Some(ref filter) = query.filter {
+                if !filter.matches(&object) {
+                    continue;
                 }
-                sui_types::object::Data::Package(pkg) => {
-                    let bcs = Some(sui_json_rpc_types::SuiRawData::Package(pkg.clone().into()));
-                    let content =
-                        sui_json_rpc_types::SuiParsedData::try_from_package(pkg.clone()).ok();
-                    (bcs, content)
-                }
-            };
+            }
 
-            let obj_data = SuiObjectData {
-                object_id,
-                version,
-                digest,
-                type_: Some(type_),
-                owner: Some(owner),
-                previous_transaction: Some(object.previous_transaction),
-                storage_rebate: Some(object.storage_rebate),
-                display: None,
-                content,
-                bcs,
-            };
-
+            let obj_data =
+                response::object_data_with_options(ctx, object.clone(), &options).await?;
             data.push(SuiObjectResponse::new_with_data(obj_data));
         }
 

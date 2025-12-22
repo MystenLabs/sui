@@ -48,7 +48,7 @@ use crate::{
         consistent_store::{ConsistentStoreConfig, start_consistent_store},
         indexer::{IndexerConfig, start_indexer},
     },
-    rpc::{fetch_and_cache_object_from_rpc, start_rpc},
+    rpc::start_rpc,
     server::*,
     store::ForkingStore,
 };
@@ -341,8 +341,6 @@ pub async fn start_server(
         .await
         .expect("Failed to create DB writer");
 
-    let graphql_endpoint = format!("https://graphql.{}.sui.io/graphql", chain_str);
-
     let context = crate::context::Context {
         pg_context,
         simulacrum,
@@ -403,6 +401,7 @@ pub async fn start_server(
     // Abort the spawned tasks when the server shuts down
     rpc_handle.abort();
     indexer_handle.abort();
+    update_objects_handle.abort();
 
     info!("Server shutdown complete");
 
@@ -464,7 +463,7 @@ async fn update_system_objects(context: crate::context::Context) -> anyhow::Resu
     } = context;
 
     let mut simulacrum = context.simulacrum.write().await;
-    let mut data_store: &mut ForkingStore = simulacrum.store_1_mut();
+    let data_store: &mut ForkingStore = simulacrum.store_1_mut();
     let x1 = ObjectID::from_hex_literal("0x1").unwrap();
     let x2 = ObjectID::from_hex_literal("0x2").unwrap();
     let objs: HashMap<ObjectID, _> = data_store

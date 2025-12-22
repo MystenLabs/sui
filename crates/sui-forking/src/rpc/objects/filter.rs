@@ -54,62 +54,99 @@ pub(crate) enum SuiObjectDataFilter {
 //     },
 // }
 //
-// #[derive(Clone, Serialize, Deserialize)]
-// pub(crate) struct ObjectCursor {
-//     object_id: Vec<u8>,
-//     cp_sequence_number: u64,
-// }
-//
-// pub(crate) type Cursor = BcsCursor<ObjectCursor>;
-// pub(crate) type ObjectIDs = PageResponse<ObjectID, String>;
-//
-// impl SuiObjectDataFilter {
-//     /// Whether this is a compound filter (which is implemented using sequential scan), or a simple
-//     /// type filter, which can leverage indices on the database.
-//     fn is_compound(&self) -> bool {
-//         use SuiObjectDataFilter as F;
-//         matches!(self, F::MatchNone(_))
-//     }
-//
-//     fn package(&self) -> Option<ObjectID> {
-//         use SuiObjectDataFilter as F;
-//         match self {
-//             F::MatchNone(_) => None,
-//             F::Package(p) => Some(*p),
-//             F::MoveModule { package, .. } => Some(*package),
-//             F::StructType(tag) => Some(tag.address.into()),
-//         }
-//     }
-//
-//     fn module(&self) -> Option<&str> {
-//         use SuiObjectDataFilter as F;
-//         match self {
-//             F::MatchNone(_) => None,
-//             F::Package(_) => None,
-//             F::MoveModule { module, .. } => Some(module.as_str()),
-//             F::StructType(tag) => Some(tag.module.as_str()),
-//         }
-//     }
-//
-//     fn name(&self) -> Option<&str> {
-//         use SuiObjectDataFilter as F;
-//         match self {
-//             F::MatchNone(_) => None,
-//             F::Package(_) => None,
-//             F::MoveModule { .. } => None,
-//             F::StructType(tag) => Some(tag.name.as_str()),
-//         }
-//     }
-//
-//     fn type_params(&self) -> Option<&[TypeTag]> {
-//         use SuiObjectDataFilter as F;
-//         match self {
-//             F::MatchNone(_) => None,
-//             F::Package(_) => None,
-//             F::MoveModule { .. } => None,
-//             F::StructType(tag) => (!tag.type_params.is_empty()).then(|| &tag.type_params[..]),
-//         }
-//     }
+impl SuiObjectDataFilter {
+    pub(crate) fn package(&self) -> Option<ObjectID> {
+        use SuiObjectDataFilter as F;
+        match self {
+            F::MatchNone(_) => None,
+            F::Package(p) => Some(*p),
+            F::MoveModule { package, .. } => Some(*package),
+            F::StructType(tag) => Some(tag.address.into()),
+        }
+    }
+
+    pub(crate) fn module(&self) -> Option<&str> {
+        use SuiObjectDataFilter as F;
+        match self {
+            F::MatchNone(_) => None,
+            F::Package(_) => None,
+            F::MoveModule { module, .. } => Some(module.as_str()),
+            F::StructType(tag) => Some(tag.module.as_str()),
+        }
+    }
+
+    pub(crate) fn name(&self) -> Option<&str> {
+        use SuiObjectDataFilter as F;
+        match self {
+            F::MatchNone(_) => None,
+            F::Package(_) => None,
+            F::MoveModule { .. } => None,
+            F::StructType(tag) => Some(tag.name.as_str()),
+        }
+    }
+
+    pub(crate) fn type_params(&self) -> Option<&[move_core_types::language_storage::TypeTag]> {
+        use SuiObjectDataFilter as F;
+        match self {
+            F::MatchNone(_) => None,
+            F::Package(_) => None,
+            F::MoveModule { .. } => None,
+            F::StructType(tag) => (!tag.type_params.is_empty()).then(|| &tag.type_params[..]),
+        }
+    }
+
+    /// Check if an object matches this filter
+    pub(crate) fn matches(&self, object: &sui_types::object::Object) -> bool {
+        use SuiObjectDataFilter as F;
+
+        match self {
+            F::MatchNone(filters) => !filters.iter().any(|f| f.matches(object)),
+            _ => {
+                let sui_types::object::Data::Move(move_obj) = &object.data else {
+                    return false;
+                };
+
+                let type_tag: sui_types::TypeTag = move_obj.type_().clone().into();
+                let sui_types::TypeTag::Struct(struct_tag) = type_tag else {
+                    return false;
+                };
+
+                if let Some(package_filter) = self.package() {
+                    if ObjectID::from(struct_tag.address) != package_filter {
+                        return false;
+                    }
+                }
+
+                if let Some(module_filter) = self.module() {
+                    if struct_tag.module.as_str() != module_filter {
+                        return false;
+                    }
+                }
+
+                if let Some(name_filter) = self.name() {
+                    if struct_tag.name.as_str() != name_filter {
+                        return false;
+                    }
+                }
+
+                if let Some(type_params_filter) = self.type_params() {
+                    if struct_tag.type_params.len() != type_params_filter.len() {
+                        return false;
+                    }
+                    for (param, filter_param) in
+                        struct_tag.type_params.iter().zip(type_params_filter.iter())
+                    {
+                        if param != filter_param {
+                            return false;
+                        }
+                    }
+                }
+
+                true
+            }
+        }
+    }
+}
 //
 //     /// Convert this filter into a raw filter which can be matched against a row from the database.
 //     /// This operation can fail if the filter exceeds limits (too many type filters or too deep).
