@@ -223,21 +223,52 @@ impl ObjectsApiServer for Objects {
             .into());
         }
 
-        let options = options.unwrap_or_default();
+        println!("multi_get_objects {:?}", object_ids);
 
         let obj_futures = object_ids
             .iter()
-            .map(|id| response::live_object(ctx, *id, &options));
+            .map(|id| self.get_object(*id, options.clone()));
 
         Ok(future::join_all(obj_futures)
             .await
             .into_iter()
             .zip(object_ids)
-            .map(|(r, o)| {
-                r.with_internal_context(|| format!("Failed to get object {o} at latest version"))
-            })
+            .map(|(r, o)| r)
             .collect::<Result<Vec<_>, _>>()?)
     }
+
+    // async fn multi_get_objects(
+    //     &self,
+    //     object_ids: Vec<ObjectID>,
+    //     options: Option<SuiObjectDataOptions>,
+    // ) -> RpcResult<Vec<SuiObjectResponse>> {
+    //     let Self(Context {
+    //         pg_context: ctx, ..
+    //     }) = self;
+    //     let config = &ctx.config().objects;
+    //     if object_ids.len() > config.max_multi_get_objects {
+    //         return Err(invalid_params(Error::TooManyKeys {
+    //             requested: object_ids.len(),
+    //             max: config.max_multi_get_objects,
+    //         })
+    //         .into());
+    //     }
+    //
+    //     let options = options.unwrap_or_default();
+    //
+    //     let obj_futures = object_ids
+    //         .iter()
+    //         .map(|id| response::live_object(ctx, *id, &options));
+    //
+    //     Ok(future::join_all(obj_futures)
+    //         .await
+    //         .into_iter()
+    //         .zip(object_ids)
+    //         .map(|(r, o)| {
+    //             r.with_internal_context(|| format!("Failed to get object {o} at latest version"))
+    //         })
+    //         .collect::<Result<Vec<_>, _>>()?)
+    // }
 
     async fn try_get_past_object(
         &self,
@@ -302,7 +333,7 @@ impl QueryObjectsApiServer for QueryObjects {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
-        _query: Option<SuiObjectResponseQuery>,
+        query: Option<SuiObjectResponseQuery>,
         _cursor: Option<String>,
         _limit: Option<usize>,
     ) -> RpcResult<Page<SuiObjectResponse, String>> {
@@ -326,6 +357,8 @@ impl QueryObjectsApiServer for QueryObjects {
             let digest = object.digest();
             let owner = object.owner().clone();
             let type_ = sui_types::base_types::ObjectType::from(object);
+            println!("Processing owned object: {:?}", object_id);
+            println!("Type: {:?}", type_);
 
             let (bcs, content) = match &object.data {
                 sui_types::object::Data::Move(move_obj) => {
@@ -338,6 +371,7 @@ impl QueryObjectsApiServer for QueryObjects {
                         object_id
                     );
                     let layout_result = ctx.package_resolver().type_layout(type_tag.clone()).await;
+                    println!("Layout result: {:?}", layout_result);
 
                     let content = match layout_result {
                         Ok(move_core_types::annotated_value::MoveTypeLayout::Struct(layout)) => {
@@ -385,7 +419,7 @@ impl QueryObjectsApiServer for QueryObjects {
 }
 
 /// Insert a package object into the kv_packages table
-async fn insert_package_into_db(
+pub(crate) async fn insert_package_into_db(
     db_writer: &sui_pg_db::Db,
     object: &Object,
     checkpoint: u64,

@@ -3,6 +3,10 @@
 
 use fastcrypto::encoding::Base64;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use tracing::info;
+
+use crate::rpc::objects::insert_package_into_db;
+use crate::store::ForkingStore;
 
 use sui_indexer_alt_jsonrpc::{api::rpc_module::RpcModule, error::invalid_params};
 use sui_json_rpc_types::{
@@ -11,12 +15,13 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::effects::TransactionEffectsAPI;
 use sui_types::{
+    base_types::ObjectID,
+    effects::TransactionEffectsAPI,
     quorum_driver_types::ExecuteTransactionRequestType,
+    transaction::TransactionDataAPI,
     transaction::{Transaction, TransactionData},
 };
-use tracing::info;
 
 #[open_rpc(namespace = "sui", tag = "Write API")]
 #[rpc(server, client, namespace = "sui")]
@@ -83,10 +88,35 @@ impl WriteApiServer for Write {
         let tx_data = bcs::from_bytes::<TransactionData>(&tx_data_decoded)
             .map_err(|e| invalid_params(Error::DecodeError(e.to_string())))?;
 
+        // we need the input objects part of simulacrum and package resolver
+        let input_objs_ids: Vec<ObjectID> = tx_data
+            .input_objects()
+            .clone()
+            .map_err(|e| invalid_params(Error::ExecutionError(e.to_string())))?
+            .into_iter()
+            .map(|o| match o {
+                sui_types::transaction::InputObjectKind::MovePackage(object_id) => object_id,
+                sui_types::transaction::InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => obj_ref.0,
+                sui_types::transaction::InputObjectKind::SharedMoveObject {
+                    id,
+                    initial_shared_version,
+                    mutability,
+                } => id,
+            })
+            .collect();
+
         let transaction = Transaction::from_data(tx_data, vec![]);
 
-        // Execute the transaction using Simulacrum
+        // Fetch and cache input objects
         let mut simulacrum = self.0.simulacrum.write().await;
+        let mut data_store: &mut ForkingStore = simulacrum.store_1_mut();
+        for object_id in input_objs_ids {
+            crate::rpc::fetch_and_cache_object_from_rpc(&mut data_store, &self.0, &object_id)
+                .await
+                .map_err(|e| invalid_params(Error::ExecutionError(e.to_string())))?;
+        }
+
+        // Execute the transaction using Simulacrum
         let (effects, _execution_error) = simulacrum
             .execute_transaction_impersonating(transaction.transaction_data().clone())
             .map_err(|e| invalid_params(Error::ExecutionError(e.to_string())))?;
