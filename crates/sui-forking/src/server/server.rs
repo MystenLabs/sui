@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    collections::{BTreeMap, HashMap},
     net::SocketAddr,
     path::PathBuf,
     sync::{
@@ -27,13 +28,13 @@ use tracing::info;
 
 use mysten_common::tempdir;
 use simulacrum::{AdvanceEpochConfig, SimulacrumBuilder};
-use sui_data_store::Node;
+use sui_data_store::{Node, ObjectKey, ObjectStore, VersionQuery};
 use sui_indexer_alt_jsonrpc::{RpcArgs, RpcService, config::RpcConfig};
 use sui_indexer_alt_metrics::MetricsService;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_pg_db::{Db, DbArgs};
 use sui_types::{
-    base_types::SuiAddress,
+    base_types::{ObjectID, SuiAddress},
     supported_protocol_versions::{
         Chain::{self},
         ProtocolConfig,
@@ -47,7 +48,7 @@ use crate::{
         consistent_store::{ConsistentStoreConfig, start_consistent_store},
         indexer::{IndexerConfig, start_indexer},
     },
-    rpc::start_rpc,
+    rpc::{fetch_and_cache_object_from_rpc, start_rpc},
     server::*,
     store::ForkingStore,
 };
@@ -302,6 +303,7 @@ pub async fn start_server(
         });
 
     simulacrum.set_data_ingestion_path(data_ingestion_path.clone());
+
     let simulacrum = Arc::new(RwLock::new(simulacrum));
 
     let registry = Registry::new_custom(Some("sui_forking".into()), None)
@@ -339,6 +341,8 @@ pub async fn start_server(
         .await
         .expect("Failed to create DB writer");
 
+    let graphql_endpoint = format!("https://graphql.{}.sui.io/graphql", chain_str);
+
     let context = crate::context::Context {
         pg_context,
         simulacrum,
@@ -351,6 +355,8 @@ pub async fn start_server(
     let state =
         Arc::new(AppState::new(context.clone(), chain, at_checkpoint, protocol_config).await);
 
+    let ctx = context.clone();
+
     let rpc_handle = tokio::spawn(async move {
         start_rpc(context.clone(), rpc, metrics).await.unwrap();
     });
@@ -358,6 +364,11 @@ pub async fn start_server(
         start_indexers(data_ingestion_path.clone(), version)
             .await
             .unwrap();
+    });
+
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    let update_objects_handle = tokio::spawn(async move {
+        update_system_objects(ctx.clone()).await.unwrap();
     });
 
     let app = Router::new()
@@ -440,6 +451,72 @@ fn drop_and_recreate_db(db_url: &str) -> Result<(), Box<dyn std::error::Error>> 
 
     // Recreate it
     diesel::sql_query("CREATE DATABASE sui_indexer_alt").execute(&mut conn)?;
+
+    Ok(())
+}
+
+// Update 0x1 and 0x2 to the versions at the forking checkpoint
+async fn update_system_objects(context: crate::context::Context) -> anyhow::Result<()> {
+    let crate::context::Context {
+        db_writer,
+        at_checkpoint,
+        ..
+    } = context;
+
+    let mut simulacrum = context.simulacrum.write().await;
+    let mut data_store: &mut ForkingStore = simulacrum.store_1_mut();
+    let x1 = ObjectID::from_hex_literal("0x1").unwrap();
+    let x2 = ObjectID::from_hex_literal("0x2").unwrap();
+    let objs: HashMap<ObjectID, _> = data_store
+        .get_objects()
+        .into_iter()
+        .filter(|x| x.0 == &x1 || x.0 == &x2)
+        .map(|(obj_id, map)| (obj_id.clone(), map.clone()))
+        .collect();
+    println!(
+        "Fetching system objects from RPC at checkpoint {}",
+        at_checkpoint
+    );
+    let obj = data_store
+        .get_rpc_data_store()
+        .get_objects(&[
+            ObjectKey {
+                object_id: x1,
+                version_query: VersionQuery::AtCheckpoint(at_checkpoint.clone()),
+            },
+            ObjectKey {
+                object_id: x2,
+                version_query: VersionQuery::AtCheckpoint(at_checkpoint.clone()),
+            },
+        ])
+        .unwrap();
+
+    for o in obj {
+        if let Some((ref object, _version)) = o {
+            info!("Fetched object from rpc: {:?}", object.id());
+            println!("Fetched object from rpc: {:?}", object.id());
+            let written_objects = BTreeMap::from([(object.id(), object.clone())]);
+            let old_obj = objs.get(&object.id()).unwrap();
+            let old_obj_digest = old_obj.get(&(1.into())).unwrap().digest();
+            data_store.update_objects(
+                written_objects,
+                vec![(object.id(), 1.into(), old_obj_digest)],
+            );
+
+            // If this is a package, insert it into kv_packages table
+            if object.is_package() {
+                if let Err(e) = crate::rpc::objects::insert_package_into_db(
+                    &db_writer,
+                    &object,
+                    at_checkpoint.clone(),
+                )
+                .await
+                {
+                    eprintln!("Failed to insert package into DB: {:?}", e);
+                }
+            }
+        }
+    }
 
     Ok(())
 }

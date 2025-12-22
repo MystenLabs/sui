@@ -100,6 +100,10 @@ impl ForkingStore {
         self.rpc_data_store.clone()
     }
 
+    pub fn get_objects(&self) -> &HashMap<ObjectID, BTreeMap<SequenceNumber, Object>> {
+        &self.objects
+    }
+
     pub fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
