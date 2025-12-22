@@ -1613,7 +1613,12 @@ impl SuiNode {
             match tx.kind {
                 // Shared object txns cannot be re-executed at this point, because we must wait for
                 // consensus replay to assign shared object versions.
-                ConsensusTransactionKind::CertifiedTransaction(tx) if !tx.is_consensus_tx() => {
+                // Similarly, when preconsensus locking is disabled, owned object transactions
+                // must go through consensus to determine execution order.
+                ConsensusTransactionKind::CertifiedTransaction(tx)
+                    if !tx.is_consensus_tx()
+                        && !epoch_store.protocol_config().disable_preconsensus_locking() =>
+                {
                     let tx = *tx;
                     // new_unchecked is safe because we never submit a transaction to consensus
                     // without verifying it

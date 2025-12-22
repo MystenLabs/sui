@@ -14,14 +14,19 @@ use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::{
     TestTransactionBuilder, publish_basics_package, publish_basics_package_and_make_counter,
 };
-use sui_types::crypto::get_key_pair;
+use sui_types::base_types::FullObjectRef;
+use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
-use sui_types::messages_grpc::{LayoutGenerationOption, ObjectInfoRequest};
+use sui_types::messages_grpc::{
+    LayoutGenerationOption, ObjectInfoRequest, RawSubmitTxRequest, SubmitTxResult, SubmitTxType,
+    WaitForEffectsRequest, WaitForEffectsResponse,
+};
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
+use tonic::IntoRequest;
 use tracing::info;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
@@ -642,17 +647,14 @@ async fn replay_shared_object_transaction() {
 }
 
 /// Test that when preconsensus locking is disabled, conflicting owned object transactions
-/// are handled correctly through post-consensus conflict detection.
-/// The first transaction in consensus order should succeed, and the second should be
-/// dropped with ObjectVersionUnavailableForConsumption status (not "object locked until next epoch").
+/// in the same consensus commit are handled correctly via post-consensus lock conflict detection.
+/// The first transaction in consensus order should succeed, and the second should be dropped
+/// with ObjectLockConflict status.
+///
+/// This test uses soft bundle submission to guarantee both transactions end up in the same
+/// consensus commit, ensuring we always test the post-consensus conflict detection path.
 #[sim_test]
 async fn test_disable_preconsensus_locking_conflicting_owned_transactions() {
-    // Enable disable_preconsensus_locking to route all transactions through consensus
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_disable_preconsensus_locking_for_testing(true);
-        config
-    });
-
     // Create cluster with multiple gas coins for the sender
     let test_cluster = TestClusterBuilder::new()
         .with_accounts(vec![AccountConfig {
@@ -678,8 +680,8 @@ async fn test_disable_preconsensus_locking_conflicting_owned_transactions() {
     let rgp = test_cluster.get_reference_gas_price().await;
 
     // Create two recipients
-    let recipient1 = get_key_pair::<sui_types::crypto::AccountKeyPair>().0;
-    let recipient2 = get_key_pair::<sui_types::crypto::AccountKeyPair>().0;
+    let recipient1 = get_key_pair::<AccountKeyPair>().0;
+    let recipient2 = get_key_pair::<AccountKeyPair>().0;
 
     info!(
         "Creating two conflicting transactions for coin {:?}",
@@ -688,84 +690,159 @@ async fn test_disable_preconsensus_locking_conflicting_owned_transactions() {
 
     // Transaction 1: Transfer contested_coin to recipient1
     let tx1 = TestTransactionBuilder::new(sender, gas_coin_1, rgp)
-        .transfer(
-            sui_types::base_types::FullObjectRef::from_fastpath_ref(contested_coin),
-            recipient1,
-        )
+        .transfer(FullObjectRef::from_fastpath_ref(contested_coin), recipient1)
         .build();
     let signed_tx1 = test_cluster.wallet.sign_transaction(&tx1).await;
 
     // Transaction 2: Transfer the SAME contested_coin to recipient2
     let tx2 = TestTransactionBuilder::new(sender, gas_coin_2, rgp)
-        .transfer(
-            sui_types::base_types::FullObjectRef::from_fastpath_ref(contested_coin),
-            recipient2,
-        )
+        .transfer(FullObjectRef::from_fastpath_ref(contested_coin), recipient2)
         .build();
     let signed_tx2 = test_cluster.wallet.sign_transaction(&tx2).await;
 
-    info!(
-        "Submitting conflicting transactions: tx1={:?}, tx2={:?}",
-        signed_tx1.digest(),
-        signed_tx2.digest()
-    );
-
-    // Submit both transactions concurrently using execute_transaction_may_fail
-    // since one is expected to fail due to conflicting owned object inputs
-    let (result1, result2) = join!(
-        test_cluster
-            .wallet
-            .execute_transaction_may_fail(signed_tx1.clone()),
-        test_cluster
-            .wallet
-            .execute_transaction_may_fail(signed_tx2.clone()),
-    );
-
-    info!("tx1 result: {:?}", result1.as_ref().map(|r| r.status_ok()));
-    info!("tx2 result: {:?}", result2.as_ref().map(|r| r.status_ok()));
-
-    // Count successes and failures
-    let tx1_success = result1
-        .as_ref()
-        .is_ok_and(|r| r.status_ok().unwrap_or(false));
-    let tx2_success = result2
-        .as_ref()
-        .is_ok_and(|r| r.status_ok().unwrap_or(false));
-    let tx1_rejected = result1.is_err();
-    let tx2_rejected = result2.is_err();
+    let tx1_digest = *signed_tx1.digest();
+    let tx2_digest = *signed_tx2.digest();
 
     info!(
-        "tx1_success: {}, tx1_rejected: {}, tx2_success: {}, tx2_rejected: {}",
-        tx1_success, tx1_rejected, tx2_success, tx2_rejected
+        "Submitting conflicting transactions via soft bundle: tx1={:?}, tx2={:?}",
+        tx1_digest, tx2_digest
     );
 
-    // Exactly one should succeed (the one that gets ordered first in consensus)
-    assert!(
-        tx1_success || tx2_success,
-        "At least one transaction should succeed"
-    );
-
-    // Exactly one should be rejected
-    assert!(
-        tx1_rejected || tx2_rejected,
-        "At least one transaction should be rejected"
-    );
-
-    // The critical assertion: the rejection error should be about
-    // "not available for consumption" (ObjectVersionUnavailableForConsumption),
-    // NOT "object locked until next epoch" (ObjectLockConflict).
-    let rejected_error = if tx1_rejected {
-        result1.unwrap_err().to_string()
-    } else {
-        result2.unwrap_err().to_string()
+    // Submit both transactions via soft bundle to ensure they're in the same consensus commit
+    let request = RawSubmitTxRequest {
+        transactions: vec![
+            bcs::to_bytes(&signed_tx1).unwrap().into(),
+            bcs::to_bytes(&signed_tx2).unwrap().into(),
+        ],
+        submit_type: SubmitTxType::SoftBundle.into(),
     };
 
-    info!("Rejected transaction error: {}", rejected_error);
+    // Get a validator client
+    let authority_aggregator = test_cluster.authority_aggregator();
+    let (_, safe_client) = authority_aggregator
+        .authority_clients
+        .iter()
+        .next()
+        .unwrap();
+    let mut validator_client = safe_client
+        .authority_client()
+        .get_client_for_testing()
+        .unwrap();
 
-    // Verify it's the right error type - ObjectVersionUnavailableForConsumption
-    assert!(
-        rejected_error.contains("not available for consumption"),
-        "Expected 'not available for consumption' error, got: {}",
-        rejected_error
+    // Submit the soft bundle
+    let result = validator_client
+        .submit_transaction(request.into_request())
+        .await
+        .map(tonic::Response::into_inner)
+        .expect("soft bundle submission should succeed");
+
+    assert_eq!(result.results.len(), 2, "Expected 2 submission results");
+
+    // Extract consensus positions from submission results
+    let mut consensus_positions = Vec::new();
+    for (i, raw_result) in result.results.iter().enumerate() {
+        let submit_result: SubmitTxResult = raw_result.clone().try_into().unwrap();
+        match submit_result {
+            SubmitTxResult::Submitted { consensus_position } => {
+                info!(
+                    "tx{} submitted with position {:?}",
+                    i + 1,
+                    consensus_position
+                );
+                consensus_positions.push(consensus_position);
+            }
+            SubmitTxResult::Executed { .. } => {
+                panic!(
+                    "Transaction {} was already executed during submission",
+                    i + 1
+                );
+            }
+            SubmitTxResult::Rejected { error } => {
+                panic!(
+                    "Transaction {} was rejected during submission: {:?}",
+                    i + 1,
+                    error
+                );
+            }
+        }
+    }
+
+    assert_eq!(
+        consensus_positions.len(),
+        2,
+        "Both transactions should be submitted"
     );
+
+    // Now wait for effects using the consensus positions
+    // This properly handles both Finalized (executed) and Dropped (rejected) transactions
+    let wait_request1 = WaitForEffectsRequest {
+        transaction_digest: Some(tx1_digest),
+        consensus_position: Some(consensus_positions[0]),
+        include_details: false,
+        ping_type: None,
+    };
+    let wait_request2 = WaitForEffectsRequest {
+        transaction_digest: Some(tx2_digest),
+        consensus_position: Some(consensus_positions[1]),
+        include_details: false,
+        ping_type: None,
+    };
+
+    // Wait for both results concurrently
+    let (response1, response2) = join!(
+        safe_client.wait_for_effects(wait_request1, None),
+        safe_client.wait_for_effects(wait_request2, None),
+    );
+
+    let response1 = response1.expect("wait_for_effects for tx1 should not error");
+    let response2 = response2.expect("wait_for_effects for tx2 should not error");
+
+    info!("tx1 response: {:?}", response1);
+    info!("tx2 response: {:?}", response2);
+
+    // One should be Executed, one should be Rejected
+    let (executed_response, rejected_response) = match (&response1, &response2) {
+        (WaitForEffectsResponse::Executed { .. }, WaitForEffectsResponse::Rejected { .. }) => {
+            info!("tx1 executed, tx2 rejected");
+            (&response1, &response2)
+        }
+        (WaitForEffectsResponse::Rejected { .. }, WaitForEffectsResponse::Executed { .. }) => {
+            info!("tx1 rejected, tx2 executed");
+            (&response2, &response1)
+        }
+        _ => {
+            panic!(
+                "Expected one Executed and one Rejected response, got: tx1={:?}, tx2={:?}",
+                response1, response2
+            );
+        }
+    };
+
+    // Verify the executed transaction succeeded
+    match executed_response {
+        WaitForEffectsResponse::Executed { effects_digest, .. } => {
+            info!("Executed transaction effects digest: {:?}", effects_digest);
+        }
+        _ => unreachable!(),
+    }
+
+    // Verify the rejected transaction has ObjectLockConflict error
+    match rejected_response {
+        WaitForEffectsResponse::Rejected { error } => {
+            let error_str = error
+                .as_ref()
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "no error details".to_string());
+            info!("Rejected transaction error: {}", error_str);
+
+            // The critical assertion: the rejection error should be ObjectLockConflict,
+            // indicating the object is already locked by another transaction in the same commit.
+            assert!(
+                error_str.contains("already locked by a different transaction"),
+                "Expected 'already locked by a different transaction' error, got: {}",
+                error_str
+            );
+        }
+        _ => unreachable!(),
+    }
 }

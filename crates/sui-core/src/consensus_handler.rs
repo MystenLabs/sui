@@ -2040,11 +2040,29 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         debug_fatal!("Invalid input objects for transaction {}", tx.digest());
                         continue;
                     };
-                    let owned_object_refs: Vec<_> = input_objects
+                    // Collect ImmOrOwnedMoveObject refs - these could be either immutable or owned.
+                    // We need to load the objects to determine which are owned (mutable).
+                    let imm_or_owned_refs: Vec<_> = input_objects
                         .iter()
                         .filter_map(|obj| match obj {
                             InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => Some(*obj_ref),
                             _ => None,
+                        })
+                        .collect();
+
+                    // Load objects to filter out immutable objects - only owned objects need locking.
+                    let object_ids: Vec<_> = imm_or_owned_refs.iter().map(|r| r.0).collect();
+                    let objects = self.cache_reader.get_objects(&object_ids);
+
+                    // Filter to only owned objects. Skip immutable objects (no locking needed)
+                    // and objects not found in cache (will fail at execution if truly missing).
+                    let owned_object_refs: Vec<_> = imm_or_owned_refs
+                        .into_iter()
+                        .zip(objects)
+                        .filter_map(|(obj_ref, obj_opt)| match obj_opt {
+                            Some(obj) if obj.is_immutable() => None, // Skip immutable
+                            Some(_) => Some(obj_ref),                // Include owned
+                            None => None, // Skip - will fail at execution if truly missing
                         })
                         .collect();
 
