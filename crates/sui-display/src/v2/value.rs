@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(unused)]
 
 use std::borrow::Cow;
 use std::fmt::Write as _;
@@ -8,12 +7,7 @@ use std::str;
 
 use async_trait::async_trait;
 use base64::engine::Engine;
-use base64::engine::general_purpose::STANDARD;
-use base64::engine::general_purpose::STANDARD_NO_PAD;
-use base64::engine::general_purpose::URL_SAFE;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::DateTime;
-use chrono::Utc;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::annotated_value::MoveTypeLayout;
@@ -24,10 +18,7 @@ use serde::Serialize;
 use serde::ser::SerializeSeq as _;
 use serde::ser::SerializeTuple as _;
 use serde::ser::SerializeTupleVariant;
-use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::base_types::RESOLVED_UTF8_STR;
-use sui_types::base_types::STD_OPTION_MODULE_NAME;
-use sui_types::base_types::STD_OPTION_STRUCT_NAME;
 use sui_types::base_types::move_ascii_str_layout;
 use sui_types::base_types::move_utf8_str_layout;
 use sui_types::base_types::url_layout;
@@ -411,7 +402,6 @@ impl<'s> Accessor<'s> {
     /// as long as their numeric values fit into a `u64`.
     pub(crate) fn as_numeric_index(&self) -> Option<u64> {
         use Accessor as A;
-        use MoveTypeLayout as L;
 
         match self {
             A::Index(value) => value.as_u64(),
@@ -799,6 +789,7 @@ pub(crate) mod tests {
     use move_core_types::annotated_value::MoveTypeLayout as L;
     use move_core_types::identifier::Identifier;
     use serde_json::json;
+    use sui_types::MOVE_STDLIB_ADDRESS;
     use sui_types::base_types::STD_ASCII_MODULE_NAME;
     use sui_types::base_types::STD_ASCII_STRUCT_NAME;
     use sui_types::dynamic_field::DynamicFieldInfo;
@@ -831,7 +822,6 @@ pub(crate) mod tests {
             use Identifier as I;
             use MoveFieldLayout as F;
             use MoveStructLayout as S;
-            use MoveTypeLayout as T;
 
             let name_bytes = bcs::to_bytes(&name).unwrap();
             let name_type = TypeTag::from(&name_layout);
@@ -875,7 +865,6 @@ pub(crate) mod tests {
             use Identifier as I;
             use MoveFieldLayout as F;
             use MoveStructLayout as S;
-            use MoveTypeLayout as T;
 
             let name_bytes = bcs::to_bytes(&name).unwrap();
             let value_bytes = bcs::to_bytes(&value).unwrap();

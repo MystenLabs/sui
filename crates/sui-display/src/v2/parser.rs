@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
 
 use std::borrow::Cow;
 use std::fmt;
@@ -1050,10 +1049,6 @@ impl Base64Modifier {
 
     /// Don't add padding characters.
     pub(crate) const NOPAD: Self = Self(1 << 2);
-
-    pub fn standard(&self) -> bool {
-        self.0 == Self::EMPTY.0
-    }
 
     pub fn url(&self) -> bool {
         self.0 & Self::URL.0 > 0
