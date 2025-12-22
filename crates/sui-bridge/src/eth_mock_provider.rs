@@ -1,19 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! A mock implementation of Ethereum JSON-RPC client, based on `MockProvider` from `ethers-rs`.
+//! A mock implementation of Ethereum JSON-RPC client, using alloy.
 
-use async_trait::async_trait;
-use ethers::providers::JsonRpcClient;
-use ethers::providers::MockError;
-use serde::{Serialize, de::DeserializeOwned};
-use serde_json::Value;
-use std::collections::HashMap;
+use alloy::{
+    providers::RootProvider,
+    rpc::{
+        client::RpcClient,
+        json_rpc::{RequestPacket, Response, ResponsePacket, SerializedRequest},
+    },
+    transports::{TransportError, TransportErrorKind},
+};
+use serde::Serialize;
+use serde_json::{Value, value::RawValue};
 use std::fmt::Debug;
 use std::{
     borrow::Borrow,
     sync::{Arc, Mutex},
+    task::{Context, Poll},
 };
+use std::{collections::HashMap, pin::Pin};
+use tower::Service;
+
+use crate::utils::EthProvider;
 
 /// Helper type that can be used to pass through the `params` value.
 /// This is necessary because the wrapper provider is supposed to skip the `params` if it's of
@@ -26,52 +35,89 @@ enum MockParams {
 
 /// Mock transport used in test environments.
 #[derive(Clone, Debug)]
-pub struct EthMockProvider {
+pub struct EthMockService {
     responses: Arc<Mutex<HashMap<(String, MockParams), Value>>>,
 }
 
-impl Default for EthMockProvider {
+impl Default for EthMockService {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-impl JsonRpcClient for EthMockProvider {
-    type Error = MockError;
+impl Service<RequestPacket> for EthMockService {
+    type Response = ResponsePacket;
+    type Error = TransportError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
-    /// If `method` and `params` match previously set response by
-    /// `add_response`, return the response. Otherwise return
-    /// MockError::EmptyResponses.
-    async fn request<P: Serialize + Send + Sync + Debug, R: DeserializeOwned>(
-        &self,
-        method: &str,
-        params: P,
-    ) -> Result<R, MockError> {
-        let params = if std::mem::size_of::<P>() == 0 {
-            MockParams::Zst
-        } else {
-            MockParams::Value(serde_json::to_value(params)?.to_string())
-        };
-        let element = self
-            .responses
-            .lock()
-            .unwrap()
-            .get(&(method.to_owned(), params))
-            .ok_or(MockError::EmptyResponses)?
-            .clone();
-        let res: R = serde_json::from_value(element)?;
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
+    }
 
-        Ok(res)
+    fn call(&mut self, req: RequestPacket) -> Self::Future {
+        let responses = self.responses.clone();
+
+        Box::pin(async move {
+            match req {
+                RequestPacket::Single(request) => {
+                    let response = process_request(&responses, &request)?;
+                    Ok(ResponsePacket::Single(response))
+                }
+                RequestPacket::Batch(requests) => {
+                    let responses: Result<Vec<_>, _> = requests
+                        .iter()
+                        .map(|req| process_request(&responses, req))
+                        .collect();
+                    Ok(ResponsePacket::Batch(responses?))
+                }
+            }
+        })
     }
 }
 
-impl EthMockProvider {
+fn process_request(
+    responses: &Arc<Mutex<HashMap<(String, MockParams), Value>>>,
+    request: &SerializedRequest,
+) -> Result<Response<Box<RawValue>>, TransportError> {
+    let method = request.method();
+    let params = request.params();
+
+    let mock_params = match params {
+        Some(value) if value.get() != "null" => MockParams::Value(value.to_string()),
+        _ => MockParams::Zst,
+    };
+
+    let guard = responses.lock().unwrap();
+    let value = guard
+        .get(&(method.to_string(), mock_params))
+        .ok_or_else(|| TransportErrorKind::custom(EthMockError::EmptyResponses))?
+        .clone();
+    let raw_value = RawValue::from_string(value.to_string()).map_err(TransportErrorKind::custom)?;
+
+    Ok(Response {
+        id: request.id().clone(),
+        payload: alloy::rpc::json_rpc::ResponsePayload::Success(raw_value),
+    })
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum EthMockError {
+    #[error("no response found for method and params")]
+    EmptyResponses,
+    #[error("serialization error: {0}")]
+    SerializationError(#[from] serde_json::Error),
+}
+
+impl EthMockService {
     pub fn new() -> Self {
         Self {
             responses: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub fn as_provider(&self) -> EthProvider {
+        let client = RpcClient::new(self.clone(), true);
+        Arc::new(RootProvider::new(client))
     }
 
     pub fn add_response<P: Serialize + Send + Sync, T: Serialize + Send + Sync, K: Borrow<T>>(
@@ -79,7 +125,7 @@ impl EthMockProvider {
         method: &str,
         params: P,
         data: K,
-    ) -> Result<(), MockError> {
+    ) -> Result<(), EthMockError> {
         let params = if std::mem::size_of::<P>() == 0 {
             MockParams::Zst
         } else {
@@ -98,52 +144,62 @@ impl EthMockProvider {
 #[cfg(not(target_arch = "wasm32"))]
 mod tests {
     use super::*;
-    use ethers::{providers::Middleware, types::U64};
-
-    #[tokio::test]
-    async fn test_basic_responses_match() {
-        let mock = EthMockProvider::new();
-
-        mock.add_response("eth_blockNumber", (), U64::from(12))
-            .unwrap();
-        let block: U64 = mock.request("eth_blockNumber", ()).await.unwrap();
-
-        assert_eq!(block.as_u64(), 12);
-        let block: U64 = mock.request("eth_blockNumber", ()).await.unwrap();
-        assert_eq!(block.as_u64(), 12);
-
-        mock.add_response("eth_blockNumber", (), U64::from(13))
-            .unwrap();
-        let block: U64 = mock.request("eth_blockNumber", ()).await.unwrap();
-        assert_eq!(block.as_u64(), 13);
-
-        mock.add_response("eth_foo", (), U64::from(0)).unwrap();
-        let block: U64 = mock.request("eth_blockNumber", ()).await.unwrap();
-        assert_eq!(block.as_u64(), 13);
-
-        let err = mock
-            .request::<_, ()>("eth_blockNumber", "bar")
-            .await
-            .unwrap_err();
-        match err {
-            MockError::EmptyResponses => {}
-            _ => panic!("expected empty responses"),
-        };
-
-        mock.add_response("eth_blockNumber", "bar", U64::from(14))
-            .unwrap();
-        let block: U64 = mock.request("eth_blockNumber", "bar").await.unwrap();
-        assert_eq!(block.as_u64(), 14);
-    }
+    use alloy::{primitives::U64, providers::Provider};
 
     #[tokio::test]
     async fn test_with_provider() {
-        let mock = EthMockProvider::new();
-        let provider = ethers::providers::Provider::new(mock.clone());
+        let mock_service = EthMockService::new();
+        let mock_provider = mock_service.as_provider();
 
-        mock.add_response("eth_blockNumber", (), U64::from(12))
+        mock_service
+            .add_response("eth_blockNumber", (), U64::from(12))
             .unwrap();
-        let block = provider.get_block_number().await.unwrap();
-        assert_eq!(block.as_u64(), 12);
+        let block: U64 = mock_provider
+            .raw_request("eth_blockNumber".into(), ())
+            .await
+            .unwrap();
+
+        assert_eq!(block, 12);
+        let block: U64 = mock_provider
+            .raw_request("eth_blockNumber".into(), ())
+            .await
+            .unwrap();
+        assert_eq!(block, 12);
+
+        mock_service
+            .add_response("eth_blockNumber", (), U64::from(13))
+            .unwrap();
+        let block: U64 = mock_provider
+            .raw_request("eth_blockNumber".into(), ())
+            .await
+            .unwrap();
+        assert_eq!(block, 13);
+
+        mock_service
+            .add_response("eth_foo", (), U64::from(0))
+            .unwrap();
+        let block: U64 = mock_provider
+            .raw_request("eth_blockNumber".into(), ())
+            .await
+            .unwrap();
+        assert_eq!(block, 13);
+
+        let err = mock_provider
+            .raw_request::<_, U64>("eth_blockNumber".into(), "bar")
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("no response found for method and params")
+        );
+
+        mock_service
+            .add_response("eth_blockNumber", "bar", U64::from(14))
+            .unwrap();
+        let block: U64 = mock_provider
+            .raw_request("eth_blockNumber".into(), "bar")
+            .await
+            .unwrap();
+        assert_eq!(block, 14);
     }
 }

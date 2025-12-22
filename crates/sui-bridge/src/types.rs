@@ -9,11 +9,9 @@ use crate::crypto::{
 use crate::encoding::BridgeMessageEncoding;
 use crate::error::{BridgeError, BridgeResult};
 use crate::events::EmittedSuiToEthTokenBridgeV1;
+use alloy::primitives::{Address as EthAddress, B256, TxHash as EthTransactionHash};
+use alloy::rpc::types::eth::Log;
 use enum_dispatch::enum_dispatch;
-use ethers::types::Address as EthAddress;
-use ethers::types::H256;
-pub use ethers::types::H256 as EthTransactionHash;
-use ethers::types::Log;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::{HashFunction, Keccak256};
 use num_enum::TryFromPrimitive;
@@ -427,7 +425,7 @@ impl BridgeAction {
         }
     }
 
-    pub fn is_governace_action(&self) -> bool {
+    pub fn is_governance_action(&self) -> bool {
         match self.action_type() {
             BridgeActionType::TokenTransfer => false,
             BridgeActionType::UpdateCommitteeBlocklist => true,
@@ -594,7 +592,7 @@ impl Message for BridgeAction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EthLog {
     pub block_number: u64,
-    pub tx_hash: H256,
+    pub tx_hash: B256,
     pub log_index_in_tx: u16,
     pub log: Log,
 }
@@ -604,13 +602,13 @@ pub struct EthLog {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RawEthLog {
     pub block_number: u64,
-    pub tx_hash: H256,
+    pub tx_hash: B256,
     pub log: Log,
 }
 
 pub trait EthEvent {
     fn block_number(&self) -> u64;
-    fn tx_hash(&self) -> H256;
+    fn tx_hash(&self) -> B256;
     fn log(&self) -> &Log;
 }
 
@@ -618,7 +616,7 @@ impl EthEvent for EthLog {
     fn block_number(&self) -> u64 {
         self.block_number
     }
-    fn tx_hash(&self) -> H256 {
+    fn tx_hash(&self) -> B256 {
         self.tx_hash
     }
     fn log(&self) -> &Log {
@@ -630,7 +628,7 @@ impl EthEvent for RawEthLog {
     fn block_number(&self) -> u64 {
         self.block_number
     }
-    fn tx_hash(&self) -> H256 {
+    fn tx_hash(&self) -> B256 {
         self.tx_hash
     }
     fn log(&self) -> &Log {
@@ -704,7 +702,7 @@ mod tests {
     use crate::test_utils::get_test_authority_and_key;
     use crate::test_utils::get_test_eth_to_sui_bridge_action;
     use crate::test_utils::get_test_sui_to_eth_bridge_action;
-    use ethers::types::Address as EthAddress;
+    use alloy::primitives::Address as EthAddress;
     use fastcrypto::traits::KeyPair;
     use std::collections::HashSet;
     use sui_types::bridge::TOKEN_ID_BTC;

@@ -21,7 +21,7 @@ pub struct BridgeOrchestratorTables {
     /// module identifier to the last processed EventID
     pub(crate) sui_syncer_cursors: DBMap<Identifier, EventID>,
     /// contract address to the last processed block
-    pub(crate) eth_syncer_cursors: DBMap<ethers::types::Address, u64>,
+    pub(crate) eth_syncer_cursors: DBMap<alloy::primitives::Address, u64>,
 }
 
 impl BridgeOrchestratorTables {
@@ -86,7 +86,7 @@ impl BridgeOrchestratorTables {
 
     pub(crate) fn update_eth_event_cursor(
         &self,
-        contract_address: ethers::types::Address,
+        contract_address: alloy::primitives::Address,
         cursor: u64,
     ) -> BridgeResult<()> {
         let mut batch = self.eth_syncer_cursors.batch();
@@ -122,7 +122,7 @@ impl BridgeOrchestratorTables {
 
     pub fn get_eth_event_cursors(
         &self,
-        contract_addresses: &[ethers::types::Address],
+        contract_addresses: &[alloy::primitives::Address],
     ) -> BridgeResult<Vec<Option<u64>>> {
         self.eth_syncer_cursors
             .multi_get(contract_addresses)
@@ -215,7 +215,7 @@ mod tests {
         assert!(actions.is_empty());
 
         // update eth event cursor
-        let eth_contract_address = ethers::types::Address::random();
+        let eth_contract_address = alloy::primitives::Address::random();
         let eth_block_num = 199999u64;
         assert!(
             store
