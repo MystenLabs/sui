@@ -91,6 +91,11 @@ pub struct SuiConfig {
     /// Otherwise, it will miss one event because of fullnode Event query semantics.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sui_bridge_module_last_processed_event_id_override: Option<EventID>,
+    /// Override the next sequence number for SuiSyncer
+    /// When set, SuiSyncer will start from this sequence number (exclusively) instead of the one in storage.
+    /// If the sequence number is not found in storage or override, the query will first fallback to the sequence number corresponding to the last processed EventID from the bridge module `bridge` (which in turn can be overridden via `sui_bridge_module_last_processed_event_id_override`) if available, otherwise fallback to 0.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sui_bridge_next_sequence_number_override: Option<u64>,
 }
 
 #[serde_as]
@@ -246,6 +251,10 @@ impl BridgeNodeConfig {
             sui_bridge_module_last_processed_event_id_override: self
                 .sui
                 .sui_bridge_module_last_processed_event_id_override,
+            sui_bridge_next_sequence_number_override: self
+                .sui
+                .sui_bridge_next_sequence_number_override,
+            sui_bridge_chain_id: self.sui.sui_bridge_chain_id,
         };
 
         info!("Config validation complete");
@@ -434,6 +443,8 @@ pub struct BridgeClientConfig {
     pub eth_contracts_start_block_fallback: u64,
     pub eth_contracts_start_block_override: Option<u64>,
     pub sui_bridge_module_last_processed_event_id_override: Option<EventID>,
+    pub sui_bridge_next_sequence_number_override: Option<u64>,
+    pub sui_bridge_chain_id: u8,
 }
 
 #[serde_as]
