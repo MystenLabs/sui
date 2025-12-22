@@ -5,7 +5,7 @@
   "publisher": "mysten",
   "icon": "images/move.png",
   "license": "Apache-2.0",
-  "version": "1.0.34",
+  "version": "1.0.35",
   "preview": true,
   "repository": {
     "url": "https://github.com/MystenLabs/sui.git",
@@ -35,6 +35,11 @@
       {
         "command": "move.serverVersion",
         "title": "Show Server Version",
+        "category": "Move"
+      },
+      {
+        "command": "move.serverRestart",
+        "title": "Restart Server",
         "category": "Move"
       },
       {
