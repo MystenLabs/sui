@@ -26,9 +26,12 @@ pub(crate) enum ConsensusTxStatus {
     Rejected,
     // Transaction is finalized post commit.
     Finalized,
-    // Transaction had invalid owned object inputs (stale version/digest or conflicting)
-    // and was dropped without execution. Only used when preconsensus locking is disabled.
-    DroppedInvalidOwnedInputs,
+    // Transaction is dropped post-consensus.
+    // This decision must be consistent across all validators.
+    //
+    // Currently, only invalid owned object inputs (using stale versions)
+    // can cause a transaction to be dropped without execution.
+    Dropped,
 }
 
 #[derive(Debug, Clone)]
@@ -126,8 +129,8 @@ impl ConsensusTxStatusCache {
                     // This happens when statuses arrive out-of-order, and is a no-op.
                     (
                         ConsensusTxStatus::Rejected
-                        | ConsensusTxStatus::Finalized
-                        | ConsensusTxStatus::DroppedInvalidOwnedInputs,
+                        | ConsensusTxStatus::Dropped
+                        | ConsensusTxStatus::Finalized,
                         ConsensusTxStatus::FastpathCertified,
                     ) => {
                         return;

@@ -1675,10 +1675,9 @@ impl ValidatorService {
                             fast_path: false,
                         });
                     }
-                    ConsensusTxStatus::DroppedInvalidOwnedInputs => {
-                        // Transaction was dropped due to invalid owned object inputs.
-                        // Fetch the detailed error (e.g., ObjectVersionUnavailableForConsumption)
-                        // from the rejection reason cache.
+                    ConsensusTxStatus::Dropped => {
+                        // Transaction was dropped post-consensus, currently only due to invalid owned object inputs..
+                        // Fetch the detailed error (e.g., ObjectLockConflict) from the rejection reason cache.
                         return Ok(WaitForEffectsResponse::Rejected {
                             error: epoch_store.get_rejection_vote_reason(consensus_position),
                         });
@@ -1759,8 +1758,8 @@ impl ValidatorService {
                                     current_status = Some(new_status);
                                     continue;
                                 }
-                                ConsensusTxStatus::DroppedInvalidOwnedInputs => {
-                                    // Transaction was dropped due to invalid owned object inputs.
+                                ConsensusTxStatus::Dropped => {
+                                    // Transaction was dropped post-consensus, currently only due to invalid owned object inputs.
                                     // Fetch the detailed error from the rejection reason cache.
                                     return Ok(WaitForEffectsResponse::Rejected {
                                         error: epoch_store

@@ -2052,23 +2052,36 @@ impl AuthorityPerEpochStore {
     /// Attempts to acquire owned object locks for a transaction post-consensus.
     /// This is used when preconsensus locking is disabled.
     ///
-    /// Checks for conflicts against:
-    /// 1. Existing locks in quarantine (from earlier consensus commits in this epoch)
-    /// 2. Existing locks in DB (from crash recovery)
-    /// 3. Intra-commit conflicts (locks acquired by earlier transactions in the same commit)
+    /// Checks whether the object versions are already locked by searching:
+    /// 1. The current commit
+    /// 2. Quarantine and cache (earlier consensus commits in this epoch)
+    /// 3. DB (cache miss)
     ///
-    /// Returns the new locks to add if successful, or an error message if there's a conflict.
+    /// Returns the new locks to add on success, or error if a conflict exists.
     pub fn try_acquire_owned_object_locks_post_consensus(
         &self,
         owned_object_refs: &[ObjectRef],
         tx_digest: TransactionDigest,
-        current_commit_locks: &[(ObjectRef, LockDetails)],
-    ) -> Result<Vec<(ObjectRef, LockDetails)>, String> {
+        current_commit_locks: &HashMap<ObjectRef, TransactionDigest>,
+    ) -> SuiResult<Vec<(ObjectRef, LockDetails)>> {
         if owned_object_refs.is_empty() {
             return Ok(Vec::new());
         }
 
-        // Check quarantine and DB for existing locks
+        // Check for intra-commit conflicts (transactions processed earlier in the same commit).
+        for obj_ref in owned_object_refs {
+            if let Some(locked_tx_digest) = current_commit_locks.get(obj_ref)
+                && *locked_tx_digest != tx_digest
+            {
+                return Err(SuiErrorKind::ObjectLockConflict {
+                    obj_ref: *obj_ref,
+                    pending_transaction: *locked_tx_digest,
+                }
+                .into());
+            }
+        }
+
+        // Check quarantine and epoch store for existing locks.
         let existing_locks = self
             .get_owned_object_locks(owned_object_refs)
             .unwrap_or_default();
@@ -2078,26 +2091,16 @@ impl AuthorityPerEpochStore {
             if let Some(locked_tx_digest) = lock
                 && *locked_tx_digest != tx_digest
             {
-                return Err(format!(
-                    "Object {:?} already locked by transaction {:?}, conflicting with {:?}",
-                    obj_ref, locked_tx_digest, tx_digest
-                ));
-            }
-        }
-
-        // Check for intra-commit conflicts (transactions processed earlier in the same commit)
-        for obj_ref in owned_object_refs {
-            for (locked_ref, locked_tx) in current_commit_locks {
-                if locked_ref == obj_ref && *locked_tx != tx_digest {
-                    return Err(format!(
-                        "Object {:?} already locked by transaction {:?} in same commit, conflicting with {:?}",
-                        obj_ref, locked_tx, tx_digest
-                    ));
+                return Err(SuiErrorKind::ObjectLockConflict {
+                    obj_ref: *obj_ref,
+                    pending_transaction: *locked_tx_digest,
                 }
+                .into());
             }
         }
 
-        // No conflicts - return the new locks to add
+        // No conflicts, so the consumed owned object versions are valid (from preconsensus validation)
+        // and available (from the checks above). Return the new locks to add.
         Ok(owned_object_refs
             .iter()
             .map(|obj_ref| (*obj_ref, tx_digest))

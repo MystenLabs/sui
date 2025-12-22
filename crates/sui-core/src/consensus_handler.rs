@@ -93,7 +93,7 @@ use crate::{
 /// Contains the filtered transactions and any owned object locks acquired post-consensus.
 struct FilteredConsensusOutput {
     transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
-    owned_object_locks: Vec<(ObjectRef, TransactionDigest)>,
+    owned_object_locks: HashMap<ObjectRef, TransactionDigest>,
 }
 
 pub struct ConsensusHandlerInitializer {
@@ -1955,7 +1955,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         consensus_commit: &impl ConsensusCommitAPI,
     ) -> FilteredConsensusOutput {
         let mut transactions = Vec::new();
-        let mut owned_object_locks: Vec<(ObjectRef, TransactionDigest)> = Vec::new();
+        let mut owned_object_locks = HashMap::new();
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
@@ -2027,7 +2027,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // TODO(fastpath): Handle unlocking.
                     continue;
                 }
-                // When pre-consensus locking is disabled, perform post-consensus owned object
+                // When preconsensus locking is disabled, perform post-consensus owned object
                 // conflict detection BEFORE setting Finalized status. If lock acquisition fails,
                 // the transaction has invalid/conflicting owned inputs and should be dropped.
                 if self
@@ -2035,8 +2035,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .protocol_config()
                     .disable_preconsensus_locking()
                     && let Some(tx) = parsed.transaction.kind.as_user_transaction()
-                    && let Ok(input_objects) = tx.transaction_data().input_objects()
                 {
+                    let Ok(input_objects) = tx.transaction_data().input_objects() else {
+                        debug_fatal!("Invalid input objects for transaction {}", tx.digest());
+                        continue;
+                    };
                     let owned_object_refs: Vec<_> = input_objects
                         .iter()
                         .filter_map(|obj| match obj {
@@ -2053,14 +2056,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                             &owned_object_locks,
                         ) {
                         Ok(new_locks) => {
-                            owned_object_locks.extend(new_locks);
+                            owned_object_locks.extend(new_locks.into_iter());
                         }
-                        Err(conflict_msg) => {
-                            debug!("Dropping transaction {:?}: {}", tx.digest(), conflict_msg);
-                            self.epoch_store.set_consensus_tx_status(
-                                position,
-                                ConsensusTxStatus::DroppedInvalidOwnedInputs,
-                            );
+                        Err(e) => {
+                            debug!("Dropping transaction {}: {}", tx.digest(), e);
+                            self.epoch_store
+                                .set_consensus_tx_status(position, ConsensusTxStatus::Dropped);
+                            self.epoch_store.set_rejection_vote_reason(position, &e);
                             continue;
                         }
                     }
