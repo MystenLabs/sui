@@ -226,6 +226,7 @@ pub(crate) struct TransactionObjectEntry {
 pub(crate) struct MoveCallEntry {
     // indexes
     pub(crate) transaction_digest: String,
+    pub(crate) cmd_idx: u64,
     pub(crate) checkpoint: u64,
     pub(crate) epoch: u64,
     pub(crate) timestamp_ms: u64,
