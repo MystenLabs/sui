@@ -415,6 +415,51 @@ pub mod checked {
                     temporary_store.mutate_input_object(gas_object);
                     cost_summary
                 }
+                PaymentMethod::Mixed {
+                    address_balance_gas_payer,
+                    ..
+                } => {
+                    let gas_object_id = self.smashed_gas_coin.unwrap();
+                    let mut gas_object =
+                        temporary_store.read_object(&gas_object_id).unwrap().clone();
+
+                    let gas_balance = gas_object
+                        .data
+                        .try_as_move()
+                        .unwrap()
+                        .get_coin_value_unsafe();
+
+                    let (coin_charge, address_balance_charge) = if net_change > 0 {
+                        assert!(
+                            gas_balance <= i64::MAX as u64,
+                            "SUI supply cap should prevent this from happening"
+                        );
+                        let coin_charge = std::cmp::min(net_change, gas_balance as i64);
+                        let address_balance_charge = net_change - coin_charge;
+                        (coin_charge, address_balance_charge)
+                    } else {
+                        (net_change, 0)
+                    };
+
+                    assert!(address_balance_charge >= 0);
+
+                    deduct_gas(&mut gas_object, coin_charge);
+                    if address_balance_charge > 0 {
+                        let balance_type = sui_types::balance::Balance::type_tag(
+                            sui_types::gas_coin::GAS::type_tag(),
+                        );
+                        let accumulator_event = AccumulatorEvent::from_balance_change(
+                            address_balance_gas_payer,
+                            balance_type,
+                            address_balance_charge,
+                        )
+                        .expect("Failed to create accumulator event for gas balance");
+
+                        temporary_store.add_accumulator_event(accumulator_event);
+                    }
+
+                    cost_summary
+                }
                 PaymentMethod::Unmetered => unreachable!(),
             }
         }
