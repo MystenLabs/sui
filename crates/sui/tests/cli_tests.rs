@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Write as IoWrite;
 use std::net::SocketAddr;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
@@ -25,23 +24,22 @@ use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
 use sui_types::transaction::{
-    TransactionData, TransactionDataAPI, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-    TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-    TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+    TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionData, TransactionDataAPI,
 };
 use tokio::time::sleep;
 
 use move_package_alt::schema::{Environment, ParsedPublishedFile};
 use mysten_common::random_util::TempDir;
 use mysten_common::tempdir;
-use std::fs::OpenOptions;
 use std::path::Path;
 use std::{fs, io};
 use sui::{
     client_commands::{
-        estimate_gas_budget, SuiClientCommandResult, SuiClientCommands, SwitchResponse,
+        SuiClientCommandResult, SuiClientCommands, SwitchResponse, estimate_gas_budget,
     },
-    sui_commands::{parse_host_port, SuiCommand},
+    sui_commands::{SuiCommand, parse_host_port},
 };
 use sui_config::{
     PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_GENESIS_FILENAME,
@@ -767,16 +765,21 @@ async fn test_ptb_publish() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_ptb_publish_upgrade() -> Result<(), anyhow::Error> {
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(2)
+        .with_num_validators(1)
         .build()
         .await;
     let context = &mut test_cluster.wallet;
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("ptb_complex_args_test_functions");
-    let mut package_path_2 = PathBuf::from(TEST_DATA_DIR);
-    package_path_2.push("clever_errors");
+    let client = context.get_client().await?;
+    let chain_id = client.read_api().get_chain_identifier().await?;
+
+    // Create temp directories with framework packages for both test packages
+    let (_tmp1, package_path) = create_temp_dir_with_framework_packages(
+        "ptb_complex_args_test_functions",
+        Some(chain_id.clone()),
+    )?;
+    let (_tmp2, package_path_2) =
+        create_temp_dir_with_framework_packages("clever_errors", Some(chain_id.clone()))?;
 
     let publish_ptb_string = format!(
         r#"
@@ -795,6 +798,8 @@ async fn test_ptb_publish_upgrade() -> Result<(), anyhow::Error> {
     sui::client_ptb::ptb::PTB { args: args.clone() }
         .execute(context)
         .await?;
+
+    // Verify both packages were published successfully
     let client = context.get_client().await?;
     let txs_page = client
         .read_api()
@@ -814,6 +819,22 @@ async fn test_ptb_publish_upgrade() -> Result<(), anyhow::Error> {
     let transaction_response = txs_page.data.first().expect("missing publish tx");
     let object_changes = transaction_response.object_changes.clone().unwrap();
 
+    // Count the number of packages published
+    let published_packages: Vec<_> = object_changes
+        .iter()
+        .filter_map(|c| {
+            if let sui_json_rpc_types::ObjectChange::Published { .. } = c {
+                Some(c.object_id())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Should have published exactly 2 packages
+    assert_eq!(published_packages.len(), 2, "Expected 2 published packages");
+
+    // Count the upgrade capabilities
     let upgrade_capabilities: Vec<ObjectID> = object_changes
         .iter()
         .filter_map(|c| {
@@ -878,52 +899,25 @@ async fn test_ptb_publish_upgrade() -> Result<(), anyhow::Error> {
         }
     }
 
-    // Write Published.toml files for both packages so they can be upgraded
-    for (pkg_path, package_id, upgrade_cap_id) in &packages_with_upgrade_cap {
-        use move_package_alt::schema::pubfile::Publication;
-        use move_package_alt::schema::{OriginalID, PublishAddresses, PublishedID};
-        use sui_package_alt::{BuildParams, PublishedMetadata, SuiFlavor};
-        let chain_id = client.read_api().get_chain_identifier().await?;
-
-        let publication = Publication::<SuiFlavor> {
-            chain_id: chain_id.clone(),
-            addresses: PublishAddresses {
-                published_at: PublishedID(**package_id),
-                original_id: OriginalID(**package_id),
-            },
-            version: 1,
-            metadata: PublishedMetadata {
-                toolchain_version: Some(env!("CARGO_PKG_VERSION").to_string()),
-                build_config: Some(BuildParams::default()),
-                upgrade_capability: Some(*upgrade_cap_id),
-            },
-        };
-
-        let published_file_content = format!(
-            r#"# Generated by Move
-# This file contains metadata about published versions of this package in different environments
-# This file SHOULD be committed to source control
-
-[published.localnet]
+    // Update published file for both packages
+    for (pkg_path, package_id, cap_id) in &packages_with_upgrade_cap {
+        let content = format!(
+            r#"[published.localnet]
 chain-id = "{}"
 published-at = "{}"
 original-id = "{}"
 version = 1
 toolchain-version = "{}"
+build-config = {{ flavor = "sui", edition = "2024" }}
 upgrade-capability = "{}"
-
-[published.localnet.build-config]
-edition = "2024"
-flavor = "sui"
 "#,
             chain_id,
             package_id,
             package_id,
             env!("CARGO_PKG_VERSION"),
-            upgrade_cap_id
+            cap_id
         );
-
-        std::fs::write(pkg_path.join("Published.toml"), published_file_content)?;
+        std::fs::write(pkg_path.join("Published.toml"), content)?;
     }
 
     let publish_ptb_string = format!(
@@ -2114,8 +2108,8 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
-async fn test_package_publish_command_with_unpublished_dependency_succeeds(
-) -> Result<(), anyhow::Error> {
+async fn test_package_publish_command_with_unpublished_dependency_succeeds()
+-> Result<(), anyhow::Error> {
     let with_unpublished_dependencies = true; // Value under test, results in successful response.
 
     let mut test_cluster = TestClusterBuilder::new().build().await;
@@ -2196,8 +2190,8 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
 }
 
 #[sim_test]
-async fn test_package_publish_command_with_unpublished_dependency_fails(
-) -> Result<(), anyhow::Error> {
+async fn test_package_publish_command_with_unpublished_dependency_fails()
+-> Result<(), anyhow::Error> {
     let with_unpublished_dependencies = false; // Value under test, results in error response.
 
     let mut test_cluster = TestClusterBuilder::new().build().await;
@@ -3853,9 +3847,11 @@ async fn key_identity_test() {
             .unwrap()
     );
     // alias does not exist
-    assert!(context
-        .get_identity_address(Some(KeyIdentity::Alias("alias".to_string())))
-        .is_err());
+    assert!(
+        context
+            .get_identity_address(Some(KeyIdentity::Alias("alias".to_string())))
+            .is_err()
+    );
 
     // get active address instead when no alias/address is given
     assert_eq!(
@@ -4483,10 +4479,12 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
             2,
             "Expected to have two coins when calling transfer sui the 2nd time"
         );
-        assert!(objs_refs
-            .data
-            .iter()
-            .any(|x| x.object().unwrap().object_id == object_id1));
+        assert!(
+            objs_refs
+                .data
+                .iter()
+                .any(|x| x.object().unwrap().object_id == object_id1)
+        );
     } else {
         panic!("TransferSui test failed");
     }
@@ -5205,8 +5203,8 @@ async fn test_tree_shaking_package_with_transitive_dependencies1() -> Result<(),
 }
 
 #[sim_test]
-async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_references(
-) -> Result<(), anyhow::Error> {
+async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_references()
+-> Result<(), anyhow::Error> {
     // Publish package C_B with no code references_B and check the linkage table
     let mut test = TreeShakingTest::new().await?;
 
@@ -5597,18 +5595,24 @@ fn create_temp_dir_with_framework_packages(
 }
 
 fn update_toml_with_localnet_chain_id(package_path: &Path, chain_id: String) -> String {
-    let orig_toml = std::fs::read_to_string(package_path.join("Move.toml")).unwrap();
-    let mut toml = OpenOptions::new()
-        .append(true)
-        .open(package_path.join("Move.toml"))
-        .unwrap();
-    writeln!(
-        toml,
-        "{}",
-        &format!("[environments]\nlocalnet=\"{chain_id}\"")
-    )
-    .unwrap();
+    let toml_path = package_path.join("Move.toml");
+    let orig_toml = std::fs::read_to_string(&toml_path).unwrap();
 
+    // Replace the existing localnet chain ID or add it if not present
+    let updated_toml = if orig_toml.contains("[environments]") {
+        // Replace existing localnet value
+        let re = regex::Regex::new(r#"(?m)^localnet\s*=\s*"[^"]*""#).unwrap();
+        re.replace(&orig_toml, &format!(r#"localnet = "{}""#, chain_id))
+            .to_string()
+    } else {
+        // Append new environments section
+        format!(
+            "{}\n[environments]\nlocalnet = \"{}\"\n",
+            orig_toml, chain_id
+        )
+    };
+
+    std::fs::write(&toml_path, updated_toml).unwrap();
     orig_toml
 }
 
