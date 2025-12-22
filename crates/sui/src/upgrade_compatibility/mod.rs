@@ -636,19 +636,19 @@ macro_rules! upgrade_codes {
                 $($code,)*
             }
 
-            #[allow(clippy::from_over_into)]
-            impl Into<DiagnosticInfo> for $cat {
-                fn into(self) -> DiagnosticInfo {
-                    match self {
-                        Self::ZeroPlaceholder =>
-                            panic!("do not use placeholder error code"),
-                        $(Self::$code => custom(
-                            COMPATIBILITY_PREFIX,
-                            Severity::NonblockingError,
-                            Category::$cat as u8,
-                            self as u8,
-                            $code_msg,
-                        ),)*
+            impl From<$cat> for DiagnosticInfo {
+                fn from(cat: $cat) -> DiagnosticInfo {
+                    match cat {
+                        $cat::ZeroPlaceholder => panic!("do not use placeholder error code"),
+                        $(
+                            $cat::$code => custom(
+                                COMPATIBILITY_PREFIX,
+                                Severity::NonblockingError,
+                                Category::$cat as u8,
+                                cat as u8,
+                                $code_msg,
+                            ),
+                        )*
                     }
                 }
             }
