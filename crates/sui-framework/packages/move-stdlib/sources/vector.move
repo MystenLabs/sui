@@ -189,7 +189,17 @@ public macro fun tabulate<$T>($n: u64, $f: |u64| -> $T): vector<$T> {
 }
 
 /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
-/// Does not preserve the order of elements in the vector (starts from the end of the vector).
+/// Does not preserve the order of elements in the vector (starts from the end of the vector). 
+///
+/// If `T` has the `copy` ability, the original vector still exists after the macro call
+/// because `vector<T>` can be copied:
+///
+/// ```move
+/// struct Data has copy, drop, store { value: u64 }
+/// let mut v = vector[Data { value: 42 }];
+/// v.destroy!(|data| data.value);
+/// let len = v.length(); // v still exists!
+/// ```
 public macro fun destroy<$T, $R: drop>($v: vector<$T>, $f: |$T| -> $R) {
     let mut v = $v;
     v.length().do!(|_| $f(v.pop_back()));
@@ -197,7 +207,17 @@ public macro fun destroy<$T, $R: drop>($v: vector<$T>, $f: |$T| -> $R) {
 }
 
 /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
-/// Preserves the order of elements in the vector.
+/// Preserves the order of elements in the vector. 
+///
+/// If `T` has the `copy` ability, the original vector still exists after the macro call
+/// because `vector<T>` can be copied:
+///
+/// ```move
+/// struct Data has copy, drop, store { value: u64 }
+/// let mut v = vector[Data { value: 42 }];
+/// v.do!(|data| data.value);
+/// let len = v.length(); // v still exists!
+/// ```
 public macro fun do<$T, $R: drop>($v: vector<$T>, $f: |$T| -> $R) {
     let mut v = $v;
     v.reverse();
@@ -322,6 +342,18 @@ public macro fun all<$T>($v: &vector<$T>, $f: |&$T| -> bool): bool {
 /// Destroys two vectors `v1` and `v2` by calling `f` to each pair of elements.
 /// Aborts if the vectors are not of the same length.
 /// The order of elements in the vectors is preserved.
+///
+/// If `T1` or `T2` has the `copy` ability, the original vectors still exist after
+/// the macro call because they can be copied:
+///
+/// ```move
+/// struct Data has copy, drop, store { value: u64 }
+/// let mut v1 = vector[Data { value: 42 }];
+/// let mut v2 = vector[Data { value: 24 }];
+/// v1.zip_do!(v1, |data1, data2| data1.value + data2.value);
+/// let len1 = v1.length(); // v1 still exists!
+/// let len2 = v2.length(); // v2 still exists!
+/// ```
 public macro fun zip_do<$T1, $T2, $R: drop>(
     $v1: vector<$T1>,
     $v2: vector<$T2>,
@@ -339,6 +371,18 @@ public macro fun zip_do<$T1, $T2, $R: drop>(
 /// Destroys two vectors `v1` and `v2` by calling `f` to each pair of elements.
 /// Aborts if the vectors are not of the same length.
 /// Starts from the end of the vectors.
+///
+/// If `T1` or `T2` has the `copy` ability, the original vectors still exist after
+/// the macro call because they can be copied:
+///
+/// ```move
+/// struct Data has copy, drop, store { value: u64 }
+/// let mut v1 = vector[Data { value: 42 }];
+/// let mut v2 = vector[Data { value: 24 }];
+/// v1.zip_do_reverse!(v2, |data1, data2| ());
+/// let len1 = v1.length(); // v1 still exists!
+/// let len2 = v2.length(); // v2 still exists!
+/// ```
 public macro fun zip_do_reverse<$T1, $T2, $R: drop>(
     $v1: vector<$T1>,
     $v2: vector<$T2>,
@@ -387,6 +431,18 @@ public macro fun zip_do_mut<$T1, $T2, $R: drop>(
 /// The returned values are collected into a new vector.
 /// Aborts if the vectors are not of the same length.
 /// The order of elements in the vectors is preserved.
+///
+/// If `T1` or `T2` has the `copy` ability, the original vectors still exist after
+/// the macro call because they can be copied:
+///
+/// ```move
+/// struct Data has copy, drop, store { value: u64 }
+/// let mut v1 = vector[Data { value: 42 }];
+/// let mut v2 = vector[Data { value: 24 }];
+/// let result = v1.zip_map!(v2, |data1, data2| data1.value + data2.value);
+/// let len1 = v1.length(); // v1 still exists!
+/// let len2 = v2.length(); // v2 still exists!
+/// ```
 public macro fun zip_map<$T1, $T2, $U>(
     $v1: vector<$T1>,
     $v2: vector<$T2>,
