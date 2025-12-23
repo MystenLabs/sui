@@ -303,6 +303,7 @@ impl Debug for ConsensusTransactionKey {
     }
 }
 
+/// Deprecated in favor of AuthorityCapabilitiesV2
 /// Used to advertise capabilities of each authority via consensus. This allows validators to
 /// negotiate the creation of the ChangeEpoch transaction.
 #[derive(Serialize, Deserialize, Clone, Hash)]
@@ -335,27 +336,6 @@ impl Debug for AuthorityCapabilitiesV1 {
             )
             .field("available_system_packages", &self.available_system_packages)
             .finish()
-    }
-}
-
-impl AuthorityCapabilitiesV1 {
-    pub fn new(
-        authority: AuthorityName,
-        supported_protocol_versions: SupportedProtocolVersions,
-        available_system_packages: Vec<ObjectRef>,
-    ) -> Self {
-        let generation = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Sui did not exist prior to 1970")
-            .as_millis()
-            .try_into()
-            .expect("This build of sui is not supported in the year 500,000,000");
-        Self {
-            authority,
-            generation,
-            supported_protocol_versions,
-            available_system_packages,
-        }
     }
 }
 
@@ -658,16 +638,6 @@ impl ConsensusTransaction {
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::EndOfPublish(authority),
-        }
-    }
-
-    pub fn new_capability_notification(capabilities: AuthorityCapabilitiesV1) -> Self {
-        let mut hasher = DefaultHasher::new();
-        capabilities.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_le_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::CapabilityNotification(capabilities),
         }
     }
 
