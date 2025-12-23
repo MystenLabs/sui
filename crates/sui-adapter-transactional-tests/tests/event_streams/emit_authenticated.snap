@@ -25,7 +25,7 @@ Checkpoint created: 1
 
 task 4, lines 46-48:
 //# view-object 2,0 --hide-contents
-Owner: Object ID: ( _ )
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000acc )
 Version: 2
 Type: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead>
 
@@ -42,7 +42,7 @@ Checkpoint created: 2
 
 task 7, lines 53-55:
 //# view-object 2,0 --hide-contents
-Owner: Object ID: ( _ )
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000acc )
 Version: 3
 Type: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead>
 
@@ -59,7 +59,7 @@ Checkpoint created: 3
 
 task 10, lines 60-62:
 //# view-object 2,0 --hide-contents
-Owner: Object ID: ( _ )
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000acc )
 Version: 4
 Type: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead>
 
@@ -76,7 +76,7 @@ Checkpoint created: 4
 
 task 13, lines 67-69:
 //# view-object 2,0 --hide-contents
-Owner: Object ID: ( _ )
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000acc )
 Version: 5
 Type: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead>
 
@@ -94,6 +94,6 @@ Checkpoint created: 5
 
 task 16, lines 74-77:
 //# view-object 2,0 --hide-contents
-Owner: Object ID: ( _ )
+Owner: Object ID: ( 0x0000000000000000000000000000000000000000000000000000000000000acc )
 Version: 6
 Type: sui::dynamic_field::Field<sui::accumulator::Key<sui::accumulator_settlement::EventStreamHead>, sui::accumulator_settlement::EventStreamHead>

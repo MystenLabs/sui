@@ -33,6 +33,19 @@ public(package) fun root_id_mut(accumulator_root: &mut AccumulatorRoot): &mut UI
 
 public use fun root_id_mut as AccumulatorRoot.id_mut;
 
+public(package) fun accumulator_u128_exists<T>(root: &AccumulatorRoot, address: address): bool {
+    root.has_accumulator<T, U128>(Key<T> { address })
+}
+
+public use fun accumulator_u128_exists as AccumulatorRoot.u128_exists;
+
+public(package) fun accumulator_u128_read<T>(root: &AccumulatorRoot, address: address): u128 {
+    let accumulator = root.borrow_accumulator<T, U128>(Key<T> { address });
+    accumulator.value
+}
+
+public use fun accumulator_u128_read as AccumulatorRoot.u128_read;
+
 // === Accumulator value types ===
 
 /// Storage for 128-bit accumulator values.
@@ -113,6 +126,15 @@ public(package) fun root_borrow_accumulator_mut<K, V: store>(
 }
 
 public use fun root_borrow_accumulator_mut as AccumulatorRoot.borrow_accumulator_mut;
+
+public(package) fun root_borrow_accumulator<K, V: store>(
+    accumulator_root: &AccumulatorRoot,
+    name: Key<K>,
+): &V {
+    dynamic_field::borrow<Key<K>, V>(&accumulator_root.id, name)
+}
+
+public use fun root_borrow_accumulator as AccumulatorRoot.borrow_accumulator;
 
 public(package) fun root_remove_accumulator<K, V: store>(
     accumulator_root: &mut AccumulatorRoot,
