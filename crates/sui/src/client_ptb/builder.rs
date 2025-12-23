@@ -932,10 +932,13 @@ impl<'a> PTBBuilder<'a> {
                 }
 
                 let build_config = MoveBuildConfig::default();
-                let root_pkg =
+                let mut root_pkg =
                     load_root_pkg_for_publish_upgrade(self.wallet, &build_config, package_path)
                         .await
                         .map_err(|e| err!(pkg_loc, "Cannot compile package: {e}"))?;
+                root_pkg
+                    .save_lockfile_to_disk()
+                    .map_err(|e| err!(pkg_loc, "Failed to save lockfile: {e}"))?;
 
                 let compiled_package = compile_package(
                     self.reader,
@@ -983,13 +986,16 @@ impl<'a> PTBBuilder<'a> {
                     }
                 };
 
-                let package_path = Path::new(&package_path);
                 let mut build_config = MoveBuildConfig::default();
                 build_config.root_as_zero = true;
-                let root_pkg =
-                    load_root_pkg_for_publish_upgrade(self.wallet, &build_config, package_path)
+                let mut root_pkg =
+                    load_root_pkg_for_publish_upgrade(self.wallet, &build_config, &package_path)
                         .await
                         .map_err(|e| err!(path_loc, "Cannot compile package: {e}"))?;
+
+                root_pkg
+                    .save_lockfile_to_disk()
+                    .map_err(|e| err!(path_loc, "Failed to save lockfile: {e}"))?;
 
                 let upgrade_cap_arg = self
                     .resolve(
@@ -1002,7 +1008,7 @@ impl<'a> PTBBuilder<'a> {
                     self.reader,
                     &root_pkg,
                     build_config.clone(),
-                    package_path,
+                    &package_path,
                     ObjectID::from_address(upgrade_cap_id.into_inner()),
                     false, /* with_unpublished_dependencies */
                     true,  /* skip_dependency_verification */
@@ -1011,36 +1017,37 @@ impl<'a> PTBBuilder<'a> {
                 .await
                 .map_err(|e| err!(path_loc, "{e}"))?;
 
-                // Fetch the upgrade cap to get the package ID
-                let upgrade_cap_obj = self
-                    .reader
-                    .get_object_with_options(
-                        ObjectID::from_address(upgrade_cap_id.into_inner()),
-                        SuiObjectDataOptions::default().with_bcs(),
-                    )
-                    .await
-                    .map_err(|e| err!(path_loc, "Failed to fetch upgrade cap: {e}"))?;
+                // try first to use the publication info if exists. If it does not exist, fetch the
+                // upgrade cap obj and deserialize it to get the package ID.
+                let package_id = if let Some(pub_info) = root_pkg.publication() {
+                    pub_info.addresses.published_at.0.into()
+                } else {
+                    // Fetch the upgrade cap to get the package ID
+                    let upgrade_cap_obj = self
+                        .reader
+                        .get_object_with_options(
+                            ObjectID::from_address(upgrade_cap_id.into_inner()),
+                            SuiObjectDataOptions::default().with_bcs(),
+                        )
+                        .await
+                        .map_err(|e| err!(path_loc, "Failed to fetch upgrade cap: {e}"))?;
 
-                let data = upgrade_cap_obj
-                    .data
-                    .ok_or_else(|| err!(path_loc, "Upgrade cap object not found"))?;
-                let bcs = data
-                    .bcs
-                    .ok_or_else(|| err!(path_loc, "No BCS data for upgrade cap"))?;
-                let upgrade_cap: UpgradeCap = bcs
-                    .try_as_move()
-                    .ok_or_else(|| err!(path_loc, "Upgrade cap is not a Move object"))?
-                    .deserialize()
-                    .map_err(|e| err!(path_loc, "Failed to deserialize upgrade cap: {e}"))?;
+                    let data = upgrade_cap_obj
+                        .data
+                        .ok_or_else(|| err!(path_loc, "Upgrade cap object not found"))?;
+                    let bcs = data
+                        .bcs
+                        .ok_or_else(|| err!(path_loc, "No BCS data for upgrade cap"))?;
+                    let upgrade_cap: UpgradeCap = bcs
+                        .try_as_move()
+                        .ok_or_else(|| err!(path_loc, "Upgrade cap is not a Move object"))?
+                        .deserialize()
+                        .map_err(|e| err!(path_loc, "Failed to deserialize upgrade cap: {e}"))?;
 
-                let package_id = unsafe {
-                    std::mem::transmute::<sui_types::id::ID, ObjectID>(upgrade_cap.package)
+                    upgrade_cap.package.bytes
                 };
-
                 let package_digest = compiled_package.get_package_digest(false);
                 let compiled_modules = compiled_package.get_package_bytes(false);
-                // let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
-                //     upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
 
                 let upgrade_arg = self
                     .ptb
