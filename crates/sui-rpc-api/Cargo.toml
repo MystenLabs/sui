@@ -31,6 +31,9 @@ tracing.workspace = true
 tokio-stream.workspace = true
 async-stream.workspace = true
 base64.workspace = true
+futures.workspace = true
+regex.workspace = true
+uuid.workspace = true
 
 sui-name-service.workspace = true
 fastcrypto.workspace = true
@@ -52,6 +55,9 @@ bytes.workspace = true
 tonic-health.workspace = true
 tonic-reflection.workspace = true
 tonic-web.workspace = true
+
+[dev-dependencies]
+tokio-tungstenite = "0.26"
 
 [build-dependencies]
 tonic-prost-build.workspace = true

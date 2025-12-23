@@ -11,8 +11,10 @@ use tap::Pipe;
 
 pub mod client;
 mod config;
+pub mod custom_broadcaster;
 mod error;
 pub mod grpc;
+pub mod liquidity_decoder;
 mod metrics;
 mod reader;
 mod response;
@@ -21,9 +23,14 @@ pub mod subscription;
 
 pub use client::Client;
 pub use config::Config;
+pub use custom_broadcaster::{
+    BroadcasterConfig, BroadcasterHandle, ClientMessage, CustomBroadcaster, LiquiditySubscription,
+    LiquidityUpdate, StreamMessage,
+};
 pub use error::{
     CheckpointNotFoundError, ErrorDetails, ErrorReason, ObjectNotFoundError, Result, RpcError,
 };
+pub use liquidity_decoder::{DexProtocol, LiquidityPoolState};
 pub use metrics::{RpcMetrics, RpcMetricsMakeCallbackHandler};
 pub use reader::TransactionNotFoundError;
 pub use sui_rpc::proto;
