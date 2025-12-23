@@ -54,6 +54,7 @@ impl ExpectedFailurePayload {
                 tx
             }
             ExpectedFailureType::Random => unreachable!(),
+            ExpectedFailureType::ObjectLockConflict => unreachable!(),
             ExpectedFailureType::NoFailure => unreachable!(),
         }
     }
