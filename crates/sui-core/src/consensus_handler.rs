@@ -32,8 +32,8 @@ use sui_types::{
     SUI_RANDOMNESS_STATE_OBJECT_ID,
     authenticator_state::ActiveJwk,
     base_types::{
-        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, ObjectRef, SequenceNumber,
-        TransactionDigest,
+        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, ObjectID, ObjectRef,
+        SequenceNumber, TransactionDigest,
     },
     crypto::RandomnessRound,
     digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest},
@@ -2034,35 +2034,38 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .epoch_store
                     .protocol_config()
                     .disable_preconsensus_locking()
-                    && let Some(tx) = parsed.transaction.kind.as_user_transaction()
                 {
+                    // Extract transaction and immutable object claims (if available)
+                    let (tx, immutable_object_ids) = match &parsed.transaction.kind {
+                        ConsensusTransactionKind::UserTransaction(tx) => {
+                            (tx.as_ref(), HashSet::new())
+                        }
+                        ConsensusTransactionKind::UserTransactionV2(tx_with_claims) => {
+                            let immutable_ids: HashSet<ObjectID> = tx_with_claims
+                                .get_immutable_objects()
+                                .map(|ids| ids.iter().cloned().collect())
+                                .unwrap_or_default();
+                            (tx_with_claims.tx(), immutable_ids)
+                        }
+                        _ => continue,
+                    };
+
                     let Ok(input_objects) = tx.transaction_data().input_objects() else {
                         debug_fatal!("Invalid input objects for transaction {}", tx.digest());
                         continue;
                     };
-                    // Collect ImmOrOwnedMoveObject refs - these could be either immutable or owned.
-                    // We need to load the objects to determine which are owned (mutable).
-                    let imm_or_owned_refs: Vec<_> = input_objects
+
+                    // Filter ImmOrOwnedMoveObject inputs, excluding those claimed to be immutable.
+                    // Immutable objects don't need lock acquisition as they can be used concurrently.
+                    let owned_object_refs: Vec<_> = input_objects
                         .iter()
                         .filter_map(|obj| match obj {
-                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => Some(*obj_ref),
+                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
+                                if !immutable_object_ids.contains(&obj_ref.0) =>
+                            {
+                                Some(*obj_ref)
+                            }
                             _ => None,
-                        })
-                        .collect();
-
-                    // Load objects to filter out immutable objects - only owned objects need locking.
-                    let object_ids: Vec<_> = imm_or_owned_refs.iter().map(|r| r.0).collect();
-                    let objects = self.cache_reader.get_objects(&object_ids);
-
-                    // Filter to only owned objects. Skip immutable objects (no locking needed)
-                    // and objects not found in cache (will fail at execution if truly missing).
-                    let owned_object_refs: Vec<_> = imm_or_owned_refs
-                        .into_iter()
-                        .zip(objects)
-                        .filter_map(|(obj_ref, obj_opt)| match obj_opt {
-                            Some(obj) if obj.is_immutable() => None, // Skip immutable
-                            Some(_) => Some(obj_ref),                // Include owned
-                            None => None, // Skip - will fail at execution if truly missing
                         })
                         .collect();
 
@@ -2367,9 +2370,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 ));
                         }
                         ConsensusTransactionKind::UserTransactionV2(tx) => {
-                            let (tx, used_alias_versions) = tx.into_inner();
+                            // Extract the aliases claim (required) from the claims
+                            let used_alias_versions = tx.aliases().clone();
+                            let inner_tx = tx.into_tx();
                             // Safe because transactions are certified by consensus.
-                            let tx = VerifiedTransaction::new_unchecked(tx);
+                            let tx = VerifiedTransaction::new_unchecked(inner_tx);
                             // TODO(fastpath): accept position in consensus, after plumbing consensus round, authority index, and transaction index here.
                             let transaction =
                                 VerifiedExecutableTransaction::new_from_consensus(tx, epoch);

@@ -734,6 +734,12 @@ pub enum SuiErrorKind {
         "The current set of aliases for a required signer changed after the transaction was submitted"
     )]
     AliasesChanged,
+
+    #[error("Claimed object {object_id} is not immutable")]
+    InvalidImmutableObjectClaim { object_id: ObjectID },
+
+    #[error("Cannot verify immutable claim for object {object_id}: object not found")]
+    CannotVerifyImmutableObjectClaim { object_id: ObjectID },
 }
 
 #[repr(u64)]

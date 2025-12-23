@@ -13,7 +13,7 @@ use crate::messages_checkpoint::{
 use crate::supported_protocol_versions::{
     Chain, SupportedProtocolVersions, SupportedProtocolVersionsWithHashes,
 };
-use crate::transaction::{CertifiedTransaction, Transaction, TransactionWithAliases};
+use crate::transaction::{CertifiedTransaction, PlainTransactionWithClaims, Transaction};
 use byteorder::{BigEndian, ReadBytesExt};
 use bytes::Bytes;
 use consensus_types::block::{BlockRef, PING_TRANSACTION_INDEX, TransactionIndex};
@@ -476,9 +476,10 @@ pub enum ConsensusTransactionKind {
     // V2: dedup by authority + sequence + digest
     CheckpointSignatureV2(Box<CheckpointSignatureMessage>),
 
-    // UserTransactionV2 commits to specific AddressAliases object versions that were used
-    // to verify the transaction.
-    UserTransactionV2(Box<TransactionWithAliases>),
+    // UserTransactionV2 commits to verified claims about the transaction:
+    // - AddressAliases: specific object versions used for signature verification
+    // - ImmutableInputObjects: object IDs that are immutable (to avoid locking them)
+    UserTransactionV2(Box<PlainTransactionWithClaims>),
 }
 
 impl ConsensusTransactionKind {
@@ -617,7 +618,7 @@ impl ConsensusTransaction {
 
     pub fn new_user_transaction_v2_message(
         authority: &AuthorityName,
-        tx: TransactionWithAliases,
+        tx: PlainTransactionWithClaims,
     ) -> Self {
         let mut hasher = DefaultHasher::new();
         let tx_digest = tx.tx().digest();

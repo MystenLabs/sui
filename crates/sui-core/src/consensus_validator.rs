@@ -15,9 +15,10 @@ use sui_macros::fail_point_arg;
 #[cfg(msim)]
 use sui_types::base_types::AuthorityName;
 use sui_types::{
+    base_types::ObjectID,
     error::{SuiError, SuiErrorKind, SuiResult},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
-    transaction::{TransactionDataAPI, TransactionWithAliases, WithAliases},
+    transaction::{PlainTransactionWithClaims, TransactionDataAPI, TransactionWithClaims},
 };
 use tap::TapFallible;
 use tracing::{debug, info, instrument, warn};
@@ -176,14 +177,14 @@ impl SuiTxValidator {
 
         let mut result = Vec::new();
         for (i, tx) in txs.into_iter().enumerate() {
-            let tx = match tx {
+            let tx: PlainTransactionWithClaims = match tx {
                 ConsensusTransactionKind::UserTransaction(tx) => {
                     let no_aliases_allowed = tx
                         .intent_message()
                         .value
                         .required_signers()
                         .map(|s| (s, None));
-                    WithAliases::new(*tx, no_aliases_allowed)
+                    TransactionWithClaims::from_aliases(*tx, no_aliases_allowed)
                 }
                 ConsensusTransactionKind::UserTransactionV2(tx) => *tx,
                 _ => continue,
@@ -218,19 +219,31 @@ impl SuiTxValidator {
     fn vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx: TransactionWithAliases,
+        tx: PlainTransactionWithClaims,
     ) -> SuiResult<()> {
-        let (tx, aliases) = tx.into_inner();
+        // Extract claims before consuming the transaction
+        let aliases = tx.aliases().clone();
+        let immutable_objects_claim = tx.get_immutable_objects().cloned();
+        let inner_tx = tx.into_tx();
 
         // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
         // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
-        tx.validity_check(&epoch_store.tx_validity_check_context())?;
+        inner_tx.validity_check(&epoch_store.tx_validity_check_context())?;
 
         self.authority_state.check_system_overload(
             &*self.consensus_overload_checker,
-            tx.data(),
+            inner_tx.data(),
             self.authority_state.check_system_overload_at_signing(),
         )?;
+
+        // Verify immutable object claims if present and protocol flag is enabled
+        if let Some(claimed_immutable_ids) = &immutable_objects_claim
+            && epoch_store
+                .protocol_config()
+                .enable_immutable_object_claims()
+        {
+            self.verify_immutable_object_claims(claimed_immutable_ids)?;
+        }
 
         #[allow(unused_mut)]
         let mut fail_point_always_report_aliases_changed = false;
@@ -244,13 +257,47 @@ impl SuiTxValidator {
             }
         );
 
-        let verified_tx = epoch_store.verify_transaction_with_current_aliases(tx)?;
+        let verified_tx = epoch_store.verify_transaction_with_current_aliases(inner_tx)?;
         if *verified_tx.aliases() != aliases || fail_point_always_report_aliases_changed {
             return Err(SuiErrorKind::AliasesChanged.into());
         }
 
         self.authority_state
             .handle_vote_transaction(epoch_store, verified_tx.into_tx())?;
+
+        Ok(())
+    }
+
+    /// Verify that all claimed immutable objects are actually immutable.
+    /// Rejects if any claimed object doesn't exist locally (can't verify) or is not immutable.
+    /// This is stricter than general voting because the claim directly controls locking behavior.
+    fn verify_immutable_object_claims(&self, claimed_ids: &[ObjectID]) -> SuiResult<()> {
+        if claimed_ids.is_empty() {
+            return Ok(());
+        }
+
+        let objects = self
+            .authority_state
+            .get_object_cache_reader()
+            .get_objects(claimed_ids);
+
+        for (obj, id) in objects.into_iter().zip(claimed_ids.iter()) {
+            match obj {
+                Some(o) if o.is_immutable() => {
+                    // Object is immutable, claim is valid
+                }
+                Some(_) => {
+                    // Object exists but is NOT immutable - invalid claim
+                    return Err(SuiErrorKind::InvalidImmutableObjectClaim { object_id: *id }.into());
+                }
+                None => {
+                    // Object not found - we can't verify the claim, so we must reject.
+                    return Err(
+                        SuiErrorKind::CannotVerifyImmutableObjectClaim { object_id: *id }.into(),
+                    );
+                }
+            }
+        }
 
         Ok(())
     }
