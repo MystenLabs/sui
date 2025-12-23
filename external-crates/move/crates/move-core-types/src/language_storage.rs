@@ -112,7 +112,7 @@ impl TypeTag {
 
     /// Return the abstract size we use for gas metering
     /// This size might be imperfect but should be consistent across platforms
-    /// TODO (ade): use macro to enfornce determinism
+    /// TODO (ade): use macro to enforce determinism
     pub fn abstract_size_for_gas_metering(&self) -> AbstractMemorySize {
         *TYPETAG_ENUM_ABSTRACT_SIZE
             + match self {
@@ -250,7 +250,7 @@ impl StructTag {
 
     /// Return the abstract size we use for gas metering
     /// This size might be imperfect but should be consistent across platforms
-    /// TODO (ade): use macro to enfornce determinism
+    /// TODO (ade): use macro to enforce determinism
     pub fn abstract_size_for_gas_metering(&self) -> AbstractMemorySize {
         // TODO: make this more robust as struct size changes
         self.address.abstract_size_for_gas_metering()
