@@ -83,10 +83,25 @@ mod checked {
                     gas_objects.push(obj);
                 }
             }
+
+            let available_address_balance_gas = if gas_paid_from_address_balance {
+                // When paying from address balance via the non-legacy API, we reserve the entire
+                // gas budget
+                gas_budget
+            } else {
+                // When paying from address balance via the legacy API, we reserve whatever is
+                // specified by the coin object refs.
+                coin_reservation_total
+            };
+
             // Skip gas balance check for address balance payments
             // We reserve gas budget in advance
             if !gas_paid_from_address_balance {
-                gas_status.check_gas_balance(&gas_objects, gas_budget)?;
+                gas_status.check_gas_balance(
+                    &gas_objects,
+                    gas_budget,
+                    available_address_balance_gas,
+                )?;
             }
             Ok(gas_status)
         }

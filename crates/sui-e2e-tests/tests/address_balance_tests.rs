@@ -3520,17 +3520,22 @@ async fn test_coin_reservation_validation() {
         );
     }
 
-    // Verify coin reservations cannot (yet) be used to pay gas.
+    // Verify gas budget is enforced with coin reservations.
     {
-        let coin_reservation = encode_coin_reservation(0, 10000000);
+        let coin_reservation = encode_coin_reservation(0, 100);
 
-        let err =
-            try_coin_reservation_tx(&mut test_cluster, gas1, sender1, sender1, coin_reservation)
-                .await
-                .unwrap_err();
+        let err = try_coin_reservation_tx(
+            &mut test_cluster,
+            coin_reservation,
+            sender1,
+            sender1,
+            coin_reservation,
+        )
+        .await
+        .unwrap_err();
         assert!(
             err.to_string()
-                .contains("Gas object is not an owned object")
+                .contains("Balance of gas object 100 is lower than the needed amount")
         );
     }
 
@@ -3720,9 +3725,10 @@ async fn test_valid_coin_reservation_gas_payments() {
 
     let (sender, gas) = get_sender_and_one_gas(context).await;
 
+    let budget = 5000000000;
     // send 1000 gas from the gas coins to the balances
     let tx = TestTransactionBuilder::new(sender, gas, rgp)
-        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1000, sender)])
+        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(budget + 100, sender)])
         .build();
 
     let (_, effects) = test_cluster
@@ -3742,39 +3748,38 @@ async fn test_valid_coin_reservation_gas_payments() {
         ParsedObjectRefWithdrawal::new(*accumulator_obj_id.inner(), epoch, amount)
             .encode(SequenceNumber::new(), chain_id)
     };
-    let coin_reservation = encode_coin_reservation(0, 100);
+    let coin_reservation = encode_coin_reservation(0, 1);
+    let ab_gas = encode_coin_reservation(0, budget);
 
     let recipient = SuiAddress::random_for_testing_only();
 
-    let gas = {
-        let tx = TestTransactionBuilder::new(sender, coin_reservation, rgp)
-            .transfer(
-                FullObjectRef::from_fastpath_ref(coin_reservation),
-                recipient,
-            )
-            .build();
-        let signed_tx = test_cluster.wallet.sign_transaction(&tx).await;
-        dbg!(signed_tx.digest());
-
-        let res = test_cluster
-            .wallet
-            .execute_transaction_may_fail(signed_tx)
-            .await
-            .unwrap();
-
-        assert!(res.effects.as_ref().unwrap().status().is_ok());
-        res.effects.unwrap().gas_object().reference.to_object_ref()
-    };
+    let res = try_coin_reservation_tx(
+        &mut test_cluster,
+        coin_reservation,
+        sender,
+        recipient,
+        ab_gas,
+    )
+    .await
+    .unwrap();
+    assert!(res.effects.as_ref().unwrap().status().is_ok());
+    let gas_charge = res.effects.as_ref().unwrap().gas_cost_summary().gas_used();
+    dbg!(res.effects.unwrap().gas_object().reference.to_object_ref());
 
     // ensure both balances arrived at the recipient
-    let recipient_balance = test_cluster
+    let recipient_balance = test_cluster.get_sui_balance(recipient).await;
+
+    // 1 MIST transferred.
+    assert_eq!(recipient_balance.total_balance, 1);
+
+    let sender_balance = test_cluster
         .fullnode_handle
         .rpc_client
-        .get_balance(recipient, Some("0x2::sui::SUI".to_string()))
+        .get_balance(sender, Some("0x2::sui::SUI".to_string()))
         .await
         .unwrap();
-    // 100 from coin transfer, 1 from coin reservation
-    assert_eq!(recipient_balance.total_balance, 100 + 1);
+    // 1 MIST transferred.
+    assert_eq!(sender_balance.total_balance, 1);
 }
 
 async fn try_coin_reservation_tx(

@@ -298,6 +298,7 @@ mod checked {
             &self,
             gas_objs: &[&ObjectReadResult],
             gas_budget: u64,
+            available_address_balance_gas: u64,
         ) -> UserInputResult {
             // 1. All gas objects have an address owner
             for gas_object in gas_objs {
@@ -330,8 +331,8 @@ mod checked {
                 });
             }
 
-            // 3. Gas balance (all gas coins together) is bigger or equal to budget
-            let mut gas_balance = 0u128;
+            // 3. Gas balance (all gas coins + address balance together) is bigger or equal to budget
+            let mut gas_balance = available_address_balance_gas as u128;
             for gas_obj in gas_objs {
                 // expect is safe because we already checked that all gas objects have an address owner
                 gas_balance +=
