@@ -17,7 +17,7 @@ pub fn create_remote_store_client(
     timeout_secs: u64,
 ) -> Result<Box<dyn ObjectStore>> {
     let retry_config = RetryConfig {
-        max_retries: 5,
+        max_retries: 10,
         retry_timeout: Duration::from_secs(timeout_secs + 1),
         ..Default::default()
     };
