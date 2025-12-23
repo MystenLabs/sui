@@ -986,8 +986,10 @@ impl<'a> PTBBuilder<'a> {
                     }
                 };
 
-                let mut build_config = MoveBuildConfig::default();
-                build_config.root_as_zero = true;
+                let build_config = MoveBuildConfig {
+                    root_as_zero: true,
+                    ..MoveBuildConfig::default()
+                };
                 let mut root_pkg =
                     load_root_pkg_for_publish_upgrade(self.wallet, &build_config, &package_path)
                         .await
