@@ -158,7 +158,9 @@ mod checked {
                 (real_gas_coins, available_address_balance_gas)
             };
 
-            if available_address_balance_gas > 0 {
+            if real_gas_coins.is_empty() {
+                PaymentMethod::AddressBalance(gas_data.owner)
+            } else if available_address_balance_gas > 0 {
                 PaymentMethod::Mixed {
                     address_balance_gas_payer: gas_data.owner,
                     gas_coins: real_gas_coins,
