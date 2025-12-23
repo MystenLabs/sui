@@ -19,14 +19,10 @@ use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
-use sui_types::messages_grpc::{
-    LayoutGenerationOption, ObjectInfoRequest, RawSubmitTxRequest, SubmitTxResult, SubmitTxType,
-    WaitForEffectsRequest, WaitForEffectsResponse,
-};
+use sui_types::messages_grpc::{LayoutGenerationOption, ObjectInfoRequest, WaitForEffectsResponse};
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
-use tonic::IntoRequest;
 use tracing::info;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
@@ -708,107 +704,29 @@ async fn test_disable_preconsensus_locking_conflicting_owned_transactions() {
         tx1_digest, tx2_digest
     );
 
-    // Submit both transactions via soft bundle to ensure they're in the same consensus commit
-    let request = RawSubmitTxRequest {
-        transactions: vec![
-            bcs::to_bytes(&signed_tx1).unwrap().into(),
-            bcs::to_bytes(&signed_tx2).unwrap().into(),
-        ],
-        submit_type: SubmitTxType::SoftBundle.into(),
-    };
-
-    // Get a validator client
-    let authority_aggregator = test_cluster.authority_aggregator();
-    let (_, safe_client) = authority_aggregator
-        .authority_clients
-        .iter()
-        .next()
-        .unwrap();
-    let mut validator_client = safe_client
-        .authority_client()
-        .get_client_for_testing()
-        .unwrap();
-
-    // Submit the soft bundle
-    let result = validator_client
-        .submit_transaction(request.into_request())
+    // Submit both transactions via soft bundle and wait for results
+    let results = test_cluster
+        .execute_soft_bundle_with_conflicts(&[signed_tx1, signed_tx2])
         .await
-        .map(tonic::Response::into_inner)
         .expect("soft bundle submission should succeed");
 
-    assert_eq!(result.results.len(), 2, "Expected 2 submission results");
+    assert_eq!(results.len(), 2, "Expected 2 results");
 
-    // Extract consensus positions from submission results
-    let mut consensus_positions = Vec::new();
-    for (i, raw_result) in result.results.iter().enumerate() {
-        let submit_result: SubmitTxResult = raw_result.clone().try_into().unwrap();
-        match submit_result {
-            SubmitTxResult::Submitted { consensus_position } => {
-                info!(
-                    "tx{} submitted with position {:?}",
-                    i + 1,
-                    consensus_position
-                );
-                consensus_positions.push(consensus_position);
-            }
-            SubmitTxResult::Executed { .. } => {
-                panic!(
-                    "Transaction {} was already executed during submission",
-                    i + 1
-                );
-            }
-            SubmitTxResult::Rejected { error } => {
-                panic!(
-                    "Transaction {} was rejected during submission: {:?}",
-                    i + 1,
-                    error
-                );
-            }
-        }
-    }
-
-    assert_eq!(
-        consensus_positions.len(),
-        2,
-        "Both transactions should be submitted"
-    );
-
-    // Now wait for effects using the consensus positions
-    // This properly handles both Finalized (executed) and Dropped (rejected) transactions
-    let wait_request1 = WaitForEffectsRequest {
-        transaction_digest: Some(tx1_digest),
-        consensus_position: Some(consensus_positions[0]),
-        include_details: false,
-        ping_type: None,
-    };
-    let wait_request2 = WaitForEffectsRequest {
-        transaction_digest: Some(tx2_digest),
-        consensus_position: Some(consensus_positions[1]),
-        include_details: false,
-        ping_type: None,
-    };
-
-    // Wait for both results concurrently
-    let (response1, response2) = join!(
-        safe_client.wait_for_effects(wait_request1, None),
-        safe_client.wait_for_effects(wait_request2, None),
-    );
-
-    let response1 = response1.expect("wait_for_effects for tx1 should not error");
-    let response2 = response2.expect("wait_for_effects for tx2 should not error");
+    let response1 = &results[0].1;
+    let response2 = &results[1].1;
 
     info!("tx1 response: {:?}", response1);
     info!("tx2 response: {:?}", response2);
 
     // One should be Executed, one should be Rejected
-    let (executed_response, rejected_response) = match (&response1, &response2) {
+    let (executed_response, rejected_response) = match (response1, response2) {
         (WaitForEffectsResponse::Executed { .. }, WaitForEffectsResponse::Rejected { .. }) => {
             info!("tx1 executed, tx2 rejected");
-            (&response1, &response2)
+            (response1, response2)
         }
         (WaitForEffectsResponse::Rejected { .. }, WaitForEffectsResponse::Executed { .. }) => {
             info!("tx1 rejected, tx2 executed");
-            (&response2, &response1)
+            (response2, response1)
         }
         _ => {
             panic!(

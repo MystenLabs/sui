@@ -33,6 +33,9 @@ pub const ESTIMATED_COMPUTATION_COST: u64 = 1_000_000;
 pub enum ExpectedFailureType {
     Random = 0,
     InvalidSignature,
+    /// Expected to fail due to object lock conflict with another concurrent transaction.
+    /// This can happen when multiple transactions try to use the same owned object.
+    ObjectLockConflict,
     // TODO: Add other failure types
 
     // This is not a failure type, but a placeholder for no failure. Marking no failure asserts that
