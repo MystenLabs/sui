@@ -184,9 +184,7 @@ impl MoveValue {
             return Err(bad_user_input(Error::NotASlice));
         };
 
-        // TODO: MoveType from layout.
-        let type_ = MoveType::from_native(TypeTag::from(&layout), self.type_.scope.clone());
-
+        let type_ = MoveType::from_layout(layout, self.type_.scope.clone());
         Ok(Some(MoveValue { type_, native }))
     }
 
