@@ -42,6 +42,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{ClientIdSource, Weight};
 use sui_types::{
+    base_types::ObjectID,
     digests::{TransactionDigest, TransactionEffectsDigest},
     error::{SuiErrorKind, UserInputError},
 };
@@ -504,6 +505,120 @@ impl ValidatorService {
         Ok(())
     }
 
+    /// Collect the IDs of input objects that are immutable.
+    /// This is used to create the ImmutableInputObjects claim for consensus messages.
+    async fn collect_immutable_object_ids(
+        &self,
+        tx: &VerifiedTransaction,
+        state: &AuthorityState,
+    ) -> Vec<ObjectID> {
+        let input_objects = match tx.data().transaction_data().input_objects() {
+            Ok(objs) => objs,
+            Err(_) => return vec![], // If we can't get input objects, skip
+        };
+
+        // Collect object IDs from ImmOrOwnedMoveObject inputs
+        let object_ids: Vec<ObjectID> = input_objects
+            .iter()
+            .filter_map(|obj| match obj {
+                InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => Some(*id),
+                _ => None,
+            })
+            .collect();
+
+        if object_ids.is_empty() {
+            return vec![];
+        }
+
+        // Load objects from cache and filter to immutable ones
+        let objects = state.get_object_cache_reader().get_objects(&object_ids);
+
+        objects
+            .into_iter()
+            .zip(object_ids.iter())
+            .filter_map(|(obj, id)| {
+                obj.and_then(|o| if o.is_immutable() { Some(*id) } else { None })
+            })
+            .collect()
+    }
+
+    pub async fn execute_certificate_for_testing(
+        &self,
+        cert: CertifiedTransaction,
+    ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
+        let request = make_tonic_request_for_testing(cert);
+        self.handle_certificate_v2(request).await
+    }
+
+    pub async fn handle_transaction_for_benchmarking(
+        &self,
+        transaction: Transaction,
+    ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
+        let request = make_tonic_request_for_testing(transaction);
+        self.transaction(request).await
+    }
+
+    // When making changes to this function, see if the changes should be applied to
+    // `Self::handle_submit_transaction()` and `SuiTxValidator::vote_transaction()` as well.
+    async fn handle_transaction(
+        &self,
+        request: tonic::Request<Transaction>,
+    ) -> WrappedServiceResponse<HandleTransactionResponse> {
+        let Self {
+            state,
+            consensus_adapter,
+            metrics,
+            traffic_controller: _,
+            client_id_source: _,
+        } = self.clone();
+        let transaction = request.into_inner();
+        let epoch_store = state.load_epoch_store_one_call_per_task();
+
+        // Validity check (basic structural validation)
+        transaction.validity_check(&epoch_store.tx_validity_check_context())?;
+
+        // Signature verification
+        let transaction = epoch_store
+            .verify_transaction_require_no_aliases(transaction)?
+            .into_tx();
+
+        // Validate the transaction
+        self.state
+            .handle_vote_transaction(&epoch_store, transaction)?;
+
+        Ok(())
+    }
+
+    /// Test method that performs transaction validation with overload checking.
+    /// Used for testing validator overload behavior.
+    pub fn handle_transaction_for_testing_with_overload_check(
+        &self,
+        transaction: Transaction,
+    ) -> SuiResult<()> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+
+        // Validity check (basic structural validation)
+        transaction.validity_check(&epoch_store.tx_validity_check_context())?;
+
+        // Check system overload
+        self.state.check_system_overload(
+            self.consensus_adapter.as_ref(),
+            transaction.data(),
+            self.state.check_system_overload_at_signing(),
+        )?;
+
+        // Signature verification
+        let transaction = epoch_store
+            .verify_transaction_require_no_aliases(transaction)?
+            .into_tx();
+
+        // Validate the transaction
+        self.state
+            .handle_vote_transaction(&epoch_store, transaction)?;
+
+        Ok(())
+    }
+
     #[instrument(
         name = "ValidatorService::handle_submit_transaction",
         level = "error",
@@ -817,9 +932,33 @@ impl ValidatorService {
             }
 
             if epoch_store.protocol_config().address_aliases() {
+                // Build TransactionWithClaims with appropriate claims
+                let tx_with_claims: PlainTransactionWithClaims = if epoch_store
+                    .protocol_config()
+                    .enable_immutable_object_claims()
+                {
+                    // Collect immutable object claims
+                    let immutable_object_ids = self
+                        .collect_immutable_object_ids(verified_transaction.tx(), state)
+                        .await;
+
+                    // Create claims with both aliases and immutable objects
+                    let (tx, aliases) = verified_transaction.into_inner();
+                    let mut claims = vec![TransactionClaim::AddressAliases(aliases)];
+                    if !immutable_object_ids.is_empty() {
+                        claims.push(TransactionClaim::ImmutableInputObjects(
+                            immutable_object_ids,
+                        ));
+                    }
+                    TransactionWithClaims::new(tx.into(), claims)
+                } else {
+                    // Just use aliases claim (existing behavior)
+                    verified_transaction.into()
+                };
+
                 consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
                     &state.name,
-                    verified_transaction.into(),
+                    tx_with_claims,
                 ));
             } else {
                 consensus_transactions.push(ConsensusTransaction::new_user_transaction_message(
