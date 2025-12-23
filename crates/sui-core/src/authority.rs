@@ -70,7 +70,7 @@ use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::accumulator_root::AccumulatorValue;
-use sui_types::coin_reservation::{ParsedDigest, ParsedObjectRefWithdrawal};
+use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
@@ -2085,11 +2085,6 @@ impl AuthorityState {
             kind,
             *epoch_id,
         );
-
-        // filter out coin reservation obj refs from gas data
-        gas_data
-            .payment
-            .retain(|obj_ref| !ParsedDigest::is_coin_reservation_digest(&obj_ref.2));
 
         let (inner_temp_store, gas_status, mut effects, timings, execution_error) = executor
             .execute_transaction_to_effects(

@@ -12,6 +12,7 @@ mod checked {
     use sui_config::verifier_signing_config::VerifierSigningConfig;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, ObjectRef};
+    use sui_types::coin_reservation::ParsedDigest;
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::metrics::BytecodeVerifierMetrics;
@@ -362,13 +363,18 @@ mod checked {
             // load all gas coins
             let objects: BTreeMap<_, _> = objects.iter().map(|o| (o.id(), o)).collect();
             let mut gas_objects = vec![];
+            let mut coin_reservation_total: u64 = 0;
             for obj_ref in gas {
-                let obj = objects.get(&obj_ref.0);
-                let obj = *obj.ok_or(UserInputError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    version: Some(obj_ref.1),
-                })?;
-                gas_objects.push(obj);
+                if let Ok(parsed) = ParsedDigest::try_from(obj_ref.2) {
+                    coin_reservation_total += parsed.reservation_amount();
+                } else {
+                    let obj = objects.get(&obj_ref.0);
+                    let obj = *obj.ok_or(UserInputError::ObjectNotFound {
+                        object_id: obj_ref.0,
+                        version: Some(obj_ref.1),
+                    })?;
+                    gas_objects.push(obj);
+                }
             }
             // Skip gas balance check for address balance payments
             // We reserve gas budget in advance
