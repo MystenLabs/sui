@@ -537,7 +537,8 @@ pub struct AuthorityEpochTables {
     #[rename = "running_root_accumulators"]
     pub running_root_state_hash: DBMap<CheckpointSequenceNumber, GlobalStateHash>,
 
-    /// Record of the capabilities advertised by each authority.
+    #[allow(dead_code)]
+    #[deprecated]
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilitiesV1>,
     authority_capabilities_v2: DBMap<AuthorityName, AuthorityCapabilitiesV2>,
 
@@ -1133,7 +1134,7 @@ impl AuthorityPerEpochStore {
 
         let jwk_aggregator = Mutex::new(jwk_aggregator);
 
-        let consensus_output_cache = ConsensusOutputCache::new(&epoch_start_configuration, &tables);
+        let consensus_output_cache = ConsensusOutputCache::new(&tables);
 
         let execution_time_observations = tables
             .execution_time_observations
@@ -2418,7 +2419,7 @@ impl AuthorityPerEpochStore {
             let mut keys = Vec::new();
             let mut txns = Vec::new();
 
-            let deferred_transactions = self.consensus_output_cache.deferred_transactions_v2.lock();
+            let deferred_transactions = self.consensus_output_cache.deferred_transactions.lock();
 
             for (key, transactions) in deferred_transactions.range(min..max) {
                 debug!(
@@ -2454,7 +2455,7 @@ impl AuthorityPerEpochStore {
         &self,
     ) -> Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)> {
         self.consensus_output_cache
-            .deferred_transactions_v2
+            .deferred_transactions
             .lock()
             .iter()
             .map(|(key, txs)| (*key, txs.clone()))
@@ -2602,9 +2603,9 @@ impl AuthorityPerEpochStore {
             .contains(tx_digest)
     }
 
-    pub fn deferred_transactions_empty_v2(&self) -> bool {
+    pub fn deferred_transactions_empty(&self) -> bool {
         self.consensus_output_cache
-            .deferred_transactions_v2
+            .deferred_transactions
             .lock()
             .is_empty()
     }
@@ -2867,28 +2868,6 @@ impl AuthorityPerEpochStore {
     }
 
     /// Record most recently advertised capabilities of all authorities
-    pub fn record_capabilities(&self, capabilities: &AuthorityCapabilitiesV1) -> SuiResult {
-        info!("received capabilities {:?}", capabilities);
-        let authority = &capabilities.authority;
-        let tables = self.tables()?;
-
-        // Read-compare-write pattern assumes we are only called from the consensus handler task.
-        if let Some(cap) = tables.authority_capabilities.get(authority)?
-            && cap.generation >= capabilities.generation
-        {
-            debug!(
-                "ignoring new capabilities {:?} in favor of previous capabilities {:?}",
-                capabilities, cap
-            );
-            return Ok(());
-        }
-        tables
-            .authority_capabilities
-            .insert(authority, capabilities)?;
-        Ok(())
-    }
-
-    /// Record most recently advertised capabilities of all authorities
     pub fn record_capabilities_v2(&self, capabilities: &AuthorityCapabilitiesV2) -> SuiResult {
         info!("received capabilities v2 {:?}", capabilities);
         let authority = &capabilities.authority;
@@ -2908,16 +2887,6 @@ impl AuthorityPerEpochStore {
             .authority_capabilities_v2
             .insert(authority, capabilities)?;
         Ok(())
-    }
-
-    pub fn get_capabilities_v1(&self) -> SuiResult<Vec<AuthorityCapabilitiesV1>> {
-        assert!(!self.protocol_config.authority_capabilities_v2());
-        Ok(self
-            .tables()?
-            .authority_capabilities
-            .safe_iter()
-            .map(|item| item.map(|(_, v)| v))
-            .collect::<Result<Vec<_>, _>>()?)
     }
 
     pub fn get_capabilities_v2(&self) -> SuiResult<Vec<AuthorityCapabilitiesV2>> {
