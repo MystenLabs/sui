@@ -688,13 +688,6 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     disable_preconsensus_locking: bool,
 
-    // If true, enable immutable object claims in consensus messages.
-    // When enabled, submitting validators include claims about which input objects are immutable,
-    // voting validators verify these claims, and the consensus handler uses verified claims
-    // to avoid locking immutable objects.
-    #[serde(skip_serializing_if = "is_false")]
-    enable_immutable_object_claims: bool,
-
     // Makes the event's sending module version-aware.
     #[serde(skip_serializing_if = "is_false")]
     relocate_event_module: bool,
@@ -2235,10 +2228,6 @@ impl ProtocolConfig {
 
     pub fn disable_preconsensus_locking(&self) -> bool {
         self.feature_flags.disable_preconsensus_locking
-    }
-
-    pub fn enable_immutable_object_claims(&self) -> bool {
-        self.feature_flags.enable_immutable_object_claims
     }
 
     pub fn consensus_round_prober_probe_accepted_rounds(&self) -> bool {
@@ -4678,10 +4667,6 @@ impl ProtocolConfig {
 
     pub fn set_disable_preconsensus_locking_for_testing(&mut self, val: bool) {
         self.feature_flags.disable_preconsensus_locking = val;
-    }
-
-    pub fn set_enable_immutable_object_claims_for_testing(&mut self, val: bool) {
-        self.feature_flags.enable_immutable_object_claims = val;
     }
 
     pub fn set_accept_passkey_in_multisig_for_testing(&mut self, val: bool) {

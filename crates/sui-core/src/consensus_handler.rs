@@ -2037,14 +2037,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 {
                     // Extract transaction and immutable object claims (if available)
                     let (tx, immutable_object_ids) = match &parsed.transaction.kind {
-                        ConsensusTransactionKind::UserTransaction(tx) => {
-                            (tx.as_ref(), HashSet::new())
-                        }
                         ConsensusTransactionKind::UserTransactionV2(tx_with_claims) => {
-                            let immutable_ids: HashSet<ObjectID> = tx_with_claims
-                                .get_immutable_objects()
-                                .map(|ids| ids.iter().cloned().collect())
-                                .unwrap_or_default();
+                            let immutable_ids: HashSet<ObjectID> =
+                                tx_with_claims.get_immutable_objects().into_iter().collect();
                             (tx_with_claims.tx(), immutable_ids)
                         }
                         _ => continue,
@@ -2371,16 +2366,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         }
                         ConsensusTransactionKind::UserTransactionV2(tx) => {
                             // Extract the aliases claim (required) from the claims
-                            let used_alias_versions = tx.aliases().clone();
+                            let used_alias_versions = tx.aliases();
                             let inner_tx = tx.into_tx();
                             // Safe because transactions are certified by consensus.
                             let tx = VerifiedTransaction::new_unchecked(inner_tx);
                             // TODO(fastpath): accept position in consensus, after plumbing consensus round, authority index, and transaction index here.
                             let transaction =
                                 VerifiedExecutableTransaction::new_from_consensus(tx, epoch);
-                            commit_handler_input
-                                .user_transactions
-                                .push(WithAliases::new(transaction, used_alias_versions));
+                            if let Some(used_alias_versions) = used_alias_versions {
+                                commit_handler_input
+                                    .user_transactions
+                                    .push(WithAliases::new(transaction, used_alias_versions));
+                            } else {
+                                commit_handler_input.user_transactions.push(
+                                    VerifiedExecutableTransactionWithAliases::no_aliases(
+                                        transaction,
+                                    ),
+                                );
+                            }
                         }
 
                         // === State machines ===

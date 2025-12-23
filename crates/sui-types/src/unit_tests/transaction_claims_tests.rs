@@ -55,9 +55,9 @@ fn test_transaction_with_claims_from_aliases() {
     let tx_with_claims = TransactionWithClaims::from_aliases("test_tx", aliases.clone());
 
     assert_eq!(*tx_with_claims.tx(), "test_tx");
-    assert_eq!(tx_with_claims.aliases().head.0, addr);
+    assert_eq!(tx_with_claims.aliases().unwrap().head.0, addr);
     assert_eq!(
-        tx_with_claims.aliases().head.1,
+        tx_with_claims.aliases().unwrap().head.1,
         Some(SequenceNumber::from(5))
     );
 }
@@ -76,12 +76,11 @@ fn test_transaction_with_claims_multiple_claims() {
     let tx_with_claims = TransactionWithClaims::new("test_tx", claims);
 
     // Should be able to get aliases
-    assert_eq!(tx_with_claims.aliases().head.0, addr);
+    assert_eq!(tx_with_claims.aliases().unwrap().head.0, addr);
 
     // Should be able to get immutable objects
     let retrieved_immutable = tx_with_claims.get_immutable_objects();
-    assert!(retrieved_immutable.is_some());
-    assert_eq!(retrieved_immutable.unwrap().len(), 2);
+    assert_eq!(retrieved_immutable.len(), 2);
 }
 
 #[test]
@@ -92,8 +91,8 @@ fn test_transaction_with_claims_no_immutable_objects() {
     let tx_with_claims = TransactionWithClaims::from_aliases("test_tx", aliases);
 
     // Should have aliases but no immutable objects
-    assert_eq!(tx_with_claims.aliases().head.0, addr);
-    assert!(tx_with_claims.get_immutable_objects().is_none());
+    assert_eq!(tx_with_claims.aliases().unwrap().head.0, addr);
+    assert!(tx_with_claims.get_immutable_objects().is_empty());
 }
 
 #[test]
@@ -134,10 +133,9 @@ fn test_transaction_with_claims_empty_immutable_objects() {
 
     let tx_with_claims = TransactionWithClaims::new("test_tx", claims);
 
-    // Should return Some with empty vec, not None
+    // Should return Some with empty vec
     let immutable = tx_with_claims.get_immutable_objects();
-    assert!(immutable.is_some());
-    assert!(immutable.unwrap().is_empty());
+    assert!(immutable.is_empty());
 }
 
 #[test]
@@ -147,5 +145,5 @@ fn test_aliases_panics_when_not_present() {
         ObjectID::random(),
     ])];
     let tx_with_claims = TransactionWithClaims::new("test_tx", claims);
-    let _ = tx_with_claims.aliases();
+    let _ = tx_with_claims.aliases().unwrap();
 }

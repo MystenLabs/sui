@@ -3937,6 +3937,11 @@ impl<T> TransactionWithClaims<T> {
         }
     }
 
+    /// Creates from a transaction without any aliases attached.
+    pub fn no_aliases(tx: T) -> Self {
+        Self { tx, claims: vec![] }
+    }
+
     pub fn tx(&self) -> &T {
         &self.tx
     }
@@ -3945,23 +3950,26 @@ impl<T> TransactionWithClaims<T> {
         self.tx
     }
 
-    /// Get the address aliases claim. Panics if not present.
-    pub fn aliases(&self) -> &NonEmpty<(SuiAddress, Option<SequenceNumber>)> {
+    /// Get the address aliases claim. Differentiate between empty and not present for validation.
+    pub fn aliases(&self) -> Option<NonEmpty<(SuiAddress, Option<SequenceNumber>)>> {
         self.claims
             .iter()
             .find_map(|c| match c {
                 TransactionClaim::AddressAliases(aliases) => Some(aliases),
                 _ => None,
             })
-            .expect("AddressAliases claim must be present")
+            .cloned()
     }
 
-    /// Get the immutable input objects claim if present.
-    pub fn get_immutable_objects(&self) -> Option<&Vec<ObjectID>> {
-        self.claims.iter().find_map(|c| match c {
-            TransactionClaim::ImmutableInputObjects(objs) => Some(objs),
-            _ => None,
-        })
+    /// Get the immutable input objects claim. Returns empty vector if not present.
+    pub fn get_immutable_objects(&self) -> Vec<ObjectID> {
+        self.claims
+            .iter()
+            .find_map(|c| match c {
+                TransactionClaim::ImmutableInputObjects(objs) => Some(objs.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
     }
 }
 

@@ -511,11 +511,8 @@ impl ValidatorService {
         &self,
         tx: &VerifiedTransaction,
         state: &AuthorityState,
-    ) -> Vec<ObjectID> {
-        let input_objects = match tx.data().transaction_data().input_objects() {
-            Ok(objs) => objs,
-            Err(_) => return vec![], // If we can't get input objects, skip
-        };
+    ) -> SuiResult<Vec<ObjectID>> {
+        let input_objects = tx.data().transaction_data().input_objects()?;
 
         // Collect object IDs from ImmOrOwnedMoveObject inputs
         let object_ids: Vec<ObjectID> = input_objects
@@ -525,21 +522,36 @@ impl ValidatorService {
                 _ => None,
             })
             .collect();
-
         if object_ids.is_empty() {
-            return vec![];
+            return Ok(vec![]);
         }
 
         // Load objects from cache and filter to immutable ones
         let objects = state.get_object_cache_reader().get_objects(&object_ids);
 
+        // All objects should be found, since owned input objects have been validated to exist.
         objects
             .into_iter()
             .zip(object_ids.iter())
             .filter_map(|(obj, id)| {
-                obj.and_then(|o| if o.is_immutable() { Some(*id) } else { None })
+                let Some(o) = obj else {
+                    return Some(Err::<ObjectID, SuiError>(
+                        SuiErrorKind::UserInputError {
+                            error: UserInputError::ObjectNotFound {
+                                object_id: *id,
+                                version: None,
+                            },
+                        }
+                        .into(),
+                    ));
+                };
+                if o.is_immutable() {
+                    Some(Ok(*id))
+                } else {
+                    None
+                }
             })
-            .collect()
+            .collect::<SuiResult<Vec<ObjectID>>>()
     }
 
     pub async fn execute_certificate_for_testing(
@@ -931,30 +943,29 @@ impl ValidatorService {
                 }
             }
 
-            if epoch_store.protocol_config().address_aliases() {
-                // Build TransactionWithClaims with appropriate claims
-                let tx_with_claims: PlainTransactionWithClaims = if epoch_store
-                    .protocol_config()
-                    .enable_immutable_object_claims()
-                {
-                    // Collect immutable object claims
+            // Create claims with aliases and / or immutable objects.
+            if epoch_store.protocol_config().address_aliases()
+                || epoch_store.protocol_config().disable_preconsensus_locking()
+            {
+                let mut claims = vec![];
+
+                if epoch_store.protocol_config().disable_preconsensus_locking() {
                     let immutable_object_ids = self
                         .collect_immutable_object_ids(verified_transaction.tx(), state)
-                        .await;
-
-                    // Create claims with both aliases and immutable objects
-                    let (tx, aliases) = verified_transaction.into_inner();
-                    let mut claims = vec![TransactionClaim::AddressAliases(aliases)];
+                        .await?;
                     if !immutable_object_ids.is_empty() {
                         claims.push(TransactionClaim::ImmutableInputObjects(
                             immutable_object_ids,
                         ));
                     }
-                    TransactionWithClaims::new(tx.into(), claims)
-                } else {
-                    // Just use aliases claim (existing behavior)
-                    verified_transaction.into()
-                };
+                }
+
+                let (tx, aliases) = verified_transaction.into_inner();
+                if epoch_store.protocol_config().address_aliases() {
+                    claims.push(TransactionClaim::AddressAliases(aliases));
+                }
+
+                let tx_with_claims = TransactionWithClaims::new(tx.into(), claims);
 
                 consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
                     &state.name,
