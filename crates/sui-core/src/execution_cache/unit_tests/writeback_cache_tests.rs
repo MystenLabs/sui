@@ -81,6 +81,7 @@ impl Scenario {
             store.clone(),
             (*METRICS).clone(),
             BackpressureManager::new_for_tests(),
+            None,
         ));
         Self {
             authority,
@@ -384,6 +385,7 @@ impl Scenario {
             self.store.clone(),
             self.cache.metrics.clone(),
             BackpressureManager::new_for_tests(),
+            None,
         ));
 
         // reset the scenario state to match the db
@@ -1183,6 +1185,7 @@ async fn latest_object_cache_race_test() {
         store.clone(),
         (*METRICS).clone(),
         BackpressureManager::new_for_tests(),
+        None,
     ));
 
     let object_id = ObjectID::random();
