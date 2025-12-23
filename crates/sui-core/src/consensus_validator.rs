@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
@@ -15,10 +15,12 @@ use sui_macros::fail_point_arg;
 #[cfg(msim)]
 use sui_types::base_types::AuthorityName;
 use sui_types::{
-    base_types::ObjectID,
-    error::{SuiError, SuiErrorKind, SuiResult},
+    base_types::{ObjectID, ObjectRef},
+    error::{SuiError, SuiErrorKind, SuiResult, UserInputError},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
-    transaction::{PlainTransactionWithClaims, TransactionDataAPI, TransactionWithClaims},
+    transaction::{
+        InputObjectKind, PlainTransactionWithClaims, TransactionDataAPI, TransactionWithClaims,
+    },
 };
 use tap::TapFallible;
 use tracing::{debug, info, instrument, warn};
@@ -109,16 +111,33 @@ impl SuiTxValidator {
                 | ConsensusTransactionKind::CapabilityNotificationV2(_)
                 | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
 
-                ConsensusTransactionKind::UserTransaction(_)
-                | ConsensusTransactionKind::UserTransactionV2(_) => {
-                    if !epoch_store.protocol_config().mysticeti_fastpath() {
+                ConsensusTransactionKind::UserTransaction(_) => {
+                    if epoch_store.protocol_config().address_aliases()
+                        || epoch_store.protocol_config().disable_preconsensus_locking()
+                    {
                         return Err(SuiErrorKind::UnexpectedMessage(
-                            "ConsensusTransactionKind::UserTransaction is unsupported".to_string(),
+                            "ConsensusTransactionKind::UserTransaction cannot be used when address aliases is enabled or preconsensus locking is disabled".to_string(),
                         )
                         .into());
                     }
-                    // TODO(fastpath): move deterministic verifications of user transactions here,
-                    // for example validity_check() and verify_transaction().
+                }
+
+                ConsensusTransactionKind::UserTransactionV2(tx) => {
+                    if !(epoch_store.protocol_config().address_aliases()
+                        || epoch_store.protocol_config().disable_preconsensus_locking())
+                    {
+                        return Err(SuiErrorKind::UnexpectedMessage(
+                            "ConsensusTransactionKind::UserTransactionV2 must be used when either address aliases is enabled or preconsensus locking is disabled".to_string(),
+                        )
+                        .into());
+                    }
+                    if epoch_store.protocol_config().address_aliases() && tx.aliases().is_none() {
+                        return Err(SuiErrorKind::UnexpectedMessage(
+                            "ConsensusTransactionKind::UserTransactionV2 must contain an aliases claim".to_string(),
+                        )
+                        .into());
+                    }
+                    // TODO(fastpath): move deterministic verifications of user transactions here.
                 }
 
                 ConsensusTransactionKind::ExecutionTimeObservation(obs) => {
@@ -175,16 +194,11 @@ impl SuiTxValidator {
             return vec![];
         }
 
-        let mut result = Vec::new();
+        let mut reject_txn_votes = Vec::new();
         for (i, tx) in txs.into_iter().enumerate() {
             let tx: PlainTransactionWithClaims = match tx {
                 ConsensusTransactionKind::UserTransaction(tx) => {
-                    let no_aliases_allowed = tx
-                        .intent_message()
-                        .value
-                        .required_signers()
-                        .map(|s| (s, None));
-                    TransactionWithClaims::from_aliases(*tx, no_aliases_allowed)
+                    TransactionWithClaims::no_aliases(*tx)
                 }
                 ConsensusTransactionKind::UserTransactionV2(tx) => *tx,
                 _ => continue,
@@ -197,7 +211,7 @@ impl SuiTxValidator {
                     .transaction_reject_votes
                     .with_label_values(&[error.to_variant_name()])
                     .inc();
-                result.push(i as TransactionIndex);
+                reject_txn_votes.push(i as TransactionIndex);
                 // Cache the rejection vote reason (error) for the transaction
                 epoch_store.set_rejection_vote_reason(
                     ConsensusPosition {
@@ -212,7 +226,7 @@ impl SuiTxValidator {
             }
         }
 
-        result
+        reject_txn_votes
     }
 
     #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx.tx().digest()))]
@@ -222,8 +236,8 @@ impl SuiTxValidator {
         tx: PlainTransactionWithClaims,
     ) -> SuiResult<()> {
         // Extract claims before consuming the transaction
-        let aliases = tx.aliases().clone();
-        let immutable_objects_claim = tx.get_immutable_objects().cloned();
+        let aliases = tx.aliases();
+        let claimed_immutable_ids = tx.get_immutable_objects();
         let inner_tx = tx.into_tx();
 
         // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
@@ -235,15 +249,6 @@ impl SuiTxValidator {
             inner_tx.data(),
             self.authority_state.check_system_overload_at_signing(),
         )?;
-
-        // Verify immutable object claims if present and protocol flag is enabled
-        if let Some(claimed_immutable_ids) = &immutable_objects_claim
-            && epoch_store
-                .protocol_config()
-                .enable_immutable_object_claims()
-        {
-            self.verify_immutable_object_claims(claimed_immutable_ids)?;
-        }
 
         #[allow(unused_mut)]
         let mut fail_point_always_report_aliases_changed = false;
@@ -258,12 +263,34 @@ impl SuiTxValidator {
         );
 
         let verified_tx = epoch_store.verify_transaction_with_current_aliases(inner_tx)?;
-        if *verified_tx.aliases() != aliases || fail_point_always_report_aliases_changed {
+
+        // aliases must have data when address_aliases() is enabled.
+        if epoch_store.protocol_config().address_aliases()
+            && (*verified_tx.aliases() != aliases.unwrap()
+                || fail_point_always_report_aliases_changed)
+        {
             return Err(SuiErrorKind::AliasesChanged.into());
         }
 
+        let inner_tx = verified_tx.into_tx();
         self.authority_state
-            .handle_vote_transaction(epoch_store, verified_tx.into_tx())?;
+            .handle_vote_transaction(epoch_store, inner_tx.clone())?;
+
+        if epoch_store.protocol_config().disable_preconsensus_locking()
+            && !claimed_immutable_ids.is_empty()
+        {
+            let owned_object_refs: HashSet<ObjectRef> = inner_tx
+                .data()
+                .transaction_data()
+                .input_objects()?
+                .iter()
+                .filter_map(|obj| match obj {
+                    InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => Some(*obj_ref),
+                    _ => None,
+                })
+                .collect();
+            self.verify_immutable_object_claims(&claimed_immutable_ids, owned_object_refs)?;
+        }
 
         Ok(())
     }
@@ -271,7 +298,11 @@ impl SuiTxValidator {
     /// Verify that all claimed immutable objects are actually immutable.
     /// Rejects if any claimed object doesn't exist locally (can't verify) or is not immutable.
     /// This is stricter than general voting because the claim directly controls locking behavior.
-    fn verify_immutable_object_claims(&self, claimed_ids: &[ObjectID]) -> SuiResult<()> {
+    fn verify_immutable_object_claims(
+        &self,
+        claimed_ids: &[ObjectID],
+        owned_object_refs: HashSet<ObjectRef>,
+    ) -> SuiResult<()> {
         if claimed_ids.is_empty() {
             return Ok(());
         }
@@ -283,18 +314,33 @@ impl SuiTxValidator {
 
         for (obj, id) in objects.into_iter().zip(claimed_ids.iter()) {
             match obj {
-                Some(o) if o.is_immutable() => {
-                    // Object is immutable, claim is valid
-                }
-                Some(_) => {
+                Some(o) => {
                     // Object exists but is NOT immutable - invalid claim
-                    return Err(SuiErrorKind::InvalidImmutableObjectClaim { object_id: *id }.into());
+                    let object_ref = o.compute_object_reference();
+                    if !owned_object_refs.contains(&o.compute_object_reference()) {
+                        return Err(SuiErrorKind::ImmutableObjectClaimNotFoundInInput {
+                            object_id: *id,
+                        }
+                        .into());
+                    }
+                    if !o.is_immutable() {
+                        return Err(SuiErrorKind::InvalidImmutableObjectClaim {
+                            claimed_object_id: *id,
+                            found_object_ref: object_ref,
+                        }
+                        .into());
+                    }
                 }
                 None => {
                     // Object not found - we can't verify the claim, so we must reject.
-                    return Err(
-                        SuiErrorKind::CannotVerifyImmutableObjectClaim { object_id: *id }.into(),
-                    );
+                    // This branch should not happen because owned input objects are already validated to exist.
+                    return Err(SuiErrorKind::UserInputError {
+                        error: UserInputError::ObjectNotFound {
+                            object_id: *id,
+                            version: None,
+                        },
+                    }
+                    .into());
                 }
             }
         }
