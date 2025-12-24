@@ -50,6 +50,16 @@ mod test_dag_parser;
 #[path = "tests/randomized_tests.rs"]
 mod randomized_tests;
 
+/// Missing blocks OOM fix verification tests.
+#[cfg(test)]
+#[path = "tests/missing_blocks_fix_test.rs"]
+mod missing_blocks_fix_test;
+
+/// Future-Flooding attack tests for eviction policy vulnerability.
+#[cfg(test)]
+#[path = "tests/future_flooding_test.rs"]
+mod future_flooding_test;
+
 /// Exported Consensus API.
 pub use authority_node::{ConsensusAuthority, NetworkType};
 pub use block::{BlockAPI, CertifiedBlock, CertifiedBlocksOutput};
