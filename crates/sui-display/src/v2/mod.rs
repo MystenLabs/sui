@@ -12,6 +12,7 @@ use sui_types::collection_types::VecMap;
 use crate::v2::error::Error;
 use crate::v2::meter::Meter;
 use crate::v2::parser::Chain;
+use crate::v2::parser::Literal;
 use crate::v2::parser::Parser;
 use crate::v2::parser::Strand;
 use crate::v2::writer::Writer;
@@ -35,6 +36,9 @@ pub use crate::v2::value::Value;
 
 /// A path into a Move value, to extract a sub-slice.
 pub struct Extract<'s>(Chain<'s>);
+
+/// A literal value, representing a dynamic field name.
+pub struct Name<'s>(Literal<'s>);
 
 /// Format strings extracted from a `Display` object on-chain.
 pub struct Format<'s> {
@@ -76,6 +80,29 @@ impl<'s> Extract<'s> {
         interpreter: &'s Interpreter<S>,
     ) -> Result<Option<Value<'s>>, FormatError> {
         interpreter.eval_chain(&self.0).await
+    }
+}
+
+impl<'s> Name<'s> {
+    /// Parse a string as a literal value.
+    ///
+    /// `limits` bounds the dimensions (depth, number of output nodes, max number of object loads)
+    /// that the parsed literal can consume.
+    pub fn parse(limits: Limits, src: &'s str) -> Result<Self, FormatError> {
+        let mut budget = limits.budget();
+        let mut meter = Meter::new(limits.max_depth, &mut budget);
+        let literal = Parser::literal(src, &mut meter)?;
+
+        Ok(Self(literal))
+    }
+
+    /// Evaluate the literal representing the dynamic field name, returning a `Value` which can be
+    /// used to derive a dynamic field or dynamic object field ID.
+    pub async fn eval<S: Store>(
+        &'s self,
+        interpreter: &'s Interpreter<S>,
+    ) -> Result<Option<Value<'s>>, FormatError> {
+        interpreter.eval_literal(&self.0).await
     }
 }
 
@@ -220,11 +247,14 @@ mod tests {
     use move_core_types::account_address::AccountAddress;
     use move_core_types::annotated_value::MoveTypeLayout;
     use move_core_types::annotated_value::MoveTypeLayout as L;
+    use move_core_types::language_storage::TypeTag;
     use move_core_types::u256::U256;
     use serde::Serialize;
     use sui_types::base_types::move_ascii_str_layout;
     use sui_types::base_types::move_utf8_str_layout;
     use sui_types::base_types::url_layout;
+    use sui_types::dynamic_field::DynamicFieldInfo;
+    use sui_types::dynamic_field::derive_dynamic_field_id;
     use sui_types::id::ID;
     use sui_types::id::UID;
 
@@ -257,6 +287,40 @@ mod tests {
 
         let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
         Ok(Some(value.format_json(writer)?))
+    }
+
+    async fn dynamic_field_id(
+        store: MockStore,
+        bytes: Vec<u8>,
+        layout: MoveTypeLayout,
+        parent: AccountAddress,
+        literal: &str,
+    ) -> Result<Option<AccountAddress>, FormatError> {
+        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
+
+        let name = Name::parse(Limits::default(), literal)?;
+        let Some(value) = name.eval(&interpreter).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(value.derive_dynamic_field_id(parent)?.into()))
+    }
+
+    async fn dynamic_object_field_id(
+        store: MockStore,
+        bytes: Vec<u8>,
+        layout: MoveTypeLayout,
+        parent: AccountAddress,
+        literal: &str,
+    ) -> Result<Option<AccountAddress>, FormatError> {
+        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
+
+        let name = Name::parse(Limits::default(), literal)?;
+        let Some(value) = name.eval(&interpreter).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(value.derive_dynamic_object_field_id(parent)?.into()))
     }
 
     /// Helper to parse display fields and render them against the provided object.
@@ -433,6 +497,150 @@ mod tests {
           null
         ]
         "###);
+    }
+
+    #[tokio::test]
+    async fn test_dynamic_field_names() {
+        let parent = AccountAddress::from_str("0x4242").unwrap();
+
+        // Dummy object to interpret against (not used for literal evaluation)
+        let obj_bytes = bcs::to_bytes(&0u8).unwrap();
+        let obj_layout = L::U8;
+
+        // Test cases: (literal, expected_type_tag, expected_bcs_bytes)
+        let cases: Vec<(&str, &str, Vec<u8>)> = vec![
+            (
+                "'hello'",
+                "0x1::string::String",
+                bcs::to_bytes(&"hello").unwrap(),
+            ),
+            ("42u64", "u64", bcs::to_bytes(&42u64).unwrap()),
+            ("123u128", "u128", bcs::to_bytes(&123u128).unwrap()),
+            (
+                "@0xabc",
+                "address",
+                bcs::to_bytes(&AccountAddress::from_str("0xabc").unwrap()).unwrap(),
+            ),
+            (
+                "0x1::m::Key(99u32, 'test')",
+                "0x1::m::Key",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+            (
+                "0x1::m::Key<u32, 0x1::string::String>(99u32, 'test')",
+                "0x1::m::Key<u32, 0x1::string::String>",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+            (
+                "vector[1u8, 2u8, 3u8]",
+                "vector<u8>",
+                bcs::to_bytes(&vec![1u8, 2u8, 3u8]).unwrap(),
+            ),
+        ];
+
+        for (literal, type_, bytes) in cases {
+            let id = dynamic_field_id(
+                MockStore::default(),
+                obj_bytes.clone(),
+                obj_layout.clone(),
+                parent,
+                literal,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+            let type_: TypeTag = type_.parse().unwrap();
+            let expected = derive_dynamic_field_id(parent, &type_, &bytes).unwrap();
+            assert_eq!(id, expected.into(), "mismatch for literal: {literal}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dynamic_object_field_names() {
+        let parent = AccountAddress::from_str("0x4242").unwrap();
+
+        // Dummy object to interpret against (not used for literal evaluation)
+        let obj_bytes = bcs::to_bytes(&0u8).unwrap();
+        let obj_layout = L::U8;
+
+        // Test cases: (literal, expected_type_tag, expected_bcs_bytes)
+        let cases: Vec<(&str, &str, Vec<u8>)> = vec![
+            (
+                "'hello'",
+                "0x1::string::String",
+                bcs::to_bytes(&"hello").unwrap(),
+            ),
+            ("42u64", "u64", bcs::to_bytes(&42u64).unwrap()),
+            ("123u128", "u128", bcs::to_bytes(&123u128).unwrap()),
+            (
+                "@0xabc",
+                "address",
+                bcs::to_bytes(&AccountAddress::from_str("0xabc").unwrap()).unwrap(),
+            ),
+            (
+                "0x1::m::Key(99u32, 'test')",
+                "0x1::m::Key",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+            (
+                "0x1::m::Key<u32, 0x1::string::String>(99u32, 'test')",
+                "0x1::m::Key<u32, 0x1::string::String>",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+            (
+                "vector[1u8, 2u8, 3u8]",
+                "vector<u8>",
+                bcs::to_bytes(&vec![1u8, 2u8, 3u8]).unwrap(),
+            ),
+        ];
+
+        for (literal, type_, bytes) in cases {
+            let id = dynamic_object_field_id(
+                MockStore::default(),
+                obj_bytes.clone(),
+                obj_layout.clone(),
+                parent,
+                literal,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+            let type_: TypeTag = type_.parse().unwrap();
+            let wrapper_type = DynamicFieldInfo::dynamic_object_field_wrapper(type_);
+            let expected = derive_dynamic_field_id(parent, &wrapper_type.into(), &bytes).unwrap();
+            assert_eq!(id, expected.into(), "mismatch for literal: {literal}");
+        }
+    }
+
+    #[test]
+    fn test_dynamic_field_name_parse_errors() {
+        let cases = [
+            // Empty input
+            "",
+            // Field access (not a literal)
+            "foo",
+            "foo.bar",
+            // Missing type suffix
+            "42",
+            // Unclosed string
+            "'hello",
+            // Unclosed struct
+            "0x1::m::S(",
+            "0x1::m::S(42u64",
+            // Unclosed vector
+            "vector[1u8, 2u8",
+            // Invalid address
+            "@0xGGG",
+        ];
+
+        for literal in cases {
+            assert!(
+                Name::parse(Limits::default(), literal).is_err(),
+                "expected error for: {literal:?}"
+            );
+        }
     }
 
     #[tokio::test]

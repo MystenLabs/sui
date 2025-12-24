@@ -314,6 +314,25 @@ impl<'s> Parser<'s> {
         Ok(chain)
     }
 
+    /// Entrypoint into the parser, parsing the `literal` non-terminal, and ensuring there is no
+    /// remaining input.
+    pub(crate) fn literal<'b>(
+        src: &'s str,
+        meter: &mut Meter<'b>,
+    ) -> Result<Literal<'s>, FormatError> {
+        let mut parser = Self {
+            lexer: Lexer::new_for_expr(src).peekable2(),
+        };
+
+        match parser.try_parse_literal(meter)? {
+            Match::Tried(_, set) => Err(set.into_error(parser.lexer.peek())),
+            Match::Found(literal) => {
+                parser.parse_eos()?;
+                Ok(literal)
+            }
+        }
+    }
+
     fn parse_format<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Vec<Strand<'s>>, FormatError> {
         let mut strands = vec![];
         while self.lexer.peek().is_some() {
