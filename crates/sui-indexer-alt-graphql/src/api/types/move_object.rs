@@ -19,6 +19,7 @@ use crate::api::scalars::id::Id;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeInput;
 use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address::Address;
 use crate::api::types::balance::Balance;
 use crate::api::types::balance::{self as balance};
 use crate::api::types::coin_metadata::CoinMetadata;
@@ -128,6 +129,15 @@ impl MoveObject {
         self.super_.address(ctx).await
     }
 
+    /// Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+    pub(crate) async fn address_at(
+        &self,
+        ctx: &Context<'_>,
+        checkpoint: Option<UInt53>,
+    ) -> Result<Option<Address>, RpcError> {
+        self.super_.address_at(ctx, checkpoint).await
+    }
+
     /// The version of this object that this content comes from.
     pub(crate) async fn version(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
         self.super_.version(ctx).await.ok()?
@@ -186,11 +196,13 @@ impl MoveObject {
             return Ok(None);
         };
 
-        let type_ = MoveType::from_native(
-            native.type_().clone().into(),
-            self.super_.super_.scope.clone(),
-        );
+        let scope = self
+            .super_
+            .super_
+            .scope
+            .with_root_version(native.version().value());
 
+        let type_ = MoveType::from_native(native.type_().clone().into(), scope);
         Ok(Some(MoveValue::new(type_, native.contents().to_owned())))
     }
 

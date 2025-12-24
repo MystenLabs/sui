@@ -15,6 +15,7 @@ use crate::api::scalars::id::Id;
 use crate::api::scalars::owner_kind::OwnerKind;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
 use crate::api::types::balance::Balance;
 use crate::api::types::balance::{self as balance};
 use crate::api::types::coin_metadata::CoinMetadata;
@@ -55,6 +56,12 @@ pub(crate) enum AddressTransactionRelationship {
 #[graphql(
     name = "IAddressable",
     field(name = "address", ty = "SuiAddress"),
+    field(
+        name = "address_at",
+        arg(name = "checkpoint", ty = "Option<UInt53>"),
+        ty = "Result<Option<Address>, RpcError>",
+        desc = "Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.",
+    ),
     field(
         name = "balance",
         arg(name = "coin_type", ty = "TypeInput"),
@@ -118,6 +125,27 @@ impl Address {
     /// The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
     pub(crate) async fn address(&self) -> Result<SuiAddress, RpcError> {
         Ok(self.address.into())
+    }
+
+    /// Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+    pub(crate) async fn address_at(
+        &self,
+        checkpoint: Option<UInt53>,
+    ) -> Result<Option<Address>, RpcError> {
+        let scope = if let Some(checkpoint) = checkpoint {
+            self.scope.with_checkpoint_viewed_at(checkpoint.into())
+        } else {
+            Some(self.scope.clone())
+        };
+
+        let Some(scope) = scope else {
+            return Ok(None);
+        };
+
+        Ok(Some(Address::with_address(
+            scope.without_root_version(),
+            self.address,
+        )))
     }
 
     /// Attempts to fetch the object at this address.
