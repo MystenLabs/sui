@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 109;
+const MAX_PROTOCOL_VERSION: u64 = 110;
 
 // Record history of protocol version allocations here:
 //
@@ -292,6 +292,7 @@ const MAX_PROTOCOL_VERSION: u64 = 109;
 //              Enable poseidon_bn254 on mainnet.
 // Version 109: Enable parsing on all nonzero custom pcrs in nitro attestation parsing native
 //              function on mainnet.
+// Version 110: split_checkpoints_in_consensus_handler in devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4475,6 +4476,11 @@ impl ProtocolConfig {
                         .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
                     cfg.feature_flags
                         .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
+                }
+                110 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
