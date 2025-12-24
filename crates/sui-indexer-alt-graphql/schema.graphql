@@ -74,6 +74,10 @@ type Address implements Node & IAddressable {
 	"""
 	address: SuiAddress!
 	"""
+	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	"""
+	addressAt(checkpoint: UInt53): Address
+	"""
 	Attempts to fetch the object at this address.
 	"""
 	asObject: Object
@@ -546,6 +550,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	address: SuiAddress!
 	"""
+	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	"""
+	addressAt(checkpoint: UInt53): Address
+	"""
 	Whether the `DenyCap` can be used to enable a global pause that behaves as if all addresses were added to the deny list. `null` indicates that it is not known whether the currency can be paused or not. This field is only populated on currencies held in the Coin Registry. To determine whether a legacy currency can be paused, check the contents of its `DenyCap`, if it can be found.
 	"""
 	allowGlobalPause: Boolean
@@ -912,6 +920,10 @@ type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	The DynamicField's ID.
 	"""
 	address: SuiAddress!
+	"""
+	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	"""
+	addressAt(checkpoint: UInt53): Address
 	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
@@ -1555,6 +1567,10 @@ An address uniquely represents either the public key of an account, or an object
 interface IAddressable {
 	address: SuiAddress!
 	"""
+	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	"""
+	addressAt(checkpoint: UInt53): Address
+	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
 	If the address does not own any coins of that type, a balance of zero is returned.
@@ -2161,6 +2177,10 @@ type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	address: SuiAddress!
 	"""
+	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	"""
+	addressAt(checkpoint: UInt53): Address
+	"""
 	Attempts to convert the object into a CoinMetadata.
 	"""
 	asCoinMetadata: CoinMetadata
@@ -2321,6 +2341,10 @@ type MovePackage implements Node & IAddressable & IObject {
 	The MovePackage's ID.
 	"""
 	address: SuiAddress!
+	"""
+	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	"""
+	addressAt(checkpoint: UInt53): Address
 	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
@@ -2592,6 +2616,16 @@ scalar MoveTypeSignature
 
 type MoveValue {
 	"""
+	Attempts to treat this value as an `Address`.
+	
+	If the value is of type `address` or `0x2::object::ID`, it is interpreted as an address pointer, and it is scoped to the current checkpoint.
+	
+	If the value is of type `0x2::object::UID`, it is interpreted as a wrapped object whose version is bounded by the root version of the current value. Such values do not support nested owned object queries, but `Address.addressAt` can be used to re-scope it to a checkpoint (defaults to the current checkpoint), instead of a root version, allowing owned object queries.
+	
+	Values of other types cannot be interpreted as addresses, and `null` is returned.
+	"""
+	asAddress: Address
+	"""
 	The BCS representation of this value, Base64-encoded.
 	"""
 	bcs: Base64
@@ -2698,6 +2732,10 @@ type Object implements Node & IAddressable & IObject {
 	The Object's ID.
 	"""
 	address: SuiAddress!
+	"""
+	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	"""
+	addressAt(checkpoint: UInt53): Address
 	"""
 	Attempts to convert the object into a MoveObject.
 	"""
@@ -4183,6 +4221,10 @@ type Validator implements IAddressable {
 	The validator's address.
 	"""
 	address: SuiAddress!
+	"""
+	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	"""
+	addressAt(checkpoint: UInt53): Address
 	"""
 	The number of epochs for which this validator has been below the low stake threshold.
 	"""

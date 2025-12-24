@@ -57,6 +57,15 @@ impl Validator {
         self.super_().address(ctx).await
     }
 
+    /// Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+    pub(crate) async fn address_at(
+        &self,
+        ctx: &Context<'_>,
+        checkpoint: Option<UInt53>,
+    ) -> Result<Option<Address>, RpcError> {
+        self.super_().address_at(ctx, checkpoint).await
+    }
+
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
     ///
     /// If the address does not own any coins of that type, a balance of zero is returned.

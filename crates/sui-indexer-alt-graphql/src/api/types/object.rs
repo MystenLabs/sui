@@ -248,6 +248,15 @@ impl Object {
         self.super_.address(ctx).await
     }
 
+    /// Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+    pub(crate) async fn address_at(
+        &self,
+        ctx: &Context<'_>,
+        checkpoint: Option<UInt53>,
+    ) -> Result<Option<Address>, RpcError> {
+        self.super_.address_at(ctx, checkpoint).await
+    }
+
     /// The version of this object that this content comes from.
     pub(crate) async fn version(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
         if let Some((version, _)) = self.version_digest {
