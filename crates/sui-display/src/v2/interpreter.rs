@@ -11,9 +11,7 @@ use futures::future::OptionFuture;
 use futures::future::join_all;
 use futures::join;
 use move_core_types::account_address::AccountAddress;
-use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::dynamic_field::DynamicFieldType;
-use sui_types::dynamic_field::derive_dynamic_field_id;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::dynamic_field::visitor::FieldVisitor;
 
@@ -140,11 +138,8 @@ impl<S: V::Store> Interpreter<S> {
         while let Some(accessor) = accessors.last() {
             match (root, accessor) {
                 (VV::Address(a), A::DFIndex(i)) => {
-                    let bytes = bcs::to_bytes(&i)?;
-                    let type_ = i.type_();
-                    let df_id = derive_dynamic_field_id(a, &type_, &bytes)?;
-
-                    let Some(slice) = self.object(df_id.into()).await? else {
+                    let df_id = i.derive_dynamic_field_id(a)?.into();
+                    let Some(slice) = self.object(df_id).await? else {
                         return Ok(None);
                     };
 
@@ -166,11 +161,8 @@ impl<S: V::Store> Interpreter<S> {
                 }
 
                 (VV::Address(a), A::DOFIndex(i)) => {
-                    let bytes = bcs::to_bytes(&i)?;
-                    let type_ = DynamicFieldInfo::dynamic_object_field_wrapper(i.type_()).into();
-                    let df_id = derive_dynamic_field_id(a, &type_, &bytes)?;
-
-                    let Some(slice) = self.object(df_id.into()).await? else {
+                    let df_id = i.derive_dynamic_object_field_id(a)?.into();
+                    let Some(slice) = self.object(df_id).await? else {
                         return Ok(None);
                     };
 
@@ -294,7 +286,7 @@ impl<S: V::Store> Interpreter<S> {
     ///
     /// Returns `Ok(Some(value))` if all parts of the literal evaluate to `Ok(Some(value))`,
     /// otherwise it propagates errors or `None` values.
-    async fn eval_literal<'s>(
+    pub(crate) async fn eval_literal<'s>(
         &'s self,
         lit: &'s P::Literal<'s>,
     ) -> Result<Option<V::Value<'s>>, FormatError> {
