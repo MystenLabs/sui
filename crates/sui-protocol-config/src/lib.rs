@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 108;
+const MAX_PROTOCOL_VERSION: u64 = 109;
 
 // Record history of protocol version allocations here:
 //
@@ -288,6 +288,7 @@ const MAX_PROTOCOL_VERSION: u64 = 108;
 // Version 107: Enable new digit based gas rounding.
 //              Support TxContext in all parameter positions.
 //              Disable entry point signature check.
+// Version 109: split_checkpoints_in_consensus_handler in devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4441,6 +4442,11 @@ impl ProtocolConfig {
                     cfg.feature_flags.gas_rounding_halve_digits = true;
                     cfg.feature_flags.flexible_tx_context_positions = true;
                     cfg.feature_flags.disable_entry_point_signature_check = true;
+                }
+                109 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
