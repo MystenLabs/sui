@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 105;
+const MAX_PROTOCOL_VERSION: u64 = 106;
 
 // Record history of protocol version allocations here:
 //
@@ -281,6 +281,7 @@ const MAX_PROTOCOL_VERSION: u64 = 105;
 // Version 105: Framework update: address aliases
 //              Enable address balances on devnet
 //              Enable multi-epoch transaction expiration.
+// Version 106: split_checkpoints_in_consensus_handler in devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4358,6 +4359,11 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
                     cfg.feature_flags.enable_multi_epoch_transaction_expiration = true;
+                }
+                106 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

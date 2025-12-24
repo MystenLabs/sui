@@ -42,7 +42,7 @@ use crate::{
         epoch_start_configuration::{EpochStartConfigTrait, EpochStartConfiguration},
         shared_object_congestion_tracker::CongestionPerObjectDebt,
     },
-    checkpoints::{CheckpointHeight, PendingCheckpoint},
+    checkpoints::{CheckpointHeight, PendingCheckpoint, PendingCheckpointV2},
     consensus_handler::{SequencedConsensusTransactionKey, VerifiedSequencedConsensusTransaction},
     epoch::{
         randomness::{VersionedProcessedMessage, VersionedUsedProcessedMessages},
@@ -75,6 +75,7 @@ pub(crate) struct ConsensusCommitOutput {
 
     // checkpoint state
     pending_checkpoints: Vec<PendingCheckpoint>,
+    pending_checkpoints_v2: Vec<PendingCheckpointV2>,
 
     // random beacon state
     next_randomness_round: Option<(RandomnessRound, TimestampMs)>,
@@ -137,6 +138,25 @@ impl ConsensusCommitOutput {
 
     fn pending_checkpoint_exists(&self, index: &CheckpointHeight) -> bool {
         self.pending_checkpoints
+            .iter()
+            .any(|cp| cp.height() == *index)
+    }
+
+    fn get_pending_checkpoints_v2(
+        &self,
+        last: Option<CheckpointHeight>,
+    ) -> impl Iterator<Item = &PendingCheckpointV2> {
+        self.pending_checkpoints_v2.iter().filter(move |cp| {
+            if let Some(last) = last {
+                cp.height() > last
+            } else {
+                true
+            }
+        })
+    }
+
+    fn pending_checkpoint_exists_v2(&self, index: &CheckpointHeight) -> bool {
+        self.pending_checkpoints_v2
             .iter()
             .any(|cp| cp.height() == *index)
     }
@@ -207,6 +227,10 @@ impl ConsensusCommitOutput {
 
     pub fn insert_pending_checkpoint(&mut self, checkpoint: PendingCheckpoint) {
         self.pending_checkpoints.push(checkpoint);
+    }
+
+    pub fn insert_pending_checkpoint_v2(&mut self, checkpoint: PendingCheckpointV2) {
+        self.pending_checkpoints_v2.push(checkpoint);
     }
 
     pub fn reserve_next_randomness_round(
@@ -648,19 +672,31 @@ impl ConsensusOutputQuarantine {
             return Ok(());
         };
 
+        let split_checkpoints_in_consensus_handler = epoch_store
+            .protocol_config()
+            .split_checkpoints_in_consensus_handler();
+
         while !self.output_queue.is_empty() {
-            // A consensus commit can have more than one pending checkpoint (a regular one and a randomnes one).
+            // A consensus commit can have more than one pending checkpoint (a regular one and a randomness one).
             // We can only write the consensus commit if the highest pending checkpoint associated with it has
             // been processed by the builder.
-            let Some(highest_in_commit) = self
-                .output_queue
-                .front()
-                .unwrap()
-                .get_highest_pending_checkpoint_height()
-            else {
-                // if highest is none, we have already written the pending checkpoint for the final epoch,
-                // so there is no more data that needs to be committed.
-                break;
+            let output = self.output_queue.front().unwrap();
+            let highest_in_commit = if split_checkpoints_in_consensus_handler {
+                // In V2, use the checkpoint_height from stats which represents the consensus
+                // commit height watermark.
+                output
+                    .consensus_commit_stats
+                    .as_ref()
+                    .expect("consensus_commit_stats must be set")
+                    .height
+            } else {
+                // In V1, use the highest pending checkpoint height from the output.
+                let Some(h) = output.get_highest_pending_checkpoint_height() else {
+                    // if highest is none, we have already written the pending checkpoint for the final epoch,
+                    // so there is no more data that needs to be committed.
+                    break;
+                };
+                h
             };
 
             if highest_in_commit <= highest_committed_height {
@@ -842,6 +878,36 @@ impl ConsensusOutputQuarantine {
         self.output_queue
             .iter()
             .any(|output| output.pending_checkpoint_exists(index))
+    }
+
+    pub(super) fn get_pending_checkpoints_v2(
+        &self,
+        last: Option<CheckpointHeight>,
+    ) -> Vec<(CheckpointHeight, PendingCheckpointV2)> {
+        let mut checkpoints = Vec::new();
+        for output in &self.output_queue {
+            checkpoints.extend(
+                output
+                    .get_pending_checkpoints_v2(last)
+                    .map(|cp| (cp.height(), cp.clone())),
+            );
+        }
+        if cfg!(debug_assertions) {
+            let mut prev = None;
+            for (height, _) in &checkpoints {
+                if let Some(prev) = prev {
+                    assert!(prev < *height);
+                }
+                prev = Some(*height);
+            }
+        }
+        checkpoints
+    }
+
+    pub(super) fn pending_checkpoint_exists_v2(&self, index: &CheckpointHeight) -> bool {
+        self.output_queue
+            .iter()
+            .any(|output| output.pending_checkpoint_exists_v2(index))
     }
 
     pub(super) fn get_new_jwks(
