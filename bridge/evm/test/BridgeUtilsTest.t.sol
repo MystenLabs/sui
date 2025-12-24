@@ -25,7 +25,7 @@ contract BridgeUtilsTest is BridgeBaseTest {
         BridgeUtils.convertSuiToERC20Decimal(10, 11, 100);
     }
 
-    function testConvertERC20ToSuiDecimal() public {
+    function testConvertERC20ToSuiDecimal() public view {
         // ETH
         assertEq(IERC20Metadata(wETH).decimals(), 18);
         uint256 ethAmount = 10 ether;
@@ -67,7 +67,7 @@ contract BridgeUtilsTest is BridgeBaseTest {
         assertEq(suiAmount, ethAmount);
     }
 
-    function testconvertSuiToERC20Decimal() public {
+    function testconvertSuiToERC20Decimal() public view {
         // ETH
         assertEq(IERC20Metadata(wETH).decimals(), 18);
         uint64 suiAmount = 11_000_000_00; // 11 eth
@@ -109,7 +109,7 @@ contract BridgeUtilsTest is BridgeBaseTest {
         assertEq(suiAmount, ethAmount);
     }
 
-    function testEncodeMessage() public {
+    function testEncodeMessage() public pure {
         bytes memory moveEncodedMessage = abi.encodePacked(
             hex"5355495f4252494447455f4d45535341474500010000000000000000012080ab1ee086210a3a37355300ca24672e81062fcdb5ced6618dab203f6a3b291c0b14b18f79fe671db47393315ffdb377da4ea1b7af96010084d71700000000"
         );
@@ -138,7 +138,7 @@ contract BridgeUtilsTest is BridgeBaseTest {
         );
     }
 
-    function testDecodeTransferTokenPayload() public {
+    function testDecodeTransferTokenPayload() public pure {
         // 20: sender length 1 bytes
         // 80ab1ee086210a3a37355300ca24672e81062fcdb5ced6618dab203f6a3b291c: sender 32 bytes
         // 0b: target chain 1 bytes
@@ -164,7 +164,7 @@ contract BridgeUtilsTest is BridgeBaseTest {
         assertEq(_payload.amount, uint64(854768923101));
     }
 
-    function testDecodeBlocklistPayload() public {
+    function testDecodeBlocklistPayload() public pure {
         bytes memory payload =
             hex"010268b43fd906c0b8f024a18c56e06744f7c6157c65acaef39832cb995c4e049437a3e2ec6a7bad1ab5";
         (bool blocklisting, address[] memory members) = BridgeUtils.decodeBlocklistPayload(payload);
@@ -175,14 +175,14 @@ contract BridgeUtilsTest is BridgeBaseTest {
         assertFalse(blocklisting);
     }
 
-    function testDecodeUpdateLimitPayload() public {
+    function testDecodeUpdateLimitPayload() public view {
         bytes memory payload = hex"0c00000002540be400";
         (uint8 sourceChainID, uint64 newLimit) = BridgeUtils.decodeUpdateLimitPayload(payload);
         assertEq(sourceChainID, 12);
         assertEq(newLimit, 100 * USD_VALUE_MULTIPLIER);
     }
 
-    function testDecodeUpdateTokenPricePayload() public {
+    function testDecodeUpdateTokenPricePayload() public view {
         bytes memory payload = hex"01000000003b9aca00";
         (uint8 _tokenID, uint64 _newPrice) = BridgeUtils.decodeUpdateTokenPricePayload(payload);
 
@@ -190,13 +190,13 @@ contract BridgeUtilsTest is BridgeBaseTest {
         assertEq(_newPrice, 10 * USD_VALUE_MULTIPLIER);
     }
 
-    function testDecodeEmergencyOpPayload() public {
+    function testDecodeEmergencyOpPayload() public pure {
         bytes memory payload = hex"01";
         bool pausing = BridgeUtils.decodeEmergencyOpPayload(payload);
         assertFalse(pausing);
     }
 
-    function testDecodeUpgradePayload() public {
+    function testDecodeUpgradePayload() public pure {
         bytes memory payload = abi.encode(
             address(100),
             address(200),
@@ -211,7 +211,7 @@ contract BridgeUtilsTest is BridgeBaseTest {
         assertEq(_calldata, hex"5355495f4252494447455f4d455353414745050100000000000000000c");
     }
 
-    function testDecodeUpgradePayloadWithNoArgsRegressionTest() public {
+    function testDecodeUpgradePayloadWithNoArgsRegressionTest() public pure {
         bytes memory initV2Message =
             hex"5355495f4252494447455f4d4553534147450501000000000000007b0c00000000000000000000000006060606060606060606060606060606060606060000000000000000000000000909090909090909090909090909090909090909000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000045cd8a76b00000000000000000000000000000000000000000000000000000000";
 
@@ -240,7 +240,7 @@ contract BridgeUtilsTest is BridgeBaseTest {
         assertEq(bytes4(_calldata), initV2CallData);
     }
 
-    function testDecodeUpgradePayloadWith1ArgRegressionTest() public {
+    function testDecodeUpgradePayloadWith1ArgRegressionTest() public pure {
         bytes memory newMockFunc1Message =
             hex"5355495f4252494447455f4d4553534147450501000000000000007b0c0000000000000000000000000606060606060606060606060606060606060606000000000000000000000000090909090909090909090909090909090909090900000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000024417795ef000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000";
 
@@ -269,7 +269,7 @@ contract BridgeUtilsTest is BridgeBaseTest {
         assertEq(bytes4(_calldata), newMockFunc1CallData);
     }
 
-    function testDecodeUpgradePayloadWith2ArgsRegressionTest() public {
+    function testDecodeUpgradePayloadWith2ArgsRegressionTest() public pure {
         bytes memory newMockFunc2Message =
             hex"5355495f4252494447455f4d4553534147450501000000000000007b0c0000000000000000000000000606060606060606060606060606060606060606000000000000000000000000090909090909090909090909090909090909090900000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044be8fc25d0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002a00000000000000000000000000000000000000000000000000000000";
 
@@ -298,7 +298,7 @@ contract BridgeUtilsTest is BridgeBaseTest {
         assertEq(bytes4(_calldata), newMockFunc2CallData);
     }
 
-    function testDecodeUpgradePayloadWithNoCalldataRegressionTest() public {
+    function testDecodeUpgradePayloadWithNoCalldataRegressionTest() public pure {
         bytes memory emptyCalldataMessage =
             hex"5355495f4252494447455f4d4553534147450501000000000000007b0c0000000000000000000000000606060606060606060606060606060606060606000000000000000000000000090909090909090909090909090909090909090900000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000";
 

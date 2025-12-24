@@ -9,6 +9,7 @@ use std::ascii::{Self, String};
 use sui::bcs::{Self, BCS};
 
 const CURRENT_MESSAGE_VERSION: u8 = 1;
+const TOKEN_TRANSFER_MESSAGE_VERSION_V2: u8 = 2;
 const ECDSA_ADDRESS_LENGTH: u64 = 20;
 
 const ETrailingBytes: u64 = 0;
@@ -18,6 +19,7 @@ const EInvalidMessageType: u64 = 3;
 const EInvalidEmergencyOpType: u64 = 4;
 const EInvalidPayloadLength: u64 = 5;
 const EMustBeTokenMessage: u64 = 6;
+const EInvalidMessageVersion: u64 = 7;
 
 // Emergency Op types
 const PAUSE: u8 = 0;
@@ -47,6 +49,15 @@ public struct TokenTransferPayload has drop {
     target_address: vector<u8>,
     token_type: u8,
     amount: u64,
+}
+
+public struct TokenTransferPayloadV2 has drop {
+    sender_address: vector<u8>,
+    target_chain: u8,
+    target_address: vector<u8>,
+    token_type: u8,
+    amount: u64,
+    timestamp_ms: u64,
 }
 
 public struct EmergencyOp has drop {
@@ -98,6 +109,7 @@ public struct ParsedTokenTransferMessage has drop {
 // Therefore their length can be represented by a single byte.
 // See `create_token_bridge_message` for the actual encoding rule.
 public fun extract_token_bridge_payload(message: &BridgeMessage): TokenTransferPayload {
+    assert!(message.message_version() == 1, EInvalidMessageVersion);
     let mut bcs = bcs::new(message.payload);
     let sender_address = bcs.peel_vec_u8();
     let target_chain = bcs.peel_u8();
@@ -106,6 +118,7 @@ public fun extract_token_bridge_payload(message: &BridgeMessage): TokenTransferP
     let amount = peel_u64_be(&mut bcs);
 
     chain_ids::assert_valid_chain_id(target_chain);
+
     assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
 
     TokenTransferPayload {
@@ -114,6 +127,46 @@ public fun extract_token_bridge_payload(message: &BridgeMessage): TokenTransferP
         target_address,
         token_type,
         amount,
+    }
+}
+
+// Note: `bcs::peel_vec_u8` *happens* to work here because
+// `sender_address` and `target_address` are no longer than 255 bytes.
+// Therefore their length can be represented by a single byte.
+// See `create_token_bridge_message` for the actual encoding rule.
+public fun extract_token_bridge_payload_v2(message: &BridgeMessage): TokenTransferPayloadV2 {
+    assert!(message.message_version() == 2, EInvalidMessageVersion);
+
+    let mut bcs = bcs::new(message.payload);
+    let sender_address = bcs.peel_vec_u8();
+    let target_chain = bcs.peel_u8();
+    let target_address = bcs.peel_vec_u8();
+    let token_type = bcs.peel_u8();
+    let amount = peel_u64_be(&mut bcs);
+
+    chain_ids::assert_valid_chain_id(target_chain);
+    let timestamp_ms = peel_u64_be(&mut bcs);
+    assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
+
+    TokenTransferPayloadV2 {
+        sender_address,
+        target_chain,
+        target_address,
+        token_type,
+        amount,
+        timestamp_ms,
+    }
+}
+
+// Convert V2 payload to V1 payload for backward compatibility
+// Only use this function if the timestamp from v2 is not needed
+public(package) fun to_token_payload_v1(self: &TokenTransferPayloadV2): TokenTransferPayload {
+    TokenTransferPayload {
+        sender_address: self.sender_address,
+        target_chain: self.target_chain,
+        target_address: self.target_address,
+        token_type: self.token_type,
+        amount: self.amount,
     }
 }
 
@@ -261,6 +314,57 @@ public fun create_token_bridge_message(
     BridgeMessage {
         message_type: message_types::token(),
         message_version: CURRENT_MESSAGE_VERSION,
+        seq_num,
+        source_chain,
+        payload,
+    }
+}
+
+/// Token Transfer Message Format:
+/// [message_type: u8]
+/// [version:u8]
+/// [nonce:u64]
+/// [source_chain: u8]
+/// [sender_address_length:u8]
+/// [sender_address: byte[]]
+/// [target_chain:u8]
+/// [target_address_length:u8]
+/// [target_address: byte[]]
+/// [token_type:u8]
+/// [amount:u64]
+/// [timestamp:u64]
+public fun create_token_bridge_message_v2(
+    source_chain: u8,
+    seq_num: u64,
+    sender_address: vector<u8>,
+    target_chain: u8,
+    target_address: vector<u8>,
+    token_type: u8,
+    amount: u64,
+    timestamp: u64,
+): BridgeMessage {
+    chain_ids::assert_valid_chain_id(source_chain);
+    chain_ids::assert_valid_chain_id(target_chain);
+
+    let mut payload = vector[];
+
+    // sender address should be less than 255 bytes so can fit into u8
+    payload.push_back((vector::length(&sender_address) as u8));
+    payload.append(sender_address);
+    payload.push_back(target_chain);
+    // target address should be less than 255 bytes so can fit into u8
+    payload.push_back((vector::length(&target_address) as u8));
+    payload.append(target_address);
+    payload.push_back(token_type);
+    // bcs serialzies u64 as 8 bytes
+    payload.append(reverse_bytes(bcs::to_bytes(&amount)));
+    payload.append(reverse_bytes(bcs::to_bytes(&timestamp)));
+
+    assert!(vector::length(&payload) == 72, EInvalidPayloadLength);
+
+    BridgeMessage {
+        message_type: message_types::token(),
+        message_version: TOKEN_TRANSFER_MESSAGE_VERSION_V2,
         seq_num,
         source_chain,
         payload,
@@ -453,6 +557,10 @@ public fun token_amount(self: &TokenTransferPayload): u64 {
     self.amount
 }
 
+public fun timestamp_ms(self: &TokenTransferPayloadV2): u64 {
+    self.timestamp_ms
+}
+
 // EmergencyOpPayload getters
 public fun emergency_op_type(self: &EmergencyOp): u8 {
     self.op_type
@@ -541,14 +649,25 @@ public fun required_voting_power(self: &BridgeMessage): u64 {
 // Convert BridgeMessage to ParsedTokenTransferMessage
 public fun to_parsed_token_transfer_message(message: &BridgeMessage): ParsedTokenTransferMessage {
     assert!(message.message_type() == message_types::token(), EMustBeTokenMessage);
-    let payload = message.extract_token_bridge_payload();
+    // Handle both V1 and V2 message formats
+    let parsed_payload = if (message.message_version() == 2) {
+        // V2 payload has timestamp - extract and convert to V1 format
+        message.extract_token_bridge_payload_v2().to_token_payload_v1()
+    } else {
+        // V1 payload
+        message.extract_token_bridge_payload()
+    };
     ParsedTokenTransferMessage {
         message_version: message.message_version(),
         seq_num: message.seq_num(),
         source_chain: message.source_chain(),
         payload: message.payload(),
-        parsed_payload: payload,
+        parsed_payload,
     }
+}
+
+public fun token_transfer_message_version(): u8 {
+    TOKEN_TRANSFER_MESSAGE_VERSION_V2
 }
 
 //////////////////////////////////////////////////////

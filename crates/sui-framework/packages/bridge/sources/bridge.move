@@ -74,6 +74,17 @@ public struct TokenDepositedEvent has copy, drop {
     amount: u64,
 }
 
+public struct TokenDepositedEventV2 has copy, drop {
+    seq_num: u64,
+    source_chain: u8,
+    sender_address: vector<u8>,
+    target_chain: u8,
+    target_address: vector<u8>,
+    token_type: u8,
+    amount: u64,
+    timestamp_ms: u64,
+}
+
 public struct EmergencyOpEvent has copy, drop {
     frozen: bool,
 }
@@ -212,13 +223,11 @@ public fun send_token<T>(
     ctx: &mut TxContext,
 ) {
     let inner = load_inner_mut(bridge);
-    assert!(!inner.paused, EBridgeUnavailable);
-    assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
-    assert!(target_address.length() == EVM_ADDRESS_LENGTH, EInvalidEvmAddress);
 
     let bridge_seq_num = inner.get_current_seq_num_and_increment(message_types::token());
     let token_id = inner.treasury.token_id<T>();
     let token_amount = token.balance().value();
+    assert!(target_address.length() == EVM_ADDRESS_LENGTH, EInvalidEvmAddress);
     assert!(token_amount > 0, ETokenValueIsZero);
 
     // create bridge message
@@ -232,20 +241,7 @@ public fun send_token<T>(
         token_amount,
     );
 
-    // burn / escrow token, unsupported coins will fail in this step
-    inner.treasury.burn(token);
-
-    // Store pending bridge request
-    inner
-        .token_transfer_records
-        .push_back(
-            message.key(),
-            BridgeRecord {
-                message,
-                verified_signatures: option::none(),
-                claimed: false,
-            },
-        );
+    inner.send_token_internal(target_chain, token, message);
 
     // emit event
     event::emit(TokenDepositedEvent {
@@ -256,6 +252,49 @@ public fun send_token<T>(
         target_address,
         token_type: token_id,
         amount: token_amount,
+    });
+}
+
+// Create bridge request to send token to other chain, the request will be in
+// pending state until approved
+public fun send_token_v2<T>(
+    bridge: &mut Bridge,
+    target_chain: u8,
+    target_address: vector<u8>,
+    token: Coin<T>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let inner = load_inner_mut(bridge);
+    let bridge_seq_num = inner.get_current_seq_num_and_increment(message_types::token());
+    let token_id = inner.treasury.token_id<T>();
+    let token_amount = token.balance().value();
+    assert!(target_address.length() == EVM_ADDRESS_LENGTH, EInvalidEvmAddress);
+    assert!(token_amount > 0, ETokenValueIsZero);
+
+    let message = message::create_token_bridge_message_v2(
+        inner.chain_id,
+        bridge_seq_num,
+        address::to_bytes(ctx.sender()),
+        target_chain,
+        target_address,
+        token_id,
+        token_amount,
+        clock.timestamp_ms(),
+    );
+
+    inner.send_token_internal(target_chain, token, message);
+
+    // emit event
+    event::emit(TokenDepositedEventV2 {
+        seq_num: bridge_seq_num,
+        source_chain: inner.chain_id,
+        sender_address: address::to_bytes(ctx.sender()),
+        target_chain,
+        target_address,
+        token_type: token_id,
+        amount: token_amount,
+        timestamp_ms: clock.timestamp_ms(),
     });
 }
 
@@ -272,8 +311,15 @@ public fun approve_token_transfer(
     inner.committee.verify_signatures(message, signatures);
 
     assert!(message.message_type() == message_types::token(), EMustBeTokenMessage);
-    assert!(message.message_version() == MESSAGE_VERSION, EUnexpectedMessageVersion);
-    let token_payload = message.extract_token_bridge_payload();
+    assert!(
+        message.message_version() <= message::token_transfer_message_version(),
+        EUnexpectedMessageVersion,
+    );
+    let token_payload = if (message.message_version() == 2) {
+        message.extract_token_bridge_payload_v2().to_token_payload_v1()
+    } else {
+        message.extract_token_bridge_payload()
+    };
     let target_chain = token_payload.token_target_chain();
     assert!(
         message.source_chain() == inner.chain_id || target_chain == inner.chain_id,
@@ -485,6 +531,7 @@ fun claim_token_internal<T>(
     assert!(!inner.paused, EBridgeUnavailable);
 
     let key = message::create_key(source_chain, message_types::token(), bridge_seq_num);
+
     assert!(inner.token_transfer_records.contains(key), EMessageNotFoundInRecords);
 
     // retrieve approved bridge message
@@ -495,7 +542,20 @@ fun claim_token_internal<T>(
     assert!(record.verified_signatures.is_some(), EUnauthorisedClaim);
 
     // extract token message
-    let token_payload = record.message.extract_token_bridge_payload();
+    let mut bypass_limiter = false;
+    let token_payload;
+    if (record.message.message_version() == 2) {
+        let token_payload_v2 = record.message.extract_token_bridge_payload_v2();
+
+        let timestamp = token_payload_v2.timestamp_ms();
+        // if more than 48 hours have passed since deposit, bypass the limiter
+        // (the limiter exists to give time to respond to bugs)
+        bypass_limiter = clock.timestamp_ms() > timestamp + 48 * 3600000;
+        token_payload = token_payload_v2.to_token_payload_v1();
+    } else {
+        token_payload = record.message.extract_token_bridge_payload();
+    };
+
     // get owner address
     let owner = address::from_bytes(token_payload.token_target_address());
 
@@ -523,6 +583,7 @@ fun claim_token_internal<T>(
     let amount = token_payload.token_amount();
     // Make sure transfer is within limit.
     if (
+        !bypass_limiter &&
         !inner
             .limiter
             .check_and_record_sending_transfer<T>(
@@ -544,6 +605,31 @@ fun claim_token_internal<T>(
     event::emit(TokenTransferClaimed { message_key: key });
 
     (option::some(token), owner)
+}
+
+fun send_token_internal<T>(
+    inner: &mut BridgeInner,
+    target_chain: u8,
+    token: Coin<T>,
+    message: BridgeMessage,
+) {
+    assert!(!inner.paused, EBridgeUnavailable);
+    assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
+
+    // burn / escrow token, unsupported coins will fail in this step
+    inner.treasury.burn(token);
+
+    // Store pending bridge request
+    inner
+        .token_transfer_records
+        .push_back(
+            message.key(),
+            BridgeRecord {
+                message,
+                verified_signatures: option::none(),
+                claimed: false,
+            },
+        );
 }
 
 fun execute_emergency_op(inner: &mut BridgeInner, payload: EmergencyOp) {

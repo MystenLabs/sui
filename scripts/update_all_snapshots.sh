@@ -48,4 +48,8 @@ cd "$ROOT/crates/sui-open-rpc" && cargo run --example generate-json-rpc-spec -- 
 cd "$ROOT/crates/sui-core" && cargo insta test -- snapshot_tests
 cd "$ROOT/crates/sui-core" && cargo run --example generate-format -- print > tests/staged/sui.yaml
 cd "$ROOT/crates/sui-graphql-rpc" && cargo insta test -- snapshot_tests
+cd "$ROOT/crates/sui-graphql-rpc" && cargo insta test -- test_schema_sdl_export
+cd "$ROOT/crates/sui-graphql-rpc" && cargo insta test --features staging -- test_schema_sdl_export
+cd "$ROOT/crates/sui-indexer-alt-graphql" && cargo insta test -- test_schema_sdl_export
+cd "$ROOT/crates/sui-indexer-alt-graphql" && cargo insta test --features staging -- test_schema_sdl_export
 exit 0

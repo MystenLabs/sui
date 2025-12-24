@@ -56,9 +56,10 @@ impl TransactionProcessor<MoveCallEntry> for MoveCallHandler {
         let transaction_digest = transaction.transaction.digest().base58_encode();
 
         let mut entries = Vec::new();
-        for (package, module, function) in move_calls.iter() {
+        for (cmd_idx, package, module, function) in move_calls.iter() {
             let entry = MoveCallEntry {
                 transaction_digest: transaction_digest.clone(),
+                cmd_idx: *cmd_idx as u64,
                 checkpoint: checkpoint_seq,
                 epoch,
                 timestamp_ms,

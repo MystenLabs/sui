@@ -10,7 +10,7 @@ edition = "2024"
 anyhow.workspace = true
 async-trait.workspace = true
 axum = { workspace = true, features = ["matched-path"] }
-axum-server = { workspace = true, features = ["tls-rustls"] }
+axum-server = { workspace = true, features = ["tls-rustls-no-provider"] }
 backoff.workspace = true
 bcs.workspace = true
 bincode = { version = "2.0.1", features = ["serde"] }

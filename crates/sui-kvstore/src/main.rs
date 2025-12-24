@@ -24,6 +24,8 @@ struct App {
 pub enum Command {
     Ingestion {
         network: String,
+        #[arg(long, default_value_t = 50)]
+        concurrency: usize,
     },
     Fetch {
         #[command(subcommand)]
@@ -45,7 +47,10 @@ async fn main() -> Result<()> {
     let _guard = TelemetryConfig::new().with_env().init();
     let app = App::parse();
     match app.command {
-        Some(Command::Ingestion { network }) => {
+        Some(Command::Ingestion {
+            network,
+            concurrency,
+        }) => {
             let client = BigTableClient::new_remote(
                 app.instance_id,
                 false,
@@ -61,7 +66,8 @@ async fn main() -> Result<()> {
                 1,
                 DataIngestionMetrics::new(&Registry::new()),
             );
-            let worker_pool = WorkerPool::new(KvWorker { client }, "bigtable".to_string(), 50);
+            let worker_pool =
+                WorkerPool::new(KvWorker { client }, "bigtable".to_string(), concurrency);
             executor.register(worker_pool).await?;
             executor
                 .run(

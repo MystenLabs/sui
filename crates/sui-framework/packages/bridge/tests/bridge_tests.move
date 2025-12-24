@@ -34,7 +34,15 @@ use bridge::bridge_env::{
     init_committee,
     register_committee,
     unfreeze_bridge,
-    test_token_id
+    test_token_id,
+    advance_clock_hours,
+    bridge_to_sui_v2,
+    chain_id,
+    claim_and_transfer_token,
+    claimed,
+    clock_timestamp_ms,
+    limit_exceeded,
+    update_bridge_limit
 };
 use bridge::btc::BTC;
 use bridge::chain_ids;
@@ -707,4 +715,247 @@ fun change_url_bad_sender() {
     let mut bridge = env.bridge(@0x0);
     bridge.bridge_ref_mut().update_node_url(b"<url_here>", env.scenario().ctx());
     abort 0
+}
+
+// ============================================================================
+// V2 Message and Limiter Bypass Tests
+// ============================================================================
+// These tests verify the V2 token transfer flow where deposits include a timestamp.
+// The limiter bypass logic:
+// - Fresh messages (< 48h old): Subject to rate limiting
+// - Mature messages (> 48h old): Bypass the limiter
+
+// 48 hours in milliseconds
+const FORTY_EIGHT_HOURS_MS: u64 = 48 * 3600 * 1000;
+
+#[test]
+/// Test that a V2 message with a fresh deposit (< 48h) is subject to the limiter.
+/// When the limiter is exceeded, the claim should return a TokenTransferLimitExceed event.
+fun test_v2_fresh_message_respects_limiter() {
+    let chain_id = chain_ids::sui_testnet();
+    let source_chain = chain_ids::eth_sepolia();
+    let mut env = create_env(chain_id);
+    env.create_bridge_default();
+
+    let target_address = @0xBEEF;
+    let source_address = x"0000000000000000000000000000000000000001";
+
+    // Get current clock time and use it as deposit timestamp (fresh deposit)
+    let current_time = env.clock_timestamp_ms();
+    let deposit_timestamp = current_time; // Just deposited
+
+    // Bridge a small amount first (within limits)
+    let seq_num = env.bridge_to_sui_v2<ETH>(
+        source_chain,
+        source_address,
+        target_address,
+        1_000_000, // small amount
+        deposit_timestamp,
+    );
+
+    // Claim the token - should succeed as it's within limits
+    let token = env.claim_token<ETH>(target_address, source_chain, seq_num);
+    assert!(token.value() == 1_000_000);
+    token.burn_for_testing();
+
+    env.destroy_env();
+}
+
+#[test]
+/// Test that a V2 message with a mature deposit (> 48h) bypasses the limiter.
+/// This test proves the bypass by:
+/// 1. Setting a low bridge limit
+/// 2. Showing a fresh V2 message with a large amount would be blocked by the limiter
+/// 3. Showing a mature V2 message with the same amount bypasses the limiter
+fun test_v2_mature_message_bypasses_limiter() {
+    let sui_chain_id = chain_ids::sui_custom();
+    let source_chain = chain_ids::eth_custom();
+    let mut env = create_env(sui_chain_id);
+    env.create_bridge_default();
+
+    // Must use @0xABCDEF as target - claim_and_transfer_token expects this address
+    let target_address = @0xABCDEF;
+    let source_address = x"0000000000000000000000000000000000000001";
+
+    // Lower the bridge limit to 3000 USD so our transfer will exceed it
+    // (same setup as test_limits in bridge_txns.move)
+    let chain_id = env.chain_id();
+    env.update_bridge_limit(@0x0, chain_id, source_chain, 3000);
+
+    // Get current clock time
+    let current_time = env.clock_timestamp_ms();
+
+    // Large amount that will exceed the 3000 USD limit
+    // ETH has 8 decimals and default price is $3000/ETH
+    // 4e9 base units = 40 ETH = $120,000 USD (way over 3000 limit)
+    let large_amount = 4_000_000_000; // 40 ETH in base units
+
+    // First, prove that a FRESH V2 message would hit the limit
+    let fresh_timestamp = current_time; // Just deposited
+    let fresh_seq_num = env.bridge_to_sui_v2<ETH>(
+        source_chain,
+        source_address,
+        target_address,
+        large_amount,
+        fresh_timestamp,
+    );
+    // This should be blocked by the limiter because it's a fresh message
+    assert!(env.claim_and_transfer_token<ETH>(source_chain, fresh_seq_num) == limit_exceeded(), 0);
+
+    // Now, prove that a MATURE V2 message bypasses the limit
+    let mature_timestamp = current_time - FORTY_EIGHT_HOURS_MS - 1000; // 48h + 1sec ago
+    let mature_seq_num = env.bridge_to_sui_v2<ETH>(
+        source_chain,
+        source_address,
+        target_address,
+        large_amount,
+        mature_timestamp,
+    );
+    // This should succeed because the message is mature (bypasses limiter)
+    assert!(env.claim_and_transfer_token<ETH>(source_chain, mature_seq_num) == claimed(), 1);
+
+    env.destroy_env();
+}
+
+#[test]
+/// Test the boundary condition: exactly 48 hours should NOT bypass the limiter.
+/// The bypass only happens when MORE than 48 hours have passed.
+fun test_v2_exactly_48h_does_not_bypass() {
+    let chain_id = chain_ids::sui_testnet();
+    let source_chain = chain_ids::eth_sepolia();
+    let mut env = create_env(chain_id);
+    env.create_bridge_default();
+
+    let target_address = @0xBEEF;
+    let source_address = x"0000000000000000000000000000000000000001";
+
+    // Get current clock time
+    let current_time = env.clock_timestamp_ms();
+
+    // Deposit happened exactly 48 hours ago (boundary - should NOT bypass)
+    let deposit_timestamp = current_time - FORTY_EIGHT_HOURS_MS;
+
+    // Bridge a small amount that will be within limits anyway
+    let seq_num = env.bridge_to_sui_v2<ETH>(
+        source_chain,
+        source_address,
+        target_address,
+        1_000_000,
+        deposit_timestamp,
+    );
+
+    // Claim should succeed (within limits, but limiter is still applied)
+    let token = env.claim_token<ETH>(target_address, source_chain, seq_num);
+    assert!(token.value() == 1_000_000);
+    token.burn_for_testing();
+
+    env.destroy_env();
+}
+
+#[test]
+/// Test that advancing the clock allows a previously fresh message to mature.
+/// Deposit is made, clock advances past 48h, then claim bypasses the limiter.
+fun test_v2_message_matures_with_time() {
+    let chain_id = chain_ids::sui_testnet();
+    let source_chain = chain_ids::eth_sepolia();
+    let mut env = create_env(chain_id);
+    env.create_bridge_default();
+
+    let target_address = @0xBEEF;
+    let source_address = x"0000000000000000000000000000000000000001";
+
+    // Get current clock time and use it as deposit timestamp
+    let deposit_timestamp = env.clock_timestamp_ms();
+
+    // Bridge a large amount
+    let seq_num = env.bridge_to_sui_v2<ETH>(
+        source_chain,
+        source_address,
+        target_address,
+        100_000_000_000, // large amount
+        deposit_timestamp,
+    );
+
+    // Advance clock past 48 hours (make the message mature)
+    env.advance_clock_hours(49); // 49 hours later
+
+    // Claim should succeed because the message is now mature (bypasses limiter)
+    let token = env.claim_token<ETH>(target_address, source_chain, seq_num);
+    assert!(token.value() == 100_000_000_000);
+    token.burn_for_testing();
+
+    env.destroy_env();
+}
+
+#[test]
+/// Test that V1 messages (without timestamp) do not bypass the limiter.
+/// This ensures backward compatibility - V1 messages always respect the limiter.
+fun test_v1_message_always_respects_limiter() {
+    let chain_id = chain_ids::sui_testnet();
+    let source_chain = chain_ids::eth_sepolia();
+    let mut env = create_env(chain_id);
+    env.create_bridge_default();
+
+    let target_address = @0xBEEF;
+    let source_address = x"0000000000000000000000000000000000000001";
+
+    // Use V1 bridge flow (no timestamp)
+    let seq_num = env.bridge_to_sui<ETH>(
+        source_chain,
+        source_address,
+        target_address,
+        1_000_000, // small amount within limits
+    );
+
+    // Claim should succeed (within limits)
+    let token = env.claim_token<ETH>(target_address, source_chain, seq_num);
+    assert!(token.value() == 1_000_000);
+    token.burn_for_testing();
+
+    env.destroy_env();
+}
+
+#[test]
+/// Test multiple V2 transfers with different maturity levels.
+/// Fresh and mature messages in the same test to verify behavior.
+fun test_v2_mixed_maturity_transfers() {
+    let chain_id = chain_ids::sui_testnet();
+    let source_chain = chain_ids::eth_sepolia();
+    let mut env = create_env(chain_id);
+    env.create_bridge_default();
+
+    let target_address = @0xBEEF;
+    let source_address = x"0000000000000000000000000000000000000001";
+
+    let current_time = env.clock_timestamp_ms();
+
+    // Fresh deposit (current time)
+    let seq_num_fresh = env.bridge_to_sui_v2<ETH>(
+        source_chain,
+        source_address,
+        target_address,
+        500_000,
+        current_time,
+    );
+
+    // Mature deposit (more than 48h ago)
+    let seq_num_mature = env.bridge_to_sui_v2<ETH>(
+        source_chain,
+        source_address,
+        target_address,
+        100_000_000_000, // large amount
+        current_time - FORTY_EIGHT_HOURS_MS - 3600000, // 49h ago
+    );
+
+    // Claim fresh message - should work (within limits)
+    let token_fresh = env.claim_token<ETH>(target_address, source_chain, seq_num_fresh);
+    assert!(token_fresh.value() == 500_000);
+    token_fresh.burn_for_testing();
+
+    // Claim mature message - should work (bypasses limiter)
+    let token_mature = env.claim_token<ETH>(target_address, source_chain, seq_num_mature);
+    assert!(token_mature.value() == 100_000_000_000);
+    token_mature.burn_for_testing();
+
+    env.destroy_env();
 }

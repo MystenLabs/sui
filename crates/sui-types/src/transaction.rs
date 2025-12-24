@@ -1348,11 +1348,14 @@ impl ProgrammableTransaction {
         })
     }
 
-    fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)> {
+    fn move_calls(&self) -> Vec<(usize, &ObjectID, &str, &str)> {
         self.commands
             .iter()
-            .filter_map(|command| match command {
-                Command::MoveCall(m) => Some((&m.package, m.module.as_str(), m.function.as_str())),
+            .enumerate()
+            .filter_map(|(idx, command)| match command {
+                Command::MoveCall(m) => {
+                    Some((idx, &m.package, m.module.as_str(), m.function.as_str()))
+                }
                 _ => None,
             })
             .collect()
@@ -1582,7 +1585,7 @@ impl TransactionKind {
         }
     }
 
-    fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)> {
+    fn move_calls(&self) -> Vec<(usize, &ObjectID, &str, &str)> {
         match &self {
             Self::ProgrammableTransaction(pt) => pt.move_calls(),
             _ => vec![],
@@ -2390,7 +2393,7 @@ pub trait TransactionDataAPI {
 
     fn expiration(&self) -> &TransactionExpiration;
 
-    fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)>;
+    fn move_calls(&self) -> Vec<(usize, &ObjectID, &str, &str)>;
 
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>>;
 
@@ -2515,7 +2518,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self.expiration
     }
 
-    fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)> {
+    fn move_calls(&self) -> Vec<(usize, &ObjectID, &str, &str)> {
         self.kind.move_calls()
     }
 

@@ -2595,11 +2595,16 @@ impl Filter<EffectsWithInput> for TransactionFilter {
                 package,
                 module,
                 function,
-            } => item.input.move_calls().into_iter().any(|(p, m, f)| {
-                p == package
-                    && (module.is_none() || matches!(module,  Some(m2) if m2 == &m.to_string()))
-                    && (function.is_none() || matches!(function, Some(f2) if f2 == &f.to_string()))
-            }),
+            } => item
+                .input
+                .move_calls()
+                .into_iter()
+                .any(|(_cmd_idx, p, m, f)| {
+                    p == package
+                        && (module.is_none() || matches!(module,  Some(m2) if m2 == &m.to_string()))
+                        && (function.is_none()
+                            || matches!(function, Some(f2) if f2 == &f.to_string()))
+                }),
             TransactionFilter::TransactionKind(kind) => item.input.kind().to_string() == *kind,
             TransactionFilter::TransactionKindIn(kinds) => {
                 kinds.contains(&item.input.kind().to_string())

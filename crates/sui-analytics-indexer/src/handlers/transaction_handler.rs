@@ -69,7 +69,9 @@ impl TransactionProcessor<TransactionEntry> for TransactionHandler {
         let move_calls_vec = txn_data.move_calls();
         let packages: BTreeSet<_> = move_calls_vec
             .iter()
-            .map(|(package, _, _)| package.to_canonical_string(/* with_prefix */ false))
+            .map(|(_cmd_idx, package, _, _)| {
+                package.to_canonical_string(/* with_prefix */ false)
+            })
             .collect();
         let packages = packages
             .iter()

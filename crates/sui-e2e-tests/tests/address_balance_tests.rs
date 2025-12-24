@@ -2,8 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{identifier::Identifier, u256::U256};
+use rand::{Rng, seq::SliceRandom};
 use shared_crypto::intent::Intent;
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 use sui_core::accumulators::balances::get_currency_types_for_owner;
 use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse};
 use sui_keys::keystore::AccountKeystore;
@@ -12,7 +19,7 @@ use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
-    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     accumulator_metadata::AccumulatorOwner,
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
@@ -3596,4 +3603,235 @@ async fn try_coin_reservation_tx(
         .wallet
         .execute_transaction_may_fail(signed_tx)
         .await
+}
+
+#[sim_test]
+async fn address_balance_stress_test() {
+    telemetry_subscribers::init_for_testing();
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.enable_accumulators_for_testing();
+        cfg
+    });
+
+    let test_cluster = Arc::new(
+        TestClusterBuilder::new()
+            .with_epoch_duration_ms(10000)
+            .with_num_validators(7)
+            .build()
+            .await,
+    );
+
+    let addresses: Vec<_> = test_cluster
+        .wallet
+        .get_addresses()
+        .into_iter()
+        .take(4)
+        .collect();
+    assert!(
+        addresses.len() == 4,
+        "Need 4 addresses, got {}",
+        addresses.len()
+    );
+
+    // Publish the coins package - creates 5 coin types with 10000 each in sender's address balance
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["tests", "data", "coins"]);
+    let publish_tx = test_cluster
+        .test_transaction_builder()
+        .await
+        .publish_async(path)
+        .await
+        .build();
+    let publisher = publish_tx.sender();
+    let response = test_cluster.sign_and_execute_transaction(&publish_tx).await;
+    let package_id = response.get_new_package_obj().unwrap().0;
+    let coin_a_type: TypeTag = format!("{}::coin_a::COIN_A", package_id).parse().unwrap();
+    let coin_b_type: TypeTag = format!("{}::coin_b::COIN_B", package_id).parse().unwrap();
+    let coin_c_type: TypeTag = format!("{}::coin_c::COIN_C", package_id).parse().unwrap();
+    let coin_d_type: TypeTag = format!("{}::coin_d::COIN_D", package_id).parse().unwrap();
+    let coin_e_type: TypeTag = format!("{}::coin_e::COIN_E", package_id).parse().unwrap();
+
+    let coin_types = vec![
+        coin_a_type,
+        coin_b_type,
+        coin_c_type,
+        coin_d_type,
+        coin_e_type,
+    ];
+
+    // Distribute coins from publisher to all 4 addresses (2500 each per coin type)
+    let mut builder = test_cluster
+        .test_transaction_builder_with_sender(publisher)
+        .await;
+    for coin_type in &coin_types {
+        let recipients: Vec<(u64, SuiAddress)> =
+            addresses.iter().map(|addr| (2500u64, *addr)).collect();
+        builder = builder.transfer_funds_to_address_balance(
+            FundSource::address_fund_with_reservation(10000),
+            recipients,
+            coin_type.clone(),
+        );
+    }
+    test_cluster
+        .sign_and_execute_transaction(&builder.build())
+        .await;
+
+    // Collect gas objects for each address (need 2 per address for 2 concurrent tasks)
+    let mut address_gas: Vec<Vec<ObjectRef>> = Vec::new();
+    for addr in &addresses {
+        let gas_objs = test_cluster
+            .wallet
+            .gas_objects(*addr)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|(_, obj)| obj.object_ref())
+            .collect::<Vec<_>>();
+        assert!(
+            gas_objs.len() >= 2,
+            "Need at least 2 gas objects for address {:?}, got {}",
+            addr,
+            gas_objs.len()
+        );
+        address_gas.push(gas_objs);
+    }
+
+    // Counters for success/failure tracking
+    let success_count = Arc::new(AtomicU64::new(0));
+    let failure_count = Arc::new(AtomicU64::new(0));
+
+    // Spawn 8 tasks (2 per address)
+    let mut handles = Vec::new();
+    for addr in addresses.iter().cloned() {
+        let gas_objects = test_cluster
+            .wallet
+            .get_gas_objects_owned_by_address(addr, Some(2))
+            .await
+            .unwrap();
+        assert_eq!(gas_objects.len(), 2);
+        for gas_obj in gas_objects {
+            let test_cluster = Arc::clone(&test_cluster);
+            let all_addresses = addresses.clone();
+            let coin_types = coin_types.clone();
+            let success_count = Arc::clone(&success_count);
+            let failure_count = Arc::clone(&failure_count);
+
+            let handle = tokio::spawn(async move {
+                let start_time = std::time::Instant::now();
+                let duration = std::time::Duration::from_secs(60);
+                let mut current_gas = gas_obj;
+
+                while start_time.elapsed() < duration {
+                    let (selected_types, recipients) = {
+                        let mut rng = rand::thread_rng();
+
+                        // Pick 1-5 random coin types
+                        let num_coin_types = rng.gen_range(1..=5);
+                        let mut selected_types = coin_types.clone();
+                        selected_types.shuffle(&mut rng);
+                        selected_types.truncate(num_coin_types);
+
+                        // Pick random recipient(s) - different from self
+                        let other_addresses: Vec<SuiAddress> = all_addresses
+                            .iter()
+                            .filter(|a| **a != addr)
+                            .copied()
+                            .collect();
+                        let num_recipients = rng.gen_range(1..=other_addresses.len());
+                        let mut recipients = other_addresses.clone();
+                        recipients.shuffle(&mut rng);
+                        recipients.truncate(num_recipients);
+
+                        (selected_types, recipients)
+                    };
+
+                    // Build transaction with random amounts
+                    // Use amounts that sometimes exceed balance to trigger failures
+                    // Each address has 2500 per coin type, so use amounts from 100 to 1500
+                    let mut builder = test_cluster
+                        .test_transaction_builder_with_gas_object(addr, current_gas)
+                        .await;
+                    let mut total_reservation_per_type = std::collections::HashMap::new();
+
+                    for coin_type in &selected_types {
+                        let mut transfers = Vec::new();
+                        for recipient in &recipients {
+                            // Amount between 100 and 1500 - sometimes will exceed balance
+                            let amount = rand::thread_rng().gen_range(100..=1500);
+                            transfers.push((amount, *recipient));
+                            *total_reservation_per_type
+                                .entry(coin_type.clone())
+                                .or_insert(0u64) += amount;
+                        }
+
+                        let reservation = *total_reservation_per_type.get(coin_type).unwrap();
+                        builder = builder.transfer_funds_to_address_balance(
+                            FundSource::address_fund_with_reservation(reservation),
+                            transfers,
+                            coin_type.clone(),
+                        );
+                    }
+
+                    let tx = builder.build();
+                    let signed_tx = test_cluster.sign_transaction(&tx).await;
+                    match test_cluster
+                        .wallet
+                        .execute_transaction_may_fail(signed_tx)
+                        .await
+                    {
+                        Ok(response) => {
+                            let effects = response.effects.unwrap();
+                            if effects.status().is_ok() {
+                                success_count.fetch_add(1, Ordering::Relaxed);
+                            } else {
+                                failure_count.fetch_add(1, Ordering::Relaxed);
+                            }
+                            current_gas = effects.gas_object().reference.to_object_ref();
+                        }
+                        Err(err) => {
+                            let err_str = err.to_string();
+                            if err_str.contains("Available balance for object id") {
+                                failure_count.fetch_add(1, Ordering::Relaxed);
+                            }
+                        }
+                    }
+                }
+            });
+            handles.push(handle);
+        }
+    }
+
+    // Wait for all tasks to complete
+    for handle in handles {
+        handle.await.unwrap();
+    }
+
+    let final_success = success_count.load(Ordering::Relaxed);
+    let final_failure = failure_count.load(Ordering::Relaxed);
+
+    tracing::info!(
+        "Stress test completed: {} successes, {} failures",
+        final_success,
+        final_failure
+    );
+
+    // Ensure we had both successes and failures (the random amounts should cause some failures)
+    assert!(
+        final_success > 0,
+        "Expected at least some successful transactions, got {}",
+        final_success
+    );
+    assert!(
+        final_failure > 0,
+        "Expected at least some failed transactions (due to insufficient balance), got {}",
+        final_failure
+    );
+
+    // Verify total transactions is reasonable (should have executed many in 30 seconds)
+    let total = final_success + final_failure;
+    assert!(
+        total >= 10,
+        "Expected at least 10 total transactions, got {}",
+        total
+    );
 }
