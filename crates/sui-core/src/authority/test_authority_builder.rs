@@ -376,7 +376,6 @@ impl<'a> TestAuthorityBuilder<'a> {
             genesis.objects(),
             &DBCheckpointConfig::default(),
             config.clone(),
-            None,
             chain_identifier,
             pruner_db,
             policy_config,

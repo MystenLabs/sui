@@ -599,7 +599,7 @@ impl SuiClientInner for SuiSdkClient {
         match self.quorum_driver_api().execute_transaction_block(
             tx,
             SuiTransactionBlockResponseOptions::new().with_effects().with_events(),
-            Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
+            Some(sui_types::transaction_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
         ).await {
             Ok(response) => {
                 let effects = response.effects.expect("We requested effects but got None.");

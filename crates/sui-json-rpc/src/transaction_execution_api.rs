@@ -30,14 +30,14 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::quorum_driver_types::{
-    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
-};
 use sui_types::signature::GenericSignature;
 use sui_types::storage::PostExecutionPackageResolver;
 use sui_types::sui_serde::BigInt;
 use sui_types::transaction::{
     InputObjectKind, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
+};
+use sui_types::transaction_driver_types::{
+    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
 };
 use tracing::instrument;
 

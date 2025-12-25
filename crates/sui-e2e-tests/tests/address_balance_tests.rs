@@ -3356,8 +3356,7 @@ async fn test_reject_signing_transaction_executed_in_previous_epoch() {
             let epoch_store = node.state().epoch_store_for_testing();
             let verified_tx = VerifiedTransaction::new_unchecked(signed_tx);
             node.state()
-                .handle_sign_transaction(&epoch_store, verified_tx)
-                .await
+                .handle_vote_transaction(&epoch_store, verified_tx)
         })
         .await;
 
@@ -3366,13 +3365,13 @@ async fn test_reject_signing_transaction_executed_in_previous_epoch() {
             let err_str = e.to_string();
             assert!(
                 err_str.contains("was already executed"),
-                "Expected 'was already executed' error when signing transaction that was executed in previous epoch, got: {}",
+                "Expected 'was already executed' error when voting on transaction that was executed in previous epoch, got: {}",
                 err_str
             );
         }
-        Ok(_) => {
+        Ok(()) => {
             panic!(
-                "Expected handle_sign_transaction to fail for transaction executed in previous epoch"
+                "Expected handle_vote_transaction to fail for transaction executed in previous epoch"
             );
         }
     }

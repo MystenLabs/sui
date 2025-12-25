@@ -193,9 +193,6 @@ pub struct NodeConfig {
     #[serde(default = "bool_true")]
     pub enable_soft_bundle: bool,
 
-    #[serde(default = "bool_true")]
-    pub enable_validator_tx_finalizer: bool,
-
     #[serde(default)]
     pub verifier_signing_config: VerifierSigningConfig,
 

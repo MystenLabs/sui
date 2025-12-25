@@ -45,7 +45,6 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{DeleteKind, WriteKind};
 use sui_types::sui_serde::Readable;
@@ -58,6 +57,7 @@ use sui_types::transaction::{
     SenderSignedData, TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom,
     WithdrawalTypeArg,
 };
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_types::{authenticator_state::ActiveJwk, transaction::SharedObjectMutability};
 
 use crate::balance_changes::BalanceChange;

@@ -37,10 +37,10 @@ use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDig
 use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::event::EventID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::{Transaction, TransactionData, TransactionKind};
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 
 const WAIT_FOR_LOCAL_EXECUTION_MIN_INTERVAL: Duration = Duration::from_millis(100);
 const WAIT_FOR_LOCAL_EXECUTION_MAX_INTERVAL: Duration = Duration::from_secs(2);

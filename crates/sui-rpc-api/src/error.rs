@@ -110,11 +110,11 @@ impl From<bcs::Error> for RpcError {
     }
 }
 
-impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
-    fn from(error: sui_types::quorum_driver_types::QuorumDriverError) -> Self {
+impl From<sui_types::transaction_driver_types::TransactionSubmissionError> for RpcError {
+    fn from(error: sui_types::transaction_driver_types::TransactionSubmissionError) -> Self {
         use itertools::Itertools;
         use sui_types::error::SuiErrorKind;
-        use sui_types::quorum_driver_types::QuorumDriverError::*;
+        use sui_types::transaction_driver_types::TransactionSubmissionError::*;
 
         match error {
             InvalidUserSignature(err) => {
@@ -128,7 +128,7 @@ impl From<sui_types::quorum_driver_types::QuorumDriverError> for RpcError {
 
                 RpcError::new(Code::InvalidArgument, message)
             }
-            QuorumDriverInternalError(err) => RpcError::new(Code::Internal, err.to_string()),
+            TransactionDriverInternalError(err) => RpcError::new(Code::Internal, err.to_string()),
             ObjectsDoubleUsed { conflicting_txes } => {
                 let new_map = conflicting_txes
                     .into_iter()

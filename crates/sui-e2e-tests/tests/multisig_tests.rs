@@ -23,6 +23,7 @@ use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::error::UserInputError;
+use sui_types::messages_grpc::SubmitTxRequest;
 use sui_types::multisig_legacy::MultiSigLegacy;
 use sui_types::passkey_authenticator::{PasskeyAuthenticator, to_signing_message};
 use sui_types::{
@@ -56,7 +57,10 @@ async fn do_upgraded_multisig_test() -> SuiResult {
         .next()
         .unwrap()
         .authority_client()
-        .handle_transaction(tx, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
+        .submit_transaction(
+            SubmitTxRequest::new_transaction(tx),
+            Some(SocketAddr::new([127, 0, 0, 1].into(), 0)),
+        )
         .await
         .map(|_| ())
 }
