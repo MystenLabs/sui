@@ -13,7 +13,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 10617200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 23-25:
-//# programmable --sender A --inputs object(1,2) 18446744073709551614 @A
+//# programmable --sender A --inputs object(1,2) 18446744073709551615 @A
 //> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
 //> TransferObjects([Result(0)], Input(2))
 created: object(2,0)
