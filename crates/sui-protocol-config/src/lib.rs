@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 105;
+const MAX_PROTOCOL_VERSION: u64 = 106;
 
 // Record history of protocol version allocations here:
 //
@@ -281,6 +281,7 @@ const MAX_PROTOCOL_VERSION: u64 = 105;
 // Version 105: Framework update: address aliases
 //              Enable address balances on devnet
 //              Enable multi-epoch transaction expiration.
+// Version 106: split_checkpoints_in_consensus_handler in devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -917,6 +918,10 @@ struct FeatureFlags {
     // If true, enable object funds withdraw.
     #[serde(skip_serializing_if = "is_false")]
     enable_object_funds_withdraw: bool,
+
+    // If true, split checkpoints in consensus handler.
+    #[serde(skip_serializing_if = "is_false")]
+    split_checkpoints_in_consensus_handler: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2452,6 +2457,10 @@ impl ProtocolConfig {
 
     pub fn enable_object_funds_withdraw(&self) -> bool {
         self.feature_flags.enable_object_funds_withdraw
+    }
+
+    pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
+        self.feature_flags.split_checkpoints_in_consensus_handler
     }
 }
 
@@ -4351,6 +4360,11 @@ impl ProtocolConfig {
                     }
                     cfg.feature_flags.enable_multi_epoch_transaction_expiration = true;
                 }
+                106 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4736,6 +4750,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_object_funds_withdraw_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_object_funds_withdraw = val;
+    }
+
+    pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
+        self.feature_flags.split_checkpoints_in_consensus_handler = val;
     }
 }
 
