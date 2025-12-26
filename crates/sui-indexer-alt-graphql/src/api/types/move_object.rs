@@ -23,6 +23,7 @@ use crate::api::types::address::Address;
 use crate::api::types::balance::Balance;
 use crate::api::types::balance::{self as balance};
 use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::dynamic_field;
 use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::dynamic_field::DynamicFieldName;
 use crate::api::types::move_type::MoveType;
@@ -221,7 +222,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
         let scope = &self.super_.super_.scope;
         DynamicField::by_name(
             ctx,
@@ -266,7 +267,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
         let scope = &self.super_.super_.scope;
         DynamicField::by_name(
             ctx,
@@ -307,7 +308,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         let scope = &self.super_.super_.scope;
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
@@ -339,7 +340,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         let scope = &self.super_.super_.scope;
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(

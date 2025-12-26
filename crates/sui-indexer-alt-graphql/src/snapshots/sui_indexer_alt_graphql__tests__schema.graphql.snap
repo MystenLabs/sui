@@ -1082,16 +1082,22 @@ type DynamicFieldEdge {
 
 """
 A description of a dynamic field's name.
+
+Names can either be given as serialized `bcs` accompanied by its `type`, or as a Display v2 `literal` expression. Other combinations of inputs are not supported.
 """
 input DynamicFieldName {
 	"""
 	The Base64-encoded BCS serialization of the dynamic field's 'name'.
 	"""
-	bcs: Base64!
+	bcs: Base64
+	"""
+	The name represented as a Display v2 literal expression.
+	"""
+	literal: String
 	"""
 	The type of the dynamic field's name, like 'u64' or '0x2::kiosk::Listing'.
 	"""
-	type: String!
+	type: String
 }
 
 """

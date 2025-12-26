@@ -1,0 +1,127 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-15:
+//# run-graphql --cursors bcs(42u64)
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Name must specify either both 'type' and 'bcs', or 'literal'",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "address",
+        "dynamicField"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 2, lines 17-24:
+//# run-graphql --cursors bcs(42u64)
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Name must specify either both 'type' and 'bcs', or 'literal'",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "address",
+        "dynamicField"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 3, lines 26-33:
+//# run-graphql --cursors bcs(42u64)
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Name must specify either both 'type' and 'bcs', or 'literal'",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "address",
+        "dynamicField"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 4, lines 35-42:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Literal error: Unexpected \"'hello\" at byte offset 0, expected one of 'b', 'false', 'true', 'x', '@', an identifier, a decimal number, a hexadecimal number, or a string",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "address",
+        "dynamicField"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 5, lines 44-51:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Name literals cannot contain field accesses",
+      "locations": [
+        {
+          "line": 3,
+          "column": 5
+        }
+      ],
+      "path": [
+        "address",
+        "dynamicField"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
