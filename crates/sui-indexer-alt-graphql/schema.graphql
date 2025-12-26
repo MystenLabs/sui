@@ -2648,6 +2648,12 @@ type MoveValue {
 	"""
 	extract(path: String!): MoveValue
 	"""
+	Render a single Display v2 format string against this value.
+	
+	Returns `null` if the value does not have a valid type, or if any of the expressions in the format string fail to evaluate (e.g. field does not exist).
+	"""
+	format(format: String!): JSON
+	"""
 	Representation of a Move value in JSON, where:
 	
 	- Addresses, IDs, and UIDs are represented in canonical form, as JSON strings.

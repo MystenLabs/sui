@@ -63,6 +63,9 @@ struct JsonWriter<'b> {
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
+    #[error("Format error: {0}")]
+    Format(sui_display::v2::FormatError),
+
     #[error("Path error: {0}")]
     Path(sui_display::v2::FormatError),
 
@@ -236,6 +239,41 @@ impl MoveValue {
 
         let type_ = MoveType::from_layout(layout, self.type_.scope.clone());
         Ok(Some(MoveValue { type_, native }))
+    }
+
+    /// Render a single Display v2 format string against this value.
+    ///
+    /// Returns `null` if the value does not have a valid type, or if any of the expressions in the format string fail to evaluate (e.g. field does not exist).
+    async fn format(
+        &self,
+        ctx: &Context<'_>,
+        format: String,
+    ) -> Result<Option<Json>, RpcError<Error>> {
+        let limits: &Limits = ctx.data()?;
+        let parsed = sui_display::v2::Format::parse(limits.display(), &format)
+            .map_err(|e| format_error(Error::Format, e))?;
+
+        let Some(layout) = self.type_.layout_impl().await.map_err(upcast)? else {
+            return Ok(None);
+        };
+
+        let store = DisplayStore::new(ctx, &self.type_.scope);
+        let root = sui_display::v2::OwnedSlice {
+            bytes: self.native.clone(),
+            layout,
+        };
+
+        let interpreter = sui_display::v2::Interpreter::new(root, store);
+        let value = parsed
+            .format(
+                &interpreter,
+                limits.max_move_value_depth,
+                limits.max_display_output_size,
+            )
+            .await
+            .map_err(|e| format_error(Error::Format, e))?;
+
+        Ok(Some(Json::try_from(value).map_err(upcast)?))
     }
 
     /// Representation of a Move value in JSON, where:
