@@ -899,46 +899,6 @@ impl MovePackage {
         )
     }
 
-    /// Get the native MovePackage, loading it lazily if needed.
-    pub(crate) async fn native(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<&Option<NativeMovePackage>, RpcError> {
-        self.native
-            .get_or_try_init(async || {
-                let Some(contents) = self.super_.contents(ctx).await? else {
-                    return Ok(None);
-                };
-
-                let native = contents
-                    .data
-                    .try_as_package()
-                    .context("Object is not a MovePackage")?;
-
-                Ok(Some(native.clone()))
-            })
-            .await
-    }
-
-    /// Get the parsed representation of this package, loading it lazily if needed.
-    pub(crate) async fn parsed(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<&Option<ParsedMovePackage>, RpcError> {
-        self.parsed
-            .get_or_try_init(async || {
-                let Some(native) = self.native(ctx).await?.as_ref() else {
-                    return Ok(None);
-                };
-
-                let parsed = ParsedMovePackage::read_from_package(native)
-                    .context("Failed to parse MovePackage")?;
-
-                Ok(Some(parsed))
-            })
-            .await
-    }
-
     /// Paginate through versions of a package, identified by its original ID. `address` points to
     /// any package on-chain that has that original ID.
     pub(crate) async fn paginate_system_packages(
@@ -1019,5 +979,50 @@ impl MovePackage {
             |p| BcsCursor::new(p.original_id.clone()),
             |p| Ok(Self::from_stored(scope.clone(), p)?.context("Failed to instantiate package")?),
         )
+    }
+
+    /// The package's address
+    pub(crate) fn address_impl(&self) -> NativeSuiAddress {
+        self.super_.super_.address
+    }
+
+    /// Get the native MovePackage, loading it lazily if needed.
+    pub(crate) async fn native(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<&Option<NativeMovePackage>, RpcError> {
+        self.native
+            .get_or_try_init(async || {
+                let Some(contents) = self.super_.contents(ctx).await? else {
+                    return Ok(None);
+                };
+
+                let native = contents
+                    .data
+                    .try_as_package()
+                    .context("Object is not a MovePackage")?;
+
+                Ok(Some(native.clone()))
+            })
+            .await
+    }
+
+    /// Get the parsed representation of this package, loading it lazily if needed.
+    pub(crate) async fn parsed(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<&Option<ParsedMovePackage>, RpcError> {
+        self.parsed
+            .get_or_try_init(async || {
+                let Some(native) = self.native(ctx).await? else {
+                    return Ok(None);
+                };
+
+                let parsed = ParsedMovePackage::read_from_package(native)
+                    .context("Failed to parse MovePackage")?;
+
+                Ok(Some(parsed))
+            })
+            .await
     }
 }

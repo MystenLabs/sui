@@ -2062,6 +2062,10 @@ type MoveModule {
 	"""
 	friends(first: Int, after: String, last: Int, before: String): MoveModuleConnection
 	"""
+	The module's fully-qualified name, including its package address.
+	"""
+	fullyQualifiedName: String!
+	"""
 	The function named `name` in this module.
 	"""
 	function(name: String!): MoveFunction
