@@ -33,6 +33,7 @@ use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address::Address;
 use crate::api::types::balance::Balance;
 use crate::api::types::balance::{self as balance};
+use crate::api::types::dynamic_field;
 use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::dynamic_field::DynamicFieldName;
 use crate::api::types::move_object::MoveObject;
@@ -206,7 +207,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
         self.super_.dynamic_field(ctx, name).await
     }
 
@@ -233,7 +234,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
         self.super_.dynamic_object_field(ctx, name).await
     }
 
@@ -266,7 +267,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         self.super_.multi_get_dynamic_fields(ctx, keys).await
     }
 
@@ -277,7 +278,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         self.super_.multi_get_dynamic_object_fields(ctx, keys).await
     }
 

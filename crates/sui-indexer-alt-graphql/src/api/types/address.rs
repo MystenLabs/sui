@@ -19,6 +19,7 @@ use crate::api::scalars::uint53::UInt53;
 use crate::api::types::balance::Balance;
 use crate::api::types::balance::{self as balance};
 use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::dynamic_field;
 use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::dynamic_field::DynamicFieldName;
 use crate::api::types::move_object::MoveObject;
@@ -218,7 +219,7 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
         DynamicField::by_name(
             ctx,
             self.scope.clone(),
@@ -257,7 +258,7 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
         DynamicField::by_name(
             ctx,
             self.scope.clone(),
@@ -275,7 +276,7 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
                 ctx,
@@ -295,7 +296,7 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
                 ctx,

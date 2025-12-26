@@ -88,13 +88,27 @@ task 12, line 42:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 13, lines 44-66:
+task 13, lines 44-68:
 //# run-graphql --cursors bcs(42u64)
 Response: {
   "data": {
     "object": {
       "address": "0xdd806f262555a167b932495c24765daccc1ba6ebee5e8a696155818e6b5e93ad",
-      "dynamicField": {
+      "ser": {
+        "name": {
+          "type": {
+            "repr": "u64"
+          },
+          "json": "42"
+        },
+        "value": {
+          "type": {
+            "repr": "u64"
+          },
+          "json": "999"
+        }
+      },
+      "lit": {
         "name": {
           "type": {
             "repr": "u64"
@@ -109,7 +123,21 @@ Response: {
         }
       },
       "asMoveObject": {
-        "dynamicField": {
+        "ser": {
+          "name": {
+            "type": {
+              "repr": "u64"
+            },
+            "json": "42"
+          },
+          "value": {
+            "type": {
+              "repr": "u64"
+            },
+            "json": "999"
+          }
+        },
+        "lit": {
           "name": {
             "type": {
               "repr": "u64"
@@ -128,13 +156,30 @@ Response: {
   }
 }
 
-task 14, lines 68-90:
+task 14, lines 70-94:
 //# run-graphql --cursors bcs(43u64)
 Response: {
   "data": {
     "object": {
       "address": "0xdd806f262555a167b932495c24765daccc1ba6ebee5e8a696155818e6b5e93ad",
-      "dynamicField": {
+      "ser": {
+        "name": {
+          "type": {
+            "repr": "u64"
+          },
+          "json": "43"
+        },
+        "value": {
+          "type": {
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+          },
+          "json": {
+            "id": "0xe784c8e18a196785fd5c242f0a16365483177ac0c19bdc31ec45384b39e82497",
+            "balance": "100"
+          }
+        }
+      },
+      "lit": {
         "name": {
           "type": {
             "repr": "u64"
@@ -152,7 +197,24 @@ Response: {
         }
       },
       "asMoveObject": {
-        "dynamicField": {
+        "ser": {
+          "name": {
+            "type": {
+              "repr": "u64"
+            },
+            "json": "43"
+          },
+          "value": {
+            "type": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+            },
+            "json": {
+              "id": "0xe784c8e18a196785fd5c242f0a16365483177ac0c19bdc31ec45384b39e82497",
+              "balance": "100"
+            }
+          }
+        },
+        "lit": {
           "name": {
             "type": {
               "repr": "u64"
@@ -174,13 +236,34 @@ Response: {
   }
 }
 
-task 15, lines 92-119:
+task 15, lines 96-125:
 //# run-graphql --cursors bcs(44u64)
 Response: {
   "data": {
     "object": {
       "address": "0x3129d37b70d881020c3293a8875a555c0e0df81841a167ba52ec963d56a9b182",
-      "dynamicObjectField": {
+      "ser": {
+        "name": {
+          "type": {
+            "repr": "u64"
+          },
+          "json": "44"
+        },
+        "value": {
+          "address": "0x9db0db4cb1b8de097d8b0d50cd4bc3d142a20c329438af3629aacc32132c42d8",
+          "version": 9,
+          "contents": {
+            "type": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+            },
+            "json": {
+              "id": "0x9db0db4cb1b8de097d8b0d50cd4bc3d142a20c329438af3629aacc32132c42d8",
+              "balance": "200"
+            }
+          }
+        }
+      },
+      "lit": {
         "name": {
           "type": {
             "repr": "u64"
@@ -202,7 +285,28 @@ Response: {
         }
       },
       "asMoveObject": {
-        "dynamicObjectField": {
+        "ser": {
+          "name": {
+            "type": {
+              "repr": "u64"
+            },
+            "json": "44"
+          },
+          "value": {
+            "address": "0x9db0db4cb1b8de097d8b0d50cd4bc3d142a20c329438af3629aacc32132c42d8",
+            "version": 9,
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+              },
+              "json": {
+                "id": "0x9db0db4cb1b8de097d8b0d50cd4bc3d142a20c329438af3629aacc32132c42d8",
+                "balance": "200"
+              }
+            }
+          }
+        },
+        "lit": {
           "name": {
             "type": {
               "repr": "u64"
@@ -228,7 +332,7 @@ Response: {
   }
 }
 
-task 16, lines 121-143:
+task 16, lines 127-149:
 //# run-graphql
 Response: {
   "data": {
@@ -236,7 +340,7 @@ Response: {
   }
 }
 
-task 17, lines 145-156:
+task 17, lines 151-162:
 //# run-graphql
 Response: {
   "data": {
@@ -247,7 +351,7 @@ Response: {
   }
 }
 
-task 18, lines 158-164:
+task 18, lines 164-170:
 //# run-graphql
 Response: {
   "data": {
@@ -255,7 +359,7 @@ Response: {
   }
 }
 
-task 19, lines 166-178:
+task 19, lines 172-184:
 //# run-graphql
 Response: {
   "data": {
@@ -277,7 +381,7 @@ Response: {
   }
 }
 
-task 20, lines 180-196:
+task 20, lines 186-202:
 //# run-graphql
 Response: {
   "data": {
@@ -336,7 +440,7 @@ Response: {
   }
 }
 
-task 21, lines 198-220:
+task 21, lines 204-234:
 //# run-graphql --cursors bcs(42u64) bcs(43u64) bcs(45u64)
 Response: {
   "data": {
@@ -344,18 +448,24 @@ Response: {
       "nodes": [
         {
           "version": 2,
-          "df42": null,
-          "df43": null,
-          "df45": null,
+          "ser42": null,
+          "ser43": null,
+          "ser45": null,
+          "lit42": null,
+          "lit43": null,
+          "lit45": null,
           "asMoveObject": {
-            "df42": null,
-            "df43": null,
-            "df45": null
+            "ser42": null,
+            "ser43": null,
+            "ser45": null,
+            "lit42": null,
+            "lit43": null,
+            "lit45": null
           }
         },
         {
           "version": 7,
-          "df42": {
+          "ser42": {
             "name": {
               "json": "42"
             },
@@ -363,10 +473,20 @@ Response: {
               "json": "999"
             }
           },
-          "df43": null,
-          "df45": null,
+          "ser43": null,
+          "ser45": null,
+          "lit42": {
+            "name": {
+              "json": "42"
+            },
+            "value": {
+              "json": "999"
+            }
+          },
+          "lit43": null,
+          "lit45": null,
           "asMoveObject": {
-            "df42": {
+            "ser42": {
               "name": {
                 "json": "42"
               },
@@ -374,13 +494,23 @@ Response: {
                 "json": "999"
               }
             },
-            "df43": null,
-            "df45": null
+            "ser43": null,
+            "ser45": null,
+            "lit42": {
+              "name": {
+                "json": "42"
+              },
+              "value": {
+                "json": "999"
+              }
+            },
+            "lit43": null,
+            "lit45": null
           }
         },
         {
           "version": 8,
-          "df42": {
+          "ser42": {
             "name": {
               "json": "42"
             },
@@ -388,7 +518,7 @@ Response: {
               "json": "999"
             }
           },
-          "df43": {
+          "ser43": {
             "name": {
               "json": "43"
             },
@@ -399,9 +529,29 @@ Response: {
               }
             }
           },
-          "df45": null,
+          "ser45": null,
+          "lit42": {
+            "name": {
+              "json": "42"
+            },
+            "value": {
+              "json": "999"
+            }
+          },
+          "lit43": {
+            "name": {
+              "json": "43"
+            },
+            "value": {
+              "json": {
+                "id": "0xe784c8e18a196785fd5c242f0a16365483177ac0c19bdc31ec45384b39e82497",
+                "balance": "100"
+              }
+            }
+          },
+          "lit45": null,
           "asMoveObject": {
-            "df42": {
+            "ser42": {
               "name": {
                 "json": "42"
               },
@@ -409,7 +559,7 @@ Response: {
                 "json": "999"
               }
             },
-            "df43": {
+            "ser43": {
               "name": {
                 "json": "43"
               },
@@ -420,12 +570,32 @@ Response: {
                 }
               }
             },
-            "df45": null
+            "ser45": null,
+            "lit42": {
+              "name": {
+                "json": "42"
+              },
+              "value": {
+                "json": "999"
+              }
+            },
+            "lit43": {
+              "name": {
+                "json": "43"
+              },
+              "value": {
+                "json": {
+                  "id": "0xe784c8e18a196785fd5c242f0a16365483177ac0c19bdc31ec45384b39e82497",
+                  "balance": "100"
+                }
+              }
+            },
+            "lit45": null
           }
         },
         {
           "version": 10,
-          "df42": {
+          "ser42": {
             "name": {
               "json": "42"
             },
@@ -433,7 +603,7 @@ Response: {
               "json": "999"
             }
           },
-          "df43": {
+          "ser43": {
             "name": {
               "json": "43"
             },
@@ -444,7 +614,37 @@ Response: {
               }
             }
           },
-          "df45": {
+          "ser45": {
+            "name": {
+              "json": "45"
+            },
+            "value": {
+              "json": {
+                "id": "0x35c792c185e1133d9942f8fb6149433944092148f980d990b0d100f9f9f83103",
+                "balance": "300"
+              }
+            }
+          },
+          "lit42": {
+            "name": {
+              "json": "42"
+            },
+            "value": {
+              "json": "999"
+            }
+          },
+          "lit43": {
+            "name": {
+              "json": "43"
+            },
+            "value": {
+              "json": {
+                "id": "0xe784c8e18a196785fd5c242f0a16365483177ac0c19bdc31ec45384b39e82497",
+                "balance": "100"
+              }
+            }
+          },
+          "lit45": {
             "name": {
               "json": "45"
             },
@@ -456,7 +656,7 @@ Response: {
             }
           },
           "asMoveObject": {
-            "df42": {
+            "ser42": {
               "name": {
                 "json": "42"
               },
@@ -464,7 +664,7 @@ Response: {
                 "json": "999"
               }
             },
-            "df43": {
+            "ser43": {
               "name": {
                 "json": "43"
               },
@@ -475,7 +675,37 @@ Response: {
                 }
               }
             },
-            "df45": {
+            "ser45": {
+              "name": {
+                "json": "45"
+              },
+              "value": {
+                "json": {
+                  "id": "0x35c792c185e1133d9942f8fb6149433944092148f980d990b0d100f9f9f83103",
+                  "balance": "300"
+                }
+              }
+            },
+            "lit42": {
+              "name": {
+                "json": "42"
+              },
+              "value": {
+                "json": "999"
+              }
+            },
+            "lit43": {
+              "name": {
+                "json": "43"
+              },
+              "value": {
+                "json": {
+                  "id": "0xe784c8e18a196785fd5c242f0a16365483177ac0c19bdc31ec45384b39e82497",
+                  "balance": "100"
+                }
+              }
+            },
+            "lit45": {
               "name": {
                 "json": "45"
               },
@@ -493,7 +723,7 @@ Response: {
   }
 }
 
-task 22, lines 222-246:
+task 22, lines 236-260:
 //# run-graphql --cursors bcs(42u64) bcs(43u64) bcs(45u64)
 Response: {
   "data": {

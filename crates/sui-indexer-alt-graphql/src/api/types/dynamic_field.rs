@@ -2,12 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
+use anyhow::bail;
 use async_graphql::Context;
 use async_graphql::InputObject;
 use async_graphql::Object;
 use async_graphql::Union;
 use async_graphql::connection::Connection;
 use async_graphql::connection::Edge;
+use async_trait::async_trait;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::TypeTag;
@@ -44,7 +48,10 @@ use crate::api::types::owner::Owner;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
+use crate::config::Limits;
 use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::upcast;
 use crate::pagination::Page;
 use crate::scope::Scope;
 
@@ -80,13 +87,18 @@ pub(crate) struct NativeField {
 }
 
 /// A description of a dynamic field's name.
+///
+/// Names can either be given as serialized `bcs` accompanied by its `type`, or as a Display v2 `literal` expression. Other combinations of inputs are not supported.
 #[derive(InputObject)]
 pub(crate) struct DynamicFieldName {
     /// The type of the dynamic field's name, like 'u64' or '0x2::kiosk::Listing'.
-    pub(crate) type_: TypeInput,
+    pub(crate) type_: Option<TypeInput>,
 
     /// The Base64-encoded BCS serialization of the dynamic field's 'name'.
-    pub(crate) bcs: Base64,
+    pub(crate) bcs: Option<Base64>,
+
+    /// The name represented as a Display v2 literal expression.
+    pub(crate) literal: Option<String>,
 }
 
 /// The value of a dynamic field (`MoveValue`) or dynamic object field (`MoveObject`).
@@ -94,6 +106,21 @@ pub(crate) struct DynamicFieldName {
 pub(crate) enum DynamicFieldValue {
     MoveObject(MoveObject),
     MoveValue(MoveValue),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum Error {
+    #[error("Name literals cannot contain field accesses")]
+    FieldAccess,
+
+    #[error("Literal error: {0}")]
+    Literal(#[from] sui_display::v2::FormatError),
+
+    #[error("Name must specify either both 'type' and 'bcs', or 'literal'")]
+    NameInput,
+
+    #[error("Name literals cannot fetch other dynamic fields")]
+    StoreAccess,
 }
 
 /// Dynamic fields are heterogenous fields that can be added or removed from an object at runtime. Their names are arbitrary Move values that have `copy`, `drop`, and `store`.
@@ -184,7 +211,7 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Result<Option<DynamicField>, RpcError<Error>> {
         self.super_.dynamic_field(ctx, name).await
     }
 
@@ -211,7 +238,7 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Result<Option<DynamicField>, RpcError<Error>> {
         self.super_.dynamic_object_field(ctx, name).await
     }
 
@@ -232,7 +259,7 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<Error>> {
         self.super_.multi_get_dynamic_fields(ctx, keys).await
     }
 
@@ -243,7 +270,7 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<Error>> {
         self.super_.multi_get_dynamic_object_fields(ctx, keys).await
     }
 
@@ -468,23 +495,122 @@ impl DynamicField {
         parent: SuiAddress,
         kind: DynamicFieldType,
         name: DynamicFieldName,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        match name {
+            DynamicFieldName {
+                type_: Some(type_),
+                bcs: Some(bcs),
+                literal: None,
+            } => Self::by_serialized_name(ctx, scope, parent, kind, type_, bcs)
+                .await
+                .map_err(upcast),
+
+            DynamicFieldName {
+                literal: Some(literal),
+                type_: None,
+                bcs: None,
+            } => Self::by_literal_name(ctx, scope, parent, kind, literal).await,
+
+            _ => Err(bad_user_input(Error::NameInput)),
+        }
+    }
+
+    /// Look up a dynamic field by its serialized name (type and BCS bytes).
+    pub(crate) async fn by_serialized_name(
+        ctx: &Context<'_>,
+        scope: Scope,
+        parent: SuiAddress,
+        kind: DynamicFieldType,
+        type_: TypeInput,
+        bcs: Base64,
     ) -> Result<Option<Self>, RpcError> {
+        use DynamicFieldType as DFT;
+
         let type_ = match kind {
-            DynamicFieldType::DynamicField => name.type_.0,
-            DynamicFieldType::DynamicObject => {
-                DynamicFieldInfo::dynamic_object_field_wrapper(name.type_.0).into()
-            }
+            DFT::DynamicField => type_.0,
+            DFT::DynamicObject => DynamicFieldInfo::dynamic_object_field_wrapper(type_.0).into(),
         };
 
-        let field_id = derive_dynamic_field_id(parent, &type_, &name.bcs.0)
-            .context("Failed to derive dynamic field ID")?
-            .into();
+        let field_id: SuiAddress = derive_dynamic_field_id(parent, &type_, &bcs.0)?.into();
 
         let object = if let Some(version) = scope.root_version() {
-            Object::version_bounded(ctx, scope.clone(), field_id, version.into()).await?
+            Object::version_bounded(ctx, scope.clone(), field_id, version.into()).await
         } else {
-            Object::latest(ctx, scope.clone(), field_id).await?
+            Object::latest(ctx, scope.clone(), field_id).await
+        }?;
+
+        let Some(object) = object else {
+            return Ok(None);
         };
+
+        let move_object = MoveObject::from_super(object);
+        Ok(Some(DynamicField::from_super(move_object)))
+    }
+
+    /// Look up a dynamic field by its literal name (Display v2 expression).
+    ///
+    /// Literals don't support field accesses or dynamic loads, so the interpreter is supplied
+    /// with a dummy store and root object.
+    pub(crate) async fn by_literal_name(
+        ctx: &Context<'_>,
+        scope: Scope,
+        parent: SuiAddress,
+        kind: DynamicFieldType,
+        literal: String,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        use DynamicFieldType as DFT;
+
+        struct NopStore;
+
+        #[async_trait]
+        impl sui_display::v2::Store for NopStore {
+            async fn object(
+                &self,
+                _: AccountAddress,
+            ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
+                bail!("Dynamic loads not supported")
+            }
+        }
+
+        let limits: &Limits = ctx.data()?;
+        let limits = limits.display();
+
+        let root = sui_display::v2::OwnedSlice {
+            layout: MoveTypeLayout::Bool,
+            bytes: bcs::to_bytes(&false).unwrap(),
+        };
+
+        let parsed =
+            sui_display::v2::Name::parse(limits, &literal).map_err(|e| bad_user_input(e.into()))?;
+
+        let interpreter = sui_display::v2::Interpreter::new(root, NopStore);
+
+        let value = match parsed.eval(&interpreter).await {
+            Ok(Some(value)) => value,
+            Ok(None) => return Err(bad_user_input(Error::FieldAccess)),
+            Err(sui_display::v2::FormatError::Store(_)) => {
+                return Err(bad_user_input(Error::StoreAccess));
+            }
+            Err(e) => return Err(bad_user_input(e.into())),
+        };
+
+        let field_id: SuiAddress = match kind {
+            DFT::DynamicField => value
+                .derive_dynamic_field_id(parent)
+                .context("Failed to derive dynamic field ID")?,
+
+            DFT::DynamicObject => value
+                .derive_dynamic_object_field_id(parent)
+                .context("Failed to derive dynamic object field ID")?,
+        }
+        .into();
+
+        let object = if let Some(version) = scope.root_version() {
+            Object::version_bounded(ctx, scope.clone(), field_id, version.into()).await
+        } else {
+            Object::latest(ctx, scope.clone(), field_id).await
+        }
+        .map_err(upcast)?;
 
         let Some(object) = object else {
             return Ok(None);

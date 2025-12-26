@@ -55,6 +55,7 @@ use crate::api::types::address::Address;
 use crate::api::types::balance::Balance;
 use crate::api::types::balance::{self as balance};
 use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::dynamic_field;
 use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::dynamic_field::DynamicFieldName;
 use crate::api::types::move_object::MoveObject;
@@ -341,7 +342,7 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<Error>> {
+    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
         DynamicField::by_name(
             ctx,
             self.super_.scope.clone(),
@@ -350,7 +351,6 @@ impl Object {
             name,
         )
         .await
-        .map_err(upcast)
     }
 
     /// Dynamic fields owned by this object.
@@ -384,7 +384,7 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<Error>> {
+    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
         DynamicField::by_name(
             ctx,
             self.super_.scope.clone(),
@@ -393,7 +393,6 @@ impl Object {
             name,
         )
         .await
-        .map_err(upcast)
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
@@ -403,7 +402,7 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<Error>> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
                 ctx,
@@ -414,7 +413,6 @@ impl Object {
             )
         }))
         .await
-        .map_err(upcast)
     }
 
     /// Access dynamic object fields on an object using their types and BCS-encoded names.
@@ -424,7 +422,7 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError<Error>> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
                 ctx,
@@ -435,7 +433,6 @@ impl Object {
             )
         }))
         .await
-        .map_err(upcast)
     }
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
