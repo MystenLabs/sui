@@ -1,0 +1,108 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-66:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 11992800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 68-70:
+//# programmable --sender A --inputs @A
+//> 0: test::mod::example();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2447200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 72-74:
+//# programmable --sender A --inputs @A
+//> 0: test::mod::versioned();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(3,0), object(3,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4164800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 76-77:
+//# programmable --sender A --inputs object(3,1)
+//> 0: test::mod::upgrade(Input(0))
+created: object(4,0)
+mutated: object(0,0), object(3,1)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 4172400,  storage_rebate: 4123152, non_refundable_storage_fee: 41648
+
+task 5, lines 79-80:
+//# programmable --sender A --inputs object(2,0)
+//> 0: test::mod::add_df(Input(0))
+created: object(5,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 3921600,  storage_rebate: 2422728, non_refundable_storage_fee: 24472
+
+task 6, lines 82-83:
+//# programmable --sender A --inputs object(2,0)
+//> 0: test::mod::add_dof(Input(0))
+created: object(6,0), object(6,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6452400,  storage_rebate: 2422728, non_refundable_storage_fee: 24472
+
+task 7, line 85:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 8, lines 87-106:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": {
+          "outer": [
+            {
+              "@variant": "Baz",
+              "pos0": "42"
+            },
+            {
+              "@variant": "Qux",
+              "val": "hello world"
+            },
+            {
+              "@variant": "Quy",
+              "opt": 7
+            },
+            {
+              "@variant": "Quy",
+              "opt": null
+            }
+          ],
+          "baz": "0x000000000000002a",
+          "url": "http://example.com/?param=hello%20world",
+          "opt": "7?",
+          "alt": "default!",
+          "df": "100",
+          "dof": {
+            "id": "0x3f024f26c302b8a262906eb0d943c9e1c2e47605f9159517bd911d7f4c20af48",
+            "map": {
+              "contents": [
+                {
+                  "key": "hello",
+                  "value": "101"
+                },
+                {
+                  "key": "world",
+                  "value": "102"
+                }
+              ]
+            }
+          },
+          "map": "102",
+          "null": null
+        }
+      }
+    }
+  }
+}
