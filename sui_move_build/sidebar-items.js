@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PublishedAtError"],"fn":["decorate_warnings","parse_legacy_pkg_info","published_at_property"],"mod":["test_utils"],"struct":["BuildConfig","CompiledPackage","PackageDependencies"]};

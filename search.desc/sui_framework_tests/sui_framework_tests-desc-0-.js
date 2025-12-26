@@ -1,0 +1,1 @@
+searchState.loadedDescShard("sui_framework_tests", 0, "Copy the examples folder and the sui-framework packages …")

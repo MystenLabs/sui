@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["check_db_migration_consistency","check_prunable_tables_valid"],"mod":["__diesel_schema_migrations","setup_postgres"],"struct":["ConnectionConfig","ConnectionPoolConfig"]};

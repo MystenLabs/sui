@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_accumulator_barrier_tx"],"mod":["balances","coin_reservations","funds_read"]};

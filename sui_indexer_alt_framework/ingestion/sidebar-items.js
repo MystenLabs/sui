@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["error","ingestion_client","remote_client","streaming_client"],"struct":["ClientArgs","IngestionConfig","IngestionService"]};

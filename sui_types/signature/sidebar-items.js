@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["enum_dispatch"],"enum":["GenericSignature"],"struct":["VerifyParams"],"trait":["AuthenticatorTrait"]};

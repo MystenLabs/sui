@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["cp_sequence_number","instantiation","module","name","object_id","owner_id","owner_kind","package","star"]};

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("sui_package_alt", 0, "Note: Every field should be optional, and the system can …\nDetermine the correct environment to use for the package …\nReturns the argument unchanged.\nReturns the argument unchanged.\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.\nCalls <code>U::from(self)</code>.")
