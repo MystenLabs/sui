@@ -318,6 +318,11 @@ impl MoveModule {
         .transpose()
     }
 
+    /// The module's fully-qualified name, including its package address.
+    async fn fully_qualified_name(&self) -> String {
+        format!("{}::{}", self.package.address_impl(), self.name)
+    }
+
     /// The function named `name` in this module.
     async fn function(
         &self,

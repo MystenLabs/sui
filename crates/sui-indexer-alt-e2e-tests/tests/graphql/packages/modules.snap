@@ -16,7 +16,7 @@ task 2, line 34:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 36-61:
+task 3, lines 36-62:
 //# run-graphql --cursors "J" "P"
 Response: {
   "data": {
@@ -28,82 +28,108 @@ Response: {
         },
         "nodes": [
           {
-            "name": "A"
+            "name": "A",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::A"
           },
           {
-            "name": "B"
+            "name": "B",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::B"
           },
           {
-            "name": "C"
+            "name": "C",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::C"
           },
           {
-            "name": "D"
+            "name": "D",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::D"
           },
           {
-            "name": "E"
+            "name": "E",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::E"
           },
           {
-            "name": "F"
+            "name": "F",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::F"
           },
           {
-            "name": "G"
+            "name": "G",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::G"
           },
           {
-            "name": "H"
+            "name": "H",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::H"
           },
           {
-            "name": "I"
+            "name": "I",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::I"
           },
           {
-            "name": "J"
+            "name": "J",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::J"
           },
           {
-            "name": "K"
+            "name": "K",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::K"
           },
           {
-            "name": "L"
+            "name": "L",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::L"
           },
           {
-            "name": "M"
+            "name": "M",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::M"
           },
           {
-            "name": "N"
+            "name": "N",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::N"
           },
           {
-            "name": "O"
+            "name": "O",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::O"
           },
           {
-            "name": "P"
+            "name": "P",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::P"
           },
           {
-            "name": "Q"
+            "name": "Q",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::Q"
           },
           {
-            "name": "R"
+            "name": "R",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::R"
           },
           {
-            "name": "S"
+            "name": "S",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::S"
           },
           {
-            "name": "T"
+            "name": "T",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::T"
           },
           {
-            "name": "U"
+            "name": "U",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::U"
           },
           {
-            "name": "V"
+            "name": "V",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::V"
           },
           {
-            "name": "W"
+            "name": "W",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::W"
           },
           {
-            "name": "X"
+            "name": "X",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::X"
           },
           {
-            "name": "Y"
+            "name": "Y",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::Y"
           },
           {
-            "name": "Z"
+            "name": "Z",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::Z"
           }
         ]
       },
@@ -114,13 +140,16 @@ Response: {
         },
         "nodes": [
           {
-            "name": "A"
+            "name": "A",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::A"
           },
           {
-            "name": "B"
+            "name": "B",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::B"
           },
           {
-            "name": "C"
+            "name": "C",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::C"
           }
         ]
       },
@@ -131,13 +160,16 @@ Response: {
         },
         "nodes": [
           {
-            "name": "X"
+            "name": "X",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::X"
           },
           {
-            "name": "Y"
+            "name": "Y",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::Y"
           },
           {
-            "name": "Z"
+            "name": "Z",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::Z"
           }
         ]
       },
@@ -148,13 +180,16 @@ Response: {
         },
         "nodes": [
           {
-            "name": "A"
+            "name": "A",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::A"
           },
           {
-            "name": "B"
+            "name": "B",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::B"
           },
           {
-            "name": "C"
+            "name": "C",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::C"
           }
         ]
       },
@@ -165,13 +200,16 @@ Response: {
         },
         "nodes": [
           {
-            "name": "X"
+            "name": "X",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::X"
           },
           {
-            "name": "Y"
+            "name": "Y",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::Y"
           },
           {
-            "name": "Z"
+            "name": "Z",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::Z"
           }
         ]
       },
@@ -182,13 +220,16 @@ Response: {
         },
         "nodes": [
           {
-            "name": "K"
+            "name": "K",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::K"
           },
           {
-            "name": "L"
+            "name": "L",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::L"
           },
           {
-            "name": "M"
+            "name": "M",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::M"
           }
         ]
       },
@@ -199,13 +240,16 @@ Response: {
         },
         "nodes": [
           {
-            "name": "M"
+            "name": "M",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::M"
           },
           {
-            "name": "N"
+            "name": "N",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::N"
           },
           {
-            "name": "O"
+            "name": "O",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::O"
           }
         ]
       },
@@ -216,19 +260,24 @@ Response: {
         },
         "nodes": [
           {
-            "name": "K"
+            "name": "K",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::K"
           },
           {
-            "name": "L"
+            "name": "L",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::L"
           },
           {
-            "name": "M"
+            "name": "M",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::M"
           },
           {
-            "name": "N"
+            "name": "N",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::N"
           },
           {
-            "name": "O"
+            "name": "O",
+            "fullyQualifiedName": "0xcdd791ceb446db099840854e5e4e8e714630d70b0f6ca0011bbce149d7ee154a::O"
           }
         ]
       }

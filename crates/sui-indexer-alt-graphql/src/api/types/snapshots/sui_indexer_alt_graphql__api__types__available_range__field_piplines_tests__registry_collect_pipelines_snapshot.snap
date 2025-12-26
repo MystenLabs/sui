@@ -848,6 +848,9 @@ MoveModule.fileFormatVersion
 MoveModule.friends
   => {}
 
+MoveModule.fullyQualifiedName
+  => {}
+
 MoveModule.function
   => {}
 
