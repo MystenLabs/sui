@@ -200,8 +200,8 @@ impl MoveValue {
         path: String,
     ) -> Result<Option<MoveValue>, RpcError<Error>> {
         let limits: &Limits = ctx.data()?;
-        let extract =
-            sui_display::v2::Extract::parse(limits.display(), &path).map_err(path_error)?;
+        let extract = sui_display::v2::Extract::parse(limits.display(), &path)
+            .map_err(|e| format_error(Error::Path, e))?;
 
         let Some(layout) = self.type_.layout_impl().await.map_err(upcast)? else {
             return Ok(None);
@@ -218,7 +218,11 @@ impl MoveValue {
 
         // Evaluate the extraction and convert to an owned slice
         let interpreter = sui_display::v2::Interpreter::new(root, store);
-        let Some(value) = extract.extract(&interpreter).await.map_err(path_error)? else {
+        let Some(value) = extract
+            .extract(&interpreter)
+            .await
+            .map_err(|e| format_error(Error::Path, e))?
+        else {
             return Ok(None);
         };
 
@@ -463,7 +467,10 @@ impl From<RV::Error> for VisitorError {
     }
 }
 
-fn path_error(e: sui_display::v2::FormatError) -> RpcError<Error> {
+fn format_error(
+    wrap: impl FnOnce(sui_display::v2::FormatError) -> Error,
+    e: sui_display::v2::FormatError,
+) -> RpcError<Error> {
     use sui_display::v2::FormatError as FE;
     match &e {
         FE::InvalidHexCharacter(_)
@@ -477,7 +484,7 @@ fn path_error(e: sui_display::v2::FormatError) -> RpcError<Error> {
         | FE::UnexpectedToken { .. }
         | FE::VectorArity { .. }
         | FE::VectorNoType
-        | FE::VectorTypeMismatch { .. } => bad_user_input(Error::Path(e)),
+        | FE::VectorTypeMismatch { .. } => bad_user_input(wrap(e)),
 
         FE::TooBig | FE::TooDeep | FE::TooManyLoads | FE::TooMuchOutput => resource_exhausted(e),
         FE::Bcs(_) | FE::Visitor(_) | FE::Store(_) => anyhow!(e).into(),
