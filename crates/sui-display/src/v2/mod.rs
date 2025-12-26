@@ -6,8 +6,6 @@ use std::sync::Arc;
 use futures::future::try_join_all;
 use futures::join;
 use indexmap::IndexMap;
-use sui_types::collection_types::Entry;
-use sui_types::collection_types::VecMap;
 
 use crate::v2::error::Error;
 use crate::v2::meter::Meter;
@@ -117,7 +115,7 @@ impl<'s> Format<'s> {
     /// will fail completely if the display overall is detected to exceed the provided `limits`.
     pub fn parse(
         limits: Limits,
-        display_fields: &'s VecMap<String, String>,
+        display_fields: impl IntoIterator<Item = (&'s str, &'s str)>,
     ) -> Result<Self, Error> {
         let mut fields = Vec::new();
         let mut budget = limits.budget();
@@ -134,7 +132,7 @@ impl<'s> Format<'s> {
             Ok(Sourced { src, val })
         };
 
-        for Entry { key: k, value: v } in &display_fields.contents {
+        for (k, v) in display_fields.into_iter() {
             let key = parse(k)?;
             let val = parse(v)?;
             fields.push(Field { key, val });
@@ -324,27 +322,17 @@ mod tests {
     }
 
     /// Helper to parse display fields and render them against the provided object.
-    async fn format(
+    async fn format<'s>(
         store: MockStore,
         limits: Limits,
         bytes: Vec<u8>,
         layout: MoveTypeLayout,
         max_depth: usize,
         max_output_size: usize,
-        fields: impl IntoIterator<Item = (&str, &str)>,
+        fields: impl IntoIterator<Item = (&'s str, &'s str)>,
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
-        let display = VecMap {
-            contents: fields
-                .into_iter()
-                .map(|(key, value)| Entry {
-                    key: key.to_owned(),
-                    value: value.to_owned(),
-                })
-                .collect(),
-        };
-
         let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
-        Format::parse(limits, &display)?
+        Format::parse(limits, fields)?
             .display(&interpreter, max_depth, max_output_size)
             .await
     }
@@ -357,22 +345,7 @@ mod tests {
             Some(true),
             48u8,
             vec![1u64, 2u64, 3u64],
-            VecMap {
-                contents: vec![
-                    Entry {
-                        key: 4u32,
-                        value: 5u32,
-                    },
-                    Entry {
-                        key: 6u32,
-                        value: 7u32,
-                    },
-                    Entry {
-                        key: 8u32,
-                        value: 9u32,
-                    },
-                ],
-            },
+            vec![(4u32, 5u32), (6u32, 7u32), (8u32, 9u32)],
         ))
         .unwrap();
 
@@ -1453,22 +1426,11 @@ mod tests {
         let val = struct_("0x42::m::Value", vec![("data", L::U32)]);
 
         // Create test data: VecMap with 3 entries
-        let bytes = bcs::to_bytes(&VecMap {
-            contents: vec![
-                Entry {
-                    key: (1u64, "first"),
-                    value: 100u32,
-                },
-                Entry {
-                    key: (2u64, "second"),
-                    value: 200u32,
-                },
-                Entry {
-                    key: (3u64, "third"),
-                    value: 300u32,
-                },
-            ],
-        })
+        let bytes = bcs::to_bytes(&vec![
+            (1u64, "first", 100u32),
+            (2u64, "second", 200u32),
+            (3u64, "third", 300u32),
+        ])
         .unwrap();
 
         let layout = struct_("0x1::m::Root", vec![("map", vec_map(key, val))]);
