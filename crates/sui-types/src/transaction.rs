@@ -3975,7 +3975,7 @@ impl<T> TransactionWithClaims<T> {
 
 pub type PlainTransactionWithClaims = TransactionWithClaims<Transaction>;
 
-/// Convert from WithAliases<VerifiedEnvelope> to TransactionWithClaims<Envelope>.
+/// Convert from `WithAliases<VerifiedEnvelope>` to `TransactionWithClaims<Envelope>`.
 /// Used when feature flag is off to convert existing WithAliases to the new type.
 impl<T: Message, S> From<WithAliases<VerifiedEnvelope<T, S>>>
     for TransactionWithClaims<Envelope<T, S>>

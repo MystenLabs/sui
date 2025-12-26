@@ -770,6 +770,14 @@ mod tests {
 
     #[sim_test]
     async fn accept_already_executed_transaction() {
+        // This test uses ConsensusTransaction::new_user_transaction_message which creates a
+        // UserTransaction. When disable_preconsensus_locking=true (protocol version 105+),
+        // UserTransaction is not allowed. Gate with disable_preconsensus_locking=false.
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_preconsensus_locking_for_testing(false);
+            config
+        });
+
         let (sender, keypair) = deterministic_random_account_key();
 
         let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);

@@ -2030,20 +2030,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // When preconsensus locking is disabled, perform post-consensus owned object
                 // conflict detection BEFORE setting Finalized status. If lock acquisition fails,
                 // the transaction has invalid/conflicting owned inputs and should be dropped.
+                // Only applies to UserTransactionV2 - other transaction types don't need lock acquisition.
                 if self
                     .epoch_store
                     .protocol_config()
                     .disable_preconsensus_locking()
+                    && let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
+                        &parsed.transaction.kind
                 {
-                    // Extract transaction and immutable object claims (if available)
-                    let (tx, immutable_object_ids) = match &parsed.transaction.kind {
-                        ConsensusTransactionKind::UserTransactionV2(tx_with_claims) => {
-                            let immutable_ids: HashSet<ObjectID> =
-                                tx_with_claims.get_immutable_objects().into_iter().collect();
-                            (tx_with_claims.tx(), immutable_ids)
-                        }
-                        _ => continue,
-                    };
+                    let immutable_object_ids: HashSet<ObjectID> =
+                        tx_with_claims.get_immutable_objects().into_iter().collect();
+                    let tx = tx_with_claims.tx();
 
                     let Ok(input_objects) = tx.transaction_data().input_objects() else {
                         debug_fatal!("Invalid input objects for transaction {}", tx.digest());

@@ -139,11 +139,11 @@ fn test_transaction_with_claims_empty_immutable_objects() {
 }
 
 #[test]
-#[should_panic(expected = "AddressAliases claim must be present")]
-fn test_aliases_panics_when_not_present() {
+fn test_aliases_returns_none_when_not_present() {
     let claims = vec![TransactionClaim::ImmutableInputObjects(vec![
         ObjectID::random(),
     ])];
     let tx_with_claims = TransactionWithClaims::new("test_tx", claims);
-    let _ = tx_with_claims.aliases().unwrap();
+    // aliases() should return None when AddressAliases claim is not present
+    assert!(tx_with_claims.aliases().is_none());
 }
