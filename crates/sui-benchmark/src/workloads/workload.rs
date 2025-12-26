@@ -43,15 +43,22 @@ pub enum ExpectedFailureType {
     NoFailure,
 }
 
+/// Failure types that can be artificially created by modifying a transaction.
+/// ObjectLockConflict is excluded because it can only occur through natural contention
+/// (e.g., via ConflictingTransferWorkload), not by modifying a transaction.
+const ARTIFICIALLY_CREATABLE_FAILURES: &[ExpectedFailureType] =
+    &[ExpectedFailureType::InvalidSignature];
+
 impl TryFrom<u32> for ExpectedFailureType {
     type Error = anyhow::Error;
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
             0 => {
+                // Random selection from artificially creatable failure types only
                 let mut rng = rand::thread_rng();
-                let n = rng.gen_range(1..ExpectedFailureType::COUNT - 1);
-                Ok(ExpectedFailureType::iter().nth(n).unwrap())
+                let n = rng.gen_range(0..ARTIFICIALLY_CREATABLE_FAILURES.len());
+                Ok(ARTIFICIALLY_CREATABLE_FAILURES[n])
             }
             _ => ExpectedFailureType::iter()
                 .nth(value as usize)
