@@ -38,8 +38,8 @@ pub struct Extract<'s>(Chain<'s>);
 /// A literal value, representing a dynamic field name.
 pub struct Name<'s>(Literal<'s>);
 
-/// Format strings extracted from a `Display` object on-chain.
-pub struct Format<'s> {
+/// A collection of format strings that are evaluated to a string-to-string mapping.
+pub struct Display<'s> {
     fields: Vec<Field<'s>>,
 }
 
@@ -104,7 +104,7 @@ impl<'s> Name<'s> {
     }
 }
 
-impl<'s> Format<'s> {
+impl<'s> Display<'s> {
     /// Convert the contents of a `Display` object into a `Format` by parsing each of its names and
     /// values as format strings.
     ///
@@ -332,7 +332,7 @@ mod tests {
         fields: impl IntoIterator<Item = (&'s str, &'s str)>,
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
         let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
-        Format::parse(limits, fields)?
+        Display::parse(limits, fields)?
             .display(&interpreter, max_depth, max_output_size)
             .await
     }
@@ -617,7 +617,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_fields_and_scalars() {
+    async fn test_display_fields_and_scalars() {
         let bytes = bcs::to_bytes(&(
             AccountAddress::from_str("0x4243").unwrap(),
             AccountAddress::from_str("0x4445").unwrap(),
@@ -712,7 +712,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_vector_access() {
+    async fn test_display_vector_access() {
         let bytes =
             bcs::to_bytes(&(vec![2u64, 1u64, 0u64], vec!["first", "second", "third"])).unwrap();
 
@@ -755,7 +755,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_enums() {
+    async fn test_display_enums() {
         #[derive(serde::Serialize)]
         enum Status<'s> {
             Pending(&'s str),
@@ -868,7 +868,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_nested_access() {
+    async fn test_display_nested_access() {
         let bytes = bcs::to_bytes(&(
             (42u64, "nested"),
             vec![(1u32, "first"), (2u32, "second")],
@@ -950,7 +950,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_string_bytes() {
+    async fn test_display_string_bytes() {
         let bytes = bcs::to_bytes("ABC").unwrap();
         let layout = L::Struct(Box::new(move_ascii_str_layout()));
 
@@ -988,7 +988,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_missing_fields() {
+    async fn test_display_missing_fields() {
         let bytes = bcs::to_bytes(&(42u64, vec![10u64, 20u64, 30u64])).unwrap();
         let fields = vec![("num", L::U64), ("nums", vector_(L::U64))];
 
@@ -1047,7 +1047,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_alternates() {
+    async fn test_display_alternates() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
         let layout = struct_("0x1::m::S", vec![("bar", L::U64)]);
 
@@ -1089,7 +1089,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_alternate_optional() {
+    async fn test_display_alternate_optional() {
         let bytes = bcs::to_bytes(&(Some(100u64), None::<u64>)).unwrap();
         let layout = struct_(
             "0x1::m::S",
@@ -1123,7 +1123,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_optional_auto_dereference() {
+    async fn test_display_optional_auto_dereference() {
         let inner = struct_(
             "0x1::m::Inner",
             vec![("data", L::U64), ("optional_data", optional_(L::U64))],
@@ -1207,7 +1207,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_dynamic_fields() {
+    async fn test_display_dynamic_fields() {
         let parent = AccountAddress::from_str("0x1000").unwrap();
         let bytes = bcs::to_bytes(&parent).unwrap();
         let layout = struct_(
@@ -1276,7 +1276,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_dynamic_object_fields() {
+    async fn test_display_dynamic_object_fields() {
         let parent = AccountAddress::from_str("0x2000").unwrap();
         let child = AccountAddress::from_str("0x2001").unwrap();
         let bytes = bcs::to_bytes(&parent).unwrap();
@@ -1349,7 +1349,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_nested_dynamic_fields() {
+    async fn test_display_nested_dynamic_fields() {
         let parent = AccountAddress::from_str("0x3000").unwrap();
         let child = AccountAddress::from_str("0x3001").unwrap();
         let bytes = bcs::to_bytes(&parent).unwrap();
@@ -1414,7 +1414,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_vec_map() {
+    async fn test_display_vec_map() {
         let key = struct_(
             "0x42::m::Key",
             vec![
@@ -1479,7 +1479,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_timestamp() {
+    async fn test_display_timestamp() {
         let bytes = bcs::to_bytes(&1681318800000u64).unwrap();
         let layout = struct_("0x1::m::S", vec![("timestamp", L::U64)]);
 
@@ -1528,7 +1528,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_hex() {
+    async fn test_display_hex() {
         let bytes = bcs::to_bytes(&(
             0x42u8,
             0x4243u16,
@@ -1626,7 +1626,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_url() {
+    async fn test_display_url() {
         let bytes = bcs::to_bytes(&(
             1234u32,
             "hello/goodbye world",
@@ -1672,7 +1672,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_base64() {
+    async fn test_display_base64() {
         let bytes = bcs::to_bytes(&00u8).unwrap();
         let layout = struct_("0x1::m::S", vec![("dummy_field", L::Bool)]);
 
@@ -1774,7 +1774,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_bcs() {
+    async fn test_display_bcs() {
         let bytes = bcs::to_bytes(&(
             0x42u8,
             0x1234u16,
@@ -1854,7 +1854,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_bcs_modifiers() {
+    async fn test_display_bcs_modifiers() {
         let bytes = bcs::to_bytes(&00u8).unwrap();
         let layout = struct_("0x1::m::S", vec![("dummy_field", L::Bool)]);
 
@@ -1956,7 +1956,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_json() {
+    async fn test_display_json() {
         let bytes = bcs::to_bytes(&(
             12u8,
             1234u16,
@@ -2135,7 +2135,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_string_hardening() {
+    async fn test_display_string_hardening() {
         let bytes = bcs::to_bytes(&("ascii", "🔥", vec![0xC3u8])).unwrap();
         let layout = struct_(
             "0x1::m::S",
@@ -2183,7 +2183,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_field_errors() {
+    async fn test_display_field_errors() {
         let bytes = bcs::to_bytes(&0u8).unwrap();
         let layout = struct_("0x1::m::S", vec![("byte", L::U8)]);
 
@@ -2283,7 +2283,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_vector_literal_type_mismatch() {
+    async fn test_display_vector_literal_type_mismatch() {
         let bytes = bcs::to_bytes(&0u8).unwrap();
         let layout = struct_("0x1::m::S", vec![("byte", L::U8)]);
 
@@ -2333,7 +2333,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_output_node_limits() {
+    async fn test_display_output_node_limits() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 
         let limits = Limits {
@@ -2371,7 +2371,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_output_size_limits() {
+    async fn test_display_output_size_limits() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
         let formats = [("x", "012345"), ("y", "67890"), ("z", "ABCDE")];
 
@@ -2389,7 +2389,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_move_value_depth_limit() {
+    async fn test_display_move_value_depth_limit() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 
         let formats = [
@@ -2431,7 +2431,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_too_many_loads() {
+    async fn test_display_too_many_loads() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 
         let limits = Limits {
@@ -2470,7 +2470,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_name_empty() {
+    async fn test_display_name_empty() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 
         // Name evaluates to null when the field doesn't exist
@@ -2489,7 +2489,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_duplicate_name() {
+    async fn test_display_duplicate_name() {
         let layout = struct_("0x1::m::S", vec![("a", L::U64), ("b", L::U64)]);
 
         // Static duplicate: same literal name
