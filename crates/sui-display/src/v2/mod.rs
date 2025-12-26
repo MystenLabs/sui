@@ -38,6 +38,9 @@ pub struct Extract<'s>(Chain<'s>);
 /// A literal value, representing a dynamic field name.
 pub struct Name<'s>(Literal<'s>);
 
+/// A parsed format string.
+pub struct Format<'s>(Vec<Strand<'s>>);
+
 /// A collection of format strings that are evaluated to a string-to-string mapping.
 pub struct Display<'s> {
     fields: Vec<Field<'s>>,
@@ -101,6 +104,35 @@ impl<'s> Name<'s> {
         interpreter: &'s Interpreter<S>,
     ) -> Result<Option<Value<'s>>, FormatError> {
         interpreter.eval_literal(&self.0).await
+    }
+}
+
+impl<'s> Format<'s> {
+    /// Parse a string as a format.
+    ///
+    /// `limits` bounds the dimensions (depth, number of output nodes, max number of object loads)
+    /// that the parsed format string can consume.
+    pub fn parse(limits: Limits, src: &'s str) -> Result<Self, FormatError> {
+        let mut budget = limits.budget();
+        let mut meter = Meter::new(limits.max_depth, &mut budget);
+        let format = Parser::format(src, &mut meter)?;
+
+        Ok(Self(format))
+    }
+
+    /// Evaluate the format string returning a formatted JSON value.
+    pub async fn format<S: Store>(
+        &'s self,
+        interpreter: &'s Interpreter<S>,
+        max_depth: usize,
+        max_output_size: usize,
+    ) -> Result<serde_json::Value, FormatError> {
+        let writer = Writer::new(max_depth, max_output_size);
+        let Some(value) = interpreter.eval_strands(&self.0).await? else {
+            return Ok(serde_json::Value::Null);
+        };
+
+        writer.write(value)
     }
 }
 
@@ -614,6 +646,86 @@ mod tests {
                 "expected error for: {literal:?}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_format_fields_and_scalars() {
+        let bytes = bcs::to_bytes(&(
+            AccountAddress::from_str("0x4243").unwrap(),
+            AccountAddress::from_str("0x4445").unwrap(),
+            AccountAddress::from_str("0x4647").unwrap(),
+            true,
+            48u8,
+            49u16,
+            50u32,
+            51u64,
+            52u128,
+            U256::from(53u64),
+            "hello",
+            "world",
+            "https://example.com",
+        ))
+        .unwrap();
+
+        let fields = vec![
+            ("addr", L::Address),
+            ("id", L::Struct(Box::new(ID::layout()))),
+            ("uid", L::Struct(Box::new(UID::layout()))),
+            ("flag", L::Bool),
+            ("n8", L::U8),
+            ("n16", L::U16),
+            ("n32", L::U32),
+            ("n64", L::U64),
+            ("n128", L::U128),
+            ("n256", L::U256),
+            ("ascii", L::Struct(Box::new(move_ascii_str_layout()))),
+            ("utf8", L::Struct(Box::new(move_ascii_str_layout()))),
+            ("url", L::Struct(Box::new(url_layout()))),
+        ];
+
+        let formats = [
+            "{addr}, {id}, {uid}",
+            "{flag}",
+            "{n8}, {n16}, {n32}, {n64}, {n128}, {n256}",
+            "{ascii}, {utf8}, {url}",
+            "{ascii.bytes}, {utf8.bytes}, {url.url.bytes}",
+            "{@0x5455}",
+            "{false}",
+            "{56u8}, {57u16}, {58u32}, {59u64}, {60u128}, {61u256}",
+            "{'goodbye'}",
+        ];
+
+        let store = MockStore::default();
+        let root = OwnedSlice {
+            layout: struct_("0x1::m::S", fields),
+            bytes,
+        };
+
+        let mut output = Vec::with_capacity(formats.len());
+        let interpreter = Interpreter::new(root, store);
+        for s in formats {
+            let format = Format::parse(Limits::default(), s).unwrap();
+            output.push(
+                format
+                    .format(&interpreter, usize::MAX, usize::MAX)
+                    .await
+                    .unwrap(),
+            );
+        }
+
+        assert_json_snapshot!(output, @r###"
+        [
+          "0x0000000000000000000000000000000000000000000000000000000000004243, 0x0000000000000000000000000000000000000000000000000000000000004445, 0x0000000000000000000000000000000000000000000000000000000000004647",
+          "true",
+          "48, 49, 50, 51, 52, 53",
+          "hello, world, https://example.com",
+          "hello, world, https://example.com",
+          "0x0000000000000000000000000000000000000000000000000000000000005455",
+          "false",
+          "56, 57, 58, 59, 60, 61",
+          "goodbye"
+        ]
+        "###);
     }
 
     #[tokio::test]
