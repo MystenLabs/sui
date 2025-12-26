@@ -442,8 +442,17 @@ mod tests {
             .iter()
             .map(|t| t.as_slice())
             .collect();
-        let res_batch = validator.verify_batch(&batch);
-        assert!(res_batch.is_err());
+        // verify_batch doesn't verify user transaction signatures (that happens in vote_transaction).
+        // Use verify_and_vote_batch to test that bogus transactions are rejected during voting.
+        let res_batch = validator.verify_and_vote_batch(&BlockRef::MIN, &batch);
+        assert!(res_batch.is_ok());
+        // All transactions should be in the rejection list since they have invalid signatures
+        let rejections = res_batch.unwrap();
+        assert_eq!(
+            rejections.len(),
+            batch.len(),
+            "All bogus transactions should be rejected"
+        );
     }
 
     #[tokio::test]

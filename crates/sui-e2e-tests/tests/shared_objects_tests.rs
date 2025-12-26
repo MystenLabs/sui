@@ -5,10 +5,8 @@ use futures::future::join_all;
 use futures::join;
 use rand::distributions::Distribution;
 use std::net::SocketAddr;
-use std::ops::Deref;
 use std::time::{Duration, SystemTime};
 use sui_config::node::AuthorityOverloadConfig;
-use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::{register_fail_point_async, sim_test};
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
@@ -543,12 +541,6 @@ async fn shared_object_sync() {
                 .build(),
         )
         .await;
-    let committee = test_cluster.committee().deref().clone();
-    let validators = test_cluster.get_validator_pubkeys();
-    let (slow_validators, fast_validators): (Vec<_>, Vec<_>) =
-        validators.iter().partition(|name| {
-            position_submit_certificate(&committee, name, create_counter_transaction.digest()) > 0
-        });
 
     let (effects, _) = test_cluster
         .submit_and_execute(create_counter_transaction.clone(), None)
@@ -557,37 +549,20 @@ async fn shared_object_sync() {
     assert!(effects.status().is_ok());
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
 
-    // Check that the counter object exists in at least one of the validators the transaction was
-    // sent to.
+    // With MFP, all validators receive and execute transactions through consensus,
+    // so all validators should have the counter object after execution.
     for validator in test_cluster.swarm.validator_node_handles() {
-        if slow_validators.contains(&validator.state().name) {
-            assert!(
-                validator
-                    .state()
-                    .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                        counter_id,
-                        LayoutGenerationOption::None,
-                    ))
-                    .await
-                    .is_ok()
-            );
-        }
-    }
-
-    // Check that the validator that wasn't sent the transaction is unaware of the counter object
-    for validator in test_cluster.swarm.validator_node_handles() {
-        if fast_validators.contains(&validator.state().name) {
-            assert!(
-                validator
-                    .state()
-                    .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                        counter_id,
-                        LayoutGenerationOption::None,
-                    ))
-                    .await
-                    .is_err()
-            );
-        }
+        assert!(
+            validator
+                .state()
+                .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+                    counter_id,
+                    LayoutGenerationOption::None,
+                ))
+                .await
+                .is_ok(),
+            "All validators should have the counter object after consensus execution"
+        );
     }
 
     // Make a transaction to increment the counter.

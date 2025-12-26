@@ -2057,30 +2057,10 @@ async fn test_conflicting_transactions() {
             SuiErrorKind::ObjectLockConflict { .. }
         ));
 
-        // Verify that locks are set on both objects
-        let object_info = authority_state
-            .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                object.id(),
-                LayoutGenerationOption::None,
-            ))
-            .await
-            .unwrap();
-        let gas_info = authority_state
-            .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                gas_object.id(),
-                LayoutGenerationOption::None,
-            ))
-            .await
-            .unwrap();
-
-        assert!(
-            object_info.lock_for_debugging.is_some(),
-            "object should be locked"
-        );
-        assert!(
-            gas_info.lock_for_debugging.is_some(),
-            "gas should be locked"
-        );
+        // Note: With MFP, handle_vote_transaction doesn't store signed transactions,
+        // so lock_for_debugging returns None even though locks are acquired.
+        // The core test logic (exactly one tx succeeds, one fails with ObjectLockConflict)
+        // verifies that locking is working correctly.
 
         authority_state.database_for_testing().reset_locks_for_test(
             &[*tx1.digest(), *tx2.digest()],
