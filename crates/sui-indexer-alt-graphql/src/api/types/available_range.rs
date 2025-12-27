@@ -292,13 +292,13 @@ collect_pipelines! {
         pipelines.insert("obj_versions".to_string());
     };
 
-    MoveDatatype.[module, name] => IMoveDatatype.*;
+    MoveDatatype.[module, name, fullyQualifiedName] => IMoveDatatype.*;
     MoveDatatype.[abilities, typeParameters] => IMoveDatatype.*;
     MoveDatatype.[asMoveEnum, asMoveStruct] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
     };
 
-    MoveEnum.[module, name] => IMoveDatatype.*;
+    MoveEnum.[module, name, fullyQualifiedName] => IMoveDatatype.*;
     MoveEnum.[abilities, typeParameters] => IMoveDatatype.*;
     MoveEnum.[variants] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
@@ -321,7 +321,7 @@ collect_pipelines! {
     MovePackage.[digest, objectBcs, owner, previousTransaction, storageRebate, version] => IObject.*;
     MovePackage.[receivedTransactions] => IObject.receivedTransactions();
 
-    MoveStruct.[module, name] => IMoveDatatype.*;
+    MoveStruct.[module, name, fullyQualifiedName] => IMoveDatatype.*;
     MoveStruct.[abilities, typeParameters] => IMoveDatatype.*;
     MoveStruct.[fields] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());

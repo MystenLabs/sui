@@ -662,6 +662,9 @@ IMoveDatatype.module
 IMoveDatatype.name
   => {}
 
+IMoveDatatype.fullyQualifiedName
+  => {}
+
 IMoveDatatype.abilities
   => {"obj_versions"}
 
@@ -761,6 +764,9 @@ MoveDatatype.module
 MoveDatatype.name
   => {}
 
+MoveDatatype.fullyQualifiedName
+  => {}
+
 MoveDatatype.abilities
   => {"obj_versions"}
 
@@ -783,6 +789,9 @@ MoveEnum.module
   => {}
 
 MoveEnum.name
+  => {}
+
+MoveEnum.fullyQualifiedName
   => {}
 
 MoveEnum.abilities
@@ -1041,6 +1050,9 @@ MoveStruct.module
   => {}
 
 MoveStruct.name
+  => {}
+
+MoveStruct.fullyQualifiedName
   => {}
 
 MoveStruct.abilities
