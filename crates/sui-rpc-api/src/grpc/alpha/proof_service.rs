@@ -225,6 +225,9 @@ fn get_object_inclusion_proof_impl(
     let object_data_bytes =
         bcs::to_bytes(&object).map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
 
+    let checkpoint_summary_bytes = bcs::to_bytes(&checkpoint_data.summary)
+        .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?;
+
     let mut obj_ref = sui_rpc::proto::sui::rpc::v2::ObjectReference::default();
     obj_ref.object_id = Some(object_ref.0.to_string());
     obj_ref.version = Some(object_ref.1.value());
@@ -234,5 +237,6 @@ fn get_object_inclusion_proof_impl(
         object_ref: Some(obj_ref),
         inclusion_proof: Some(proto_inclusion_proof),
         object_data: Some(object_data_bytes),
+        checkpoint_summary: Some(checkpoint_summary_bytes),
     })
 }
