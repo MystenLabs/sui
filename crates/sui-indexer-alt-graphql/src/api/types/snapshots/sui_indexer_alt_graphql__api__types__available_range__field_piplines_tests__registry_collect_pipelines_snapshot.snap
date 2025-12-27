@@ -800,6 +800,9 @@ MoveFunction.module
 MoveFunction.name
   => {}
 
+MoveFunction.fullyQualifiedName
+  => {}
+
 MoveFunction.isEntry
   => {}
 
