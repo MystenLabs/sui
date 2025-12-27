@@ -1560,6 +1560,10 @@ interface IMoveDatatype {
 	"""
 	abilities: [MoveAbility!]
 	"""
+	The datatype's fully-qualified name, including package address, module name, and datatype name.
+	"""
+	fullyQualifiedName: String!
+	"""
 	The module that this datatype is defined in
 	"""
 	module: MoveModule!
@@ -1787,6 +1791,10 @@ type MoveDatatype implements IMoveDatatype {
 	"""
 	asMoveStruct: MoveStruct
 	"""
+	The datatype's fully-qualified name, including package address, module name, and datatype name.
+	"""
+	fullyQualifiedName: String!
+	"""
 	The module that this datatype is defined in.
 	"""
 	module: MoveModule!
@@ -1855,6 +1863,10 @@ type MoveEnum implements IMoveDatatype {
 	Abilities on this enum definition.
 	"""
 	abilities: [MoveAbility!]
+	"""
+	The enum's fully-qualified name, including package address, module name, and datatype name.
+	"""
+	fullyQualifiedName: String!
 	"""
 	The module that this enum is defined in.
 	"""
@@ -2422,6 +2434,10 @@ type MoveStruct implements IMoveDatatype {
 	Field types reference type parameters by their index in the defining struct's `typeParameters` list.
 	"""
 	fields: [MoveField!]
+	"""
+	The struct's fully-qualified name, including package address, module name, and datatype name.
+	"""
+	fullyQualifiedName: String!
 	"""
 	The module that this struct is defined in.
 	"""

@@ -35,6 +35,11 @@ use super::{
         desc = "The datatype's unqualified name",
     ),
     field(
+        name = "fully_qualified_name",
+        ty = "Result<String, RpcError>",
+        desc = "The datatype's fully-qualified name, including package address, module name, and datatype name.",
+    ),
+    field(
         name = "abilities",
         ty = "Option<Result<Vec<MoveAbility>, RpcError>>",
         desc = "Abilities on this datatype definition.",
@@ -103,6 +108,16 @@ impl MoveDatatype {
         Ok(&self.name)
     }
 
+    /// The datatype's fully-qualified name, including package address, module name, and datatype name.
+    async fn fully_qualified_name(&self, _ctx: &Context<'_>) -> Result<String, RpcError> {
+        Ok(format!(
+            "{}::{}::{}",
+            self.module.package.address_impl(),
+            self.module.name,
+            self.name
+        ))
+    }
+
     /// Abilities on this datatype definition.
     async fn abilities(&self, ctx: &Context<'_>) -> Option<Result<Vec<MoveAbility>, RpcError>> {
         let def = self.contents(ctx).await.ok()?.as_ref()?;
@@ -161,6 +176,11 @@ impl MoveEnum {
         self.super_.name(ctx).await
     }
 
+    /// The enum's fully-qualified name, including package address, module name, and datatype name.
+    async fn fully_qualified_name(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
+        self.super_.fully_qualified_name(ctx).await
+    }
+
     /// Abilities on this enum definition.
     async fn abilities(&self, ctx: &Context<'_>) -> Option<Result<Vec<MoveAbility>, RpcError>> {
         self.super_.abilities(ctx).await.ok()?
@@ -202,6 +222,11 @@ impl MoveStruct {
     /// The struct's unqualified name.
     async fn name(&self, ctx: &Context<'_>) -> Result<&str, RpcError> {
         self.super_.name(ctx).await
+    }
+
+    /// The struct's fully-qualified name, including package address, module name, and datatype name.
+    async fn fully_qualified_name(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
+        self.super_.fully_qualified_name(ctx).await
     }
 
     /// Abilities on this struct definition.
