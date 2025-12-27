@@ -418,7 +418,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
             || matches!(
                 first_ty.value.type_name(),
                 Some(sp!(_, TypeName_::ModuleType(m, n)))
-                    if m == context.current_module() && n.value() == otw_name
+                    if m.as_ref() == context.current_module() && n.value() == otw_name
             );
         if !is_otw {
             let msg = format!(
@@ -1026,7 +1026,7 @@ fn check_event_emit(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
         debug_assert!(false, "ICE arity should have been expanded for errors");
         return;
     };
-    let is_defined_in_current_module = matches!(first_ty.value.type_name(), Some(sp!(_, TypeName_::ModuleType(m, _))) if m == current_module);
+    let is_defined_in_current_module = matches!(first_ty.value.type_name(), Some(sp!(_, TypeName_::ModuleType(m, _))) if m.as_ref() == current_module);
     if !is_defined_in_current_module {
         let msg = format!(
             "Invalid event. The function '{}::{}' must be called with a type defined in the current module",
@@ -1057,7 +1057,7 @@ fn check_dynamic_coin_creation(context: &mut Context, loc: Loc, mcall: &ModuleCa
         debug_assert!(false, "ICE arity should have been expanded for errors");
         return;
     };
-    let is_defined_in_current_module = matches!(first_ty.value.type_name(), Some(sp!(_, TypeName_::ModuleType(m, _))) if m == current_module);
+    let is_defined_in_current_module = matches!(first_ty.value.type_name(), Some(sp!(_, TypeName_::ModuleType(m, _))) if m.as_ref() == current_module);
     if !is_defined_in_current_module {
         let msg = format!(
             "Invalid coin creation. The function '{}::{}' must be called with a type defined in the current module",
@@ -1099,7 +1099,7 @@ fn check_private_transfer(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
         Some(sp!(_, TypeName_::Multiple(_))) | Some(sp!(_, TypeName_::Builtin(_))) | None => {
             (false, None)
         }
-        Some(sp!(_, TypeName_::ModuleType(m, n))) => (m == current_module, Some((m, n))),
+        Some(sp!(_, TypeName_::ModuleType(m, n))) => (m.as_ref() == current_module, Some((m, n))),
     };
     if !in_current_module {
         let mut msg = format!(
@@ -1166,7 +1166,7 @@ fn check_internal_permit(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
         Some(sp!(_, TypeName_::Multiple(_))) | Some(sp!(_, TypeName_::Builtin(_))) | None => {
             (false, None)
         }
-        Some(sp!(_, TypeName_::ModuleType(m, n))) => (m == current_module, Some((m, n))),
+        Some(sp!(_, TypeName_::ModuleType(m, n))) => (m.as_ref() == current_module, Some((m, n))),
     };
     if !in_current_module {
         let mut msg = format!(

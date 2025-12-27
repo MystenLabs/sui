@@ -115,7 +115,8 @@ pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
                     )
                 }
             }
-            TypeName_::ModuleType(sp!(_, mod_ident), datatype_name) => {
+            TypeName_::ModuleType(mod_ident, datatype_name) => {
+                let mod_ident = &mod_ident.value;
                 let type_args = if ss.is_empty() {
                     "".to_string()
                 } else {

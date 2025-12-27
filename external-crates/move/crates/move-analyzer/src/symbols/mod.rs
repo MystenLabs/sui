@@ -1027,7 +1027,8 @@ pub fn type_def_loc(
 ) -> Option<Loc> {
     match t.inner() {
         TypeInner::Ref(_, r) => type_def_loc(mod_outer_defs, r),
-        TypeInner::Apply(_, sp!(_, TypeName_::ModuleType(sp!(_, mod_ident), struct_name)), _) => {
+        TypeInner::Apply(_, sp!(_, TypeName_::ModuleType(mod_ident, struct_name)), _) => {
+            let mod_ident = &mod_ident.value;
             let mod_ident_str = expansion_mod_ident_to_map_key(mod_ident);
             mod_outer_defs
                 .get(&mod_ident_str)
