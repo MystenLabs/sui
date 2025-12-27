@@ -76,6 +76,7 @@ pub fn verify<Mode: ExecutionMode>(_env: &Env, txn: &T::Transaction) -> Result<(
         withdrawals: _,
         pure,
         receiving,
+        withdrawal_compatibility_conversions: _,
         commands,
     } = txn;
     for pure in pure {

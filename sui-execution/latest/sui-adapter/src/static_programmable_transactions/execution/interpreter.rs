@@ -77,6 +77,7 @@ where
         withdrawals,
         pure,
         receiving,
+        withdrawal_compatibility_conversions: _,
         commands,
     } = ast;
     let mut context = Context::new(

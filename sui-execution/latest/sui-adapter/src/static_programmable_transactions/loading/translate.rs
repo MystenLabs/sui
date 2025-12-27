@@ -108,6 +108,10 @@ fn input<Mode: ExecutionMode>(
             )
         }
         CallArg::FundsWithdrawal(f) => {
+            assert_invariant!(
+                env.protocol_config.enable_accumulators(),
+                "Withdrawals should be rejected at signing if accumulators are not enabled"
+            );
             let FundsWithdrawalArg {
                 reservation,
                 type_arg,
@@ -142,6 +146,8 @@ fn input<Mode: ExecutionMode>(
             };
             (
                 L::InputArg::FundsWithdrawal(L::FundsWithdrawalArg {
+                    // TODO populate this field when we add support for compatibility objects
+                    from_compatibility_object: false,
                     amount,
                     ty: ty.clone(),
                     owner,
