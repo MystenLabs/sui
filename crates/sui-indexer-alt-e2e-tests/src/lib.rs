@@ -211,12 +211,16 @@ impl FullCluster {
         let consistent_store = self
             .offchain
             .wait_for_consistent_store(checkpoint.sequence_number, Duration::from_secs(10));
+
+        try_join!(indexer, consistent_store)
+            .expect("Timed out waiting for indexer and consistent store");
+
+        // graphql depends on indexer and consistent store
         let graphql = self
             .offchain
-            .wait_for_graphql(checkpoint.sequence_number, Duration::from_secs(10));
+            .wait_for_graphql(checkpoint.sequence_number, Duration::from_secs(20));
 
-        try_join!(indexer, consistent_store, graphql)
-            .expect("Timed out waiting for indexer and consistent store");
+        try_join!(graphql).expect("Timed out waiting for graphql");
 
         checkpoint
     }
