@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulators::funds_read::AccountFundsRead;
 use crate::authority::AuthorityStore;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
@@ -71,6 +72,7 @@ pub struct ExecutionCacheTraitPointers {
     pub state_sync_store: Arc<dyn StateSyncAPI>,
     pub cache_commit: Arc<dyn ExecutionCacheCommit>,
     pub testing_api: Arc<dyn TestingAPI>,
+    pub account_funds_read: Arc<dyn AccountFundsRead>,
 }
 
 impl ExecutionCacheTraitPointers {
@@ -88,6 +90,7 @@ impl ExecutionCacheTraitPointers {
             + StateSyncAPI
             + ExecutionCacheCommit
             + TestingAPI
+            + AccountFundsRead
             + 'static,
     {
         Self {
@@ -104,6 +107,7 @@ impl ExecutionCacheTraitPointers {
             state_sync_store: cache.clone(),
             cache_commit: cache.clone(),
             testing_api: cache.clone(),
+            account_funds_read: cache.clone(),
         }
     }
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    accumulators::funds_read::AccountFundsRead,
     authority::{
         AuthorityMetrics, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
         shared_object_version_manager::Schedulable,
@@ -33,7 +34,7 @@ use sui_types::{
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     execution_params::FundsWithdrawStatus,
-    storage::{ChildObjectResolver, InputKey},
+    storage::InputKey,
     transaction::{
         SenderSignedData, SharedInputObject, SharedObjectMutability, TransactionData,
         TransactionDataAPI, TransactionKey,
@@ -131,7 +132,7 @@ impl Drop for PendingGuard<'_> {
 impl ExecutionScheduler {
     pub fn new(
         object_cache_read: Arc<dyn ObjectCacheRead>,
-        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+        account_funds_read: Arc<dyn AccountFundsRead>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -142,7 +143,7 @@ impl ExecutionScheduler {
             Self::initialize_funds_withdraw_scheduler(
                 epoch_store,
                 &object_cache_read,
-                child_object_resolver,
+                account_funds_read,
             );
         Self {
             object_cache_read,
@@ -160,7 +161,7 @@ impl ExecutionScheduler {
     fn initialize_funds_withdraw_scheduler(
         epoch_store: &Arc<AuthorityPerEpochStore>,
         object_cache_read: &Arc<dyn ObjectCacheRead>,
-        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+        account_funds_read: Arc<dyn AccountFundsRead>,
     ) -> (
         Option<FundsWithdrawScheduler>,
         Option<Box<dyn ObjectFundsWithdrawSchedulerTrait>>,
@@ -174,15 +175,13 @@ impl ExecutionScheduler {
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .expect("Accumulator root object must be present if funds accumulator is enabled")
             .version();
-        let address_funds_withdraw_scheduler = FundsWithdrawScheduler::new(
-            Arc::new(child_object_resolver.clone()),
-            starting_accumulator_version,
-        );
+        let address_funds_withdraw_scheduler =
+            FundsWithdrawScheduler::new(account_funds_read.clone(), starting_accumulator_version);
         let object_funds_withdraw_scheduler =
             if epoch_store.protocol_config().enable_object_funds_withdraw() {
                 let scheduler: Box<dyn ObjectFundsWithdrawSchedulerTrait> =
                     Box::new(NaiveObjectFundsWithdrawScheduler::new(
-                        Arc::new(child_object_resolver),
+                        account_funds_read,
                         starting_accumulator_version,
                     ));
                 Some(scheduler)
@@ -654,13 +653,13 @@ impl ExecutionScheduler {
     pub fn reconfigure(
         &self,
         new_epoch_store: &Arc<AuthorityPerEpochStore>,
-        child_object_resolver: &Arc<dyn ChildObjectResolver + Send + Sync>,
+        account_funds_read: &Arc<dyn AccountFundsRead>,
     ) {
         let (address_funds_withdraw_scheduler, object_funds_withdraw_scheduler) =
             Self::initialize_funds_withdraw_scheduler(
                 new_epoch_store,
                 &self.object_cache_read,
-                child_object_resolver.clone(),
+                account_funds_read.clone(),
             );
         let mut guard = self.address_funds_withdraw_scheduler.lock();
         if let Some(old_scheduler) = guard.as_ref() {
@@ -856,7 +855,7 @@ mod test {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = ExecutionScheduler::new(
             state.get_object_cache_reader().clone(),
-            state.get_child_object_resolver().clone(),
+            state.get_account_funds_read().clone(),
             state.get_transaction_cache_reader().clone(),
             tx_ready_certificates,
             &state.epoch_store_for_testing(),
