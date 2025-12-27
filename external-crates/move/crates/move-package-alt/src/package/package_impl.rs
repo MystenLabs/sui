@@ -15,7 +15,6 @@ use tracing::debug;
 use super::manifest::Manifest;
 use super::package_lock::PackageSystemLock;
 use super::paths::PackagePath;
-use crate::errors::FileHandle;
 use crate::{
     compatibility::legacy::LegacyData,
     dependency::Pinned,
@@ -32,6 +31,7 @@ use crate::{
     package::manifest::Digest,
     schema::{Environment, OriginalID, PackageMetadata, PackageName, PublishedID},
 };
+use crate::{errors::FileHandle, package::root_package::PackageConfig};
 
 // TODO: is this the right way to handle this?
 static DUMMY_ADDRESSES: LazyLock<Mutex<u16>> = LazyLock::new(|| Mutex::new(0x1000));
@@ -82,9 +82,10 @@ impl<F: MoveFlavor> Package<F> {
         dep: Pinned,
         env: &Environment,
         mtx: &PackageSystemLock,
+        config: &PackageConfig,
     ) -> PackageResult<Self> {
         debug!("loading package {:?}", dep);
-        let path = FetchedDependency::fetch(&dep).await?;
+        let path = FetchedDependency::fetch(&dep, config.allow_dirty).await?;
 
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
@@ -317,6 +318,7 @@ impl<F: MoveFlavor> Package<F> {
 pub async fn cache_package<F: MoveFlavor>(
     env: &Environment,
     manifest_dep: &ManifestDependencyInfo,
+    config: &PackageConfig,
 ) -> PackageResult<CachedPackageInfo> {
     // We need some file handles and things to give context to the dep loading system
     let tempdir = tempdir().expect("can create a temporary directory");
@@ -347,7 +349,7 @@ pub async fn cache_package<F: MoveFlavor>(
     let deps = PinnedDependencyInfo::pin::<F>(&root, vec![combined], env.id()).await?;
 
     // load
-    let package = Package::<F>::load(deps[0].as_ref().clone(), env, &mtx).await?;
+    let package = Package::<F>::load(deps[0].as_ref().clone(), env, &mtx, &config).await?;
 
     // summarize
     Ok(CachedPackageInfo {

@@ -39,11 +39,11 @@ impl FetchedDependency {
     /// Assumes that `pinned` is already normalized - paths of any local dependencies are relative
     /// to the current working directory, and local dependencies of git dependencies have been
     /// transformed into git dependencies
-    pub async fn fetch(pinned: &Pinned) -> FetchResult<PackagePath> {
+    pub async fn fetch(pinned: &Pinned, allow_dirty: bool) -> FetchResult<PackagePath> {
         let path = match &pinned {
             Pinned::Git(dep) => dep
                 .inner
-                .fetch()
+                .checkout_repo(allow_dirty)
                 .await
                 .map_err(FetchError::from_git(pinned))?,
             _ => pinned.unfetched_path(),
