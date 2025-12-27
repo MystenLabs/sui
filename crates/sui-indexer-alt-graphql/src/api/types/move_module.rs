@@ -30,10 +30,10 @@ use super::{
 #[derive(Clone)]
 pub(crate) struct MoveModule {
     /// The package that this module was defined in.
-    package: MovePackage,
+    pub(crate) package: MovePackage,
 
     /// The module's unqualified name.
-    name: String,
+    pub(crate) name: String,
 
     /// The lazily loaded contents of the module, in raw and structured form.
     contents: Arc<OnceCell<Option<ModuleContents>>>,

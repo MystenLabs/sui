@@ -1949,6 +1949,10 @@ A function defined in a Move module.
 """
 type MoveFunction {
 	"""
+	The function's fully-qualified name, including package address, module name, and function name.
+	"""
+	fullyQualifiedName: String!
+	"""
 	Whether the function is marked `entry` or not.
 	"""
 	isEntry: Boolean

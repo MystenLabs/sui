@@ -47,6 +47,16 @@ impl MoveFunction {
         &self.name
     }
 
+    /// The function's fully-qualified name, including package address, module name, and function name.
+    async fn fully_qualified_name(&self) -> String {
+        format!(
+            "{}::{}::{}",
+            self.module.package.address_impl(),
+            self.module.name,
+            self.name
+        )
+    }
+
     /// Whether the function is marked `entry` or not.
     async fn is_entry(&self, ctx: &Context<'_>) -> Option<Result<bool, RpcError>> {
         let contents = self.contents(ctx).await.ok()?.as_ref()?;
