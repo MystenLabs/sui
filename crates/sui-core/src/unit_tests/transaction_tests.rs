@@ -51,14 +51,7 @@ macro_rules! assert_matches {
 
 use crate::{
     authority_client::NetworkAuthorityClient,
-    authority_server::{
-        AuthorityServer, AuthorityServerHandle, ValidatorService, ValidatorServiceMetrics,
-    },
-    checkpoints::CheckpointStore,
-    consensus_adapter::{
-        ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
-    },
-    mysticeti_adapter::LazyMysticetiClient,
+    authority_server::{AuthorityServer, AuthorityServerHandle},
 };
 
 use super::*;
@@ -501,34 +494,12 @@ async fn do_transaction_test_impl(
         rgp,
     );
 
-    // Create ValidatorService directly for testing (bypasses gRPC)
-    let consensus_adapter = Arc::new(ConsensusAdapter::new(
-        Arc::new(LazyMysticetiClient::new()),
-        CheckpointStore::new_for_tests(),
-        authority_state.name,
-        Arc::new(ConnectionMonitorStatusForTests {}),
-        100_000,
-        100_000,
-        None,
-        None,
-        ConsensusAdapterMetrics::new_test(),
-        authority_state
-            .epoch_store_for_testing()
-            .protocol_config()
-            .clone(),
-    ));
-    let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
-    let validator_service =
-        ValidatorService::new_for_tests(authority_state.clone(), consensus_adapter, metrics);
-
     post_sign_mutations(&mut transfer_transaction);
     post_sign_mutations(&mut move_call_transaction);
 
     let transactions = vec![transfer_transaction, move_call_transaction];
-    for transaction in &transactions {
-        let err = validator_service
-            .handle_transaction_for_testing(transaction.clone())
-            .unwrap_err();
+    for transaction in transactions {
+        let err = handle_transaction_for_test(&authority_state, transaction).unwrap_err();
         err_check(err.as_inner());
     }
 
@@ -922,9 +893,6 @@ async fn do_zklogin_transaction_test(
             .get(),
         1
     );
-
-    // Note: metrics.signature_errors is not checked because handle_transaction_for_test
-    // bypasses the AuthorityServer where this metric is tracked.
 
     check_locks(authority_state, object_ids).await;
 }

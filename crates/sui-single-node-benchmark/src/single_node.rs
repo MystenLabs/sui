@@ -111,7 +111,7 @@ impl SingleValidator {
     }
 
     pub async fn execute_raw_transaction(&self, transaction: Transaction) -> TransactionEffects {
-        let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
+        let executable = VerifiedExecutableTransaction::new_from_consensus(
             VerifiedTransaction::new_unchecked(transaction),
             0,
         );
@@ -144,7 +144,7 @@ impl SingleValidator {
 
     /// Creates a VerifiedExecutableTransaction from a Transaction using MFP style certification.
     fn create_executable(&self, transaction: Transaction) -> VerifiedExecutableTransaction {
-        VerifiedExecutableTransaction::new_from_quorum_execution(
+        VerifiedExecutableTransaction::new_from_consensus(
             VerifiedTransaction::new_unchecked(transaction),
             self.epoch_store.epoch(),
         )

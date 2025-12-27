@@ -475,8 +475,7 @@ async fn test_certificate_deny() {
         .handle_vote_transaction(&epoch_store, tx.clone())
         .unwrap();
     // Create an executable transaction as if certified by consensus
-    let executable =
-        VerifiedExecutableTransaction::new_from_quorum_execution(tx, epoch_store.epoch());
+    let executable = VerifiedExecutableTransaction::new_from_consensus(tx, epoch_store.epoch());
     let (effects, _) = state
         .try_execute_executable_for_test(&executable, ExecutionEnv::new())
         .await;

@@ -48,7 +48,9 @@ use sui_types::{
         ExecutionTimeObservation,
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
-    transaction::{SenderSignedData, TransactionKey, VerifiedTransaction, WithAliases},
+    transaction::{
+        SenderSignedData, TransactionKey, VerifiedCertificate, VerifiedTransaction, WithAliases,
+    },
 };
 use tokio::task::JoinSet;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -2262,11 +2264,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 SequencedConsensusTransactionKind::External(consensus_transaction) => {
                     match consensus_transaction.kind {
                         // === User transactions ===
-                        ConsensusTransactionKind::CertifiedTransaction(_) => {
-                            // DEPRECATED: CertifiedTransaction is no longer used since MFP is live.
-                            // No valid certificates can exist - honest validators don't sign for QD anymore.
-                            // Keep enum variant for wire format compatibility, but skip processing.
-                            debug!("Ignoring deprecated CertifiedTransaction in consensus output");
+                        ConsensusTransactionKind::CertifiedTransaction(cert) => {
+                            // Safe because signatures are verified when consensus called into SuiTxValidator::validate_batch.
+                            let cert = VerifiedCertificate::new_unchecked(*cert);
+                            let transaction =
+                                VerifiedExecutableTransaction::new_from_certificate(cert);
+                            commit_handler_input.user_transactions.push(
+                                VerifiedExecutableTransactionWithAliases::no_aliases(transaction),
+                            );
                         }
                         ConsensusTransactionKind::UserTransaction(tx) => {
                             // Safe because transactions are certified by consensus.
@@ -2528,9 +2533,12 @@ fn authenticator_state_update_transaction(
 
 pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     match &transaction.kind {
-        ConsensusTransactionKind::CertifiedTransaction(_) => {
-            // DEPRECATED: CertifiedTransaction is no longer used since MFP is live.
-            "deprecated_certificate"
+        ConsensusTransactionKind::CertifiedTransaction(certificate) => {
+            if certificate.is_consensus_tx() {
+                "shared_certificate"
+            } else {
+                "owned_certificate"
+            }
         }
         ConsensusTransactionKind::CheckpointSignature(_) => "checkpoint_signature",
         ConsensusTransactionKind::CheckpointSignatureV2(_) => "checkpoint_signature",
@@ -2672,8 +2680,7 @@ impl SequencedConsensusTransactionKind {
     pub fn executable_transaction_digest(&self) -> Option<TransactionDigest> {
         match self {
             SequencedConsensusTransactionKind::External(ext) => match &ext.kind {
-                // DEPRECATED: CertifiedTransaction is no longer processed since MFP is live.
-                ConsensusTransactionKind::CertifiedTransaction(_) => None,
+                ConsensusTransactionKind::CertifiedTransaction(txn) => Some(*txn.digest()),
                 ConsensusTransactionKind::UserTransaction(txn) => Some(*txn.digest()),
                 ConsensusTransactionKind::UserTransactionV2(txn) => Some(*txn.tx().digest()),
                 _ => None,
@@ -2735,11 +2742,10 @@ impl SequencedConsensusTransaction {
             return false;
         }
         match &self.transaction {
-            // DEPRECATED: CertifiedTransaction is no longer processed since MFP is live.
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::CertifiedTransaction(_),
+                kind: ConsensusTransactionKind::CertifiedTransaction(cert),
                 ..
-            }) => false,
+            }) => cert.transaction_data().uses_randomness(),
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(txn),
                 ..
@@ -2754,11 +2760,10 @@ impl SequencedConsensusTransaction {
 
     pub fn as_consensus_txn(&self) -> Option<&SenderSignedData> {
         match &self.transaction {
-            // DEPRECATED: CertifiedTransaction is no longer processed since MFP is live.
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::CertifiedTransaction(_),
+                kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
                 ..
-            }) => None,
+            }) if certificate.is_consensus_tx() => Some(certificate.data()),
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(txn),
                 ..

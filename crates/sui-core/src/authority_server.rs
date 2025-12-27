@@ -474,6 +474,36 @@ impl ValidatorService {
         Ok(())
     }
 
+    /// Test method that performs transaction validation with overload checking.
+    /// Used for testing validator overload behavior.
+    pub fn handle_transaction_for_testing_with_overload_check(
+        &self,
+        transaction: Transaction,
+    ) -> SuiResult<()> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+
+        // Validity check (basic structural validation)
+        transaction.validity_check(&epoch_store.tx_validity_check_context())?;
+
+        // Check system overload
+        self.state.check_system_overload(
+            self.consensus_adapter.as_ref(),
+            transaction.data(),
+            self.state.check_system_overload_at_signing(),
+        )?;
+
+        // Signature verification
+        let transaction = epoch_store
+            .verify_transaction_require_no_aliases(transaction)?
+            .into_tx();
+
+        // Validate the transaction
+        self.state
+            .handle_vote_transaction(&epoch_store, transaction)?;
+
+        Ok(())
+    }
+
     #[instrument(
         name = "ValidatorService::handle_submit_transaction",
         level = "error",

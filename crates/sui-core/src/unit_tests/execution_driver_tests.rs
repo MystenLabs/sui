@@ -5,16 +5,23 @@ use crate::authority::authority_test_utils::{
     assign_shared_object_versions, assign_versions_and_schedule,
 };
 use crate::authority::shared_object_version_manager::Schedulable;
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use crate::authority::{AuthorityState, ExecutionEnv};
 use crate::authority_client::AuthorityAPI;
+use crate::authority_server::{ValidatorService, ValidatorServiceMetrics};
+use crate::checkpoints::CheckpointStore;
+use crate::consensus_adapter::ConsensusAdapter;
+use crate::consensus_adapter::ConsensusAdapterMetrics;
+use crate::consensus_adapter::{ConnectionMonitorStatusForTests, MockConsensusClient};
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
-use crate::test_utils::make_transfer_object_move_transaction;
+use crate::test_utils::{make_transfer_object_move_transaction, make_transfer_object_transaction};
 use crate::unit_test_utils::{
     init_local_authorities, init_local_authorities_with_overload_thresholds,
 };
 use sui_protocol_config::ProtocolConfig;
 
+use sui_types::error::SuiErrorKind;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_grpc::VerifiedObjectInfoResponse;
 use sui_types::transaction::VerifiedTransaction;
@@ -254,7 +261,7 @@ async fn pending_exec_full() {
  */
 
 // Helper to create a VerifiedExecutableTransaction.
-// This uses CertificateProof::QuorumExecuted instead of collecting validator signatures.
+// This uses CertificateProof::Consensus to simulate consensus-certified transactions.
 fn create_executable_transaction(
     authority_clients: &[Arc<SafeClient<LocalAuthorityClient>>],
     txn: &Transaction,
@@ -263,9 +270,9 @@ fn create_executable_transaction(
     let state = &authority_clients[0].authority_client().state;
     let epoch = state.epoch_store_for_testing().epoch();
 
-    // Verify the transaction and create executable with MFP-style proof
+    // Verify the transaction and create executable with consensus proof
     let verified_tx = VerifiedTransaction::new_unchecked(txn.clone());
-    VerifiedExecutableTransaction::new_from_quorum_execution(verified_tx, epoch)
+    VerifiedExecutableTransaction::new_from_consensus(verified_tx, epoch)
 }
 
 // Helper to execute an owned object transaction on authorities.
@@ -741,4 +748,126 @@ async fn test_txn_age_overload() {
         "{}",
         message
     );
+}
+
+// Tests that when validator is in load shedding mode, it can pushback txn signing correctly.
+#[tokio::test]
+async fn test_authority_txn_signing_pushback() {
+    telemetry_subscribers::init_for_testing();
+
+    // Create one sender, two recipients addresses, and 2 gas objects.
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (recipient1, _): (_, AccountKeyPair) = get_key_pair();
+    let (recipient2, _): (_, AccountKeyPair) = get_key_pair();
+    let gas_object1 = Object::with_owner_for_testing(sender);
+    let gas_object2 = Object::with_owner_for_testing(sender);
+
+    // Initialize an AuthorityState. Disable overload monitor by setting max_load_shedding_percentage to 0;
+    // Set check_system_overload_at_signing to true.
+    let overload_config = AuthorityOverloadConfig {
+        check_system_overload_at_signing: true,
+        max_load_shedding_percentage: 0,
+        ..Default::default()
+    };
+    let authority_state = TestAuthorityBuilder::new()
+        .with_authority_overload_config(overload_config)
+        .build()
+        .await;
+    authority_state
+        .insert_genesis_objects(&[gas_object1.clone(), gas_object2.clone()])
+        .await;
+
+    // Create a validator service around the `authority_state`.
+    let epoch_store = authority_state.epoch_store_for_testing();
+    let consensus_adapter = Arc::new(ConsensusAdapter::new(
+        Arc::new(MockConsensusClient::new()),
+        CheckpointStore::new_for_tests(),
+        authority_state.name,
+        Arc::new(ConnectionMonitorStatusForTests {}),
+        100_000,
+        100_000,
+        None,
+        None,
+        ConsensusAdapterMetrics::new_test(),
+        epoch_store.protocol_config().clone(),
+    ));
+    let validator_service = Arc::new(ValidatorService::new_for_tests(
+        authority_state.clone(),
+        consensus_adapter,
+        Arc::new(ValidatorServiceMetrics::new_for_tests()),
+    ));
+
+    // Manually make the authority into overload state and reject 100% of traffic.
+    authority_state.overload_info.set_overload(100);
+
+    // First, create a transaction to transfer `gas_object1` to `recipient1`.
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+    let tx = make_transfer_object_transaction(
+        gas_object1.compute_object_reference(),
+        gas_object2.compute_object_reference(),
+        sender,
+        &sender_key,
+        recipient1,
+        rgp,
+    );
+
+    // Txn shouldn't get signed with ValidatorOverloadedRetryAfter error.
+    let result = validator_service.handle_transaction_for_testing_with_overload_check(tx.clone());
+    assert!(matches!(
+        result.unwrap_err().into_inner(),
+        SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+    ));
+
+    // Check that the input object should be locked by the above transaction.
+    let lock_tx = authority_state
+        .get_transaction_lock(&gas_object1.compute_object_reference(), &epoch_store)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(tx.digest(), lock_tx.digest());
+
+    // Send the same txn again. Although objects are locked, since authority is in load shedding mode,
+    // it should still pushback the transaction.
+    let error = validator_service
+        .handle_transaction_for_testing_with_overload_check(tx.clone())
+        .unwrap_err();
+    assert!(matches!(
+        error.into_inner(),
+        SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+    ));
+
+    // Send another transaction, that send the same object to a different recipient.
+    // Transaction signing should failed with ObjectLockConflict error, since the object
+    // is already locked by the previous transaction.
+    let tx2 = make_transfer_object_transaction(
+        gas_object1.compute_object_reference(),
+        gas_object2.compute_object_reference(),
+        sender,
+        &sender_key,
+        recipient2,
+        rgp,
+    );
+    let error = validator_service
+        .handle_transaction_for_testing_with_overload_check(tx2)
+        .unwrap_err();
+    assert!(matches!(
+        error.into_inner(),
+        SuiErrorKind::ObjectLockConflict { .. }
+    ));
+
+    // Clear the authority overload status.
+    authority_state.overload_info.clear_overload();
+
+    // Re-send the first transaction, now the transaction can be successfully signed.
+    // Since objects are already locked by tx, this should succeed (returns the existing lock).
+    let result = validator_service.handle_transaction_for_testing_with_overload_check(tx.clone());
+    assert!(result.is_ok());
+
+    // Verify the lock is still held by the original transaction.
+    let lock_tx_after = authority_state
+        .get_transaction_lock(&gas_object1.compute_object_reference(), &epoch_store)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(lock_tx.digest(), lock_tx_after.digest());
 }
