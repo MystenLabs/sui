@@ -16,7 +16,6 @@ colored.workspace = true
 dirs-next.workspace = true
 hex.workspace = true
 insta = { workspace = true, features = ["serde"] }
-once_cell.workspace = true
 packed_struct.workspace = true
 serde.workspace = true
 sha2.workspace = true

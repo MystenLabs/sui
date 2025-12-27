@@ -22,7 +22,6 @@ move-docgen.workspace = true
 move-model-2.workspace = true
 move-package-alt.workspace = true
 move-symbol-pool.workspace = true
-once_cell.workspace = true
 petgraph.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true

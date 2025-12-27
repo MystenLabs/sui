@@ -9,13 +9,12 @@ use crate::debug::DebugContext;
 use ::{
     move_binary_format::file_format::Bytecode,
     move_vm_types::values::Locals,
-    once_cell::sync::Lazy,
     std::{
         env,
         fs::{File, OpenOptions},
         io::Write,
         process,
-        sync::Mutex,
+        sync::{LazyLock, Mutex},
         thread,
     },
 };
@@ -33,19 +32,20 @@ const MOVE_VM_TRACING_ENV_VAR_NAME: &str = "MOVE_VM_TRACE";
 const MOVE_VM_STEPPING_ENV_VAR_NAME: &str = "MOVE_VM_STEP";
 
 #[cfg(any(debug_assertions, feature = "tracing"))]
-static FILE_PATH: Lazy<String> = Lazy::new(|| {
+static FILE_PATH: LazyLock<String> = LazyLock::new(|| {
     env::var(MOVE_VM_TRACING_ENV_VAR_NAME).unwrap_or_else(|_| "move_vm_trace.trace".to_string())
 });
 
 #[cfg(any(debug_assertions, feature = "tracing"))]
-static TRACING_ENABLED: Lazy<bool> = Lazy::new(|| env::var(MOVE_VM_TRACING_ENV_VAR_NAME).is_ok());
+static TRACING_ENABLED: LazyLock<bool> =
+    LazyLock::new(|| env::var(MOVE_VM_TRACING_ENV_VAR_NAME).is_ok());
 
 #[cfg(any(debug_assertions, feature = "tracing"))]
-static DEBUGGING_ENABLED: Lazy<bool> =
-    Lazy::new(|| env::var(MOVE_VM_STEPPING_ENV_VAR_NAME).is_ok());
+static DEBUGGING_ENABLED: LazyLock<bool> =
+    LazyLock::new(|| env::var(MOVE_VM_STEPPING_ENV_VAR_NAME).is_ok());
 
 #[cfg(any(debug_assertions, feature = "tracing"))]
-static LOGGING_FILE: Lazy<Mutex<File>> = Lazy::new(|| {
+static LOGGING_FILE: LazyLock<Mutex<File>> = LazyLock::new(|| {
     Mutex::new(
         OpenOptions::new()
             .create(true)
@@ -56,7 +56,8 @@ static LOGGING_FILE: Lazy<Mutex<File>> = Lazy::new(|| {
 });
 
 #[cfg(any(debug_assertions, feature = "tracing"))]
-static DEBUG_CONTEXT: Lazy<Mutex<DebugContext>> = Lazy::new(|| Mutex::new(DebugContext::new()));
+static DEBUG_CONTEXT: LazyLock<Mutex<DebugContext>> =
+    LazyLock::new(|| Mutex::new(DebugContext::new()));
 
 // Only include in debug builds
 #[cfg(any(debug_assertions, feature = "tracing"))]

@@ -2,28 +2,25 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    io::BufRead,
-    path::{Path, PathBuf},
-    process::Stdio,
-};
-
-use indoc::formatdoc;
-use path_clean::PathClean;
-use tokio::process::Command;
-use tracing::debug;
-
 use crate::{
+    git::errors::{GitError, GitResult},
     logging::{user_info, user_note},
     package::package_lock::PackageSystemLock,
     schema::GitSha,
 };
 
-use super::errors::{GitError, GitResult};
+use indoc::formatdoc;
+use path_clean::PathClean;
+use std::{
+    io::BufRead,
+    path::{Path, PathBuf},
+    process::Stdio,
+    sync::OnceLock,
+};
+use tokio::process::Command;
+use tracing::debug;
 
-use once_cell::sync::OnceCell;
-
-static CONFIG: OnceCell<String> = OnceCell::new();
+static CONFIG: OnceLock<String> = OnceLock::new();
 
 // TODO: this should be moved into [crate::dependency::git]
 pub(crate) fn get_cache_path() -> &'static str {

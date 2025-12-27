@@ -3,16 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::location::*;
+
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
     runtime_value::MoveValue,
 };
 use move_symbol_pool::Symbol;
-use once_cell::sync::Lazy;
+
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeSet, HashSet, VecDeque},
     fmt,
+    sync::LazyLock,
 };
 
 //**************************************************************************************************
@@ -754,7 +756,7 @@ impl Program {
     }
 }
 
-static SELF_MODULE_NAME: Lazy<Symbol> = Lazy::new(|| Symbol::from("Self"));
+static SELF_MODULE_NAME: LazyLock<Symbol> = LazyLock::new(|| Symbol::from("Self"));
 
 impl ModuleName {
     /// Name for the current module handle

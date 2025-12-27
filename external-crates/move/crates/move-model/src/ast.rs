@@ -6,18 +6,18 @@
 //! Note that in this crate, specs are represented in AST form, whereas code is represented
 //! as bytecodes. Therefore we do not need an AST for the Move code itself.
 
+use crate::{
+    model::NodeId,
+    symbol::{Symbol, SymbolPool},
+};
+
+use num::{BigInt, BigUint, Num};
+
 use std::{
     fmt,
     fmt::{Debug, Error, Formatter},
     hash::Hash,
-};
-
-use num::{BigInt, BigUint, Num};
-use once_cell::sync::Lazy;
-
-use crate::{
-    model::NodeId,
-    symbol::{Symbol, SymbolPool},
+    sync::LazyLock,
 };
 
 const MAX_ADDR_STRING: &str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
@@ -114,8 +114,8 @@ impl ModuleName {
     /// Determine whether this is a script. The move-compiler infrastructure uses MAX_ADDR
     /// for pseudo modules created from scripts, so use this address to check.
     pub fn is_script(&self) -> bool {
-        static MAX_ADDR: Lazy<BigUint> =
-            Lazy::new(|| BigUint::from_str_radix(MAX_ADDR_STRING, 16).expect("valid hex"));
+        static MAX_ADDR: LazyLock<BigUint> =
+            LazyLock::new(|| BigUint::from_str_radix(MAX_ADDR_STRING, 16).expect("valid hex"));
         self.0 == *MAX_ADDR
     }
 }

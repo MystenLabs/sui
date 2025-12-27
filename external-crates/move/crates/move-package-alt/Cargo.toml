@@ -25,7 +25,6 @@ move-compiler.workspace = true
 move-core-types.workspace = true
 move-symbol-pool.workspace = true
 named-lock.workspace = true
-once_cell.workspace = true
 path-clean.workspace = true
 petgraph.workspace = true
 pretty_assertions.workspace = true

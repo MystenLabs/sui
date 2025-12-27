@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 /// An environment variable which can be set to cause the move compiler to generate
 /// file formats at a given version. Only version v5 and greater are supported.
@@ -25,7 +25,7 @@ pub fn read_bool_env_var(v: &str) -> bool {
     val.parse::<bool>() == Ok(true) || val.parse::<usize>() == Ok(1)
 }
 
-pub static MOVE_HOME: Lazy<String> = Lazy::new(|| {
+pub static MOVE_HOME: LazyLock<String> = LazyLock::new(|| {
     std::env::var("MOVE_HOME").unwrap_or_else(|_| {
         dirs_next::home_dir()
             .expect("user's home directory not found")

@@ -11,7 +11,6 @@ edition = "2024"
 
 [dependencies]
 criterion.workspace = true
-once_cell.workspace = true
 
 move-core-types.workspace = true
 move-compiler.workspace = true

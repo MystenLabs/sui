@@ -14,7 +14,6 @@ edition = "2024"
 [dependencies]
 serde.workspace = true
 hex.workspace = true
-once_cell.workspace = true
 
 move-core-types.workspace = true
 move-symbol-pool.workspace = true

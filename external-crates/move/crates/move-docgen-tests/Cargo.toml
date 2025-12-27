@@ -25,7 +25,6 @@ num.workspace = true
 regex.workspace = true
 anyhow.workspace = true
 serde.workspace = true
-once_cell.workspace = true
 tempfile.workspace = true
 insta.workspace = true
 tokio.workspace = true

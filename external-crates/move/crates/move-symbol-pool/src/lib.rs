@@ -24,9 +24,9 @@
 mod pool;
 pub mod symbol;
 
-use once_cell::sync::Lazy;
 use pool::Pool;
-use std::sync::Mutex;
+
+use std::sync::{LazyLock, Mutex};
 
 pub use symbol::Symbol;
 
@@ -111,7 +111,7 @@ static_symbols!(
 );
 
 /// The global, unique cache of strings.
-pub(crate) static SYMBOL_POOL: Lazy<Mutex<Pool>> = Lazy::new(|| Mutex::new(Pool::new()));
+pub(crate) static SYMBOL_POOL: LazyLock<Mutex<Pool>> = LazyLock::new(|| Mutex::new(Pool::new()));
 
 #[cfg(test)]
 mod tests {

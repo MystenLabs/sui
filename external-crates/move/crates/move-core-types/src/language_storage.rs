@@ -8,23 +8,25 @@ use crate::{
     identifier::{IdentStr, Identifier},
     parsing::types::{ParsedModuleId, ParsedStructType, ParsedType},
 };
-use indexmap::IndexSet;
+
 use move_proc_macros::test_variant_order;
-use once_cell::sync::Lazy;
+
+use indexmap::IndexSet;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Display, Formatter},
     str::FromStr,
+    sync::LazyLock,
 };
 
 /// Hex address: 0x1
 pub const CORE_CODE_ADDRESS: AccountAddress = AccountAddress::ONE;
 
 /// Rough estimate of abstract size for TypeTag
-pub static TYPETAG_ENUM_ABSTRACT_SIZE: Lazy<AbstractMemorySize> =
-    Lazy::new(|| ENUM_BASE_ABSTRACT_SIZE + BOX_ABSTRACT_SIZE);
+pub static TYPETAG_ENUM_ABSTRACT_SIZE: LazyLock<AbstractMemorySize> =
+    LazyLock::new(|| ENUM_BASE_ABSTRACT_SIZE + BOX_ABSTRACT_SIZE);
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
 #[test_variant_order(src/unit_tests/staged_enum_variant_order/type_tag.yaml)]

@@ -2,15 +2,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, path::Path};
-
 use crate::{
     framework::{CompiledState, MaybeNamedCompiledModule, MoveTestAdapter, run_test_impl},
     tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput},
 };
-use anyhow::{Error, Result, anyhow};
-use async_trait::async_trait;
-use clap::Parser;
+
 use move_binary_format::{
     CompiledModule,
     errors::{Location, VMError, VMResult},
@@ -32,8 +28,15 @@ use move_vm_runtime::{
     session::{SerializedReturnValues, Session},
 };
 use move_vm_test_utils::{InMemoryStorage, gas_schedule::GasStatus};
-use once_cell::sync::Lazy;
-use std::sync::Arc;
+
+use anyhow::{Error, Result, anyhow};
+use async_trait::async_trait;
+use clap::Parser;
+use std::{
+    collections::BTreeMap,
+    path::Path,
+    sync::{Arc, LazyLock},
+};
 
 const STD_ADDR: AccountAddress = AccountAddress::ONE;
 
@@ -295,7 +298,7 @@ impl SimpleVMTestAdapter {
     }
 }
 
-pub static PRECOMPILED_MOVE_STDLIB: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
+pub static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
@@ -318,7 +321,7 @@ pub static PRECOMPILED_MOVE_STDLIB: Lazy<PreCompiledProgramInfo> = Lazy::new(|| 
     }
 });
 
-static MOVE_STDLIB_COMPILED: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
+static MOVE_STDLIB_COMPILED: LazyLock<Vec<CompiledModule>> = LazyLock::new(|| {
     let (files, units_res) = move_compiler::Compiler::from_files(
         None,
         move_stdlib::source_files(),

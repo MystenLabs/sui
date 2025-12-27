@@ -32,11 +32,11 @@ use crate::{
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
-use once_cell::sync::Lazy;
+
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     convert::TryInto,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 
 //**************************************************************************************************
@@ -74,7 +74,7 @@ fn translate_block_label(lbl: N::BlockLabel) -> H::BlockLabel {
 }
 
 const TEMP_PREFIX: &str = "%";
-static TEMP_PREFIX_SYMBOL: Lazy<Symbol> = Lazy::new(|| TEMP_PREFIX.into());
+static TEMP_PREFIX_SYMBOL: LazyLock<Symbol> = LazyLock::new(|| TEMP_PREFIX.into());
 
 fn new_temp_name(context: &mut Context) -> Symbol {
     format!(

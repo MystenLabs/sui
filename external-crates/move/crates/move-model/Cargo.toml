@@ -23,7 +23,6 @@ codespan-reporting.workspace = true
 itertools.workspace = true
 log.workspace = true
 num.workspace = true
-once_cell.workspace = true
 regex.workspace = true
 anyhow.workspace = true
 serde.workspace = true
