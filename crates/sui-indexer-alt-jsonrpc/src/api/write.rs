@@ -8,7 +8,7 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 
 use crate::error::{client_error_to_error_object, invalid_params};
 

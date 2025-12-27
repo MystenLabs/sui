@@ -29,11 +29,9 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::messages_checkpoint::{VerifiedCheckpoint, VerifiedCheckpointContents};
-use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::object::Object;
 use sui_types::transaction::{
-    CertifiedTransaction, DEFAULT_VALIDATOR_GAS_PRICE, Transaction, TransactionDataAPI,
-    VerifiedCertificate, VerifiedTransaction,
+    DEFAULT_VALIDATOR_GAS_PRICE, Transaction, TransactionDataAPI, VerifiedTransaction,
 };
 
 #[derive(Clone)]
@@ -89,10 +87,6 @@ impl SingleValidator {
         self.validator_service.validator_state()
     }
 
-    pub fn get_epoch_store(&self) -> &Arc<AuthorityPerEpochStore> {
-        &self.epoch_store
-    }
-
     /// Publish a package, returns the package object and the updated gas object.
     pub async fn publish_package(
         &self,
@@ -117,7 +111,7 @@ impl SingleValidator {
     }
 
     pub async fn execute_raw_transaction(&self, transaction: Transaction) -> TransactionEffects {
-        let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
+        let executable = VerifiedExecutableTransaction::new_from_consensus(
             VerifiedTransaction::new_unchecked(transaction),
             0,
         );
@@ -148,20 +142,26 @@ impl SingleValidator {
         effects
     }
 
-    pub async fn execute_certificate(
+    /// Creates a VerifiedExecutableTransaction from a Transaction using MFP style certification.
+    fn create_executable(&self, transaction: Transaction) -> VerifiedExecutableTransaction {
+        VerifiedExecutableTransaction::new_from_consensus(
+            VerifiedTransaction::new_unchecked(transaction),
+            self.epoch_store.epoch(),
+        )
+    }
+
+    pub async fn execute_transaction(
         &self,
-        cert: CertifiedTransaction,
+        transaction: Transaction,
         assigned_versions: &AssignedVersions,
         component: Component,
     ) -> TransactionEffects {
+        let executable = self.create_executable(transaction);
         let effects = match component {
             Component::Baseline => {
-                let cert = VerifiedExecutableTransaction::new_from_certificate(
-                    VerifiedCertificate::new_unchecked(cert),
-                );
                 self.get_validator()
                     .try_execute_immediately(
-                        &cert,
+                        &executable,
                         ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
                         &self.epoch_store,
                     )
@@ -170,34 +170,33 @@ impl SingleValidator {
                     .0
             }
             Component::WithTxManager => {
-                let cert = VerifiedCertificate::new_unchecked(cert);
-                if cert.is_consensus_tx() {
-                    // For shared objects transactions, `execute_certificate` won't enqueue it because
-                    // it expects consensus to do so. However we don't have consensus, hence the manual enqueue.
+                if executable.is_consensus_tx() {
+                    // For shared objects transactions, we manually enqueue since we don't have consensus.
                     self.get_validator().execution_scheduler().enqueue(
                         vec![(
-                            VerifiedExecutableTransaction::new_from_certificate(cert.clone())
-                                .into(),
+                            executable.clone().into(),
                             ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
                         )],
                         &self.epoch_store,
                     );
                 }
                 self.get_validator()
-                    .wait_for_certificate_execution(&cert, &self.epoch_store)
+                    .wait_for_transaction_execution(&executable, &self.epoch_store)
                     .await
                     .unwrap()
             }
             Component::ValidatorWithoutConsensus | Component::ValidatorWithFakeConsensus => {
-                let response = self
-                    .validator_service
-                    .execute_certificate_for_testing(cert)
-                    .await
-                    .unwrap()
-                    .into_inner();
-                response.signed_effects.into_data()
+                // Execute the transaction directly using try_execute_executable_for_test
+                let (signed_effects, _) = self
+                    .get_validator()
+                    .try_execute_executable_for_test(
+                        &executable,
+                        ExecutionEnv::new().with_assigned_versions(assigned_versions.clone()),
+                    )
+                    .await;
+                signed_effects.into_inner().into_data()
             }
-            Component::TxnSigning | Component::CheckpointExecutor | Component::ExecutionOnly => {
+            Component::CheckpointExecutor | Component::ExecutionOnly => {
                 unreachable!()
             }
         };
@@ -208,17 +207,20 @@ impl SingleValidator {
     pub(crate) async fn execute_transaction_in_memory(
         &self,
         store: InMemoryObjectStore,
-        transaction: CertifiedTransaction,
+        transaction: Transaction,
         assigned_versions: &AssignedVersions,
     ) -> TransactionEffects {
-        let input_objects = transaction.transaction_data().input_objects().unwrap();
+        let input_objects = transaction
+            .data()
+            .intent_message()
+            .value
+            .input_objects()
+            .unwrap();
+        let executable = self.create_executable(transaction);
         let objects = store
-            .read_objects_for_execution(&transaction.key(), assigned_versions, &input_objects)
+            .read_objects_for_execution(&executable.key(), assigned_versions, &input_objects)
             .unwrap();
 
-        let executable = VerifiedExecutableTransaction::new_from_certificate(
-            VerifiedCertificate::new_unchecked(transaction),
-        );
         let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
             &executable,
             objects,
@@ -249,17 +251,9 @@ impl SingleValidator {
         effects
     }
 
-    pub async fn sign_transaction(&self, transaction: Transaction) -> HandleTransactionResponse {
-        self.validator_service
-            .handle_transaction_for_benchmarking(transaction)
-            .await
-            .unwrap()
-            .into_inner()
-    }
-
     pub(crate) async fn build_checkpoints(
         &self,
-        transactions: Vec<CertifiedTransaction>,
+        transactions: Vec<Transaction>,
         mut all_effects: BTreeMap<TransactionDigest, TransactionEffects>,
         checkpoint_size: usize,
     ) -> Vec<(VerifiedCheckpoint, VerifiedCheckpointContents)> {
@@ -273,10 +267,7 @@ impl SingleValidator {
         let mut checkpoints = vec![];
         for transaction in transactions {
             let effects = all_effects.remove(transaction.digest()).unwrap();
-            builder.push_transaction(
-                VerifiedTransaction::new_unchecked(transaction.into_unsigned()),
-                effects,
-            );
+            builder.push_transaction(VerifiedTransaction::new_unchecked(transaction), effects);
             if builder.size() == checkpoint_size {
                 let (checkpoint, _, full_contents) = builder.build(self, 0);
                 checkpoints.push((checkpoint, full_contents));
@@ -316,17 +307,13 @@ impl SingleValidator {
 
     pub(crate) async fn assigned_shared_object_versions(
         &self,
-        transactions: &[CertifiedTransaction],
+        transactions: &[Transaction],
     ) -> AssignedTxAndVersions {
-        let transactions: Vec<_> = transactions
+        let executables: Vec<_> = transactions
             .iter()
-            .map(|tx| {
-                VerifiedExecutableTransaction::new_from_certificate(
-                    VerifiedCertificate::new_unchecked(tx.clone()),
-                )
-            })
+            .map(|tx| self.create_executable(tx.clone()))
             .collect();
-        let assignables: Vec<_> = transactions.iter().map(Schedulable::Transaction).collect();
+        let assignables: Vec<_> = executables.iter().map(Schedulable::Transaction).collect();
         self.epoch_store
             .assign_shared_object_versions_idempotent(
                 self.get_validator().get_object_cache_reader().as_ref(),

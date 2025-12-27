@@ -15,7 +15,7 @@ use sui_types::committee::{QUORUM_THRESHOLD, TOTAL_VOTING_POWER};
 use sui_types::error::{
     ErrorCategory, SuiError, SuiErrorKind, SuiObjectResponseError, UserInputError,
 };
-use sui_types::quorum_driver_types::QuorumDriverError;
+use sui_types::transaction_driver_types::TransactionSubmissionError;
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -56,7 +56,7 @@ pub enum Error {
     TokioJoinError(#[from] JoinError),
 
     #[error(transparent)]
-    QuorumDriverError(#[from] QuorumDriverError),
+    TransactionSubmissionError(#[from] TransactionSubmissionError),
 
     #[error(transparent)]
     FastCryptoError(#[from] FastCryptoError),
@@ -151,26 +151,26 @@ impl From<Error> for ErrorObjectOwned {
                     None::<()>,
                 ),
             },
-            Error::QuorumDriverError(err) => {
+            Error::TransactionSubmissionError(err) => {
                 match err {
-                    QuorumDriverError::InvalidUserSignature(err) => ErrorObject::owned(
+                    TransactionSubmissionError::InvalidUserSignature(err) => ErrorObject::owned(
                         TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
                         format!("Invalid user signature: {err}"),
                         None::<()>,
                     ),
-                    QuorumDriverError::TxAlreadyFinalizedWithDifferentUserSignatures => {
+                    TransactionSubmissionError::TxAlreadyFinalizedWithDifferentUserSignatures => {
                         ErrorObject::owned(
                             TRANSACTION_EXECUTION_CLIENT_ERROR_CODE,
                             "The transaction is already finalized but with different user signatures",
                             None::<()>,
                         )
                     }
-                    QuorumDriverError::TimeoutBeforeFinality
-                    | QuorumDriverError::TimeoutBeforeFinalityWithErrors { .. }
-                    | QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts { .. } => {
-                        ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>)
-                    }
-                    QuorumDriverError::ObjectsDoubleUsed { conflicting_txes } => {
+                    TransactionSubmissionError::TimeoutBeforeFinality
+                    | TransactionSubmissionError::TimeoutBeforeFinalityWithErrors { .. }
+                    | TransactionSubmissionError::FailedWithTransientErrorAfterMaximumAttempts {
+                        ..
+                    } => ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>),
+                    TransactionSubmissionError::ObjectsDoubleUsed { conflicting_txes } => {
                         let weights: Vec<u64> =
                             conflicting_txes.values().map(|(_, stake)| *stake).collect();
                         let remaining: u64 = TOTAL_VOTING_POWER - weights.iter().sum::<u64>();
@@ -220,7 +220,7 @@ impl From<Error> for ErrorObjectOwned {
                             Some(new_map),
                         )
                     }
-                    QuorumDriverError::NonRecoverableTransactionError { errors } => {
+                    TransactionSubmissionError::NonRecoverableTransactionError { errors } => {
                         let new_errors: Vec<String> = errors
                             .into_iter()
                             // sort by total stake, descending, so users see the most prominent one first
@@ -273,16 +273,18 @@ impl From<Error> for ErrorObjectOwned {
                             None::<()>,
                         )
                     }
-                    QuorumDriverError::QuorumDriverInternalError(_) => ErrorObject::owned(
-                        INTERNAL_ERROR_CODE,
-                        "Internal error occurred while executing transaction.",
-                        None::<()>,
-                    ),
-                    QuorumDriverError::SystemOverload { .. }
-                    | QuorumDriverError::SystemOverloadRetryAfter { .. } => {
+                    TransactionSubmissionError::TransactionDriverInternalError(_) => {
+                        ErrorObject::owned(
+                            INTERNAL_ERROR_CODE,
+                            "Internal error occurred while executing transaction.",
+                            None::<()>,
+                        )
+                    }
+                    TransactionSubmissionError::SystemOverload { .. }
+                    | TransactionSubmissionError::SystemOverloadRetryAfter { .. } => {
                         ErrorObject::owned(TRANSIENT_ERROR_CODE, err.to_string(), None::<()>)
                     }
-                    QuorumDriverError::TransactionFailed { category, details } => {
+                    TransactionSubmissionError::TransactionFailed { category, details } => {
                         let code = match category {
                             ErrorCategory::Internal => INTERNAL_ERROR_CODE,
                             ErrorCategory::Aborted => TRANSIENT_ERROR_CODE,
@@ -378,14 +380,14 @@ mod tests {
         )
     }
 
-    mod match_quorum_driver_error_tests {
+    mod match_transaction_submission_error_tests {
         use sui_types::error::SuiErrorKind;
 
         use super::*;
 
         #[test]
         fn test_invalid_user_signature() {
-            let quorum_driver_error = QuorumDriverError::InvalidUserSignature(
+            let transaction_driver_error = TransactionSubmissionError::InvalidUserSignature(
                 SuiErrorKind::InvalidSignature {
                     error: "Test inner invalid signature".to_string(),
                 }
@@ -393,7 +395,7 @@ mod tests {
             );
 
             let error_object: ErrorObjectOwned =
-                Error::QuorumDriverError(quorum_driver_error).into();
+                Error::TransactionSubmissionError(transaction_driver_error).into();
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect![
@@ -404,10 +406,10 @@ mod tests {
 
         #[test]
         fn test_timeout_before_finality() {
-            let quorum_driver_error = QuorumDriverError::TimeoutBeforeFinality;
+            let transaction_driver_error = TransactionSubmissionError::TimeoutBeforeFinality;
 
             let error_object: ErrorObjectOwned =
-                Error::QuorumDriverError(quorum_driver_error).into();
+                Error::TransactionSubmissionError(transaction_driver_error).into();
             let expected_code = expect!["-32050"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect!["Transaction timed out before reaching finality"];
@@ -416,13 +418,13 @@ mod tests {
 
         #[test]
         fn test_failed_with_transient_error_after_maximum_attempts() {
-            let quorum_driver_error =
-                QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts {
+            let transaction_driver_error =
+                TransactionSubmissionError::FailedWithTransientErrorAfterMaximumAttempts {
                     total_attempts: 10,
                 };
 
             let error_object: ErrorObjectOwned =
-                Error::QuorumDriverError(quorum_driver_error).into();
+                Error::TransactionSubmissionError(transaction_driver_error).into();
             let expected_code = expect!["-32050"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect![
@@ -452,10 +454,11 @@ mod tests {
             let authority_name = AuthorityPublicKeyBytes([1; AuthorityPublicKey::LENGTH]);
             conflicting_txes.insert(tx_digest, (vec![(authority_name, object_ref)], stake_unit));
 
-            let quorum_driver_error = QuorumDriverError::ObjectsDoubleUsed { conflicting_txes };
+            let quorum_driver_error =
+                TransactionSubmissionError::ObjectsDoubleUsed { conflicting_txes };
 
             let error_object: ErrorObjectOwned =
-                Error::QuorumDriverError(quorum_driver_error).into();
+                Error::TransactionSubmissionError(quorum_driver_error).into();
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             println!("error_object.message() {}", error_object.message());
@@ -513,10 +516,11 @@ mod tests {
                 ),
             );
 
-            let quorum_driver_error = QuorumDriverError::ObjectsDoubleUsed { conflicting_txes };
+            let quorum_driver_error =
+                TransactionSubmissionError::ObjectsDoubleUsed { conflicting_txes };
 
             let error_object: ErrorObjectOwned =
-                Error::QuorumDriverError(quorum_driver_error).into();
+                Error::TransactionSubmissionError(quorum_driver_error).into();
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect![[r#"
@@ -537,7 +541,7 @@ mod tests {
 
         #[test]
         fn test_non_recoverable_transaction_error() {
-            let quorum_driver_error = QuorumDriverError::NonRecoverableTransactionError {
+            let quorum_driver_error = TransactionSubmissionError::NonRecoverableTransactionError {
                 errors: vec![
                     (
                         SuiErrorKind::UserInputError {
@@ -565,7 +569,7 @@ mod tests {
             };
 
             let error_object: ErrorObjectOwned =
-                Error::QuorumDriverError(quorum_driver_error).into();
+                Error::TransactionSubmissionError(quorum_driver_error).into();
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect![
@@ -576,7 +580,7 @@ mod tests {
 
         #[test]
         fn test_non_recoverable_transaction_error_with_transient_errors() {
-            let quorum_driver_error = QuorumDriverError::NonRecoverableTransactionError {
+            let quorum_driver_error = TransactionSubmissionError::NonRecoverableTransactionError {
                 errors: vec![
                     (
                         SuiErrorKind::UserInputError {
@@ -598,7 +602,7 @@ mod tests {
             };
 
             let error_object: ErrorObjectOwned =
-                Error::QuorumDriverError(quorum_driver_error).into();
+                Error::TransactionSubmissionError(quorum_driver_error).into();
             let expected_code = expect!["-32002"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect![
@@ -608,13 +612,13 @@ mod tests {
         }
 
         #[test]
-        fn test_quorum_driver_internal_error() {
-            let quorum_driver_error = QuorumDriverError::QuorumDriverInternalError(
+        fn test_transaction_driver_internal_error() {
+            let quorum_driver_error = TransactionSubmissionError::TransactionDriverInternalError(
                 SuiErrorKind::UnexpectedMessage("test".to_string()).into(),
             );
 
             let error_object: ErrorObjectOwned =
-                Error::QuorumDriverError(quorum_driver_error).into();
+                Error::TransactionSubmissionError(quorum_driver_error).into();
             let expected_code = expect!["-32603"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect!["Internal error occurred while executing transaction."];
@@ -623,7 +627,7 @@ mod tests {
 
         #[test]
         fn test_system_overload() {
-            let quorum_driver_error = QuorumDriverError::SystemOverload {
+            let quorum_driver_error = TransactionSubmissionError::SystemOverload {
                 overloaded_stake: 10,
                 errors: vec![(
                     SuiErrorKind::UnexpectedMessage("test".to_string()).into(),
@@ -633,7 +637,7 @@ mod tests {
             };
 
             let error_object: ErrorObjectOwned =
-                Error::QuorumDriverError(quorum_driver_error).into();
+                Error::TransactionSubmissionError(quorum_driver_error).into();
             let expected_code = expect!["-32050"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect![

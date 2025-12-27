@@ -28,14 +28,12 @@ use sui_types::{
 };
 
 use clap::*;
-use fastcrypto::encoding::Encoding;
 use sui_config::Config;
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
-use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
-use sui_types::transaction::{SenderSignedData, Transaction};
+use sui_types::transaction::Transaction;
 
 #[derive(Parser, Clone, ValueEnum)]
 pub enum Verbosity {
@@ -368,19 +366,6 @@ pub enum ToolCommand {
         chain: Option<String>,
         #[command(subcommand)]
         cmd: ReplayToolCommand,
-    },
-
-    /// Ask all validators to sign a transaction through AuthorityAggregator.
-    #[command(name = "sign-transaction")]
-    SignTransaction {
-        #[arg(long = "genesis")]
-        genesis: PathBuf,
-
-        #[arg(
-            long,
-            help = "The Base64-encoding of the bcs bytes of SenderSignedData"
-        )]
-        sender_signed_data: String,
     },
 }
 
@@ -980,21 +965,6 @@ impl ToolCommand {
             } => {
                 execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, chain, cmd)
                     .await?;
-            }
-            ToolCommand::SignTransaction {
-                genesis,
-                sender_signed_data,
-            } => {
-                let genesis = Genesis::load(genesis)?;
-                let sender_signed_data = bcs::from_bytes::<SenderSignedData>(
-                    &fastcrypto::encoding::Base64::decode(sender_signed_data.as_str()).unwrap(),
-                )
-                .unwrap();
-                let transaction = Transaction::new(sender_signed_data);
-                let (agg, _) =
-                    AuthorityAggregatorBuilder::from_genesis(&genesis).build_network_clients();
-                let result = agg.process_transaction(transaction, None).await;
-                println!("{:?}", result);
             }
         };
         Ok(())

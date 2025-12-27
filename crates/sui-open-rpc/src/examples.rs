@@ -57,11 +57,11 @@ use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::object::MoveObject;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_TRANSFER;
 use sui_types::transaction::{CallArg, TransactionData};
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, parse_sui_struct_tag};
 

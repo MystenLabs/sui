@@ -10,7 +10,7 @@ use sui_types::{
     utils::to_sender_signed_transaction,
 };
 
-use authority_tests::send_and_confirm_transaction;
+use authority_tests::submit_and_execute;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use sui_types::{
     crypto::{AccountKeyPair, get_key_pair},
@@ -75,7 +75,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
     );
 
     let tx = to_sender_signed_transaction(data, &sender_key);
-    let response = send_and_confirm_transaction(&authority_state, tx).await?;
+    let response = submit_and_execute(&authority_state, tx).await?;
     let effects = response.1.into_data();
     assert_eq!(effects.status(), &ExecutionStatus::Success);
     assert_eq!(
@@ -155,7 +155,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
 
     let tx = to_sender_signed_transaction(data, &sender_key);
 
-    let response = send_and_confirm_transaction(&authority_state, tx).await?.1;
+    let response = submit_and_execute(&authority_state, tx).await?.1;
     let effects = response.into_data();
     assert!(effects.status().is_err());
     assert_eq!(
@@ -208,7 +208,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
     );
 
     let tx = to_sender_signed_transaction(data, &sender_key);
-    let response = send_and_confirm_transaction(&authority_state, tx).await;
+    let response = submit_and_execute(&authority_state, tx).await;
 
     assert!(matches!(
         UserInputError::try_from(response.unwrap_err()).unwrap(),

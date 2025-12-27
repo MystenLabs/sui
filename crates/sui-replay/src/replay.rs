@@ -958,7 +958,7 @@ impl LocalExec {
         // traits and make them shared so that we don't have to fix one by one when we have major execution
         // layer changes.
         let input_objects = store.read_input_objects_for_transaction(&transaction);
-        let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
+        let executable = VerifiedExecutableTransaction::new_from_consensus(
             VerifiedTransaction::new_unchecked(transaction),
             executed_epoch,
         );

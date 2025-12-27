@@ -23,6 +23,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::Signature;
 use sui_types::error::UserInputError;
 use sui_types::error::{SuiErrorKind, SuiResult};
+use sui_types::messages_grpc::SubmitTxRequest;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::{
@@ -78,7 +79,10 @@ async fn execute_tx(tx: Transaction, test_cluster: &TestCluster) -> SuiResult {
         .next()
         .unwrap()
         .authority_client()
-        .handle_transaction(tx, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
+        .submit_transaction(
+            SubmitTxRequest::new_transaction(tx),
+            Some(SocketAddr::new([127, 0, 0, 1].into(), 0)),
+        )
         .await
         .map(|_| ())
 }

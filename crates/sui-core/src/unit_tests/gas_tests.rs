@@ -3,7 +3,7 @@
 
 use super::*;
 
-use super::authority_tests::{init_state_with_ids, send_and_confirm_transaction};
+use super::authority_tests::{init_state_with_ids, submit_and_execute};
 use super::move_integration_tests::build_and_try_publish_test_package;
 use crate::authority::authority_tests::init_state_with_ids_and_object_basics;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
@@ -12,7 +12,7 @@ use move_core_types::ident_str;
 use once_cell::sync::Lazy;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::crypto::AccountKeyPair;
-use sui_types::effects::TransactionEvents;
+use sui_types::effects::SignedTransactionEffects;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
@@ -210,7 +210,7 @@ where
 
     // sign and execute transaction
     let tx = to_sender_signed_transaction(data, &sender_key);
-    let effects = send_and_confirm_transaction(&authority_state, tx)
+    let effects = submit_and_execute(&authority_state, tx)
         .await
         .unwrap()
         .1
@@ -298,9 +298,7 @@ async fn touch_gas_coins(
     let data = TransactionData::new(kind, sender, gas_object_ref, 100_000_000, rgp);
     let tx = to_sender_signed_transaction(data, sender_key);
 
-    send_and_confirm_transaction(authority_state, tx)
-        .await
-        .unwrap();
+    submit_and_execute(authority_state, tx).await.unwrap();
 }
 
 // - OOG computation, storage ok
@@ -503,11 +501,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     // This test does a native transfer with sufficient gas budget and balance.
     // It's expected to succeed. We check that gas was charged properly.
     let result = execute_transfer(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, true, false).await;
-    let effects = result
-        .response
-        .unwrap()
-        .into_effects_for_testing()
-        .into_data();
+    let effects = result.response.unwrap().unwrap().into_data();
     let gas_cost = effects.gas_cost_summary();
     assert!(gas_cost.net_gas_usage() as u64 > *MIN_GAS_BUDGET_PRE_RGP);
     assert!(gas_cost.computation_cost > 0);
@@ -531,20 +525,12 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
 async fn test_native_transfer_gas_price_is_used() {
     let result =
         execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, 1, true, false).await;
-    let effects = result
-        .response
-        .unwrap()
-        .into_effects_for_testing()
-        .into_data();
+    let effects = result.response.unwrap().unwrap().into_data();
     let gas_summary_1 = effects.gas_cost_summary();
 
     let result =
         execute_transfer_with_price(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, 2, true, false).await;
-    let effects = result
-        .response
-        .unwrap()
-        .into_effects_for_testing()
-        .into_data();
+    let effects = result.response.unwrap().unwrap().into_data();
     let gas_summary_2 = effects.gas_cost_summary();
 
     assert_eq!(
@@ -588,7 +574,7 @@ async fn test_transfer_sui_insufficient_gas() {
     );
     let tx = to_sender_signed_transaction(data, &sender_key);
 
-    let effects = send_and_confirm_transaction(&authority_state, tx)
+    let effects = submit_and_execute(&authority_state, tx)
         .await
         .unwrap()
         .1
@@ -656,7 +642,7 @@ async fn test_invalid_gas_owners() {
         );
         let tx = to_sender_signed_transaction(data, sender_key);
 
-        let result = send_and_confirm_transaction(authority_state, tx).await;
+        let result = submit_and_execute(authority_state, tx).await;
         UserInputError::try_from(result.unwrap_err()).unwrap()
     }
 
@@ -722,11 +708,7 @@ async fn test_native_transfer_insufficient_gas_reading_objects() {
     let balance = *MIN_GAS_BUDGET_PRE_RGP + 1;
     let result = execute_transfer(*MAX_GAS_BUDGET, balance, true, true).await;
     // The transaction should still execute to effects, but with execution status as failure.
-    let effects = result
-        .response
-        .unwrap()
-        .into_effects_for_testing()
-        .into_data();
+    let effects = result.response.unwrap().unwrap().into_data();
     assert_eq!(
         effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::InsufficientGas
@@ -743,17 +725,13 @@ async fn test_native_transfer_insufficient_gas_execution() {
     let total_gas = result
         .response
         .unwrap()
-        .into_effects_for_testing()
+        .unwrap()
         .data()
         .gas_cost_summary()
         .gas_used();
     let budget = total_gas - 1;
     let result = execute_transfer(budget, budget, true, false).await;
-    let effects = result
-        .response
-        .unwrap()
-        .into_effects_for_testing()
-        .into_data();
+    let effects = result.response.unwrap().unwrap().into_data();
     // Transaction failed for out of gas so charge is same as budget
     assert!(effects.gas_cost_summary().gas_used() == budget);
     let gas_object = result
@@ -875,7 +853,7 @@ async fn test_move_call_gas() -> SuiResult {
     .unwrap();
 
     let tx = to_sender_signed_transaction(data, &sender_key);
-    let response = send_and_confirm_transaction(&authority_state, tx).await?;
+    let response = submit_and_execute(&authority_state, tx).await?;
     let effects = response.1.into_data();
     let created_object_ref = effects.created()[0].0;
     assert!(effects.status().is_ok());
@@ -910,7 +888,7 @@ async fn test_move_call_gas() -> SuiResult {
     .unwrap();
 
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let response = send_and_confirm_transaction(&authority_state, transaction).await?;
+    let response = submit_and_execute(&authority_state, transaction).await?;
     let effects = response.1.into_data();
     assert!(effects.status().is_ok());
     let gas_cost = effects.gas_cost_summary();
@@ -993,7 +971,7 @@ async fn test_tx_gas_coins_input_coins() {
             rgp,
         );
         let tx = to_sender_signed_transaction(data, sender_key);
-        send_and_confirm_transaction(authority_state, tx)
+        submit_and_execute(authority_state, tx)
             .await
             .unwrap()
             .1
@@ -1016,7 +994,8 @@ async fn test_tx_gas_coins_input_coins() {
 struct TransferResult {
     pub authority_state: Arc<AuthorityState>,
     pub gas_object_id: ObjectID,
-    pub response: SuiResult<TransactionStatus>,
+    /// None = vote only succeeded, Some = executed with effects
+    pub response: SuiResult<Option<SignedTransactionEffects>>,
     pub rgp: u64,
 }
 
@@ -1068,24 +1047,17 @@ async fn execute_transfer_with_price(
     let tx = to_sender_signed_transaction(data, &sender_key);
 
     let response = if run_confirm {
-        send_and_confirm_transaction(&authority_state, tx)
+        submit_and_execute(&authority_state, tx)
             .await
-            .map(|(cert, effects)| {
-                TransactionStatus::Executed(
-                    Some(cert.into_sig()),
-                    effects,
-                    TransactionEvents::default(),
-                )
-            })
+            .map(|(_executable, effects)| Some(effects))
     } else {
         let tx = epoch_store
             .verify_transaction_require_no_aliases(tx)
             .unwrap()
             .into_tx();
         authority_state
-            .handle_transaction(&epoch_store, tx)
-            .await
-            .map(|r| r.status)
+            .handle_vote_transaction(&epoch_store, tx)
+            .map(|()| None)
     };
     TransferResult {
         authority_state,
@@ -1142,7 +1114,7 @@ async fn test_gas_price_capping_for_aborted_transactions() {
 
     // sign and execute transaction
     let tx = to_sender_signed_transaction(data, &sender_key);
-    let effects = send_and_confirm_transaction(&authority_state, tx)
+    let effects = submit_and_execute(&authority_state, tx)
         .await
         .unwrap()
         .1

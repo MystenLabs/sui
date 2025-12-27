@@ -23,8 +23,8 @@ use sui_sdk::types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    quorum_driver_types::ExecuteTransactionRequestType,
     transaction::{Argument, Command, Transaction, TransactionData},
+    transaction_driver_types::ExecuteTransactionRequestType,
 };
 
 use sui_sdk::{SuiClient, SuiClientBuilder, rpc_types::SuiTransactionBlockResponseOptions};

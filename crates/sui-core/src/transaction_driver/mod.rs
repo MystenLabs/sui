@@ -39,11 +39,21 @@ use transaction_submitter::*;
 use crate::{
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
-    quorum_driver::{AuthorityAggregatorUpdatable, reconfig_observer::ReconfigObserver},
     validator_client_monitor::{
         OperationFeedback, OperationType, ValidatorClientMetrics, ValidatorClientMonitor,
     },
 };
+
+pub mod reconfig_observer;
+pub use reconfig_observer::ReconfigObserver;
+
+/// Trait for components that can update their AuthorityAggregator during reconfiguration.
+/// Used by ReconfigObserver to notify components of epoch changes.
+pub trait AuthorityAggregatorUpdatable<A: Clone>: Send + Sync + 'static {
+    fn epoch(&self) -> EpochId;
+    fn authority_aggregator(&self) -> Arc<AuthorityAggregator<A>>;
+    fn update_authority_aggregator(&self, new_authorities: Arc<AuthorityAggregator<A>>);
+}
 use sui_config::NodeConfig;
 /// Options for submitting a transaction.
 #[derive(Clone, Default, Debug)]
@@ -63,8 +73,7 @@ pub struct SubmitTransactionOptions {
 
 #[derive(Clone, Debug)]
 pub struct QuorumTransactionResponse {
-    // TODO(fastpath): Stop using QD types
-    pub effects: sui_types::quorum_driver_types::FinalizedEffects,
+    pub effects: sui_types::transaction_driver_types::FinalizedEffects,
 
     pub events: Option<sui_types::effects::TransactionEvents>,
     // Input objects will only be populated in the happy path

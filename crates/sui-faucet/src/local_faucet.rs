@@ -13,7 +13,7 @@ use crate::FaucetConfig;
 use crate::FaucetError;
 use sui_sdk::{
     rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions},
-    types::quorum_driver_types::ExecuteTransactionRequestType,
+    types::transaction_driver_types::ExecuteTransactionRequestType,
 };
 
 use crate::CoinInfo;

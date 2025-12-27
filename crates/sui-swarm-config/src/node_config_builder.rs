@@ -261,7 +261,6 @@ impl ValidatorConfigBuilder {
             firewall_config: self.firewall_config,
             state_accumulator_v2: self.global_state_hash_v2,
             enable_soft_bundle: true,
-            enable_validator_tx_finalizer: true,
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
             execution_time_observer_config: self.execution_time_observer_config,
@@ -600,8 +599,6 @@ impl FullnodeConfigBuilder {
             execution_cache: ExecutionCacheConfig::default(),
             state_accumulator_v2: true,
             enable_soft_bundle: true,
-            // This is a validator specific feature.
-            enable_validator_tx_finalizer: false,
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
             execution_time_observer_config: None,

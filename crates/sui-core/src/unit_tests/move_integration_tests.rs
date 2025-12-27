@@ -5,7 +5,7 @@
 use super::*;
 use crate::authority::authority_tests::{
     TestCallArg, call_move, call_move_, execute_programmable_transaction, init_state_with_ids,
-    send_and_confirm_transaction,
+    submit_and_execute,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -28,6 +28,7 @@ use sui_move_build::BuildConfig;
 use sui_types::{
     crypto::{AccountKeyPair, get_key_pair},
     error::SuiError,
+    executable_transaction::VerifiedExecutableTransaction,
 };
 
 use std::{collections::HashSet, path::PathBuf};
@@ -2834,10 +2835,7 @@ pub async fn build_and_try_publish_test_package(
 
     (
         transaction.clone(),
-        send_and_confirm_transaction(authority, transaction)
-            .await
-            .unwrap()
-            .1,
+        submit_and_execute(authority, transaction).await.unwrap().1,
     )
 }
 
@@ -2934,7 +2932,7 @@ pub async fn run_multi_txns(
     sender_key: &AccountKeyPair,
     gas_object_id: &ObjectID,
     builder: ProgrammableTransactionBuilder,
-) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
+) -> Result<(VerifiedExecutableTransaction, SignedTransactionEffects), SuiError> {
     // build the transaction data
     let pt = builder.finish();
     let gas_object = authority.get_object(gas_object_id).await;
@@ -2947,7 +2945,7 @@ pub async fn run_multi_txns(
         TransactionData::new_programmable(sender, vec![gas_object_ref], pt, gas_budget, gas_price);
     // run the transaction
     let transaction = to_sender_signed_transaction(data, sender_key);
-    send_and_confirm_transaction(authority, transaction).await
+    submit_and_execute(authority, transaction).await
 }
 
 pub fn build_multi_publish_txns(

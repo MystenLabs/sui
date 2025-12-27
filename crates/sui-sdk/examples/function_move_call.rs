@@ -12,8 +12,8 @@ use sui_sdk::{
         Identifier,
         base_types::ObjectID,
         programmable_transaction_builder::ProgrammableTransactionBuilder,
-        quorum_driver_types::ExecuteTransactionRequestType,
         transaction::{Argument, CallArg, Command, Transaction, TransactionData},
+        transaction_driver_types::ExecuteTransactionRequestType,
     },
 };
 use utils::setup_for_write;

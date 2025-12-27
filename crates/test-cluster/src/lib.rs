@@ -5,7 +5,6 @@ use futures::{StreamExt, future::join_all};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use mysten_common::fatal;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -48,17 +47,17 @@ use sui_types::crypto::SuiKeyPair;
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
-use sui_types::message_envelope::Message;
-use sui_types::messages_grpc::{RawSubmitTxRequest, SubmitTxType};
+use sui_types::messages_grpc::{
+    RawSubmitTxRequest, SubmitTxRequest, SubmitTxResult, SubmitTxType, WaitForEffectsRequest,
+    WaitForEffectsResponse,
+};
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
-use sui_types::transaction::{
-    CertifiedTransaction, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
-};
+use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
 use tokio::time::{Instant, timeout};
 use tokio::{task::JoinHandle, time::sleep};
 use tonic::IntoRequest;
@@ -731,9 +730,7 @@ impl TestCluster {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
-        let results = self
-            .submit_transaction_to_validators(tx.clone(), &self.get_validator_pubkeys())
-            .await?;
+        let results = self.submit_and_execute(tx.clone(), None).await?;
         self.wallet.execute_transaction_may_fail(tx).await.unwrap();
         Ok(results)
     }
@@ -744,79 +741,66 @@ impl TestCluster {
             .with(|node| node.clone_authority_aggregator().unwrap())
     }
 
-    pub async fn create_certificate(
+    /// Submit a transaction and wait for it to be executed.
+    /// With MFP, transactions are submitted to consensus and executed by validators.
+    /// Returns the transaction effects and events on success.
+    pub async fn submit_and_execute(
         &self,
         tx: Transaction,
         client_addr: Option<SocketAddr>,
-    ) -> anyhow::Result<CertifiedTransaction> {
-        let agg = self.authority_aggregator();
-        Ok(agg
-            .process_transaction(tx, client_addr)
-            .await?
-            .into_cert_for_testing())
-    }
-
-    /// Execute a transaction on specified list of validators, and bypassing authority aggregator.
-    /// This allows us to obtain the return value directly from validators, so that we can access more
-    /// information directly such as the original effects, events and extra objects returned.
-    /// This also allows us to control which validator to send certificates to, which is useful in
-    /// some tests.
-    pub async fn submit_transaction_to_validators(
-        &self,
-        tx: Transaction,
-        pubkeys: &[AuthorityName],
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let agg = self.authority_aggregator();
-        let certificate = agg
-            .process_transaction(tx, None)
-            .await?
-            .into_cert_for_testing();
-        let replies = loop {
-            let futures: Vec<_> = agg
-                .authority_clients
-                .iter()
-                .filter_map(|(name, client)| {
-                    if pubkeys.contains(name) {
-                        Some(client)
-                    } else {
-                        None
+        // Pick a validator to submit to
+        let (_, client) = agg
+            .authority_clients
+            .iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("No authority clients available"))?;
+
+        // Submit the transaction
+        let submit_request = SubmitTxRequest::new_transaction(tx.clone());
+        let submit_response = client
+            .submit_transaction(submit_request, client_addr)
+            .await?;
+
+        // Check if already executed
+        for result in submit_response.results {
+            match result {
+                SubmitTxResult::Executed { details, .. } => {
+                    if let Some(data) = details {
+                        let events = data.events.unwrap_or_default();
+                        return Ok((data.effects, events));
                     }
-                })
-                .map(|client| {
-                    let cert = certificate.clone();
-                    async move { client.handle_certificate_v2(cert, None).await }
-                })
-                .collect();
-
-            let replies: Vec<_> = futures::future::join_all(futures)
-                .await
-                .into_iter()
-                .filter(|result| match result {
-                    Err(e) => !e.to_string().contains("deadline has elapsed"),
-                    _ => true,
-                })
-                .collect();
-
-            if !replies.is_empty() {
-                break replies;
+                }
+                SubmitTxResult::Rejected { error } => {
+                    return Err(error.into());
+                }
+                SubmitTxResult::Submitted { .. } => {
+                    // Need to wait for effects
+                }
             }
-        };
-        let replies: SuiResult<Vec<_>> = replies.into_iter().collect();
-        let replies = replies?;
-        let mut all_effects = HashMap::new();
-        let mut all_events = HashMap::new();
-        for reply in replies {
-            let effects = reply.signed_effects.into_data();
-            all_effects.insert(effects.digest(), effects);
-            all_events.insert(reply.events.digest(), reply.events);
-            // reply.fastpath_input_objects is unused.
         }
-        assert_eq!(all_effects.len(), 1);
-        assert_eq!(all_events.len(), 1);
-        Ok((
-            all_effects.into_values().next().unwrap(),
-            all_events.into_values().next().unwrap(),
-        ))
+
+        // Wait for effects
+        let wait_request = WaitForEffectsRequest {
+            transaction_digest: Some(*tx.digest()),
+            consensus_position: None,
+            include_details: true,
+            ping_type: None,
+        };
+
+        let response = client.wait_for_effects(wait_request, client_addr).await?;
+        match response {
+            WaitForEffectsResponse::Executed { details, .. } => {
+                let data = details.ok_or_else(|| anyhow::anyhow!("Expected execution details"))?;
+                let events = data.events.unwrap_or_default();
+                Ok((data.effects, events))
+            }
+            WaitForEffectsResponse::Rejected { error } => Err(error
+                .ok_or_else(|| anyhow::anyhow!("Transaction was rejected"))?
+                .into()),
+            WaitForEffectsResponse::Expired { .. } => Err(anyhow::anyhow!("Transaction expired")),
+        }
     }
 
     /// This call sends some funds from the seeded address to the funding

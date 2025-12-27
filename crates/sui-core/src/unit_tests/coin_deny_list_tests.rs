@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
-use crate::authority::authority_tests::send_and_confirm_transaction_;
+use crate::authority::authority_tests::submit_and_execute_with_options;
 use crate::authority::move_integration_tests::build_and_try_publish_test_package;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use move_core_types::ident_str;
@@ -114,7 +114,7 @@ async fn test_regulated_coin_v2_types() {
         ],
     )
     .build_and_sign(&env.keypair);
-    let (_, effects) = send_and_confirm_transaction_(&env.authority, None, tx, true)
+    let (_, effects) = submit_and_execute_with_options(&env.authority, None, tx, true)
         .await
         .unwrap();
     if effects.status().is_err() {
@@ -187,7 +187,7 @@ async fn test_regulated_coin_v2_types() {
         ],
     )
     .build_and_sign(&env.keypair);
-    let (_, effects) = send_and_confirm_transaction_(&env.authority, None, tx, true)
+    let (_, effects) = submit_and_execute_with_options(&env.authority, None, tx, true)
         .await
         .unwrap();
     if effects.status().is_err() {
@@ -244,7 +244,7 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
             regulated_coin_type.clone(),
         )
         .build_and_sign(&env.keypair);
-        let effects = send_and_confirm_transaction_(&env.authority, None, tx, true)
+        let effects = submit_and_execute_with_options(&env.authority, None, tx, true)
             .await
             .unwrap()
             .1;
@@ -278,7 +278,7 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
         ],
     )
     .build_and_sign(&env.keypair);
-    send_and_confirm_transaction_(&env.authority, None, add_tx, true)
+    submit_and_execute_with_options(&env.authority, None, add_tx, true)
         .await
         .unwrap();
 
@@ -315,9 +315,8 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
 
     let err = env
         .authority
-        .handle_sign_transaction(&epoch_store, verified)
-        .await
-        .expect_err("signing should fail for denied address");
+        .handle_vote_transaction(&epoch_store, verified)
+        .expect_err("validation should fail for denied address");
 
     match err.into_inner() {
         SuiErrorKind::UserInputError {

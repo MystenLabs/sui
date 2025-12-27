@@ -4,11 +4,11 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use sui_core::{
-    authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
+    authority_aggregator::AuthorityAggregator,
     authority_client::NetworkAuthorityClient,
     epoch::committee_store::CommitteeStore,
-    quorum_driver::{AuthorityAggregatorUpdatable, reconfig_observer::ReconfigObserver},
     safe_client::SafeClientMetricsBase,
+    transaction_driver::{AuthorityAggregatorUpdatable, reconfig_observer::ReconfigObserver},
 };
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use tracing::{debug, error, trace};
@@ -23,7 +23,6 @@ pub struct FullNodeReconfigObserver {
     pub fullnode_client: SuiClient,
     committee_store: Arc<CommitteeStore>,
     safe_client_metrics_base: SafeClientMetricsBase,
-    auth_agg_metrics: Arc<AuthAggMetrics>,
 }
 
 impl FullNodeReconfigObserver {
@@ -31,7 +30,6 @@ impl FullNodeReconfigObserver {
         fullnode_rpc_url: &str,
         committee_store: Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
-        auth_agg_metrics: Arc<AuthAggMetrics>,
     ) -> Self {
         Self {
             fullnode_client: SuiClientBuilder::default()
@@ -45,7 +43,6 @@ impl FullNodeReconfigObserver {
                 }),
             committee_store,
             safe_client_metrics_base,
-            auth_agg_metrics,
         }
     }
 }
@@ -79,7 +76,6 @@ impl ReconfigObserver<NetworkAuthorityClient> for FullNodeReconfigObserver {
                             sui_system_state.reference_gas_price,
                             &self.committee_store,
                             self.safe_client_metrics_base.clone(),
-                            self.auth_agg_metrics.clone(),
                         );
                         driver.update_authority_aggregator(Arc::new(auth_agg));
                     } else {

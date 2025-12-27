@@ -20,7 +20,7 @@ use sui_types::{
         ExecutedData, PingType, RawWaitForEffectsRequest, SubmitTxResult, TxType,
         WaitForEffectsRequest, WaitForEffectsResponse,
     },
-    quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
+    transaction_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::{
     join,

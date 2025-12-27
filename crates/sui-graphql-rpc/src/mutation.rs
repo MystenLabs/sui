@@ -13,8 +13,8 @@ use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::SuiClient;
 use sui_types::effects::TransactionEffects as NativeTransactionEffects;
 use sui_types::event::Event as NativeEvent;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::SenderSignedData;
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_types::{signature::GenericSignature, transaction::Transaction};
 pub struct Mutation;
 

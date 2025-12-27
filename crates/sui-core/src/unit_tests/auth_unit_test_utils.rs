@@ -92,7 +92,7 @@ pub async fn publish_package_on_single_authority(
     );
 
     let signed = to_sender_signed_transaction(txn_data, sender_key);
-    let (_cert, effects) = send_and_confirm_transaction(state, signed).await?;
+    let (_tx, effects) = submit_and_execute(state, signed).await?;
     assert!(effects.data().status().is_ok());
     let package_id = effects
         .data()
@@ -144,7 +144,7 @@ pub async fn upgrade_package_on_single_authority(
     )
     .unwrap();
     let signed = to_sender_signed_transaction(data, sender_key);
-    let (_cert, effects) = send_and_confirm_transaction(state, signed).await?;
+    let (_tx, effects) = submit_and_execute(state, signed).await?;
     assert!(effects.data().status().is_ok());
     let package_id = effects
         .data()

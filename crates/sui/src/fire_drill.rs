@@ -346,7 +346,7 @@ async fn execute_tx(
         .execute_transaction_block(
             tx,
             SuiTransactionBlockResponseOptions::full_content(),
-            Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
+            Some(sui_types::transaction_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
         )
         .await
         .unwrap();

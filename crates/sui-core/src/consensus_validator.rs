@@ -356,6 +356,7 @@ mod tests {
         messages_consensus::ConsensusTransaction,
         object::Object,
         signature::GenericSignature,
+        transaction::{Transaction, TransactionWithAliases},
     };
 
     use crate::authority::ExecutionEnv;
@@ -363,7 +364,7 @@ mod tests {
         authority::test_authority_builder::TestAuthorityBuilder,
         checkpoints::CheckpointServiceNoop,
         consensus_adapter::consensus_tests::{
-            test_certificates, test_gas_objects, test_user_transaction,
+            test_gas_objects, test_user_transaction, test_user_transactions,
         },
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
@@ -386,13 +387,15 @@ mod tests {
             .build()
             .await;
         let name1 = state.name;
-        let certificates = test_certificates(&state, shared_object).await;
+        let transactions = test_user_transactions(&state, shared_object).await;
 
-        let first_transaction = certificates[0].clone();
-        let first_transaction_bytes: Vec<u8> = bcs::to_bytes(
-            &ConsensusTransaction::new_certificate_message(&name1, first_transaction),
-        )
-        .unwrap();
+        let first_transaction = transactions[0].clone();
+        let first_transaction_bytes: Vec<u8> =
+            bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
+                &name1,
+                first_transaction.into(),
+            ))
+            .unwrap();
 
         let metrics = SuiTxValidatorMetrics::new(&Default::default());
         let validator =
@@ -400,11 +403,15 @@ mod tests {
         let res = validator.verify_batch(&[&first_transaction_bytes]);
         assert!(res.is_ok(), "{res:?}");
 
-        let transaction_bytes: Vec<_> = certificates
+        let transaction_bytes: Vec<_> = transactions
             .clone()
             .into_iter()
-            .map(|cert| {
-                bcs::to_bytes(&ConsensusTransaction::new_certificate_message(&name1, cert)).unwrap()
+            .map(|tx| {
+                bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
+                    &name1,
+                    tx.into(),
+                ))
+                .unwrap()
             })
             .collect();
 
@@ -412,15 +419,22 @@ mod tests {
         let res_batch = validator.verify_batch(&batch);
         assert!(res_batch.is_ok(), "{res_batch:?}");
 
-        let bogus_transaction_bytes: Vec<_> = certificates
+        let bogus_transaction_bytes: Vec<_> = transactions
             .into_iter()
-            .map(|mut cert| {
-                // set it to an all-zero user signature
-                cert.tx_signatures_mut_for_testing()[0] =
+            .map(|tx| {
+                // Create a transaction with an invalid signature
+                let aliases = tx.aliases().clone();
+                let mut signed_tx: Transaction = tx.into_tx().into();
+                signed_tx.tx_signatures_mut_for_testing()[0] =
                     GenericSignature::Signature(sui_types::crypto::Signature::Ed25519SuiSignature(
                         Ed25519SuiSignature::default(),
                     ));
-                bcs::to_bytes(&ConsensusTransaction::new_certificate_message(&name1, cert)).unwrap()
+                let tx_with_aliases = TransactionWithAliases::new(signed_tx, aliases);
+                bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
+                    &name1,
+                    tx_with_aliases,
+                ))
+                .unwrap()
             })
             .collect();
 
@@ -428,8 +442,17 @@ mod tests {
             .iter()
             .map(|t| t.as_slice())
             .collect();
-        let res_batch = validator.verify_batch(&batch);
-        assert!(res_batch.is_err());
+        // verify_batch doesn't verify user transaction signatures (that happens in vote_transaction).
+        // Use verify_and_vote_batch to test that bogus transactions are rejected during voting.
+        let res_batch = validator.verify_and_vote_batch(&BlockRef::MIN, &batch);
+        assert!(res_batch.is_ok());
+        // All transactions should be in the rejection list since they have invalid signatures
+        let rejections = res_batch.unwrap();
+        assert_eq!(
+            rejections.len(),
+            batch.len(),
+            "All bogus transactions should be rejected"
+        );
     }
 
     #[tokio::test]
@@ -683,7 +706,7 @@ mod tests {
         .await
         .into_tx();
         let tx_digest = *transaction.digest();
-        let cert = VerifiedExecutableTransaction::new_from_quorum_execution(transaction.clone(), 0);
+        let cert = VerifiedExecutableTransaction::new_from_consensus(transaction.clone(), 0);
         let (executed_effects, _) = state
             .try_execute_immediately(&cert, ExecutionEnv::new(), &state.epoch_store_for_testing())
             .await

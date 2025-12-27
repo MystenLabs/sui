@@ -1470,11 +1470,11 @@ async fn test_transaction_expired_too_early() {
 
     match result {
         Err(err) => {
-            let err_str = format!("{:?}", err);
+            let err_str = err.to_string();
             assert!(
-                err_str.contains("TransactionExpired"),
-                "Expected TransactionExpired error, got: {:?}",
-                err
+                err_str.contains("Transaction Expired"),
+                "Expected Transaction Expired error, got: {}",
+                err_str
             );
         }
         Ok(_) => panic!("Transaction should be rejected when epoch is too early"),
@@ -1510,11 +1510,11 @@ async fn test_transaction_expired_too_late() {
 
     match result {
         Err(err) => {
-            let err_str = format!("{:?}", err);
+            let err_str = err.to_string();
             assert!(
-                err_str.contains("TransactionExpired"),
-                "Expected TransactionExpired error, got: {:?}",
-                err
+                err_str.contains("Transaction Expired"),
+                "Expected Transaction Expired error, got: {}",
+                err_str
             );
         }
         Ok(_) => panic!("Transaction should be rejected when epoch is too late"),
@@ -1550,11 +1550,11 @@ async fn test_transaction_invalid_chain_id() {
 
     match result {
         Err(err) => {
-            let err_str = format!("{:?}", err);
+            let err_str = err.to_string();
             assert!(
-                err_str.contains("InvalidChainId"),
-                "Expected InvalidChainId error, got: {:?}",
-                err
+                err_str.contains("does not match network chain ID"),
+                "Expected chain ID mismatch error, got: {}",
+                err_str
             );
         }
         Ok(_) => panic!("Transaction should be rejected with invalid chain ID"),
@@ -1645,11 +1645,11 @@ async fn test_transaction_expiration_edge_cases() {
         .execute_transaction_return_raw_effects(test_cluster.sign_transaction(&tx2).await)
         .await;
     let err2 = result2.expect_err("Transaction should be rejected when min_epoch is in the future");
-    let err_str2 = format!("{:?}", err2);
+    let err_str2 = err2.to_string();
     assert!(
-        err_str2.contains("TransactionExpired"),
-        "Expected TransactionExpired for future min_epoch, got: {:?}",
-        err2
+        err_str2.contains("Transaction Expired"),
+        "Expected Transaction Expired for future min_epoch, got: {}",
+        err_str2
     );
 
     // Test case 3: min_epoch: Some(past), max_epoch: Some(past) - expired
@@ -1673,11 +1673,11 @@ async fn test_transaction_expiration_edge_cases() {
         .await;
     match result3 {
         Err(err) => {
-            let err_str = format!("{:?}", err);
+            let err_str = err.to_string();
             assert!(
-                err_str.contains("TransactionExpired"),
-                "Expected TransactionExpired for past max_epoch, got: {:?}",
-                err
+                err_str.contains("Transaction Expired"),
+                "Expected Transaction Expired for past max_epoch, got: {}",
+                err_str
             );
         }
         Ok(_) => panic!("Transaction should be rejected when max_epoch is in the past"),
@@ -3356,8 +3356,7 @@ async fn test_reject_signing_transaction_executed_in_previous_epoch() {
             let epoch_store = node.state().epoch_store_for_testing();
             let verified_tx = VerifiedTransaction::new_unchecked(signed_tx);
             node.state()
-                .handle_sign_transaction(&epoch_store, verified_tx)
-                .await
+                .handle_vote_transaction(&epoch_store, verified_tx)
         })
         .await;
 
@@ -3365,14 +3364,14 @@ async fn test_reject_signing_transaction_executed_in_previous_epoch() {
         Err(e) => {
             let err_str = e.to_string();
             assert!(
-                err_str.contains("was already executed"),
-                "Expected 'was already executed' error when signing transaction that was executed in previous epoch, got: {}",
+                err_str.contains("already been executed"),
+                "Expected 'already been executed' error when voting on transaction that was executed in previous epoch, got: {}",
                 err_str
             );
         }
-        Ok(_) => {
+        Ok(()) => {
             panic!(
-                "Expected handle_sign_transaction to fail for transaction executed in previous epoch"
+                "Expected handle_vote_transaction to fail for transaction executed in previous epoch"
             );
         }
     }

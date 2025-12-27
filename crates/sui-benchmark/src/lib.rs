@@ -12,11 +12,10 @@ use sui_config::genesis::Genesis;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::NetworkAuthorityClient,
-    quorum_driver::{
-        QuorumDriver, QuorumDriverHandler, QuorumDriverHandlerBuilder, QuorumDriverMetrics,
+    transaction_driver::{
+        SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics,
         reconfig_observer::ReconfigObserver,
     },
-    transaction_driver::{SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics},
     validator_client_monitor::ValidatorClientMetrics,
 };
 use sui_json_rpc_types::{
@@ -25,12 +24,12 @@ use sui_json_rpc_types::{
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::quorum_driver_types::EffectsFinalityInfo;
-use sui_types::quorum_driver_types::FinalizedEffects;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::Argument;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::ObjectArg;
+use sui_types::transaction_driver_types::EffectsFinalityInfo;
+use sui_types::transaction_driver_types::FinalizedEffects;
 use sui_types::{
     base_types::ObjectID,
     committee::{Committee, EpochId},
@@ -68,7 +67,6 @@ pub mod options;
 pub mod system_state_observer;
 pub mod util;
 pub mod workloads;
-use sui_types::quorum_driver_types::{QuorumDriverError, QuorumDriverResponse};
 
 #[derive(Debug)]
 /// A wrapper on execution results to accommodate different types of
@@ -261,13 +259,9 @@ pub trait ValidatorProxy {
 
 // TODO: Eventually remove this proxy because we shouldn't rely on validators to read objects.
 pub struct LocalValidatorAggregatorProxy {
-    _qd_handler: QuorumDriverHandler<NetworkAuthorityClient>,
-    // Stress client does not verify individual validator signatures since this is very expensive
-    qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
     td: Arc<TransactionDriver<NetworkAuthorityClient>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
-    td_percentage: u8,
 }
 
 impl LocalValidatorAggregatorProxy {
@@ -286,7 +280,6 @@ impl LocalValidatorAggregatorProxy {
             reconfig_fullnode_rpc_url,
             clients,
             committee,
-            100,
         )
         .await
     }
@@ -297,9 +290,7 @@ impl LocalValidatorAggregatorProxy {
         reconfig_fullnode_rpc_url: &str,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
         committee: Committee,
-        td_percentage: u8,
     ) -> Self {
-        let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
         let transaction_driver_metrics = Arc::new(TransactionDriverMetrics::new(registry));
         let (aggregator, reconfig_observer): (
             Arc<_>,
@@ -315,18 +306,12 @@ impl LocalValidatorAggregatorProxy {
                     reconfig_fullnode_rpc_url,
                     committee_store,
                     aggregator.safe_client_metrics_base.clone(),
-                    aggregator.metrics.clone(),
                 )
                 .await,
             );
             (Arc::new(aggregator), reconfig_observer)
         };
 
-        let qd_handler_builder =
-            QuorumDriverHandlerBuilder::new(aggregator.clone(), quorum_driver_metrics.clone())
-                .with_reconfig_observer(reconfig_observer.clone());
-        let qd_handler = qd_handler_builder.start();
-        let qd = qd_handler.clone_quorum_driver();
         let client_metrics = Arc::new(ValidatorClientMetrics::new(registry));
 
         // For benchmark, pass None to use default validator client monitor config
@@ -338,12 +323,9 @@ impl LocalValidatorAggregatorProxy {
             client_metrics,
         );
         Self {
-            _qd_handler: qd_handler,
-            qd,
             td,
             clients,
             committee,
-            td_percentage,
         }
     }
 
@@ -367,7 +349,7 @@ impl LocalValidatorAggregatorProxy {
 #[async_trait]
 impl ValidatorProxy for LocalValidatorAggregatorProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
-        let auth_agg = self.qd.authority_aggregator().load();
+        let auth_agg = self.td.authority_aggregator().load();
         Ok(auth_agg
             .get_latest_object_version_for_testing(object_id)
             .await?)
@@ -381,7 +363,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     }
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error> {
-        let auth_agg = self.qd.authority_aggregator().load();
+        let auth_agg = self.td.authority_aggregator().load();
         Ok(auth_agg
             .get_latest_system_state_object_for_testing()
             .await?
@@ -393,110 +375,26 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
         let tx_digest = *tx.digest();
-        if self.td_percentage > 0 {
-            let random_value = rand::thread_rng().gen_range(1..=100);
-            if random_value <= self.td_percentage {
-                debug!("Using TransactionDriver for transaction {:?}", tx_digest);
-                return (
-                    ClientType::TransactionDriver,
-                    self.submit_transaction_block(tx).await,
-                );
-            }
-        }
-
-        debug!("Using QuorumDriver for transaction {tx_digest:?}");
-        let mut retry_cnt = 0;
-        while retry_cnt < 3 {
-            let ticket = match self
-                .qd
-                .submit_transaction(
-                    sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
-                        transaction: tx.clone(),
-                        include_events: true,
-                        include_input_objects: false,
-                        include_output_objects: false,
-                        include_auxiliary_data: false,
-                    },
-                )
-                .await
-            {
-                Ok(ticket) => ticket,
-                Err(err) => {
-                    return (
-                        ClientType::QuorumDriver,
-                        Err(anyhow::anyhow!("Failed to submit transaction: {}", err)),
-                    );
-                }
-            };
-            // The ticket only times out when QuorumDriver exceeds the retry times
-            match ticket.await {
-                Ok(resp) => {
-                    let QuorumDriverResponse {
-                        effects_cert,
-                        events,
-                        ..
-                    } = resp;
-                    return (
-                        ClientType::QuorumDriver,
-                        Ok(ExecutionEffects::FinalizedTransactionEffects(
-                            FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                            events.unwrap_or_default(),
-                        )),
-                    );
-                }
-                Err(QuorumDriverError::NonRecoverableTransactionError { errors }) => {
-                    warn!(
-                        ?tx_digest,
-                        retry_cnt, "Transaction failed with non-recoverable err: {:?}", errors
-                    );
-                    return (
-                        ClientType::QuorumDriver,
-                        Err(anyhow::anyhow!(
-                            QuorumDriverError::NonRecoverableTransactionError { errors }
-                        )),
-                    );
-                }
-                Err(err) => {
-                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
-                    warn!(
-                        ?tx_digest,
-                        retry_cnt,
-                        "Transaction failed with err: {:?}. Sleeping for {:?} ...",
-                        err,
-                        delay,
-                    );
-                    retry_cnt += 1;
-                    sleep(delay).await;
-                }
-            }
-        }
+        debug!("Using TransactionDriver for transaction {:?}", tx_digest);
         (
-            ClientType::QuorumDriver,
-            Err(anyhow::anyhow!(
-                "Transaction {:?} failed for {retry_cnt} times",
-                tx_digest
-            )),
+            ClientType::TransactionDriver,
+            self.submit_transaction_block(tx).await,
         )
     }
 
     fn clone_committee(&self) -> Arc<Committee> {
-        self.qd.clone_committee()
+        self.td.authority_aggregator().load().committee.clone()
     }
 
     fn get_current_epoch(&self) -> EpochId {
-        self.qd.current_epoch()
+        self.td.authority_aggregator().load().committee.epoch
     }
 
     fn clone_new(&self) -> Box<dyn ValidatorProxy + Send + Sync> {
-        let qdh = self._qd_handler.clone_new();
-        let qd = qdh.clone_quorum_driver();
         Box::new(Self {
-            _qd_handler: qdh,
-            qd,
             td: self.td.clone(),
             clients: self.clients.clone(),
             committee: self.committee.clone(),
-            td_percentage: self.td_percentage,
         })
     }
 

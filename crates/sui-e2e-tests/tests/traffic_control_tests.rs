@@ -25,11 +25,12 @@ use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::traffic_control::TrafficControlReconfigParams;
 use sui_types::{
     crypto::Ed25519SuiSignature,
-    quorum_driver_types::ExecuteTransactionRequestType,
+    messages_grpc::SubmitTxRequest,
     signature::GenericSignature,
     traffic_control::{
         FreqThresholdConfig, PolicyConfig, PolicyType, RemoteFirewallConfig, Weight,
     },
+    transaction_driver_types::ExecuteTransactionRequestType,
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -252,7 +253,9 @@ async fn test_validator_traffic_control_error_blocked() -> Result<(), anyhow::Er
 
     // it should take no more than 4 requests to be added to the blocklist
     for _ in 0..n {
-        let response = auth_client.handle_transaction(tx.clone(), None).await;
+        let response = auth_client
+            .submit_transaction(SubmitTxRequest::new_transaction(tx.clone()), None)
+            .await;
         if let Err(err) = response
             && err.to_string().contains("Too many requests")
         {
@@ -299,7 +302,9 @@ async fn test_validator_traffic_control_error_blocked_with_policy_reconfig()
     // Before reconfiguring the policy, we should not block any requests due to dry run mode,
     // even after far exceeding the threshold. However the blocklist should be updated.
     for _ in 0..(2 * n) {
-        let response = auth_client.handle_transaction(tx.clone(), None).await;
+        let response = auth_client
+            .submit_transaction(SubmitTxRequest::new_transaction(tx.clone()), None)
+            .await;
         if let Err(err) = response {
             assert!(
                 !err.to_string().contains("Too many requests"),
@@ -321,7 +326,9 @@ async fn test_validator_traffic_control_error_blocked_with_policy_reconfig()
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
     // If Node and TrafficController has not crashed, blocklist and policy freq state should still
     // be intact. A single additional erroneous request from the client should trigger enforcement.
-    let response = auth_client.handle_transaction(tx.clone(), None).await;
+    let response = auth_client
+        .submit_transaction(SubmitTxRequest::new_transaction(tx.clone()), None)
+        .await;
     if let Err(err) = response
         && err.to_string().contains("Too many requests")
     {
@@ -511,7 +518,9 @@ async fn test_validator_traffic_control_error_delegated() -> Result<(), anyhow::
 
     // it should take no more than 4 requests to be added to the blocklist
     for _ in 0..n {
-        let response = auth_client.handle_transaction(tx.clone(), None).await;
+        let response = auth_client
+            .submit_transaction(SubmitTxRequest::new_transaction(tx.clone()), None)
+            .await;
         if let Err(err) = response
             && err.to_string().contains("Too many requests")
         {

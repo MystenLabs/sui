@@ -25,9 +25,9 @@ use sui_types::error::UserInputError;
 use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_type_tag;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::NON_RECOVERABLE_ERROR_MSG;
 use sui_types::transaction::{Argument, Transaction};
 use sui_types::transaction::{Command, ObjectArg, SharedObjectMutability};
+use sui_types::transaction_driver_types::NON_RECOVERABLE_ERROR_MSG;
 use sui_types::{
     base_types::SuiAddress,
     transaction::{CallArg, TransactionData},
@@ -581,8 +581,8 @@ impl OnChainDataUploader {
                     tx.clone(),
                     SuiTransactionBlockResponseOptions::new().with_effects(),
                     // TODO: after 1.4.0, we can simply use `WaitForEffectsCert` which is faster.
-                    // Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
-                    Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
+                    // Some(sui_types::transaction_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
+                    Some(sui_types::transaction_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
                 )
                 .await {
                 Ok(response) => return Ok(response),

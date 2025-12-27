@@ -15,7 +15,7 @@ use sui_sdk::types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_sdk::types::coin::{COIN_MODULE_NAME, COIN_TREASURE_CAP_NAME};
 use sui_sdk::types::crypto::{Signature, SuiKeyPair};
 use sui_sdk::types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_sdk::types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_sdk::types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_sdk::types::transaction::{Argument, Command, ObjectArg, Transaction, TransactionData};
 use sui_sdk::types::{SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID};
 use sui_sdk::SuiClient;

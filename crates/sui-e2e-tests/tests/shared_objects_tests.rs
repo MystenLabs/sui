@@ -5,10 +5,8 @@ use futures::future::join_all;
 use futures::join;
 use rand::distributions::Distribution;
 use std::net::SocketAddr;
-use std::ops::Deref;
 use std::time::{Duration, SystemTime};
 use sui_config::node::AuthorityOverloadConfig;
-use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::{register_fail_point_async, sim_test};
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
@@ -111,18 +109,13 @@ async fn shared_object_deletion_multiple_times() {
             .build();
         let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
-        test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
-        txs.push(signed);
+        txs.push((signed, client_ip));
     }
 
     // Submit all the deletion transactions to the validators.
-    let validators = test_cluster.get_validator_pubkeys();
-    let submissions = txs.iter().map(|tx| async {
+    let submissions = txs.iter().map(|(tx, client_ip)| async {
         test_cluster
-            .submit_transaction_to_validators(tx.clone(), &validators)
+            .submit_and_execute(tx.clone(), Some(*client_ip))
             .await
             .unwrap();
         *tx.digest()
@@ -164,7 +157,6 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
     let gas_coins = accounts_and_gas[0].1.clone();
 
     // Make a bunch transactions that all want to delete the counter object.
-    let validators = test_cluster.get_validator_pubkeys();
     let mut digests = vec![];
     for coin_ref in gas_coins.into_iter() {
         let transaction = test_cluster
@@ -175,11 +167,7 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
         let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
-        test_cluster
-            .submit_transaction_to_validators(signed.clone(), &validators)
+            .submit_and_execute(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         digests.push(*signed.digest());
@@ -205,7 +193,7 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
 ///
 /// The two execution certs should be immediately executable (because they have a missing
 /// input). Therefore validators may execute them in either order. The injected delay ensures that
-/// we will explore all possible orders, and `submit_transaction_to_validators` verifies that we
+/// we will explore all possible orders, and `submit_and_execute` verifies that we
 /// get the same effects regardless of the order. (checkpoint fork detection will also test this).
 #[sim_test]
 async fn shared_object_deletion_multi_certs() {
@@ -262,24 +250,9 @@ async fn shared_object_deletion_multi_certs() {
     let inc_tx_b_digest = *inc_tx_b.digest();
     let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
 
-    let _ = test_cluster
-        .create_certificate(delete_tx.clone(), Some(client_ip))
-        .await
-        .unwrap();
-    let _ = test_cluster
-        .create_certificate(inc_tx_a.clone(), Some(client_ip))
-        .await
-        .unwrap();
-    let _ = test_cluster
-        .create_certificate(inc_tx_b.clone(), Some(client_ip))
-        .await
-        .unwrap();
-
-    let validators = test_cluster.get_validator_pubkeys();
-
     // delete obj on all validators, await effects
     test_cluster
-        .submit_transaction_to_validators(delete_tx, &validators)
+        .submit_and_execute(delete_tx, Some(client_ip))
         .await
         .unwrap();
 
@@ -287,13 +260,13 @@ async fn shared_object_deletion_multi_certs() {
     join!(
         async {
             test_cluster
-                .submit_transaction_to_validators(inc_tx_a, &validators)
+                .submit_and_execute(inc_tx_a, Some(client_ip))
                 .await
                 .unwrap()
         },
         async {
             test_cluster
-                .submit_transaction_to_validators(inc_tx_b, &validators)
+                .submit_and_execute(inc_tx_b, Some(client_ip))
                 .await
                 .unwrap()
         }
@@ -555,7 +528,7 @@ async fn shared_object_sync() {
         .await;
     let package_id = publish_basics_package(&test_cluster.wallet).await.0;
 
-    // Since we use submit_transaction_to_validators in this test, which does not go through fullnode,
+    // Since we use submit_and_execute in this test, which does not go through fullnode,
     // we need to manage gas objects ourselves.
     let (sender, mut objects) = test_cluster.wallet.get_one_account().await.unwrap();
     let rgp = test_cluster.get_reference_gas_price().await;
@@ -568,51 +541,28 @@ async fn shared_object_sync() {
                 .build(),
         )
         .await;
-    let committee = test_cluster.committee().deref().clone();
-    let validators = test_cluster.get_validator_pubkeys();
-    let (slow_validators, fast_validators): (Vec<_>, Vec<_>) =
-        validators.iter().partition(|name| {
-            position_submit_certificate(&committee, name, create_counter_transaction.digest()) > 0
-        });
 
     let (effects, _) = test_cluster
-        .submit_transaction_to_validators(create_counter_transaction.clone(), &slow_validators)
+        .submit_and_execute(create_counter_transaction.clone(), None)
         .await
         .unwrap();
     assert!(effects.status().is_ok());
     let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
 
-    // Check that the counter object exists in at least one of the validators the transaction was
-    // sent to.
+    // With MFP, all validators receive and execute transactions through consensus,
+    // so all validators should have the counter object after execution.
     for validator in test_cluster.swarm.validator_node_handles() {
-        if slow_validators.contains(&validator.state().name) {
-            assert!(
-                validator
-                    .state()
-                    .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                        counter_id,
-                        LayoutGenerationOption::None,
-                    ))
-                    .await
-                    .is_ok()
-            );
-        }
-    }
-
-    // Check that the validator that wasn't sent the transaction is unaware of the counter object
-    for validator in test_cluster.swarm.validator_node_handles() {
-        if fast_validators.contains(&validator.state().name) {
-            assert!(
-                validator
-                    .state()
-                    .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                        counter_id,
-                        LayoutGenerationOption::None,
-                    ))
-                    .await
-                    .is_err()
-            );
-        }
+        assert!(
+            validator
+                .state()
+                .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+                    counter_id,
+                    LayoutGenerationOption::None,
+                ))
+                .await
+                .is_ok(),
+            "All validators should have the counter object after consensus execution"
+        );
     }
 
     // Make a transaction to increment the counter.
@@ -627,7 +577,7 @@ async fn shared_object_sync() {
 
     // Let's submit the transaction to the original set of validators, except the first.
     let (effects, _) = test_cluster
-        .submit_transaction_to_validators(increment_counter_transaction.clone(), &validators[1..])
+        .submit_and_execute(increment_counter_transaction.clone(), None)
         .await
         .unwrap();
     assert!(effects.status().is_ok());
@@ -635,7 +585,7 @@ async fn shared_object_sync() {
     // Submit transactions to the out-of-date authority.
     // It will succeed because we share owned object certificates through narwhal
     let (effects, _) = test_cluster
-        .submit_transaction_to_validators(increment_counter_transaction, &validators[0..1])
+        .submit_and_execute(increment_counter_transaction, None)
         .await
         .unwrap();
     assert!(effects.status().is_ok());

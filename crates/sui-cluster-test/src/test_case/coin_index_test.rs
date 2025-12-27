@@ -16,7 +16,7 @@ use sui_test_transaction_builder::make_staking_transaction;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use tracing::info;
 
 pub struct CoinIndexTest;

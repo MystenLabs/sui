@@ -100,7 +100,7 @@ async fn test_fast_path_execution() {
     )
     .transfer_sui(None, sender)
     .build();
-    let cert = VerifiedExecutableTransaction::new_from_quorum_execution(
+    let cert = VerifiedExecutableTransaction::new_from_consensus(
         VerifiedTransaction::new_unchecked(to_sender_signed_transaction(tx_data, &sender_key)),
         0,
     );
@@ -161,7 +161,7 @@ async fn test_fast_path_then_consensus_execution() {
     )
     .transfer_sui(None, sender)
     .build();
-    let cert = VerifiedExecutableTransaction::new_from_quorum_execution(
+    let cert = VerifiedExecutableTransaction::new_from_consensus(
         VerifiedTransaction::new_unchecked(to_sender_signed_transaction(tx_data, &sender_key)),
         0,
     );
@@ -235,7 +235,7 @@ async fn test_consensus_then_fast_path_execution() {
     )
     .transfer_sui(None, sender)
     .build();
-    let cert = VerifiedExecutableTransaction::new_from_quorum_execution(
+    let cert = VerifiedExecutableTransaction::new_from_consensus(
         VerifiedTransaction::new_unchecked(to_sender_signed_transaction(tx_data, &sender_key)),
         0,
     );
@@ -292,7 +292,7 @@ async fn test_fast_path_then_consensus_execution_e2e() {
     )
     .transfer_sui(None, sender)
     .build();
-    let cert = VerifiedExecutableTransaction::new_from_quorum_execution(
+    let cert = VerifiedExecutableTransaction::new_from_consensus(
         VerifiedTransaction::new_unchecked(to_sender_signed_transaction(tx_data, &sender_key)),
         0,
     );
@@ -380,7 +380,7 @@ async fn test_consensus_then_fast_path_execution_e2e() {
     )
     .transfer_sui(None, sender)
     .build();
-    let cert = VerifiedExecutableTransaction::new_from_quorum_execution(
+    let cert = VerifiedExecutableTransaction::new_from_consensus(
         VerifiedTransaction::new_unchecked(to_sender_signed_transaction(tx_data, &sender_key)),
         0,
     );

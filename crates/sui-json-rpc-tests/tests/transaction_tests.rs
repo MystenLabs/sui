@@ -20,10 +20,10 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::Command;
 use sui_types::transaction::SenderSignedData;
 use sui_types::transaction::TransactionData;
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use test_cluster::TestClusterBuilder;
 
 use sui_json_rpc_api::{IndexerApiClient, TransactionBuilderClient, WriteApiClient};

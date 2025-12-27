@@ -15,14 +15,10 @@ use std::ops::Deref;
 use std::sync::Arc;
 use sui_config::node::RunWithRange;
 use sui_core::authority::shared_object_version_manager::{AssignedTxAndVersions, AssignedVersions};
-use sui_core::mock_checkpoint_builder::ValidatorKeypairProvider;
 use sui_test_transaction_builder::PublishData;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::messages_grpc::HandleTransactionResponse;
-use sui_types::transaction::{
-    CertifiedTransaction, SignedTransaction, Transaction, VerifiedTransaction,
-};
+use sui_types::transaction::Transaction;
 use tracing::{info, warn};
 
 pub struct BenchmarkContext {
@@ -235,55 +231,17 @@ impl BenchmarkContext {
         results.into_iter().map(|r| r.unwrap()).collect()
     }
 
-    pub(crate) async fn certify_transactions(
-        &self,
-        transactions: Vec<Transaction>,
-        skip_signing: bool,
-    ) -> Vec<CertifiedTransaction> {
-        info!("Creating transaction certificates");
-        let tasks: FuturesUnordered<_> = transactions
-            .into_iter()
-            .map(|tx| {
-                let validator = self.validator();
-                tokio::spawn(async move {
-                    let committee = validator.get_committee();
-                    let validator_state = validator.get_validator();
-                    let sig = if skip_signing {
-                        SignedTransaction::sign(
-                            0,
-                            &tx,
-                            &*validator_state.secret,
-                            validator_state.name,
-                        )
-                    } else {
-                        let verified_tx = VerifiedTransaction::new_unchecked(tx.clone());
-                        validator_state
-                            .handle_transaction(validator.get_epoch_store(), verified_tx)
-                            .await
-                            .unwrap()
-                            .status
-                            .into_signed_for_testing()
-                    };
-                    CertifiedTransaction::new(tx.into_data(), vec![sig], committee).unwrap()
-                })
-            })
-            .collect();
-        let results: Vec<_> = tasks.collect().await;
-        results.into_iter().map(|r| r.unwrap()).collect()
-    }
-
     pub(crate) async fn benchmark_transaction_execution(
         &self,
-        transactions: Vec<CertifiedTransaction>,
+        transactions: Vec<Transaction>,
         assigned_versions: AssignedTxAndVersions,
         print_sample_tx: bool,
     ) {
         let assigned_versions = assigned_versions.into_map();
         if print_sample_tx {
-            // We must use remove(0) in case there are shared objects and the transactions
+            // We must use the first transaction in case there are shared objects and the transactions
             // must be executed in order.
-            self.execute_sample_transaction(transactions[0].clone())
-                .await;
+            self.execute_sample_transaction(&transactions[0]).await;
         }
 
         let tx_count = transactions.len();
@@ -299,7 +257,7 @@ impl BenchmarkContext {
             for transaction in transactions {
                 let key = transaction.key();
                 self.validator
-                    .execute_certificate(
+                    .execute_transaction(
                         transaction,
                         assigned_versions.get(&key).unwrap(),
                         self.benchmark_component,
@@ -314,7 +272,7 @@ impl BenchmarkContext {
                     let component = self.benchmark_component;
                     tokio::spawn(async move {
                         validator
-                            .execute_certificate(
+                            .execute_transaction(
                                 tx,
                                 &AssignedVersions::new(vec![], None),
                                 component,
@@ -339,13 +297,12 @@ impl BenchmarkContext {
 
     pub(crate) async fn benchmark_transaction_execution_in_memory(
         &self,
-        transactions: Vec<CertifiedTransaction>,
+        transactions: Vec<Transaction>,
         assigned_versions: AssignedTxAndVersions,
         print_sample_tx: bool,
     ) {
         if print_sample_tx {
-            self.execute_sample_transaction(transactions[0].clone())
-                .await;
+            self.execute_sample_transaction(&transactions[0]).await;
         }
 
         let tx_count = transactions.len();
@@ -374,7 +331,7 @@ impl BenchmarkContext {
 
     /// Print out a sample transaction and its effects so that we can get a rough idea
     /// what we are measuring.
-    async fn execute_sample_transaction(&self, sample_transaction: CertifiedTransaction) {
+    async fn execute_sample_transaction(&self, sample_transaction: &Transaction) {
         info!(
             "Sample transaction digest={:?}: {:?}",
             sample_transaction.digest(),
@@ -382,42 +339,19 @@ impl BenchmarkContext {
         );
         let effects = self
             .validator()
-            .execute_dry_run(sample_transaction.into_unsigned())
+            .execute_dry_run(sample_transaction.clone())
             .await;
         info!("Sample effects: {:?}\n\n", effects);
         assert!(effects.status().is_ok());
     }
 
-    /// Benchmark parallel signing a vector of transactions and measure the TPS.
-    pub(crate) async fn benchmark_transaction_signing(
-        &self,
-        transactions: Vec<Transaction>,
-        print_sample_tx: bool,
-    ) {
-        if print_sample_tx {
-            let sample_transaction = &transactions[0];
-            info!("Sample transaction: {:?}", sample_transaction.data());
-        }
-
-        let tx_count = transactions.len();
-        let start_time = std::time::Instant::now();
-        self.validator_sign_transactions(transactions).await;
-        let elapsed = start_time.elapsed().as_millis() as f64 / 1000f64;
-        info!(
-            "Transaction signing finished in {}s, TPS={}.",
-            elapsed,
-            tx_count as f64 / elapsed,
-        );
-    }
-
     pub(crate) async fn benchmark_checkpoint_executor(
         &self,
-        transactions: Vec<CertifiedTransaction>,
+        transactions: Vec<Transaction>,
         assigned_versions: AssignedTxAndVersions,
         checkpoint_size: usize,
     ) {
-        self.execute_sample_transaction(transactions[0].clone())
-            .await;
+        self.execute_sample_transaction(&transactions[0]).await;
 
         info!("Executing all transactions to generate effects");
         let tx_count = transactions.len();
@@ -490,7 +424,7 @@ impl BenchmarkContext {
     async fn execute_transactions_in_memory(
         &self,
         store: InMemoryObjectStore,
-        transactions: Vec<CertifiedTransaction>,
+        transactions: Vec<Transaction>,
         assigned_versions: AssignedTxAndVersions,
     ) -> Vec<TransactionEffects> {
         let is_consensus_tx = transactions.iter().any(|tx| tx.is_consensus_tx());
@@ -549,23 +483,5 @@ impl BenchmarkContext {
                 .collect();
             account.gas_objects = Arc::new(refreshed_gas_objects);
         }
-    }
-    pub(crate) async fn validator_sign_transactions(
-        &self,
-        transactions: Vec<Transaction>,
-    ) -> Vec<HandleTransactionResponse> {
-        info!(
-            "Started signing {} transactions. You can now attach a profiler",
-            transactions.len(),
-        );
-        let tasks: FuturesUnordered<_> = transactions
-            .into_iter()
-            .map(|tx| {
-                let validator = self.validator();
-                tokio::spawn(async move { validator.sign_transaction(tx).await })
-            })
-            .collect();
-        let results: Vec<_> = tasks.collect().await;
-        results.into_iter().map(|r| r.unwrap()).collect()
     }
 }

@@ -13,6 +13,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::crypto::Signature;
 use sui_types::error::{SuiErrorKind, SuiResult, UserInputError};
+use sui_types::messages_grpc::SubmitTxRequest;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::utils::load_test_vectors;
@@ -34,7 +35,10 @@ async fn do_zklogin_test(address: SuiAddress, legacy: bool) -> SuiResult {
         .next()
         .unwrap()
         .authority_client()
-        .handle_transaction(tx, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
+        .submit_transaction(
+            SubmitTxRequest::new_transaction(tx),
+            Some(SocketAddr::new([127, 0, 0, 1].into(), 0)),
+        )
         .await
         .map(|_| ())
 }

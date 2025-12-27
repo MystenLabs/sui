@@ -102,7 +102,7 @@ pub async fn execute_transaction(
         FieldMaskTree::from(read_mask)
     };
 
-    let request = sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
+    let request = sui_types::transaction_driver_types::ExecuteTransactionRequestV3 {
         transaction: signed_transaction.try_into()?,
         include_events: read_mask.contains(ExecutedTransaction::EVENTS_FIELD.name),
         include_input_objects: read_mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
@@ -114,9 +114,9 @@ pub async fn execute_transaction(
         include_auxiliary_data: false,
     };
 
-    let sui_types::quorum_driver_types::ExecuteTransactionResponseV3 {
+    let sui_types::transaction_driver_types::ExecuteTransactionResponseV3 {
         effects:
-            sui_types::quorum_driver_types::FinalizedEffects {
+            sui_types::transaction_driver_types::FinalizedEffects {
                 effects,
                 finality_info: _,
             },

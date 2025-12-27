@@ -44,51 +44,6 @@ fn main() -> Result<()> {
         )
         .method(
             Method::builder()
-                .name("transaction")
-                .route_name("Transaction")
-                .input_type("sui_types::transaction::Transaction")
-                .output_type("sui_types::messages_grpc::HandleTransactionResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            Method::builder()
-                .name("handle_certificate_v2")
-                .route_name("CertifiedTransactionV2")
-                .input_type("sui_types::transaction::CertifiedTransaction")
-                .output_type("sui_types::messages_grpc::HandleCertificateResponseV2")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            Method::builder()
-                .name("handle_certificate_v3")
-                .route_name("CertifiedTransactionV3")
-                .input_type("sui_types::messages_grpc::HandleCertificateRequestV3")
-                .output_type("sui_types::messages_grpc::HandleCertificateResponseV3")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            Method::builder()
-                .name("handle_soft_bundle_certificates_v3")
-                .route_name("SoftBundleCertifiedTransactionsV3")
-                .input_type("sui_types::messages_grpc::HandleSoftBundleCertificatesRequestV3")
-                .output_type("sui_types::messages_grpc::HandleSoftBundleCertificatesResponseV3")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            Method::builder()
-                .name("submit_certificate")
-                .route_name("SubmitCertificate")
-                .input_type("sui_types::transaction::CertifiedTransaction")
-                .output_type("sui_types::messages_grpc::SubmitCertificateResponse")
-                .codec_path(codec_path)
-                .build(),
-        )
-        .method(
-            Method::builder()
                 .name("object_info")
                 .route_name("ObjectInfo")
                 .input_type("sui_types::messages_grpc::ObjectInfoRequest")
