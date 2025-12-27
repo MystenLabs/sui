@@ -102,7 +102,7 @@ pub struct CompiledPkgInfo {
     /// Edition of the compiler
     pub edition: Option<Edition>,
     /// Compiler analysis info
-    pub compiler_analysis_info: Option<CompilerAnalysisInfo>,
+    pub compiler_analysis_info: CompilerAnalysisInfo,
     /// Compiler autocomplete info
     pub compiler_autocomplete_info: Option<CompilerAutocompleteInfo>,
     /// IDE diagnostics related to the package
@@ -132,7 +132,7 @@ pub struct CachedPkgInfo {
     /// Edition of the compiler used to build this package
     pub edition: Option<Edition>,
     /// Compiler analysis info (cached)
-    pub compiler_analysis_info: Option<CompilerAnalysisInfo>,
+    pub compiler_analysis_info: CompilerAnalysisInfo,
     /// IDE diagnostics related to the package
     pub lsp_diags: Arc<BTreeMap<PathBuf, Vec<Diagnostic>>>,
 }
@@ -187,7 +187,7 @@ struct MappedFilesData {
 struct CachingResult {
     pkg_deps: Option<AnalyzedPkgInfo>,
     edition: Option<Edition>,
-    compiler_analysis_info: Option<CompilerAnalysisInfo>,
+    compiler_analysis_info: CompilerAnalysisInfo,
 }
 
 impl CachedPackages {
@@ -277,7 +277,7 @@ impl CachingResult {
     pub fn new(
         pkg_deps: Option<AnalyzedPkgInfo>,
         edition: Option<Edition>,
-        compiler_analysis_info: Option<CompilerAnalysisInfo>,
+        compiler_analysis_info: CompilerAnalysisInfo,
     ) -> Self {
         Self {
             pkg_deps,
@@ -290,7 +290,7 @@ impl CachingResult {
         Self {
             pkg_deps: None,
             edition: None,
-            compiler_analysis_info: None,
+            compiler_analysis_info: CompilerAnalysisInfo::new(),
         }
     }
 }
@@ -466,7 +466,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
                         dep_names,
                         mapped_files_data.dep_hashes.clone(),
                     );
-                    CachingResult::new(Some(analyzed_pkg_info), None, None)
+                    CachingResult::new(Some(analyzed_pkg_info), None, CompilerAnalysisInfo::new())
                 } else {
                     CachingResult::empty()
                 }
@@ -633,7 +633,9 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
         (
             parsed_definitions,
             typed_modules,
-            compiler_analysis_info_opt,
+            // unwrap is safe as this is created at the same time
+            // as parsed_ast and typed_ast
+            compiler_analysis_info_opt.unwrap(),
         )
     } else if files_to_compile.is_empty() {
         // no compilation happened, so we get everything from the cache, and
@@ -655,12 +657,12 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
             files_to_compile.clone(),
         );
 
-        let merged_analysis_info = Some(merge_compiler_analysis_info(
-            caching_result.compiler_analysis_info.clone().unwrap(),
+        let merged_analysis_info = merge_compiler_analysis_info(
+            caching_result.compiler_analysis_info.clone(),
             compiler_analysis_info_opt.unwrap(),
             &file_paths,
             &files_to_compile,
-        ));
+        );
 
         (parsed_defs, typed_mods, merged_analysis_info)
     };
@@ -980,6 +982,7 @@ fn merge_compiler_analysis_info(
     result.macro_info.retain(|loc, _| !is_modified(loc));
     result.expanded_lambdas.retain(|loc| !is_modified(loc));
     result.ellipsis_binders.retain(|loc| !is_modified(loc));
+    result.string_values.retain(|loc, _| !is_modified(loc));
 
     // Add new entries - no additional filtering needed
     // as incremental compilation produced these
@@ -987,6 +990,7 @@ fn merge_compiler_analysis_info(
     result.macro_info.extend(new_info.macro_info);
     result.expanded_lambdas.extend(new_info.expanded_lambdas);
     result.ellipsis_binders.extend(new_info.ellipsis_binders);
+    result.string_values.extend(new_info.string_values);
 
     result
 }

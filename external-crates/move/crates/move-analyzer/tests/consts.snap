@@ -40,7 +40,7 @@ Use: 'BYTES', start: 10, end: 15
 Def: 'BYTES', line: 10, def char: 10
 TypeDef: no info
 On Hover:
-const Symbols::M8::BYTES: vector<u8> = [104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100]
+const Symbols::M8::BYTES: vector<u8> = b"hello world"
 
 -- test 5 -------------------
 use line: 13, use_ndx: 0
@@ -48,7 +48,7 @@ Use: 'HEX_BYTES', start: 10, end: 19
 Def: 'HEX_BYTES', line: 12, def char: 10
 TypeDef: no info
 On Hover:
-const Symbols::M8::HEX_BYTES: vector<u8> = [222, 173, 190, 239]
+const Symbols::M8::HEX_BYTES: vector<u8> = x"DEADBEEF"
 
 -- test 6 -------------------
 use line: 15, use_ndx: 0

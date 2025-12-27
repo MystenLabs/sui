@@ -4,7 +4,10 @@
 //! This module contains the implementation of functions supporting conversion of various
 //! constructs to their IDE-friendly string representations.
 
-use crate::symbols::def_info::{FunType, VariantInfo};
+use crate::{
+    compiler_info::CompilerAnalysisInfo,
+    symbols::def_info::{FunType, VariantInfo},
+};
 use move_compiler::{
     expansion::{
         ast::{self as E, AbilitySet, ModuleIdent_, Value, Value_, Visibility},
@@ -186,7 +189,13 @@ pub fn ret_type_to_ide_str(ret_type: &Type, verbose: bool) -> String {
 }
 /// Conversions of constant values to strings is currently best-effort which is why this function
 /// returns an Option (in the worst case we will display constant name and type but no value).
-pub fn const_val_to_ide_string(exp: &Exp) -> Option<String> {
+pub fn const_val_to_ide_string(
+    exp: &Exp,
+    compiler_analysis_info: &CompilerAnalysisInfo,
+) -> Option<String> {
+    if let Some(string) = compiler_analysis_info.string_values.get(&exp.exp.loc) {
+        return Some(string.clone());
+    }
     ast_exp_to_ide_string(exp)
 }
 
