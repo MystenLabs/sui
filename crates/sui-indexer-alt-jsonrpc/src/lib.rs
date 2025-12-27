@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use api::checkpoints::Checkpoints;
-use api::coin::{Coins, DelegationCoins};
+use api::coin::Coins;
 use api::dynamic_fields::DynamicFields;
 use api::move_utils::MoveUtils;
 use api::name_service::NameService;
@@ -23,6 +23,7 @@ use prometheus::Registry;
 use serde_json::json;
 use sui_futures::service::Service;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_open_rpc::Project;
@@ -230,16 +231,16 @@ pub struct NodeArgs {
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
 /// command-line).
 ///
-/// Access to most reads is controlled by the `database_url` -- if it is `None`, reads will not work.
-/// The only exceptions are the `DelegationCoins` and `DelegationGovernance` modules, which are controlled
-/// by `node_args.fullnode_rpc_url`, which can be omitted to disable reads from this RPC.
+/// Access to most reads is controlled by the `database_url` -- if it is `None`, reads will not
+/// work. The only exception is the `DelegationGovernance` module, which is controlled by
+/// `node_args.fullnode_rpc_url`, which can be omitted to disable reads from this RPC.
 ///
 /// KV queries can optionally be served by a Bigtable instance, if `bigtable_instance` is provided.
 /// Otherwise these requests are served by the database. If a `bigtable_instance` is provided, the
 /// `GOOGLE_APPLICATION_CREDENTIALS` environment variable must point to the credentials JSON file.
 ///
-/// Access to writes (executing and dry-running transactions) is controlled by `node_args.fullnode_rpc_url`,
-/// which can be omitted to disable writes from this RPC.
+/// Access to writes (executing and dry-running transactions) is controlled by
+/// `node_args.fullnode_rpc_url`, which can be omitted to disable writes from this RPC.
 ///
 /// The service may spin up auxiliary services (such as the system package task) to support itself,
 /// and will clean these up on shutdown as well.
@@ -248,6 +249,7 @@ pub async fn start_rpc(
     bigtable_instance: Option<String>,
     db_args: DbArgs,
     bigtable_args: BigtableArgs,
+    consistent_reader_args: ConsistentReaderArgs,
     rpc_args: RpcArgs,
     node_args: NodeArgs,
     system_package_task_args: SystemPackageTaskArgs,
@@ -261,6 +263,7 @@ pub async fn start_rpc(
         bigtable_instance,
         db_args,
         bigtable_args,
+        consistent_reader_args,
         rpc_config,
         rpc.metrics(),
         registry,
@@ -286,12 +289,11 @@ pub async fn start_rpc(
 
     if let Some(fullnode_rpc_url) = node_args.fullnode_rpc_url {
         let client = context.config().node.client(fullnode_rpc_url)?;
-        rpc.add_module(DelegationCoins::new(client.clone()))?;
         rpc.add_module(DelegationGovernance::new(client.clone()))?;
         rpc.add_module(Write::new(client))?;
     } else {
         warn!(
-            "No fullnode rpc url provided, DelegationCoins, DelegationGovernance, and Write modules will not be added."
+            "No fullnode rpc url provided, DelegationGovernance and Write modules will not be added."
         );
     }
 

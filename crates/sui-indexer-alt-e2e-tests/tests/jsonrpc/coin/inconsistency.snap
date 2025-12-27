@@ -80,7 +80,7 @@ Response: {
         "previousTransaction": "3tfDJdUhJPunyaRVaMnTiLzHdyryECfepHu6LfUXUsDN"
       }
     ],
-    "nextCursor": "IOSn3o4jNqNNikpURUbuz/rXSBVqj7Yt1ObAMEJNSeJZAQAAAAAAAAAEAAAAAAAAAA==",
+    "nextCursor": "zAEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAANzdWkAAAAAAAAAA1NVSQAAAAAAAAAAAf///////9Ef5KfejiM2o02KSlRFRu7P+tdIFWqPti3U5sAwQk1J4lk=",
     "hasNextPage": true
   }
 }
@@ -98,7 +98,7 @@ task 8, line 37:
 Checkpoint created: 2
 
 task 9, lines 39-43:
-//# run-jsonrpc --cursors bcs(bcs(@{obj_1_0}),1,4)
+//# run-jsonrpc --cursors bcs(bin(0u8,@{A},0x2::coin::Coin<0x2::sui::SUI>,1u8,!12000,@{obj_1_0}))
 Response: {
   "jsonrpc": "2.0",
   "id": 1,
@@ -121,7 +121,7 @@ Response: {
         "previousTransaction": "AXzgRv8bvNPQvMiETHqWkQ9oQhWb8QF2PUurfXeEFUyT"
       }
     ],
-    "nextCursor": "IKmiwGvhJd+nP6tA/cynTrgCUd5ZyVpLrwfhPhQ1/hnNAQAAAAAAAAADAAAAAAAAAA==",
+    "nextCursor": "zAEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAANzdWkAAAAAAAAAA1NVSQAAAAAAAAAAAf////////qHqaLAa+El36c/q0D9zKdOuAJR3lnJWkuvB+E+FDX+Gc0=",
     "hasNextPage": false
   }
 }
