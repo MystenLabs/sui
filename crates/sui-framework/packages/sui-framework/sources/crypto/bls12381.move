@@ -107,7 +107,7 @@ public fun scalar_mul(e1: &Element<Scalar>, e2: &Element<Scalar>): Element<Scala
     group_ops::mul(SCALAR_TYPE, e1, e2)
 }
 
-/// Returns e2/e1, fails if a is zero.
+/// Returns e2/e1, fails if e1 is zero.
 public fun scalar_div(e1: &Element<Scalar>, e2: &Element<Scalar>): Element<Scalar> {
     group_ops::div(SCALAR_TYPE, e1, e2)
 }
