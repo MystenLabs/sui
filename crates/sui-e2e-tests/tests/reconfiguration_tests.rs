@@ -148,7 +148,7 @@ async fn do_test_passive_reconfig(chain: Option<Chain>) {
         });
 }
 
-// Test that transaction locks from previously epochs could be overridden.
+// Test that transaction locks from previous epochs could be overridden.
 #[sim_test]
 async fn test_expired_locks() {
     let test_cluster = TestClusterBuilder::new()
@@ -176,20 +176,18 @@ async fn test_expired_locks() {
     // attempt to equivocate
     let t2 = test_cluster.wallet.sign_transaction(&transfer_sui(2)).await;
 
-    for (idx, validator) in test_cluster.all_validator_handles().into_iter().enumerate() {
+    // Acquire locks for t1 on all validators to simulate a locked transaction
+    // that was never executed (e.g., didn't make it through consensus).
+    for validator in test_cluster.all_validator_handles().into_iter() {
         let state = validator.state();
         let epoch_store = state.epoch_store_for_testing();
-        let t = if idx % 2 == 0 { t1.clone() } else { t2.clone() };
         validator
             .state()
-            .handle_vote_transaction(&epoch_store, VerifiedTransaction::new_unchecked(t))
+            .handle_vote_transaction(&epoch_store, VerifiedTransaction::new_unchecked(t1.clone()))
             .unwrap();
     }
-    test_cluster
-        .submit_and_execute(t1.clone(), None)
-        .await
-        .unwrap_err();
 
+    // t2 should fail because all validators have locks for t1
     test_cluster
         .submit_and_execute(t2.clone(), None)
         .await
@@ -197,13 +195,13 @@ async fn test_expired_locks() {
 
     test_cluster.wait_for_epoch_all_nodes(1).await;
 
-    // old locks can be overridden in new epoch
+    // Old locks can be overridden in new epoch - t2 should now succeed
     test_cluster
         .submit_and_execute(t2.clone(), None)
         .await
         .unwrap();
 
-    // attempt to equivocate
+    // t1 should now fail because t2 has executed and consumed the object
     test_cluster
         .submit_and_execute(t1.clone(), None)
         .await

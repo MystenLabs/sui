@@ -338,7 +338,7 @@ async fn test_congestion_control_execution_cancellation() {
 
     // Now execute the cancelled transaction to get the effects
     let epoch_store = authority_state.load_epoch_store_one_call_per_task();
-    let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
+    let executable = VerifiedExecutableTransaction::new_from_consensus(
         VerifiedTransaction::new_unchecked(congested_tx.clone()),
         epoch_store.epoch(),
     );

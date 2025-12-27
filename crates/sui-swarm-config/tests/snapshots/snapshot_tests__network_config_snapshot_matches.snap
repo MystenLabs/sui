@@ -164,7 +164,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -335,7 +334,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -506,7 +504,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -677,7 +674,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -848,7 +844,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -1019,7 +1014,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~
@@ -1190,7 +1184,6 @@ validator_configs:
         backpressure_threshold_for_rpc: ~
         fastpath_transaction_outputs_cache_size: ~
     enable-soft-bundle: true
-    enable-validator-tx-finalizer: true
     verifier-signing-config:
       max-per-fun-meter-units: ~
       max-per-mod-meter-units: ~

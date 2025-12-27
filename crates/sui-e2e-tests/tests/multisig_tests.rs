@@ -319,25 +319,9 @@ async fn test_upgraded_multisig_feature_allow() {
         config
     });
 
-    let res = do_upgraded_multisig_test().await;
-
-    // We verify that we pass the feature gate. With MFP, submit_transaction returns Ok(())
-    // when the transaction is accepted for voting. The key is that we don't get the
-    // "Unsupported" error that would indicate the feature gate blocked the transaction.
-    match res {
-        Ok(()) => {
-            // Feature gate passed, transaction was accepted for voting
-        }
-        Err(e) => {
-            // If there's an error, it should be a UserInputError (e.g., invalid object),
-            // not an Unsupported error from the feature gate
-            assert!(
-                matches!(e.as_inner(), SuiErrorKind::UserInputError { .. }),
-                "Expected UserInputError if there's an error, got: {:?}",
-                e
-            );
-        }
-    }
+    // When the feature is enabled, the transaction should be accepted for voting.
+    // Unlike when disabled (which returns Unsupported error), this should succeed.
+    do_upgraded_multisig_test().await.unwrap();
 }
 
 #[sim_test]

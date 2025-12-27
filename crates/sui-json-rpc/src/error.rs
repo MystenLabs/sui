@@ -380,7 +380,7 @@ mod tests {
         )
     }
 
-    mod match_transaction_driver_error_tests {
+    mod match_transaction_submission_error_tests {
         use sui_types::error::SuiErrorKind;
 
         use super::*;

@@ -58,7 +58,7 @@ pub fn create_executable_transaction(
 ) -> Result<VerifiedExecutableTransaction, SuiError> {
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     let verified_tx = vote_transaction(authority, transaction)?;
-    Ok(VerifiedExecutableTransaction::new_from_quorum_execution(
+    Ok(VerifiedExecutableTransaction::new_from_consensus(
         verified_tx,
         epoch_store.epoch(),
     ))
@@ -81,7 +81,7 @@ pub async fn submit_to_consensus(
 
     // Create executable - the transaction is now "certified" by consensus
     let executable =
-        VerifiedExecutableTransaction::new_from_quorum_execution(verified_tx, epoch_store.epoch());
+        VerifiedExecutableTransaction::new_from_consensus(verified_tx, epoch_store.epoch());
 
     // Assign shared object versions
     let assigned_versions = authority
@@ -164,7 +164,7 @@ pub async fn submit_and_execute_with_error(
 
     // Create executable - transaction is now certified by consensus
     let executable =
-        VerifiedExecutableTransaction::new_from_quorum_execution(verified_tx, epoch_store.epoch());
+        VerifiedExecutableTransaction::new_from_consensus(verified_tx, epoch_store.epoch());
 
     // Assign shared object versions if needed
     let assigned_versions = if with_shared {

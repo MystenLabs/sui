@@ -706,7 +706,7 @@ mod tests {
         .await
         .into_tx();
         let tx_digest = *transaction.digest();
-        let cert = VerifiedExecutableTransaction::new_from_quorum_execution(transaction.clone(), 0);
+        let cert = VerifiedExecutableTransaction::new_from_consensus(transaction.clone(), 0);
         let (executed_effects, _) = state
             .try_execute_immediately(&cert, ExecutionEnv::new(), &state.epoch_store_for_testing())
             .await
