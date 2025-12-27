@@ -734,6 +734,19 @@ pub enum SuiErrorKind {
         "The current set of aliases for a required signer changed after the transaction was submitted"
     )]
     AliasesChanged,
+
+    // Retriable by client because another validator can create the correct claim.
+    #[error("Object {object_id} not found among input objects.")]
+    ImmutableObjectClaimNotFoundInInput { object_id: ObjectID },
+
+    // Retriable by client because the object can be frozen in the future.
+    #[error(
+        "Claimed object {claimed_object_id} is not immutable. Found object ref: {found_object_ref:?}"
+    )]
+    InvalidImmutableObjectClaim {
+        claimed_object_id: ObjectID,
+        found_object_ref: ObjectRef,
+    },
 }
 
 #[repr(u64)]

@@ -2036,6 +2036,77 @@ impl AuthorityPerEpochStore {
         Ok(self.tables()?.transaction_cert_signatures.get(tx_digest)?)
     }
 
+    /// Gets owned object locks, checking quarantine first then falling back to DB.
+    /// Used for post-consensus conflict detection when preconsensus locking is disabled.
+    /// After crash recovery, quarantine is empty so we naturally fall back to DB.
+    pub fn get_owned_object_locks(
+        &self,
+        obj_refs: &[ObjectRef],
+    ) -> SuiResult<Vec<Option<LockDetails>>> {
+        let tables = self.tables()?;
+        self.consensus_quarantine
+            .read()
+            .get_owned_object_locks(&tables, obj_refs)
+    }
+
+    /// Attempts to acquire owned object locks for a transaction post-consensus.
+    /// This is used when preconsensus locking is disabled.
+    ///
+    /// Checks whether the object versions are already locked by searching:
+    /// 1. The current commit
+    /// 2. Quarantine and cache (earlier consensus commits in this epoch)
+    /// 3. DB (cache miss)
+    ///
+    /// Returns the new locks to add on success, or error if a conflict exists.
+    pub fn try_acquire_owned_object_locks_post_consensus(
+        &self,
+        owned_object_refs: &[ObjectRef],
+        tx_digest: TransactionDigest,
+        current_commit_locks: &HashMap<ObjectRef, TransactionDigest>,
+    ) -> SuiResult<Vec<(ObjectRef, LockDetails)>> {
+        if owned_object_refs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Check for intra-commit conflicts (transactions processed earlier in the same commit).
+        for obj_ref in owned_object_refs {
+            if let Some(locked_tx_digest) = current_commit_locks.get(obj_ref)
+                && *locked_tx_digest != tx_digest
+            {
+                return Err(SuiErrorKind::ObjectLockConflict {
+                    obj_ref: *obj_ref,
+                    pending_transaction: *locked_tx_digest,
+                }
+                .into());
+            }
+        }
+
+        // Check quarantine and epoch store for existing locks.
+        let existing_locks = self
+            .get_owned_object_locks(owned_object_refs)
+            .unwrap_or_default();
+
+        // Check for conflicts with existing locks (from earlier commits or crash recovery)
+        for (lock, obj_ref) in existing_locks.iter().zip(owned_object_refs) {
+            if let Some(locked_tx_digest) = lock
+                && *locked_tx_digest != tx_digest
+            {
+                return Err(SuiErrorKind::ObjectLockConflict {
+                    obj_ref: *obj_ref,
+                    pending_transaction: *locked_tx_digest,
+                }
+                .into());
+            }
+        }
+
+        // No conflicts, so the consumed owned object versions are valid (from preconsensus validation)
+        // and available (from the checks above). Return the new locks to add.
+        Ok(owned_object_refs
+            .iter()
+            .map(|obj_ref| (*obj_ref, tx_digest))
+            .collect())
+    }
+
     /// Resolves InputObjectKinds into InputKeys. `assigned_versions` is used to map shared inputs
     /// to specific object versions.
     pub(crate) fn get_input_object_keys(
@@ -2152,7 +2223,7 @@ impl AuthorityPerEpochStore {
         Ok(result)
     }
 
-    /// Called when transaction outputs are committed to disk
+    /// Called when transaction outputs are committed to disk.
     #[instrument(level = "trace", skip_all)]
     pub fn handle_finalized_checkpoint(
         &self,

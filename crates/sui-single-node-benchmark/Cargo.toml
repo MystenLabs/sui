@@ -17,6 +17,7 @@ sui-test-transaction-builder.workspace = true
 sui-transaction-checks.workspace = true
 sui-types.workspace = true
 sui-storage.workspace = true
+sui-protocol-config.workspace = true
 
 async-trait.workspace = true
 bcs.workspace = true
@@ -34,5 +35,4 @@ tracing.workspace = true
 
 [dev-dependencies]
 sui-macros.workspace = true
-sui-protocol-config.workspace = true
 sui-simulator.workspace = true

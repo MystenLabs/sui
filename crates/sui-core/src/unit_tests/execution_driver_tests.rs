@@ -296,8 +296,12 @@ async fn test_execution_with_dependencies() {
     telemetry_subscribers::init_for_testing();
 
     // Disable randomness, it can't be constructed with fake authorities in this test anyway.
+    // Also disable preconsensus locking since this test uses the Quorum Driver flow
+    // (extract_cert) which requires signed transaction storage that only happens with
+    // preconsensus locking enabled.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_random_beacon_for_testing(false);
+        config.set_disable_preconsensus_locking_for_testing(false);
         config
     });
 
@@ -489,8 +493,12 @@ async fn test_per_object_overload() {
     telemetry_subscribers::init_for_testing();
 
     // Disable randomness, it can't be constructed with fake authorities in this test anyway.
+    // Also disable preconsensus locking since this test uses the Quorum Driver flow
+    // (extract_cert) which requires signed transaction storage that only happens with
+    // preconsensus locking enabled.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_random_beacon_for_testing(false);
+        config.set_disable_preconsensus_locking_for_testing(false);
         config
     });
 
@@ -627,8 +635,12 @@ async fn test_txn_age_overload() {
     telemetry_subscribers::init_for_testing();
 
     // Disable randomness, it can't be constructed with fake authorities in this test anyway.
+    // Also disable preconsensus locking since this test uses the Quorum Driver flow
+    // (extract_cert) which requires signed transaction storage that only happens with
+    // preconsensus locking enabled.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_random_beacon_for_testing(false);
+        config.set_disable_preconsensus_locking_for_testing(false);
         config
     });
 
@@ -759,6 +771,13 @@ async fn test_txn_age_overload() {
 async fn test_authority_txn_signing_pushback() {
     telemetry_subscribers::init_for_testing();
 
+    // This test requires preconsensus locking to be enabled because it tests lock-related
+    // behavior (checking object locks and ObjectLockConflict errors).
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     // Create one sender, two recipients addresses, and 2 gas objects.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let (recipient1, _): (_, AccountKeyPair) = get_key_pair();
@@ -888,6 +907,13 @@ async fn test_authority_txn_signing_pushback() {
 // Tests that when validator is in load shedding mode, it can pushback txn execution correctly.
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn test_authority_txn_execution_pushback() {
+    // This test uses wait_for_certificate_execution which requires fastpath execution.
+    // Gate with disable_preconsensus_locking=false.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     telemetry_subscribers::init_for_testing();
 
     // Create one sender, one recipient addresses, and 2 gas objects.

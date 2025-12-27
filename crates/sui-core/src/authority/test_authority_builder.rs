@@ -178,8 +178,14 @@ impl<'a> TestAuthorityBuilder<'a> {
     pub async fn build(self) -> Arc<AuthorityState> {
         // `_guard` must be declared here so it is not dropped before
         // `AuthorityPerEpochStore::new` is called
-        let protocol_config = self.protocol_config.clone();
-        let _guard = protocol_config
+        //
+        // Only create a guard if an explicit protocol_config was provided.
+        // If no protocol_config is provided, the caller is responsible for setting up
+        // any necessary protocol config overrides (e.g., disable_preconsensus_locking=false
+        // for tests that use the Quorum Driver flow with extract_cert).
+        let _guard = self
+            .protocol_config
+            .clone()
             .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
 
         let mut local_network_config_builder =
