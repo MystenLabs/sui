@@ -19,7 +19,10 @@ use sui_indexer_alt_schema::{
     schema::tx_balance_changes,
     transactions::{BalanceChange, StoredTxBalanceChange},
 };
+use sui_types::TypeTag;
+use sui_types::balance_change::address_balance_changes_from_accumulator_events;
 use sui_types::full_checkpoint_content::ExecutedTransaction;
+use sui_types::object::Owner;
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
 use async_trait::async_trait;
@@ -98,33 +101,59 @@ fn balance_changes(
 ) -> Result<Vec<BalanceChange>> {
     // Shortcut if the transaction failed -- we know that only gas was charged.
     if transaction.effects.status().is_err() {
+        let net_gas_usage = transaction.effects.gas_cost_summary().net_gas_usage();
+        // This can happen if the transaction failed due to insufficient address balance.
+        if net_gas_usage == 0 {
+            return Ok(vec![]);
+        }
         return Ok(vec![BalanceChange::V1 {
             owner: transaction.effects.gas_object().1,
             coin_type: GAS::type_tag().to_canonical_string(/* with_prefix */ true),
-            amount: -(transaction.effects.gas_cost_summary().net_gas_usage() as i128),
+            amount: -(net_gas_usage as i128),
         }]);
     }
 
-    let mut changes = BTreeMap::new();
+    // First gather address balance changes from accumulator events.
+    let mut balance_changes = address_balance_changes_from_accumulator_events(&transaction.effects)
+        .fold(
+            BTreeMap::<(Owner, TypeTag), i128>::new(),
+            |mut acc, (addr, coin_type, amt)| {
+                // We always transfer address balance funds to an address.
+                *acc.entry((Owner::AddressOwner(addr), coin_type))
+                    .or_default() += amt;
+                acc
+            },
+        );
 
+    // Then gather coin balance changes from input and output objects.
     for object in transaction.input_objects(&checkpoint.object_set) {
         if let Some((type_, balance)) = Coin::extract_balance_if_coin(object)? {
-            *changes.entry((object.owner(), type_)).or_insert(0i128) -= balance as i128;
+            *balance_changes
+                .entry((object.owner().clone(), type_))
+                .or_insert(0i128) -= balance as i128;
         }
     }
 
     for object in transaction.output_objects(&checkpoint.object_set) {
         if let Some((type_, balance)) = Coin::extract_balance_if_coin(object)? {
-            *changes.entry((object.owner(), type_)).or_insert(0i128) += balance as i128;
+            *balance_changes
+                .entry((object.owner().clone(), type_))
+                .or_insert(0i128) += balance as i128;
         }
     }
 
-    Ok(changes
+    Ok(balance_changes
         .into_iter()
-        .map(|((owner, coin_type), amount)| BalanceChange::V1 {
-            owner: owner.clone(),
-            coin_type: coin_type.to_canonical_string(/* with_prefix */ true),
-            amount,
+        .filter_map(|((owner, coin_type), amount)| {
+            if amount == 0 {
+                None
+            } else {
+                Some(BalanceChange::V1 {
+                    owner,
+                    coin_type: coin_type.to_canonical_string(/* with_prefix */ true),
+                    amount,
+                })
+            }
         })
         .collect())
 }

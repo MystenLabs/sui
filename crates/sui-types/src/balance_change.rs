@@ -52,9 +52,9 @@ fn coins(objects: &[Object]) -> impl Iterator<Item = (&SuiAddress, TypeTag, u64)
     })
 }
 
-/// Extract balance changes from accumulator events that have Balance<T> types.
+/// Extract balance changes from accumulator events that have `Balance<T>` types.
 /// Returns an iterator of (address, coin_type, signed_amount) tuples.
-fn address_balance_changes_from_accumulator_events(
+pub fn address_balance_changes_from_accumulator_events(
     effects: &TransactionEffects,
 ) -> impl Iterator<Item = (SuiAddress, TypeTag, i128)> + '_ {
     effects

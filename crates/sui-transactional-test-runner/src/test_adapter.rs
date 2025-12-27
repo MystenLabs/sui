@@ -247,6 +247,7 @@ impl AdapterInitConfig {
             enable_authenticated_event_streams,
             allow_references_in_ptbs,
             enable_non_exclusive_writes,
+            enable_address_balance_gas_payments,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -284,6 +285,9 @@ impl AdapterInitConfig {
         }
         if let Some(enable) = shared_object_deletion {
             protocol_config.set_shared_object_deletion_for_testing(enable);
+        }
+        if enable_address_balance_gas_payments {
+            protocol_config.enable_address_balance_gas_payments_for_testing();
         }
         // Older protocol versions use deprecated congestion control modes. Override to use
         // ExecutionTimeEstimate mode which is the only supported mode.
@@ -956,6 +960,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 sender,
                 gas_budget,
                 gas_price,
+                address_balance_gas,
             }) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let obj_arg = SuiValue::Object(fake_id, None).into_argument(&mut builder, self)?;
@@ -965,6 +970,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 };
                 let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let gas_price: u64 = gas_price.unwrap_or(self.gas_price);
+                let use_address_balance_gas = address_balance_gas.unwrap_or(false);
                 let transaction = self.sign_txn(sender, |sender, gas| {
                     let rec_arg = builder.pure(recipient).unwrap();
                     builder.command(sui_types::transaction::Command::TransferObjects(
@@ -972,6 +978,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         rec_arg,
                     ));
                     let pt = builder.finish();
+                    let gas = if use_address_balance_gas { vec![] } else { gas };
                     TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price)
                 });
                 let summary = self.execute_txn(transaction).await?;

@@ -101,6 +101,9 @@ pub struct SuiInitArgs {
     /// Enable non-exclusive write objects for testing
     #[clap(long = "enable-non-exclusive-write-objects")]
     pub enable_non_exclusive_writes: bool,
+    /// Enable using address balance as gas payments feature for testing
+    #[clap(long = "enable-address-balance-gas-payments")]
+    pub enable_address_balance_gas_payments: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -123,6 +126,8 @@ pub struct TransferObjectCommand {
     pub gas_budget: Option<u64>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
+    #[clap(long = "address-balance-gas")]
+    pub address_balance_gas: Option<bool>,
 }
 
 #[derive(Debug, clap::Parser)]
