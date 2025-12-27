@@ -77,7 +77,7 @@ pub enum FetchError {
         #[source]
         error: anyhow::Error,
     },
-    #[error("Permenent error in {reason}: {error}")]
+    #[error("Permanent error in {reason}: {error}")]
     Permanent {
         reason: &'static str,
         #[source]
