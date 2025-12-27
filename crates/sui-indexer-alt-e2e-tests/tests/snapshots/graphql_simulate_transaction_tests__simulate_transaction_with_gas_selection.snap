@@ -1,0 +1,34 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_simulate_transaction_tests.rs
+expression: "result.pointer(\"/data/simulateTransaction\")"
+---
+{
+  "effects": {
+    "status": "SUCCESS",
+    "transaction": {
+      "gasInput": {
+        "gasBudget": "156976000",
+        "gasPayment": {
+          "nodes": [
+            {
+              "address": "0x12f601fb4c87c12b18121a0b9313565f272996d0be5c263849bb7fdc66da4c47"
+            },
+            {
+              "address": "0x230a741dc47a74034d89335ff35319d19372c3c627385a9030d7062b1f922eae"
+            },
+            {
+              "address": "0x28eb9af2f4476c385aa2e9cdbfb4ebd421d873214baf627bfd090585abcd3eff"
+            },
+            {
+              "address": "0x706a14cb73ecf4f08acf662e48ded0266214488e87b8123dc75ecb527c91c5f4"
+            },
+            {
+              "address": "0xc6d6317b72e5fba9686fcf833c2ccb5e1754bed8e86610d5b3bf7b4c76b4fe86"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "error": null
+}

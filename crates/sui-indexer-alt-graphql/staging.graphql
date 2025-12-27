@@ -3282,8 +3282,11 @@ type Query {
 	`{"bcs": {"value": "<base64>"}}`
 	
 	Unlike `executeTransaction`, this does not require signatures since the transaction is not committed to the blockchain. This allows for previewing transaction effects, estimating gas costs, and testing transaction logic without spending gas or requiring valid signatures.
+	
+	- `checksEnabled`: If true, enables transaction validation checks during simulation. Defaults to true.
+	- `doGasSelection`: If true, enables automatic gas coin selection and budget estimation. Defaults to false.
 	"""
-	simulateTransaction(transaction: JSON!): SimulationResult!
+	simulateTransaction(transaction: JSON!, checksEnabled: Boolean, doGasSelection: Boolean): SimulationResult!
 	"""
 	Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
 	"""
