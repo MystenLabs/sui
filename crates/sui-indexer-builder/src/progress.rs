@@ -32,7 +32,7 @@ pub struct OutOfOrderSaveAfterDurationPolicy {
     duration: tokio::time::Duration,
     last_save_time: Arc<Mutex<HashMap<String, Option<tokio::time::Instant>>>>,
     seen: Arc<Mutex<HashMap<String, HashSet<u64>>>>,
-    next_to_fill: Arc<Mutex<HashMap<String, Option<u64>>>>,
+    next_to_fill: Arc<Mutex<HashMap<String, u64>>>,
 }
 
 impl OutOfOrderSaveAfterDurationPolicy {
@@ -77,10 +77,9 @@ impl ProgressSavingPolicy {
             ProgressSavingPolicy::OutOfOrderSaveAfterDuration(policy) => {
                 let mut next_to_fill = {
                     let mut next_to_fill_guard = policy.next_to_fill.lock().unwrap();
-                    (*next_to_fill_guard
+                    *next_to_fill_guard
                         .entry(task_name.clone())
-                        .or_insert(Some(start_height)))
-                    .unwrap()
+                        .or_insert(start_height)
                 };
                 let old_next_to_fill = next_to_fill;
                 {
@@ -99,7 +98,7 @@ impl ProgressSavingPolicy {
                         .next_to_fill
                         .lock()
                         .unwrap()
-                        .insert(task_name.clone(), Some(next_to_fill));
+                        .insert(task_name.clone(), next_to_fill);
                 }
 
                 let mut last_save_time_guard = policy.last_save_time.lock().unwrap();
