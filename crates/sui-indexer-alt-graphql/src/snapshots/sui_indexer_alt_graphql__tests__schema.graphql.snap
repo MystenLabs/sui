@@ -1,6 +1,5 @@
 ---
 source: crates/sui-indexer-alt-graphql/src/lib.rs
-assertion_line: 466
 expression: sdl
 ---
 """
@@ -4066,7 +4065,7 @@ input TransactionFilter {
 """
 Input argument to a Programmable Transaction Block (PTB) command.
 """
-union TransactionInput = Pure | OwnedOrImmutable | SharedInput | Receiving | BalanceWithdraw
+union TransactionInput = Pure | MoveValue | OwnedOrImmutable | SharedInput | Receiving | BalanceWithdraw
 
 type TransactionInputConnection {
 	"""

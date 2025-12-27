@@ -41,13 +41,20 @@ impl ProgrammableTransaction {
     ) -> Option<Result<Connection<String, TransactionInput>, RpcError>> {
         Some(
             async {
-                let pagination = ctx.data::<PaginationConfig>()?;
+                let pagination: &PaginationConfig = ctx.data()?;
                 let limits = pagination.limits("ProgrammableTransaction", "inputs");
                 let page = Page::from_params(limits, first, after, last, before)?;
+
+                let resolver = self.scope.package_resolver();
+                let pure_layouts = match resolver.pure_input_layouts(&self.native).await {
+                    Ok(layouts) => layouts,
+                    Err(_) => vec![None; self.native.inputs.len()],
+                };
 
                 page.paginate_indices(self.native.inputs.len(), |i| {
                     Ok(TransactionInput::from(
                         self.native.inputs[i].clone(),
+                        pure_layouts[i].clone(),
                         self.scope.clone(),
                     ))
                 })
@@ -67,7 +74,7 @@ impl ProgrammableTransaction {
     ) -> Option<Result<Connection<String, Command>, RpcError>> {
         Some(
             async {
-                let pagination = ctx.data::<PaginationConfig>()?;
+                let pagination: &PaginationConfig = ctx.data()?;
                 let limits = pagination.limits("ProgrammableTransaction", "commands");
                 let page = Page::from_params(limits, first, after, last, before)?;
 
