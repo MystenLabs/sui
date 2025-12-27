@@ -15,6 +15,13 @@ service ConsistentService {
 
   rpc ListBalances(ListBalancesRequest) returns (ListBalancesResponse);
 
+  rpc BatchGetAddressBalances(BatchGetAddressBalancesRequest)
+      returns (BatchGetAddressBalancesResponse);
+
+  rpc GetAddressBalance(GetAddressBalanceRequest) returns (AddressBalance);
+
+  rpc ListAddressBalances(ListAddressBalancesRequest) returns (ListAddressBalancesResponse);
+
   rpc ListObjectsByType(ListObjectsByTypeRequest) returns (ListObjectsResponse);
 
   rpc ListOwnedObjects(ListOwnedObjectsRequest) returns (ListObjectsResponse);
@@ -97,6 +104,55 @@ message ListBalancesResponse {
   // Page of balances owned by the specified owner.
   repeated Balance balances = 3;
 }
+
+message BatchGetAddressBalancesRequest { repeated GetAddressBalanceRequest requests = 1; }
+
+message BatchGetAddressBalancesResponse { repeated AddressBalance balances = 1; }
+
+message GetAddressBalanceRequest {
+  // Required. The address of the owner whose address balance is being requested.
+  optional string owner = 1;
+
+  // Required. The marker type for the balance, e.g. `0x2::sui::SUI`.
+  optional string coin_type = 2;
+}
+
+message ListAddressBalancesRequest {
+  // Required. The address of the owner whose address balances are being requested.
+  optional string owner = 1;
+
+  // The maximum number of entries to return. The service may return fewer than
+  // this value.
+  //
+  // Consult `sui.rpc.consistent.v1alpha/ServiceConfig` for default and maximum
+  // page sizes.
+  optional uint32 page_size = 100;
+
+  // A page token, received from a previous `ListAddressBalances` call.
+  // Provide this to retrieve the next page.
+  optional bytes after_token = 101;
+
+  // A page token, received from a previous `ListAddressBalances` call.
+  // Provide this to retrieve the previous page.
+  optional bytes before_token = 102;
+
+  // Whether to fetch the next page from the front or back of the filtered
+  // range.
+  optional End end = 103;
+}
+
+message ListAddressBalancesResponse {
+  // Whether there are more pages before this one.
+  optional bool has_previous_page = 1;
+
+  // Whether there are more pages after this one.
+  optional bool has_next_page = 2;
+
+  // Page of address balances owned by the specified owner.
+  repeated AddressBalance balances = 3;
+}
+
+
 
 message ListObjectsByTypeRequest {
   // Required. Type filter to limit the types of objects listed.
@@ -227,6 +283,21 @@ message Balance {
 
   // Pagination cursor pointing to this balance entry, if this Balance is part
   // of a paginated response.
+  optional bytes page_token = 100;
+}
+
+message AddressBalance {
+  // Address of the owner whose address balance is being reported.
+  optional string owner = 1;
+
+  // The marker type for the balance, e.g. `0x2::sui::SUI`.
+  optional string coin_type = 2;
+
+  /// The total balance for the type owned by one address, denominated in its smallest unit.
+  optional uint64 balance = 3;
+
+  // Pagination cursor pointing to this balance entry, if this AddressBalance is part of a paginated
+  // response.
   optional bytes page_token = 100;
 }
 

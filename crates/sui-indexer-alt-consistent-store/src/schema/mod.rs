@@ -10,12 +10,16 @@ use crate::{
     store,
 };
 
+pub(crate) mod address_balances;
 pub(crate) mod balances;
 pub(crate) mod object_by_owner;
 pub(crate) mod object_by_type;
 
 /// All tables written to and read from the consistent store.
 pub(crate) struct Schema {
+    /// Tracks ... address balances.
+    pub(crate) address_balances: DbMap<address_balances::Key, u128>,
+
     /// The balances of all coin-like objects owned by an account, indexed by owner and type.
     pub(crate) balances: DbMap<balances::Key, i128>,
 
@@ -30,6 +34,7 @@ pub(crate) struct Schema {
 impl store::Schema for Schema {
     fn cfs(base_options: &rocksdb::Options) -> Vec<(&'static str, rocksdb::Options)> {
         vec![
+            ("address_balances", address_balances::options(base_options)),
             ("balances", balances::options(base_options)),
             ("object_by_owner", object_by_owner::options(base_options)),
             ("object_by_type", object_by_type::options(base_options)),
@@ -38,6 +43,7 @@ impl store::Schema for Schema {
 
     fn open(db: &Arc<Db>) -> anyhow::Result<Self> {
         Ok(Self {
+            address_balances: DbMap::new(db.clone(), "address_balances"),
             balances: DbMap::new(db.clone(), "balances"),
             object_by_owner: DbMap::new(db.clone(), "object_by_owner"),
             object_by_type: DbMap::new(db.clone(), "object_by_type"),

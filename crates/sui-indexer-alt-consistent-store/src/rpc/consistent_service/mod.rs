@@ -3,20 +3,26 @@
 
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_server::ConsistentService;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    AvailableRangeRequest, AvailableRangeResponse, Balance, BatchGetBalancesRequest,
-    BatchGetBalancesResponse, GetBalanceRequest, ListBalancesRequest, ListBalancesResponse,
-    ListObjectsByTypeRequest, ListObjectsResponse, ListOwnedObjectsRequest, ServiceConfigRequest,
-    ServiceConfigResponse,
+    AddressBalance, AvailableRangeRequest, AvailableRangeResponse, Balance,
+    BatchGetAddressBalancesRequest, BatchGetAddressBalancesResponse, BatchGetBalancesRequest,
+    BatchGetBalancesResponse, GetAddressBalanceRequest, GetBalanceRequest,
+    ListAddressBalancesRequest, ListAddressBalancesResponse, ListBalancesRequest,
+    ListBalancesResponse, ListObjectsByTypeRequest, ListObjectsResponse, ListOwnedObjectsRequest,
+    ServiceConfigRequest, ServiceConfigResponse,
 };
 
 use super::state::{State, checkpointed_response};
 
+use self::address_balances::{
+    batch_get_address_balances, get_address_balance, list_address_balances,
+};
 use self::available_range::available_range;
 use self::balances::{batch_get_balances, get_balance, list_balances};
 use self::list_objects_by_type::list_objects_by_type;
 use self::list_owned_objects::list_owned_objects;
 use self::service_config::service_config;
 
+mod address_balances;
 mod available_range;
 mod balances;
 mod list_objects_by_type;
@@ -49,6 +55,33 @@ impl ConsistentService for State {
     ) -> Result<tonic::Response<Balance>, tonic::Status> {
         let checkpoint = self.checkpoint(&request)?;
         let response = get_balance(self, checkpoint, request.into_inner())?;
+        Ok(checkpointed_response(checkpoint, response)?)
+    }
+
+    async fn batch_get_address_balances(
+        &self,
+        request: tonic::Request<BatchGetAddressBalancesRequest>,
+    ) -> Result<tonic::Response<BatchGetAddressBalancesResponse>, tonic::Status> {
+        let checkpoint = self.checkpoint(&request)?;
+        let response = batch_get_address_balances(self, checkpoint, request.into_inner())?;
+        Ok(checkpointed_response(checkpoint, response)?)
+    }
+
+    async fn get_address_balance(
+        &self,
+        request: tonic::Request<GetAddressBalanceRequest>,
+    ) -> Result<tonic::Response<AddressBalance>, tonic::Status> {
+        let checkpoint = self.checkpoint(&request)?;
+        let response = get_address_balance(self, checkpoint, request.into_inner())?;
+        Ok(checkpointed_response(checkpoint, response)?)
+    }
+
+    async fn list_address_balances(
+        &self,
+        request: tonic::Request<ListAddressBalancesRequest>,
+    ) -> Result<tonic::Response<ListAddressBalancesResponse>, tonic::Status> {
+        let checkpoint = self.checkpoint(&request)?;
+        let response = list_address_balances(self, checkpoint, request.into_inner())?;
         Ok(checkpointed_response(checkpoint, response)?)
     }
 

@@ -46,6 +46,8 @@ use sui_indexer_alt_framework::{
     pipeline::sequential::SequentialConfig, service::Service,
 };
 
+use crate::handlers::address_balances::AddressBalances;
+
 pub mod args;
 pub mod config;
 mod db;
@@ -85,6 +87,7 @@ pub async fn start_service(
                 balances,
                 object_by_owner,
                 object_by_type,
+                address_balances,
             },
         rpc,
     } = config;
@@ -132,6 +135,7 @@ pub async fn start_service(
     add_sequential!(Balances, balances);
     add_sequential!(ObjectByOwner, object_by_owner);
     add_sequential!(ObjectByType, object_by_type);
+    add_sequential!(AddressBalances, address_balances);
 
     let s_rpc = rpc.run().await?;
     let s_indexer = indexer.run().await?;

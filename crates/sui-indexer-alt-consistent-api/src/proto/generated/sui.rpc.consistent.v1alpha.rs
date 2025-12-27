@@ -85,6 +85,62 @@ pub struct ListBalancesResponse {
     #[prost(message, repeated, tag = "3")]
     pub balances: ::prost::alloc::vec::Vec<Balance>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BatchGetAddressBalancesRequest {
+    #[prost(message, repeated, tag = "1")]
+    pub requests: ::prost::alloc::vec::Vec<GetAddressBalanceRequest>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BatchGetAddressBalancesResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub balances: ::prost::alloc::vec::Vec<AddressBalance>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetAddressBalanceRequest {
+    /// Required. The address of the owner whose address balance is being requested.
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
+    /// Required. The marker type for the balance, e.g. `0x2::sui::SUI`.
+    #[prost(string, optional, tag = "2")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListAddressBalancesRequest {
+    /// Required. The address of the owner whose address balances are being requested.
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
+    /// The maximum number of entries to return. The service may return fewer than
+    /// this value.
+    ///
+    /// Consult `sui.rpc.consistent.v1alpha/ServiceConfig` for default and maximum
+    /// page sizes.
+    #[prost(uint32, optional, tag = "100")]
+    pub page_size: ::core::option::Option<u32>,
+    /// A page token, received from a previous `ListAddressBalances` call.
+    /// Provide this to retrieve the next page.
+    #[prost(bytes = "bytes", optional, tag = "101")]
+    pub after_token: ::core::option::Option<::prost::bytes::Bytes>,
+    /// A page token, received from a previous `ListAddressBalances` call.
+    /// Provide this to retrieve the previous page.
+    #[prost(bytes = "bytes", optional, tag = "102")]
+    pub before_token: ::core::option::Option<::prost::bytes::Bytes>,
+    /// Whether to fetch the next page from the front or back of the filtered
+    /// range.
+    #[prost(enumeration = "End", optional, tag = "103")]
+    pub end: ::core::option::Option<i32>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListAddressBalancesResponse {
+    /// Whether there are more pages before this one.
+    #[prost(bool, optional, tag = "1")]
+    pub has_previous_page: ::core::option::Option<bool>,
+    /// Whether there are more pages after this one.
+    #[prost(bool, optional, tag = "2")]
+    pub has_next_page: ::core::option::Option<bool>,
+    /// Page of address balances owned by the specified owner.
+    #[prost(message, repeated, tag = "3")]
+    pub balances: ::prost::alloc::vec::Vec<AddressBalance>,
+}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ListObjectsByTypeRequest {
     /// Required. Type filter to limit the types of objects listed.
@@ -254,6 +310,22 @@ pub struct Balance {
     pub balance: ::core::option::Option<u64>,
     /// Pagination cursor pointing to this balance entry, if this Balance is part
     /// of a paginated response.
+    #[prost(bytes = "bytes", optional, tag = "100")]
+    pub page_token: ::core::option::Option<::prost::bytes::Bytes>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AddressBalance {
+    /// Address of the owner whose address balance is being reported.
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
+    /// The marker type for the balance, e.g. `0x2::sui::SUI`.
+    #[prost(string, optional, tag = "2")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
+    /// / The total balance for the type owned by one address, denominated in its smallest unit.
+    #[prost(uint64, optional, tag = "3")]
+    pub balance: ::core::option::Option<u64>,
+    /// Pagination cursor pointing to this balance entry, if this AddressBalance is part of a paginated
+    /// response.
     #[prost(bytes = "bytes", optional, tag = "100")]
     pub page_token: ::core::option::Option<::prost::bytes::Bytes>,
 }
@@ -502,6 +574,90 @@ pub mod consistent_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        pub async fn batch_get_address_balances(
+            &mut self,
+            request: impl tonic::IntoRequest<super::BatchGetAddressBalancesRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::BatchGetAddressBalancesResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.consistent.v1alpha.ConsistentService/BatchGetAddressBalances",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "sui.rpc.consistent.v1alpha.ConsistentService",
+                        "BatchGetAddressBalances",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_address_balance(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetAddressBalanceRequest>,
+        ) -> std::result::Result<tonic::Response<super::AddressBalance>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.consistent.v1alpha.ConsistentService/GetAddressBalance",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "sui.rpc.consistent.v1alpha.ConsistentService",
+                        "GetAddressBalance",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_address_balances(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListAddressBalancesRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListAddressBalancesResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.rpc.consistent.v1alpha.ConsistentService/ListAddressBalances",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(
+                        "sui.rpc.consistent.v1alpha.ConsistentService",
+                        "ListAddressBalances",
+                    ),
+                );
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn list_objects_by_type(
             &mut self,
             request: impl tonic::IntoRequest<super::ListObjectsByTypeRequest>,
@@ -627,6 +783,24 @@ pub mod consistent_service_server {
             request: tonic::Request<super::ListBalancesRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ListBalancesResponse>,
+            tonic::Status,
+        >;
+        async fn batch_get_address_balances(
+            &self,
+            request: tonic::Request<super::BatchGetAddressBalancesRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::BatchGetAddressBalancesResponse>,
+            tonic::Status,
+        >;
+        async fn get_address_balance(
+            &self,
+            request: tonic::Request<super::GetAddressBalanceRequest>,
+        ) -> std::result::Result<tonic::Response<super::AddressBalance>, tonic::Status>;
+        async fn list_address_balances(
+            &self,
+            request: tonic::Request<super::ListAddressBalancesRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListAddressBalancesResponse>,
             tonic::Status,
         >;
         async fn list_objects_by_type(
@@ -898,6 +1072,155 @@ pub mod consistent_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ListBalancesSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.consistent.v1alpha.ConsistentService/BatchGetAddressBalances" => {
+                    #[allow(non_camel_case_types)]
+                    struct BatchGetAddressBalancesSvc<T: ConsistentService>(pub Arc<T>);
+                    impl<
+                        T: ConsistentService,
+                    > tonic::server::UnaryService<super::BatchGetAddressBalancesRequest>
+                    for BatchGetAddressBalancesSvc<T> {
+                        type Response = super::BatchGetAddressBalancesResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                super::BatchGetAddressBalancesRequest,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ConsistentService>::batch_get_address_balances(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = BatchGetAddressBalancesSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.consistent.v1alpha.ConsistentService/GetAddressBalance" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetAddressBalanceSvc<T: ConsistentService>(pub Arc<T>);
+                    impl<
+                        T: ConsistentService,
+                    > tonic::server::UnaryService<super::GetAddressBalanceRequest>
+                    for GetAddressBalanceSvc<T> {
+                        type Response = super::AddressBalance;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetAddressBalanceRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ConsistentService>::get_address_balance(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetAddressBalanceSvc(inner);
+                        let codec = tonic_prost::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/sui.rpc.consistent.v1alpha.ConsistentService/ListAddressBalances" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListAddressBalancesSvc<T: ConsistentService>(pub Arc<T>);
+                    impl<
+                        T: ConsistentService,
+                    > tonic::server::UnaryService<super::ListAddressBalancesRequest>
+                    for ListAddressBalancesSvc<T> {
+                        type Response = super::ListAddressBalancesResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListAddressBalancesRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as ConsistentService>::list_address_balances(
+                                        &inner,
+                                        request,
+                                    )
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListAddressBalancesSvc(inner);
                         let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
