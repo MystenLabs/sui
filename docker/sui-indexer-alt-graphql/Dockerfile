@@ -4,7 +4,7 @@
 # and build the application.
 # rust:1.90-bullseye
 FROM rust:1.90-bullseye AS builder
-ARG PROFILE=release
+ARG PROFILE=release-unwind
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
 WORKDIR "$WORKDIR/sui"

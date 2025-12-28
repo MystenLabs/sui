@@ -14853,6 +14853,7 @@ dependencies = [
  "pin-project",
  "prometheus",
  "prost-types 0.14.1",
+ "reqwest 0.12.9",
  "serde",
  "serde_json",
  "shared-crypto",

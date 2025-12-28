@@ -46,6 +46,7 @@ pub struct RpcMetrics {
     pub queries_succeeded: IntCounter,
     pub queries_failed: IntCounterVec,
     pub queries_cancelled: IntCounter,
+    pub queries_panicked: IntCounter,
     pub queries_in_flight: IntGauge,
 
     pub limits_validation_latency: Histogram,
@@ -157,6 +158,13 @@ impl RpcMetrics {
             queries_cancelled: register_int_counter_with_registry!(
                 "graphql_queries_cancelled",
                 "Number of read requests that were cancelled before completion",
+                registry,
+            )
+            .unwrap(),
+
+            queries_panicked: register_int_counter_with_registry!(
+                "graphql_queries_panicked",
+                "Number of read requests that panicked during processing",
                 registry,
             )
             .unwrap(),
