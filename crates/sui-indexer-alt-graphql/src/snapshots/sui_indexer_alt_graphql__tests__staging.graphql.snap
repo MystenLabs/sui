@@ -1223,7 +1223,9 @@ type Epoch implements Node {
 	"""
 	totalStakeSubsidies: BigInt
 	"""
-	The total number of transaction blocks in this epoch (or `null` if the epoch has not finished yet).
+	The total number of transaction blocks in this epoch.
+	
+	If the epoch has not finished yet, this number is computed based on the number of transactions at the latest known checkpoint.
 	"""
 	totalTransactions: UInt53
 	"""
