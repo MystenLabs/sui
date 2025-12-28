@@ -483,13 +483,64 @@ Epoch.checkpoints
 Epoch.coinDenyList
   => {"obj_versions"}
 
+Epoch.endTimestamp
+  => {}
+
+Epoch.fundInflow
+  => {}
+
+Epoch.fundOutflow
+  => {}
+
+Epoch.fundSize
+  => {}
+
+Epoch.liveObjectSetDigest
+  => {}
+
+Epoch.netInflow
+  => {}
+
 Epoch.protocolConfigs
   => {}
 
 Epoch.referenceGasPrice
   => {}
 
+Epoch.safeMode
+  => {}
+
 Epoch.startTimestamp
+  => {}
+
+Epoch.storageFund
+  => {}
+
+Epoch.systemPackages
+  => {}
+
+Epoch.systemParameters
+  => {}
+
+Epoch.systemStakeSubsidy
+  => {}
+
+Epoch.systemStateVersion
+  => {}
+
+Epoch.totalCheckpoints
+  => {}
+
+Epoch.totalGasFees
+  => {}
+
+Epoch.totalStakeRewards
+  => {}
+
+Epoch.totalStakeSubsidies
+  => {}
+
+Epoch.totalTransactions
   => {}
 
 Epoch.transactions
@@ -510,58 +561,7 @@ Epoch.transactions (filter: affectedObject)
 Epoch.transactions (filter: sentAddress)
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
-Epoch.systemPackages
-  => {}
-
-Epoch.endTimestamp
-  => {}
-
 Epoch.validatorSet
-  => {}
-
-Epoch.totalCheckpoints
-  => {}
-
-Epoch.totalTransactions
-  => {}
-
-Epoch.totalGasFees
-  => {}
-
-Epoch.totalStakeRewards
-  => {}
-
-Epoch.totalStakeSubsidies
-  => {}
-
-Epoch.fundSize
-  => {}
-
-Epoch.netInflow
-  => {}
-
-Epoch.fundInflow
-  => {}
-
-Epoch.fundOutflow
-  => {}
-
-Epoch.storageFund
-  => {}
-
-Epoch.safeMode
-  => {}
-
-Epoch.systemStateVersion
-  => {}
-
-Epoch.systemParameters
-  => {}
-
-Epoch.systemStakeSubsidy
-  => {}
-
-Epoch.liveObjectSetDigest
   => {}
 
 Event.contents
