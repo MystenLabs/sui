@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 11 tasks
+processed 12 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -239,6 +239,22 @@ task 10, lines 173-202:
 Response: {
   "data": {
     "noEventsTransaction": {
+      "events": {
+        "pageInfo": {
+          "hasNextPage": false,
+          "hasPreviousPage": false
+        },
+        "nodes": []
+      }
+    }
+  }
+}
+
+task 11, lines 204-217:
+//# run-graphql --cursors 1000 2000
+Response: {
+  "data": {
+    "outOfBounds": {
       "events": {
         "pageInfo": {
           "hasNextPage": false,
