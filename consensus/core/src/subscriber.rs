@@ -203,7 +203,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                             .with_label_values(&[peer_hostname])
                             .inc();
                         let result = authority_service
-                            .handle_send_block(peer, block.clone())
+                            .handle_send_block(peer, block)
                             .await;
                         if let Err(e) = result {
                             match e {
