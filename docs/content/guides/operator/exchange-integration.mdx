@@ -45,18 +45,18 @@ Sui supports both addresses with and without a `0x` prefix. Sui recommends that 
 
 ## Track balance changes for an address
 
-You can track balance changes by calling `sui_getBalance` at predefined intervals. This call returns the total balance for an address. The total includes any coin or token type, but this document focuses on SUI. You can track changes in the total balance for an address between subsequent `sui_getBalance` requests.
+You can track balance changes by calling `suix_getBalance` at predefined intervals. This call returns the total balance for a specific coin type owned by an address. The total includes any coin or token type, but this document focuses on SUI. You can track changes in the total balance for an address between subsequent `suix_getBalance` requests.
 
-The following bash example demonstrates how to use `sui_getBalance` for address `0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3`. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate full node.
+The following bash example demonstrates how to use `suix_getBalance` for address `0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3`. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate full node.
 
 ```sh
 rpc="https://fullnode.devnet.sui.io:443"
-address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
-data="{\"jsonrpc\": \"2.0\", \"method\": \"sui_getBalance\", \"id\": 1, \"params\": [\"$address\"]}"
+owner="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
+data="{\"jsonrpc\": \"2.0\", \"method\": \"suix_getBalance\", \"id\": 1, \"params\": {\"owner\": \"$owner\"}}"
 curl -X POST -H 'Content-type: application/json' --data-raw "$data" $rpc
 ```
 
-The response is a JSON object that includes the `totalBalance` for the address:
+The response is a JSON object that includes the `totalBalance` for the address and coin type:
 ```json
 {
   "jsonrpc":"2.0",
@@ -93,19 +93,18 @@ async fn main() -> Result<(), anyhow::Error> {
 
 ## Use events to track balance changes for an address
 
-You can also track the balance for an address by subscribing to all of the events emitted from it. Use a filter to include only the events related to SUI coins, such as when the address acquires a coin or pays for a gas fee.
-The following example demonstrates how to filter events for an address using bash and cURL:
+You can also track the balance for an address by subscribing to events related to it. Use a filter to include only the events related to SUI coins, such as when the address acquires a coin or pays for a gas fee.
+The following example demonstrates how to query events using bash and cURL with the `suix_queryEvents` method:
 
 ```sh
 rpc="https://fullnode.devnet.sui.io:443"
-address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
-data="{\"jsonrpc\": \"2.0\", \"id\":1, \"method\": \"sui_getEvents\", \"params\": [{\"Recipient\": {\"AddressOwner\": \"0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3\"}}, null, null, true ]}"
+data="{\"jsonrpc\": \"2.0\", \"id\":1, \"method\": \"suix_queryEvents\", \"params\": [{\"MoveModule\": {\"package\": \"0x2\", \"module\": \"sui\"}}, null, 100, false]}"
 curl -X POST -H 'Content-type: application/json' --data-raw "$data" $rpc
 ```
 
-The response can include a large number of events. Add pagination to the response using the `nextCursor` key in the request. You can determine the corresponding `txDigest` and `eventSeq` from the `id` field of a transaction.
+The response can include a large number of events. Add pagination to the response using the `nextCursor` key in the response and providing it as the cursor parameter in subsequent requests. You can determine the corresponding `txDigest` and `eventSeq` from the `id` field of a transaction.
 
-You can replace the first `null` in the `params` array with a `txDigest` value to paginate from a specific point. The second `null` is an integer that defines how many results (up to 1000) to return and the `true` means ascending order. You can use the `nextCursor` so the response starts from a desired point.
+You can paginate from a specific point by setting the cursor parameter to the `nextCursor` value returned in the previous response. The third parameter is an integer that defines how many results (up to 1000) to return and the final boolean controls sort order.
 
 The `id` field of any transaction looks like:
 
@@ -134,7 +133,7 @@ Sui is a DAG-based blockchain and uses checkpoints for node synchronization and 
 Sui Checkpoint API operations include:
  - [`sui_getCheckpoint`](/sui-api-ref#sui_getCheckpoint): Retrieves the specified checkpoint.
  - [`sui_getLatestCheckpointSequenceNumber`](/sui-api-ref#sui_getLatestCheckpointSequenceNumber): Retrieves the sequence number of the most recently executed checkpoint.
- - [`sui_getCheckpoints`](/sui-api-ref#sui_getCheckpoints): Retrieves a paginated list of checkpoints that occurred during the specified interval. Pending a future release.
+ - [`sui_getCheckpoints`](/sui-api-ref#sui_getCheckpoints): Retrieves a paginated list of checkpoints that occurred during the specified interval.
 
 ## SUI balance transfer
 
@@ -185,67 +184,47 @@ Sui supports the following API operations related to staking. You can find the s
  - `request_add_stake`: Add user stake to a validator's staking pool.
 
    ```move
-   public fun request_add_stake(
-      self: &mut SuiSystemState,
+   #[allow(lint(public_entry))]
+   public entry fun request_add_stake(
+      wrapper: &mut SuiSystemState,
       stake: Coin<SUI>,
       validator_address: address,
       ctx: &mut TxContext,
    ) {
-      validator_set::request_add_stake(
-         &mut self.validators,
-         validator_address,
-         coin::into_balance(stake),
-         option::none(),
-         ctx,
-      );
+      let staked_sui = request_add_stake_non_entry(wrapper, stake, validator_address, ctx);
+      transfer::public_transfer(staked_sui, ctx.sender());
    }
    ```
 
  - `request_add_stake_mul_coin`: Add user stake to a validator's staking pool using multiple coins.
 
    ```move
-   public fun request_add_stake_mul_coin(
-      self: &mut SuiSystemState,
-      delegate_stakes: vector<Coin<SUI>>,
+   #[allow(lint(public_entry))]
+   public entry fun request_add_stake_mul_coin(
+      wrapper: &mut SuiSystemState,
+      stakes: vector<Coin<SUI>>,
       stake_amount: option::Option<u64>,
       validator_address: address,
       ctx: &mut TxContext,
    ) {
-      let balance = extract_coin_balance(delegate_stakes, stake_amount, ctx);
-      validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::none(), ctx);
+      let staked_sui = wrapper
+         .load_system_state_mut()
+         .request_add_stake_mul_coin(stakes, stake_amount, validator_address, ctx);
+
+      transfer::public_transfer(staked_sui, ctx.sender());
    }
    ```
 
- - `request_add_stake_with_locked_coin`: Add user stake to a validator's staking pool using a locked SUI coin.
+ - `request_withdraw_stake`: Withdraw stake from a validator's staking pool.
 
    ```move
-   public fun request_add_stake_with_locked_coin(
-      self: &mut SuiSystemState,
-      stake: LockedCoin<SUI>,
-      validator_address: address,
+   #[allow(lint(public_entry))]
+   public entry fun request_withdraw_stake(
+      wrapper: &mut SuiSystemState,
+      staked_sui: StakedSui,
       ctx: &mut TxContext,
    ) {
-      let (balance, lock) = locked_coin::into_balance(stake);
-      validator_set::request_add_stake(&mut self.validators, validator_address, balance, option::some(lock), ctx);
-   }
-   ```
-
- - `request_withdraw_stake`: Withdraw some portion of a user stake from a validator's staking pool.
-
-   ```move
-   public fun request_withdraw_stake(
-      self: &mut SuiSystemState,
-      delegation: &mut Delegation,
-      staked_sui: &mut StakedSui,
-      principal_withdraw_amount: u64,
-      ctx: &mut TxContext,
-   ) {
-      validator_set::request_withdraw_stake(
-         &mut self.validators,
-         delegation,
-         staked_sui,
-         principal_withdraw_amount,
-         ctx,
-      );
+      let withdrawn_stake = wrapper.request_withdraw_stake_non_entry(staked_sui, ctx);
+      transfer::public_transfer(withdrawn_stake.into_coin(ctx), ctx.sender());
    }
    ```
