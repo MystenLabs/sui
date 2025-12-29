@@ -80,9 +80,11 @@ impl SuiTxValidator {
                     }
                     cert_batch.push(certificate.as_ref());
                 }
-                ConsensusTransactionKind::CheckpointSignature(signature) => {
-                    ckpt_messages.push(signature.as_ref());
-                    ckpt_batch.push(&signature.summary);
+                ConsensusTransactionKind::CheckpointSignature(_) => {
+                    return Err(SuiErrorKind::UnexpectedMessage(
+                        "CheckpointSignature V1 is no longer supported".to_string(),
+                    )
+                    .into());
                 }
                 ConsensusTransactionKind::CheckpointSignatureV2(signature) => {
                     ckpt_messages.push(signature.as_ref());
@@ -101,7 +103,12 @@ impl SuiTxValidator {
                     }
                 }
 
-                ConsensusTransactionKind::CapabilityNotification(_) => {}
+                ConsensusTransactionKind::CapabilityNotification(_) => {
+                    return Err(SuiErrorKind::UnexpectedMessage(
+                        "CapabilityNotification V1 is no longer supported".to_string(),
+                    )
+                    .into());
+                }
 
                 ConsensusTransactionKind::EndOfPublish(_)
                 | ConsensusTransactionKind::NewJWKFetched(_, _, _)

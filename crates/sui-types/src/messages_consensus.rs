@@ -431,11 +431,10 @@ impl ExecutionTimeObservation {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
     CertifiedTransaction(Box<CertifiedTransaction>),
-    // V1: dedup by authority + sequence only
-    CheckpointSignature(Box<CheckpointSignatureMessage>),
+    CheckpointSignature(Box<CheckpointSignatureMessage>), // deprecated, use CheckpointSignatureV2
     EndOfPublish(AuthorityName),
 
-    CapabilityNotification(AuthorityCapabilitiesV1),
+    CapabilityNotification(AuthorityCapabilitiesV1), // deprecated, use CapabilityNotificationV2
 
     NewJWKFetched(AuthorityName, JwkId, JWK),
     RandomnessStateUpdate(u64, Vec<u8>), // deprecated

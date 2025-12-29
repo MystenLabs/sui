@@ -539,7 +539,7 @@ pub struct AuthorityEpochTables {
 
     #[allow(dead_code)]
     #[deprecated]
-    authority_capabilities: DBMap<AuthorityName, AuthorityCapabilitiesV1>,
+    authority_capabilities: DBMap<(), ()>,
     authority_capabilities_v2: DBMap<AuthorityName, AuthorityCapabilitiesV2>,
 
     /// Contains a single key, which overrides the value of
