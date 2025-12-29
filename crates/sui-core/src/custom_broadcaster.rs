@@ -13,6 +13,7 @@ use std::{collections::HashSet, net::SocketAddr, sync::Arc};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     transaction::TransactionDataAPI,
+    effects::TransactionEffectsAPI,
 };
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info, warn};
@@ -39,6 +40,7 @@ pub enum StreamMessage {
         account: SuiAddress,
         digest: String,
         kind: String,
+        is_success: bool,
     },
     BalanceChange {
         account: SuiAddress,
@@ -58,11 +60,12 @@ pub enum StreamMessage {
         order_id: String,
         sender: SuiAddress,
         digest: String,
+        is_success: bool,
     },
     ProbeEvent {
         event_type: String,
         sender: SuiAddress,
-        contents_hex: String,
+        contents: Vec<u8>,
     },
     SubscriptionSuccess {
         details: String,
@@ -134,7 +137,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
     let mut subscriptions_orders = HashSet::new(); // [Ticket #2]
     let mut subscribe_all = false;
 
-    println!("📡 [DEBUG] 新的 WebSocket 客戶端已連入！");
+    println!("[DEBUG] 新的 WebSocket 客戶端已連入！");
 
     loop {
         tokio::select! {
@@ -143,6 +146,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                     Ok(outputs) => {
                         let digest = outputs.transaction.digest().to_string();
                         let sender = outputs.transaction.sender_address();
+                        let is_success = outputs.effects.status().is_ok();
 
                         // 1. Firehose / SubscribeAll
                         if subscribe_all {
@@ -150,6 +154,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                                  account: sender,
                                  digest: digest.clone(),
                                  kind: "Transaction".to_string(),
+                                 is_success,
                              };
                              let _ = send_json(&mut socket, &msg).await;
                         }
@@ -170,13 +175,12 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
 
                              // --- [Ticket #2] 訂單探針邏輯 ---
                              if subscriptions_orders.contains(&event.sender) {
-                                 let hex_contents = format!("{:02x?}", event.contents);
-                                 println!("🔍 [探針] 發現目標 {} 的事件: {}", event.sender, event.type_);
+                                 println!("目標 {} 的事件: {} (成功: {})", event.sender, event.type_, is_success);
                                  
                                  let probe = StreamMessage::ProbeEvent {
                                      event_type: event.type_.to_string(),
                                      sender: event.sender,
-                                     contents_hex: hex_contents,
+                                     contents: event.contents.clone(),
                                  };
                                  let _ = send_json(&mut socket, &probe).await;
 
@@ -185,6 +189,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                                          order_id: "PENDING".to_string(),
                                          sender: event.sender,
                                          digest: digest.clone(),
+                                         is_success,
                                      };
                                      let _ = send_json(&mut socket, &msg).await;
                                  }
@@ -210,6 +215,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                                  account: sender,
                                  digest: digest.clone(),
                                  kind: "Transaction".to_string(),
+                                 is_success,
                              };
                              let _ = send_json(&mut socket, &msg).await;
                         }
@@ -260,7 +266,7 @@ mod smoke_tests {
     async fn test_broadcaster_startup() {
         let (_tx, rx) = mpsc::channel(100);
         CustomBroadcaster::spawn(rx, 9003);
-        println!("🚀 探針測試版已啟動於 9003...");
+        println!("測試版已啟動於 9003...");
         loop { tokio::time::sleep(Duration::from_secs(10)).await; }
     }
 }
