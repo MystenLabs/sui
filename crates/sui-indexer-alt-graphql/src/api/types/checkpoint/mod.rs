@@ -199,26 +199,26 @@ impl CheckpointContents {
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
     ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
-        let transactions = async {
-            let Some((summary, _, _)) = &self.contents else {
-                return Ok(Connection::new(false, false));
-            };
-            let pagination: &PaginationConfig = ctx.data()?;
-            let limits = pagination.limits("Checkpoint", "transactions");
-            let page = Page::from_params(limits, first, after, last, before)?;
+        Some(
+            async {
+                let Some((summary, _, _)) = &self.contents else {
+                    return Ok(Connection::new(false, false));
+                };
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Checkpoint", "transactions");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-            let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
-                at_checkpoint: Some(UInt53::from(summary.sequence_number)),
-                ..Default::default()
-            }) else {
-                return Ok(Connection::new(false, false));
-            };
+                let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
+                    at_checkpoint: Some(UInt53::from(summary.sequence_number)),
+                    ..Default::default()
+                }) else {
+                    return Ok(Connection::new(false, false));
+                };
 
-            Transaction::paginate(ctx, self.scope.clone(), page, filter).await
-        }
-        .await;
-
-        Some(transactions)
+                Transaction::paginate(ctx, self.scope.clone(), page, filter).await
+            }
+            .await,
+        )
     }
 }
 
