@@ -71,6 +71,12 @@ impl SuiTxValidator {
         for tx in txs.iter() {
             match tx {
                 ConsensusTransactionKind::CertifiedTransaction(certificate) => {
+                    if epoch_store.protocol_config().disable_preconsensus_locking() {
+                        return Err(SuiErrorKind::UnexpectedMessage(
+                            "CertifiedTransaction cannot be used when preconsensus locking is disabled".to_string(),
+                        )
+                        .into());
+                    }
                     cert_batch.push(certificate.as_ref());
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
@@ -464,6 +470,14 @@ mod tests {
 
     #[sim_test]
     async fn accept_valid_transaction() {
+        // This test uses ConsensusTransaction::new_certificate_message which creates a
+        // CertifiedTransaction. When disable_preconsensus_locking=true (protocol version 105+),
+        // CertifiedTransaction is not allowed. Gate with disable_preconsensus_locking=false.
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_preconsensus_locking_for_testing(false);
+            config
+        });
+
         // Initialize an authority with a (owned) gas object and a shared object; then
         // make a test certificate.
         let mut objects = test_gas_objects();
