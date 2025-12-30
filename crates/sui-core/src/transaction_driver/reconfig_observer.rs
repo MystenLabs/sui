@@ -3,7 +3,6 @@
 
 use super::AuthorityAggregatorUpdatable;
 use crate::{
-    authority_aggregator::AuthAggMetrics,
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     epoch::committee_store::CommitteeStore,
     execution_cache::ObjectCacheRead,
@@ -29,9 +28,7 @@ pub struct OnsiteReconfigObserver {
     reconfig_rx: tokio::sync::broadcast::Receiver<SuiSystemState>,
     execution_cache: Arc<dyn ObjectCacheRead>,
     committee_store: Arc<CommitteeStore>,
-    // TODO: Use Arc for both metrics.
     safe_client_metrics_base: SafeClientMetricsBase,
-    auth_agg_metrics: AuthAggMetrics,
 }
 
 impl OnsiteReconfigObserver {
@@ -40,14 +37,12 @@ impl OnsiteReconfigObserver {
         execution_cache: Arc<dyn ObjectCacheRead>,
         committee_store: Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
-        auth_agg_metrics: AuthAggMetrics,
     ) -> Self {
         Self {
             reconfig_rx,
             execution_cache,
             committee_store,
             safe_client_metrics_base,
-            auth_agg_metrics,
         }
     }
 }
@@ -60,7 +55,6 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
             execution_cache: self.execution_cache.clone(),
             committee_store: self.committee_store.clone(),
             safe_client_metrics_base: self.safe_client_metrics_base.clone(),
-            auth_agg_metrics: self.auth_agg_metrics.clone(),
         })
     }
 

@@ -9,19 +9,20 @@ use sui_types::{
     digests::ObjectDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{SuiError, SuiErrorKind, UserInputError},
+    executable_transaction::VerifiedExecutableTransaction,
     execution_status::{ExecutionFailureStatus, ExecutionStatus},
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
         CallArg, ObjectArg, ProgrammableTransaction, SharedObjectMutability,
-        TEST_ONLY_GAS_UNIT_FOR_PUBLISH, VerifiedCertificate,
+        TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
     },
 };
 
 use crate::{
     authority::{
         AuthorityState,
-        authority_test_utils::{certify_transaction, send_consensus},
+        authority_test_utils::{assign_versions_and_schedule, create_executable_transaction},
         authority_tests::{
             build_programmable_transaction, execute_programmable_transaction,
             execute_programmable_transaction_with_shared,
@@ -204,11 +205,11 @@ impl TestRunner {
         self.run_with_gas_object(pt, 0).await
     }
 
-    pub async fn lock_and_verify_transaction(
+    pub async fn lock_and_create_executable(
         &mut self,
         pt: ProgrammableTransaction,
         account_id: usize,
-    ) -> VerifiedCertificate {
+    ) -> VerifiedExecutableTransaction {
         let transaction = build_programmable_transaction(
             &self.authority_state,
             &self.gas_object_ids[account_id],
@@ -219,24 +220,21 @@ impl TestRunner {
         )
         .await
         .unwrap();
-        certify_transaction(&self.authority_state, transaction)
-            .await
-            .unwrap()
+        create_executable_transaction(&self.authority_state, transaction).unwrap()
     }
 
-    pub async fn execute_certificate(
+    pub async fn execute_executable(
         &mut self,
-        ct: VerifiedCertificate,
+        executable: VerifiedExecutableTransaction,
         shared: bool,
     ) -> TransactionEffects {
         let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
         if shared {
-            send_consensus(&self.authority_state, &ct).await;
+            assign_versions_and_schedule(&self.authority_state, &executable).await;
         }
-        // Call `execute_certificate` instead of `execute_certificate_with_execution_error` to make sure we go through TM
         let effects = self
             .authority_state
-            .wait_for_certificate_execution(&ct, &epoch_store)
+            .wait_for_transaction_execution(&executable, &epoch_store)
             .await
             .unwrap();
 
@@ -938,10 +936,10 @@ async fn verify_tto_not_locked(
         .cloned()
         .unwrap();
 
-    // Now get a certificate for fake_parent/child1. This will lock input objects.
+    // Now create an executable for fake_parent/child1.
     // NB: the receiving object is _not_ locked.
-    let cert_for_fake_parent = runner
-        .lock_and_verify_transaction(
+    let executable_for_fake_parent = runner
+        .lock_and_create_executable(
             {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder
@@ -959,11 +957,11 @@ async fn verify_tto_not_locked(
         )
         .await;
 
-    // After the other (fake) transaction has been created and signed, sign and execute this
+    // After the other (fake) transaction has been created, create and execute this
     // transaction. This should have no issues because the receiving object is not locked by the
-    // signing of the transaction above.
-    let valid_cert = runner
-        .lock_and_verify_transaction(
+    // creation of the transaction above.
+    let valid_executable = runner
+        .lock_and_create_executable(
             {
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -983,14 +981,14 @@ async fn verify_tto_not_locked(
     // flipper. However, the result should be the same in either case.
     let (valid_effects, invalid_effects) = if flipper {
         let invalid_effects = runner
-            .execute_certificate(cert_for_fake_parent, false)
+            .execute_executable(executable_for_fake_parent, false)
             .await;
-        let valid_effects = runner.execute_certificate(valid_cert, false).await;
+        let valid_effects = runner.execute_executable(valid_executable, false).await;
         (valid_effects, invalid_effects)
     } else {
-        let valid_effects = runner.execute_certificate(valid_cert, false).await;
+        let valid_effects = runner.execute_executable(valid_executable, false).await;
         let invalid_effects = runner
-            .execute_certificate(cert_for_fake_parent, false)
+            .execute_executable(executable_for_fake_parent, false)
             .await;
         (valid_effects, invalid_effects)
     };
@@ -1670,8 +1668,8 @@ async fn receive_and_dof_interleave() {
 
         let init_digest = effects.transaction_digest();
 
-        let cert = runner
-            .lock_and_verify_transaction(
+        let executable = runner
+            .lock_and_create_executable(
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
                     let parent = builder
@@ -1716,7 +1714,7 @@ async fn receive_and_dof_interleave() {
 
         assert!(dof_effects.status().is_ok());
 
-        let recv_effects = runner.execute_certificate(cert, true).await;
+        let recv_effects = runner.execute_executable(executable, true).await;
         assert!(recv_effects.status().is_ok());
         // The recv_effects should not contain the dependency on the initial transaction since we
         // didn't actually receive the object -- it was loaded via the dynamic field instead.

@@ -106,18 +106,13 @@ async fn party_object_deletion_multiple_times() {
             .build();
         let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
-        test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
-        txs.push(signed);
+        txs.push((signed, client_ip));
     }
 
     // Submit all the deletion transactions to the validators.
-    let validators = test_cluster.get_validator_pubkeys();
-    let submissions = txs.iter().map(|tx| async {
+    let submissions = txs.iter().map(|(tx, client_ip)| async {
         test_cluster
-            .submit_transaction_to_validators(tx.clone(), &validators)
+            .submit_and_execute(tx.clone(), Some(*client_ip))
             .await
             .unwrap();
         *tx.digest()
@@ -166,7 +161,6 @@ async fn party_object_deletion_multiple_times_cert_racing() {
     let gas_coins = accounts_and_gas[0].1.clone();
 
     // Make a bunch of transactions that all want to delete the party object.
-    let validators = test_cluster.get_validator_pubkeys();
     let mut digests = vec![];
     for coin_ref in gas_coins.into_iter() {
         let transaction = test_cluster
@@ -184,17 +178,13 @@ async fn party_object_deletion_multiple_times_cert_racing() {
         let signed = test_cluster.sign_transaction(&transaction).await;
 
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
-        test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
         info!(
             "Submitting transaction with digest: {:?}\n{:#?}",
             signed.digest(),
             signed.data().inner().intent_message().value
         );
         test_cluster
-            .submit_transaction_to_validators(signed.clone(), &validators)
+            .submit_and_execute(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         digests.push(*signed.digest());
@@ -312,18 +302,13 @@ async fn party_object_transfer_multiple_times() {
             .build();
         let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
-        test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
-        txs.push(signed);
+        txs.push((signed, client_ip));
     }
 
     // Submit all the transfer transactions to the validators.
-    let validators = test_cluster.get_validator_pubkeys();
-    let submissions = txs.iter().map(|tx| async {
+    let submissions = txs.iter().map(|(tx, client_ip)| async {
         test_cluster
-            .submit_transaction_to_validators(tx.clone(), &validators)
+            .submit_and_execute(tx.clone(), Some(*client_ip))
             .await
             .unwrap();
         *tx.digest()
@@ -432,24 +417,9 @@ async fn party_object_transfer_multi_certs() {
     let repeat_tx_b_digest = *repeat_tx_b.digest();
     let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
 
-    let _ = test_cluster
-        .create_certificate(xfer_tx.clone(), Some(client_ip))
-        .await
-        .unwrap();
-    let _ = test_cluster
-        .create_certificate(repeat_tx_a.clone(), Some(client_ip))
-        .await
-        .unwrap();
-    let _ = test_cluster
-        .create_certificate(repeat_tx_b.clone(), Some(client_ip))
-        .await
-        .unwrap();
-
-    let validators = test_cluster.get_validator_pubkeys();
-
     // transfer obj on all validators, await effects
     test_cluster
-        .submit_transaction_to_validators(xfer_tx, &validators)
+        .submit_and_execute(xfer_tx, Some(client_ip))
         .await
         .unwrap();
 
@@ -457,13 +427,13 @@ async fn party_object_transfer_multi_certs() {
     futures::join!(
         async {
             test_cluster
-                .submit_transaction_to_validators(repeat_tx_a, &validators)
+                .submit_and_execute(repeat_tx_a, Some(client_ip))
                 .await
                 .unwrap()
         },
         async {
             test_cluster
-                .submit_transaction_to_validators(repeat_tx_b, &validators)
+                .submit_and_execute(repeat_tx_b, Some(client_ip))
                 .await
                 .unwrap()
         }
@@ -539,13 +509,7 @@ async fn party_object_read() {
         let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
-
-        let validators = test_cluster.get_validator_pubkeys();
-        test_cluster
-            .submit_transaction_to_validators(signed.clone(), &validators)
+            .submit_and_execute(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         all_digests.push(*signed.digest());
@@ -569,13 +533,12 @@ async fn party_object_read() {
     let signed_transfer = test_cluster.sign_transaction(&transfer_transaction).await;
     let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
     test_cluster
-        .create_certificate(signed_transfer.clone(), Some(client_ip))
+        .submit_and_execute(signed_transfer.clone(), Some(client_ip))
         .await
         .unwrap();
 
-    let validators = test_cluster.get_validator_pubkeys();
     let (transfer_effects, _) = test_cluster
-        .submit_transaction_to_validators(signed_transfer.clone(), &validators)
+        .submit_and_execute(signed_transfer.clone(), None)
         .await
         .unwrap();
     all_digests.push(*signed_transfer.digest());
@@ -607,13 +570,7 @@ async fn party_object_read() {
         let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
-
-        let validators = test_cluster.get_validator_pubkeys();
-        test_cluster
-            .submit_transaction_to_validators(signed.clone(), &validators)
+            .submit_and_execute(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         all_digests.push(*signed.digest());

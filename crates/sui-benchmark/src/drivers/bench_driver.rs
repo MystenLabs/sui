@@ -39,8 +39,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use sui_types::committee::Committee;
-use sui_types::quorum_driver_types::QuorumDriverError;
 use sui_types::transaction::{Transaction, TransactionDataAPI};
+use sui_types::transaction_driver_types::TransactionSubmissionError;
 use sysinfo::System;
 use tokio::sync::Barrier;
 use tokio::task::{JoinHandle, JoinSet};
@@ -839,11 +839,11 @@ async fn run_bench_worker(
                     }
                     None => {
                         if err
-                            .downcast::<QuorumDriverError>()
+                            .downcast::<TransactionSubmissionError>()
                             .and_then(|err| {
                                 if matches!(
                                     err,
-                                    QuorumDriverError::NonRecoverableTransactionError { .. }
+                                    TransactionSubmissionError::NonRecoverableTransactionError { .. }
                                 ) {
                                     Err(err.into())
                                 } else {

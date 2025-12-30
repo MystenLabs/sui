@@ -13,10 +13,10 @@ use sui_sdk::rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sdk::types::Identifier;
 use sui_sdk::types::base_types::{ObjectID, SuiAddress};
 use sui_sdk::types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_sdk::types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_sdk::types::transaction::{
     CallArg, ObjectArg, SharedObjectMutability, Transaction, TransactionData,
 };
+use sui_sdk::types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::{TypeTag, parse_sui_type_tag};

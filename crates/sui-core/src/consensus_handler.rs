@@ -3011,6 +3011,7 @@ mod tests {
         object::Object,
         transaction::{
             CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+            VerifiedCertificate,
         },
     };
 
@@ -3021,9 +3022,7 @@ mod tests {
             test_authority_builder::TestAuthorityBuilder,
         },
         checkpoints::CheckpointServiceNoop,
-        consensus_adapter::consensus_tests::{
-            test_certificates_with_gas_objects, test_user_transaction,
-        },
+        consensus_adapter::consensus_tests::test_user_transaction,
         consensus_test_utils::make_consensus_adapter_for_test,
         post_consensus_tx_reorder::PostConsensusTxReorder,
     };
@@ -3105,35 +3104,31 @@ mod tests {
             user_transactions.push(transaction);
         }
 
-        // AND create 4 certified transactions with remaining gas objects and 2 shared objects.
+        // AND create 4 more user transactions with remaining gas objects and 2 shared objects.
         // Having more txns on the same shared object may get deferred.
-        let certified_transactions = [
-            test_certificates_with_gas_objects(
+        for (i, gas_object) in gas_objects[8..12].iter().enumerate() {
+            let shared_object = if i < 2 {
+                shared_objects[4].clone()
+            } else {
+                shared_objects[5].clone()
+            };
+            let transaction = test_user_transaction(
                 &state,
-                &gas_objects[8..10],
-                shared_objects[4].clone(),
+                sender,
+                &keypair,
+                gas_object.clone(),
+                vec![shared_object],
             )
-            .await,
-            test_certificates_with_gas_objects(
-                &state,
-                &gas_objects[10..12],
-                shared_objects[5].clone(),
-            )
-            .await,
-        ]
-        .concat();
+            .await;
+            user_transactions.push(transaction);
+        }
 
-        // AND create block for each user and certified transaction
+        // AND create block for each user transaction
         let mut blocks = Vec::new();
         for (i, consensus_transaction) in user_transactions
             .iter()
             .cloned()
             .map(|t| ConsensusTransaction::new_user_transaction_v2_message(&state.name, t.into()))
-            .chain(
-                certified_transactions
-                    .iter()
-                    .map(|t| ConsensusTransaction::new_certificate_message(&state.name, t.clone())),
-            )
             .enumerate()
         {
             let transaction_bytes = bcs::to_bytes(&consensus_transaction).unwrap();
@@ -3181,7 +3176,7 @@ mod tests {
 
         // THEN check the consensus stats
         let num_blocks = blocks.len();
-        let num_transactions = user_transactions.len() + certified_transactions.len();
+        let num_transactions = user_transactions.len();
         let last_consensus_stats_1 = consensus_handler.last_consensus_stats.clone();
         assert_eq!(
             last_consensus_stats_1.index.transaction_index,
@@ -3211,21 +3206,6 @@ mod tests {
                 // Effects exist as expected.
             } else {
                 panic!("User transaction {} {} did not execute", i, digest);
-            }
-        }
-
-        // THEN check for execution status of certified transactions.
-        for (i, t) in certified_transactions.iter().enumerate() {
-            let digest = t.digest();
-            if let Ok(Ok(_)) = tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                state.notify_read_effects("", *digest),
-            )
-            .await
-            {
-                // Effects exist as expected.
-            } else {
-                panic!("Certified transaction {} {} did not execute", i, digest);
             }
         }
 

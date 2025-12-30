@@ -144,8 +144,8 @@ use sui_types::messages_checkpoint::{
     CheckpointTimestamp, ECMHLiveObjectSetDigest, VerifiedCheckpoint,
 };
 use sui_types::messages_grpc::{
-    HandleTransactionResponse, LayoutGenerationOption, ObjectInfoRequest, ObjectInfoRequestKind,
-    ObjectInfoResponse, TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
+    LayoutGenerationOption, ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse,
+    TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, OBJECT_START_VERSION, Owner, PastObjectRead};
@@ -198,8 +198,6 @@ pub use crate::checkpoints::checkpoint_executor::utils::{
 };
 
 use crate::authority::authority_store_tables::AuthorityPrunerTables;
-use crate::authority_client::NetworkAuthorityClient;
-use crate::validator_tx_finalizer::ValidatorTxFinalizer;
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_signing;
@@ -277,7 +275,6 @@ pub struct AuthorityMetrics {
     num_shared_objects: Histogram,
     batch_size: Histogram,
 
-    authority_state_handle_transaction_latency: Histogram,
     authority_state_handle_vote_transaction_latency: Histogram,
 
     execute_certificate_latency_single_writer: Histogram,
@@ -483,13 +480,6 @@ impl AuthorityMetrics {
                 "batch_size",
                 "Distribution of size of transaction batch",
                 POSITIVE_INT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            authority_state_handle_transaction_latency: register_histogram_with_registry!(
-                "authority_state_handle_transaction_latency",
-                "Latency of handling transactions",
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -957,8 +947,6 @@ pub struct AuthorityState {
     /// Current overload status in this authority. Updated periodically.
     pub overload_info: AuthorityOverloadInfo,
 
-    pub validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
-
     /// The chain identifier is derived from the digest of the genesis checkpoint.
     chain_identifier: ChainIdentifier,
 
@@ -1153,85 +1141,6 @@ impl AuthorityState {
         Ok(signed_transaction)
     }
 
-    /// Initiate a new transaction.
-    #[instrument(level = "trace", skip_all)]
-    pub async fn handle_transaction(
-        &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        transaction: VerifiedTransaction,
-    ) -> SuiResult<HandleTransactionResponse> {
-        let tx_digest = *transaction.digest();
-        debug!("handle_transaction");
-
-        // Ensure an idempotent answer.
-        if let Some((_, status)) = self.get_transaction_status(&tx_digest, epoch_store)? {
-            return Ok(HandleTransactionResponse { status });
-        }
-
-        let _metrics_guard = self
-            .metrics
-            .authority_state_handle_transaction_latency
-            .start_timer();
-        self.metrics.tx_orders.inc();
-
-        if epoch_store.protocol_config().mysticeti_fastpath()
-            && !self
-                .wait_for_fastpath_dependency_objects(&transaction, epoch_store.epoch())
-                .await?
-        {
-            debug!("fastpath input objects are still unavailable after waiting");
-            // Proceed with input checks to generate a proper error.
-        }
-
-        self.handle_sign_transaction(epoch_store, transaction).await
-    }
-
-    /// Signs a transaction. Exposed for testing.
-    pub async fn handle_sign_transaction(
-        &self,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        transaction: VerifiedTransaction,
-    ) -> SuiResult<HandleTransactionResponse> {
-        let tx_digest = *transaction.digest();
-
-        if self
-            .get_transaction_cache_reader()
-            .transaction_executed_in_last_epoch(&tx_digest, epoch_store.epoch())
-        {
-            return Err(UserInputError::TransactionAlreadyExecuted { digest: tx_digest }.into());
-        }
-
-        let signed = self.handle_transaction_impl(transaction, /* sign */ true, epoch_store);
-        match signed {
-            Ok(Some(s)) => {
-                if self.is_validator(epoch_store)
-                    && let Some(validator_tx_finalizer) = &self.validator_tx_finalizer
-                {
-                    let tx = s.clone();
-                    let validator_tx_finalizer = validator_tx_finalizer.clone();
-                    let cache_reader = self.get_transaction_cache_reader().clone();
-                    let epoch_store = epoch_store.clone();
-                    spawn_monitored_task!(epoch_store.within_alive_epoch(
-                        validator_tx_finalizer.track_signed_tx(cache_reader, &epoch_store, tx)
-                    ));
-                }
-                Ok(HandleTransactionResponse {
-                    status: TransactionStatus::Signed(s.into_inner().into_sig()),
-                })
-            }
-            Ok(None) => panic!("handle_transaction_impl should return a signed transaction"),
-            // It happens frequently that while we are checking the validity of the transaction, it
-            // has just been executed.
-            // In that case, we could still return Ok to avoid showing confusing errors.
-            Err(err) => Ok(HandleTransactionResponse {
-                status: self
-                    .get_transaction_status(&tx_digest, epoch_store)?
-                    .ok_or(err)?
-                    .1,
-            }),
-        }
-    }
-
     /// Vote for a transaction, either when validator receives a submit_transaction request,
     /// or sees a transaction from consensus. Performs the same types of checks as
     /// transaction signing, but does not explicitly sign the transaction.
@@ -1242,7 +1151,7 @@ impl AuthorityState {
     /// TODO(mysticeti-fastpath): Assess whether we want to optimize the case when the transaction
     /// has already been finalized executed.
     #[instrument(level = "trace", skip_all, fields(tx_digest = ?transaction.digest()))]
-    pub(crate) fn handle_vote_transaction(
+    pub fn handle_vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
@@ -1835,6 +1744,20 @@ impl AuthorityState {
                 execution_env,
                 &epoch_store,
             )
+            .await
+            .unwrap();
+        let signed_effects = self.sign_effects(effects, &epoch_store).unwrap();
+        (signed_effects, execution_error_opt)
+    }
+
+    pub async fn try_execute_executable_for_test(
+        &self,
+        executable: &VerifiedExecutableTransaction,
+        execution_env: ExecutionEnv,
+    ) -> (VerifiedSignedTransactionEffects, Option<ExecutionError>) {
+        let epoch_store = self.epoch_store_for_testing();
+        let (effects, execution_error_opt) = self
+            .try_execute_immediately(executable, execution_env, &epoch_store)
             .await
             .unwrap();
         let signed_effects = self.sign_effects(effects, &epoch_store).unwrap();
@@ -3615,7 +3538,6 @@ impl AuthorityState {
         genesis_objects: &[Object],
         db_checkpoint_config: &DBCheckpointConfig,
         config: NodeConfig,
-        validator_tx_finalizer: Option<Arc<ValidatorTxFinalizer<NetworkAuthorityClient>>>,
         chain_identifier: ChainIdentifier,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
         policy_config: Option<PolicyConfig>,
@@ -3702,7 +3624,6 @@ impl AuthorityState {
             db_checkpoint_config: db_checkpoint_config.clone(),
             config,
             overload_info: AuthorityOverloadInfo::default(),
-            validator_tx_finalizer,
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
             traffic_controller,

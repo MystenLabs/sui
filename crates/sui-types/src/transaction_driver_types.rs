@@ -20,20 +20,22 @@ use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use thiserror::Error;
 
-pub type QuorumDriverResult = Result<QuorumDriverResponse, QuorumDriverError>;
+pub type TransactionDriverResult = Result<TransactionDriverResponse, TransactionSubmissionError>;
 
-pub type QuorumDriverEffectsQueueResult =
-    Result<(Transaction, QuorumDriverResponse), (TransactionDigest, QuorumDriverError)>;
+pub type TransactionDriverEffectsQueueResult = Result<
+    (Transaction, TransactionDriverResponse),
+    (TransactionDigest, TransactionSubmissionError),
+>;
 
 pub const NON_RECOVERABLE_ERROR_MSG: &str =
     "Transaction has non recoverable errors from at least 1/3 of validators";
 
-/// Client facing errors regarding transaction submission via Quorum Driver.
+/// Client facing errors regarding transaction submission via Transaction Driver.
 /// Every invariant needs detailed documents to instruct client handling.
 #[derive(Eq, PartialEq, Clone, Debug, Error, Hash, AsRefStr)]
-pub enum QuorumDriverError {
-    #[error("QuorumDriver internal error: {0}.")]
-    QuorumDriverInternalError(SuiError),
+pub enum TransactionSubmissionError {
+    #[error("TransactionDriver internal error: {0}.")]
+    TransactionDriverInternalError(SuiError),
     #[error("Invalid user signature: {0}.")]
     InvalidUserSignature(SuiError),
     #[error(
@@ -76,7 +78,6 @@ pub enum QuorumDriverError {
     #[error("Transaction is already finalized but with different user signatures")]
     TxAlreadyFinalizedWithDifferentUserSignatures,
 
-    // Wrapped error from Transaction Driver.
     #[error("Transaction processing failed. Details: {details}")]
     TransactionFailed {
         category: ErrorCategory,
@@ -84,22 +85,20 @@ pub enum QuorumDriverError {
     },
 }
 
-impl QuorumDriverError {
+impl TransactionSubmissionError {
     pub fn is_retriable(&self) -> bool {
         match self {
-            QuorumDriverError::QuorumDriverInternalError { .. } => false,
-            QuorumDriverError::InvalidUserSignature { .. } => false,
-            QuorumDriverError::ObjectsDoubleUsed { .. } => false,
-            QuorumDriverError::TimeoutBeforeFinality => true,
-            QuorumDriverError::TimeoutBeforeFinalityWithErrors { .. } => true,
-            QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts { .. } => true,
-            QuorumDriverError::NonRecoverableTransactionError { .. } => false,
-            QuorumDriverError::SystemOverload { .. } => true,
-            QuorumDriverError::SystemOverloadRetryAfter { .. } => true,
-            QuorumDriverError::TxAlreadyFinalizedWithDifferentUserSignatures => false,
-            QuorumDriverError::TransactionFailed { category, .. } => {
-                category.is_submission_retriable()
-            }
+            Self::TransactionDriverInternalError { .. } => false,
+            Self::InvalidUserSignature { .. } => false,
+            Self::ObjectsDoubleUsed { .. } => false,
+            Self::TimeoutBeforeFinality => true,
+            Self::TimeoutBeforeFinalityWithErrors { .. } => true,
+            Self::FailedWithTransientErrorAfterMaximumAttempts { .. } => true,
+            Self::NonRecoverableTransactionError { .. } => false,
+            Self::SystemOverload { .. } => true,
+            Self::SystemOverloadRetryAfter { .. } => true,
+            Self::TxAlreadyFinalizedWithDifferentUserSignatures => false,
+            Self::TransactionFailed { category, .. } => category.is_submission_retriable(),
         }
     }
 }
@@ -149,14 +148,13 @@ pub enum ExecuteTransactionResponse {
 }
 
 #[derive(Clone, Debug)]
-pub struct QuorumDriverRequest {
+pub struct TransactionDriverRequest {
     pub transaction: VerifiedTransaction,
 }
 
 #[derive(Debug, Clone)]
-pub struct QuorumDriverResponse {
+pub struct TransactionDriverResponse {
     pub effects_cert: VerifiedCertifiedTransactionEffects,
-    // pub events: TransactionEvents,
     pub events: Option<TransactionEvents>,
     // Input objects will only be populated in the happy path
     pub input_objects: Option<Vec<Object>>,
