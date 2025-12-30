@@ -18,7 +18,6 @@ fun test_nitro_attestation() {
     let mut clock = sui::clock::create_for_testing(ctx);
     clock.set_for_testing(1747071568899);
     let res = nitro_attestation::load_nitro_attestation(payload, &clock);
-    std::debug::print(res.pcrs());
     assert!(res.pcrs().length() == 6);
 
     assert!(res.pcrs()[0].index() == 0);

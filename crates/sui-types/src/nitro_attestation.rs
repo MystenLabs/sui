@@ -398,14 +398,14 @@ impl AttestationDocument {
     pub fn parse_payload(
         payload: &[u8],
         is_upgraded_parsing: bool,
-        include_all_nonzero_custom_pcrs: bool,
+        include_all_nonzero_pcrs: bool,
         always_include_required_pcrs: bool,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
         let document_map = Self::to_map(payload, is_upgraded_parsing)?;
         Self::validate_document_map(
             &document_map,
             is_upgraded_parsing,
-            include_all_nonzero_custom_pcrs,
+            include_all_nonzero_pcrs,
             always_include_required_pcrs,
         )
     }
@@ -458,7 +458,7 @@ impl AttestationDocument {
     fn validate_document_map(
         document_map: &BTreeMap<String, Value>,
         is_upgraded_parsing: bool,
-        include_all_nonzero_custom_pcrs: bool,
+        include_all_nonzero_pcrs: bool,
         always_include_required_pcrs: bool,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
         let module_id = document_map
@@ -626,8 +626,8 @@ impl AttestationDocument {
                             ));
                         }
 
-                        if include_all_nonzero_custom_pcrs {
-                            // If include_all_nonzero_custom_pcrs = true, parse all 0..31 PCRs, but
+                        if include_all_nonzero_pcrs {
+                            // If include_all_nonzero_pcrs = true, parse all 0..31 PCRs, but
                             // only include nonzero values.
                             // See: <https://github.com/aws/aws-nitro-enclaves-nsm-api/issues/18#issuecomment-970172662>
                             // Also: <https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/nsm-test/src/bin/nsm-check.rs#L193-L199>
@@ -642,7 +642,7 @@ impl AttestationDocument {
                                 pcr_map.insert(key_u8, value.to_vec());
                             }
                         } else {
-                            // Legacy mode (include_all_nonzero_custom_pcrs=false): Parse only
+                            // Legacy mode (include_all_nonzero_pcrs=false): Parse only
                             // required PCRs (0, 1, 2, 3, 4, 8), regardless if they are zero or not.
                             // See: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where>
                             if matches!(key_u8, 0 | 1 | 2 | 3 | 4 | 8) {
