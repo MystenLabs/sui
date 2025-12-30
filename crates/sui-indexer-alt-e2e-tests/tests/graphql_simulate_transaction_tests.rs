@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context;
+use fastcrypto::encoding::{Base64, Encoding};
 use prometheus::Registry;
 use reqwest::Client;
 use serde::Deserialize;
@@ -1064,6 +1065,7 @@ async fn test_simulate_transaction_balance_changes() {
 
 /// Test that `doGasSelection: true` allows simulating a transaction without specifying gas_payment.
 /// The server auto-selects gas coins and estimates the budget.
+/// This E2E test verifies the simulation output can be signed, executed, and the transfer succeeds.
 #[tokio::test]
 async fn test_simulate_transaction_with_gas_selection() {
     let validator_cluster = TestClusterBuilder::new().build().await;
@@ -1099,7 +1101,8 @@ async fn test_simulate_transaction_with_gas_selection() {
         }
     });
 
-    let result = graphql_cluster
+    // Step 1: Simulate the transaction with gas selection
+    let simulate_result = graphql_cluster
         .execute_graphql(
             r#"
             query($txJson: JSON!) {
@@ -1107,9 +1110,7 @@ async fn test_simulate_transaction_with_gas_selection() {
                     effects {
                         status
                         transaction {
-                            gasInput {
-                                gasBudget
-                            }
+                            transactionBcs
                         }
                     }
                     error
@@ -1119,19 +1120,50 @@ async fn test_simulate_transaction_with_gas_selection() {
             json!({ "txJson": tx_json }),
         )
         .await
-        .expect("GraphQL request failed");
+        .expect("GraphQL simulation request failed");
 
-    insta::assert_json_snapshot!(result.pointer("/data/simulateTransaction"), @r#"
-    {
-      "effects": {
-        "status": "SUCCESS",
-        "transaction": {
-          "gasInput": {
-            "gasBudget": "156976000"
-          }
-        }
-      },
-      "error": null
-    }
-    "#);
+    assert_eq!(
+        simulate_result.pointer("/data/simulateTransaction/effects/status"),
+        Some(&json!("SUCCESS"))
+    );
+
+    // Step 2: Extract the transaction BCS, sign it, and execute
+    let tx_bcs_base64 = simulate_result
+        .pointer("/data/simulateTransaction/effects/transaction/transactionBcs")
+        .and_then(|v| v.as_str())
+        .expect("Simulation should return transactionBcs");
+
+    let tx_bytes = Base64::decode(tx_bcs_base64).unwrap();
+    let tx_data: sui_types::transaction::TransactionData = bcs::from_bytes(&tx_bytes).unwrap();
+
+    let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
+    let (signed_tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    // Step 3: Execute and verify the transaction succeeds
+    let execute_result = graphql_cluster
+        .execute_graphql(
+            r#"
+            mutation($txData: Base64!, $sigs: [Base64!]!) {
+                executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
+                    effects { status }
+                    errors
+                }
+            }
+        "#,
+            json!({
+                "txData": signed_tx_bytes.encoded(),
+                "sigs": signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
+            }),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        execute_result.pointer("/data/executeTransaction/effects/status"),
+        Some(&json!("SUCCESS"))
+    );
+    assert_eq!(
+        execute_result.pointer("/data/executeTransaction/errors"),
+        Some(&serde_json::Value::Null)
+    );
 }
