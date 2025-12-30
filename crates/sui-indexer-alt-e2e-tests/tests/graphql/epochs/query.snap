@@ -18,7 +18,7 @@ task 5, line 14:
 //# advance-epoch
 Epoch advanced: 3
 
-task 6, lines 16-86:
+task 6, lines 16-65:
 //# run-graphql
 Response: {
   "data": {
@@ -28,16 +28,28 @@ Response: {
       "startTimestamp": "1970-01-01T00:00:00.444Z",
       "endTimestamp": "1970-01-01T00:00:00.444Z",
       "validatorSet": {
-        "totalStake": "20000000000000000",
-        "pendingRemovals": [],
-        "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
-        "pendingActiveValidatorsSize": 0,
-        "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
-        "stakingPoolMappingsSize": 1,
-        "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
-        "inactivePoolsSize": 0,
-        "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
-        "validatorCandidatesSize": 0
+        "contents": {
+          "totalStake": "20000000000000000",
+          "pendingRemovals": [],
+          "pendingActiveValidators": {
+            "contents": {
+              "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+              "size": "0"
+            }
+          },
+          "stakingPoolMappings": {
+            "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "size": "1"
+          },
+          "inactiveValidators": {
+            "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "size": "0"
+          },
+          "validatorCandidates": {
+            "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "size": "0"
+          }
+        }
       },
       "totalCheckpoints": 1,
       "totalTransactions": 1,
@@ -48,36 +60,43 @@ Response: {
       "netInflow": "0",
       "fundInflow": "0",
       "fundOutflow": "0",
-      "storageFund": {
-        "totalObjectStorageRebates": "0",
-        "nonRefundableBalance": "0"
-      },
-      "safeMode": {
-        "enabled": false,
-        "gasSummary": {
-          "computationCost": 0,
-          "storageCost": 0,
-          "storageRebate": 0,
-          "nonRefundableStorageFee": 0
-        }
-      },
-      "systemStateVersion": 2,
-      "systemParameters": {
-        "durationMs": "86400000",
-        "stakeSubsidyStartEpoch": 0,
-        "minValidatorCount": null,
-        "maxValidatorCount": 150,
-        "minValidatorJoiningStake": "30000000000000000",
-        "validatorLowStakeThreshold": "20000000000000000",
-        "validatorVeryLowStakeThreshold": "15000000000000000",
-        "validatorLowStakeGracePeriod": "7"
-      },
-      "systemStakeSubsidy": {
-        "balance": "9949400000000000000",
-        "distributionCounter": 0,
-        "currentDistributionAmount": "1000000000000000",
-        "periodLength": 10,
-        "decreaseRate": 1000
+      "systemState": {
+        "protocolVersion": "70",
+        "systemStateVersion": "2",
+        "storageFund": {
+          "total_object_storage_rebates": "0",
+          "non_refundable_balance": "0"
+        },
+        "parameters": {
+          "epoch_duration_ms": "86400000",
+          "stake_subsidy_start_epoch": "0",
+          "min_validator_count": "4",
+          "max_validator_count": "150",
+          "min_validator_joining_stake": "30000000000000000",
+          "validator_low_stake_threshold": "20000000000000000",
+          "validator_very_low_stake_threshold": "15000000000000000",
+          "validator_low_stake_grace_period": "7",
+          "extra_fields": {
+            "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+            "size": "0"
+          }
+        },
+        "stakeSubsidy": {
+          "balance": "9949400000000000000",
+          "distribution_counter": "0",
+          "current_distribution_amount": "1000000000000000",
+          "stake_subsidy_period_length": "10",
+          "stake_subsidy_decrease_rate": 1000,
+          "extra_fields": {
+            "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+            "size": "0"
+          }
+        },
+        "safeMode": false,
+        "safeModeComputationRewards": "0",
+        "safeModeStorageRewards": "0",
+        "safeModeStorageRebates": "0",
+        "safeModeNonRefundableStorageFee": "0"
       },
       "liveObjectSetDigest": null
     },
@@ -87,16 +106,28 @@ Response: {
       "startTimestamp": "1970-01-01T00:00:00Z",
       "endTimestamp": "1970-01-01T00:00:00.123Z",
       "validatorSet": {
-        "totalStake": "20000000000000000",
-        "pendingRemovals": [],
-        "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
-        "pendingActiveValidatorsSize": 0,
-        "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
-        "stakingPoolMappingsSize": 1,
-        "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
-        "inactivePoolsSize": 0,
-        "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
-        "validatorCandidatesSize": 0
+        "contents": {
+          "totalStake": "20000000000000000",
+          "pendingRemovals": [],
+          "pendingActiveValidators": {
+            "contents": {
+              "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+              "size": "0"
+            }
+          },
+          "stakingPoolMappings": {
+            "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "size": "1"
+          },
+          "inactiveValidators": {
+            "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "size": "0"
+          },
+          "validatorCandidates": {
+            "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "size": "0"
+          }
+        }
       },
       "totalCheckpoints": 2,
       "totalTransactions": 3,
@@ -107,36 +138,42 @@ Response: {
       "netInflow": "0",
       "fundInflow": "0",
       "fundOutflow": "0",
-      "storageFund": {
-        "totalObjectStorageRebates": "0",
-        "nonRefundableBalance": "0"
-      },
-      "safeMode": {
-        "enabled": false,
-        "gasSummary": {
-          "computationCost": 0,
-          "storageCost": 0,
-          "storageRebate": 0,
-          "nonRefundableStorageFee": 0
-        }
-      },
-      "systemStateVersion": 1,
-      "systemParameters": {
-        "durationMs": "86400000",
-        "stakeSubsidyStartEpoch": 0,
-        "minValidatorCount": null,
-        "maxValidatorCount": 150,
-        "minValidatorJoiningStake": "30000000000000000",
-        "validatorLowStakeThreshold": "20000000000000000",
-        "validatorVeryLowStakeThreshold": "15000000000000000",
-        "validatorLowStakeGracePeriod": "7"
-      },
-      "systemStakeSubsidy": {
-        "balance": "9949400000000000000",
-        "distributionCounter": 0,
-        "currentDistributionAmount": "1000000000000000",
-        "periodLength": 10,
-        "decreaseRate": 1000
+      "systemState": {
+        "protocolVersion": "70",
+        "systemStateVersion": "1",
+        "storageFund": {
+          "total_object_storage_rebates": "0",
+          "non_refundable_balance": "0"
+        },
+        "parameters": {
+          "epoch_duration_ms": "86400000",
+          "stake_subsidy_start_epoch": "0",
+          "max_validator_count": "150",
+          "min_validator_joining_stake": "30000000000000000",
+          "validator_low_stake_threshold": "20000000000000000",
+          "validator_very_low_stake_threshold": "15000000000000000",
+          "validator_low_stake_grace_period": "7",
+          "extra_fields": {
+            "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+            "size": "0"
+          }
+        },
+        "stakeSubsidy": {
+          "balance": "9949400000000000000",
+          "distribution_counter": "0",
+          "current_distribution_amount": "1000000000000000",
+          "stake_subsidy_period_length": "10",
+          "stake_subsidy_decrease_rate": 1000,
+          "extra_fields": {
+            "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+            "size": "0"
+          }
+        },
+        "safeMode": false,
+        "safeModeComputationRewards": "0",
+        "safeModeStorageRewards": "0",
+        "safeModeStorageRebates": "0",
+        "safeModeNonRefundableStorageFee": "0"
       },
       "liveObjectSetDigest": null
     },
@@ -146,16 +183,28 @@ Response: {
       "startTimestamp": "1970-01-01T00:00:00.123Z",
       "endTimestamp": "1970-01-01T00:00:00.444Z",
       "validatorSet": {
-        "totalStake": "20000000000000000",
-        "pendingRemovals": [],
-        "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
-        "pendingActiveValidatorsSize": 0,
-        "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
-        "stakingPoolMappingsSize": 1,
-        "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
-        "inactivePoolsSize": 0,
-        "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
-        "validatorCandidatesSize": 0
+        "contents": {
+          "totalStake": "20000000000000000",
+          "pendingRemovals": [],
+          "pendingActiveValidators": {
+            "contents": {
+              "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+              "size": "0"
+            }
+          },
+          "stakingPoolMappings": {
+            "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "size": "1"
+          },
+          "inactiveValidators": {
+            "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "size": "0"
+          },
+          "validatorCandidates": {
+            "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "size": "0"
+          }
+        }
       },
       "totalCheckpoints": 1,
       "totalTransactions": 2,
@@ -166,36 +215,43 @@ Response: {
       "netInflow": "0",
       "fundInflow": "0",
       "fundOutflow": "0",
-      "storageFund": {
-        "totalObjectStorageRebates": "0",
-        "nonRefundableBalance": "0"
-      },
-      "safeMode": {
-        "enabled": false,
-        "gasSummary": {
-          "computationCost": 0,
-          "storageCost": 0,
-          "storageRebate": 0,
-          "nonRefundableStorageFee": 0
-        }
-      },
-      "systemStateVersion": 2,
-      "systemParameters": {
-        "durationMs": "86400000",
-        "stakeSubsidyStartEpoch": 0,
-        "minValidatorCount": null,
-        "maxValidatorCount": 150,
-        "minValidatorJoiningStake": "30000000000000000",
-        "validatorLowStakeThreshold": "20000000000000000",
-        "validatorVeryLowStakeThreshold": "15000000000000000",
-        "validatorLowStakeGracePeriod": "7"
-      },
-      "systemStakeSubsidy": {
-        "balance": "9949400000000000000",
-        "distributionCounter": 0,
-        "currentDistributionAmount": "1000000000000000",
-        "periodLength": 10,
-        "decreaseRate": 1000
+      "systemState": {
+        "protocolVersion": "70",
+        "systemStateVersion": "2",
+        "storageFund": {
+          "total_object_storage_rebates": "0",
+          "non_refundable_balance": "0"
+        },
+        "parameters": {
+          "epoch_duration_ms": "86400000",
+          "stake_subsidy_start_epoch": "0",
+          "min_validator_count": "4",
+          "max_validator_count": "150",
+          "min_validator_joining_stake": "30000000000000000",
+          "validator_low_stake_threshold": "20000000000000000",
+          "validator_very_low_stake_threshold": "15000000000000000",
+          "validator_low_stake_grace_period": "7",
+          "extra_fields": {
+            "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+            "size": "0"
+          }
+        },
+        "stakeSubsidy": {
+          "balance": "9949400000000000000",
+          "distribution_counter": "0",
+          "current_distribution_amount": "1000000000000000",
+          "stake_subsidy_period_length": "10",
+          "stake_subsidy_decrease_rate": 1000,
+          "extra_fields": {
+            "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+            "size": "0"
+          }
+        },
+        "safeMode": false,
+        "safeModeComputationRewards": "0",
+        "safeModeStorageRewards": "0",
+        "safeModeStorageRebates": "0",
+        "safeModeNonRefundableStorageFee": "0"
       },
       "liveObjectSetDigest": null
     },
@@ -205,16 +261,28 @@ Response: {
       "startTimestamp": "1970-01-01T00:00:00.444Z",
       "endTimestamp": "1970-01-01T00:00:00.444Z",
       "validatorSet": {
-        "totalStake": "20000000000000000",
-        "pendingRemovals": [],
-        "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
-        "pendingActiveValidatorsSize": 0,
-        "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
-        "stakingPoolMappingsSize": 1,
-        "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
-        "inactivePoolsSize": 0,
-        "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
-        "validatorCandidatesSize": 0
+        "contents": {
+          "totalStake": "20000000000000000",
+          "pendingRemovals": [],
+          "pendingActiveValidators": {
+            "contents": {
+              "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+              "size": "0"
+            }
+          },
+          "stakingPoolMappings": {
+            "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "size": "1"
+          },
+          "inactiveValidators": {
+            "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "size": "0"
+          },
+          "validatorCandidates": {
+            "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "size": "0"
+          }
+        }
       },
       "totalCheckpoints": 1,
       "totalTransactions": 1,
@@ -225,36 +293,43 @@ Response: {
       "netInflow": "0",
       "fundInflow": "0",
       "fundOutflow": "0",
-      "storageFund": {
-        "totalObjectStorageRebates": "0",
-        "nonRefundableBalance": "0"
-      },
-      "safeMode": {
-        "enabled": false,
-        "gasSummary": {
-          "computationCost": 0,
-          "storageCost": 0,
-          "storageRebate": 0,
-          "nonRefundableStorageFee": 0
-        }
-      },
-      "systemStateVersion": 2,
-      "systemParameters": {
-        "durationMs": "86400000",
-        "stakeSubsidyStartEpoch": 0,
-        "minValidatorCount": null,
-        "maxValidatorCount": 150,
-        "minValidatorJoiningStake": "30000000000000000",
-        "validatorLowStakeThreshold": "20000000000000000",
-        "validatorVeryLowStakeThreshold": "15000000000000000",
-        "validatorLowStakeGracePeriod": "7"
-      },
-      "systemStakeSubsidy": {
-        "balance": "9949400000000000000",
-        "distributionCounter": 0,
-        "currentDistributionAmount": "1000000000000000",
-        "periodLength": 10,
-        "decreaseRate": 1000
+      "systemState": {
+        "protocolVersion": "70",
+        "systemStateVersion": "2",
+        "storageFund": {
+          "total_object_storage_rebates": "0",
+          "non_refundable_balance": "0"
+        },
+        "parameters": {
+          "epoch_duration_ms": "86400000",
+          "stake_subsidy_start_epoch": "0",
+          "min_validator_count": "4",
+          "max_validator_count": "150",
+          "min_validator_joining_stake": "30000000000000000",
+          "validator_low_stake_threshold": "20000000000000000",
+          "validator_very_low_stake_threshold": "15000000000000000",
+          "validator_low_stake_grace_period": "7",
+          "extra_fields": {
+            "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+            "size": "0"
+          }
+        },
+        "stakeSubsidy": {
+          "balance": "9949400000000000000",
+          "distribution_counter": "0",
+          "current_distribution_amount": "1000000000000000",
+          "stake_subsidy_period_length": "10",
+          "stake_subsidy_decrease_rate": 1000,
+          "extra_fields": {
+            "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+            "size": "0"
+          }
+        },
+        "safeMode": false,
+        "safeModeComputationRewards": "0",
+        "safeModeStorageRewards": "0",
+        "safeModeStorageRebates": "0",
+        "safeModeNonRefundableStorageFee": "0"
       },
       "liveObjectSetDigest": null
     },
@@ -262,7 +337,7 @@ Response: {
   }
 }
 
-task 7, lines 88-159:
+task 7, lines 67-117:
 //# run-graphql
 Response: {
   "data": {
@@ -274,16 +349,28 @@ Response: {
           "startTimestamp": "1970-01-01T00:00:00.123Z",
           "endTimestamp": "1970-01-01T00:00:00.444Z",
           "validatorSet": {
-            "totalStake": "20000000000000000",
-            "pendingRemovals": [],
-            "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
-            "pendingActiveValidatorsSize": 0,
-            "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
-            "stakingPoolMappingsSize": 1,
-            "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
-            "inactivePoolsSize": 0,
-            "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
-            "validatorCandidatesSize": 0
+            "contents": {
+              "totalStake": "20000000000000000",
+              "pendingRemovals": [],
+              "pendingActiveValidators": {
+                "contents": {
+                  "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+                  "size": "0"
+                }
+              },
+              "stakingPoolMappings": {
+                "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+                "size": "1"
+              },
+              "inactiveValidators": {
+                "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+                "size": "0"
+              },
+              "validatorCandidates": {
+                "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+                "size": "0"
+              }
+            }
           },
           "totalCheckpoints": 1,
           "totalTransactions": 2,
@@ -294,36 +381,43 @@ Response: {
           "netInflow": "0",
           "fundInflow": "0",
           "fundOutflow": "0",
-          "storageFund": {
-            "totalObjectStorageRebates": "0",
-            "nonRefundableBalance": "0"
-          },
-          "safeMode": {
-            "enabled": false,
-            "gasSummary": {
-              "computationCost": 0,
-              "storageCost": 0,
-              "storageRebate": 0,
-              "nonRefundableStorageFee": 0
-            }
-          },
-          "systemStateVersion": 2,
-          "systemParameters": {
-            "durationMs": "86400000",
-            "stakeSubsidyStartEpoch": 0,
-            "minValidatorCount": null,
-            "maxValidatorCount": 150,
-            "minValidatorJoiningStake": "30000000000000000",
-            "validatorLowStakeThreshold": "20000000000000000",
-            "validatorVeryLowStakeThreshold": "15000000000000000",
-            "validatorLowStakeGracePeriod": "7"
-          },
-          "systemStakeSubsidy": {
-            "balance": "9949400000000000000",
-            "distributionCounter": 0,
-            "currentDistributionAmount": "1000000000000000",
-            "periodLength": 10,
-            "decreaseRate": 1000
+          "systemState": {
+            "protocolVersion": "70",
+            "systemStateVersion": "2",
+            "storageFund": {
+              "total_object_storage_rebates": "0",
+              "non_refundable_balance": "0"
+            },
+            "parameters": {
+              "epoch_duration_ms": "86400000",
+              "stake_subsidy_start_epoch": "0",
+              "min_validator_count": "4",
+              "max_validator_count": "150",
+              "min_validator_joining_stake": "30000000000000000",
+              "validator_low_stake_threshold": "20000000000000000",
+              "validator_very_low_stake_threshold": "15000000000000000",
+              "validator_low_stake_grace_period": "7",
+              "extra_fields": {
+                "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+                "size": "0"
+              }
+            },
+            "stakeSubsidy": {
+              "balance": "9949400000000000000",
+              "distribution_counter": "0",
+              "current_distribution_amount": "1000000000000000",
+              "stake_subsidy_period_length": "10",
+              "stake_subsidy_decrease_rate": 1000,
+              "extra_fields": {
+                "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+                "size": "0"
+              }
+            },
+            "safeMode": false,
+            "safeModeComputationRewards": "0",
+            "safeModeStorageRewards": "0",
+            "safeModeStorageRebates": "0",
+            "safeModeNonRefundableStorageFee": "0"
           },
           "liveObjectSetDigest": null
         },
@@ -333,16 +427,28 @@ Response: {
           "startTimestamp": "1970-01-01T00:00:00Z",
           "endTimestamp": "1970-01-01T00:00:00.123Z",
           "validatorSet": {
-            "totalStake": "20000000000000000",
-            "pendingRemovals": [],
-            "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
-            "pendingActiveValidatorsSize": 0,
-            "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
-            "stakingPoolMappingsSize": 1,
-            "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
-            "inactivePoolsSize": 0,
-            "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
-            "validatorCandidatesSize": 0
+            "contents": {
+              "totalStake": "20000000000000000",
+              "pendingRemovals": [],
+              "pendingActiveValidators": {
+                "contents": {
+                  "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+                  "size": "0"
+                }
+              },
+              "stakingPoolMappings": {
+                "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+                "size": "1"
+              },
+              "inactiveValidators": {
+                "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+                "size": "0"
+              },
+              "validatorCandidates": {
+                "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+                "size": "0"
+              }
+            }
           },
           "totalCheckpoints": 2,
           "totalTransactions": 3,
@@ -353,36 +459,42 @@ Response: {
           "netInflow": "0",
           "fundInflow": "0",
           "fundOutflow": "0",
-          "storageFund": {
-            "totalObjectStorageRebates": "0",
-            "nonRefundableBalance": "0"
-          },
-          "safeMode": {
-            "enabled": false,
-            "gasSummary": {
-              "computationCost": 0,
-              "storageCost": 0,
-              "storageRebate": 0,
-              "nonRefundableStorageFee": 0
-            }
-          },
-          "systemStateVersion": 1,
-          "systemParameters": {
-            "durationMs": "86400000",
-            "stakeSubsidyStartEpoch": 0,
-            "minValidatorCount": null,
-            "maxValidatorCount": 150,
-            "minValidatorJoiningStake": "30000000000000000",
-            "validatorLowStakeThreshold": "20000000000000000",
-            "validatorVeryLowStakeThreshold": "15000000000000000",
-            "validatorLowStakeGracePeriod": "7"
-          },
-          "systemStakeSubsidy": {
-            "balance": "9949400000000000000",
-            "distributionCounter": 0,
-            "currentDistributionAmount": "1000000000000000",
-            "periodLength": 10,
-            "decreaseRate": 1000
+          "systemState": {
+            "protocolVersion": "70",
+            "systemStateVersion": "1",
+            "storageFund": {
+              "total_object_storage_rebates": "0",
+              "non_refundable_balance": "0"
+            },
+            "parameters": {
+              "epoch_duration_ms": "86400000",
+              "stake_subsidy_start_epoch": "0",
+              "max_validator_count": "150",
+              "min_validator_joining_stake": "30000000000000000",
+              "validator_low_stake_threshold": "20000000000000000",
+              "validator_very_low_stake_threshold": "15000000000000000",
+              "validator_low_stake_grace_period": "7",
+              "extra_fields": {
+                "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+                "size": "0"
+              }
+            },
+            "stakeSubsidy": {
+              "balance": "9949400000000000000",
+              "distribution_counter": "0",
+              "current_distribution_amount": "1000000000000000",
+              "stake_subsidy_period_length": "10",
+              "stake_subsidy_decrease_rate": 1000,
+              "extra_fields": {
+                "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+                "size": "0"
+              }
+            },
+            "safeMode": false,
+            "safeModeComputationRewards": "0",
+            "safeModeStorageRewards": "0",
+            "safeModeStorageRebates": "0",
+            "safeModeNonRefundableStorageFee": "0"
           },
           "liveObjectSetDigest": null
         },
@@ -392,16 +504,28 @@ Response: {
           "startTimestamp": "1970-01-01T00:00:00.123Z",
           "endTimestamp": "1970-01-01T00:00:00.444Z",
           "validatorSet": {
-            "totalStake": "20000000000000000",
-            "pendingRemovals": [],
-            "pendingActiveValidatorsId": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
-            "pendingActiveValidatorsSize": 0,
-            "stakingPoolMappingsId": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
-            "stakingPoolMappingsSize": 1,
-            "inactivePoolsId": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
-            "inactivePoolsSize": 0,
-            "validatorCandidatesId": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
-            "validatorCandidatesSize": 0
+            "contents": {
+              "totalStake": "20000000000000000",
+              "pendingRemovals": [],
+              "pendingActiveValidators": {
+                "contents": {
+                  "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+                  "size": "0"
+                }
+              },
+              "stakingPoolMappings": {
+                "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+                "size": "1"
+              },
+              "inactiveValidators": {
+                "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+                "size": "0"
+              },
+              "validatorCandidates": {
+                "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+                "size": "0"
+              }
+            }
           },
           "totalCheckpoints": 1,
           "totalTransactions": 2,
@@ -412,36 +536,43 @@ Response: {
           "netInflow": "0",
           "fundInflow": "0",
           "fundOutflow": "0",
-          "storageFund": {
-            "totalObjectStorageRebates": "0",
-            "nonRefundableBalance": "0"
-          },
-          "safeMode": {
-            "enabled": false,
-            "gasSummary": {
-              "computationCost": 0,
-              "storageCost": 0,
-              "storageRebate": 0,
-              "nonRefundableStorageFee": 0
-            }
-          },
-          "systemStateVersion": 2,
-          "systemParameters": {
-            "durationMs": "86400000",
-            "stakeSubsidyStartEpoch": 0,
-            "minValidatorCount": null,
-            "maxValidatorCount": 150,
-            "minValidatorJoiningStake": "30000000000000000",
-            "validatorLowStakeThreshold": "20000000000000000",
-            "validatorVeryLowStakeThreshold": "15000000000000000",
-            "validatorLowStakeGracePeriod": "7"
-          },
-          "systemStakeSubsidy": {
-            "balance": "9949400000000000000",
-            "distributionCounter": 0,
-            "currentDistributionAmount": "1000000000000000",
-            "periodLength": 10,
-            "decreaseRate": 1000
+          "systemState": {
+            "protocolVersion": "70",
+            "systemStateVersion": "2",
+            "storageFund": {
+              "total_object_storage_rebates": "0",
+              "non_refundable_balance": "0"
+            },
+            "parameters": {
+              "epoch_duration_ms": "86400000",
+              "stake_subsidy_start_epoch": "0",
+              "min_validator_count": "4",
+              "max_validator_count": "150",
+              "min_validator_joining_stake": "30000000000000000",
+              "validator_low_stake_threshold": "20000000000000000",
+              "validator_very_low_stake_threshold": "15000000000000000",
+              "validator_low_stake_grace_period": "7",
+              "extra_fields": {
+                "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+                "size": "0"
+              }
+            },
+            "stakeSubsidy": {
+              "balance": "9949400000000000000",
+              "distribution_counter": "0",
+              "current_distribution_amount": "1000000000000000",
+              "stake_subsidy_period_length": "10",
+              "stake_subsidy_decrease_rate": 1000,
+              "extra_fields": {
+                "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+                "size": "0"
+              }
+            },
+            "safeMode": false,
+            "safeModeComputationRewards": "0",
+            "safeModeStorageRewards": "0",
+            "safeModeStorageRebates": "0",
+            "safeModeNonRefundableStorageFee": "0"
           },
           "liveObjectSetDigest": null
         },

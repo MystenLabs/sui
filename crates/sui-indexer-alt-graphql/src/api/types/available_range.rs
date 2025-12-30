@@ -389,13 +389,6 @@ collect_pipelines! {
         pipelines.insert("tx_balance_changes".to_string());
         pipelines.insert("tx_digests".to_string());
     };
-
-    Validator.[address, addressAt] => IAddressable.*;
-    Validator.[balance, balances, multiGetBalances, objects] => IAddressable.*;
-    Validator.[defaultSuinsName] => IAddressable.defaultSuinsName();
-    Validator.[operationCap] |pipelines, _filters| {
-        pipelines.insert("obj_versions".to_string());
-    };
 }
 
 #[cfg(test)]
