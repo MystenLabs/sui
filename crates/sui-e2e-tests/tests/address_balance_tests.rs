@@ -18,6 +18,7 @@ use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
+use sui_types::accumulator_metadata::get_accumulator_object_count;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     accumulator_metadata::AccumulatorOwner,
@@ -407,6 +408,14 @@ async fn test_deposits() {
         input_consensus_objects.iter().find(|input_consensus_object| {
             matches!(input_consensus_object, InputConsensusObject::ReadOnly(obj_ref) if obj_ref.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
         }).expect("settlement should have accumulator root object as read-only input consensus object");
+
+
+        // Verify the accumulator object count after settlement.
+        // 1 account (recipient) with SUI balance = 5 objects.
+        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
+            .expect("read cannot fail")
+            .expect("accumulator object count should exist after settlement");
+        assert_eq!(object_count, 5);
     });
 
     // ensure that no conservation failures are detected during reconfig.
@@ -455,6 +464,13 @@ async fn test_multiple_settlement_txns() {
         for (amount, recipient) in amounts_and_recipients {
             verify_accumulator_exists(child_object_resolver, recipient, amount);
         }
+
+        // Verify the accumulator object count after settlement.
+        // 21 accounts (20 from first tx + 1 from second tx), each with 5 objects = 105.
+        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
+            .expect("read cannot fail")
+            .expect("accumulator object count should exist after settlement");
+        assert_eq!(object_count, 105);
     });
 
     // ensure that no conservation failures are detected during reconfig.
@@ -555,6 +571,13 @@ async fn test_deposit_and_withdraw() {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         verify_accumulator_exists(child_object_resolver, sender, 1000);
+
+        // Verify the accumulator object count after settlement.
+        // 1 account (sender) with SUI balance = 5 objects.
+        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
+            .expect("read cannot fail")
+            .expect("accumulator object count should exist after settlement");
+        assert_eq!(object_count, 5);
     });
 
     let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
@@ -620,6 +643,13 @@ async fn test_deposit_and_withdraw_with_larger_reservation() {
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         // Verify that the accumulator still exists, as the entire balance was not withdrawn
         verify_accumulator_exists(child_object_resolver, sender, 200);
+
+        // Verify the accumulator object count after settlement.
+        // 2 accounts (sender with 200, dbg_addr(2) with 800), each with 5 objects = 10.
+        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
+            .expect("read cannot fail")
+            .expect("accumulator object count should exist after settlement");
+        assert_eq!(object_count, 10);
     });
 
     // ensure that no conservation failures are detected during reconfig.
@@ -752,6 +782,13 @@ async fn test_address_balance_gas() {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         verify_accumulator_exists(child_object_resolver, sender, 10_000_000);
+
+        // Verify the accumulator object count after settlement.
+        // 1 account (sender) with SUI balance = 5 objects.
+        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
+            .expect("read cannot fail")
+            .expect("accumulator object count should exist after settlement");
+        assert_eq!(object_count, 5);
     });
 
     let rgp = test_cluster.get_reference_gas_price().await;
@@ -1858,6 +1895,13 @@ async fn test_address_balance_gas_charged_on_move_abort() {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         verify_accumulator_exists(child_object_resolver, sender, 10_000_000);
+
+        // Verify the accumulator object count after settlement.
+        // 1 account (sender) with SUI balance = 5 objects.
+        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
+            .expect("read cannot fail")
+            .expect("accumulator object count should exist after settlement");
+        assert_eq!(object_count, 5);
     });
 
     let rgp = test_cluster.get_reference_gas_price().await;

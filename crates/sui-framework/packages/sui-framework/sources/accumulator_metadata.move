@@ -142,3 +142,41 @@ fun accumulator_owner_destroy(this: Owner) {
 }
 
 use fun accumulator_owner_destroy as Owner.destroy;
+
+/// Key for storing the net count of accumulator objects as a dynamic field on the accumulator root.
+public struct AccumulatorObjectCountKey() has copy, drop, store;
+
+/// Records changes in the net count of accumulator objects. Called by the barrier transaction
+/// as part of accumulator settlement.
+///
+/// This value is copied to the Sui system state object at end-of-epoch by the
+/// WriteAccumulatorStorageCost transaction, for use in storage fund accounting. Copying once
+/// at end-of-epoch lets us avoid depending on the Sui system state object in the settlement
+/// barrier transaction.
+#[allow(unused_function)]
+fun record_accumulator_object_changes(
+    accumulator_root: &mut AccumulatorRoot,
+    objects_created: u64,
+    objects_destroyed: u64,
+) {
+    let key = AccumulatorObjectCountKey();
+    if (dynamic_field::exists_(accumulator_root.id_mut(), key)) {
+        let current_count: &mut u64 = dynamic_field::borrow_mut(accumulator_root.id_mut(), key);
+        assert!(*current_count + objects_created >= objects_destroyed, EInvariantViolation);
+        *current_count = *current_count + objects_created - objects_destroyed;
+    } else {
+        assert!(objects_created >= objects_destroyed, EInvariantViolation);
+        dynamic_field::add(accumulator_root.id_mut(), key, objects_created - objects_destroyed);
+    };
+}
+
+/// Returns the current count of accumulator objects stored as a dynamic field.
+#[allow(unused_function)]
+fun get_accumulator_object_count(accumulator_root: &AccumulatorRoot): u64 {
+    let key = AccumulatorObjectCountKey();
+    if (dynamic_field::exists_(accumulator_root.id(), key)) {
+        *dynamic_field::borrow(accumulator_root.id(), key)
+    } else {
+        0
+    }
+}

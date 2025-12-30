@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "105",
+              "maxSupportedProtocolVersion": "106",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1427,6 +1427,7 @@
                 "zklogin_auth": false
               },
               "attributes": {
+                "accumulator_object_storage_cost": null,
                 "address_from_bytes_cost_base": {
                   "u64": "52"
                 },
@@ -9027,7 +9028,8 @@
               "AccumulatorRootCreate",
               "CoinRegistryCreate",
               "DisplayRegistryCreate",
-              "AddressAliasStateCreate"
+              "AddressAliasStateCreate",
+              "WriteAccumulatorStorageCost"
             ]
           },
           {

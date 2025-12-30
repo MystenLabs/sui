@@ -1,9 +1,8 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
-snapshot_kind: text
 ---
-version: 105
+version: 106
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -111,7 +110,10 @@ feature_flags:
   enable_party_transfer: true
   allow_unbounded_system_objects: true
   type_tags_in_object_runtime: true
+  enable_accumulators: true
   create_root_accumulator_object: true
+  enable_authenticated_event_streams: true
+  enable_address_balance_gas_payments: true
   enable_multi_epoch_transaction_expiration: true
   enable_ptb_execution_v2: true
   better_adapter_type_resolution_errors: true
@@ -136,6 +138,7 @@ feature_flags:
   deprecate_global_storage_ops: true
   consensus_skip_gced_accept_votes: true
   include_cancelled_randomness_txns_in_prologue: true
+  enable_object_funds_withdraw: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -224,6 +227,7 @@ storage_rebate_rate: 9900
 storage_fund_reinvest_rate: 500
 reward_slashing_rate: 10000
 storage_gas_price: 76
+accumulator_object_storage_cost: 7600
 max_transactions_per_checkpoint: 20000
 max_checkpoint_size_bytes: 31457280
 buffer_stake_for_protocol_upgrade_bps: 5000

@@ -66,7 +66,6 @@ use std::{
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_protocol_config::PerObjectCongestionControlMode;
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
@@ -89,6 +88,7 @@ use sui_types::traffic_control::{
 };
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::TransactionChecks;
+use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_metadata};
 use tap::TapFallible;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::unbounded_channel;
@@ -5683,6 +5683,44 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all)]
+    fn create_write_accumulator_storage_cost_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.accumulator_root_exists() {
+            info!("accumulator root does not exist yet");
+            return None;
+        }
+        if !epoch_store.protocol_config().enable_accumulators() {
+            info!("accumulators not enabled");
+            return None;
+        }
+
+        let object_store = self.get_object_store();
+        let object_count =
+            match accumulator_metadata::get_accumulator_object_count(object_store.as_ref()) {
+                Ok(Some(count)) => count,
+                Ok(None) => return None,
+                Err(e) => {
+                    fatal!("failed to read accumulator object count: {e}");
+                }
+            };
+
+        let storage_cost = object_count.saturating_mul(
+            epoch_store
+                .protocol_config()
+                .accumulator_object_storage_cost(),
+        );
+
+        let tx = EndOfEpochTransactionKind::new_write_accumulator_storage_cost(storage_cost);
+        info!(
+            object_count,
+            storage_cost, "Creating WriteAccumulatorStorageCost tx"
+        );
+        Some(tx)
+    }
+
+    #[instrument(level = "debug", skip_all)]
     fn create_coin_registry_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -5973,12 +6011,13 @@ impl AuthorityState {
         if let Some(tx) = self.create_coin_registry_tx(epoch_store) {
             txns.push(tx);
         }
-
         if let Some(tx) = self.create_display_registry_tx(epoch_store) {
             txns.push(tx);
         }
-
         if let Some(tx) = self.create_address_alias_state_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.create_write_accumulator_storage_cost_tx(epoch_store) {
             txns.push(tx);
         }
 

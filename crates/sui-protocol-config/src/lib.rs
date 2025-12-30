@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 105;
+const MAX_PROTOCOL_VERSION: u64 = 106;
 
 // Record history of protocol version allocations here:
 //
@@ -279,10 +279,11 @@ const MAX_PROTOCOL_VERSION: u64 = 105;
 // Version 104: Framework update: CoinRegistry follow up for Coin methods
 //              Enable all non-zero PCRs parsing for nitro attestation native function in Devnet and Testnet.
 // Version 105: Framework update: address aliases
-//              Enable address balances on devnet
 //              Enable multi-epoch transaction expiration.
 //              Enable always include required PCRs (0-4 & 8) parsing even if they are zeros for
 //              nitro attestation native function in Devnet and Testnet.
+// Version 106: Framework update: accumulator storage fund calculations
+//              Enable address balances on devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1345,6 +1346,9 @@ pub struct ProtocolConfig {
 
     /// Unit gas price, Mist per internal gas unit.
     storage_gas_price: Option<u64>,
+
+    /// Per-object storage cost for accumulator objects, used during end-of-epoch accounting.
+    accumulator_object_storage_cost: Option<u64>,
 
     // === Core Protocol ===
     /// Max number of transactions per checkpoint.
@@ -2686,6 +2690,7 @@ impl ProtocolConfig {
             storage_fund_reinvest_rate: Some(500),
             reward_slashing_rate: Some(5000),
             storage_gas_price: Some(1),
+            accumulator_object_storage_cost: None,
             max_transactions_per_checkpoint: Some(10_000),
             max_checkpoint_size_bytes: Some(30 * 1024 * 1024),
 
@@ -4354,17 +4359,22 @@ impl ProtocolConfig {
                         .include_cancelled_randomness_txns_in_prologue = true;
                 }
                 105 => {
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.enable_accumulators = true;
-                        cfg.feature_flags.enable_address_balance_gas_payments = true;
-                        cfg.feature_flags.enable_authenticated_event_streams = true;
-                        cfg.feature_flags.enable_object_funds_withdraw = true;
-                    }
                     cfg.feature_flags.enable_multi_epoch_transaction_expiration = true;
 
                     if chain != Chain::Mainnet {
                         cfg.feature_flags
                             .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
+                    }
+                }
+                106 => {
+                    // est. 100 bytes per object * 76 (storage_gas_price)
+                    cfg.accumulator_object_storage_cost = Some(7600);
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_accumulators = true;
+                        cfg.feature_flags.enable_address_balance_gas_payments = true;
+                        cfg.feature_flags.enable_authenticated_event_streams = true;
+                        cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
                 }
                 // Use this template when making changes:

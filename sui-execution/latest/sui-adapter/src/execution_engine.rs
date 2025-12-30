@@ -73,7 +73,7 @@ mod checked {
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
         ProgrammableTransaction, StoredExecutionTimeObservations, TransactionKind,
-        is_gas_paid_from_address_balance,
+        WriteAccumulatorStorageCost, is_gas_paid_from_address_balance,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
@@ -790,6 +790,13 @@ mod checked {
                             assert!(protocol_config.create_root_accumulator_object());
                             builder = setup_accumulator_root_create(builder);
                         }
+                        EndOfEpochTransactionKind::WriteAccumulatorStorageCost(
+                            write_storage_cost,
+                        ) => {
+                            assert!(protocol_config.enable_accumulators());
+                            builder =
+                                setup_write_accumulator_storage_cost(builder, &write_storage_cost);
+                        }
                         EndOfEpochTransactionKind::CoinRegistryCreate => {
                             assert!(protocol_config.enable_coin_registry());
                             builder = setup_coin_registry_create(builder);
@@ -1492,6 +1499,22 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate accumulator_root_create transaction!");
+        builder
+    }
+
+    fn setup_write_accumulator_storage_cost(
+        mut builder: ProgrammableTransactionBuilder,
+        write_storage_cost: &WriteAccumulatorStorageCost,
+    ) -> ProgrammableTransactionBuilder {
+        let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+        let storage_cost_arg = builder.pure(write_storage_cost.storage_cost).unwrap();
+        builder.programmable_move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            ident_str!("write_accumulator_storage_cost").to_owned(),
+            vec![],
+            vec![system_state, storage_cost_arg],
+        );
         builder
     }
 

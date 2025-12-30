@@ -347,6 +347,12 @@ pub enum StoredExecutionTimeObservations {
     V1(Vec<(ExecutionTimeObservationKey, Vec<(AuthorityName, Duration)>)>),
 }
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct WriteAccumulatorStorageCost {
+    /// Contains the end-of-epoch-computed storage cost for accumulator objects.
+    pub storage_cost: u64,
+}
+
 impl StoredExecutionTimeObservations {
     pub fn unwrap_v1(self) -> Vec<(ExecutionTimeObservationKey, Vec<(AuthorityName, Duration)>)> {
         match self {
@@ -495,6 +501,7 @@ pub enum EndOfEpochTransactionKind {
     CoinRegistryCreate,
     DisplayRegistryCreate,
     AddressAliasStateCreate,
+    WriteAccumulatorStorageCost(WriteAccumulatorStorageCost),
 }
 
 impl EndOfEpochTransactionKind {
@@ -572,6 +579,10 @@ impl EndOfEpochTransactionKind {
         Self::StoreExecutionTimeObservations(estimates)
     }
 
+    pub fn new_write_accumulator_storage_cost(storage_cost: u64) -> Self {
+        Self::WriteAccumulatorStorageCost(WriteAccumulatorStorageCost { storage_cost })
+    }
+
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
             Self::ChangeEpoch(_) => {
@@ -615,6 +626,13 @@ impl EndOfEpochTransactionKind {
             Self::CoinRegistryCreate => vec![],
             Self::DisplayRegistryCreate => vec![],
             Self::AddressAliasStateCreate => vec![],
+            Self::WriteAccumulatorStorageCost(_) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutability: SharedObjectMutability::Mutable,
+                }]
+            }
         }
     }
 
@@ -653,6 +671,9 @@ impl EndOfEpochTransactionKind {
             Self::CoinRegistryCreate => Either::Right(iter::empty()),
             Self::DisplayRegistryCreate => Either::Right(iter::empty()),
             Self::AddressAliasStateCreate => Either::Right(iter::empty()),
+            Self::WriteAccumulatorStorageCost(_) => {
+                Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
+            }
         }
     }
 
@@ -734,6 +755,13 @@ impl EndOfEpochTransactionKind {
                 if !config.address_aliases() {
                     return Err(UserInputError::Unsupported(
                         "address aliases not enabled".to_string(),
+                    ));
+                }
+            }
+            Self::WriteAccumulatorStorageCost(_) => {
+                if !config.enable_accumulators() {
+                    return Err(UserInputError::Unsupported(
+                        "accumulators not enabled".to_string(),
                     ));
                 }
             }
