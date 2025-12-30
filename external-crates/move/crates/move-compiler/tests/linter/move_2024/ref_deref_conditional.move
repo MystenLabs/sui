@@ -61,13 +61,13 @@ public fun should_flag_function_call() {
 
 // Case 9: Should be flagged for removal - &*& pattern with constant value
 public fun should_flag_value() {
-    let _ref = &*&0; // Should be flagged
+    let _ref = &*&0u64; // Should be flagged
 }
 
 // Case 10: Should be flagged - &*& pattern but path is mutated in a loop
 public fun should_flag_loop_mutation() {
     let mut resource = MyResource { value: 10 };
-    let mut i = 0;
+    let mut i = 0u64;
     while (i < 5) {
         let _ref = &*&resource; // Should be flagged regardless
         resource.value = resource.value + 1;
@@ -85,5 +85,5 @@ public fun should_flag_constant() {
 
 // Case 12: Should be flagged -- vector
 public fun should_flag_vector() {
-    let _ref = &*&vector[1, 2, 3]; // Should be flagged
+    let _ref = &*&vector[1u64,2,3]; // Should be flagged
 }

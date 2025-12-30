@@ -43,8 +43,8 @@ error[E04005]: expected a single type
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/assign_wrong_type.move:17:9
    │
-17 │         () = 0;
-   │         ^^   - Given: integer
+17 │         () = 0u64;
+   │         ^^   ---- Given: 'u64'
    │         │     
    │         Invalid value for assignment
    │         Expected: '()'
@@ -52,8 +52,8 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/assign_wrong_type.move:18:9
    │
-18 │         (x, b, R{f}) = (0, false, R{f: 0}, R{f: 0});
-   │         ^^^^^^^^^^^^   ---------------------------- Given expression list of length 4: '({integer}, bool, 0x8675309::M::R, 0x8675309::M::R)'
+18 │         (x, b, R{f}) = (0u64, false, R{f: 0}, R{f: 0});
+   │         ^^^^^^^^^^^^   ------------------------------- Given expression list of length 4: '(u64, bool, 0x8675309::M::R, 0x8675309::M::R)'
    │         │               
    │         Invalid value for assignment
    │         Expected expression list of length 3: '(_, _, _)'
@@ -61,8 +61,8 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/assign_wrong_type.move:19:9
    │
-19 │         (x, b, R{f}) = (0, false);
-   │         ^^^^^^^^^^^^   ---------- Given expression list of length 2: '({integer}, bool)'
+19 │         (x, b, R{f}) = (0u64, false);
+   │         ^^^^^^^^^^^^   ------------- Given expression list of length 2: '(u64, bool)'
    │         │               
    │         Invalid value for assignment
    │         Expected expression list of length 3: '(_, _, _)'
@@ -73,21 +73,20 @@ error[E04007]: incompatible types
 23 │         let x = false;
    │                 ----- Expected: 'bool'
    ·
-27 │         (x, b, R{f}, r) = (0, false, R{f: 0}, R{f: 0});
-   │          ^
-   │          │
+27 │         (x, b, R{f}, r) = (0u64, false, R{f: 0}, R{f: 0});
+   │          ^                 ---- Given: 'u64'
+   │          │                  
    │          Invalid assignment to variable 'x'
-   │          Given: integer
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/assign_wrong_type.move:27:13
    │
-24 │         let b = 0;
-   │             - Expected: integer
+24 │         let b = 0u64;
+   │                 ---- Expected: 'u64'
    ·
-27 │         (x, b, R{f}, r) = (0, false, R{f: 0}, R{f: 0});
-   │             ^                 ----- Given: 'bool'
-   │             │                  
+27 │         (x, b, R{f}, r) = (0u64, false, R{f: 0}, R{f: 0});
+   │             ^                    ----- Given: 'bool'
+   │             │                     
    │             Invalid assignment to variable 'b'
 
 error[E04007]: incompatible types
@@ -99,7 +98,7 @@ error[E04007]: incompatible types
 25 │         let f = @0x0;
    │                 ---- Expected: 'address'
 26 │         let r = S{ g: 0 };
-27 │         (x, b, R{f}, r) = (0, false, R{f: 0}, R{f: 0});
+27 │         (x, b, R{f}, r) = (0u64, false, R{f: 0}, R{f: 0});
    │                  ^ Invalid assignment to variable 'f'
 
 error[E04007]: incompatible types
@@ -107,7 +106,7 @@ error[E04007]: incompatible types
    │
 26 │         let r = S{ g: 0 };
    │                 --------- Expected: '0x8675309::M::S'
-27 │         (x, b, R{f}, r) = (0, false, R{f: 0}, R{f: 0});
-   │                      ^                        ------- Given: '0x8675309::M::R'
-   │                      │                         
+27 │         (x, b, R{f}, r) = (0u64, false, R{f: 0}, R{f: 0});
+   │                      ^                           ------- Given: '0x8675309::M::R'
+   │                      │                            
    │                      Invalid assignment to variable 'r'

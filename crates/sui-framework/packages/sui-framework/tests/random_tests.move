@@ -447,7 +447,7 @@ fun random_tests_in_range() {
         let output = gen.generate_u128_in_range(min, max);
         assert!(output >= min);
         assert!(output <= max);
-        i = i + 1;
+        i = i + 1u64;
     };
 
     // generate_u64_in_range
@@ -461,7 +461,7 @@ fun random_tests_in_range() {
     assert!(output1 != output2);
     let output = gen.generate_u64_in_range(123454321, 123454321 + 1);
     assert!((output == 123454321) || (output == 123454321 + 1));
-    let mut i = 0;
+    let mut i = 0u64;
     while (i < 50) {
         let min = gen.generate_u64();
         let max = min + (gen.generate_u32() as u64);
@@ -482,7 +482,7 @@ fun random_tests_in_range() {
     assert!(output1 != output2);
     let output = gen.generate_u32_in_range(123454321, 123454321 + 1);
     assert!((output == 123454321) || (output == 123454321 + 1));
-    let mut i = 0;
+    let mut i = 0u64;
     while (i < 50) {
         let min = gen.generate_u32();
         let max = min + (gen.generate_u16() as u32);
@@ -503,7 +503,7 @@ fun random_tests_in_range() {
     assert!(output1 != output2);
     let output = gen.generate_u16_in_range(12345, 12345 + 1);
     assert!((output == 12345) || (output == 12345 + 1));
-    let mut i = 0;
+    let mut i = 0u64;
     while (i < 50) {
         let min = gen.generate_u16();
         let max = min + (gen.generate_u8() as u16);
@@ -524,7 +524,7 @@ fun random_tests_in_range() {
     assert!(output1 != output2);
     let output = gen.generate_u8_in_range(123, 123 + 1);
     assert!((output == 123) || (output == 123 + 1));
-    let mut i = 0;
+    let mut i = 0u64;
     while (i < 50) {
         let (min, max) = (gen.generate_u8(), gen.generate_u8());
         let (min, max) = if (min < max) (min, max) else (max, min);

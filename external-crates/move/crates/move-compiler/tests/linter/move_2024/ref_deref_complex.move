@@ -7,10 +7,10 @@ public struct S has copy, drop {
 // Non-Local but Simple Borrow Cases
 
 public fun literal_case() {
-    let _ref = &*&0; // Redundant borrow-dereference on literal
+    let _ref = &*&0u64; // Redundant borrow-dereference on literal
 }
 
-public fun literal_case_valid() { let _ref = &0; }
+public fun literal_case_valid() { let _ref = &0u64; }
 
 public fun get_resource(): S { S { a: 20 } }
 

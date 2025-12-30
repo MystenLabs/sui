@@ -8,39 +8,39 @@ info:
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/binary_and_invalid.move:8:9
   │
-8 │         0 && 1;
-  │         ^ -- Expected: 'bool'
-  │         │  
+8 │         0u64 && 1u64;
+  │         ^^^^ -- Expected: 'bool'
+  │         │     
   │         Invalid argument to '&&'
-  │         Given: integer
+  │         Given: 'u64'
 
 error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/binary_and_invalid.move:8:14
+  ┌─ tests/move_check/typing/binary_and_invalid.move:8:17
   │
-8 │         0 && 1;
-  │           -- ^
-  │           │  │
-  │           │  Invalid argument to '&&'
-  │           │  Given: integer
-  │           Expected: 'bool'
+8 │         0u64 && 1u64;
+  │              -- ^^^^
+  │              │  │
+  │              │  Invalid argument to '&&'
+  │              │  Given: 'u64'
+  │              Expected: 'bool'
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/binary_and_invalid.move:9:9
   │
-9 │         1 && false;
-  │         ^ -- Expected: 'bool'
-  │         │  
+9 │         1u64 && false;
+  │         ^^^^ -- Expected: 'bool'
+  │         │     
   │         Invalid argument to '&&'
-  │         Given: integer
+  │         Given: 'u64'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/binary_and_invalid.move:10:18
    │
-10 │         false && 1;
-   │               -- ^
+10 │         false && 1u64;
+   │               -- ^^^^
    │               │  │
    │               │  Invalid argument to '&&'
-   │               │  Given: integer
+   │               │  Given: 'u64'
    │               Expected: 'bool'
 
 error[E04007]: incompatible types

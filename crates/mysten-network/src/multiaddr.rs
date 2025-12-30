@@ -493,7 +493,7 @@ mod test {
         ))
         .with_zero_ip();
         assert_eq!(Some("::".to_string()), multi_addr_ip6.hostname());
-        assert_eq!(Some(10500u16), multi_addr_ip4.port());
+        assert_eq!(Some(10500u16), multi_addr_ip6.port());
 
         let multi_addr_dns = Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16))).with_zero_ip();
         assert_eq!(Some("0.0.0.0".to_string()), multi_addr_dns.hostname());
@@ -513,7 +513,7 @@ mod test {
         ))
         .with_localhost_ip();
         assert_eq!(Some("::1".to_string()), multi_addr_ip6.hostname());
-        assert_eq!(Some(10500u16), multi_addr_ip4.port());
+        assert_eq!(Some(10500u16), multi_addr_ip6.port());
 
         let multi_addr_dns =
             Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16))).with_localhost_ip();

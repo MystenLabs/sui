@@ -2989,7 +2989,7 @@ impl AuthorityState {
                 .value
                 .move_calls()
                 .into_iter()
-                .map(|(package, module, function)| {
+                .map(|(_cmd_idx, package, module, function)| {
                     (*package, module.to_owned(), function.to_owned())
                 }),
             events,

@@ -603,6 +603,14 @@ impl CompilationEnv {
         self.modes().contains(&ModeAttribute::IDE.into())
     }
 
+    pub fn ide_test_mode(&self) -> bool {
+        debug_assert_eq!(
+            self.flags.ide_test_mode(),
+            self.modes().contains(&ModeAttribute::IDE_TEST.into())
+        );
+        self.modes().contains(&ModeAttribute::IDE_TEST.into())
+    }
+
     pub fn keep_testing_functions(&self) -> bool {
         self.flags.keep_testing_functions()
     }

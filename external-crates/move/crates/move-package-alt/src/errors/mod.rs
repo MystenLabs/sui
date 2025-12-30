@@ -118,6 +118,11 @@ pub enum PackageError {
         name: EnvironmentName,
         valid: String,
     },
+
+    #[error(
+        "You cannot have a dependency with the same name as the package. Rename the dependency, which will require adding `rename-from=\"{name}\"`"
+    )]
+    DependencyWithSameNameAsPackage { name: String },
 }
 
 /// Truncate `s` to the first `head` characters and the last `tail` characters of `s`, separated by

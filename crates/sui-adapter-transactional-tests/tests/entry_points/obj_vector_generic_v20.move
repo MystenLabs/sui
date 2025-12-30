@@ -42,7 +42,7 @@ module Test::M {
     public entry fun mint_child_any<Any>(v: u64, parent: &mut ObjAny<Any>, ctx: &mut TxContext) {
         sui::dynamic_object_field::add(
             &mut parent.id,
-            0,
+            0u64,
             ObjAny<Any> {
                 id: object::new(ctx),
                 value: v,

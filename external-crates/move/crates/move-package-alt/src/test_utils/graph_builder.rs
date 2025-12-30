@@ -607,10 +607,27 @@ impl PackageSpec {
         published_at: PublishedID,
         version: Option<u64>,
     ) -> Self {
+        self.publish_in_env(
+            DEFAULT_ENV_NAME,
+            DEFAULT_ENV_ID,
+            original_id,
+            published_at,
+            version,
+        )
+    }
+
+    pub fn publish_in_env(
+        mut self,
+        env_name: impl AsRef<str>,
+        env_id: impl AsRef<str>,
+        original_id: OriginalID,
+        published_at: PublishedID,
+        version: Option<u64>,
+    ) -> Self {
         self.pubs.insert(
-            DEFAULT_ENV_NAME.to_string(),
+            env_name.as_ref().to_string(),
             PubSpec {
-                chain_id: DEFAULT_ENV_ID.to_string(),
+                chain_id: env_id.as_ref().to_string(),
                 addresses: PublishAddresses {
                     original_id,
                     published_at,
@@ -618,6 +635,12 @@ impl PackageSpec {
                 version: version.unwrap_or(1),
             },
         );
+        self
+    }
+
+    pub fn add_env(mut self, env_name: impl AsRef<str>, env_id: impl AsRef<str>) -> Self {
+        self.environments
+            .insert(env_name.as_ref().to_string(), env_id.as_ref().to_string());
         self
     }
 

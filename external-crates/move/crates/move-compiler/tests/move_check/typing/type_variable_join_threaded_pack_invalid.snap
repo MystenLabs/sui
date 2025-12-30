@@ -11,8 +11,8 @@ error[E04007]: incompatible types
 35 │     fun t0(): Box<bool> {
    │                   ---- Expected: 'bool'
    ·
-38 │         let b = Box { f1: x, f2: x };
-   │                 -------------------- Given: integer
+39 │         Container::put(&mut v, 0u64);
+   │                                ---- Given: 'u64'
    ·
 42 │         b
    │         ^ Invalid return expression

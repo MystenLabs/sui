@@ -20,7 +20,7 @@ module 0x42::m {
         'outer: loop {
             'inner: loop {
                 if (cond) { break 'outer 10 };
-                if (cond) { break 'inner 20 };
+                if (cond) { break 'inner 20u64 };
             };
         }
     }
@@ -45,7 +45,7 @@ module 0x42::m {
         'outer: while (cond) {
             let _x = 'inner: {
                 if (cond) { break 'outer };
-                if (cond) { return 'inner 10 };
+                if (cond) { return 'inner 10u64 };
                 20
             };
         }

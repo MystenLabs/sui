@@ -13,7 +13,7 @@ use move_compiler::{
             ModuleMemberKind,
         },
     },
-    naming::ast::{Type, Type_, TypeName_},
+    naming::ast::{Type, TypeInner, TypeName_},
     shared::{Identifier, Name},
     typing::ast::{Exp, ExpListItem, SequenceItem, SequenceItem_, UnannotatedExp_},
 };
@@ -87,17 +87,17 @@ pub fn typed_id_list_to_ide_string(
 }
 
 pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
-    match t {
-        Type_::Unit => "()".to_string(),
-        Type_::Ref(m, r) => format!(
+    match t.inner() {
+        TypeInner::Unit => "()".to_string(),
+        TypeInner::Ref(m, r) => format!(
             "&{}{}",
             if *m { "mut " } else { "" },
             type_to_ide_string(r, verbose)
         ),
-        Type_::Param(tp) => {
+        TypeInner::Param(tp) => {
             format!("{}", tp.user_specified_name)
         }
-        Type_::Apply(_, sp!(_, type_name), ss) => match type_name {
+        TypeInner::Apply(_, sp!(_, type_name), ss) => match type_name {
             TypeName_::Multiple(_) => {
                 format!(
                     "({})",
@@ -136,17 +136,17 @@ pub fn type_to_ide_string(sp!(_, t): &Type, verbose: bool) -> String {
                 }
             }
         },
-        Type_::Fun(args, ret) => {
+        TypeInner::Fun(args, ret) => {
             format!(
                 "|{}| -> {}",
                 type_list_to_ide_string(args, /* separate_lines */ false, verbose),
                 type_to_ide_string(ret, verbose)
             )
         }
-        Type_::Anything => "_".to_string(),
-        Type_::Void => "_".to_string(),
-        Type_::Var(_) => "invalid type (var)".to_string(),
-        Type_::UnresolvedError => "unknown type (unresolved)".to_string(),
+        TypeInner::Anything => "_".to_string(),
+        TypeInner::Void => "_".to_string(),
+        TypeInner::Var(_) => "invalid type (var)".to_string(),
+        TypeInner::UnresolvedError => "unknown type (unresolved)".to_string(),
     }
 }
 
@@ -179,8 +179,8 @@ pub fn datatype_type_list_to_ide_string(types: &[(Type, bool)], verbose: bool) -
 }
 
 pub fn ret_type_to_ide_str(ret_type: &Type, verbose: bool) -> String {
-    match ret_type {
-        sp!(_, Type_::Unit) => "".to_string(),
+    match ret_type.value.inner() {
+        TypeInner::Unit => "".to_string(),
         _ => format!(": {}", type_to_ide_string(ret_type, verbose)),
     }
 }

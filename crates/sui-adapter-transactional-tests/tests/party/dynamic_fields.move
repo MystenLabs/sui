@@ -25,11 +25,11 @@ public fun mint(ctx: &mut TxContext) {
 }
 
 public fun add_df(parent: &mut Parent, child: Child) {
-    ofield::add(&mut parent.id, 0, child);
+    ofield::add(&mut parent.id, 0u64, child);
 }
 
 public fun remove_df(parent: &mut Parent, ctx: &mut TxContext) {
-    let child: Child = ofield::remove(&mut parent.id, 0);
+    let child: Child = ofield::remove(&mut parent.id, 0u64);
     transfer::transfer(child, ctx.sender())
 }
 

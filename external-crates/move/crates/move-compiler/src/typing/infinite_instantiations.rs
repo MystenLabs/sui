@@ -6,7 +6,7 @@ use super::core::{self, Subst, TParamSubst};
 use crate::{
     diagnostics::{Diagnostic, codes::TypeSafety},
     expansion::ast::ModuleIdent,
-    naming::ast::{self as N, TParam, TParamID, Type, Type_},
+    naming::ast::{self as N, ANYTHING_TYPE, TParam, TParamID, Type, TypeInner},
     parser::ast::FunctionName,
     shared::{CompilationEnv, unique_map::UniqueMap},
     typing::ast as T,
@@ -76,18 +76,18 @@ impl<'a> Context<'a> {
         info: EdgeInfo,
         sp!(_, targ_): &Type,
     ) {
-        use N::Type_::*;
-        match targ_ {
-            Var(_) => panic!("ICE tvar after expansion"),
-            Unit | Anything | Void | UnresolvedError => (),
-            Ref(_, t) => {
+        use N::TypeInner as TI;
+        match targ_.inner() {
+            TI::Var(_) => panic!("ICE tvar after expansion"),
+            TI::Unit | TI::Anything | TI::Void | TI::UnresolvedError => (),
+            TI::Ref(_, t) => {
                 let info = EdgeInfo {
                     edge: Edge::Nested,
                     ..info
                 };
                 Self::add_tparam_edges(acc, tparam, info, t)
             }
-            Apply(_, _, tys) => {
+            TI::Apply(_, _, tys) => {
                 let info = EdgeInfo {
                     edge: Edge::Nested,
                     ..info
@@ -95,7 +95,7 @@ impl<'a> Context<'a> {
                 tys.iter()
                     .for_each(|t| Self::add_tparam_edges(acc, tparam, info.clone(), t))
             }
-            Fun(tys, t) => {
+            TI::Fun(tys, t) => {
                 let info = EdgeInfo {
                     edge: Edge::Nested,
                     ..info
@@ -104,7 +104,7 @@ impl<'a> Context<'a> {
                     .for_each(|t| Self::add_tparam_edges(acc, tparam, info.clone(), t));
                 Self::add_tparam_edges(acc, tparam, info.clone(), t)
             }
-            Param(tp) => {
+            TI::Param(tp) => {
                 let tp_neighbors = acc.entry(tp.clone()).or_default();
                 match tp_neighbors.get(tparam) {
                     Some(EdgeInfo {
@@ -384,7 +384,7 @@ fn cycle_error(
                     user_specified_name: qualified,
                     ..ftparam.clone()
                 };
-                sp(init_state.loc, Type_::Param(qualified_tp))
+                sp(init_state.loc, TypeInner::Param(qualified_tp).into())
             };
             let init_call = make_call_string(context, init_state, ftparam.id, &ftparam_ty);
             let loc = ftparam.user_specified_name.loc;
@@ -398,7 +398,7 @@ fn cycle_error(
             .map(|(i, targ_tparam)| {
                 let tparam = cycle_nodes[next(i)];
                 let cur = &context.tparam_type_arguments[targ_tparam][tparam];
-                let targ = core::subst_tparams(&subst, cur.type_argument.clone());
+                let targ = core::subst_tparams(&subst, &cur.type_argument);
                 let res = make_call_string(context, cur, tparam.id, &targ);
                 let loc = tparam.user_specified_name.loc;
                 subst = make_subst(context, loc, cur, tparam.id, targ);
@@ -441,7 +441,7 @@ fn make_subst(
             let ty = if tp.id == tparam {
                 tparam_ty.take().unwrap()
             } else {
-                sp(loc, Type_::Anything)
+                sp(loc, ANYTHING_TYPE.clone())
             };
             (tp.id, ty)
         })

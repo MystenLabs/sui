@@ -8,7 +8,7 @@ info:
 warning[W09002]: unused variable
   ┌─ tests/move_check/liveness/unused_assignment.move:3:13
   │
-3 │         let x = 0;
+3 │         let x = 0u64;
   │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
@@ -24,7 +24,7 @@ warning[W09003]: unused assignment
 warning[W09003]: unused assignment
   ┌─ tests/move_check/liveness/unused_assignment.move:8:9
   │
-8 │         x = 0;
+8 │         x = 0u64;
   │         ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
   │
   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
@@ -32,7 +32,7 @@ warning[W09003]: unused assignment
 warning[W09002]: unused variable
    ┌─ tests/move_check/liveness/unused_assignment.move:13:17
    │
-13 │             let x = 0;
+13 │             let x = 0u64;
    │                 ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
@@ -40,7 +40,7 @@ warning[W09002]: unused variable
 warning[W09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:21:13
    │
-21 │             x = 0;
+21 │             x = 0u64;
    │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
    │
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
@@ -64,7 +64,7 @@ warning[W09003]: unused assignment
 warning[W09003]: unused assignment
    ┌─ tests/move_check/liveness/unused_assignment.move:30:13
    │
-30 │             x = 2;
+30 │             x = 2u64;
    │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
    │
    = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

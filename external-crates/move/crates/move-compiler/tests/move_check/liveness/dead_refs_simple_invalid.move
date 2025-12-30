@@ -4,11 +4,11 @@ module 0x8675309::M {
         let x_ref = &mut x;
         _ = x;
         _ = move x;
-        *x_ref = 0;
+        *x_ref = 0u64;
     }
 
     fun t1() {
-        let x = 0;
+        let x = 0u64;
         let x_ref = &mut x;
         _ = x;
         _ = move x;

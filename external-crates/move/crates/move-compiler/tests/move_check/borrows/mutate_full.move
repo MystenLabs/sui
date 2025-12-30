@@ -11,20 +11,20 @@ module 0x8675309::M {
         let x = &mut 0;
         let f = x;
         *f;
-        *x = 0;
+        *x = 0u64;
 
 
-        let x = &mut 0;
+        let x = &mut 0u64;
         let f = freeze(x);
         *f;
         *x = 0;
 
-        let x = &mut 0;
+        let x = &mut 0u64;
         let f = id(x);
         *f;
         *x = 0;
 
-        let x = &mut 0;
+        let x = &mut 0u64;
         let f = id_mut(x);
         *f;
         *x = 0;

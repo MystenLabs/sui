@@ -10,7 +10,7 @@ error[E04003]: built-in operation not supported
    │
 32 │            NBase { mut t } => {
    │                        - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-33 │                 t = t + 1;
+33 │                 t = t + 1u64;
    │                     ^ Invalid argument to '+'
 
 error[E04007]: incompatible types
@@ -18,8 +18,8 @@ error[E04007]: incompatible types
    │
 32 │            NBase { mut t } => {
    │                        - Found: '&u64'. It is not compatible with the other type.
-33 │                 t = t + 1;
-   │                       ^ - Found: integer. It is not compatible with the other type.
+33 │                 t = t + 1u64;
+   │                       ^ ---- Found: 'u64'. It is not compatible with the other type.
    │                       │  
    │                       Incompatible arguments to '+'
 
@@ -28,15 +28,15 @@ error[E04003]: built-in operation not supported
    │
 32 │            NBase { mut t } => {
    │                        - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-33 │                 t = t + 1;
-   │                         ^ Invalid argument to '+'
+33 │                 t = t + 1u64;
+   │                         ^^^^ Invalid argument to '+'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:42:21
    │
 41 │            NBase { t: mut x } => {
    │                           - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-42 │                 x = x + 1;
+42 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
 error[E04007]: incompatible types
@@ -44,8 +44,8 @@ error[E04007]: incompatible types
    │
 41 │            NBase { t: mut x } => {
    │                           - Found: '&u64'. It is not compatible with the other type.
-42 │                 x = x + 1;
-   │                       ^ - Found: integer. It is not compatible with the other type.
+42 │                 x = x + 1u64;
+   │                       ^ ---- Found: 'u64'. It is not compatible with the other type.
    │                       │  
    │                       Incompatible arguments to '+'
 
@@ -54,15 +54,15 @@ error[E04003]: built-in operation not supported
    │
 41 │            NBase { t: mut x } => {
    │                           - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-42 │                 x = x + 1;
-   │                         ^ Invalid argument to '+'
+42 │                 x = x + 1u64;
+   │                         ^^^^ Invalid argument to '+'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:51:20
    │
 50 │            PBase(mut x) => {
    │                      - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-51 │                x = x + 1;
+51 │                x = x + 1u64;
    │                    ^ Invalid argument to '+'
 
 error[E04007]: incompatible types
@@ -70,8 +70,8 @@ error[E04007]: incompatible types
    │
 50 │            PBase(mut x) => {
    │                      - Found: '&u64'. It is not compatible with the other type.
-51 │                x = x + 1;
-   │                      ^ - Found: integer. It is not compatible with the other type.
+51 │                x = x + 1u64;
+   │                      ^ ---- Found: 'u64'. It is not compatible with the other type.
    │                      │  
    │                      Incompatible arguments to '+'
 
@@ -80,15 +80,15 @@ error[E04003]: built-in operation not supported
    │
 50 │            PBase(mut x) => {
    │                      - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-51 │                x = x + 1;
-   │                        ^ Invalid argument to '+'
+51 │                x = x + 1u64;
+   │                        ^^^^ Invalid argument to '+'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:60:21
    │
 59 │            NPoly { t : NBase { mut t } } => {
    │                                    - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-60 │                 t = t + 1;
+60 │                 t = t + 1u64;
    │                     ^ Invalid argument to '+'
 
 error[E04007]: incompatible types
@@ -96,8 +96,8 @@ error[E04007]: incompatible types
    │
 59 │            NPoly { t : NBase { mut t } } => {
    │                                    - Found: '&u64'. It is not compatible with the other type.
-60 │                 t = t + 1;
-   │                       ^ - Found: integer. It is not compatible with the other type.
+60 │                 t = t + 1u64;
+   │                       ^ ---- Found: 'u64'. It is not compatible with the other type.
    │                       │  
    │                       Incompatible arguments to '+'
 
@@ -106,15 +106,15 @@ error[E04003]: built-in operation not supported
    │
 59 │            NPoly { t : NBase { mut t } } => {
    │                                    - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-60 │                 t = t + 1;
-   │                         ^ Invalid argument to '+'
+60 │                 t = t + 1u64;
+   │                         ^^^^ Invalid argument to '+'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:69:21
    │
 68 │            NPoly { t : NBase { t: mut x } } => {
    │                                       - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-69 │                 x = x + 1;
+69 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
 error[E04007]: incompatible types
@@ -122,8 +122,8 @@ error[E04007]: incompatible types
    │
 68 │            NPoly { t : NBase { t: mut x } } => {
    │                                       - Found: '&u64'. It is not compatible with the other type.
-69 │                 x = x + 1;
-   │                       ^ - Found: integer. It is not compatible with the other type.
+69 │                 x = x + 1u64;
+   │                       ^ ---- Found: 'u64'. It is not compatible with the other type.
    │                       │  
    │                       Incompatible arguments to '+'
 
@@ -132,15 +132,15 @@ error[E04003]: built-in operation not supported
    │
 68 │            NPoly { t : NBase { t: mut x } } => {
    │                                       - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-69 │                 x = x + 1;
-   │                         ^ Invalid argument to '+'
+69 │                 x = x + 1u64;
+   │                         ^^^^ Invalid argument to '+'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:78:21
    │
 77 │            NPoly { t : PBase(mut x) } => {
    │                                  - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-78 │                 x = x + 1;
+78 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
 error[E04007]: incompatible types
@@ -148,8 +148,8 @@ error[E04007]: incompatible types
    │
 77 │            NPoly { t : PBase(mut x) } => {
    │                                  - Found: '&u64'. It is not compatible with the other type.
-78 │                 x = x + 1;
-   │                       ^ - Found: integer. It is not compatible with the other type.
+78 │                 x = x + 1u64;
+   │                       ^ ---- Found: 'u64'. It is not compatible with the other type.
    │                       │  
    │                       Incompatible arguments to '+'
 
@@ -158,15 +158,15 @@ error[E04003]: built-in operation not supported
    │
 77 │            NPoly { t : PBase(mut x) } => {
    │                                  - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-78 │                 x = x + 1;
-   │                         ^ Invalid argument to '+'
+78 │                 x = x + 1u64;
+   │                         ^^^^ Invalid argument to '+'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:87:21
    │
 86 │            PPoly(NBase { t: mut x }) => {
    │                                 - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-87 │                 x = x + 1;
+87 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
 error[E04007]: incompatible types
@@ -174,8 +174,8 @@ error[E04007]: incompatible types
    │
 86 │            PPoly(NBase { t: mut x }) => {
    │                                 - Found: '&u64'. It is not compatible with the other type.
-87 │                 x = x + 1;
-   │                       ^ - Found: integer. It is not compatible with the other type.
+87 │                 x = x + 1u64;
+   │                       ^ ---- Found: 'u64'. It is not compatible with the other type.
    │                       │  
    │                       Incompatible arguments to '+'
 
@@ -184,15 +184,15 @@ error[E04003]: built-in operation not supported
    │
 86 │            PPoly(NBase { t: mut x }) => {
    │                                 - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-87 │                 x = x + 1;
-   │                         ^ Invalid argument to '+'
+87 │                 x = x + 1u64;
+   │                         ^^^^ Invalid argument to '+'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:96:21
    │
 95 │            PPoly(PBase(mut x)) => {
    │                            - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-96 │                 x = x + 1;
+96 │                 x = x + 1u64;
    │                     ^ Invalid argument to '+'
 
 error[E04007]: incompatible types
@@ -200,8 +200,8 @@ error[E04007]: incompatible types
    │
 95 │            PPoly(PBase(mut x)) => {
    │                            - Found: '&u64'. It is not compatible with the other type.
-96 │                 x = x + 1;
-   │                       ^ - Found: integer. It is not compatible with the other type.
+96 │                 x = x + 1u64;
+   │                       ^ ---- Found: 'u64'. It is not compatible with the other type.
    │                       │  
    │                       Incompatible arguments to '+'
 
@@ -210,5 +210,5 @@ error[E04003]: built-in operation not supported
    │
 95 │            PPoly(PBase(mut x)) => {
    │                            - Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
-96 │                 x = x + 1;
-   │                         ^ Invalid argument to '+'
+96 │                 x = x + 1u64;
+   │                         ^^^^ Invalid argument to '+'

@@ -6,6 +6,29 @@ info:
   lint: false
 ---
 error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/pack_constraint_not_satisfied.move:7:9
+  │
+3 │     struct R<T: key>  { r: T }
+  │                 --- 'key' constraint declared here
+  ·
+7 │         R {r:_ } = R { r: 0u64 };
+  │         ^^^^^^^^          ---- The type 'u64' does not have the ability 'key'
+  │         │                  
+  │         'key' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+  ┌─ tests/move_check/typing/pack_constraint_not_satisfied.move:7:20
+  │
+3 │     struct R<T: key>  { r: T }
+  │                 --- 'key' constraint declared here
+  ·
+7 │         R {r:_ } = R { r: 0u64 };
+  │                    ^^^^^^^^^^^^^
+  │                    │      │
+  │                    │      The type 'u64' does not have the ability 'key'
+  │                    'key' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/pack_constraint_not_satisfied.move:8:9
   │
 2 │     struct Coin {}
@@ -38,10 +61,21 @@ error[E05001]: ability constraint not satisfied
    │            │     
    │            To satisfy the constraint, the 'key' ability would need to be added here
    ·
-12 │         R {r: R { r: _ } } = R { r: R { r: 0 }};
-   │         ^^^^^^^^^^^^^^^^^^          ---------- The type '0x8675309::M::R<{integer}>' does not have the ability 'key'
+12 │         R {r: R { r: _ } } = R { r: R { r: 0u64 }};
+   │         ^^^^^^^^^^^^^^^^^^          ------------- The type '0x8675309::M::R<u64>' does not have the ability 'key'
    │         │                            
    │         'key' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/pack_constraint_not_satisfied.move:12:15
+   │
+ 3 │     struct R<T: key>  { r: T }
+   │                 --- 'key' constraint declared here
+   ·
+12 │         R {r: R { r: _ } } = R { r: R { r: 0u64 }};
+   │               ^^^^^^^^^^                   ---- The type 'u64' does not have the ability 'key'
+   │               │                             
+   │               'key' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/pack_constraint_not_satisfied.move:12:30
@@ -51,11 +85,23 @@ error[E05001]: ability constraint not satisfied
    │            │     
    │            To satisfy the constraint, the 'key' ability would need to be added here
    ·
-12 │         R {r: R { r: _ } } = R { r: R { r: 0 }};
-   │                              ^^^^^^^^^^^^^^^^^^
+12 │         R {r: R { r: _ } } = R { r: R { r: 0u64 }};
+   │                              ^^^^^^^^^^^^^^^^^^^^^
    │                              │      │
-   │                              │      The type '0x8675309::M::R<{integer}>' does not have the ability 'key'
+   │                              │      The type '0x8675309::M::R<u64>' does not have the ability 'key'
    │                              'key' constraint not satisifed
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_check/typing/pack_constraint_not_satisfied.move:12:37
+   │
+ 3 │     struct R<T: key>  { r: T }
+   │                 --- 'key' constraint declared here
+   ·
+12 │         R {r: R { r: _ } } = R { r: R { r: 0u64 }};
+   │                                     ^^^^^^^^^^^^^
+   │                                     │      │
+   │                                     │      The type 'u64' does not have the ability 'key'
+   │                                     'key' constraint not satisifed
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/pack_constraint_not_satisfied.move:13:9

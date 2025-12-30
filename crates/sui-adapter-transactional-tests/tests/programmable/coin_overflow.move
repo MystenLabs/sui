@@ -20,7 +20,7 @@ module test::fake {
 
 }
 
-//# programmable --sender A --inputs object(1,2) 18446744073709551614 @A
+//# programmable --sender A --inputs object(1,2) 18446744073709551615 @A
 //> 0: sui::coin::mint<test::fake::FAKE>(Input(0), Input(1));
 //> TransferObjects([Result(0)], Input(2))
 

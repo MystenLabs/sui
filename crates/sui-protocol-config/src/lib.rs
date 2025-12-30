@@ -280,6 +280,8 @@ const MAX_PROTOCOL_VERSION: u64 = 106;
 //              Enable all non-zero PCRs parsing for nitro attestation native function in Devnet and Testnet.
 // Version 105: Framework update: address aliases
 //              Enable multi-epoch transaction expiration.
+//              Enable always include required PCRs (0-4 & 8) parsing even if they are zeros for
+//              nitro attestation native function in Devnet and Testnet.
 // Version 106: Framework update: accumulator storage fund calculations
 //              Enable address balances on devnet
 
@@ -562,6 +564,10 @@ struct FeatureFlags {
     // Enable upgraded parsing of nitro attestation containing all nonzero PCRs.
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation_all_nonzero_pcrs_parsing: bool,
+
+    // Enable upgraded parsing of nitro attestation to always include required PCRs, even when all zeros.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation_always_include_required_pcrs_parsing: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -2268,6 +2274,11 @@ impl ProtocolConfig {
     pub fn enable_nitro_attestation_all_nonzero_pcrs_parsing(&self) -> bool {
         self.feature_flags
             .enable_nitro_attestation_all_nonzero_pcrs_parsing
+    }
+
+    pub fn enable_nitro_attestation_always_include_required_pcrs_parsing(&self) -> bool {
+        self.feature_flags
+            .enable_nitro_attestation_always_include_required_pcrs_parsing
     }
 
     pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
@@ -4349,6 +4360,11 @@ impl ProtocolConfig {
                 }
                 105 => {
                     cfg.feature_flags.enable_multi_epoch_transaction_expiration = true;
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
+                    }
                 }
                 106 => {
                     // est. 100 bytes per object * 76 (storage_gas_price)
