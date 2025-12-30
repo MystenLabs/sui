@@ -24,7 +24,7 @@ use tracing::{debug, error, info, warn};
 pub enum SubscriptionRequest {
     SubscribePool(ObjectID),
     SubscribeAccount(SuiAddress),
-    SubscribeOrders(SuiAddress), // [Ticket #2] 新增訂單訂閱
+    SubscribeOrders(SuiAddress),
     SubscribeAll,
 }
 
@@ -41,6 +41,7 @@ pub enum StreamMessage {
         digest: String,
         kind: String,
         is_success: bool,
+        tx_bytes: Option<Vec<u8>>,
     },
     BalanceChange {
         account: SuiAddress,
@@ -55,7 +56,6 @@ pub enum StreamMessage {
         contents: Vec<u8>,
         digest: String,
     },
-    // [Ticket #2] 新增訂單相關訊息與探針
     OrderPlaced {
         order_id: String,
         sender: SuiAddress,
@@ -66,6 +66,7 @@ pub enum StreamMessage {
         event_type: String,
         sender: SuiAddress,
         contents: Vec<u8>,
+        digest: String,
     },
     SubscriptionSuccess {
         details: String,
@@ -150,13 +151,15 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
 
                         // 1. Firehose / SubscribeAll
                         if subscribe_all {
-                             let msg = StreamMessage::AccountActivity {
-                                 account: sender,
-                                 digest: digest.clone(),
-                                 kind: "Transaction".to_string(),
-                                 is_success,
-                             };
-                             let _ = send_json(&mut socket, &msg).await;
+                            let tx_data = bcs::to_bytes(outputs.transaction.data()).ok();
+                            let msg = StreamMessage::AccountActivity {
+                                account: sender,
+                                digest: digest.clone(),
+                                kind: "Transaction".to_string(),
+                                is_success,
+                                tx_bytes: tx_data,
+                            };
+                            let _ = send_json(&mut socket, &msg).await;
                         }
 
                         // 2. Events Broadcast & [Ticket #2] Order Detection
@@ -181,6 +184,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                                      event_type: event.type_.to_string(),
                                      sender: event.sender,
                                      contents: event.contents.clone(),
+                                     digest: digest.clone(),
                                  };
                                  let _ = send_json(&mut socket, &probe).await;
 
@@ -210,14 +214,16 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                         }
 
                         // 4. Account Updates
-                        if subscriptions_accounts.contains(&sender) {
-                             let msg = StreamMessage::AccountActivity {
-                                 account: sender,
-                                 digest: digest.clone(),
-                                 kind: "Transaction".to_string(),
-                                 is_success,
-                             };
-                             let _ = send_json(&mut socket, &msg).await;
+                        if subscriptions_accounts.contains(&sender){
+                            let tx_data = bcs::to_bytes(outputs.transaction.data()).ok();
+                            let msg = StreamMessage::AccountActivity {
+                                account: sender,
+                                digest: digest.clone(),
+                                kind: "Transaction".to_string(),
+                                is_success,
+                                tx_bytes: tx_data,
+                            };
+                            let _ = send_json(&mut socket, &msg).await;
                         }
                     }
                     Err(_) => break,
