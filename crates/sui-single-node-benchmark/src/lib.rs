@@ -28,7 +28,7 @@ pub async fn run_benchmark(
     let transactions = ctx.generate_transactions(tx_generator).await;
 
     // No consensus in single node benchmark so we do not need to go through
-    //certification before assigning shared object versions.
+    // the certification process before assigning shared object versions.
     let assigned_versions = ctx
         .validator()
         .assigned_shared_object_versions(&transactions)

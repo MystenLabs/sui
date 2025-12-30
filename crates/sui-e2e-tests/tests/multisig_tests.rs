@@ -23,7 +23,7 @@ use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::error::UserInputError;
-use sui_types::messages_grpc::SubmitTxRequest;
+use sui_types::messages_grpc::{SubmitTxRequest, SubmitTxResponse, SubmitTxResult};
 use sui_types::multisig_legacy::MultiSigLegacy;
 use sui_types::passkey_authenticator::{PasskeyAuthenticator, to_signing_message};
 use sui_types::{
@@ -46,7 +46,7 @@ use sui_types::{
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 use url::Url;
-async fn do_upgraded_multisig_test() -> SuiResult {
+async fn do_upgraded_multisig_test() -> SuiResult<SubmitTxResponse> {
     let test_cluster = TestClusterBuilder::new().build().await;
     let tx = make_upgraded_multisig_tx();
 
@@ -62,7 +62,6 @@ async fn do_upgraded_multisig_test() -> SuiResult {
             Some(SocketAddr::new([127, 0, 0, 1].into(), 0)),
         )
         .await
-        .map(|_| ())
 }
 
 async fn create_credential_and_sign_test_tx_with_passkey_multisig(
@@ -319,9 +318,30 @@ async fn test_upgraded_multisig_feature_allow() {
         config
     });
 
-    // When the feature is enabled, the transaction should be accepted for voting.
-    // Unlike when disabled (which returns Unsupported error), this should succeed.
-    do_upgraded_multisig_test().await.unwrap();
+    // When the feature is enabled, the transaction passes the feature gate check.
+    // The transaction is rejected for other reasons (dummy tx has no valid objects),
+    // but importantly NOT with Unsupported error.
+    let response = do_upgraded_multisig_test().await.unwrap();
+    assert_eq!(response.results.len(), 1);
+    match &response.results[0] {
+        SubmitTxResult::Rejected { error } => {
+            // Verify it's not an Unsupported error (which would mean feature gate failed)
+            assert!(
+                !matches!(
+                    error.as_inner(),
+                    SuiErrorKind::UserInputError {
+                        error: UserInputError::Unsupported(..)
+                    }
+                ),
+                "Transaction should pass feature gate, but got Unsupported error: {:?}",
+                error
+            );
+        }
+        other => panic!(
+            "Expected Rejected result (tx uses dummy objects), got {:?}",
+            other
+        ),
+    }
 }
 
 #[sim_test]

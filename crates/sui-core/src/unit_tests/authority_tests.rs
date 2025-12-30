@@ -1377,7 +1377,7 @@ async fn test_handle_transfer_transaction_ok() {
         rgp,
     );
 
-    // Handle the transaction - validates and sets locks
+    // Handle the transaction - validates the transaction.
     handle_transaction_for_test(&authority_state, transfer_transaction.clone()).unwrap();
 
     // In MFP, validators don't store signed transactions during voting.
@@ -1533,7 +1533,6 @@ async fn test_transfer_package() {
     let object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-    let _epoch_store = authority_state.load_epoch_store_one_call_per_task();
     let gas_object = authority_state.get_object(&object_id).await.unwrap();
     let package_object_ref = authority_state
         .get_sui_system_package_object_ref()

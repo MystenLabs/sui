@@ -3106,7 +3106,6 @@ mod tests {
 
         // AND create 4 more user transactions with remaining gas objects and 2 shared objects.
         // Having more txns on the same shared object may get deferred.
-        // Note: CertifiedTransaction is deprecated with MFP - all transactions use UserTransactionV2
         for (i, gas_object) in gas_objects[8..12].iter().enumerate() {
             let shared_object = if i < 2 {
                 shared_objects[4].clone()

@@ -19,16 +19,14 @@ use super::shared_object_version_manager::{AssignedTxAndVersions, Schedulable};
 // MFP (Mysticeti Fast Path) Test Helpers
 //
 // The MFP transaction flow is:
-//   1. Client signs transaction
-//   2. Validator validates transaction and acquires locks (voting phase)
-//   3. Transaction submitted to consensus
-//   4. Consensus orders and certifies the transaction
-//   5. Transaction comes out of consensus ready for execution
-//   6. Transaction is executed
+//   1. Client signs transaction and submits to a validator.
+//   2. The validator validates transaction and submits it to consensus.
+//   3. Consensus finalizes the transaction and outputs it in a commit.
+//   4. Transactions in the commit are filtered, sequenced and processed. Then they are sent to execution.
 //
 // =============================================================================
 
-/// Validates a transaction and acquires locks on owned objects.
+/// Validates a transaction.
 /// This is the MFP "voting" phase - similar to what happens when a validator
 /// receives a transaction before submitting to consensus.
 ///
@@ -43,7 +41,7 @@ pub fn vote_transaction(
         .verify_transaction_require_no_aliases(transaction)?
         .into_tx();
 
-    // Validate the transaction and acquire locks on owned objects
+    // Validate the transaction.
     authority.handle_vote_transaction(&epoch_store, verified_tx.clone())?;
 
     Ok(verified_tx)
@@ -65,8 +63,8 @@ pub fn create_executable_transaction(
 }
 
 /// Submits a transaction to consensus for ordering and version assignment.
-/// This simulates the consensus process that orders transactions and assigns
-/// versions to shared objects.
+/// This only simulates the consensus submission process by assigning versions
+/// to shared objects.
 ///
 /// Returns the executable transaction (now certified by consensus) and assigned versions.
 /// The transaction is NOT automatically executed - use `execute_from_consensus` for that.
@@ -159,7 +157,7 @@ pub async fn submit_and_execute_with_error(
 > {
     let epoch_store = authority.load_epoch_store_one_call_per_task();
 
-    // Vote on the transaction (validate and acquire locks)
+    // Vote on the transaction.
     let verified_tx = vote_transaction(authority, transaction)?;
 
     // Create executable - transaction is now certified by consensus
