@@ -277,11 +277,8 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         block_refs: Vec<BlockRef>,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
         let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::CheckBlockRefs(
-            block_refs,
-            sender,
-        ))
-        .await;
+        self.send(CoreThreadCommand::CheckBlockRefs(block_refs, sender))
+            .await;
         let missing_block_refs = receiver.await.map_err(|e| Shutdown(e.to_string()))?;
 
         Ok(missing_block_refs)
