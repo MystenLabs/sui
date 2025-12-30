@@ -62,14 +62,14 @@ impl ExecutionError {
     }
 
     /// The instruction offset in the Move bytecode where the error occurred. Populated for Move aborts and primitive runtime errors.
-    async fn instruction_offset(&self) -> Result<Option<u16>, RpcError> {
-        match &self.native {
-            ExecutionFailureStatus::MoveAbort(location, _) => Ok(Some(location.instruction)),
+    async fn instruction_offset(&self) -> Option<Result<u16, RpcError>> {
+        Some(Ok(match &self.native {
+            ExecutionFailureStatus::MoveAbort(location, _) => location.instruction,
             ExecutionFailureStatus::MovePrimitiveRuntimeError(location_opt) => {
-                Ok(location_opt.0.as_ref().map(|loc| loc.instruction))
+                location_opt.0.as_ref()?.instruction
             }
-            _ => Ok(None),
-        }
+            _ => return None,
+        }))
     }
 
     /// The error's name. Only populated for clever errors.

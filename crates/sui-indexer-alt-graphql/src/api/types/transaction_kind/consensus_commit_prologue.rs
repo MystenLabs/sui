@@ -53,8 +53,8 @@ impl ConsensusCommitPrologueTransaction {
     /// Unix timestamp from consensus.
     ///
     /// Present in V1, V2, V3, V4.
-    async fn commit_timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        Ok(Some(DateTime::from_ms(self.commit_timestamp_ms as i64)?))
+    async fn commit_timestamp(&self) -> Option<Result<DateTime, RpcError>> {
+        Some(DateTime::from_ms(self.commit_timestamp_ms as i64))
     }
 
     /// Digest of consensus output, encoded as a Base58 string.
