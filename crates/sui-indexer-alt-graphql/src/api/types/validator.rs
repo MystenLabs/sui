@@ -303,29 +303,29 @@ impl Validator {
         last: Option<u64>,
         after: Option<CAddr>,
     ) -> Option<Result<Connection<String, Validator>, RpcError>> {
-        let report_records = async {
-            let Some(report_records) = self
-                .contents
-                .report_records
-                .get(&self.validator().metadata.sui_address)
-            else {
-                return Ok(Connection::new(false, false));
-            };
+        Some(
+            async {
+                let Some(report_records) = self
+                    .contents
+                    .report_records
+                    .get(&self.validator().metadata.sui_address)
+                else {
+                    return Ok(Connection::new(false, false));
+                };
 
-            let pagination: &PaginationConfig = ctx.data()?;
-            let limits = pagination.limits("Validator", "reportRecords");
-            let page = Page::from_params(limits, first, after, last, before)?;
-            page.paginate_indices(report_records.len(), |i| {
-                let idx = report_records[i];
-                Ok(Validator {
-                    contents: Arc::clone(&self.contents),
-                    idx,
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Validator", "reportRecords");
+                let page = Page::from_params(limits, first, after, last, before)?;
+                page.paginate_indices(report_records.len(), |i| {
+                    let idx = report_records[i];
+                    Ok(Validator {
+                        contents: Arc::clone(&self.contents),
+                        idx,
+                    })
                 })
-            })
-        }
-        .await;
-
-        Some(report_records)
+            }
+            .await,
+        )
     }
 }
 
