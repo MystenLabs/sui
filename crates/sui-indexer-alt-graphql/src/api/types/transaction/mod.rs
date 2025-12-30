@@ -30,6 +30,7 @@ use crate::api::scalars::cursor::JsonCursor;
 use crate::api::scalars::digest::Digest;
 use crate::api::scalars::fq_name_filter::FqNameFilter;
 use crate::api::scalars::id::Id;
+use crate::api::scalars::json::Json;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::types::address::Address;
 use crate::api::types::available_range::AvailableRangeKey;
@@ -177,6 +178,18 @@ impl TransactionContents {
         }
         .await
         .transpose()
+    }
+
+    /// The transaction as a JSON blob, matching the gRPC proto format.
+    async fn transaction_json(&self) -> Result<Option<Json>, RpcError> {
+        let Some(content) = &self.contents else {
+            return Ok(None);
+        };
+
+        let proto_transaction = content.proto_transaction()?;
+        let json_value = serde_json::to_value(&proto_transaction)
+            .context("Failed to serialize transaction to JSON")?;
+        Ok(Some(json_value.try_into()?))
     }
 
     /// User signatures for this transaction.

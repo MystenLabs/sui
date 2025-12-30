@@ -61,6 +61,12 @@ pub enum TransactionContents {
         transaction_data: Box<TransactionData>,
         signatures: Vec<GenericSignature>,
         balance_changes: Vec<grpc::BalanceChange>,
+        /// The proto TransactionEffects from gRPC, if available.
+        /// Contains fully-rendered effects with object types and clever errors.
+        proto_effects: Option<grpc::TransactionEffects>,
+        /// The proto Transaction from gRPC, if available.
+        /// Contains the fully-rendered transaction.
+        proto_transaction: Option<grpc::Transaction>,
     },
 }
 
@@ -271,12 +277,18 @@ impl TransactionContents {
 
         let balance_changes = executed_transaction.balance_changes.clone();
 
+        // Store the proto effects and transaction for JSON serialization
+        let proto_effects = executed_transaction.effects.clone();
+        let proto_transaction = executed_transaction.transaction.clone();
+
         Ok(Self::ExecutedTransaction {
             effects: Box::new(effects),
             events,
             transaction_data: Box::new(transaction_data),
             signatures,
             balance_changes,
+            proto_effects,
+            proto_transaction,
         })
     }
 
@@ -355,6 +367,44 @@ impl TransactionContents {
                 balance_changes, ..
             } => Some(balance_changes),
             _ => None,
+        }
+    }
+
+    /// Returns the proto TransactionEffects.
+    ///
+    /// For ExecutedTransaction, returns the cached proto from gRPC (with object types, clever errors).
+    /// For other sources, converts native effects to proto.
+    pub fn proto_effects(&self) -> anyhow::Result<grpc::TransactionEffects> {
+        match self {
+            Self::ExecutedTransaction { proto_effects, .. } => {
+                // Use cached proto if available, otherwise convert from native
+                if let Some(proto) = proto_effects {
+                    Ok(proto.clone())
+                } else {
+                    Ok(self.effects()?.into())
+                }
+            }
+            _ => Ok(self.effects()?.into()),
+        }
+    }
+
+    /// Returns the proto Transaction.
+    ///
+    /// For ExecutedTransaction, returns the cached proto from gRPC.
+    /// For other sources, converts native transaction to proto.
+    pub fn proto_transaction(&self) -> anyhow::Result<grpc::Transaction> {
+        match self {
+            Self::ExecutedTransaction {
+                proto_transaction, ..
+            } => {
+                // Use cached proto if available, otherwise convert from native
+                if let Some(proto) = proto_transaction {
+                    Ok(proto.clone())
+                } else {
+                    Ok(self.data()?.into())
+                }
+            }
+            _ => Ok(self.data()?.into()),
         }
     }
 
