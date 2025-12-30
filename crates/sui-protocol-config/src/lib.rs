@@ -281,6 +281,8 @@ const MAX_PROTOCOL_VERSION: u64 = 105;
 // Version 105: Framework update: address aliases
 //              Enable address balances on devnet
 //              Enable multi-epoch transaction expiration.
+//              Enable always include required PCRs (0-4 & 8) parsing even if they are zeros for
+//              nitro attestation native function in Devnet and Testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -561,6 +563,10 @@ struct FeatureFlags {
     // Enable upgraded parsing of nitro attestation containing all nonzero PCRs.
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation_all_nonzero_pcrs_parsing: bool,
+
+    // Enable upgraded parsing of nitro attestation to always include required PCRs, even when all zeros.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation_always_include_required_pcrs_parsing: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -2264,6 +2270,11 @@ impl ProtocolConfig {
     pub fn enable_nitro_attestation_all_nonzero_pcrs_parsing(&self) -> bool {
         self.feature_flags
             .enable_nitro_attestation_all_nonzero_pcrs_parsing
+    }
+
+    pub fn enable_nitro_attestation_always_include_required_pcrs_parsing(&self) -> bool {
+        self.feature_flags
+            .enable_nitro_attestation_always_include_required_pcrs_parsing
     }
 
     pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
@@ -4350,6 +4361,11 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
                     cfg.feature_flags.enable_multi_epoch_transaction_expiration = true;
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

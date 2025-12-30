@@ -98,12 +98,14 @@ pub fn parse_nitro_attestation(
     attestation_bytes: &[u8],
     is_upgraded_parsing: bool,
     include_all_nonzero_pcrs: bool,
+    always_include_required_pcrs: bool,
 ) -> SuiResult<(Vec<u8>, Vec<u8>, AttestationDocument)> {
     let cose_sign1 = CoseSign1::parse_and_validate(attestation_bytes)?;
     let doc = AttestationDocument::parse_payload(
         &cose_sign1.payload,
         is_upgraded_parsing,
         include_all_nonzero_pcrs,
+        always_include_required_pcrs,
     )?;
     let msg = cose_sign1.to_signed_message()?;
     let signature = cose_sign1.signature;
@@ -397,9 +399,15 @@ impl AttestationDocument {
         payload: &[u8],
         is_upgraded_parsing: bool,
         include_all_nonzero_pcrs: bool,
+        always_include_required_pcrs: bool,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
         let document_map = Self::to_map(payload, is_upgraded_parsing)?;
-        Self::validate_document_map(&document_map, is_upgraded_parsing, include_all_nonzero_pcrs)
+        Self::validate_document_map(
+            &document_map,
+            is_upgraded_parsing,
+            include_all_nonzero_pcrs,
+            always_include_required_pcrs,
+        )
     }
 
     fn to_map(
@@ -451,6 +459,7 @@ impl AttestationDocument {
         document_map: &BTreeMap<String, Value>,
         is_upgraded_parsing: bool,
         include_all_nonzero_pcrs: bool,
+        always_include_required_pcrs: bool,
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
         let module_id = document_map
             .get("module_id")
@@ -618,14 +627,23 @@ impl AttestationDocument {
                         }
 
                         if include_all_nonzero_pcrs {
-                            // If flag=true, parse all 0..31 PCRs, but skip all-zero values.
+                            // If include_all_nonzero_pcrs = true, parse all 0..31 PCRs, but
+                            // only include nonzero values.
                             // See: <https://github.com/aws/aws-nitro-enclaves-nsm-api/issues/18#issuecomment-970172662>
                             // Also: <https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/main/nsm-test/src/bin/nsm-check.rs#L193-L199>
-                            if key_u8 <= 31 && !value.iter().all(|&b| b == 0) {
+                            let is_required_pcr = matches!(key_u8, 0 | 1 | 2 | 3 | 4 | 8);
+                            let is_nonzero = !value.iter().all(|&b| b == 0);
+
+                            // If always_include_required_pcrs = true, always include required PCRs,
+                            // regardless if they are zero or not.
+                            if key_u8 <= 31
+                                && (is_nonzero || (is_required_pcr && always_include_required_pcrs))
+                            {
                                 pcr_map.insert(key_u8, value.to_vec());
                             }
                         } else {
-                            // In legacy mode (flag=false): Parse only specific PCRs (0, 1, 2, 3, 4, 8), including zero values.
+                            // Legacy mode (include_all_nonzero_pcrs=false): Parse only
+                            // required PCRs (0, 1, 2, 3, 4, 8), regardless if they are zero or not.
                             // See: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where>
                             if matches!(key_u8, 0 | 1 | 2 | 3 | 4 | 8) {
                                 pcr_map.insert(key_u8, value.to_vec());

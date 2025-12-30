@@ -1356,6 +1356,7 @@
                 "enable_multi_epoch_transaction_expiration": false,
                 "enable_nitro_attestation": false,
                 "enable_nitro_attestation_all_nonzero_pcrs_parsing": false,
+                "enable_nitro_attestation_always_include_required_pcrs_parsing": false,
                 "enable_nitro_attestation_upgraded_parsing": false,
                 "enable_non_exclusive_writes": false,
                 "enable_object_funds_withdraw": false,
