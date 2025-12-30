@@ -34,7 +34,6 @@ use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
-use crate::api::types::validator::Validator;
 use crate::error::RpcError;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
@@ -107,7 +106,6 @@ pub(crate) enum IAddressable {
     MoveObject(MoveObject),
     MovePackage(MovePackage),
     Object(Object),
-    Validator(Validator),
 }
 
 #[derive(Clone, Debug)]

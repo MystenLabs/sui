@@ -6,7 +6,7 @@ processed 2 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-82:
+task 1, lines 6-49:
 //# run-graphql
 Response: {
   "data": {
@@ -22,63 +22,120 @@ Response: {
           },
           "nodes": [
             {
-              "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
-              "balance": {
-                "totalBalance": "30000000000000000"
-              },
-              "balances": {
-                "__typename": "BalanceConnection"
-              },
-              "defaultSuinsName": null,
-              "multiGetBalances": [
-                {
-                  "totalBalance": "30000000000000000"
+              "contents": {
+                "json": {
+                  "metadata": {
+                    "sui_address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244",
+                    "protocol_pubkey_bytes": "qqgbtEP57SCwGrO7tmcKwy/daeoOFwANmrMTm1Qu4jUJRhi2VePz/brF9YAcjmJ7BLOpN8c5Ia7zYzTNmGtGoaUnjoYrbvDG9E05s9antwSmkHAIGsM8mkmeBkSjSBrt",
+                    "network_pubkey_bytes": "ZeETulurG5EpRBoewpF26pyLQtpUqwH1T6LqgugHBIU=",
+                    "worker_pubkey_bytes": "3sE4/d+MbOSh9pesKr7b89TSO5gFBuyGUjVa4GldmFU=",
+                    "proof_of_possession": "sIupbWI7yiRvXM22F2E5sJFRricflowHFu7yqXnzglaAvYTxInm4MSDNAgeMzHyJ",
+                    "name": "validator-0",
+                    "description": "",
+                    "image_url": "",
+                    "project_url": "",
+                    "net_address": "/ip4/127.0.0.1/tcp/8000/http",
+                    "p2p_address": "/ip4/127.0.0.1/udp/8001/http",
+                    "primary_address": "/ip4/127.0.0.1/udp/8004/http",
+                    "worker_address": "/ip4/127.0.0.1/udp/8005/http",
+                    "next_epoch_protocol_pubkey_bytes": null,
+                    "next_epoch_proof_of_possession": null,
+                    "next_epoch_network_pubkey_bytes": null,
+                    "next_epoch_worker_pubkey_bytes": null,
+                    "next_epoch_net_address": null,
+                    "next_epoch_p2p_address": null,
+                    "next_epoch_primary_address": null,
+                    "next_epoch_worker_address": null,
+                    "extra_fields": {
+                      "id": "0x5b999826b0b75228a23c51b7dfb391e15c08d4e4c3785afd52b28c5998d135bc",
+                      "size": "0"
+                    }
+                  },
+                  "voting_power": "10000",
+                  "operation_cap_id": "0x03c47745906988d806cf7b623cebf960c79b370bb8b95c3ad24616e2aa29ca7b",
+                  "gas_price": "1000",
+                  "staking_pool": {
+                    "id": "0x2f4c0b14e06a9dd4724e823b2289e3356b2e987fd0f3435e3e00b616bbec111f",
+                    "activation_epoch": "0",
+                    "deactivation_epoch": null,
+                    "sui_balance": "20000000000000000",
+                    "rewards_pool": "0",
+                    "pool_token_balance": "20000000000000000",
+                    "exchange_rates": {
+                      "id": "0x94071141bae9afff56a839bc873ae0b51333c8eec79314f79334fa137b317f6a",
+                      "size": "1"
+                    },
+                    "pending_stake": "0",
+                    "pending_total_sui_withdraw": "0",
+                    "pending_pool_token_withdraw": "0",
+                    "extra_fields": {
+                      "id": "0xe2421a18e7b0d29f7e4e502ef289a13253d42309263ce7f373dfd6e9603bc0e3",
+                      "size": "0"
+                    }
+                  },
+                  "commission_rate": "200",
+                  "next_epoch_stake": "20000000000000000",
+                  "next_epoch_gas_price": "1000",
+                  "next_epoch_commission_rate": "200",
+                  "extra_fields": {
+                    "id": "0xaf1d00f378970cbaab5148e35dd4ca4a492ab2ee3abfb714191d4c604cf2317b",
+                    "size": "0"
+                  }
+                },
+                "address": {
+                  "asAddress": {
+                    "balances": {
+                      "nodes": [
+                        {
+                          "coinType": {
+                            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                          },
+                          "totalBalance": "30000000000000000"
+                        }
+                      ]
+                    },
+                    "objects": {
+                      "nodes": [
+                        {
+                          "contents": {
+                            "type": {
+                              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                            },
+                            "json": {
+                              "id": "0x565a8256a333da0289961e68a8279661b04135fe5d1fa122832c90c41080fbb4",
+                              "balance": "30000000000000000"
+                            }
+                          }
+                        },
+                        {
+                          "contents": {
+                            "type": {
+                              "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui"
+                            },
+                            "json": {
+                              "id": "0x9aafd79b95a557e0099bfba0a24d0d610c574ea180e6e611b9769f8e1c0397c6",
+                              "pool_id": "0x2f4c0b14e06a9dd4724e823b2289e3356b2e987fd0f3435e3e00b616bbec111f",
+                              "stake_activation_epoch": "0",
+                              "principal": "20000000000000000"
+                            }
+                          }
+                        },
+                        {
+                          "contents": {
+                            "type": {
+                              "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::validator_cap::UnverifiedValidatorOperationCap"
+                            },
+                            "json": {
+                              "id": "0x03c47745906988d806cf7b623cebf960c79b370bb8b95c3ad24616e2aa29ca7b",
+                              "authorizer_validator_address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
                 }
-              ],
-              "objects": {
-                "__typename": "MoveObjectConnection"
               },
-              "credentials": {
-                "protocolPubKey": "qqgbtEP57SCwGrO7tmcKwy/daeoOFwANmrMTm1Qu4jUJRhi2VePz/brF9YAcjmJ7BLOpN8c5Ia7zYzTNmGtGoaUnjoYrbvDG9E05s9antwSmkHAIGsM8mkmeBkSjSBrt",
-                "networkPubKey": "ZeETulurG5EpRBoewpF26pyLQtpUqwH1T6LqgugHBIU=",
-                "workerPubKey": "3sE4/d+MbOSh9pesKr7b89TSO5gFBuyGUjVa4GldmFU=",
-                "proofOfPossession": "sIupbWI7yiRvXM22F2E5sJFRricflowHFu7yqXnzglaAvYTxInm4MSDNAgeMzHyJ",
-                "netAddress": "/ip4/127.0.0.1/tcp/8000/http",
-                "p2PAddress": "/ip4/127.0.0.1/udp/8001/http",
-                "primaryAddress": "/ip4/127.0.0.1/udp/8004/http",
-                "workerAddress": "/ip4/127.0.0.1/udp/8005/http"
-              },
-              "nextEpochCredentials": {
-                "protocolPubKey": null,
-                "networkPubKey": null,
-                "workerPubKey": null,
-                "proofOfPossession": null,
-                "netAddress": null,
-                "p2PAddress": null,
-                "primaryAddress": null,
-                "workerAddress": null
-              },
-              "name": "validator-0",
-              "description": "",
-              "imageUrl": "",
-              "projectUrl": "",
-              "operationCap": {
-                "address": "0x03c47745906988d806cf7b623cebf960c79b370bb8b95c3ad24616e2aa29ca7b"
-              },
-              "stakingPoolId": "0x2f4c0b14e06a9dd4724e823b2289e3356b2e987fd0f3435e3e00b616bbec111f",
-              "stakingPoolActivationEpoch": 0,
-              "stakingPoolSuiBalance": "20000000000000000",
-              "rewardsPool": "0",
-              "poolTokenBalance": "20000000000000000",
-              "pendingStake": "0",
-              "pendingTotalSuiWithdraw": "0",
-              "pendingPoolTokenWithdraw": "0",
-              "votingPower": 10000,
-              "gasPrice": "1000",
-              "commissionRate": 200,
-              "nextEpochStake": "20000000000000000",
-              "nextEpochGasPrice": "1000",
-              "nextEpochCommissionRate": 200,
               "atRisk": 0
             }
           ]

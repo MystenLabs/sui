@@ -6,7 +6,7 @@ processed 2 tasks
 init:
 A: object(0,0), validator_0: object(0,1), validator_1: object(0,2), validator_2: object(0,3), validator_3: object(0,4), validator_4: object(0,5), validator_5: object(0,6), validator_6: object(0,7), validator_7: object(0,8)
 
-task 1, lines 6-33:
+task 1, lines 6-35:
 //# run-graphql --cursors 0 1 2 3 4 5 6 7
 Response: {
   "data": {
@@ -22,10 +22,14 @@ Response: {
           },
           "nodes": [
             {
-              "name": "validator-0"
+              "contents": {
+                "name": "validator-0"
+              }
             },
             {
-              "name": "validator-1"
+              "contents": {
+                "name": "validator-1"
+              }
             }
           ]
         },
@@ -38,10 +42,14 @@ Response: {
           },
           "nodes": [
             {
-              "name": "validator-0"
+              "contents": {
+                "name": "validator-0"
+              }
             },
             {
-              "name": "validator-1"
+              "contents": {
+                "name": "validator-1"
+              }
             }
           ]
         },
@@ -54,10 +62,14 @@ Response: {
           },
           "nodes": [
             {
-              "name": "validator-2"
+              "contents": {
+                "name": "validator-2"
+              }
             },
             {
-              "name": "validator-3"
+              "contents": {
+                "name": "validator-3"
+              }
             }
           ]
         },
@@ -70,10 +82,14 @@ Response: {
           },
           "nodes": [
             {
-              "name": "validator-2"
+              "contents": {
+                "name": "validator-2"
+              }
             },
             {
-              "name": "validator-3"
+              "contents": {
+                "name": "validator-3"
+              }
             }
           ]
         },
@@ -86,10 +102,14 @@ Response: {
           },
           "nodes": [
             {
-              "name": "validator-4"
+              "contents": {
+                "name": "validator-4"
+              }
             },
             {
-              "name": "validator-5"
+              "contents": {
+                "name": "validator-5"
+              }
             }
           ]
         },
@@ -102,10 +122,14 @@ Response: {
           },
           "nodes": [
             {
-              "name": "validator-4"
+              "contents": {
+                "name": "validator-4"
+              }
             },
             {
-              "name": "validator-5"
+              "contents": {
+                "name": "validator-5"
+              }
             }
           ]
         },
@@ -118,10 +142,14 @@ Response: {
           },
           "nodes": [
             {
-              "name": "validator-6"
+              "contents": {
+                "name": "validator-6"
+              }
             },
             {
-              "name": "validator-7"
+              "contents": {
+                "name": "validator-7"
+              }
             }
           ]
         },
@@ -134,10 +162,14 @@ Response: {
           },
           "nodes": [
             {
-              "name": "validator-6"
+              "contents": {
+                "name": "validator-6"
+              }
             },
             {
-              "name": "validator-7"
+              "contents": {
+                "name": "validator-7"
+              }
             }
           ]
         }

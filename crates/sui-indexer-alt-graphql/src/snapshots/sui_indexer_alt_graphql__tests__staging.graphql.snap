@@ -1211,35 +1211,17 @@ type Epoch implements Node {
 	"""
 	referenceGasPrice: BigInt
 	"""
-	Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
-	"""
-	safeMode: SafeMode
-	"""
 	The timestamp associated with the first checkpoint in the epoch.
 	"""
 	startTimestamp: DateTime
-	"""
-	SUI set aside to account for objects stored on-chain, at the start of the epoch.
-	This is also used for storage rebates.
-	"""
-	storageFund: StorageFund
 	"""
 	The system packages used by all transactions in this epoch.
 	"""
 	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection
 	"""
-	Details of the system that are decided during genesis.
+	The contents of the system state inner object at the start of this epoch.
 	"""
-	systemParameters: SystemParameters
-	"""
-	Parameters related to the subsidy that supplements staking rewards
-	"""
-	systemStakeSubsidy: StakeSubsidy
-	"""
-	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
-	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
-	"""
-	systemStateVersion: UInt53
+	systemState: MoveValue
 	"""
 	The total number of checkpoints in this epoch.
 	
@@ -3541,18 +3523,6 @@ enum RegulatedState {
 	UNREGULATED
 }
 
-type SafeMode {
-	"""
-	Whether safe mode was used for the last epoch change.
-	The system will retry a full epoch change on every epoch boundary and automatically reset this flag if so.
-	"""
-	enabled: Boolean
-	"""
-	Accumulated fees for computation and cost that have not been added to the various reward pools, because the full epoch change did not happen.
-	"""
-	gasSummary: GasCostSummary
-}
-
 type ServiceConfig {
 	"""
 	Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.
@@ -3753,48 +3723,6 @@ type SplitCoinsCommand {
 }
 
 """
-Parameters that control the distribution of the stake subsidy.
-"""
-type StakeSubsidy {
-	"""
-	SUI set aside for stake subsidies -- reduces over time as stake subsidies are paid out over time.
-	"""
-	balance: BigInt
-	"""
-	Amount of stake subsidy deducted from the balance per distribution -- decays over time.
-	"""
-	currentDistributionAmount: BigInt
-	"""
-	Percentage of the current distribution amount to deduct at the end of the current subsidy period, expressed in basis points.
-	"""
-	decreaseRate: Int
-	"""
-	Number of times stake subsidies have been distributed.
-	Subsidies are distributed with other staking rewards, at the end of the epoch.
-	"""
-	distributionCounter: Int
-	"""
-	Maximum number of stake subsidy distributions that occur with the same distribution amount (before the amount is reduced).
-	"""
-	periodLength: Int
-}
-
-"""
-SUI set aside to account for objects stored on-chain.
-"""
-type StorageFund {
-	"""
-	The portion of the storage fund that will never be refunded through storage rebates.
-	The system maintains an invariant that the sum of all storage fees into the storage fund is equal to the sum of all storage rebates out, the total storage rebates remaining, and the non-refundable balance.
-	"""
-	nonRefundableBalance: BigInt
-	"""
-	Sum of storage rebates of live objects on chain.
-	"""
-	totalObjectStorageRebates: BigInt
-}
-
-"""
 System transaction for storing execution time observations.
 """
 type StoreExecutionTimeObservationsTransaction {
@@ -3822,44 +3750,6 @@ enum SupplyState {
 	The supply can neither increase nor decrease.
 	"""
 	FIXED
-}
-
-"""
-Details of the system that are decided during genesis.
-"""
-type SystemParameters {
-	"""
-	Target duration of an epoch, in milliseconds.
-	"""
-	durationMs: BigInt
-	"""
-	The maximum number of active validators that the system supports.
-	"""
-	maxValidatorCount: Int
-	"""
-	The minimum number of active validators that the system supports.
-	"""
-	minValidatorCount: Int
-	"""
-	Minimum stake needed to become a new validator.
-	"""
-	minValidatorJoiningStake: BigInt
-	"""
-	The epoch at which stake subsidies start being paid out.
-	"""
-	stakeSubsidyStartEpoch: UInt53
-	"""
-	The number of epochs that a validator has to recover from having less than `validatorLowStakeThreshold` stake.
-	"""
-	validatorLowStakeGracePeriod: BigInt
-	"""
-	Validators with stake below this threshold will enter the grace period (see `validatorLowStakeGracePeriod`), after which they are removed from the active validator set.
-	"""
-	validatorLowStakeThreshold: BigInt
-	"""
-	Validators with stake below this threshold will be removed from the active validator set at the next epoch boundary, without a grace period.
-	"""
-	validatorVeryLowStakeThreshold: BigInt
 }
 
 """
@@ -4232,142 +4122,19 @@ type UserSignature {
 	signatureBytes: Base64
 }
 
-type Validator implements IAddressable {
-	"""
-	The validator's address.
-	"""
-	address: SuiAddress!
-	"""
-	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
-	"""
-	addressAt(checkpoint: UInt53): Address
+type Validator {
 	"""
 	The number of epochs for which this validator has been below the low stake threshold.
 	"""
 	atRisk: UInt53
 	"""
-	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
-	
-	If the address does not own any coins of that type, a balance of zero is returned.
+	On-chain representation of the underlying `0x3::validator::Validator` value.
 	"""
-	balance(coinType: String!): Balance
-	"""
-	Total balance across coins owned by this address, grouped by coin type.
-	"""
-	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
-	"""
-	The fee charged by the validator for staking services.
-	"""
-	commissionRate: Int
-	"""
-	Validator's set of credentials such as public keys, network addresses and others.
-	"""
-	credentials: ValidatorCredentials
-	"""
-	The domain explicitly configured as the default SuiNS name for this address.
-	"""
-	defaultSuinsName: String
-	"""
-	Validator's description.
-	"""
-	description: String
-	"""
-	Number of exchange rates in the table.
-	"""
-	exchangeRatesSize: UInt53
-	"""
-	A wrapped object containing the validator's exchange rates. This is a table from epoch number to `PoolTokenExchangeRate` value.
-	The exchange rate is used to determine the amount of SUI tokens that each past SUI staker can withdraw in the future.
-	"""
-	exchangeRatesTable: Address
-	"""
-	The reference gas price for this epoch.
-	"""
-	gasPrice: BigInt
-	"""
-	Validator's url containing their custom image.
-	"""
-	imageUrl: String
-	"""
-	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
-	
-	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
-	If the address does not own any coins of a given type, a balance of zero is returned for that type.
-	"""
-	multiGetBalances(keys: [String!]!): [Balance!]
-	"""
-	Validator's name.
-	"""
-	name: String
-	"""
-	The proposed next epoch fee for the validator's staking services.
-	"""
-	nextEpochCommissionRate: Int
-	"""
-	Validator's set of credentials for the next epoch.
-	"""
-	nextEpochCredentials: ValidatorCredentials
-	"""
-	The validator's gas price quote for the next epoch.
-	"""
-	nextEpochGasPrice: BigInt
-	"""
-	The total number of SUI tokens in this pool plus the pending stake amount for this epoch.
-	"""
-	nextEpochStake: BigInt
-	"""
-	Objects owned by this object, optionally filtered by type.
-	"""
-	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
-	"""
-	The validator's current valid `Cap` object. Validators can delegate the operation ability to another address.
-	The address holding this `Cap` object can then update the reference gas price and tallying rule on behalf of the validator.
-	"""
-	operationCap: MoveObject
-	"""
-	Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
-	"""
-	pendingPoolTokenWithdraw: BigInt
-	"""
-	Pending stake amount for this epoch.
-	"""
-	pendingStake: BigInt
-	"""
-	Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
-	"""
-	pendingTotalSuiWithdraw: BigInt
-	"""
-	Total number of pool tokens issued by the pool.
-	"""
-	poolTokenBalance: BigInt
-	"""
-	Validator's homepage URL.
-	"""
-	projectUrl: String
+	contents: MoveValue
 	"""
 	Other validators this validator has reported.
 	"""
 	reportRecords(first: Int, before: String, last: Int, after: String): ValidatorConnection
-	"""
-	The epoch stake rewards will be added here at the end of each epoch.
-	"""
-	rewardsPool: BigInt
-	"""
-	The epoch at which this pool became active.
-	"""
-	stakingPoolActivationEpoch: UInt53
-	"""
-	The ID of this validator's `0x3::staking_pool::StakingPool`.
-	"""
-	stakingPoolId: SuiAddress!
-	"""
-	The total number of SUI tokens in this pool.
-	"""
-	stakingPoolSuiBalance: BigInt
-	"""
-	The voting power of this validator in basis points (e.g., 100 = 1% voting power).
-	"""
-	votingPower: Int
 }
 
 type ValidatorAggregatedSignature {
@@ -4401,20 +4168,6 @@ type ValidatorConnection {
 }
 
 """
-The credentials related fields associated with a validator.
-"""
-type ValidatorCredentials {
-	netAddress: String
-	networkPubKey: Base64
-	p2PAddress: String
-	primaryAddress: String
-	proofOfPossession: Base64
-	protocolPubKey: Base64
-	workerAddress: String
-	workerPubKey: Base64
-}
-
-"""
 An edge in a connection.
 """
 type ValidatorEdge {
@@ -4433,50 +4186,13 @@ Representation of `0x3::validator_set::ValidatorSet`.
 """
 type ValidatorSet {
 	"""
-	The current list of active validators.
+	The validators currently in the committee for this validator set.
 	"""
 	activeValidators(first: Int, after: String, last: Int, before: String): ValidatorConnection
 	"""
-	Object ID of the `Table` storing the inactive staking pools.
+	On-chain representation of the underlying `0x3::validator_set::ValidatorSet` value.
 	"""
-	inactivePoolsId: SuiAddress
-	"""
-	Size of the inactive pools `Table`.
-	"""
-	inactivePoolsSize: Int
-	"""
-	Object ID of the wrapped object `TableVec` storing the pending active validators.
-	"""
-	pendingActiveValidatorsId: SuiAddress
-	"""
-	Size of the pending active validators table.
-	"""
-	pendingActiveValidatorsSize: Int
-	"""
-	Validators that are pending removal from the active validator set, expressed as indices in to `activeValidators`.
-	"""
-	pendingRemovals: [Int!]
-	"""
-	Object ID of the `Table` storing the mapping from staking pool ids to the addresses of the corresponding validators.
-	This is needed because a validator's address can potentially change but the object ID of its pool will not.
-	"""
-	stakingPoolMappingsId: SuiAddress
-	"""
-	Size of the stake pool mappings `Table`.
-	"""
-	stakingPoolMappingsSize: Int
-	"""
-	Total amount of stake for all active validators at the beginning of the epoch.
-	"""
-	totalStake: BigInt
-	"""
-	Object ID of the `Table` storing the validator candidates.
-	"""
-	validatorCandidatesId: SuiAddress
-	"""
-	Size of the validator candidates `Table`.
-	"""
-	validatorCandidatesSize: Int
+	contents: MoveValue
 }
 
 """
