@@ -2027,11 +2027,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // TODO(fastpath): Handle unlocking.
                     continue;
                 }
-                if matches!(
-                    parsed.transaction.kind,
-                    ConsensusTransactionKind::UserTransaction(_)
-                        | ConsensusTransactionKind::UserTransactionV2(_)
-                ) {
+                // Set Finalized status for user transactions.
+                // For UserTransactionV2 with disable_preconsensus_locking, we defer setting
+                // Finalized until after successful lock acquisition (see below).
+                let defer_finalized_status = self
+                    .epoch_store
+                    .protocol_config()
+                    .disable_preconsensus_locking()
+                    && matches!(
+                        parsed.transaction.kind,
+                        ConsensusTransactionKind::UserTransactionV2(_)
+                    );
+                if !defer_finalized_status
+                    && matches!(
+                        parsed.transaction.kind,
+                        ConsensusTransactionKind::UserTransaction(_)
+                            | ConsensusTransactionKind::UserTransactionV2(_)
+                    )
+                {
                     self.epoch_store
                         .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
                     num_finalized_user_transactions[author] += 1;
@@ -2204,6 +2217,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         ) {
                         Ok(new_locks) => {
                             owned_object_locks.extend(new_locks.into_iter());
+                            // Lock acquisition succeeded - now set Finalized status
+                            self.epoch_store
+                                .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
+                            num_finalized_user_transactions[author] += 1;
                         }
                         Err(e) => {
                             debug!("Dropping transaction {}: {}", tx.digest(), e);
