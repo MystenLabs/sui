@@ -177,18 +177,18 @@ impl Validator {
         &self,
         ctx: &Context<'_>,
     ) -> Option<Result<MoveObject, RpcError<Error>>> {
-        async {
-            let address = Address::with_address(
-                self.contents.scope.clone(),
-                self.validator().operation_cap_id.bytes.into(),
-            );
-            let Some(object) = address.as_object(ctx).await? else {
-                return Ok(None);
-            };
-            object.as_move_object(ctx).await.map_err(upcast)
+        let address = Address::with_address(
+            self.contents.scope.clone(),
+            self.validator().operation_cap_id.bytes.into(),
+        );
+        let object = match address.as_object(ctx).await.ok()?? {
+            Ok(obj) => obj,
+            Err(e) => return Some(Err(e)),
+        };
+        match object.as_move_object(ctx).await.ok()?? {
+            Ok(obj) => Some(Ok(obj)),
+            Err(e) => Some(Err(upcast(e))),
         }
-        .await
-        .transpose()
     }
 
     /// The ID of this validator's `0x3::staking_pool::StakingPool`.

@@ -259,13 +259,13 @@ impl Object {
     pub(crate) async fn as_move_object(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<MoveObject>, RpcError> {
-        MoveObject::from_object(self, ctx).await
+    ) -> Option<Result<MoveObject, RpcError>> {
+        MoveObject::from_object(self, ctx).await.transpose()
     }
 
     /// Attempts to convert the object into a MovePackage.
-    async fn as_move_package(&self, ctx: &Context<'_>) -> Result<Option<MovePackage>, RpcError> {
-        MovePackage::from_object(self, ctx).await
+    async fn as_move_package(&self, ctx: &Context<'_>) -> Option<Result<MovePackage, RpcError>> {
+        MovePackage::from_object(self, ctx).await.transpose()
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.

@@ -114,7 +114,7 @@ impl Address {
     pub(crate) async fn as_object(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Object>, RpcError<object::Error>> {
+    ) -> Option<Result<Object, RpcError<object::Error>>> {
         Object::by_key(
             ctx,
             self.scope.clone(),
@@ -126,6 +126,7 @@ impl Address {
             },
         )
         .await
+        .transpose()
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.

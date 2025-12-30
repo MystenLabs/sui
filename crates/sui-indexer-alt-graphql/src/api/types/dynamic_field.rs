@@ -241,15 +241,19 @@ impl DynamicField {
     }
 
     /// The dynamic field's name, as a Move value.
-    async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
-        let Some(native) = self.native(ctx).await? else {
-            return Ok(None);
-        };
+    async fn name(&self, ctx: &Context<'_>) -> Option<Result<MoveValue, RpcError>> {
+        async {
+            let Some(native) = self.native(ctx).await? else {
+                return Ok(None);
+            };
 
-        Ok(Some(MoveValue::new(
-            MoveType::from_native(native.name_type.clone(), native.scope.clone()),
-            native.name_bytes.clone(),
-        )))
+            Ok(Some(MoveValue::new(
+                MoveType::from_native(native.name_type.clone(), native.scope.clone()),
+                native.name_bytes.clone(),
+            )))
+        }
+        .await
+        .transpose()
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
@@ -357,34 +361,38 @@ impl DynamicField {
     }
 
     /// The dynamic field's value, as a Move value for dynamic fields and as a MoveObject for dynamic object fields.
-    async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>, RpcError> {
-        let Some(native) = self.native(ctx).await? else {
-            return Ok(None);
-        };
+    async fn value(&self, ctx: &Context<'_>) -> Option<Result<DynamicFieldValue, RpcError>> {
+        async {
+            let Some(native) = self.native(ctx).await? else {
+                return Ok(None);
+            };
 
-        if native.kind == DynamicFieldType::DynamicField {
-            return Ok(Some(DynamicFieldValue::MoveValue(MoveValue::new(
-                MoveType::from_native(native.value_type.clone(), native.scope.clone()),
-                native.value_bytes.clone(),
-            ))));
+            if native.kind == DynamicFieldType::DynamicField {
+                return Ok(Some(DynamicFieldValue::MoveValue(MoveValue::new(
+                    MoveType::from_native(native.value_type.clone(), native.scope.clone()),
+                    native.value_bytes.clone(),
+                ))));
+            }
+
+            let address: SuiAddress = bcs::from_bytes(&native.value_bytes)
+                .context("Failed to deserialize dynamic object field ID")?;
+
+            let object = if let Some(version) = native.scope.root_version() {
+                Object::version_bounded(ctx, native.scope.clone(), address, version.into()).await?
+            } else {
+                Object::latest(ctx, native.scope.clone(), address).await?
+            };
+
+            let Some(object) = object else {
+                return Ok(None);
+            };
+
+            Ok(Some(DynamicFieldValue::MoveObject(MoveObject::from_super(
+                object,
+            ))))
         }
-
-        let address: SuiAddress = bcs::from_bytes(&native.value_bytes)
-            .context("Failed to deserialize dynamic object field ID")?;
-
-        let object = if let Some(version) = native.scope.root_version() {
-            Object::version_bounded(ctx, native.scope.clone(), address, version.into()).await?
-        } else {
-            Object::latest(ctx, native.scope.clone(), address).await?
-        };
-
-        let Some(object) = object else {
-            return Ok(None);
-        };
-
-        Ok(Some(DynamicFieldValue::MoveObject(MoveObject::from_super(
-            object,
-        ))))
+        .await
+        .transpose()
     }
 }
 
