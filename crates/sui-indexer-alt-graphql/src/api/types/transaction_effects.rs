@@ -190,28 +190,28 @@ impl EffectsContents {
     ) -> Option<Result<Connection<String, Event>, RpcError>> {
         let content = self.contents.as_ref()?;
 
-        let result = async {
-            let pagination: &PaginationConfig = ctx.data()?;
-            let limits = pagination.limits("TransactionEffects", "events");
-            let page = Page::from_params(limits, first, after, last, before)?;
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("TransactionEffects", "events");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-            let events = content.events()?;
-            page.paginate_indices(events.len(), |i| {
-                let transaction_digest = content.digest()?;
-                let timestamp_ms = content.timestamp_ms();
+                let events = content.events()?;
+                page.paginate_indices(events.len(), |i| {
+                    let transaction_digest = content.digest()?;
+                    let timestamp_ms = content.timestamp_ms();
 
-                Ok(Event {
-                    scope: self.scope.clone(),
-                    native: events[i].clone(),
-                    transaction_digest,
-                    sequence_number: i as u64,
-                    timestamp_ms,
+                    Ok(Event {
+                        scope: self.scope.clone(),
+                        native: events[i].clone(),
+                        transaction_digest,
+                        sequence_number: i as u64,
+                        timestamp_ms,
+                    })
                 })
-            })
-        }
-        .await;
-
-        Some(result)
+            }
+            .await,
+        )
     }
 
     /// The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
@@ -225,43 +225,43 @@ impl EffectsContents {
     ) -> Option<Result<Connection<String, BalanceChange>, RpcError>> {
         let content = self.contents.as_ref()?;
 
-        let result = async {
-            let pagination: &PaginationConfig = ctx.data()?;
-            let limits = pagination.limits("TransactionEffects", "balanceChanges");
-            let page = Page::from_params(limits, first, after, last, before)?;
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("TransactionEffects", "balanceChanges");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-            // First try to get balance changes from execution context (content)
-            if let Some(grpc_balance_changes) = content.balance_changes() {
-                return page.paginate_indices(grpc_balance_changes.len(), |i| {
-                    BalanceChange::from_grpc(self.scope.clone(), &grpc_balance_changes[i])
-                });
+                // First try to get balance changes from execution context (content)
+                if let Some(grpc_balance_changes) = content.balance_changes() {
+                    return page.paginate_indices(grpc_balance_changes.len(), |i| {
+                        BalanceChange::from_grpc(self.scope.clone(), &grpc_balance_changes[i])
+                    });
+                }
+
+                // Fall back to loading from database
+                let transaction_digest = content.digest()?;
+                let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+                let key = TxBalanceChangeKey(transaction_digest);
+
+                let Some(stored_balance_changes) = pg_loader
+                    .load_one(key)
+                    .await
+                    .context("Failed to load balance changes")?
+                else {
+                    return Ok(Connection::new(false, false));
+                };
+
+                // Deserialize balance changes from BCS bytes
+                let balance_changes: Vec<StoredBalanceChange> =
+                    bcs::from_bytes(&stored_balance_changes.balance_changes)
+                        .context("Failed to deserialize balance changes")?;
+
+                page.paginate_indices(balance_changes.len(), |i| {
+                    BalanceChange::from_stored(self.scope.clone(), balance_changes[i].clone())
+                })
             }
-
-            // Fall back to loading from database
-            let transaction_digest = content.digest()?;
-            let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-            let key = TxBalanceChangeKey(transaction_digest);
-
-            let Some(stored_balance_changes) = pg_loader
-                .load_one(key)
-                .await
-                .context("Failed to load balance changes")?
-            else {
-                return Ok(Connection::new(false, false));
-            };
-
-            // Deserialize balance changes from BCS bytes
-            let balance_changes: Vec<StoredBalanceChange> =
-                bcs::from_bytes(&stored_balance_changes.balance_changes)
-                    .context("Failed to deserialize balance changes")?;
-
-            page.paginate_indices(balance_changes.len(), |i| {
-                BalanceChange::from_stored(self.scope.clone(), balance_changes[i].clone())
-            })
-        }
-        .await;
-
-        Some(result)
+            .await,
+        )
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
@@ -292,22 +292,22 @@ impl EffectsContents {
     ) -> Option<Result<Connection<String, ObjectChange>, RpcError>> {
         let content = self.contents.as_ref()?;
 
-        let result = async {
-            let pagination: &PaginationConfig = ctx.data()?;
-            let limits = pagination.limits("TransactionEffects", "objectChanges");
-            let page = Page::from_params(limits, first, after, last, before)?;
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("TransactionEffects", "objectChanges");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-            let object_changes = content.effects()?.object_changes();
-            page.paginate_indices(object_changes.len(), |i| {
-                Ok(ObjectChange {
-                    scope: self.scope.clone(),
-                    native: object_changes[i].clone(),
+                let object_changes = content.effects()?.object_changes();
+                page.paginate_indices(object_changes.len(), |i| {
+                    Ok(ObjectChange {
+                        scope: self.scope.clone(),
+                        native: object_changes[i].clone(),
+                    })
                 })
-            })
-        }
-        .await;
-
-        Some(result)
+            }
+            .await,
+        )
     }
 
     /// Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
@@ -333,24 +333,24 @@ impl EffectsContents {
     ) -> Option<Result<Connection<String, UnchangedConsensusObject>, RpcError>> {
         let content = self.contents.as_ref()?;
 
-        let result = async {
-            let pagination: &PaginationConfig = ctx.data()?;
-            let limits = pagination.limits("TransactionEffects", "unchangedConsensusObjects");
-            let page = Page::from_params(limits, first, after, last, before)?;
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("TransactionEffects", "unchangedConsensusObjects");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-            let epoch = content.effects()?.executed_epoch();
-            let unchanged_consensus_objects = content.effects()?.unchanged_consensus_objects();
-            page.paginate_indices(unchanged_consensus_objects.len(), |i| {
-                Ok(UnchangedConsensusObject::from_native(
-                    self.scope.clone(),
-                    unchanged_consensus_objects[i].clone(),
-                    epoch,
-                ))
-            })
-        }
-        .await;
-
-        Some(result)
+                let epoch = content.effects()?.executed_epoch();
+                let unchanged_consensus_objects = content.effects()?.unchanged_consensus_objects();
+                page.paginate_indices(unchanged_consensus_objects.len(), |i| {
+                    Ok(UnchangedConsensusObject::from_native(
+                        self.scope.clone(),
+                        unchanged_consensus_objects[i].clone(),
+                        epoch,
+                    ))
+                })
+            }
+            .await,
+        )
     }
 
     /// Transactions whose outputs this transaction depends upon.
@@ -364,20 +364,20 @@ impl EffectsContents {
     ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
         let content = self.contents.as_ref()?;
 
-        let result = async {
-            let pagination: &PaginationConfig = ctx.data()?;
-            let limits = pagination.limits("TransactionEffects", "dependencies");
-            let page = Page::from_params(limits, first, after, last, before)?;
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("TransactionEffects", "dependencies");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-            let effects = content.effects()?;
-            let dependencies = effects.dependencies();
-            page.paginate_indices(dependencies.len(), |i| {
-                Ok(Transaction::with_id(self.scope.clone(), dependencies[i]))
-            })
-        }
-        .await;
-
-        Some(result)
+                let effects = content.effects()?;
+                let dependencies = effects.dependencies();
+                page.paginate_indices(dependencies.len(), |i| {
+                    Ok(Transaction::with_id(self.scope.clone(), dependencies[i]))
+                })
+            }
+            .await,
+        )
     }
 }
 

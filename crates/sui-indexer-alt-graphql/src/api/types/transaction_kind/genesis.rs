@@ -31,21 +31,21 @@ impl GenesisTransaction {
         last: Option<u64>,
         before: Option<CObject>,
     ) -> Option<Result<Connection<String, Object>, RpcError>> {
-        let objects = async {
-            let pagination: &PaginationConfig = ctx.data()?;
-            let limits = pagination.limits("GenesisTransaction", "objects");
-            let page = Page::from_params(limits, first, after, last, before)?;
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("GenesisTransaction", "objects");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-            let objects = &self.native.objects;
-            page.paginate_indices(objects.len(), |i| {
-                Ok(Object::from_genesis_object(
-                    self.scope.clone(),
-                    objects[i].clone(),
-                ))
-            })
-        }
-        .await;
-
-        Some(objects)
+                let objects = &self.native.objects;
+                page.paginate_indices(objects.len(), |i| {
+                    Ok(Object::from_genesis_object(
+                        self.scope.clone(),
+                        objects[i].clone(),
+                    ))
+                })
+            }
+            .await,
+        )
     }
 }

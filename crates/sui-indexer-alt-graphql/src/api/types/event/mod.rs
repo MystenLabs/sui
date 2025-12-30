@@ -101,8 +101,7 @@ impl Event {
     ///
     /// `null` for simulated/executed transactions as they are not included in a checkpoint.
     async fn timestamp(&self) -> Option<Result<DateTime, RpcError>> {
-        let timestamp_ms = self.timestamp_ms?;
-        Some(DateTime::from_ms(timestamp_ms as i64))
+        Some(DateTime::from_ms(self.timestamp_ms? as i64))
     }
 
     /// The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.
