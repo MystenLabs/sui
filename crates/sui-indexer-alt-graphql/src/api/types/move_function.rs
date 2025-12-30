@@ -48,44 +48,31 @@ impl MoveFunction {
     }
 
     /// Whether the function is marked `entry` or not.
-    async fn is_entry(&self, ctx: &Context<'_>) -> Result<Option<bool>, RpcError> {
-        let Some(contents) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
-
-        Ok(Some(contents.is_entry))
+    async fn is_entry(&self, ctx: &Context<'_>) -> Option<Result<bool, RpcError>> {
+        let contents = self.contents(ctx).await.ok()?.as_ref()?;
+        Some(Ok(contents.is_entry))
     }
 
     /// The function's parameter types. These types can reference type parameters introduced by this function (see `typeParameters`).
-    async fn parameters(&self, ctx: &Context<'_>) -> Result<Option<Vec<OpenMoveType>>, RpcError> {
-        let Some(contents) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
-
-        Ok(Some(
-            contents
-                .parameters
-                .iter()
-                .cloned()
-                .map(OpenMoveType::from)
-                .collect(),
-        ))
+    async fn parameters(&self, ctx: &Context<'_>) -> Option<Result<Vec<OpenMoveType>, RpcError>> {
+        let contents = self.contents(ctx).await.ok()?.as_ref()?;
+        Some(Ok(contents
+            .parameters
+            .iter()
+            .cloned()
+            .map(OpenMoveType::from)
+            .collect()))
     }
 
     /// The function's return types. There can be multiple because functions in Move can return multiple values. These types can reference type parameters introduced by this function (see `typeParameters`).
-    async fn return_(&self, ctx: &Context<'_>) -> Result<Option<Vec<OpenMoveType>>, RpcError> {
-        let Some(contents) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
-
-        Ok(Some(
-            contents
-                .return_
-                .iter()
-                .cloned()
-                .map(OpenMoveType::from)
-                .collect(),
-        ))
+    async fn return_(&self, ctx: &Context<'_>) -> Option<Result<Vec<OpenMoveType>, RpcError>> {
+        let contents = self.contents(ctx).await.ok()?.as_ref()?;
+        Some(Ok(contents
+            .return_
+            .iter()
+            .cloned()
+            .map(OpenMoveType::from)
+            .collect()))
     }
 
     /// Constraints on the function's formal type parameters.
@@ -94,29 +81,21 @@ impl MoveFunction {
     async fn type_parameters(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Vec<MoveFunctionTypeParameter>>, RpcError> {
-        let Some(contents) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
-
-        Ok(Some(
-            contents
-                .type_params
-                .iter()
-                .map(|c| MoveFunctionTypeParameter {
-                    constraints: abilities(*c),
-                })
-                .collect(),
-        ))
+    ) -> Option<Result<Vec<MoveFunctionTypeParameter>, RpcError>> {
+        let contents = self.contents(ctx).await.ok()?.as_ref()?;
+        Some(Ok(contents
+            .type_params
+            .iter()
+            .map(|c| MoveFunctionTypeParameter {
+                constraints: abilities(*c),
+            })
+            .collect()))
     }
 
     /// The function's visibility: `public`, `public(friend)`, or `private`.
-    async fn visibility(&self, ctx: &Context<'_>) -> Result<Option<MoveVisibility>, RpcError> {
-        let Some(contents) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
-
-        Ok(Some(contents.visibility.into()))
+    async fn visibility(&self, ctx: &Context<'_>) -> Option<Result<MoveVisibility, RpcError>> {
+        let contents = self.contents(ctx).await.ok()?.as_ref()?;
+        Some(Ok(contents.visibility.into()))
     }
 }
 

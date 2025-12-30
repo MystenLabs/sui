@@ -65,10 +65,10 @@ impl ChangeEpochTransaction {
     }
 
     /// Unix timestamp when epoch started.
-    async fn epoch_start_timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        Ok(Some(DateTime::from_ms(
+    async fn epoch_start_timestamp(&self) -> Option<Result<DateTime, RpcError>> {
+        Some(DateTime::from_ms(
             self.native.epoch_start_timestamp_ms as i64,
-        )?))
+        ))
     }
 
     /// System packages that will be written by validators before the new epoch starts, to upgrade them on-chain. These objects do not have a "previous transaction" because they are not written on-chain yet. Consult `effects.objectChanges` for this transaction to see the actual objects written.
