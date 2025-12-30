@@ -96,8 +96,8 @@ impl FullnodeClient {
         })
         .with_signatures(signatures)
         .with_read_mask(FieldMask::from_paths([
-            "effects.bcs",
-            "effects.lamport_version",
+            "effects",
+            "transaction",
             "events.bcs",
             "balance_changes",
             "objects.objects.bcs",
@@ -133,8 +133,8 @@ impl FullnodeClient {
 
         let request = proto::SimulateTransactionRequest::new(transaction)
             .with_read_mask(FieldMask::from_paths([
-                "transaction.effects.bcs",
-                "transaction.effects.lamport_version",
+                "transaction.effects",
+                "transaction.transaction",
                 "transaction.events.bcs",
                 "transaction.balance_changes",
                 "transaction.objects.objects.bcs",

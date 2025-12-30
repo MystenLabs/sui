@@ -3740,6 +3740,10 @@ type Transaction {
 	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
 	"""
 	transactionBcs: Base64
+	"""
+	The transaction as a JSON blob, matching the gRPC proto format.
+	"""
+	transactionJson: JSON
 }
 
 """
@@ -3806,6 +3810,10 @@ type TransactionEffects {
 	A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
 	"""
 	effectsDigest: String
+	"""
+	The effects as a JSON blob, matching the gRPC proto format.
+	"""
+	effectsJson: JSON
 	"""
 	The epoch this transaction was finalized in.
 	"""
