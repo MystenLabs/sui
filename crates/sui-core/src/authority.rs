@@ -5781,8 +5781,7 @@ impl AuthorityState {
                 Ok(Some(count)) => count,
                 Ok(None) => return None,
                 Err(e) => {
-                    debug_fatal!("failed to read accumulator object count: {}", e);
-                    return None;
+                    fatal!("failed to read accumulator object count: {e}");
                 }
             };
 
