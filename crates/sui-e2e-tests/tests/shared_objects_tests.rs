@@ -6,10 +6,8 @@ use futures::join;
 use rand::distributions::Distribution;
 use std::net::SocketAddr;
 use std::time::{Duration, SystemTime};
-use sui_config::node::AuthorityOverloadConfig;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::{register_fail_point_async, sim_test};
-use sui_protocol_config::ProtocolConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::{
     TestTransactionBuilder, publish_basics_package, publish_basics_package_and_make_counter,
@@ -19,7 +17,7 @@ use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
-use sui_types::messages_grpc::{LayoutGenerationOption, ObjectInfoRequest, WaitForEffectsResponse};
+use sui_types::messages_grpc::WaitForEffectsResponse;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
@@ -518,89 +516,6 @@ async fn access_clock_object_test() {
         assert_eq!(checkpoint.timestamp_ms, event.timestamp_ms);
         break;
     }
-}
-
-#[sim_test]
-async fn shared_object_sync() {
-    // This test relies on submitting transactions to only some validators and checking that
-    // other validators don't have the object yet. With disable_preconsensus_locking=true,
-    // all transactions go through consensus, so all validators will have the object.
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_disable_preconsensus_locking_for_testing(false);
-        config
-    });
-
-    let test_cluster = TestClusterBuilder::new()
-        // Set the threshold high enough so it won't be triggered.
-        .with_authority_overload_config(AuthorityOverloadConfig {
-            max_txn_age_in_queue: Duration::from_secs(60),
-            ..Default::default()
-        })
-        .build()
-        .await;
-    let package_id = publish_basics_package(&test_cluster.wallet).await.0;
-
-    // Since we use submit_and_execute in this test, which does not go through fullnode,
-    // we need to manage gas objects ourselves.
-    let (sender, mut objects) = test_cluster.wallet.get_one_account().await.unwrap();
-    let rgp = test_cluster.get_reference_gas_price().await;
-    // Send a transaction to create a counter, to all but one authority.
-    let create_counter_transaction = test_cluster
-        .wallet
-        .sign_transaction(
-            &TestTransactionBuilder::new(sender, objects.pop().unwrap(), rgp)
-                .call_counter_create(package_id)
-                .build(),
-        )
-        .await;
-
-    let (effects, _) = test_cluster
-        .submit_and_execute(create_counter_transaction.clone(), None)
-        .await
-        .unwrap();
-    assert!(effects.status().is_ok());
-    let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
-
-    // With MFP, all validators receive and execute transactions through consensus,
-    // so all validators should have the counter object after execution.
-    for validator in test_cluster.swarm.validator_node_handles() {
-        assert!(
-            validator
-                .state()
-                .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                    counter_id,
-                    LayoutGenerationOption::None,
-                ))
-                .await
-                .is_ok(),
-            "All validators should have the counter object after consensus execution"
-        );
-    }
-
-    // Make a transaction to increment the counter.
-    let increment_counter_transaction = test_cluster
-        .wallet
-        .sign_transaction(
-            &TestTransactionBuilder::new(sender, objects.pop().unwrap(), rgp)
-                .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
-                .build(),
-        )
-        .await;
-
-    // Let's submit the transaction to the original set of validators, except the first.
-    let (effects, _) = test_cluster
-        .submit_and_execute(increment_counter_transaction.clone(), None)
-        .await
-        .unwrap();
-    assert!(effects.status().is_ok());
-
-    // Submit transactions to the out-of-date authority.
-    // It will succeed because we share owned object certificates through narwhal
-    let (effects, _) = test_cluster
-        .submit_and_execute(increment_counter_transaction, None)
-        .await
-        .unwrap();
-    assert!(effects.status().is_ok());
 }
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.

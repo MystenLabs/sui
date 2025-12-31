@@ -470,16 +470,7 @@ mod tests {
 
     #[sim_test]
     async fn accept_valid_transaction() {
-        // This test uses ConsensusTransaction::new_certificate_message which creates a
-        // CertifiedTransaction. When disable_preconsensus_locking=true (protocol version 105+),
-        // CertifiedTransaction is not allowed. Gate with disable_preconsensus_locking=false.
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_disable_preconsensus_locking_for_testing(false);
-            config
-        });
-
-        // Initialize an authority with a (owned) gas object and a shared object; then
-        // make a test certificate.
+        // Initialize an authority with a (owned) gas object and a shared object.
         let mut objects = test_gas_objects();
         let shared_object = Object::shared_for_testing();
         objects.push(shared_object.clone());

@@ -176,13 +176,16 @@ mod test {
         test_simulated_load(test_cluster, 15).await;
     }
 
-    /// Tests conflicting transfer workload which creates contention by having
-    /// multiple payloads share the same transfer object.
+    /// Tests conflicting transfer workload which creates contention by submitting
+    /// conflicting transactions as soft bundles. The soft bundle ensures deterministic
+    /// ordering: first transaction succeeds, subsequent ones fail with ObjectLockConflict.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_conflicting_transfers() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 5000, 1).await;
         let mut simulated_load_config = SimulatedLoadConfig::default();
+        // Use LocalValidatorAggregatorProxy for soft bundle support
+        simulated_load_config.remote_env = false;
         // Enable conflicting transfer workload
         simulated_load_config.conflicting_transfer_weight = 1;
         simulated_load_config.num_contested_objects = 5;
