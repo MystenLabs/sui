@@ -15,6 +15,7 @@ use move_core_types::annotated_value as A;
 use move_core_types::annotated_visitor as AV;
 use move_core_types::language_storage::StructTag;
 use move_core_types::u256::U256;
+use move_core_types::visitor_default;
 use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::TypeTag;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
@@ -229,99 +230,15 @@ impl ValidatorSetContents {
             type Value = Option<NativeSuiAddress>;
             type Error = Error;
 
+            visitor_default! { <'_, '_> u8, u16, u32, u64, u128, u256 = Ok(None) }
+            visitor_default! { <'_, '_> bool, signer, vector, struct, variant = Ok(None) }
+
             fn visit_address(
                 &mut self,
                 _: &AV::ValueDriver<'_, '_, '_>,
                 value: AccountAddress,
             ) -> Result<Self::Value, Error> {
                 Ok(Some(value.into()))
-            }
-
-            // === Empty cases ===
-
-            fn visit_u8(
-                &mut self,
-                _: &AV::ValueDriver<'_, '_, '_>,
-                _: u8,
-            ) -> Result<Self::Value, Error> {
-                Ok(None)
-            }
-
-            fn visit_u16(
-                &mut self,
-                _: &AV::ValueDriver<'_, '_, '_>,
-                _: u16,
-            ) -> Result<Self::Value, Error> {
-                Ok(None)
-            }
-
-            fn visit_u32(
-                &mut self,
-                _: &AV::ValueDriver<'_, '_, '_>,
-                _: u32,
-            ) -> Result<Self::Value, Error> {
-                Ok(None)
-            }
-
-            fn visit_u64(
-                &mut self,
-                _: &AV::ValueDriver<'_, '_, '_>,
-                _: u64,
-            ) -> Result<Self::Value, Error> {
-                Ok(None)
-            }
-
-            fn visit_u128(
-                &mut self,
-                _: &AV::ValueDriver<'_, '_, '_>,
-                _: u128,
-            ) -> Result<Self::Value, Error> {
-                Ok(None)
-            }
-
-            fn visit_u256(
-                &mut self,
-                _: &AV::ValueDriver<'_, '_, '_>,
-                _: U256,
-            ) -> Result<Self::Value, Error> {
-                Ok(None)
-            }
-
-            fn visit_bool(
-                &mut self,
-                _: &AV::ValueDriver<'_, '_, '_>,
-                _: bool,
-            ) -> Result<Self::Value, Error> {
-                Ok(None)
-            }
-
-            fn visit_signer(
-                &mut self,
-                _: &AV::ValueDriver<'_, '_, '_>,
-                _: AccountAddress,
-            ) -> Result<Self::Value, Error> {
-                Ok(None)
-            }
-
-            fn visit_vector(
-                &mut self,
-                _: &mut AV::VecDriver<'_, '_, '_>,
-            ) -> Result<Self::Value, Error> {
-                Ok(None)
-            }
-
-            fn visit_struct(
-                &mut self,
-                _: &mut AV::StructDriver<'_, '_, '_>,
-            ) -> Result<Self::Value, Error> {
-                Ok(None)
-            }
-
-            fn visit_variant(
-                &mut self,
-                _: &mut AV::VariantDriver<'_, '_, '_>,
-            ) -> Result<Self::Value, Error> {
-                Ok(None)
             }
         }
 

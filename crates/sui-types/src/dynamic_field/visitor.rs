@@ -4,9 +4,10 @@
 use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
-    annotated_visitor::{self, StructDriver, ValueDriver, VariantDriver, VecDriver, Visitor},
+    annotated_visitor::{self, StructDriver, Visitor},
     language_storage::TypeTag,
     u256::U256,
+    visitor_default,
 };
 
 use crate::{base_types::ObjectID, id::UID};
@@ -78,6 +79,12 @@ impl<'b, 'l> Visitor<'b, 'l> for FieldVisitor {
     type Value = Field<'b, 'l>;
     type Error = Error;
 
+    // === Empty/default casees ===
+    //
+    // A dynamic field must be a struct, so if the visitor is fed anything else, it complains.
+    visitor_default! { <'b, 'l> u8, u16, u32, u64, u128, u256 = Err(Error::NotADynamicField) }
+    visitor_default! { <'b, 'l> bool, address, signer, vector, variant = Err(Error::NotADynamicField) }
+
     fn visit_struct(
         &mut self,
         driver: &mut StructDriver<'_, 'b, 'l>,
@@ -145,62 +152,6 @@ impl<'b, 'l> Visitor<'b, 'l> for FieldVisitor {
             value_layout,
             value_bytes,
         })
-    }
-
-    // === Empty/default casees ===
-    //
-    // A dynamic field must be a struct, so if the visitor is fed anything else, it complains.
-
-    fn visit_u8(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: u8) -> Result<Self::Value, Error> {
-        Err(Error::NotADynamicField)
-    }
-
-    fn visit_u16(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: u16) -> Result<Self::Value, Error> {
-        Err(Error::NotADynamicField)
-    }
-
-    fn visit_u32(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: u32) -> Result<Self::Value, Error> {
-        Err(Error::NotADynamicField)
-    }
-
-    fn visit_u64(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: u64) -> Result<Self::Value, Error> {
-        Err(Error::NotADynamicField)
-    }
-
-    fn visit_u128(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: u128) -> Result<Self::Value, Error> {
-        Err(Error::NotADynamicField)
-    }
-
-    fn visit_u256(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: U256) -> Result<Self::Value, Error> {
-        Err(Error::NotADynamicField)
-    }
-
-    fn visit_bool(&mut self, _: &ValueDriver<'_, 'b, 'l>, _: bool) -> Result<Self::Value, Error> {
-        Err(Error::NotADynamicField)
-    }
-
-    fn visit_address(
-        &mut self,
-        _: &ValueDriver<'_, 'b, 'l>,
-        _: AccountAddress,
-    ) -> Result<Self::Value, Error> {
-        Err(Error::NotADynamicField)
-    }
-
-    fn visit_signer(
-        &mut self,
-        _: &ValueDriver<'_, 'b, 'l>,
-        _: AccountAddress,
-    ) -> Result<Self::Value, Error> {
-        Err(Error::NotADynamicField)
-    }
-
-    fn visit_vector(&mut self, _: &mut VecDriver<'_, 'b, 'l>) -> Result<Self::Value, Error> {
-        Err(Error::NotADynamicField)
-    }
-
-    fn visit_variant(&mut self, _: &mut VariantDriver<'_, 'b, 'l>) -> Result<Self::Value, Error> {
-        Err(Error::NotADynamicField)
     }
 }
 

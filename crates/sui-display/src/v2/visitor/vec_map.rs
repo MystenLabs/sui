@@ -5,6 +5,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_visitor as AV;
 use move_core_types::language_storage::StructTag;
 use move_core_types::u256::U256;
+use move_core_types::visitor_default;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::base_types::VEC_MAP_ENTRY_STRUCT_NAME;
 use sui_types::base_types::VEC_MAP_MODULE_NAME;
@@ -33,6 +34,9 @@ impl<'v, 'p> VecMapVisitor<'v, 'p> {
 impl<'v> AV::Visitor<'v, 'v> for VecMapVisitor<'v, '_> {
     type Value = Option<Value<'v>>;
     type Error = FormatError;
+
+    visitor_default! { <'v, 'v> u8, u16, u32, u64, u128, u256 = Ok(None) }
+    visitor_default! { <'v, 'v> bool, address, signer, variant = Ok(None) }
 
     /// Expect to visit the content vector of the VecMap first. Look through each entry for one
     /// with a matching key, and continue visiting the value for that entry.
@@ -88,87 +92,6 @@ impl<'v> AV::Visitor<'v, 'v> for VecMapVisitor<'v, '_> {
         }
 
         Ok(Some(value))
-    }
-
-    // All other Move Value variants can be ignored.
-
-    fn visit_u8(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
-        _: u8,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_u16(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
-        _: u16,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_u32(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
-        _: u32,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_u64(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
-        _: u64,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_u128(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
-        _: u128,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_u256(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
-        _: U256,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_bool(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
-        _: bool,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_address(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
-        _: AccountAddress,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_signer(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
-        _: AccountAddress,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_variant(
-        &mut self,
-        _: &mut AV::VariantDriver<'_, 'v, 'v>,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
     }
 }
 
