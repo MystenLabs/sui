@@ -478,6 +478,7 @@ mod field_piplines_tests {
 
         for (interface_name, meta_type) in registry.types.iter() {
             let MetaType::Interface {
+                name,
                 possible_types,
                 fields,
                 ..
@@ -485,6 +486,13 @@ mod field_piplines_tests {
             else {
                 continue;
             };
+
+            // Node is part of the GraphQL Global Identification specification, it does not have
+            // any retention requirements, so can be safely skipped.
+            if name == "Node" {
+                continue;
+            }
+
             for type_name in possible_types {
                 for (interface_field_name, _) in fields {
                     let Some((delegate_type, delegate_field)) =

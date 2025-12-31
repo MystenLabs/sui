@@ -26,6 +26,9 @@ ActiveJwk.alg
 ActiveJwk.epoch
   => {}
 
+Address.id
+  => {}
+
 Address.address
   => {}
 
@@ -1061,6 +1064,9 @@ MutateConsensusStreamEnded.sequenceNumber
 Mutation.executeTransaction
   => {}
 
+Node.id
+  => {}
+
 Object.address
   => {}
 
@@ -1215,6 +1221,9 @@ PublishCommand.dependencies
   => {}
 
 Pure.bytes
+  => {}
+
+Query.node
   => {}
 
 Query.address

@@ -68,7 +68,7 @@ type ActiveJwkEdge {
 	node: ActiveJwk!
 }
 
-type Address implements IAddressable {
+type Address implements Node & IAddressable {
 	"""
 	The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
 	"""
@@ -110,6 +110,7 @@ type Address implements IAddressable {
 	Returns `null` if a dynamic object field with that name could not be found attached to the object with this address.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	id: ID!
 	"""
 	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
@@ -2604,6 +2605,10 @@ type Mutation {
 	executeTransaction(transactionDataBcs: Base64!, signatures: [Base64!]!): ExecutionResult!
 }
 
+interface Node {
+	id: ID!
+}
+
 """
 An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
 
@@ -3206,6 +3211,7 @@ type Query {
 	Returns a list of types that is guaranteed to be the same length as `keys`. If a type in `keys` could not be found, its corresponding entry in the result will be `null`.
 	"""
 	multiGetTypes(keys: [String!]!): [MoveType]!
+	node(id: ID!): Node!
 	"""
 	Fetch an object by its address.
 	

@@ -10,9 +10,9 @@ use sui_rpc::proto::sui::rpc::v2 as proto;
 use crate::{
     api::{
         mutation::TransactionInputError,
-        scalars::{base64::Base64, json::Json},
+        scalars::{base64::Base64, id::Id, json::Json},
         types::{
-            epoch::CEpoch, simulation_result::SimulationResult,
+            epoch::CEpoch, node::Node, simulation_result::SimulationResult,
             transaction_effects::TransactionEffects,
         },
     },
@@ -57,6 +57,15 @@ pub struct Query {
 
 #[Object]
 impl Query {
+    async fn node(&self, ctx: &Context<'_>, id: Id) -> Result<Node, RpcError> {
+        match id {
+            Id::Address(a) => Ok(Node::Address(Box::new(Address::with_address(
+                self.scope(ctx)?,
+                a,
+            )))),
+        }
+    }
+
     /// Look-up an account by its SuiAddress.
     ///
     /// If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:

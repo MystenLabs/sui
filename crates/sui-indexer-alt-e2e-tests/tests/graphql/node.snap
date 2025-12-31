@@ -1,0 +1,33 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-22:
+//# run-graphql --cursors bcs(0u8,@{A})
+Response: {
+  "data": {
+    "node": {
+      "id": "APzMmkIbuxPBpmoaqY8K11Ap7elIV3ecaRW0T5QGi5Ie",
+      "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+      "objects": {
+        "nodes": [
+          {
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+              },
+              "json": {
+                "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                "balance": "300000000000000"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
