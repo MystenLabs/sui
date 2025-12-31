@@ -58,12 +58,12 @@ pub struct Query {
 #[Object]
 impl Query {
     async fn node(&self, ctx: &Context<'_>, id: Id) -> Result<Node, RpcError> {
-        match id {
-            Id::Address(a) => Ok(Node::Address(Box::new(Address::with_address(
-                self.scope(ctx)?,
-                a,
-            )))),
-        }
+        let scope = self.scope(ctx)?;
+        Ok(match id {
+            Id::Address(a) => Node::Address(Box::new(Address::with_address(scope, a))),
+            Id::ObjectByAddress(a) => Node::Object(Box::new(Object::with_address(scope, a))),
+            Id::ObjectByRef(a, v, d) => Node::Object(Box::new(Object::with_ref(&scope, a, v, d))),
+        })
     }
 
     /// Look-up an account by its SuiAddress.
