@@ -70,9 +70,13 @@ impl Event {
 
     /// The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
     /// This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
-    async fn event_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let bcs_bytes = bcs::to_bytes(&self.native).context("Failed to serialize event")?;
-        Ok(Some(Base64(bcs_bytes)))
+    async fn event_bcs(&self) -> Option<Result<Base64, RpcError>> {
+        Some(
+            bcs::to_bytes(&self.native)
+                .context("Failed to serialize event")
+                .map(Base64)
+                .map_err(RpcError::from),
+        )
     }
 
     /// Address of the sender of the transaction that emitted this event.
@@ -96,10 +100,8 @@ impl Event {
     /// All events from the same transaction share the same timestamp.
     ///
     /// `null` for simulated/executed transactions as they are not included in a checkpoint.
-    async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        self.timestamp_ms
-            .map(|ms| DateTime::from_ms(ms as i64))
-            .transpose()
+    async fn timestamp(&self) -> Option<Result<DateTime, RpcError>> {
+        Some(DateTime::from_ms(self.timestamp_ms? as i64))
     }
 
     /// The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.

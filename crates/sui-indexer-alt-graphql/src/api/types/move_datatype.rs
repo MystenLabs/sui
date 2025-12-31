@@ -36,12 +36,12 @@ use super::{
     ),
     field(
         name = "abilities",
-        ty = "Result<Option<Vec<MoveAbility>>, RpcError>",
+        ty = "Option<Result<Vec<MoveAbility>, RpcError>>",
         desc = "Abilities on this datatype definition.",
     ),
     field(
         name = "type_parameters",
-        ty = "Result<Option<Vec<MoveDatatypeTypeParameter>>, RpcError>",
+        ty = "Option<Result<Vec<MoveDatatypeTypeParameter>, RpcError>>",
         desc = "Constraints on the datatype's formal type parameters\n\nMove bytecode does not name type parameters, so when they are referenced (e.g. in field types), they are identified by their index in this list.",
     )
 )]
@@ -104,34 +104,29 @@ impl MoveDatatype {
     }
 
     /// Abilities on this datatype definition.
-    async fn abilities(&self, ctx: &Context<'_>) -> Result<Option<Vec<MoveAbility>>, RpcError> {
-        let Some(def) = self.contents(ctx).await? else {
-            return Ok(None);
-        };
-
-        Ok(Some(abilities(def.abilities)))
+    async fn abilities(&self, ctx: &Context<'_>) -> Option<Result<Vec<MoveAbility>, RpcError>> {
+        let def = self.contents(ctx).await.ok()?.as_ref()?;
+        Some(Ok(abilities(def.abilities)))
     }
 
     /// Attempts to convert the `MoveDatatype` to a `MoveStruct`.
-    async fn as_move_struct(&self, ctx: &Context<'_>) -> Result<Option<MoveStruct>, RpcError> {
-        let Some(def) = self.contents(ctx).await? else {
-            return Ok(None);
-        };
-
-        Ok(matches!(def.data, MoveData::Struct(_)).then(|| MoveStruct {
-            super_: self.clone(),
-        }))
+    async fn as_move_struct(&self, ctx: &Context<'_>) -> Option<Result<MoveStruct, RpcError>> {
+        let def = self.contents(ctx).await.ok()?.as_ref()?;
+        matches!(def.data, MoveData::Struct(_)).then(|| {
+            Ok(MoveStruct {
+                super_: self.clone(),
+            })
+        })
     }
 
     /// Attempts to convert the `MoveDatatype` to a `MoveEnum`.
-    async fn as_move_enum(&self, ctx: &Context<'_>) -> Result<Option<MoveEnum>, RpcError> {
-        let Some(def) = self.contents(ctx).await? else {
-            return Ok(None);
-        };
-
-        Ok(matches!(def.data, MoveData::Enum(_)).then(|| MoveEnum {
-            super_: self.clone(),
-        }))
+    async fn as_move_enum(&self, ctx: &Context<'_>) -> Option<Result<MoveEnum, RpcError>> {
+        let def = self.contents(ctx).await.ok()?.as_ref()?;
+        matches!(def.data, MoveData::Enum(_)).then(|| {
+            Ok(MoveEnum {
+                super_: self.clone(),
+            })
+        })
     }
 
     /// Constraints on the datatype's formal type parameters.
@@ -140,20 +135,16 @@ impl MoveDatatype {
     async fn type_parameters(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Vec<MoveDatatypeTypeParameter>>, RpcError> {
-        let Some(def) = self.contents(ctx).await? else {
-            return Ok(None);
-        };
-
-        Ok(Some(
-            def.type_params
-                .iter()
-                .map(|param| MoveDatatypeTypeParameter {
-                    constraints: abilities(param.constraints),
-                    is_phantom: param.is_phantom,
-                })
-                .collect(),
-        ))
+    ) -> Option<Result<Vec<MoveDatatypeTypeParameter>, RpcError>> {
+        let def = self.contents(ctx).await.ok()?.as_ref()?;
+        Some(Ok(def
+            .type_params
+            .iter()
+            .map(|param| MoveDatatypeTypeParameter {
+                constraints: abilities(param.constraints),
+                is_phantom: param.is_phantom,
+            })
+            .collect()))
     }
 }
 
@@ -171,8 +162,8 @@ impl MoveEnum {
     }
 
     /// Abilities on this enum definition.
-    async fn abilities(&self, ctx: &Context<'_>) -> Result<Option<Vec<MoveAbility>>, RpcError> {
-        self.super_.abilities(ctx).await
+    async fn abilities(&self, ctx: &Context<'_>) -> Option<Result<Vec<MoveAbility>, RpcError>> {
+        self.super_.abilities(ctx).await.ok()?
     }
 
     /// The names and fields of the enum's variants
@@ -181,16 +172,12 @@ impl MoveEnum {
     async fn variants(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Vec<MoveEnumVariant<'_>>>, RpcError> {
-        let Some(def) = self.super_.contents(ctx).await? else {
-            return Ok(None);
-        };
-
+    ) -> Option<Result<Vec<MoveEnumVariant<'_>>, RpcError>> {
+        let def = self.super_.contents(ctx).await.ok()?.as_ref()?;
         let MoveData::Enum(variants) = &def.data else {
-            return Ok(None);
+            return None;
         };
-
-        Ok(Some(variants.iter().map(MoveEnumVariant).collect()))
+        Some(Ok(variants.iter().map(MoveEnumVariant).collect()))
     }
 
     /// Constraints on the enum's formal type parameters.
@@ -199,8 +186,8 @@ impl MoveEnum {
     async fn type_parameters(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Vec<MoveDatatypeTypeParameter>>, RpcError> {
-        self.super_.type_parameters(ctx).await
+    ) -> Option<Result<Vec<MoveDatatypeTypeParameter>, RpcError>> {
+        self.super_.type_parameters(ctx).await.ok()?
     }
 }
 
@@ -218,31 +205,25 @@ impl MoveStruct {
     }
 
     /// Abilities on this struct definition.
-    async fn abilities(&self, ctx: &Context<'_>) -> Result<Option<Vec<MoveAbility>>, RpcError> {
-        self.super_.abilities(ctx).await
+    async fn abilities(&self, ctx: &Context<'_>) -> Option<Result<Vec<MoveAbility>, RpcError>> {
+        self.super_.abilities(ctx).await.ok()?
     }
 
     /// The names and types of the struct's fields.
     ///
     /// Field types reference type parameters by their index in the defining struct's `typeParameters` list.
-    async fn fields(&self, ctx: &Context<'_>) -> Result<Option<Vec<MoveField<'_>>>, RpcError> {
-        let Some(def) = self.super_.contents(ctx).await? else {
-            return Ok(None);
-        };
-
+    async fn fields(&self, ctx: &Context<'_>) -> Option<Result<Vec<MoveField<'_>>, RpcError>> {
+        let def = self.super_.contents(ctx).await.ok()?.as_ref()?;
         let MoveData::Struct(fields) = &def.data else {
-            return Ok(None);
+            return None;
         };
-
-        Ok(Some(
-            fields
-                .iter()
-                .map(|(name, type_)| MoveField {
-                    name: name.as_str(),
-                    type_,
-                })
-                .collect(),
-        ))
+        Some(Ok(fields
+            .iter()
+            .map(|(name, type_)| MoveField {
+                name: name.as_str(),
+                type_,
+            })
+            .collect()))
     }
 
     /// Constraints on the struct's formal type parameters.
@@ -251,8 +232,8 @@ impl MoveStruct {
     async fn type_parameters(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Vec<MoveDatatypeTypeParameter>>, RpcError> {
-        self.super_.type_parameters(ctx).await
+    ) -> Option<Result<Vec<MoveDatatypeTypeParameter>, RpcError>> {
+        self.super_.type_parameters(ctx).await.ok()?
     }
 }
 

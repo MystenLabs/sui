@@ -176,18 +176,22 @@ impl EndOfEpochTransaction {
         after: Option<CTransaction>,
         last: Option<u64>,
         before: Option<CTransaction>,
-    ) -> Result<Option<Connection<String, EndOfEpochTransactionKind>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("EndOfEpochTransaction", "transactions");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, EndOfEpochTransactionKind>, RpcError>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("EndOfEpochTransaction", "transactions");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        page.paginate_indices(self.native.len(), |i| {
-            Ok(EndOfEpochTransactionKind::from(
-                self.native[i].clone(),
-                self.scope.clone(),
-            ))
-        })
-        .map(Some)
+                page.paginate_indices(self.native.len(), |i| {
+                    Ok(EndOfEpochTransactionKind::from(
+                        self.native[i].clone(),
+                        self.scope.clone(),
+                    ))
+                })
+            }
+            .await,
+        )
     }
 }
 

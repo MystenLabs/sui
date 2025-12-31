@@ -510,7 +510,9 @@ task 10, lines 106-111:
 //# run-graphql
 Response: {
   "data": {
-    "type": null
+    "type": {
+      "layout": null
+    }
   },
   "errors": [
     {

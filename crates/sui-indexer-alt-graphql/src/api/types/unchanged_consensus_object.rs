@@ -90,18 +90,22 @@ pub(crate) struct PerEpochConfig {
 #[Object]
 impl PerEpochConfig {
     /// The per-epoch configuration object as of when the transaction was executed.
-    async fn object(&self, ctx: &Context<'_>) -> Result<Option<Object>, RpcError> {
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-        let Some(epoch_start) = pg_loader
-            .load_one(EpochStartKey(self.epoch))
-            .await
-            .context("Failed to fetch epoch start information")?
-        else {
-            return Ok(None);
-        };
+    async fn object(&self, ctx: &Context<'_>) -> Option<Result<Object, RpcError>> {
+        async {
+            let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+            let Some(epoch_start) = pg_loader
+                .load_one(EpochStartKey(self.epoch))
+                .await
+                .context("Failed to fetch epoch start information")?
+            else {
+                return Ok(None);
+            };
 
-        let cp: UInt53 = (epoch_start.cp_lo as u64).into();
-        Object::checkpoint_bounded(ctx, self.scope.clone(), self.object_id.into(), cp).await
+            let cp: UInt53 = (epoch_start.cp_lo as u64).into();
+            Object::checkpoint_bounded(ctx, self.scope.clone(), self.object_id.into(), cp).await
+        }
+        .await
+        .transpose()
     }
 }
 
