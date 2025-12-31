@@ -1067,6 +1067,9 @@ Mutation.executeTransaction
 Node.id
   => {}
 
+Object.id
+  => {}
+
 Object.address
   => {}
 

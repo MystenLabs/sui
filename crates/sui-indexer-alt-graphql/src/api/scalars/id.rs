@@ -4,11 +4,16 @@
 use async_graphql::{InputValueError, Scalar, ScalarType, Value};
 use fastcrypto::encoding::{Base64, Encoding};
 use serde::{Deserialize, Serialize};
-use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::{
+    base_types::{SequenceNumber, SuiAddress as NativeSuiAddress},
+    digests::ObjectDigest,
+};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) enum Id {
     Address(NativeSuiAddress),
+    ObjectByAddress(NativeSuiAddress),
+    ObjectByRef(NativeSuiAddress, SequenceNumber, ObjectDigest),
 }
 
 #[derive(thiserror::Error, Debug)]
