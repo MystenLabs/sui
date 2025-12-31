@@ -32,33 +32,28 @@ Response: {
   }
 }
 
-task 2, lines 24-37:
-//# run-graphql --cursors bcs(1u8,@{obj_0_0})
+task 2, lines 24-49:
+//# run-graphql --cursors bcs(1u8,0x2) bcs(2u8,0x2)
 Response: {
   "data": {
-    "node": {
-      "id": "Ab/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
-      "asMoveObject": {
-        "contents": {
-          "type": {
-            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
-          },
-          "json": {
-            "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
-            "balance": "300000000000000"
-          }
-        }
-      }
-    }
-  }
-}
-
-task 3, lines 39-53:
-//# run-graphql --cursors bcs(1u8,0x2)
-Response: {
-  "data": {
-    "node": {
+    "package": {
       "id": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
+      "modules": {
+        "nodes": [
+          {
+            "name": "address"
+          },
+          {
+            "name": "authenticator_state"
+          },
+          {
+            "name": "bag"
+          }
+        ]
+      }
+    },
+    "object": {
+      "id": "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
       "asMovePackage": {
         "modules": {
           "nodes": [
@@ -70,59 +65,29 @@ Response: {
             },
             {
               "name": "bag"
-            },
-            {
-              "name": "balance"
-            },
-            {
-              "name": "bcs"
-            },
-            {
-              "name": "bls12381"
-            },
-            {
-              "name": "borrow"
-            },
-            {
-              "name": "clock"
-            },
-            {
-              "name": "coin"
-            },
-            {
-              "name": "config"
-            },
-            {
-              "name": "deny_list"
-            },
-            {
-              "name": "display"
-            },
-            {
-              "name": "dynamic_field"
-            },
-            {
-              "name": "dynamic_object_field"
-            },
-            {
-              "name": "ecdsa_k1"
-            },
-            {
-              "name": "ecdsa_r1"
-            },
-            {
-              "name": "ecvrf"
-            },
-            {
-              "name": "ed25519"
-            },
-            {
-              "name": "event"
-            },
-            {
-              "name": "groth16"
             }
           ]
+        }
+      }
+    }
+  }
+}
+
+task 3, lines 51-64:
+//# run-graphql --cursors bcs(2u8,@{obj_0_0})
+Response: {
+  "data": {
+    "node": {
+      "id": "Ar/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
+      "asMoveObject": {
+        "contents": {
+          "type": {
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+          },
+          "json": {
+            "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+            "balance": "300000000000000"
+          }
         }
       }
     }

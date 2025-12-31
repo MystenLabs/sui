@@ -2257,7 +2257,7 @@ type MoveObjectEdge {
 """
 A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
 """
-type MovePackage implements IAddressable & IObject {
+type MovePackage implements Node & IAddressable & IObject {
 	"""
 	The MovePackage's ID.
 	"""
@@ -2280,6 +2280,7 @@ type MovePackage implements IAddressable & IObject {
 	32-byte hash that identifies the package's contents, encoded in Base58.
 	"""
 	digest: String
+	id: ID!
 	"""
 	The transitive dependencies of this package.
 	"""

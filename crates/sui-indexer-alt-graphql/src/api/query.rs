@@ -61,6 +61,7 @@ impl Query {
         let scope = self.scope(ctx)?;
         Ok(match id {
             Id::Address(a) => Node::Address(Box::new(Address::with_address(scope, a))),
+            Id::MovePackage(a) => Node::MovePackage(Box::new(MovePackage::with_address(scope, a))),
             Id::ObjectByAddress(a) => Node::Object(Box::new(Object::with_address(scope, a))),
             Id::ObjectByRef(a, v, d) => Node::Object(Box::new(Object::with_ref(&scope, a, v, d))),
         })
