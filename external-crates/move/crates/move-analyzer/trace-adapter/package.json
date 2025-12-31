@@ -19,9 +19,11 @@
     "access": "public"
   },
   "scripts": {
+    "clean": "rm -rf out",
     "compile": "tsc -p ./",
     "lint": "eslint src --ext ts",
-    "test": "npm run compile && mocha --config ./.mocharc.yaml"
+    "test": "npm run compile && mocha --config ./.mocharc.yaml",
+    "prepublishOnly": "npm run clean && npm run compile && npm run lint && npm test"
   },
   "devDependencies": {
     "@types/lodash.snakecase": "^4.1.9",
