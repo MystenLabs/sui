@@ -643,10 +643,10 @@ impl Epoch {
         // Queries nested under Move objects are scoped by that object's root version. We cannot do
         // the same thing for the system state object because we don't know its root version, so we
         // choose to scope by checkpoint instead.
-        //
-        // TODO: allow setting checkpoint viewed at in the future relative to the scoped
-        // checkpoint, but still bounded by the service watermark.
-        let Some(scope) = self.scope.with_checkpoint_viewed_at(start.cp_lo as u64) else {
+        let Some(scope) = self
+            .scope
+            .with_checkpoint_viewed_at(ctx, start.cp_lo as u64)
+        else {
             return Ok(None);
         };
 

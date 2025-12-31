@@ -158,7 +158,7 @@ impl Balance {
             (Some(c), _) | (_, Some(c)) => c.0,
         };
 
-        let Some(scope) = scope.with_checkpoint_viewed_at(checkpoint) else {
+        let Some(scope) = scope.with_checkpoint_viewed_at(ctx, checkpoint) else {
             return Err(bad_user_input(Error::Future(checkpoint)));
         };
 

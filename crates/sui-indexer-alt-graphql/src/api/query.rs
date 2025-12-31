@@ -21,7 +21,9 @@ use crate::api::scalars::json::Json;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeInput;
 use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address;
 use crate::api::types::address::Address;
+use crate::api::types::address::AddressKey;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::checkpoint::filter::CheckpointFilter;
@@ -137,25 +139,33 @@ impl Query {
 
     /// Look-up an account by its SuiAddress.
     ///
-    /// If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+    /// If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or descendant object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
     ///
     /// - The root object of the object it is wrapped in, if it is wrapped.
     /// - The root object of its owner, if it is owned by another object.
     /// - The object itself, if it is not object-owned or wrapped.
     ///
     /// Specifying a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
+    ///
+    /// If `atCheckpoint` is specified, the address will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
+    ///
+    /// If none of the above are specified, the address is fetched at the checkpoint being viewed.
     async fn address(
         &self,
         ctx: &Context<'_>,
         address: SuiAddress,
         root_version: Option<UInt53>,
-    ) -> Result<Address, RpcError> {
-        let mut scope = self.scope(ctx)?;
-        if let Some(version) = root_version {
-            scope = scope.with_root_version(version.into());
-        }
-
-        Ok(Address::with_address(scope, address.into()))
+        at_checkpoint: Option<UInt53>,
+    ) -> Result<Address, RpcError<address::Error>> {
+        Address::by_key(
+            ctx,
+            self.scope(ctx)?,
+            AddressKey {
+                address,
+                root_version,
+                at_checkpoint,
+            },
+        )
     }
 
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
@@ -258,6 +268,20 @@ impl Query {
         Event::paginate(ctx, scope, page, filter.unwrap_or_default())
             .await
             .map(Some)
+    }
+
+    /// Fetch addresses by their keys.
+    ///
+    /// Returns a list of addresses that is guaranteed to be the same length as `keys`.
+    async fn multi_get_addresses(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<AddressKey>,
+    ) -> Result<Vec<Address>, RpcError<address::Error>> {
+        let scope = self.scope(ctx)?;
+        keys.into_iter()
+            .map(|k| Address::by_key(ctx, scope.clone(), k))
+            .collect()
     }
 
     /// Fetch checkpoints by their sequence numbers.
@@ -386,7 +410,7 @@ impl Query {
     ///
     /// If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
     ///
-    /// If none of the above are specified, the object is fetched at the latest checkpoint.
+    /// If none of the above are specified, the object is fetched at the checkpoint being viewed.
     ///
     /// It is an error to specify more than one of `version`, `rootVersion`, or `atCheckpoint`.
     ///
@@ -468,7 +492,7 @@ impl Query {
     ///
     /// If `atCheckpoint` is specified, the package loaded is the one with the largest version among all packages sharing an original ID with the package at `address` and was published at or before `atCheckpoint`.
     ///
-    /// If neither are specified, the package is fetched at the latest checkpoint.
+    /// If neither are specified, the package is fetched at the checkpoint being viewed.
     ///
     /// It is an error to specify both `version` and `atCheckpoint`, and `null` will be returned if the package cannot be found as of the latest checkpoint, or the address points to an object that is not a package.
     ///

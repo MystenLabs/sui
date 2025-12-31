@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 5 tasks
+processed 6 tasks
 
 init:
 A: object(0,0)
@@ -127,6 +127,45 @@ Response: {
                           }
                         }
                       ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 5, lines 80-103:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "validatorSet": {
+        "activeValidators": {
+          "nodes": [
+            {
+              "contents": {
+                "exchangeRates": {
+                  "asAddress": {
+                    "addressAt": {
+                      "dynamicFields": {
+                        "nodes": [
+                          {
+                            "name": {
+                              "json": "0"
+                            }
+                          },
+                          {
+                            "name": {
+                              "json": "1"
+                            }
+                          }
+                        ]
+                      }
                     }
                   }
                 }

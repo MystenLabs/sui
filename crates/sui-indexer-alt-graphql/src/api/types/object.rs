@@ -51,6 +51,7 @@ use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeFilter;
 use crate::api::scalars::type_filter::TypeInput;
 use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address;
 use crate::api::types::address::Address;
 use crate::api::types::balance::Balance;
 use crate::api::types::balance::{self as balance};
@@ -249,13 +250,16 @@ impl Object {
         self.super_.address(ctx).await
     }
 
-    /// Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+    /// Fetch the address as it was at a different root version, or checkpoint.
+    ///
+    /// If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
     pub(crate) async fn address_at(
         &self,
         ctx: &Context<'_>,
+        root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
-    ) -> Result<Option<Address>, RpcError> {
-        self.super_.address_at(ctx, checkpoint).await
+    ) -> Result<Option<Address>, RpcError<address::Error>> {
+        self.super_.address_at(ctx, root_version, checkpoint).await
     }
 
     /// The version of this object that this content comes from.
@@ -449,7 +453,7 @@ impl Object {
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
     ///
-    /// If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+    /// If no additional bound is provided, the object is fetched at the latest checkpoint known to the RPC.
     pub(crate) async fn object_at(
         &self,
         ctx: &Context<'_>,
@@ -457,16 +461,18 @@ impl Object {
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
     ) -> Option<Result<Self, RpcError<Error>>> {
-        let key = ObjectKey {
-            address: self.super_.address.into(),
-            version,
-            root_version,
-            at_checkpoint: checkpoint,
-        };
+        async {
+            let key = ObjectKey {
+                address: self.super_.address.into(),
+                version,
+                root_version,
+                at_checkpoint: checkpoint,
+            };
 
-        Object::by_key(ctx, self.super_.scope.without_root_version(), key)
-            .await
-            .transpose()
+            Object::by_key(ctx, Scope::new(ctx)?, key).await
+        }
+        .await
+        .transpose()
     }
 
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
@@ -728,7 +734,7 @@ impl Object {
                 .map_err(upcast)
         } else if let Some(cp) = key.at_checkpoint {
             let scope = scope
-                .with_checkpoint_viewed_at(cp.into())
+                .with_checkpoint_viewed_at(ctx, cp.into())
                 .ok_or_else(|| bad_user_input(Error::Future(cp.into())))?;
 
             Self::checkpoint_bounded(ctx, scope, key.address, cp)
@@ -1025,7 +1031,7 @@ impl Object {
 
         // Set the checkpoint being viewed to the one calculated from the cursors, so that
         // nested queries about the resulting objects also treat this checkpoint as latest.
-        let Some(scope) = scope.with_checkpoint_viewed_at(checkpoint) else {
+        let Some(scope) = scope.with_checkpoint_viewed_at(ctx, checkpoint) else {
             return Err(bad_user_input(Error::Future(checkpoint)));
         };
 

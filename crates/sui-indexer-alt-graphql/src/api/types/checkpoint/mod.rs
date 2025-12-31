@@ -73,11 +73,11 @@ impl Checkpoint {
     }
 
     /// Query the RPC as if this checkpoint were the latest checkpoint.
-    async fn query(&self) -> Option<Result<Query, RpcError>> {
+    async fn query(&self, ctx: &Context<'_>) -> Option<Result<Query, RpcError>> {
         async {
             let scope = Some(
                 self.scope
-                    .with_checkpoint_viewed_at(self.sequence_number)
+                    .with_checkpoint_viewed_at(ctx, self.sequence_number)
                     .context("Checkpoint in the future")?,
             );
 
