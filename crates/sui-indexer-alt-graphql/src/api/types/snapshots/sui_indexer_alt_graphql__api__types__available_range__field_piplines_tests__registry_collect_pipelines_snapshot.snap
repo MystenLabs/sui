@@ -941,6 +941,9 @@ MoveObject.storageRebate
 MoveObject.receivedTransactions
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
+MovePackage.id
+  => {}
+
 MovePackage.address
   => {}
 

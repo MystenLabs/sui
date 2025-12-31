@@ -33,6 +33,7 @@ use crate::{
         base64::Base64,
         big_int::BigInt,
         cursor::{BcsCursor, JsonCursor},
+        id::Id,
         sui_address::SuiAddress,
         type_filter::TypeInput,
         uint53::UInt53,
@@ -125,6 +126,10 @@ pub(crate) type CSysPackage = BcsCursor<Vec<u8>>;
 /// A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
 #[Object]
 impl MovePackage {
+    pub(crate) async fn id(&self) -> Id {
+        Id::MovePackage(self.super_.super_.address)
+    }
+
     /// The MovePackage's ID.
     pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
         self.super_.address(ctx).await

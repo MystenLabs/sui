@@ -21,7 +21,34 @@
   }
 }
 
-//# run-graphql --cursors bcs(1u8,@{obj_0_0})
+//# run-graphql --cursors bcs(1u8,0x2) bcs(2u8,0x2)
+{ # Fetch a package
+  package: node(id: "@{cursor_0}") {
+    id
+    ... on MovePackage {
+      modules(first: 3) {
+        nodes {
+          name
+        }
+      }
+    }
+  }
+
+  object: node(id: "@{cursor_1}") {
+    id
+    ... on Object {
+      asMovePackage {
+        modules(first: 3) {
+          nodes {
+            name
+          }
+        }
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors bcs(2u8,@{obj_0_0})
 { # Fetch an object
   node(id: "@{cursor_0}") {
     id
@@ -30,22 +57,6 @@
         contents {
           type { repr }
           json
-        }
-      }
-    }
-  }
-}
-
-//# run-graphql --cursors bcs(1u8,0x2)
-{ # Fetch a package, as an object
-  node(id: "@{cursor_0}") {
-    id
-    ... on Object {
-      asMovePackage {
-        modules {
-          nodes {
-            name
-          }
         }
       }
     }
