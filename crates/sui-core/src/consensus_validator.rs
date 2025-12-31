@@ -455,7 +455,7 @@ mod tests {
         messages_consensus::ConsensusTransaction,
         object::Object,
         signature::GenericSignature,
-        transaction::{Transaction, TransactionWithAliases},
+        transaction::{PlainTransactionWithClaims, Transaction},
     };
 
     use crate::authority::ExecutionEnv;
@@ -536,10 +536,10 @@ mod tests {
                     GenericSignature::Signature(sui_types::crypto::Signature::Ed25519SuiSignature(
                         Ed25519SuiSignature::default(),
                     ));
-                let tx_with_aliases = TransactionWithAliases::new(signed_tx, aliases);
+                let tx_with_claims = PlainTransactionWithClaims::from_aliases(signed_tx, aliases);
                 bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
                     &name1,
-                    tx_with_aliases,
+                    tx_with_claims,
                 ))
                 .unwrap()
             })

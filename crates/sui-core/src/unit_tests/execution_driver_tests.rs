@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_store::ObjectLockStatus;
 use crate::authority::authority_test_utils::{
     assign_shared_object_versions, assign_versions_and_schedule,
 };
@@ -763,167 +762,21 @@ async fn test_txn_age_overload() {
     );
 }
 
-// Tests that when validator is in load shedding mode, it can pushback txn signing correctly.
+// Tests that when validator is in load shedding mode, it can pushback txn validation correctly.
 #[tokio::test]
-async fn test_authority_txn_signing_pushback() {
+async fn test_authority_txn_validation_pushback() {
     telemetry_subscribers::init_for_testing();
 
-    // This test requires preconsensus locking to be enabled because it tests lock-related
-    // behavior (checking object locks and ObjectLockConflict errors).
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_disable_preconsensus_locking_for_testing(false);
-        config
-    });
-
-    // Create one sender, two recipients addresses, and 2 gas objects.
+    // Create one sender and 2 gas objects.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let (recipient, _): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(sender);
     let gas_object2 = Object::with_owner_for_testing(sender);
 
     // Initialize an AuthorityState. Disable overload monitor by setting max_load_shedding_percentage to 0;
-    // Set check_system_overload_at_signing to true.
+    // Enable overload check at transaction validation time.
     let overload_config = AuthorityOverloadConfig {
         check_system_overload_at_signing: true,
-        max_load_shedding_percentage: 0,
-        ..Default::default()
-    };
-    let authority_state = TestAuthorityBuilder::new()
-        .with_authority_overload_config(overload_config)
-        .build()
-        .await;
-    authority_state
-        .insert_genesis_objects(&[gas_object1.clone(), gas_object2.clone()])
-        .await;
-
-    // Create a validator service around the `authority_state`.
-    let epoch_store = authority_state.epoch_store_for_testing();
-    let consensus_adapter = Arc::new(ConsensusAdapter::new(
-        Arc::new(MockConsensusClient::new()),
-        CheckpointStore::new_for_tests(),
-        authority_state.name,
-        Arc::new(ConnectionMonitorStatusForTests {}),
-        100_000,
-        100_000,
-        None,
-        None,
-        ConsensusAdapterMetrics::new_test(),
-        epoch_store.protocol_config().clone(),
-    ));
-    let validator_service = Arc::new(ValidatorService::new_for_tests(
-        authority_state.clone(),
-        consensus_adapter,
-        Arc::new(ValidatorServiceMetrics::new_for_tests()),
-    ));
-
-    // Manually make the authority into overload state and reject 100% of traffic.
-    authority_state.overload_info.set_overload(100);
-
-    // First, create a transaction to transfer `gas_object1` to `recipient1`.
-    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-    let tx = make_transfer_object_transaction(
-        gas_object1.compute_object_reference(),
-        gas_object2.compute_object_reference(),
-        sender,
-        &sender_key,
-        recipient1,
-        rgp,
-    );
-
-    // Txn shouldn't get signed with ValidatorOverloadedRetryAfter error.
-    let response = validator_service
-        .handle_transaction_for_benchmarking(tx.clone())
-        .await;
-    assert!(matches!(
-        SuiError::from(response.err().unwrap()).into_inner(),
-        SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
-    ));
-
-    // Check that the input object should be locked by the above transaction.
-    let lock_tx = authority_state
-        .get_transaction_lock(&gas_object1.compute_object_reference(), &epoch_store)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(tx.digest(), lock_tx.digest());
-
-    // Send the same txn again. Although objects are locked, since authority is in load shedding mode,
-    // it should still pushback the transaction.
-    let error: SuiError = validator_service
-        .handle_transaction_for_benchmarking(tx.clone())
-        .await
-        .err()
-        .unwrap()
-        .into();
-    assert!(matches!(
-        error.into_inner(),
-        SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
-    ));
-
-    // Send another transaction, that send the same object to a different recipient.
-    // Transaction signing should failed with ObjectLockConflict error, since the object
-    // is already locked by the previous transaction.
-    let tx2 = make_transfer_object_transaction(
-        gas_object1.compute_object_reference(),
-        gas_object2.compute_object_reference(),
-        sender,
-        &sender_key,
-        recipient2,
-        rgp,
-    );
-    let error: SuiError = validator_service
-        .handle_transaction_for_benchmarking(tx2)
-        .await
-        .err()
-        .unwrap()
-        .into();
-    assert!(matches!(
-        error.into_inner(),
-        SuiErrorKind::ObjectLockConflict { .. }
-    ));
-
-    // Clear the authority overload status.
-    authority_state.overload_info.clear_overload();
-
-    // Re-send the first transaction, now the transaction can be successfully signed.
-    let response = validator_service
-        .handle_transaction_for_benchmarking(tx.clone())
-        .await;
-    assert!(response.is_ok());
-    assert_eq!(
-        &response
-            .unwrap()
-            .into_inner()
-            .status
-            .into_signed_for_testing(),
-        lock_tx.auth_sig()
-    );
-}
-
-// Tests that when validator is in load shedding mode, it can pushback txn execution correctly.
-#[tokio::test(flavor = "current_thread", start_paused = true)]
-async fn test_authority_txn_execution_pushback() {
-    // This test uses wait_for_certificate_execution which requires fastpath execution.
-    // Gate with disable_preconsensus_locking=false.
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-        config.set_disable_preconsensus_locking_for_testing(false);
-        config
-    });
-
-    telemetry_subscribers::init_for_testing();
-
-    // Create one sender, one recipient addresses, and 2 gas objects.
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let (recipient, _): (_, AccountKeyPair) = get_key_pair();
-    let gas_object1 = Object::with_owner_for_testing(sender);
-    let gas_object2 = Object::with_owner_for_testing(sender);
-
-    // Initialize an AuthorityState. Disable overload monitor by setting max_load_shedding_percentage to 0;
-    // Set check_system_overload_at_signing to false to disable load shedding at signing, this we are testing load shedding at execution.
-    // Set check_system_overload_at_execution to true.
-    let overload_config = AuthorityOverloadConfig {
-        check_system_overload_at_signing: false,
-        check_system_overload_at_execution: true,
         max_load_shedding_percentage: 0,
         ..Default::default()
     };
@@ -969,43 +822,26 @@ async fn test_authority_txn_execution_pushback() {
         rgp,
     );
 
-    // Manually make the authority into overload state and reject 100% of traffic.
-    authority_state.overload_info.set_overload(100);
-
-    // Transaction should be rejected with ValidatorOverloadedRetryAfter error.
-    // Overload is checked early, before object locking.
+    // Txn validation should fail with ValidatorOverloadedRetryAfter error.
     let result = validator_service.handle_transaction_for_testing_with_overload_check(tx.clone());
     assert!(matches!(
-        result.unwrap_err().into_inner(),
+        result.err().unwrap().into_inner(),
         SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
     ));
 
-    // Verify that objects are NOT locked when overload error is returned early.
-    let lock = authority_state
-        .get_transaction_lock(&gas_object1.compute_object_reference(), &epoch_store)
-        .await
-        .unwrap();
-    assert!(
-        lock.is_none(),
-        "Objects should not be locked when overload is triggered early"
-    );
+    // Send the same txn again. Authority is still in load shedding mode,
+    // so it should still pushback the transaction.
+    let result = validator_service.handle_transaction_for_testing_with_overload_check(tx.clone());
+    assert!(matches!(
+        result.err().unwrap().into_inner(),
+        SuiErrorKind::ValidatorOverloadedRetryAfter { .. }
+    ));
 
     // Clear the authority overload status.
     authority_state.overload_info.clear_overload();
 
-    // Now the transaction can be successfully processed.
+    // Re-send the first transaction, now the transaction can be successfully validated.
+    // Note: handle_vote_transaction is vote-only and doesn't acquire object locks.
     let result = validator_service.handle_transaction_for_testing_with_overload_check(tx.clone());
     assert!(result.is_ok());
-
-    // Verify the object is now locked by the transaction.
-    // We use get_lock() instead of get_transaction_lock() because handle_vote_transaction
-    // uses sign=false, which doesn't store the signed transaction.
-    let lock_status = authority_state
-        .get_object_cache_reader()
-        .get_lock(gas_object1.compute_object_reference(), &epoch_store)
-        .unwrap();
-    assert!(
-        matches!(lock_status, ObjectLockStatus::LockedToTx { locked_by_tx } if locked_by_tx.tx_digest == *tx.digest()),
-        "Object should be locked to the transaction after successful processing"
-    );
 }
