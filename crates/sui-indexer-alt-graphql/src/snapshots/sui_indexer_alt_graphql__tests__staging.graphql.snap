@@ -78,9 +78,11 @@ type Address implements Node & IAddressable {
 	"""
 	address: SuiAddress!
 	"""
-	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
 	"""
-	addressAt(checkpoint: UInt53): Address
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
 	"""
 	Attempts to fetch the object at this address.
 	"""
@@ -161,6 +163,28 @@ type AddressAliasStateCreateTransaction {
 	A workaround to define an empty variant of a GraphQL union.
 	"""
 	_: Boolean
+}
+
+"""
+Identifies a specific version of an address.
+
+The `address` field must be specified, as well as at most one of `rootVersion`, or `atCheckpoint`. If neither is provided, the package is fetched at the checkpoint being viewed.
+
+See `Query.address` for more details.
+"""
+input AddressKey {
+	"""
+	The address.
+	"""
+	address: SuiAddress!
+	"""
+	If specified, sets a checkpoint bound for this address.
+	"""
+	atCheckpoint: UInt53
+	"""
+	If specified, sets a root version bound for this address.
+	"""
+	rootVersion: UInt53
 }
 
 """
@@ -554,9 +578,11 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	address: SuiAddress!
 	"""
-	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
 	"""
-	addressAt(checkpoint: UInt53): Address
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
 	"""
 	Whether the `DenyCap` can be used to enable a global pause that behaves as if all addresses were added to the deny list. `null` indicates that it is not known whether the currency can be paused or not. This field is only populated on currencies held in the Coin Registry. To determine whether a legacy currency can be paused, check the contents of its `DenyCap`, if it can be found.
 	"""
@@ -925,9 +951,11 @@ type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	address: SuiAddress!
 	"""
-	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
 	"""
-	addressAt(checkpoint: UInt53): Address
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
 	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
@@ -1559,9 +1587,11 @@ An address uniquely represents either the public key of an account, or an object
 interface IAddressable {
 	address: SuiAddress!
 	"""
-	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
 	"""
-	addressAt(checkpoint: UInt53): Address
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
 	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
@@ -2169,9 +2199,11 @@ type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	address: SuiAddress!
 	"""
-	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
 	"""
-	addressAt(checkpoint: UInt53): Address
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
 	"""
 	Attempts to convert the object into a CoinMetadata.
 	"""
@@ -2334,9 +2366,11 @@ type MovePackage implements Node & IAddressable & IObject {
 	"""
 	address: SuiAddress!
 	"""
-	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
 	"""
-	addressAt(checkpoint: UInt53): Address
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
 	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
@@ -2408,9 +2442,9 @@ type MovePackage implements Node & IAddressable & IObject {
 	"""
 	owner: Owner
 	"""
-	Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
+	Fetch the package with the same original ID, at a different version, or checkpoint.
 	
-	If no additional bound is provided, the latest version of this package is fetched at the latest checkpoint.
+	If no additional bound is provided, the package is fetched at the latest checkpoint known to the RPC.
 	"""
 	packageAt(version: UInt53, checkpoint: UInt53): MovePackage
 	"""
@@ -2731,9 +2765,11 @@ type Object implements Node & IAddressable & IObject {
 	"""
 	address: SuiAddress!
 	"""
-	Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
 	"""
-	addressAt(checkpoint: UInt53): Address
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
 	"""
 	Attempts to convert the object into a MoveObject.
 	"""
@@ -2802,7 +2838,7 @@ type Object implements Node & IAddressable & IObject {
 	"""
 	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
 	
-	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+	If no additional bound is provided, the object is fetched at the latest checkpoint known to the RPC.
 	"""
 	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
 	"""
@@ -3103,7 +3139,7 @@ input PackageCheckpointFilter {
 """
 Identifies a specific version of a package.
 
-The `address` field must be specified, as well as at most one of `version`, or `atCheckpoint`. If neither is provided, the package is fetched at the current checkpoint.
+The `address` field must be specified, as well as at most one of `version`, or `atCheckpoint`. If neither is provided, the package is fetched at the checkpoint being viewed.
 
 See `Query.package` for more details.
 """
@@ -3243,15 +3279,19 @@ type Query {
 	"""
 	Look-up an account by its SuiAddress.
 	
-	If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+	If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or descendant object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
 	
 	- The root object of the object it is wrapped in, if it is wrapped.
 	- The root object of its owner, if it is owned by another object.
 	- The object itself, if it is not object-owned or wrapped.
 	
 	Specifying a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
+	
+	If `atCheckpoint` is specified, the address will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
+	
+	If none of the above are specified, the address is fetched at the checkpoint being viewed.
 	"""
-	address(address: SuiAddress!, rootVersion: UInt53): Address!
+	address(address: SuiAddress!, rootVersion: UInt53, atCheckpoint: UInt53): Address!
 	"""
 	First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
 	"""
@@ -3286,6 +3326,12 @@ type Query {
 	Paginate events that are emitted in the network, optionally filtered by event filters.
 	"""
 	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
+	"""
+	Fetch addresses by their keys.
+	
+	Returns a list of addresses that is guaranteed to be the same length as `keys`.
+	"""
+	multiGetAddresses(keys: [AddressKey!]!): [Address!]!
 	"""
 	Fetch checkpoints by their sequence numbers.
 	
@@ -3349,7 +3395,7 @@ type Query {
 	
 	If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
 	
-	If none of the above are specified, the object is fetched at the latest checkpoint.
+	If none of the above are specified, the object is fetched at the checkpoint being viewed.
 	
 	It is an error to specify more than one of `version`, `rootVersion`, or `atCheckpoint`.
 	
@@ -3375,7 +3421,7 @@ type Query {
 	
 	If `atCheckpoint` is specified, the package loaded is the one with the largest version among all packages sharing an original ID with the package at `address` and was published at or before `atCheckpoint`.
 	
-	If neither are specified, the package is fetched at the latest checkpoint.
+	If neither are specified, the package is fetched at the checkpoint being viewed.
 	
 	It is an error to specify both `version` and `atCheckpoint`, and `null` will be returned if the package cannot be found as of the latest checkpoint, or the address points to an object that is not a package.
 	

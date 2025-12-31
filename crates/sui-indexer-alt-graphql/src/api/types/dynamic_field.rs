@@ -31,6 +31,7 @@ use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeFilter;
 use crate::api::scalars::type_filter::TypeInput;
 use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address;
 use crate::api::types::address::Address;
 use crate::api::types::balance::Balance;
 use crate::api::types::balance::{self as balance};
@@ -146,13 +147,16 @@ impl DynamicField {
         self.super_.address(ctx).await
     }
 
-    /// Fetch the address as it was at a different checkpoint. Defaults to the latest checkpoint.
+    /// Fetch the address as it was at a different root version, or checkpoint.
+    ///
+    /// If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
     pub(crate) async fn address_at(
         &self,
         ctx: &Context<'_>,
+        root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
-    ) -> Result<Option<Address>, RpcError> {
-        self.super_.address_at(ctx, checkpoint).await
+    ) -> Result<Option<Address>, RpcError<address::Error>> {
+        self.super_.address_at(ctx, root_version, checkpoint).await
     }
 
     /// The version of this object that this content comes from.

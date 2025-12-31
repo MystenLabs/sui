@@ -110,11 +110,16 @@ impl Scope {
         }
     }
 
-    /// Create a nested scope pinned to a past checkpoint. Returns `None` if the checkpoint is in
+    /// Create a nested scope pinned to a checkpoint. Returns `None` if the checkpoint is in
     /// the future, or if the current scope is in execution context (no checkpoint is set).
-    pub(crate) fn with_checkpoint_viewed_at(&self, checkpoint_viewed_at: u64) -> Option<Self> {
-        let current_cp = self.checkpoint_viewed_at?;
-        (checkpoint_viewed_at <= current_cp).then(|| Self {
+    pub(crate) fn with_checkpoint_viewed_at(
+        &self,
+        ctx: &Context<'_>,
+        checkpoint_viewed_at: u64,
+    ) -> Option<Self> {
+        let watermark: &Arc<Watermarks> = ctx.data().ok()?;
+        let cp_hi_inclusive = watermark.high_watermark().checkpoint();
+        (checkpoint_viewed_at <= cp_hi_inclusive).then(|| Self {
             checkpoint_viewed_at: Some(checkpoint_viewed_at),
             root_version: self.root_version,
             execution_objects: Arc::clone(&self.execution_objects),
