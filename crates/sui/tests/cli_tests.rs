@@ -225,6 +225,7 @@ upgrade-capability = "{}""#,
         let mut build_config = BuildConfig::new_for_testing();
         build_config.config.environment = Some(environment.name.clone());
         build_config.environment = environment.clone();
+        build_config.config.install_dir = None;
         let compiled_package = build_config.build_async(&package_path).await.unwrap();
 
         let context = self.test_cluster.wallet_mut();
@@ -263,7 +264,8 @@ upgrade-capability = "{}""#,
         upgrade_capability: ObjectID,
     ) -> Result<ObjectID, anyhow::Error> {
         let mut build_config = BuildConfig::new_for_testing().config;
-        build_config.lock_file = Some(self.package_path(package_name).join("Move.lock"));
+        build_config.install_dir = None;
+
         let resp = SuiClientCommands::Upgrade {
             package_path: self.package_path(package_name),
             upgrade_capability: Some(upgrade_capability),
@@ -317,8 +319,7 @@ async fn test_publish_package(
     pubfile: Option<PathBuf>,
 ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
     let mut build_config = BuildConfig::new_for_testing().config;
-    let move_lock_path = package_path.clone().join("Move.lock");
-    build_config.lock_file = Some(move_lock_path.clone());
+    build_config.install_dir = None;
 
     let pubfile_path = pubfile.unwrap_or(package_path.join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
@@ -372,8 +373,7 @@ async fn publish_package(
     with_unpublished_dependencies: bool,
 ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
     let mut build_config = BuildConfig::new_for_testing().config;
-    let move_lock_path = package_path.clone().join("Move.lock");
-    build_config.lock_file = Some(move_lock_path.clone());
+    build_config.install_dir = None;
 
     let resp = SuiClientCommands::Publish(PublishArgs {
         package_path: package_path.clone(),
@@ -1318,7 +1318,8 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     // Check log output contains all object ids.
     let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
 
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.install_dir = None;
 
     let (_tmp, pkg_path) =
         create_temp_dir_with_framework_packages("pkg_mgmt_modules_publish", Some(chain_id))?;
@@ -2339,7 +2340,9 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let (_tmp, package_path) =
         create_temp_dir_with_framework_packages("dummy_modules_upgrade", Some(chain_id))?;
 
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.install_dir = None; // build in-place so that the publish info is recorded
+
     let resp = SuiClientCommands::Publish(PublishArgs {
         package_path: package_path.clone(),
         build_config: build_config.clone(),
@@ -2445,7 +2448,9 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     let (_tmp, package_path) =
         create_temp_dir_with_framework_packages("dummy_modules_upgrade", Some(chain_id))?;
 
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.install_dir = None;
+
     let resp = SuiClientCommands::Publish(PublishArgs {
         package_path: package_path.clone(),
         build_config: build_config.clone(),

@@ -106,8 +106,10 @@ impl PackageLoader {
     }
 
     /// Write the output (generated pubfiles, lockfiles, etc) to `dir` instead of the input path
-    pub fn output_path(mut self, output_dir: impl AsRef<Path>) -> Self {
-        self.config.output_path = output_dir.as_ref().to_path_buf();
+    pub fn output_path(mut self, output_dir: Option<impl AsRef<Path>>) -> Self {
+        if let Some(output_dir) = output_dir {
+            self.config.output_path = output_dir.as_ref().to_path_buf();
+        }
         self
     }
 

@@ -2,7 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
 use std::{collections::BTreeMap, fmt, path::Path};
 
 use indexmap::IndexMap;
@@ -78,7 +77,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
     ///
     /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
-    pub async fn load(
+    pub(crate) async fn load(
         path: impl AsRef<Path>,
         env: Environment,
         modes: Vec<ModeName>,
@@ -86,38 +85,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         PackageLoader::new(path, env).modes(modes).load().await
     }
 
-    /// A synchronous version of `load` that can be used to load a package while blocking in place.
-    pub fn load_sync(path: PathBuf, env: Environment, modes: Vec<ModeName>) -> PackageResult<Self> {
-        PackageLoader::new(path, env).modes(modes).load_sync()
-    }
-
-    /// Load the root package from `root` in environment `build_env`, but replace all the addresses
-    /// with the addresses in `pubfile`. Saving publication data will also save to the output to
-    /// `pubfile` rather than `Published.toml`
-    ///
-    /// If `pubfile` does not exist, one is created with the provided `chain_id` and `build_env`;
-    /// If the file does exist but these fields differ, then an error is returned.
-    ///
-    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
-    pub async fn load_ephemeral(
-        root: impl AsRef<Path>,
-        build_env: Option<EnvironmentName>,
-        chain_id: EnvironmentID,
-        pubfile_path: impl AsRef<Path>,
-        modes: Vec<ModeName>,
-    ) -> PackageResult<Self> {
-        PackageLoader::new_ephemeral(root, build_env, chain_id, pubfile_path)
-            .modes(modes)
-            .load()
-            .await
-    }
-
     /// Loads the root package from path and builds a dependency graph from the manifests.
     /// This forcefully re-pins all dependencies even if the manifest digests match. Note that it
     /// does not write to the lockfile; you should call [Self::save_to_disk] to save the results.
     ///
     /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
-    pub async fn load_force_repin(
+    pub(crate) async fn load_force_repin(
         path: impl AsRef<Path>,
         env: Environment,
         modes: Vec<ModeName>,
@@ -125,25 +98,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         PackageLoader::new(path, env)
             .modes(modes)
             .force_repin(true)
-            .load()
-            .await
-    }
-
-    /// Loads the root lockfile only, ignoring all manifests. Returns an error if the lockfile
-    /// doesn't exist of if it doesn't contain a dependency graph for `env`.
-    ///
-    /// Note that this still fetches all of the dependencies, it just doesn't look at their
-    /// manifests.
-    ///
-    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
-    pub async fn load_ignore_digests(
-        path: impl AsRef<Path>,
-        env: Environment,
-        modes: Vec<ModeName>,
-    ) -> PackageResult<Self> {
-        PackageLoader::new(path, env)
-            .modes(modes)
-            .ignore_digests(true)
             .load()
             .await
     }

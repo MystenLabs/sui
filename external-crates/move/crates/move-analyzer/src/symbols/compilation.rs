@@ -1082,8 +1082,7 @@ fn load_root_pkg<F: MoveFlavor>(
     path: &Path,
 ) -> anyhow::Result<RootPackage<F>> {
     let env = find_env::<F>(path, build_config)?;
-    let mut root_pkg =
-        RootPackage::<F>::load_sync(path.to_path_buf(), env, build_config.mode_set())?;
+    let mut root_pkg = build_config.package_loader(path, &env).load_sync()?;
 
     root_pkg.save_lockfile_to_disk()?;
 
