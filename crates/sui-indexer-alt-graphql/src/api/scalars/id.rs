@@ -12,6 +12,7 @@ use sui_types::{
 #[derive(Serialize, Deserialize)]
 pub(crate) enum Id {
     Address(NativeSuiAddress),
+    Epoch(u64),
     MovePackage(NativeSuiAddress),
     ObjectByAddress(NativeSuiAddress),
     ObjectByRef(NativeSuiAddress, SequenceNumber, ObjectDigest),

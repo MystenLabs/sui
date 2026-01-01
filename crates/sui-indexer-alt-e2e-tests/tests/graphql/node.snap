@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 4 tasks
+processed 5 tasks
 
 init:
 A: object(0,0)
@@ -32,12 +32,24 @@ Response: {
   }
 }
 
-task 2, lines 24-49:
-//# run-graphql --cursors bcs(1u8,0x2) bcs(2u8,0x2)
+task 2, lines 24-33:
+//# run-graphql --cursors bcs(1u8,0)
+Response: {
+  "data": {
+    "node": {
+      "id": "AQAAAAAAAAAA",
+      "epochId": 0,
+      "startTimestamp": "1970-01-01T00:00:00Z"
+    }
+  }
+}
+
+task 3, lines 35-60:
+//# run-graphql --cursors bcs(2u8,0x2) bcs(3u8,0x2)
 Response: {
   "data": {
     "package": {
-      "id": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
+      "id": "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
       "modules": {
         "nodes": [
           {
@@ -53,7 +65,7 @@ Response: {
       }
     },
     "object": {
-      "id": "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
+      "id": "AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
       "asMovePackage": {
         "modules": {
           "nodes": [
@@ -73,12 +85,12 @@ Response: {
   }
 }
 
-task 3, lines 51-64:
-//# run-graphql --cursors bcs(2u8,@{obj_0_0})
+task 4, lines 62-75:
+//# run-graphql --cursors bcs(3u8,@{obj_0_0})
 Response: {
   "data": {
     "node": {
-      "id": "Ar/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
+      "id": "A7/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
       "asMoveObject": {
         "contents": {
           "type": {
