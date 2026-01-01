@@ -19,8 +19,8 @@ use tracing::debug;
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::package::package_loader::PackageConfig;
 use crate::package::package_lock::PackageSystemLock;
-use crate::package::root_package::PackageConfig;
 use crate::schema::{LockfileDependencyInfo, ModeName, Publication};
 use crate::{
     dependency::PinnedDependencyInfo,
