@@ -785,10 +785,11 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // modify the manifest and then reload
         project.extend_file("root/Move.toml", "\n# extra stuff\n");
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .force_repin(true)
+            .load()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
 
         // since the manifest changed, we should have repinned, so the sha should be for commit 2
@@ -832,10 +833,11 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // modify the manifest for `dirty` and then reload
         project.extend_file("dirty/Move.toml", "\n# extra stuff\n");
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .force_repin(true)
+            .load()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
 
         // since the dependency's manifest changed, we should have repinned, so the sha should be
@@ -957,13 +959,13 @@ pkg_b = { local = "../pkg_b" }"#,
         .unwrap();
 
         // load root package with ephemeral file
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
@@ -1007,13 +1009,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
@@ -1063,13 +1065,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let err = RootPackage::<Vanilla>::load_ephemeral(
+        let err = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load::<Vanilla>()
         .await
         .unwrap_err();
 
@@ -1097,13 +1099,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
@@ -1147,13 +1149,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
@@ -1191,13 +1193,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
@@ -1243,13 +1245,13 @@ pkg_b = { local = "../pkg_b" }"#,
         )
         .unwrap();
 
-        RootPackage::<Vanilla>::load_ephemeral(
+        PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load::<Vanilla>()
         .await
         .unwrap();
     }
@@ -1286,13 +1288,13 @@ pkg_b = { local = "../pkg_b" }"#,
         )
         .unwrap();
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load::<Vanilla>()
         .await;
 
         assert_snapshot!(root.unwrap_err().to_string(), @r###"
@@ -1322,13 +1324,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             Some(DEFAULT_ENV_NAME.to_string()),
             "localnet".into(),
             ephemeral.as_path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
@@ -1367,13 +1369,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let mut root = RootPackage::<Vanilla>::load_ephemeral(
+        let mut root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
@@ -1431,13 +1433,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load::<Vanilla>()
         .await;
 
         let message = root
@@ -1465,13 +1467,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             Some(DEFAULT_ENV_NAME.to_string()),
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load::<Vanilla>()
         .await;
 
         let message = root
@@ -1492,13 +1494,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.join("nonexistent.toml"),
-            vec![],
         )
+        .load::<Vanilla>()
         .await;
 
         let message = root
@@ -1519,13 +1521,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             Some("unknown environment".into()),
             "localnet".into(),
             ephemeral.clone(),
-            vec![],
         )
+        .load::<Vanilla>()
         .await;
 
         let message = root.unwrap_err().to_string().replace(

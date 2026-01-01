@@ -844,12 +844,9 @@ mod tests {
         git_tree.checkout_repo(false).await.unwrap();
 
         // create dirty file in dep's parent directory
-        fs::create_dir_all(git_tree.path_to_tree().parent().unwrap()).unwrap();
-        fs::write(
-            git_tree.path_to_tree().join("garbage.txt"),
-            "something to dirty the repo",
-        )
-        .unwrap();
+        let dirty_dir = git_tree.path_to_tree().parent().unwrap().to_path_buf();
+        fs::create_dir_all(&dirty_dir).unwrap();
+        fs::write(dirty_dir.join("garbage.txt"), "something to dirty the repo").unwrap();
 
         // fetch again - subtree should still be clean so it should succeed
         git_tree.checkout_repo(false).await.unwrap();
