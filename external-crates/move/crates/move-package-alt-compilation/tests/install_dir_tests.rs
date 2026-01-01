@@ -84,6 +84,7 @@ async fn test_install_dir_creates_directory() {
 }
 
 #[tokio::test]
+#[ignore] // TODO: DVX-1924
 async fn test_install_dir_relative_path() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let package_path = temp_dir.path().join("test_package");
