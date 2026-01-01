@@ -142,10 +142,9 @@ async fn test_install_dir_absolute_path() {
     let env = default_environment();
     let mut output = Cursor::new(Vec::new());
 
-    let result =
-        compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut output).await;
-
-    assert!(result.is_ok(), "Compilation should succeed");
+    compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut output)
+        .await
+        .expect("compilation succeeds");
 
     assert!(
         absolute_install_dir.exists(),
