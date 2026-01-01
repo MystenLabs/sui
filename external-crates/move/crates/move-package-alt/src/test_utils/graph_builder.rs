@@ -775,18 +775,10 @@ impl Scenario {
     ) -> PackageResult<PackageGraph<Vanilla>> {
         let path = PackagePath::new(self.path_for(&package)).unwrap();
 
-        let config = PackageConfig {
-            input_path: self.path_for(&package),
-            chain_id: DEFAULT_ENV_ID.to_owned(),
-            load_type: LoadType::Persistent {
-                env: DEFAULT_ENV_NAME.to_owned(),
-            },
-            output_path: self.path_for(&package),
-            modes: vec![],
-            force_repin: false,
-            ignore_digests: false,
-            allow_dirty: false,
-        };
+        let config = PackageLoader::new(self.path_for(&package), default_environment())
+            .config()
+            .clone();
+
         let mtx = path.lock().unwrap();
 
         PackageGraph::<Vanilla>::load_from_manifests(
@@ -800,7 +792,7 @@ impl Scenario {
 
     /// Loads the root package for `package` in the default environment and with no modes
     pub async fn root_package(&self, package: impl AsRef<str>) -> RootPackage<Vanilla> {
-        self.try_root_package(package)
+        self.try_root_package(package, |cfg| cfg)
             .await
             .map_err(|e| e.emit())
             .expect("could load package")
@@ -811,11 +803,7 @@ impl Scenario {
         package: impl AsRef<str>,
         config: impl Fn(PackageLoader) -> PackageLoader,
     ) -> RootPackage<Vanilla> {
-        let loader = PackageLoader::new(self.path_for(package), default_environment());
-        let loader = config(loader);
-
-        loader
-            .load()
+        self.try_root_package(package, config)
             .await
             .map_err(|e| e.emit())
             .expect("could load package")
@@ -824,7 +812,7 @@ impl Scenario {
     /// Loads the root package for `package` and expects an error; returns the (redacted) contents
     /// of the error
     pub async fn root_package_err(&self, package: impl AsRef<str>) -> String {
-        match self.try_root_package(package).await {
+        match self.try_root_package(package, |cfg| cfg).await {
             Ok(_) => panic!("expected root package to fail to load"),
             Err(err) => err
                 .to_string()
@@ -836,8 +824,14 @@ impl Scenario {
     pub async fn try_root_package(
         &self,
         package: impl AsRef<str>,
+        config: impl Fn(PackageLoader) -> PackageLoader,
     ) -> PackageResult<RootPackage<Vanilla>> {
-        RootPackage::<Vanilla>::load(self.path_for(package), default_environment(), vec![]).await
+        config(PackageLoader::new(
+            self.path_for(package),
+            default_environment(),
+        ))
+        .load()
+        .await
     }
 
     pub fn read_file(&self, file: impl AsRef<Path>) -> String {
