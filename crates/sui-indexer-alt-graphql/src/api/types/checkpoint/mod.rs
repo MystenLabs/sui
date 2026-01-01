@@ -18,7 +18,9 @@ use sui_types::{
 use crate::{
     api::{
         query::Query,
-        scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
+        scalars::{
+            base64::Base64, cursor::JsonCursor, date_time::DateTime, id::Id, uint53::UInt53,
+        },
         types::available_range::AvailableRangeKey,
     },
     error::RpcError,
@@ -62,6 +64,10 @@ pub(crate) type CCheckpoint = JsonCursor<u64>;
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
 impl Checkpoint {
+    pub(crate) async fn id(&self) -> Id {
+        Id::Checkpoint(self.sequence_number)
+    }
+
     /// The checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
     async fn sequence_number(&self) -> UInt53 {
         self.sequence_number.into()
