@@ -401,7 +401,7 @@ type ChangeEpochTransaction {
 """
 Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 """
-type Checkpoint {
+type Checkpoint implements Node {
 	"""
 	A commitment by the committee at each checkpoint on the artifacts of the checkpoint.
 	e.g., object checkpoint states
@@ -423,6 +423,7 @@ type Checkpoint {
 	The epoch that this checkpoint is part of.
 	"""
 	epoch: Epoch
+	id: ID!
 	"""
 	The total number of transactions in the network by the end of this checkpoint.
 	"""
@@ -3218,7 +3219,7 @@ type Query {
 	Returns a list of types that is guaranteed to be the same length as `keys`. If a type in `keys` could not be found, its corresponding entry in the result will be `null`.
 	"""
 	multiGetTypes(keys: [String!]!): [MoveType]!
-	node(id: ID!): Node!
+	node(id: ID!): Node
 	"""
 	Fetch an object by its address.
 	

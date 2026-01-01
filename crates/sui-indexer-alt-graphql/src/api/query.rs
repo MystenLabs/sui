@@ -57,14 +57,26 @@ pub struct Query {
 
 #[Object]
 impl Query {
-    async fn node(&self, ctx: &Context<'_>, id: Id) -> Result<Node, RpcError> {
+    async fn node(&self, ctx: &Context<'_>, id: Id) -> Result<Option<Node>, RpcError> {
         let scope = self.scope(ctx)?;
         Ok(match id {
-            Id::Address(a) => Node::Address(Box::new(Address::with_address(scope, a))),
-            Id::Epoch(e) => Node::Epoch(Box::new(Epoch::with_id(scope, e))),
-            Id::MovePackage(a) => Node::MovePackage(Box::new(MovePackage::with_address(scope, a))),
-            Id::ObjectByAddress(a) => Node::Object(Box::new(Object::with_address(scope, a))),
-            Id::ObjectByRef(a, v, d) => Node::Object(Box::new(Object::with_ref(&scope, a, v, d))),
+            Id::Address(a) => Some(Node::Address(Box::new(Address::with_address(scope, a)))),
+
+            Id::Checkpoint(s) => Checkpoint::with_sequence_number(scope, Some(s))
+                .map(Box::new)
+                .map(Node::Checkpoint),
+
+            Id::Epoch(e) => Some(Node::Epoch(Box::new(Epoch::with_id(scope, e)))),
+
+            Id::MovePackage(a) => Some(Node::MovePackage(Box::new(MovePackage::with_address(
+                scope, a,
+            )))),
+
+            Id::ObjectByAddress(a) => Some(Node::Object(Box::new(Object::with_address(scope, a)))),
+
+            Id::ObjectByRef(a, v, d) => {
+                Some(Node::Object(Box::new(Object::with_ref(&scope, a, v, d))))
+            }
         })
     }
 

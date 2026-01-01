@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 5 tasks
+processed 6 tasks
 
 init:
 A: object(0,0)
@@ -38,18 +38,30 @@ Response: {
   "data": {
     "node": {
       "id": "AQAAAAAAAAAA",
+      "sequenceNumber": 0,
+      "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C"
+    }
+  }
+}
+
+task 3, lines 35-44:
+//# run-graphql --cursors bcs(2u8,0)
+Response: {
+  "data": {
+    "node": {
+      "id": "AgAAAAAAAAAA",
       "epochId": 0,
       "startTimestamp": "1970-01-01T00:00:00Z"
     }
   }
 }
 
-task 3, lines 35-60:
-//# run-graphql --cursors bcs(2u8,0x2) bcs(3u8,0x2)
+task 4, lines 46-71:
+//# run-graphql --cursors bcs(3u8,0x2) bcs(4u8,0x2)
 Response: {
   "data": {
     "package": {
-      "id": "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
+      "id": "AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
       "modules": {
         "nodes": [
           {
@@ -65,7 +77,7 @@ Response: {
       }
     },
     "object": {
-      "id": "AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
+      "id": "BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
       "asMovePackage": {
         "modules": {
           "nodes": [
@@ -85,12 +97,12 @@ Response: {
   }
 }
 
-task 4, lines 62-75:
-//# run-graphql --cursors bcs(3u8,@{obj_0_0})
+task 5, lines 73-86:
+//# run-graphql --cursors bcs(4u8,@{obj_0_0})
 Response: {
   "data": {
     "node": {
-      "id": "A7/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
+      "id": "BL/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
       "asMoveObject": {
         "contents": {
           "type": {

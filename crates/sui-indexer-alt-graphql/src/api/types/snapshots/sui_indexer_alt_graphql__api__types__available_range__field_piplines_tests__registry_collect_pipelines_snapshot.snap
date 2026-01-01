@@ -146,6 +146,9 @@ ChangeEpochTransaction.epochStartTimestamp
 ChangeEpochTransaction.systemPackages
   => {}
 
+Checkpoint.id
+  => {}
+
 Checkpoint.sequenceNumber
   => {}
 
