@@ -688,6 +688,88 @@ impl TestCluster {
         Ok(digests.into_iter().zip(effects.into_iter()).collect())
     }
 
+    /// Execute signed transactions in a soft bundle and return results for each transaction.
+    /// Unlike `execute_signed_txns_in_soft_bundle`, this method handles conflicting transactions
+    /// where some may be executed and others rejected.
+    ///
+    /// Returns a vector of (digest, WaitForEffectsResponse) for each transaction.
+    pub async fn execute_soft_bundle_with_conflicts(
+        &self,
+        signed_txs: &[Transaction],
+    ) -> SuiResult<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
+        let digests: Vec<_> = signed_txs.iter().map(|tx| *tx.digest()).collect();
+
+        let request = RawSubmitTxRequest {
+            transactions: signed_txs
+                .iter()
+                .map(|tx| bcs::to_bytes(tx).unwrap().into())
+                .collect(),
+            submit_type: SubmitTxType::SoftBundle.into(),
+        };
+
+        let authority_aggregator = self.authority_aggregator();
+        let (_, safe_client) = authority_aggregator
+            .authority_clients
+            .iter()
+            .next()
+            .unwrap();
+        let mut validator_client = safe_client
+            .authority_client()
+            .get_client_for_testing()
+            .unwrap();
+
+        let result = validator_client
+            .submit_transaction(request.into_request())
+            .await
+            .map(tonic::Response::into_inner)?;
+        assert_eq!(result.results.len(), signed_txs.len());
+
+        // Extract consensus positions from submission results
+        let mut consensus_positions = Vec::new();
+        for (i, raw_result) in result.results.iter().enumerate() {
+            let submit_result: SubmitTxResult = raw_result.clone().try_into()?;
+            match submit_result {
+                SubmitTxResult::Submitted { consensus_position } => {
+                    consensus_positions.push(consensus_position);
+                }
+                SubmitTxResult::Executed { .. } => {
+                    panic!(
+                        "Transaction {} was already executed during submission",
+                        i + 1
+                    );
+                }
+                SubmitTxResult::Rejected { error } => {
+                    return Err(error);
+                }
+            }
+        }
+
+        // Wait for effects using consensus positions
+        let wait_futures: Vec<_> = digests
+            .iter()
+            .zip(consensus_positions.iter())
+            .map(|(digest, position)| {
+                let request = WaitForEffectsRequest {
+                    transaction_digest: Some(*digest),
+                    consensus_position: Some(*position),
+                    include_details: false,
+                    ping_type: None,
+                };
+                safe_client.wait_for_effects(request, None)
+            })
+            .collect();
+
+        let responses = futures::future::join_all(wait_futures).await;
+
+        let results: SuiResult<Vec<_>> = digests
+            .into_iter()
+            .zip(responses.into_iter())
+            .map(|(digest, response)| Ok((digest, response?)))
+            .collect();
+
+        results
+    }
+
     pub async fn wait_for_tx_settlement(&self, digests: &[TransactionDigest]) {
         self.fullnode_handle
             .sui_node

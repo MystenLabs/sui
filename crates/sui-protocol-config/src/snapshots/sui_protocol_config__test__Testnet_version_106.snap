@@ -1,5 +1,6 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
+assertion_line: 4893
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
 version: 106
@@ -86,6 +87,7 @@ feature_flags:
   validate_identifier_inputs: true
   disallow_self_identifier: true
   mysticeti_fastpath: true
+  disable_preconsensus_locking: true
   relocate_event_module: true
   uncompressed_g1_group_elements: true
   disallow_new_modules_in_deps_only_packages: true

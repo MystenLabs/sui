@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::{
-    AuthorityEpochTables, EncG, ExecutionIndicesWithStats, PkG,
+    AuthorityEpochTables, EncG, ExecutionIndicesWithStats, LockDetails, LockDetailsWrapper, PkG,
 };
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::BuilderCheckpointSummary;
@@ -17,7 +17,7 @@ use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque, hash_map};
 use sui_types::authenticator_state::ActiveJwk;
-use sui_types::base_types::{AuthorityName, SequenceNumber};
+use sui_types::base_types::{AuthorityName, ObjectRef, SequenceNumber};
 use sui_types::crypto::RandomnessRound;
 use sui_types::error::SuiResult;
 use sui_types::executable_transaction::{
@@ -96,6 +96,9 @@ pub(crate) struct ConsensusCommitOutput {
         u64, /* generation */
         Vec<(ExecutionTimeObservationKey, Duration)>,
     )>,
+
+    // Owned object locks acquired post-consensus (when disable_preconsensus_locking=true)
+    owned_object_locks: HashMap<ObjectRef, LockDetails>,
 }
 
 impl ConsensusCommitOutput {
@@ -254,6 +257,11 @@ impl ConsensusCommitOutput {
         self.congestion_control_randomness_object_debts = object_debts;
     }
 
+    pub fn set_owned_object_locks(&mut self, locks: HashMap<ObjectRef, LockDetails>) {
+        assert!(self.owned_object_locks.is_empty());
+        self.owned_object_locks = locks;
+    }
+
     pub fn write_to_batch(
         self,
         epoch_store: &AuthorityPerEpochStore,
@@ -291,6 +299,15 @@ impl ConsensusCommitOutput {
 
         if let Some(next_versions) = self.next_shared_object_versions {
             batch.insert_batch(&tables.next_shared_object_versions_v2, next_versions)?;
+        }
+
+        if !self.owned_object_locks.is_empty() {
+            batch.insert_batch(
+                &tables.owned_object_locked_transactions,
+                self.owned_object_locks
+                    .into_iter()
+                    .map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
+            )?;
         }
 
         batch.delete_batch(
@@ -495,6 +512,9 @@ pub(crate) struct ConsensusOutputQuarantine {
 
     processed_consensus_messages: RefCountedHashMap<SequencedConsensusTransactionKey, ()>,
 
+    // Owned object locks acquired post-consensus.
+    owned_object_locks: HashMap<ObjectRef, LockDetails>,
+
     metrics: Arc<EpochMetrics>,
 }
 
@@ -513,6 +533,7 @@ impl ConsensusOutputQuarantine {
             processed_consensus_messages: RefCountedHashMap::new(),
             congestion_control_randomness_object_debts: RefCountedHashMap::new(),
             congestion_control_object_debts: RefCountedHashMap::new(),
+            owned_object_locks: HashMap::new(),
             metrics: authority_metrics,
         }
     }
@@ -530,6 +551,7 @@ impl ConsensusOutputQuarantine {
         self.insert_shared_object_next_versions(&output);
         self.insert_congestion_control_debts(&output);
         self.insert_processed_consensus_messages(&output);
+        self.insert_owned_object_locks(&output);
         self.output_queue.push_back(output);
 
         self.metrics
@@ -672,6 +694,7 @@ impl ConsensusOutputQuarantine {
                 self.remove_shared_object_next_versions(&output);
                 self.remove_processed_consensus_messages(&output);
                 self.remove_congestion_control_debts(&output);
+                self.remove_owned_object_locks(&output);
 
                 output.write_to_batch(epoch_store, batch)?;
             } else {
@@ -749,6 +772,18 @@ impl ConsensusOutputQuarantine {
             }
         }
     }
+
+    fn insert_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
+        for (obj_ref, lock) in &output.owned_object_locks {
+            self.owned_object_locks.insert(*obj_ref, *lock);
+        }
+    }
+
+    fn remove_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
+        for obj_ref in output.owned_object_locks.keys() {
+            self.owned_object_locks.remove(obj_ref);
+        }
+    }
 }
 
 // Read methods - all methods in this block return data from the quarantine which would otherwise
@@ -803,6 +838,31 @@ impl ConsensusOutputQuarantine {
                 tables
                     .next_shared_object_versions_v2
                     .multi_get(object_keys)
+                    .expect("db error")
+            },
+        ))
+    }
+
+    /// Gets owned object locks, checking quarantine first then falling back to DB.
+    /// Used for post-consensus conflict detection when preconsensus locking is disabled.
+    /// After crash recovery, quarantine is empty so we naturally fall back to DB.
+    pub(super) fn get_owned_object_locks(
+        &self,
+        tables: &AuthorityEpochTables,
+        obj_refs: &[ObjectRef],
+    ) -> SuiResult<Vec<Option<LockDetails>>> {
+        Ok(do_fallback_lookup(
+            obj_refs,
+            |obj_ref| {
+                if let Some(lock) = self.owned_object_locks.get(obj_ref) {
+                    CacheResult::Hit(Some(*lock))
+                } else {
+                    CacheResult::Miss
+                }
+            },
+            |obj_refs| {
+                tables
+                    .multi_get_locked_transactions(obj_refs)
                     .expect("db error")
             },
         ))

@@ -96,6 +96,10 @@ mod balance_withdraw_tests;
 #[path = "unit_tests/address_balance_gas_tests.rs"]
 mod address_balance_gas_tests;
 
+#[cfg(test)]
+#[path = "unit_tests/transaction_claims_tests.rs"]
+mod transaction_claims_tests;
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum CallArg {
     // contains no structs or objects
@@ -3888,6 +3892,97 @@ mod nonempty_as_vec {
         }
 
         deserializer.deserialize_seq(NonEmptyVisitor(PhantomData))
+    }
+}
+
+// =============================================================================
+// TransactionWithClaims - Generalized claim system for consensus messages
+// =============================================================================
+
+/// Claims that can be attached to a transaction for consensus validation.
+/// Each claim type represents a piece of information that:
+/// 1. The submitting validator includes in the consensus message
+/// 2. Voting validators verify before accepting
+/// 3. The consensus handler can use deterministically
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TransactionClaim {
+    /// Address aliases used for signature verification.
+    /// Maps addresses to their alias object versions (if any).
+    AddressAliases(
+        #[serde(with = "nonempty_as_vec")] NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
+    ),
+
+    /// Object IDs that are claimed to be immutable.
+    /// Used to filter out immutable objects from lock acquisition in consensus handler.
+    ImmutableInputObjects(Vec<ObjectID>),
+}
+
+/// A transaction with attached claims that have been verified by voting validators.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TransactionWithClaims<T> {
+    tx: T,
+    claims: Vec<TransactionClaim>,
+}
+
+impl<T> TransactionWithClaims<T> {
+    pub fn new(tx: T, claims: Vec<TransactionClaim>) -> Self {
+        Self { tx, claims }
+    }
+
+    /// Create from a transaction with only address aliases.
+    pub fn from_aliases(tx: T, aliases: NonEmpty<(SuiAddress, Option<SequenceNumber>)>) -> Self {
+        Self {
+            tx,
+            claims: vec![TransactionClaim::AddressAliases(aliases)],
+        }
+    }
+
+    /// Creates from a transaction without any aliases attached.
+    pub fn no_aliases(tx: T) -> Self {
+        Self { tx, claims: vec![] }
+    }
+
+    pub fn tx(&self) -> &T {
+        &self.tx
+    }
+
+    pub fn into_tx(self) -> T {
+        self.tx
+    }
+
+    /// Get the address aliases claim. Differentiate between empty and not present for validation.
+    pub fn aliases(&self) -> Option<NonEmpty<(SuiAddress, Option<SequenceNumber>)>> {
+        self.claims
+            .iter()
+            .find_map(|c| match c {
+                TransactionClaim::AddressAliases(aliases) => Some(aliases),
+                _ => None,
+            })
+            .cloned()
+    }
+
+    /// Get the immutable input objects claim. Returns empty vector if not present.
+    pub fn get_immutable_objects(&self) -> Vec<ObjectID> {
+        self.claims
+            .iter()
+            .find_map(|c| match c {
+                TransactionClaim::ImmutableInputObjects(objs) => Some(objs.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+}
+
+pub type PlainTransactionWithClaims = TransactionWithClaims<Transaction>;
+
+/// Convert from `WithAliases<VerifiedEnvelope>` to `TransactionWithClaims<Envelope>`.
+/// Used when feature flag is off to convert existing WithAliases to the new type.
+impl<T: Message, S> From<WithAliases<VerifiedEnvelope<T, S>>>
+    for TransactionWithClaims<Envelope<T, S>>
+{
+    fn from(value: WithAliases<VerifiedEnvelope<T, S>>) -> Self {
+        let (tx, aliases) = value.into_inner();
+        Self::from_aliases(tx.into(), aliases)
     }
 }
 

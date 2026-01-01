@@ -42,6 +42,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{ClientIdSource, Weight};
 use sui_types::{
+    base_types::ObjectID,
     digests::{TransactionDigest, TransactionEffectsDigest},
     error::{SuiErrorKind, UserInputError},
 };
@@ -504,6 +505,55 @@ impl ValidatorService {
         Ok(())
     }
 
+    /// Collect the IDs of input objects that are immutable.
+    /// This is used to create the ImmutableInputObjects claim for consensus messages.
+    async fn collect_immutable_object_ids(
+        &self,
+        tx: &VerifiedTransaction,
+        state: &AuthorityState,
+    ) -> SuiResult<Vec<ObjectID>> {
+        let input_objects = tx.data().transaction_data().input_objects()?;
+
+        // Collect object IDs from ImmOrOwnedMoveObject inputs
+        let object_ids: Vec<ObjectID> = input_objects
+            .iter()
+            .filter_map(|obj| match obj {
+                InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => Some(*id),
+                _ => None,
+            })
+            .collect();
+        if object_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Load objects from cache and filter to immutable ones
+        let objects = state.get_object_cache_reader().get_objects(&object_ids);
+
+        // All objects should be found, since owned input objects have been validated to exist.
+        objects
+            .into_iter()
+            .zip(object_ids.iter())
+            .filter_map(|(obj, id)| {
+                let Some(o) = obj else {
+                    return Some(Err::<ObjectID, SuiError>(
+                        SuiErrorKind::UserInputError {
+                            error: UserInputError::ObjectNotFound {
+                                object_id: *id,
+                                version: None,
+                            },
+                        }
+                        .into(),
+                    ));
+                };
+                if o.is_immutable() {
+                    Some(Ok(*id))
+                } else {
+                    None
+                }
+            })
+            .collect::<SuiResult<Vec<ObjectID>>>()
+    }
+
     #[instrument(
         name = "ValidatorService::handle_submit_transaction",
         level = "error",
@@ -816,10 +866,33 @@ impl ValidatorService {
                 }
             }
 
-            if epoch_store.protocol_config().address_aliases() {
+            // Create claims with aliases and / or immutable objects.
+            if epoch_store.protocol_config().address_aliases()
+                || epoch_store.protocol_config().disable_preconsensus_locking()
+            {
+                let mut claims = vec![];
+
+                if epoch_store.protocol_config().disable_preconsensus_locking() {
+                    let immutable_object_ids = self
+                        .collect_immutable_object_ids(verified_transaction.tx(), state)
+                        .await?;
+                    if !immutable_object_ids.is_empty() {
+                        claims.push(TransactionClaim::ImmutableInputObjects(
+                            immutable_object_ids,
+                        ));
+                    }
+                }
+
+                let (tx, aliases) = verified_transaction.into_inner();
+                if epoch_store.protocol_config().address_aliases() {
+                    claims.push(TransactionClaim::AddressAliases(aliases));
+                }
+
+                let tx_with_claims = TransactionWithClaims::new(tx.into(), claims);
+
                 consensus_transactions.push(ConsensusTransaction::new_user_transaction_v2_message(
                     &state.name,
-                    verified_transaction.into(),
+                    tx_with_claims,
                 ));
             } else {
                 consensus_transactions.push(ConsensusTransaction::new_user_transaction_message(
@@ -1212,6 +1285,13 @@ impl ValidatorService {
                             fast_path: false,
                         });
                     }
+                    ConsensusTxStatus::Dropped => {
+                        // Transaction was dropped post-consensus, currently only due to invalid owned object inputs..
+                        // Fetch the detailed error (e.g., ObjectLockConflict) from the rejection reason cache.
+                        return Ok(WaitForEffectsResponse::Rejected {
+                            error: epoch_store.get_rejection_vote_reason(consensus_position),
+                        });
+                    }
                 },
                 NotifyReadConsensusTxStatusResult::Expired(round) => {
                     return Ok(WaitForEffectsResponse::Expired {
@@ -1287,6 +1367,14 @@ impl ValidatorService {
                                 ConsensusTxStatus::Finalized => {
                                     current_status = Some(new_status);
                                     continue;
+                                }
+                                ConsensusTxStatus::Dropped => {
+                                    // Transaction was dropped post-consensus, currently only due to invalid owned object inputs.
+                                    // Fetch the detailed error from the rejection reason cache.
+                                    return Ok(WaitForEffectsResponse::Rejected {
+                                        error: epoch_store
+                                            .get_rejection_vote_reason(consensus_position),
+                                    });
                                 }
                             }
                         }
