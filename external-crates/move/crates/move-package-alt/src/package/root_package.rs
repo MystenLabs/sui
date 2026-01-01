@@ -121,7 +121,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let ephemeral_file = config
             .load_type
             .ephemeral_file()
-            .map(|path| EphemeralPubfilePath::new(path))
+            .map(EphemeralPubfilePath::new)
             .transpose()?;
 
         let output_path = OutputPath::new(config.output_path.clone())?;
