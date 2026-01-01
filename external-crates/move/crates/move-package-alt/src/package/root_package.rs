@@ -970,6 +970,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // Reload root package, expecting an error
         let error = project.root_package_err("root").await;
+        assert_snapshot!(error, @"");
         assert!(error.contains("is dirty"));
     }
 

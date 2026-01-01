@@ -16,9 +16,9 @@ pub enum GitError {
     #[error(
         "The following cached dependency repository is dirty:
 
-        {repo}
+    {repo}
 
-        Please clean it up before proceeding or pass the `--allow-dirty` flag."
+Please clean it up before proceeding or pass the `--allow-dirty` flag."
     )]
     Dirty { repo: String },
 
