@@ -12,7 +12,7 @@ use crate::{
     errors::{FileHandle, PackageError, PackageResult, fmt_truncated},
     flavor::MoveFlavor,
     git::{GitCache, GitError, GitTree},
-    package::paths::PackagePath,
+    package::{package_loader::PackageConfig, paths::PackagePath},
     schema::{
         EnvironmentID, EnvironmentName, LocalDepInfo, LockfileDependencyInfo, LockfileGitDepInfo,
         ManifestGitDependency, ModeName, OnChainDepInfo, PackageName, RootDepInfo,
@@ -241,19 +241,20 @@ impl Pinned {
 impl ManifestGitDependency {
     /// Replace the commit-ish [self.rev] with a commit (i.e. a SHA). Requires fetching the git
     /// repository
-    async fn pin(&self) -> PackageResult<Pinned> {
-        let cache = GitCache::new();
+    async fn pin(&self, config: &PackageConfig) -> PackageResult<Pinned> {
+        let cache = GitCache::new(&config.cache_dir);
         let ManifestGitDependency { repo, rev, subdir } = self.clone();
         let tree = cache.resolve_to_tree(&repo, &rev, Some(subdir)).await?;
         Ok(Pinned::Git(PinnedGitDependency { inner: tree }))
     }
 }
 
-impl TryFrom<LockfileGitDepInfo> for PinnedGitDependency {
-    type Error = GitError;
-
-    fn try_from(value: LockfileGitDepInfo) -> Result<Self, Self::Error> {
-        let cache = GitCache::new();
+impl PinnedGitDependency {
+    pub fn from_lockfile(
+        value: LockfileGitDepInfo,
+        config: &PackageConfig,
+    ) -> Result<Self, GitError> {
+        let cache = GitCache::new(config.cache_dir.join("git"));
         let LockfileGitDepInfo { repo, rev, path } = value;
         let tree = cache.tree_for_sha(repo, rev, Some(path))?;
         Ok(PinnedGitDependency { inner: tree })
@@ -580,7 +581,8 @@ mod tests {
         sha: impl AsRef<str>,
         path: impl AsRef<Path>,
     ) -> Pinned {
-        let cache = GitCache::new();
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new(cache_dir);
         let sha = GitSha::try_from(sha.as_ref().to_string()).expect("valid sha");
         Pinned::Git(PinnedGitDependency {
             inner: cache

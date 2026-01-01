@@ -21,20 +21,6 @@ use crate::{
 
 use super::errors::{GitError, GitResult};
 
-use once_cell::sync::OnceCell;
-
-static CONFIG: OnceCell<String> = OnceCell::new();
-
-// TODO: this should be moved into [crate::dependency::git]
-pub(crate) fn get_cache_path() -> &'static str {
-    CONFIG.get_or_init(|| {
-        PathBuf::from(move_command_line_common::env::MOVE_HOME.clone())
-            .join("git")
-            .to_string_lossy()
-            .to_string()
-    })
-}
-
 /// A cache that manages a collection of downloaded git trees
 #[derive(Debug)]
 pub struct GitCache {
@@ -59,20 +45,10 @@ pub struct GitTree {
     path_to_repo: PathBuf,
 }
 
-impl Default for GitCache {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl GitCache {
-    pub fn new() -> Self {
-        Self {
-            root_dir: get_cache_path().into(),
-        }
-    }
-    /// Create or load the cache at `root_dir`
-    pub fn new_from_dir(root_dir: impl AsRef<Path>) -> Self {
+    /// Create or load the cache at `root_dir` (e.g. `~/.move/git`). The cache will create a
+    /// `lookups` subdirectory as well as a directory for each `GitTree`.
+    pub fn new(root_dir: impl AsRef<Path>) -> Self {
         Self {
             root_dir: root_dir.as_ref().to_path_buf(),
         }
@@ -80,8 +56,8 @@ impl GitCache {
 
     /// Resolve the git committish `rev` (branch, tag, or sha) from a repository at the remote
     /// `repo` to a commit hash. This will make a remote call so network is required.
-    pub async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
-        find_sha(repo, rev).await
+    async fn find_sha(cache_dir: &Path, repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
+        find_sha(cache_dir, repo, rev).await
     }
 
     /// Helper function to find the sha and then construct a [GitTree]. If `rev` is `None`, the
@@ -92,7 +68,7 @@ impl GitCache {
         rev: &Option<String>,
         path_in_repo: Option<PathBuf>,
     ) -> GitResult<GitTree> {
-        let sha = Self::find_sha(repo, rev).await?;
+        let sha = Self::find_sha(self.root_dir.as_path(), repo, rev).await?;
         self.tree_for_sha(repo.to_string(), sha.clone(), path_in_repo.clone())
     }
 
@@ -287,7 +263,7 @@ fn url_to_file_name(url: &str) -> String {
 
 /// Resolve the git committish `rev` (branch, tag, or sha) from a repository at the remote
 /// `repo` to a 40-character commit SHA. This will make a remote call so network is required.
-async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
+async fn find_sha(cache_dir: &Path, repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
     if let Some(r) = rev {
         if let Ok(sha) = GitSha::try_from(r.to_string()) {
             return Ok(sha);
@@ -295,7 +271,7 @@ async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
 
         // if the sha is a short sha, then the repo will be cloned to a temp directory and full
         // history will be downloaded to retrieve the full sha
-        if let Ok(Some(full_sha)) = try_find_full_sha(repo, r).await {
+        if let Ok(Some(full_sha)) = try_find_full_sha(cache_dir, repo, r).await {
             return Ok(full_sha);
         }
 
@@ -420,15 +396,16 @@ async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
 }
 
 /// If the given rev is a short sha, clone the repository to a temp dir and return the full sha.
-async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
+/// Repositories are downloaded to `cache_root/lookups` so that the same repo isn't cloned multiple
+/// times.
+async fn try_find_full_sha(cache_root: &Path, repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
     debug!("try_find_full_sha for `{rev}` in `{repo}`");
     if rev.chars().any(|c| !c.is_ascii_hexdigit()) {
         // not a sha!
         return Ok(None);
     }
 
-    let git_cache_path = PathBuf::from(get_cache_path());
-    let lookup_path = git_cache_path.join("lookups");
+    let lookup_path = PathBuf::from(cache_root.join("lookups"));
 
     std::fs::create_dir_all(&lookup_path).map_err(GitError::TempDirectory)?;
 
@@ -541,7 +518,7 @@ mod tests {
         commit.branch("branch-name").await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         // Pass in a branch name
         let git_tree = cache
@@ -566,7 +543,7 @@ mod tests {
         let commit = project.commit(|project| project.add_packages(["a"])).await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         // Pass in a short SHA
         let git_tree = cache
@@ -594,7 +571,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         // Pass in a commit SHA
         let git_tree = cache
@@ -622,7 +599,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree_a = cache
             .resolve_to_tree(
@@ -662,7 +639,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         // valid sha, but incorrect for repo:
         let wrong_sha = "0".repeat(40);
@@ -692,7 +669,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(
@@ -714,7 +691,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(&project.repo_path_str(), &None, None)
@@ -733,7 +710,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(
@@ -764,7 +741,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(
@@ -802,7 +779,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(
@@ -837,7 +814,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(
@@ -874,7 +851,7 @@ mod tests {
         commit1.tag(tag).await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(&project.repo_path_str(), &Some(tag.to_string()), None)
@@ -911,8 +888,10 @@ mod tests {
             .commit(|project| project.add_packages(["pkg_git"]))
             .await;
 
+        let cache = tempdir().unwrap();
+
         assert_eq!(
-            try_find_full_sha(&project.repo_path_str(), &commit1.short_sha())
+            try_find_full_sha(cache.path(), &project.repo_path_str(), &commit1.short_sha())
                 .await
                 .unwrap()
                 .unwrap()
@@ -928,7 +907,7 @@ mod tests {
         assert_ne!(commit1.short_sha(), commit2.short_sha());
 
         assert_eq!(
-            try_find_full_sha(&project.repo_path_str(), &commit2.short_sha())
+            try_find_full_sha(cache.path(), &project.repo_path_str(), &commit2.short_sha())
                 .await
                 .unwrap()
                 .unwrap()
@@ -949,7 +928,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
 
         let git_tree = cache
             .resolve_to_tree(&project.repo_path_str(), &None, Some(PathBuf::from("")))
@@ -980,7 +959,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
         let git_tree = cache
             .resolve_to_tree(&project.repo_path_str(), &None, Some(PathBuf::from("a")))
             .await
@@ -1001,7 +980,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
         let tree_a = cache
             .resolve_to_tree(&project.repo_path_str(), &None, Some(PathBuf::from("a")))
             .await
@@ -1027,7 +1006,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
         let tree_a = cache
             .resolve_to_tree(&project.repo_path_str(), &None, Some(PathBuf::from("a")))
             .await
@@ -1061,7 +1040,7 @@ mod tests {
             .await;
 
         let cache_dir = tempdir().unwrap();
-        let cache = GitCache::new_from_dir(cache_dir.path());
+        let cache = GitCache::new(cache_dir.path());
         let tree_d = cache
             .resolve_to_tree(
                 &project.repo_path_str(),

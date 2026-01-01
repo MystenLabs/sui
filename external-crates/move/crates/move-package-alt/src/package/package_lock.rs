@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tracing::{debug, error};
 
-use crate::git::get_cache_path;
 use crate::logging::user_error;
 
 #[derive(Debug, Error)]
@@ -36,20 +35,19 @@ pub struct PackageSystemLock {
 
 impl PackageSystemLock {
     /// Acquire a lock for doing git operations sequentially
-    pub fn new_for_git(repo_id: &str) -> LockResult<Self> {
-        let path = cache_path_for(repo_id)?;
-        Self::new_for_path(&path, true).map_err(|source| LockError::CacheLockError {
+    pub fn new_for_git(lock_root: &Path, repo_id: &str) -> LockResult<Self> {
+        let git_lock_path = cache_path_for(lock_root, repo_id)?;
+        Self::new_for_path(&git_lock_path, true).map_err(|source| LockError::CacheLockError {
             name: repo_id.to_string(),
-            path,
+            path: git_lock_path,
             source,
         })
     }
 
     /// Acquire a lock corresponding to the package contained in the directory `path`
     /// We do sequential operations per package (we acquire lock per package path).
-    pub fn new_for_project(path: &Path) -> LockResult<Self> {
-        let project_lock_path = cache_path_for(digest_path(path).as_str())
-            .expect("failed to get git cache folder lock");
+    pub fn new_for_project(lock_root: &Path, path: &Path) -> LockResult<Self> {
+        let project_lock_path = cache_path_for(lock_root, digest_path(path).as_str())?;
         Self::new_for_path(&project_lock_path, true).map_err(|source| LockError::PackageLockError {
             package: path.to_path_buf(),
             lock: project_lock_path,
@@ -86,12 +84,11 @@ impl Drop for PackageSystemLock {
     }
 }
 
-fn cache_path_for(name: &str) -> LockResult<PathBuf> {
-    let cache_path = PathBuf::from(get_cache_path());
-    let project_lock_path = cache_path.join(format!(".{name}.lock"));
+fn cache_path_for(lock_root: &Path, name: &str) -> LockResult<PathBuf> {
+    let project_lock_path = lock_root.join(format!(".{name}.lock"));
 
     // create dir if not exists.
-    std::fs::create_dir_all(&cache_path).map_err(|source| LockError::CacheLockError {
+    std::fs::create_dir_all(&lock_root).map_err(|source| LockError::CacheLockError {
         name: name.to_string(),
         path: project_lock_path.clone(),
         source,

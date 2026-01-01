@@ -904,6 +904,28 @@ pkg_b = { local = "../pkg_b" }"#,
         git.rev.to_string()
     }
 
+    /// Using `allow_dirty` when loading a package succeeds even if a dependency repo is dirty
+    #[test(tokio::test)]
+    async fn allow_dirty() {
+        todo!()
+    }
+
+    /// Loading a package fails without `allow_dirty` if a dependency repo is dirty
+    #[test(tokio::test)]
+    async fn disallow_dirty() {
+        let repo = git::new().await;
+        let commit = repo
+            .commit(|project| project.add_packages(["git_dep"]))
+            .await;
+        commit.branch("branch-name").await;
+
+        let project = TestPackageGraph::new(["root"])
+            .add_git_dep("root", &repo, "git_dep", "branch-name", |dep| dep)
+            .build();
+
+        h
+    }
+
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // Ephemeral loading and storing ///////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////

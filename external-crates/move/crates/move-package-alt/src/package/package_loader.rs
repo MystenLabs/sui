@@ -4,7 +4,7 @@ use crate::{
     errors::PackageResult,
     flavor::MoveFlavor,
     package::{EnvironmentID, EnvironmentName, RootPackage, block_on},
-    schema::{CachedPackageInfo, Environment, ManifestDependencyInfo, ModeName},
+    schema::{Environment, ModeName},
 };
 
 /// A Builder for the [RootPackage] type
@@ -40,7 +40,7 @@ pub struct PackageConfig {
     pub ignore_digests: bool,
 
     /// The directory for the cache (defaults to ~/.move)
-    pub cache_dir: Option<PathBuf>,
+    pub cache_dir: PathBuf,
 
     /// Don't fail if git cache is dirty
     pub allow_dirty: bool,
@@ -77,7 +77,7 @@ impl PackageLoader {
             modes: vec![],
             force_repin: false,
             ignore_digests: false,
-            cache_dir: None,
+            cache_dir: get_cache_path(),
             allow_dirty: false,
         };
         Self { config }
@@ -112,6 +112,12 @@ impl PackageLoader {
     /// Write the output (generated pubfiles, lockfiles, etc) to `dir` instead of the input path
     pub fn output_path(mut self, output_dir: impl AsRef<Path>) -> Self {
         self.config.output_path = output_dir.as_ref().to_path_buf();
+        self
+    }
+
+    /// Use `cache_dir` for the git cache (instead of `~/.move`)
+    pub fn cache_dir(mut self, cache_dir: impl AsRef<Path>) -> Self {
+        self.config.cache_dir = cache_dir.as_ref().to_path_buf();
         self
     }
 
@@ -163,7 +169,7 @@ impl PackageConfig {
             modes,
             force_repin: false,
             ignore_digests: false,
-            cache_dir: None,
+            cache_dir: get_cache_path(),
             allow_dirty: false,
         }
     }
@@ -177,4 +183,9 @@ impl LoadType {
             LoadType::Ephemeral { ephemeral_file, .. } => Some(ephemeral_file),
         }
     }
+}
+
+/// Returns `~/.move`
+fn get_cache_path() -> PathBuf {
+    PathBuf::from(move_command_line_common::env::MOVE_HOME.clone())
 }
