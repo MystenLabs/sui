@@ -21,7 +21,18 @@
   }
 }
 
-//# run-graphql --cursors bcs(1u8,0x2) bcs(2u8,0x2)
+//# run-graphql --cursors bcs(1u8,0)
+{ # Fetch an epoch
+  node(id: "@{cursor_0}") {
+    id
+    ... on Epoch {
+      epochId
+      startTimestamp
+    }
+  }
+}
+
+//# run-graphql --cursors bcs(2u8,0x2) bcs(3u8,0x2)
 { # Fetch a package
   package: node(id: "@{cursor_0}") {
     id
@@ -48,7 +59,7 @@
   }
 }
 
-//# run-graphql --cursors bcs(2u8,@{obj_0_0})
+//# run-graphql --cursors bcs(3u8,@{obj_0_0})
 { # Fetch an object
   node(id: "@{cursor_0}") {
     id

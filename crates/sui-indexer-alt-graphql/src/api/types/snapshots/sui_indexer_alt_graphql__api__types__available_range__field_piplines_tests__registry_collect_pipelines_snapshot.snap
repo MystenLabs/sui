@@ -446,6 +446,9 @@ DynamicField.value
 EndOfEpochTransaction.transactions
   => {}
 
+Epoch.id
+  => {}
+
 Epoch.epochId
   => {}
 

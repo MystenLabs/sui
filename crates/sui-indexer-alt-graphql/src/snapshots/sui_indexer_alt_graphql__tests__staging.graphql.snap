@@ -1110,7 +1110,7 @@ During a particular epoch the following data is fixed:
 - system package versions,
 - validators in the committee.
 """
-type Epoch {
+type Epoch implements Node {
 	"""
 	The epoch's corresponding checkpoints.
 	"""
@@ -1142,6 +1142,7 @@ type Epoch {
 	This fund is used to redistribute storage fees from past transactions to future validators.
 	"""
 	fundSize: BigInt
+	id: ID!
 	"""
 	A commitment by the committee at the end of epoch on the contents of the live object set at that time.
 	This can be used to verify state snapshots.
