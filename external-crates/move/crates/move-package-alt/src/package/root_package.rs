@@ -904,6 +904,75 @@ pkg_b = { local = "../pkg_b" }"#,
         git.rev.to_string()
     }
 
+    /// Using `allow_dirty` when loading a package succeeds even if a dependency repo is dirty
+    /// See also [disallow_dirty]
+    #[test(tokio::test)]
+    async fn allow_dirty() {
+        let repo = git::new().await;
+        let commit = repo
+            .commit(|project| project.add_packages(["git_dep"]))
+            .await;
+        commit.branch("branch-name").await;
+
+        let project = TestPackageGraph::new(["root"])
+            .add_git_dep("root", &repo, "git_dep", "branch-name", |dep| dep)
+            .build();
+
+        // Get the dependency cached and find its path
+        let root_package = project.root_package("root").await;
+        let cached_dep_path = root_package
+            .packages()
+            .iter()
+            .find(|pkg| pkg.name().as_str() == "git_dep")
+            .unwrap()
+            .path()
+            .clone();
+
+        drop(root_package);
+
+        // Dirty the cached package
+        std::fs::write(cached_dep_path.path().join("dirty_file.txt"), "dirty stuff").unwrap();
+
+        // Reload root package with `allow_dirty`; should succeed
+        let _ = project
+            .root_package_with_config("root", |loader| loader.allow_dirty(true))
+            .await;
+    }
+
+    /// Loading a package fails without `allow_dirty` if a dependency repo is dirty
+    /// See also [allow_dirty]
+    #[test(tokio::test)]
+    async fn disallow_dirty() {
+        let repo = git::new().await;
+        let commit = repo
+            .commit(|project| project.add_packages(["git_dep"]))
+            .await;
+        commit.branch("branch-name").await;
+
+        let project = TestPackageGraph::new(["root"])
+            .add_git_dep("root", &repo, "git_dep", "branch-name", |dep| dep)
+            .build();
+
+        // Get the dependency cached and find its path
+        let root_package = project.root_package("root").await;
+        let cached_dep_path = root_package
+            .packages()
+            .iter()
+            .find(|pkg| pkg.name().as_str() == "git_dep")
+            .unwrap()
+            .path()
+            .clone();
+
+        drop(root_package);
+
+        // Dirty the cached package
+        std::fs::write(cached_dep_path.path().join("dirty_file.txt"), "dirty stuff").unwrap();
+
+        // Reload root package, expecting an error
+        let error = project.root_package_err("root").await;
+        assert!(error.contains("is dirty"));
+    }
+
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // Ephemeral loading and storing ///////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////

@@ -4,7 +4,7 @@ use crate::{
     errors::PackageResult,
     flavor::MoveFlavor,
     package::{EnvironmentID, EnvironmentName, RootPackage, block_on},
-    schema::{CachedPackageInfo, Environment, ManifestDependencyInfo, ModeName},
+    schema::{Environment, ModeName},
 };
 
 /// A Builder for the [RootPackage] type
@@ -38,9 +38,6 @@ pub struct PackageConfig {
 
     /// Use the lockfile even if the manifest digests are out of date
     pub ignore_digests: bool,
-
-    /// The directory for the cache (defaults to ~/.move)
-    pub cache_dir: Option<PathBuf>,
 
     /// Don't fail if git cache is dirty
     pub allow_dirty: bool,
@@ -77,7 +74,6 @@ impl PackageLoader {
             modes: vec![],
             force_repin: false,
             ignore_digests: false,
-            cache_dir: None,
             allow_dirty: false,
         };
         Self { config }
@@ -163,7 +159,6 @@ impl PackageConfig {
             modes,
             force_repin: false,
             ignore_digests: false,
-            cache_dir: None,
             allow_dirty: false,
         }
     }

@@ -58,7 +58,7 @@ use crate::{
     },
     package::{
         EnvironmentID, EnvironmentName, RootPackage,
-        package_loader::{LoadType, PackageConfig},
+        package_loader::{LoadType, PackageConfig, PackageLoader},
         package_lock::PackageSystemLock,
         paths::PackagePath,
     },
@@ -785,7 +785,6 @@ impl Scenario {
             modes: vec![],
             force_repin: false,
             ignore_digests: false,
-            cache_dir: None,
             allow_dirty: false,
         };
         let mtx = path.lock().unwrap();
@@ -802,6 +801,21 @@ impl Scenario {
     /// Loads the root package for `package` in the default environment and with no modes
     pub async fn root_package(&self, package: impl AsRef<str>) -> RootPackage<Vanilla> {
         self.try_root_package(package)
+            .await
+            .map_err(|e| e.emit())
+            .expect("could load package")
+    }
+
+    pub async fn root_package_with_config(
+        &self,
+        package: impl AsRef<str>,
+        config: impl Fn(PackageLoader) -> PackageLoader,
+    ) -> RootPackage<Vanilla> {
+        let loader = PackageLoader::new(self.path_for(package), default_environment());
+        let loader = config(loader);
+
+        loader
+            .load()
             .await
             .map_err(|e| e.emit())
             .expect("could load package")

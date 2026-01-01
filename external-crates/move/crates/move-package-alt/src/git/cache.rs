@@ -242,15 +242,7 @@ impl GitTree {
             &self.path_in_repo.to_string_lossy()
         };
 
-        let Ok(output) = self
-            .run_git(&[
-                "status",
-                "--porcelain",
-                "--untracked-files=no",
-                path_in_repo,
-            ])
-            .await
-        else {
+        let Ok(output) = self.run_git(&["status", "--porcelain", path_in_repo]).await else {
             // if there's an error, the git repo has probably been tampered with - it's dirty
             return true;
         };
