@@ -3,6 +3,7 @@
 
 use expect_test::expect;
 use move_core_types::account_address::AccountAddress;
+use move_package_alt::package::package_loader::PackageLoader;
 use std::collections::HashMap;
 use std::{fs, io, path::Path};
 use std::{path::PathBuf, str};
