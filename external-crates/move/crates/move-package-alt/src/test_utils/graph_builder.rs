@@ -58,9 +58,9 @@ use crate::{
     },
     package::{
         EnvironmentID, EnvironmentName, RootPackage,
+        package_loader::{LoadType, PackageConfig},
         package_lock::PackageSystemLock,
         paths::PackagePath,
-        root_package::{LoadType, PackageConfig},
     },
     schema::{Environment, ModeName, OriginalID, PublishAddresses, PublishedID},
     test_utils::{Project, project},

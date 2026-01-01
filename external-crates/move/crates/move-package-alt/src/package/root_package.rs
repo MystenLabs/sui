@@ -160,7 +160,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ///
     /// This helps validate:
     /// 1. TODO: Fill this in! (deduplicate nodes etc)
-    async fn validate_and_construct(mut config: PackageConfig) -> PackageResult<Self> {
+    pub(crate) async fn validate_and_construct(mut config: PackageConfig) -> PackageResult<Self> {
         let input_path = PackagePath::new(config.input_path.clone())?;
         let mutex = input_path.lock()?;
 

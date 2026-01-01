@@ -42,7 +42,7 @@ pub struct GitCache {
 }
 
 /// A subdirectory within a particular commit of a git repository. The files may or may not have
-/// been downloaded, but you can ensure that they have by calling `fetch()`
+/// been downloaded, but you can ensure that they have by calling `checkout_repo(false)`
 #[derive(Clone, Debug)]
 pub struct GitTree {
     /// Repository URL
@@ -554,7 +554,7 @@ mod tests {
             .unwrap();
 
         // Fetch the dependency
-        let _ = git_tree.fetch().await.unwrap();
+        let _ = git_tree.checkout_repo(false).await.unwrap();
 
         // Verify only pkg_a was checked out
         assert_exactly_paths(git_tree.repo_fs_path(), ["pkg_a/Move.toml"]);
@@ -579,7 +579,7 @@ mod tests {
             .unwrap();
 
         // Fetch the dependency
-        let _ = git_tree.fetch().await.unwrap();
+        let _ = git_tree.checkout_repo(false).await.unwrap();
 
         // Verify only pkg_a was checked out
         assert_exactly_paths(git_tree.repo_fs_path(), ["a/Move.toml"]);
@@ -607,7 +607,7 @@ mod tests {
             .unwrap();
 
         // Fetch the dependency
-        let _ = git_tree.fetch().await.unwrap();
+        let _ = git_tree.checkout_repo(false).await.unwrap();
 
         // Verify only pkg_a was checked out
         assert_exactly_paths(git_tree.repo_fs_path(), ["pkg_a/Move.toml"]);
@@ -643,8 +643,8 @@ mod tests {
             .unwrap();
 
         // Fetch the dependencies
-        git_tree_a.fetch().await.unwrap();
-        git_tree_b.fetch().await.unwrap();
+        git_tree_a.checkout_repo(false).await.unwrap();
+        git_tree_b.checkout_repo(false).await.unwrap();
 
         assert_eq!(git_tree_a.repo_fs_path(), git_tree_b.repo_fs_path());
         assert_exactly_paths(
@@ -678,7 +678,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result = git_tree.fetch().await;
+        let result = git_tree.checkout_repo(false).await;
 
         assert!(result.is_err());
     }
@@ -721,7 +721,7 @@ mod tests {
             .await
             .unwrap();
 
-        git_tree.fetch().await.unwrap();
+        git_tree.checkout_repo(false).await.unwrap();
     }
 
     /// Fetching should fail if a dirty checkout exists
@@ -751,7 +751,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = git_tree.fetch().await;
+        let result = git_tree.checkout_repo(false).await;
         assert!(result.is_err());
     }
 
@@ -776,7 +776,7 @@ mod tests {
             .unwrap();
 
         // First do a clean checkout
-        git_tree.fetch().await.unwrap();
+        git_tree.checkout_repo(false).await.unwrap();
 
         // Now dirty the checkout
         debug!(
@@ -790,7 +790,7 @@ mod tests {
         .unwrap();
 
         // fetch_allow_dirty should succeed despite the dirty state
-        git_tree.fetch_allow_dirty().await.unwrap();
+        git_tree.checkout_repo(true).await.unwrap();
     }
 
     /// Fetching should succeed if a clean checkout exists
@@ -813,7 +813,7 @@ mod tests {
             .await
             .unwrap();
 
-        git_tree.fetch().await.unwrap();
+        git_tree.checkout_repo(false).await.unwrap();
 
         // same as above
         let git_tree = cache
@@ -825,7 +825,7 @@ mod tests {
             .await
             .unwrap();
 
-        git_tree.fetch().await.unwrap();
+        git_tree.checkout_repo(false).await.unwrap();
     }
 
     /// Fetching should succeed if the path is clean but other paths are not
@@ -849,7 +849,7 @@ mod tests {
             .unwrap();
 
         // fetch
-        git_tree.fetch().await.unwrap();
+        git_tree.checkout_repo(false).await.unwrap();
 
         // create dirty file in dep's parent directory
         fs::create_dir_all(git_tree.path_to_tree().parent().unwrap()).unwrap();
@@ -860,7 +860,7 @@ mod tests {
         .unwrap();
 
         // fetch again - subtree should still be clean so it should succeed
-        git_tree.fetch().await.unwrap();
+        git_tree.checkout_repo(false).await.unwrap();
     }
 
     #[test(tokio::test)]
@@ -881,7 +881,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result = git_tree.fetch().await;
+        let result = git_tree.checkout_repo(false).await;
         assert!(result.is_ok());
 
         let commit2 = project
@@ -900,7 +900,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result = git_tree.fetch().await;
+        let result = git_tree.checkout_repo(false).await;
         assert!(result.is_ok());
     }
 
@@ -957,7 +957,7 @@ mod tests {
             .unwrap();
 
         // Fetch the dependency
-        let _checkout_path = git_tree.fetch().await.unwrap();
+        let _checkout_path = git_tree.checkout_repo(false).await.unwrap();
 
         // Verify only a was checked out
         assert_exactly_paths(git_tree.repo_fs_path(), ["a/Move.toml", "a/sources/a.move"]);
@@ -987,7 +987,7 @@ mod tests {
             .unwrap();
 
         // Fetch the dependency
-        let _checkout_path = git_tree.fetch().await.unwrap();
+        let _checkout_path = git_tree.checkout_repo(false).await.unwrap();
         // Verify only a was checked out
         assert_exactly_paths(git_tree.repo_fs_path(), ["a/Move.toml"]);
     }
@@ -1012,8 +1012,8 @@ mod tests {
             .await
             .unwrap();
 
-        tree_a.fetch().await.unwrap();
-        tree_b.fetch().await.unwrap();
+        tree_a.checkout_repo(false).await.unwrap();
+        tree_b.checkout_repo(false).await.unwrap();
 
         assert_exactly_paths(tree_a.repo_fs_path(), ["a/Move.toml", "b/Move.toml"]);
     }
@@ -1038,8 +1038,8 @@ mod tests {
             .await
             .unwrap();
 
-        tree_root.fetch().await.unwrap();
-        tree_a.fetch().await.unwrap();
+        tree_root.checkout_repo(false).await.unwrap();
+        tree_a.checkout_repo(false).await.unwrap();
 
         assert_exactly_paths(
             tree_a.repo_fs_path(),
@@ -1071,7 +1071,7 @@ mod tests {
             .await
             .unwrap();
 
-        tree_d.fetch().await.unwrap();
+        tree_d.checkout_repo(false).await.unwrap();
 
         // note that `a/Move.toml` should be included because git sparse-checkout always includes
         // the files in directories that are on the path to the added files, but `a/e/Move.toml`

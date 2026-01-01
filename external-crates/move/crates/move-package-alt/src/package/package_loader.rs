@@ -3,17 +3,17 @@ use std::path::{Path, PathBuf};
 use crate::{
     errors::PackageResult,
     flavor::MoveFlavor,
-    package::{EnvironmentID, EnvironmentName, RootPackage},
-    schema::{Environment, ModeName},
+    package::{EnvironmentID, EnvironmentName, RootPackage, block_on},
+    schema::{CachedPackageInfo, Environment, ManifestDependencyInfo, ModeName},
 };
 
-/// A
+/// A Builder for the [RootPackage] type
 pub struct PackageLoader {
     config: PackageConfig,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct PackageConfig {
+pub struct PackageConfig {
     /// The path to read all input files from (e.g. lockfiles, pubfiles, etc). If this path is
     /// different from `output_path`, the package system won't touch any files here Note that in
     /// the case of ephemeral loads, `self.load_type.ephemeral_file` may also be read
@@ -122,17 +122,21 @@ impl PackageLoader {
     /// missing or out-of-date. However, this behavior can be changed using [Self::ignore_digests] and
     /// [Self::force_repin]
     pub async fn load<F: MoveFlavor>(self) -> PackageResult<RootPackage<F>> {
-        todo!()
+        RootPackage::validate_and_construct(self.config).await
     }
 
     /// Block the current thread and call [Self::load]
     pub fn load_sync<F: MoveFlavor>(self) -> PackageResult<RootPackage<F>> {
-        todo!()
+        block_on!(RootPackage::validate_and_construct(self.config))
+    }
+
+    pub(crate) fn config(&self) -> &PackageConfig {
+        &self.config
     }
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum LoadType {
+pub enum LoadType {
     Persistent {
         env: EnvironmentName,
     },

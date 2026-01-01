@@ -18,7 +18,7 @@ use super::paths::PackagePath;
 use crate::{
     compatibility::legacy::LegacyData,
     dependency::Pinned,
-    package::manifest::ManifestError,
+    package::{manifest::ManifestError, package_loader::PackageLoader},
     schema::{
         CachedPackageInfo, DefaultDependency, ManifestDependencyInfo, ParsedManifest, Publication,
     },
@@ -31,7 +31,7 @@ use crate::{
     package::manifest::Digest,
     schema::{Environment, OriginalID, PackageMetadata, PackageName, PublishedID},
 };
-use crate::{errors::FileHandle, package::root_package::PackageConfig};
+use crate::{errors::FileHandle, package::package_loader::PackageConfig};
 
 // TODO: is this the right way to handle this?
 static DUMMY_ADDRESSES: LazyLock<Mutex<u16>> = LazyLock::new(|| Mutex::new(0x1000));
@@ -318,7 +318,6 @@ impl<F: MoveFlavor> Package<F> {
 pub async fn cache_package<F: MoveFlavor>(
     env: &Environment,
     manifest_dep: &ManifestDependencyInfo,
-    config: &PackageConfig,
 ) -> PackageResult<CachedPackageInfo> {
     // We need some file handles and things to give context to the dep loading system
     let tempdir = tempdir().expect("can create a temporary directory");
@@ -345,11 +344,17 @@ pub async fn cache_package<F: MoveFlavor>(
         CombinedDependency::from_default(toml_handle, package, env.name().clone(), default_dep);
 
     // pin
-    let root = Pinned::Root(dummy_path);
+    let root = Pinned::Root(dummy_path.clone());
     let deps = PinnedDependencyInfo::pin::<F>(&root, vec![combined], env.id()).await?;
 
     // load
-    let package = Package::<F>::load(deps[0].as_ref().clone(), env, &mtx, &config).await?;
+    let package = Package::<F>::load(
+        deps[0].as_ref().clone(),
+        env,
+        &mtx,
+        PackageLoader::new(dummy_path.path(), env.clone()).config(),
+    )
+    .await?;
 
     // summarize
     Ok(CachedPackageInfo {
