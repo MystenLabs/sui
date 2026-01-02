@@ -459,7 +459,7 @@ impl CoinMetadata {
                     regulated_state: Some(RegulatedState::Regulated),
                     allow_global_pause: *allow_global_pause,
                     deny_cap: Some(MoveObject::from_super(Object::with_address(
-                        scope.without_root_version(),
+                        scope.without_root_bound(),
                         (*cap).into(),
                     ))),
                 });
@@ -483,8 +483,7 @@ impl CoinMetadata {
         }
 
         let type_ = RegulatedCoinMetadata::type_(*coin_type.clone());
-        let Some(object) = Object::singleton(ctx, scope.without_root_version(), type_).await?
-        else {
+        let Some(object) = Object::singleton(ctx, scope.without_root_bound(), type_).await? else {
             // If there is no RegulatedCoinMetadata object, the coin is unregulated.
             return Ok(RegulatedFields {
                 regulated_state: Some(RegulatedState::Unregulated),
@@ -515,7 +514,7 @@ impl CoinMetadata {
             regulated_state: Some(RegulatedState::Regulated),
             allow_global_pause: None,
             deny_cap: Some(MoveObject::from_super(Object::with_address(
-                scope.without_root_version(),
+                scope.without_root_bound(),
                 metadata.deny_cap_object.bytes.into(),
             ))),
         })
@@ -570,7 +569,7 @@ impl CoinMetadata {
         }
 
         let type_ = TreasuryCap::type_(*coin_type.clone());
-        let scope = self.super_.super_.super_.scope.without_root_version();
+        let scope = self.super_.super_.super_.scope.without_root_bound();
         let Some(object) = Object::singleton(ctx, scope, type_).await? else {
             return Ok(SupplyFields::default());
         };

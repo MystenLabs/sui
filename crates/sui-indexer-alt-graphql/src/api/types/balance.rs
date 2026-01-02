@@ -65,7 +65,7 @@ impl Balance {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
 
-        let Some(checkpoint) = scope.checkpoint_viewed_at() else {
+        let Some(checkpoint) = scope.root_checkpoint() else {
             return Ok(None);
         };
 
@@ -98,7 +98,7 @@ impl Balance {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
 
-        let Some(checkpoint) = scope.checkpoint_viewed_at() else {
+        let Some(checkpoint) = scope.root_checkpoint() else {
             return Ok(None);
         };
 
@@ -139,7 +139,7 @@ impl Balance {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
 
-        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+        let Some(root_checkpoint) = scope.root_checkpoint() else {
             return Ok(Connection::new(false, false));
         };
 
@@ -154,7 +154,7 @@ impl Balance {
             (Some(a), Some(b)) if a.0 != b.0 => {
                 return Err(bad_user_input(Error::CursorInconsistency(a.0, b.0)));
             }
-            (None, None) => checkpoint_viewed_at,
+            (None, None) => root_checkpoint,
             (Some(c), _) | (_, Some(c)) => c.0,
         };
 

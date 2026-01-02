@@ -434,11 +434,7 @@ impl DynamicField {
             let address: SuiAddress = bcs::from_bytes(&native.value_bytes)
                 .context("Failed to deserialize dynamic object field ID")?;
 
-            let object = if let Some(version) = native.scope.root_version() {
-                Object::version_bounded(ctx, native.scope.clone(), address, version.into()).await?
-            } else {
-                Object::latest(ctx, native.scope.clone(), address).await?
-            };
+            let object = Object::latest(ctx, native.scope.clone(), address).await?;
 
             let Some(object) = object else {
                 return Ok(None);
@@ -537,11 +533,7 @@ impl DynamicField {
 
         let field_id: SuiAddress = derive_dynamic_field_id(parent, &type_, &bcs.0)?.into();
 
-        let object = if let Some(version) = scope.root_version() {
-            Object::version_bounded(ctx, scope.clone(), field_id, version.into()).await
-        } else {
-            Object::latest(ctx, scope.clone(), field_id).await
-        }?;
+        let object = Object::latest(ctx, scope.clone(), field_id).await?;
 
         let Some(object) = object else {
             return Ok(None);
@@ -609,12 +601,9 @@ impl DynamicField {
         }
         .into();
 
-        let object = if let Some(version) = scope.root_version() {
-            Object::version_bounded(ctx, scope.clone(), field_id, version.into()).await
-        } else {
-            Object::latest(ctx, scope.clone(), field_id).await
-        }
-        .map_err(upcast)?;
+        let object = Object::latest(ctx, scope.clone(), field_id)
+            .await
+            .map_err(upcast)?;
 
         let Some(object) = object else {
             return Ok(None);

@@ -77,6 +77,7 @@ use crate::pagination::Page;
 use crate::pagination::PageLimits;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 /// Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
 #[allow(clippy::duplicated_attributes)]
@@ -519,7 +520,7 @@ impl Object {
 
             Object::paginate_by_version(
                 ctx,
-                self.super_.scope.without_root_version(),
+                self.super_.scope.without_root_bound(),
                 page,
                 self.super_.address,
                 filter,
@@ -560,7 +561,7 @@ impl Object {
 
             Object::paginate_by_version(
                 ctx,
-                self.super_.scope.without_root_version(),
+                self.super_.scope.without_root_bound(),
                 page,
                 self.super_.address,
                 filter,
@@ -612,7 +613,7 @@ impl Object {
         };
 
         Some(Ok(Transaction::with_digest(
-            self.super_.scope.without_root_version(),
+            self.super_.scope.without_root_bound(),
             contents.previous_transaction,
         )))
     }
@@ -733,9 +734,11 @@ impl Object {
                 .await
                 .map_err(upcast)
         } else if let Some(cp) = key.at_checkpoint {
-            let scope = scope
-                .with_checkpoint_viewed_at(ctx, cp.into())
-                .ok_or_else(|| bad_user_input(Error::Future(cp.into())))?;
+            // Validate checkpoint isn't in the future
+            let watermark: &Arc<Watermarks> = ctx.data()?;
+            if u64::from(cp) > watermark.high_watermark().checkpoint() {
+                return Err(bad_user_input(Error::Future(cp.into())));
+            }
 
             Self::checkpoint_bounded(ctx, scope, key.address, cp)
                 .await
@@ -745,9 +748,29 @@ impl Object {
         }
     }
 
+    /// Get the latest version of the object at the given address, respecting any root bounds in
+    /// scope.
+    ///
+    /// If a root version bound is set, fetches the object at that version.
+    /// Otherwise, fetches the object at the root checkpoint (which falls back to the checkpoint
+    /// being viewed).
+    pub(crate) async fn latest(
+        ctx: &Context<'_>,
+        scope: Scope,
+        address: SuiAddress,
+    ) -> Result<Option<Self>, RpcError> {
+        if let Some(version) = scope.root_version() {
+            Self::version_bounded(ctx, scope, address, version.into()).await
+        } else if let Some(cp) = scope.root_checkpoint() {
+            Self::checkpoint_bounded(ctx, scope, address, cp.into()).await
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Fetch the latest version of the object at the given address less than or equal to
     /// `root_version`.
-    pub(crate) async fn version_bounded(
+    async fn version_bounded(
         ctx: &Context<'_>,
         scope: Scope,
         address: SuiAddress,
@@ -769,23 +792,9 @@ impl Object {
         Object::from_stored_version(scope.with_root_version(root_version.into()), stored)
     }
 
-    /// Get the latest version of the object at the given address, as of the latest checkpoint
-    /// according to `scope`.
-    pub(crate) async fn latest(
-        ctx: &Context<'_>,
-        scope: Scope,
-        address: SuiAddress,
-    ) -> Result<Option<Self>, RpcError> {
-        let Some(cp) = scope.checkpoint_viewed_at() else {
-            return Ok(None);
-        };
-
-        Self::checkpoint_bounded(ctx, scope, address, cp.into()).await
-    }
-
     /// Fetch the latest version of the object at the given address as of the checkpoint with
     /// sequence number `at_checkpoint`.
-    pub(crate) async fn checkpoint_bounded(
+    async fn checkpoint_bounded(
         ctx: &Context<'_>,
         scope: Scope,
         address: SuiAddress,
@@ -804,7 +813,7 @@ impl Object {
             return Ok(None);
         };
 
-        Object::from_stored_version(scope, stored)
+        Object::from_stored_version(scope.with_root_checkpoint(at_checkpoint.into()), stored)
     }
 
     /// Load the object at the given ID and version from the store, and return it fully inflated
@@ -1010,7 +1019,8 @@ impl Object {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
-        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+
+        let Some(root_checkpoint) = scope.root_checkpoint() else {
             return Ok(Connection::new(false, false));
         };
 
@@ -1018,14 +1028,14 @@ impl Object {
         let consistent_reader: &ConsistentReader = ctx.data()?;
 
         // Figure out which checkpoint to pin results to, based on the pagination cursors and
-        // defaulting to the current scope. If both cursors are provided, they must agree on the
-        // checkpoint they are pinning, and this checkpoint must be at or below the scope's latest
-        // checkpoint.
+        // defaulting to the root checkpoint bound. If both cursors are provided, they must agree
+        // on the checkpoint they are pinning, and this checkpoint must be at or below the scope's
+        // root checkpoint.
         let checkpoint = match (page.after(), page.before()) {
             (Some(a), Some(b)) if a.0 != b.0 => {
                 return Err(bad_user_input(Error::CursorInconsistency(a.0, b.0)));
             }
-            (None, None) => checkpoint_viewed_at,
+            (None, None) => root_checkpoint,
             (Some(c), _) | (_, Some(c)) => c.0,
         };
 
