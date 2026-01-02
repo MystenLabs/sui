@@ -58,7 +58,7 @@ pub mod checked {
 
     /// Version aware enum for gas status.
     #[enum_dispatch(SuiGasStatusAPI)]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub enum SuiGasStatus {
         // V1 does not exists any longer as it was a pre mainnet version.
         // So we start the enum from V2
@@ -119,6 +119,12 @@ pub mod checked {
         pub fn gas_price(&self) -> u64 {
             match self {
                 Self::V2(status) => status.gas_price(),
+            }
+        }
+
+        pub fn set_inner_gas_model_version(&mut self, version: u64) {
+            match self {
+                Self::V2(status) => status.gas_status.gas_model_version = version,
             }
         }
     }

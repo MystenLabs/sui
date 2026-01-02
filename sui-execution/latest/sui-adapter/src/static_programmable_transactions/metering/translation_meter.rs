@@ -14,6 +14,20 @@ use sui_types::error::{ExecutionError, ExecutionErrorKind};
 pub struct TranslationMeter<'pc, 'gas> {
     protocol_config: &'pc ProtocolConfig,
     charger: &'gas mut GasCharger,
+    translation_gas: u64,
+}
+
+impl<'pc, 'gas> Drop for TranslationMeter<'pc, 'gas> {
+    fn drop(&mut self) {
+        let final_gas = self.charger.move_gas_status().gas_used_pre_gas_price();
+        if final_gas > self.translation_gas {
+            self.charger.move_gas_status_mut().set_transl_gas(
+                final_gas
+                    .checked_sub(self.translation_gas)
+                    .expect("translation gas should not fail"),
+            );
+        }
+    }
 }
 
 impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
@@ -21,9 +35,11 @@ impl<'pc, 'gas> TranslationMeter<'pc, 'gas> {
         protocol_config: &'pc ProtocolConfig,
         gas_charger: &'gas mut GasCharger,
     ) -> TranslationMeter<'pc, 'gas> {
+        let translation_gas = gas_charger.move_gas_status().gas_used_pre_gas_price();
         TranslationMeter {
             protocol_config,
             charger: gas_charger,
+            translation_gas,
         }
     }
 
