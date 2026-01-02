@@ -31,6 +31,7 @@ use super::{
         address::Address,
         checkpoint::{CCheckpoint, Checkpoint, filter::CheckpointFilter},
         coin_metadata::CoinMetadata,
+        dynamic_field::DynamicField,
         epoch::Epoch,
         event::{CEvent, Event, filter::EventFilter},
         move_object::MoveObject,
@@ -66,6 +67,22 @@ impl Query {
             Id::Checkpoint(s) => Checkpoint::with_sequence_number(scope, Some(s))
                 .map(Box::new)
                 .map(Node::Checkpoint),
+
+            Id::DynamicFieldByAddress(a) => {
+                let object = Object::with_address(scope, a);
+                DynamicField::from_object(&object, ctx)
+                    .await?
+                    .map(Box::new)
+                    .map(Node::DynamicField)
+            }
+
+            Id::DynamicFieldByRef(a, v, d) => {
+                let object = Object::with_ref(&scope, a, v, d);
+                DynamicField::from_object(&object, ctx)
+                    .await?
+                    .map(Box::new)
+                    .map(Node::DynamicField)
+            }
 
             Id::Epoch(e) => Some(Node::Epoch(Box::new(Epoch::with_id(scope, e)))),
 

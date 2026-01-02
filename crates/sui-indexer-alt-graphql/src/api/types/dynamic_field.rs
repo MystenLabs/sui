@@ -20,6 +20,7 @@ use crate::{
     api::scalars::{
         base64::Base64,
         big_int::BigInt,
+        id::Id,
         owner_kind::OwnerKind,
         sui_address::SuiAddress,
         type_filter::{TypeFilter, TypeInput},
@@ -97,6 +98,15 @@ pub(crate) enum DynamicFieldValue {
 /// - Dynamic object fields can only store objects (values that have the `key` ability, and an `id: UID` as its first field) that have `store`, but they will still be directly accessible off-chain via their ID after being attached as a field.
 #[Object]
 impl DynamicField {
+    pub(crate) async fn id(&self) -> Id {
+        let a = self.super_.super_.super_.address;
+        if let Some((v, d)) = self.super_.super_.version_digest {
+            Id::DynamicFieldByRef(a, v, d)
+        } else {
+            Id::DynamicFieldByAddress(a)
+        }
+    }
+
     /// The DynamicField's ID.
     pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
         self.super_.address(ctx).await
@@ -404,6 +414,18 @@ impl DynamicField {
             super_,
             native: OnceCell::new(),
         }
+    }
+
+    /// Create a dynamic field from an `Object`, after checking whether it is a dynamic field.
+    pub(crate) async fn from_object(
+        object: &Object,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Self>, RpcError> {
+        let Some(move_object) = MoveObject::from_object(object, ctx).await? else {
+            return Ok(None);
+        };
+
+        Self::from_move_object(&move_object, ctx).await
     }
 
     /// Create a dynamic field from a `MoveObject`, after checking whether it is a dynamic field.
