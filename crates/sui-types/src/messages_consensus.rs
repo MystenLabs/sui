@@ -610,16 +610,6 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn new_checkpoint_signature_message(data: CheckpointSignatureMessage) -> Self {
-        let mut hasher = DefaultHasher::new();
-        data.summary.auth_sig().signature.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_le_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::CheckpointSignature(Box::new(data)),
-        }
-    }
-
     pub fn new_checkpoint_signature_message_v2(data: CheckpointSignatureMessage) -> Self {
         let mut hasher = DefaultHasher::new();
         data.summary.auth_sig().signature.hash(&mut hasher);

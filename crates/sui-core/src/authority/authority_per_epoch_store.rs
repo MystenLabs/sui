@@ -537,9 +537,7 @@ pub struct AuthorityEpochTables {
     #[rename = "running_root_accumulators"]
     pub running_root_state_hash: DBMap<CheckpointSequenceNumber, GlobalStateHash>,
 
-    #[allow(dead_code)]
-    #[deprecated]
-    authority_capabilities: DBMap<(), ()>,
+    /// Record of the capabilities advertised by each authority.
     authority_capabilities_v2: DBMap<AuthorityName, AuthorityCapabilitiesV2>,
 
     /// Contains a single key, which overrides the value of
