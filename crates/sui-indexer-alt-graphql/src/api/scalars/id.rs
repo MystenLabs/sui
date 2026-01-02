@@ -14,6 +14,8 @@ pub(crate) enum Id {
     Address(NativeSuiAddress),
     Checkpoint(u64),
     Epoch(u64),
+    MoveObjectByAddress(NativeSuiAddress),
+    MoveObjectByRef(NativeSuiAddress, SequenceNumber, ObjectDigest),
     MovePackage(NativeSuiAddress),
     ObjectByAddress(NativeSuiAddress),
     ObjectByRef(NativeSuiAddress, SequenceNumber, ObjectDigest),

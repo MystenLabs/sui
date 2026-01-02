@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 9 tasks
+processed 10 tasks
 
 init:
 A: object(0,0)
@@ -79,12 +79,31 @@ Response: {
   }
 }
 
-task 6, lines 52-77:
-//# run-graphql --cursors bcs(3u8,0x2) bcs(4u8,0x2)
+task 6, lines 52-63:
+//# run-graphql --cursors bcs(3u8,@{obj_0_0})
+Response: {
+  "data": {
+    "node": {
+      "id": "A7/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
+      "contents": {
+        "type": {
+          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+        },
+        "json": {
+          "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+          "balance": "299999997023999"
+        }
+      }
+    }
+  }
+}
+
+task 7, lines 65-90:
+//# run-graphql --cursors bcs(5u8,0x2) bcs(6u8,0x2)
 Response: {
   "data": {
     "package": {
-      "id": "AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
+      "id": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
       "modules": {
         "nodes": [
           {
@@ -100,7 +119,7 @@ Response: {
       }
     },
     "object": {
-      "id": "BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
+      "id": "BgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
       "asMovePackage": {
         "modules": {
           "nodes": [
@@ -120,12 +139,12 @@ Response: {
   }
 }
 
-task 7, lines 79-92:
-//# run-graphql --cursors bcs(4u8,@{obj_0_0})
+task 8, lines 92-105:
+//# run-graphql --cursors bcs(6u8,@{obj_0_0})
 Response: {
   "data": {
     "node": {
-      "id": "BL/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
+      "id": "Br/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
       "asMoveObject": {
         "contents": {
           "type": {
@@ -141,12 +160,12 @@ Response: {
   }
 }
 
-task 8, lines 94-105:
-//# run-graphql --cursors bcs(6u8,digest(@{digest_1}))
+task 9, lines 107-118:
+//# run-graphql --cursors bcs(8u8,digest(@{digest_1}))
 Response: {
   "data": {
     "node": {
-      "id": "BiDg6cuvDBzNzyV2rREJA5T73yWG8hXfaB3C1EJGcQR20w==",
+      "id": "CCDg6cuvDBzNzyV2rREJA5T73yWG8hXfaB3C1EJGcQR20w==",
       "digest": "G8y6UPLMoougiKa8vFkXH3N5TVFqAhLAdxEjdz7WdrC2",
       "effects": {
         "status": "SUCCESS"

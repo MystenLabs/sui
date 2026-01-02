@@ -869,6 +869,9 @@ MoveModule.struct
 MoveModule.structs
   => {}
 
+MoveObject.id
+  => {}
+
 MoveObject.address
   => {}
 

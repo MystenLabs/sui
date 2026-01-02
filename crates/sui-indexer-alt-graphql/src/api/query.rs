@@ -33,6 +33,7 @@ use super::{
         coin_metadata::CoinMetadata,
         epoch::Epoch,
         event::{CEvent, Event, filter::EventFilter},
+        move_object::MoveObject,
         move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
         move_type::{self, MoveType},
         name_service::name_to_address,
@@ -67,6 +68,22 @@ impl Query {
                 .map(Node::Checkpoint),
 
             Id::Epoch(e) => Some(Node::Epoch(Box::new(Epoch::with_id(scope, e)))),
+
+            Id::MoveObjectByAddress(a) => {
+                let object = Object::with_address(scope, a);
+                MoveObject::from_object(&object, ctx)
+                    .await?
+                    .map(Box::new)
+                    .map(Node::MoveObject)
+            }
+
+            Id::MoveObjectByRef(a, v, d) => {
+                let object = Object::with_ref(&scope, a, v, d);
+                MoveObject::from_object(&object, ctx)
+                    .await?
+                    .map(Box::new)
+                    .map(Node::MoveObject)
+            }
 
             Id::MovePackage(a) => Some(Node::MovePackage(Box::new(MovePackage::with_address(
                 scope, a,

@@ -49,7 +49,20 @@
   }
 }
 
-//# run-graphql --cursors bcs(3u8,0x2) bcs(4u8,0x2)
+//# run-graphql --cursors bcs(3u8,@{obj_0_0})
+{ # Fetch a MoveObject
+  node(id: "@{cursor_0}") {
+    id
+    ... on MoveObject {
+      contents {
+        type { repr }
+        json
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors bcs(5u8,0x2) bcs(6u8,0x2)
 { # Fetch a package
   package: node(id: "@{cursor_0}") {
     id
@@ -76,7 +89,7 @@
   }
 }
 
-//# run-graphql --cursors bcs(4u8,@{obj_0_0})
+//# run-graphql --cursors bcs(6u8,@{obj_0_0})
 { # Fetch an object
   node(id: "@{cursor_0}") {
     id
@@ -91,7 +104,7 @@
   }
 }
 
-//# run-graphql --cursors bcs(6u8,digest(@{digest_1}))
+//# run-graphql --cursors bcs(8u8,digest(@{digest_1}))
 { # Fetch a transaction
   node(id: "@{cursor_0}") {
     id
