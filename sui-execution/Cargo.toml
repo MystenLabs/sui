@@ -57,16 +57,4 @@ petgraph = "0.5.1"
 
 [features]
 default = []
-tracing = [
-    "sui-adapter-latest/tracing",
-    "sui-adapter-v0/tracing",
-    "sui-adapter-v1/tracing",
-  "sui-adapter-v2/tracing",
-#   "sui-adapter-$CUT/tracing",
-    "move-vm-runtime-v0/tracing",
-    "move-vm-runtime-v1/tracing",
-    "move-vm-runtime-latest/tracing",
-  "move-vm-runtime-v2/tracing",
-#   "move-vm-runtime-$CUT/tracing",
-    "move-vm-config/tracing",
-]
+
