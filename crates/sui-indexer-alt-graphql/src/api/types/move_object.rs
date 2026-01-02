@@ -11,7 +11,7 @@ use tokio::sync::OnceCell;
 
 use crate::{
     api::scalars::{
-        base64::Base64, big_int::BigInt, sui_address::SuiAddress, type_filter::TypeInput,
+        base64::Base64, big_int::BigInt, id::Id, sui_address::SuiAddress, type_filter::TypeInput,
         uint53::UInt53,
     },
     error::RpcError,
@@ -102,6 +102,15 @@ pub(crate) enum IMoveObject {
 /// A MoveObject is a kind of Object that reprsents data stored on-chain.
 #[Object]
 impl MoveObject {
+    pub(crate) async fn id(&self) -> Id {
+        let a = self.super_.super_.address;
+        if let Some((v, d)) = self.super_.version_digest {
+            Id::MoveObjectByRef(a, v, d)
+        } else {
+            Id::MoveObjectByAddress(a)
+        }
+    }
+
     /// The MoveObject's ID.
     pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
         self.super_.address(ctx).await
