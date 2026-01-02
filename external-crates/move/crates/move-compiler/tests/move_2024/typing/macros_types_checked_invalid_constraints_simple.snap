@@ -14,7 +14,7 @@ error[E05001]: ability constraint not satisfied
    │                                        ---- 'copy' constraint declared here
    ·
  7 │     macro fun bar<$T>(_: NeedsCopy<$T>) {}
-   │                          ^^^^^^^^^^^^^ 'copy' constraint not satisifed
+   │                          ^^^^^^^^^^^^^ 'copy' constraint not satisfied
    ·
 14 │         bar!<None>(NeedsCopy {});
    │              ---- The type 'a::m::None' does not have the ability 'copy'
@@ -28,7 +28,7 @@ error[E05001]: ability constraint not satisfied
    │                                        ---- 'copy' constraint declared here
    ·
  9 │     macro fun baz<$T>(): NeedsCopy<$T> { abort 0 }
-   │                          ^^^^^^^^^^^^^ 'copy' constraint not satisifed
+   │                          ^^^^^^^^^^^^^ 'copy' constraint not satisfied
    ·
 18 │         baz!<None>()
    │              ---- The type 'a::m::None' does not have the ability 'copy'
