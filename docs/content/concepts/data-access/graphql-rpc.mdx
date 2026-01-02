@@ -1,7 +1,7 @@
 ---
 title: GraphQL for Sui RPC (Beta)
 beta: devnet, testnet, mainnet
-description: Use GraphQL to make Sui RPC calls. This feature is currently in Beta. 
+description: Use GraphQL to make Sui RPC calls. This feature is currently in Beta.
 keywords: [ graphql, graphql headers, x-sui-rpc-version, x-sui-rpc-show-usage, variables, fragments, pagination, graphql limits, make rpc call, sui rpc calls ]
 ---
 
@@ -49,7 +49,7 @@ $ curl -i -X POST https://graphql.testnet.sui.io/graphql\
 <summary>Output</summary>
 
 ```sh
-HTTP/2 200 
+HTTP/2 200
 content-type: application/json
 content-length: 179
 x-sui-rpc-request-id: f5442058-47ab-4360-8295-61c009f38516
@@ -61,23 +61,23 @@ via: 1.1 google
 alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
 
 {
-  "data": { 
-    "epoch": { 
-      "referenceGasPrice": "1000" 
-    } 
+  "data": {
+    "epoch": {
+      "referenceGasPrice": "1000"
+    }
   },
   "extensions": {
     "usage": {
-      "input": { 
-        "nodes": 2, 
-        "depth": 2 
+      "input": {
+        "nodes": 2,
+        "depth": 2
       },
-      "payload": { 
-        "query_payload_size": 67, 
-        "tx_payload_size": 0 
+      "payload": {
+        "query_payload_size": 67,
+        "tx_payload_size": 0
       },
-      "output": { 
-        "nodes": 2 
+      "output": {
+        "nodes": 2
       }
     }
   }
@@ -241,8 +241,9 @@ Cursors are used to bound results from below (with `after`) and above (with `bef
 
 #### Consistency
 
-Cursors for queries that paginate live objects also guarantee **consistent** pagination. If a paginated query reads the state of the network at a specific checkpoint (checkpoint `X`), the query returns cursors that can be used by subsequent requests. When a future call fetches the next page of results, it uses the previous query's cursors and continues reading from the network as it existed at checkpoint `X`, even if newer checkpoints are available. Currently, the available range offers roughly 1 hour to finish pagination.
-This property requires that cursors that are used together (such as when supplying an `after` and `before` bound) are fixed on the same checkpoint, otherwise the query produces an error.
+Cursors for queries that paginate live objects also guarantee **consistent** pagination. They encode the checkpoint at which the query was first executed so that later pages are [scoped](#scope) by the same checkpoint, even if newer checkpoints are available. If both an `after` and a `before` cursor are provided, they must both be from the same checkpoint, otherwise the query produces an error.
+
+By default, RPCs offer roughly 1 hour of [retention](#retention) for consistent pagination.
 
 ### Page limits
 
@@ -262,6 +263,155 @@ It is an error to apply both a `first` and a `last` limit.
 
 To see these principles put into practice, consult the examples for [paginating forwards](/guides/developer/advanced/graphql-rpc.mdx#page-forward) and [paginating backwards](/guides/developer/advanced/graphql-rpc.mdx#page-back).
 
+## Scope
+
+GraphQL requests are evaluated in a **scope** that controls the checkpoint being viewed. The GraphQL service responds to queries as if this is the last checkpoint to have been executed. By default, this is set to the latest checkpoint that the service has all data for. To avoid returning partial responses, the service does not allow queries to specify a later checkpoint than this, but it can be set to an earlier checkpoint to perform historical queries.
+
+Optionally, the scope provides a **root object** bound that applies only to queries that fetch dynamic fields. The query fetches dynamic fields as they existed at the end of a specific checkpoint or when their root object reached a given version. For any wrapped or child (object-owned) object, the root object is defined recursively as:
+
+- The root object of the object it is wrapped in, if it is wrapped
+- The root object of its owner, if it is owned by another object
+- The object itself
+
+If a dynamic field's root object has version `v`, its own version, `w` is the latest version such that `w <= v` meaning the latest version of the dynamic field that existed when its root object was at version `v`.
+
+If a root object bound is not provided, dynamic fields are fetched at the checkpoint being viewed, while if a checkpoint-based root object bound exists, it does not impact the checkpoint being viewed.
+
+Finally, the GraphQL service treats queries nested under executed `Mutation.executeTransaction` and simulated `Query.simulateTransaction` transactions as being in a special scope that exists just after the transaction that was executed or simulated, without having indexed that transaction.
+
+The scope a query is evaluated in impacts which fields are available. In particular:
+
+- Live object set queries are not available under executed transaction scopes or when a root object binding specifies a particular version. These queries rely on data that is indexed at the checkpoint level.
+- Queries that paginate through history are not available under executed transaction scopes. Before indexing occurs, the system cannot determine where in the history the transaction falls.
+
+### Setting checkpoint scope
+
+You can run queries against a historical checkpoint using `Checkpoint.query`. For [consistent](#consistency) live object set queries (such as fetching an address' owned objects or balances, or an object's dynamic fields), you can continue to paginate using a cursor obtained from a previous query at that checkpoint.
+
+```graphql
+query AtCheckpoint($cp: UInt53!) {
+  checkpoint(sequenceNumber: $cp) {
+    query {
+      transactions(last: 5) {
+        nodes {
+          digest
+        }
+      }
+    }
+  }
+}
+
+query NextBalancesPage($address: SuiAddress!, $after: String!) {
+  address(address: $address) {
+    balances(after: $after, first: 10) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        objectId
+        balance
+      }
+    }
+  }
+}
+```
+
+`AtCheckpoint` returns the last 5 transactions to execute as of the end of the checkpoint with sequence number `$cp`, while `NextBalancesPage` fetches the next 10 balances for `$address` after the page that ended at cursor `$after`. You can also combine both approaches, to ensure that the first page of a live object query is fetched from a specific checkpoint:
+
+```graphql
+query FirstBalancesPageAtCheckpoint($address: SuiAddress!, $cp: UInt53) {
+  checkpoint(sequenceNumber: $cp) {
+    query {
+      address(address: $address) {
+        balances(first: 10) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          nodes {
+            objectId
+            balance
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Responses to these queries are subject to [retention](#retention). If `$cp` is outside the retention window `Query.transactions`, `AtCheckpoint` returns no results, while an attempt to continue paginating `NextBalancesPage` at a checkpoint outside the consistent range returns an error.
+
+### Setting root version scope
+
+Queries nested under the fetch of an object at a specific version are scoped by a root object bound at its version. For example, in the following query, the dynamic field with name `42u64` is fetched as it existed when its owning object was at version `$v`:
+
+```graphql
+query ObjectsDynamicFields($id: SuiAddress!, $v: UInt53!) {
+  object(address: $id, version: $v) {
+    dynamicField(name: { literal: "42u64" }) {
+      value {
+        ... on MoveValue {
+          json
+        }
+      }
+    }
+  }
+}
+```
+
+This property applies recursively to nested dynamic field queries. It also applies if the root object is fetched at a specific checkpoint using the `atCheckpoint` parameter or at the latest checkpoint (by omitting all parameters). In these cases, the root object bound is checkpoint-based.
+
+The `rootVersion` parameter overrides this implicit bound. It fetches the object as if it was subject to a root version bound governed by the parameter, which also applies to queries nested underneath it. This is necessary when fetching a dynamic field directly (as an object), because an object's version is not updated when its children are updated unless it is a root object.
+
+In the following query, `$id` is the address of a dynamic field fetched as it existed when its root object was at version `$r`. The nested query fetches a nested dynamic field with name `42u64` owned by a wrapped object stored in field `foo` of the dynamic field. The nested fetch is subject to the same root object version bound, `$r`.
+
+```graphql
+query NestedDynamicFields($id: SuiAddress!, $r: UInt53!) {
+  object(address: $id, rootVersion: $v) {
+    asMoveObject {
+      asDynamicField {
+        value {
+          ... on MoveValue {
+            extract(path: "foo->[42u64]") {
+              json
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Queries that return an `Address` can be used to make nested dynamic field queries on wrapped objects. An `Address` does not have an associated version, but `Query.address` can accept `rootVersion` or `atCheckpoint` parameters to set root object bounds for nested dynamic field queries. The following query fetches a dynamic field with name `42u64` owned by an object with address `$id` (which can belong to a wrapped object) as it existed when its root object was at version `$r`:
+
+```graphql
+query WrappedDynamicField($id: SuiAddress!, $r: UInt53!) {
+  address(address: $id, rootVersion: $r) {
+    dynamicField(name: { literal: "42u64" }) {
+      value {
+        ... on MoveValue {
+          json
+        }
+      }
+    }
+  }
+}
+```
+
+While nested within a scope that has a root object bound, you can reset or override the bound using the `objectAt` or `addressAt` queries. These fields query the same entity but at a different position in its history. If these fields are not provided any parameters, they fetch the state of the object at the latest known checkpoint to the GraphQL service. The following query fetches the latest version of an object that was previously fetched at version `$v`:
+
+```graphql
+query LatestDynamicField($id: SuiAddress!, $v: UInt53!) {
+  object(address: $id, version: $v) {
+    objectAt {
+      version
+    }
+  }
+}
+```
+
 ## Limits
 
 The GraphQL service for Sui RPC is rate-limited on all available instances to keep network throughput optimized and to protect against excessive or abusive calls to the service.
@@ -280,8 +430,8 @@ In addition to rate limits, queries are also validated against a number of rules
     maxQueryDepth
     maxQueryNodes
     maxOutputNodes
-    defaultPageSize
-    maxPageSize
+    defaultPageSize(type: "Query", field: "transactions")
+    maxPageSize(type: "Query", field: "objects")
     queryTimeoutMs
     maxQueryPayloadSize
     maxTypeArgumentDepth
