@@ -3,6 +3,12 @@
 
 //# init --protocol-version 70 --accounts A --addresses P=0x0 --simulator
 
+//# programmable --sender A --inputs 1 @A
+//> SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+
+//# create-checkpoint
+
 //# run-graphql --cursors bcs(0u8,@{A})
 { # Fetch an address
   node(id: "@{cursor_0}") {
@@ -80,6 +86,19 @@
           type { repr }
           json
         }
+      }
+    }
+  }
+}
+
+//# run-graphql --cursors bcs(6u8,digest(@{digest_1}))
+{ # Fetch a transaction
+  node(id: "@{cursor_0}") {
+    id
+    ... on Transaction {
+      digest
+      effects {
+        status
       }
     }
   }

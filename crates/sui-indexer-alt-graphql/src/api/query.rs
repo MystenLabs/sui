@@ -77,6 +77,10 @@ impl Query {
             Id::ObjectByRef(a, v, d) => {
                 Some(Node::Object(Box::new(Object::with_ref(&scope, a, v, d))))
             }
+
+            Id::Transaction(d) => Some(Node::Transaction(Box::new(Transaction::with_digest(
+                scope, d,
+            )))),
         })
     }
 

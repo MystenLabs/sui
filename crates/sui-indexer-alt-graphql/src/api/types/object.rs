@@ -586,7 +586,7 @@ impl Object {
             Err(e) => return Some(Err(e)),
         };
 
-        Some(Ok(Transaction::with_id(
+        Some(Ok(Transaction::with_digest(
             self.super_.scope.without_root_version(),
             contents.previous_transaction,
         )))

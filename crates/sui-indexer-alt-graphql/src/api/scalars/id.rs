@@ -6,7 +6,7 @@ use fastcrypto::encoding::{Base64, Encoding};
 use serde::{Deserialize, Serialize};
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress as NativeSuiAddress},
-    digests::ObjectDigest,
+    digests::{ObjectDigest, TransactionDigest},
 };
 
 #[derive(Serialize, Deserialize)]
@@ -17,6 +17,7 @@ pub(crate) enum Id {
     MovePackage(NativeSuiAddress),
     ObjectByAddress(NativeSuiAddress),
     ObjectByRef(NativeSuiAddress, SequenceNumber, ObjectDigest),
+    Transaction(TransactionDigest),
 }
 
 #[derive(thiserror::Error, Debug)]

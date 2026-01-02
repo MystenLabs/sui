@@ -3721,7 +3721,7 @@ type SystemParameters {
 """
 Description of a transaction, the unit of activity on Sui.
 """
-type Transaction {
+type Transaction implements Node {
 	"""
 	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
 	"""
@@ -3738,6 +3738,7 @@ type Transaction {
 	The gas input field provides information on what objects were used as gas as well as the owner of the gas object(s) and information on the gas price and budget.
 	"""
 	gasInput: GasInput
+	id: ID!
 	"""
 	The type of this transaction as well as the commands and/or parameters comprising the transaction of this kind.
 	"""
