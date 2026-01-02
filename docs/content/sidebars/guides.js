@@ -162,6 +162,18 @@ const guides = [
       },
     ],
   },
+    {
+    type: 'category',
+    label: 'Nautilus',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/nautilus/index',
+    },
+    items: [
+      'guides/developer/nautilus/using-nautilus',
+      'guides/developer/nautilus/customize-nautilus',
+    ],
+  },
   {
     type: 'category',
     label: 'Advanced',
