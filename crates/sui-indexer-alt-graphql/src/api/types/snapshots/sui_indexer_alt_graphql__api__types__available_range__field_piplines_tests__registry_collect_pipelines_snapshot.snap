@@ -1517,6 +1517,9 @@ SystemParameters.validatorVeryLowStakeThreshold
 SystemParameters.validatorLowStakeGracePeriod
   => {}
 
+Transaction.id
+  => {}
+
 Transaction.digest
   => {}
 

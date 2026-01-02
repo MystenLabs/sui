@@ -9,6 +9,7 @@ use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::move_package::MovePackage;
 use crate::api::types::object::Object;
+use crate::api::types::transaction::Transaction;
 
 #[derive(Interface)]
 #[graphql(name = "Node", field(name = "id", ty = "Id"))]
@@ -18,4 +19,5 @@ pub(crate) enum Node {
     Epoch(Box<Epoch>),
     MovePackage(Box<MovePackage>),
     Object(Box<Object>),
+    Transaction(Box<Transaction>),
 }

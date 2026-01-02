@@ -106,7 +106,7 @@ impl Event {
 
     /// The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.
     async fn transaction(&self) -> Option<Transaction> {
-        Some(Transaction::with_id(
+        Some(Transaction::with_digest(
             self.scope.clone(),
             self.transaction_digest,
         ))
