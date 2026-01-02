@@ -368,6 +368,9 @@ Display.errors
 DisplayRegistryCreateTransaction._
   => {}
 
+DynamicField.id
+  => {}
+
 DynamicField.address
   => {}
 

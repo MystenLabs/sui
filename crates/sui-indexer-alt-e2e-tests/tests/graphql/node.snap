@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 10 tasks
+processed 13 tasks
 
 init:
 A: object(0,0)
@@ -14,11 +14,26 @@ created: object(1,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, line 10:
+task 2, lines 10-12:
+//# programmable --sender A --inputs @A
+//> sui::bag::new();
+//> TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 14-15:
+//# programmable --sender A --inputs object(2,0) 42
+//> sui::bag::add<u64, u64>(Input(0), Input(1), Input(1));
+created: object(3,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 3754400,  storage_rebate: 2264724, non_refundable_storage_fee: 22876
+
+task 4, line 17:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 12-28:
+task 5, lines 19-35:
 //# run-graphql --cursors bcs(0u8,@{A})
 Response: {
   "data": {
@@ -30,11 +45,22 @@ Response: {
           {
             "contents": {
               "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::bag::Bag"
+              },
+              "json": {
+                "id": "0xacdd73a12a350dc8d3ac7f3f0d94cf3b92206b9ba8059c51d90c9e4bc1733940",
+                "size": "1"
+              }
+            }
+          },
+          {
+            "contents": {
+              "type": {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
               },
               "json": {
                 "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
-                "balance": "299999997023999"
+                "balance": "299999992224843"
               }
             }
           },
@@ -55,7 +81,7 @@ Response: {
   }
 }
 
-task 4, lines 30-39:
+task 6, lines 37-46:
 //# run-graphql --cursors bcs(1u8,0)
 Response: {
   "data": {
@@ -67,43 +93,65 @@ Response: {
   }
 }
 
-task 5, lines 41-50:
-//# run-graphql --cursors bcs(2u8,0)
+task 7, lines 48-62:
+//# run-graphql --cursors bcs(2u8,@{obj_3_0})
 Response: {
   "data": {
     "node": {
-      "id": "AgAAAAAAAAAA",
+      "id": "ApBzilQKOuVI9M8PjhMeCPc87mRSKYWWa5S1poLofwzF",
+      "name": {
+        "type": {
+          "repr": "u64"
+        },
+        "json": "42"
+      },
+      "value": {
+        "type": {
+          "repr": "u64"
+        },
+        "json": "42"
+      }
+    }
+  }
+}
+
+task 8, lines 64-73:
+//# run-graphql --cursors bcs(4u8,0)
+Response: {
+  "data": {
+    "node": {
+      "id": "BAAAAAAAAAAA",
       "epochId": 0,
       "startTimestamp": "1970-01-01T00:00:00Z"
     }
   }
 }
 
-task 6, lines 52-63:
-//# run-graphql --cursors bcs(3u8,@{obj_0_0})
+task 9, lines 75-86:
+//# run-graphql --cursors bcs(5u8,@{obj_0_0})
 Response: {
   "data": {
     "node": {
-      "id": "A7/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
+      "id": "Bb/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
       "contents": {
         "type": {
           "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
         },
         "json": {
           "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
-          "balance": "299999997023999"
+          "balance": "299999992224843"
         }
       }
     }
   }
 }
 
-task 7, lines 65-90:
-//# run-graphql --cursors bcs(5u8,0x2) bcs(6u8,0x2)
+task 10, lines 88-113:
+//# run-graphql --cursors bcs(7u8,0x2) bcs(8u8,0x2)
 Response: {
   "data": {
     "package": {
-      "id": "BQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
+      "id": "BwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
       "modules": {
         "nodes": [
           {
@@ -119,7 +167,7 @@ Response: {
       }
     },
     "object": {
-      "id": "BgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
+      "id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC",
       "asMovePackage": {
         "modules": {
           "nodes": [
@@ -139,12 +187,12 @@ Response: {
   }
 }
 
-task 8, lines 92-105:
-//# run-graphql --cursors bcs(6u8,@{obj_0_0})
+task 11, lines 115-128:
+//# run-graphql --cursors bcs(8u8,@{obj_0_0})
 Response: {
   "data": {
     "node": {
-      "id": "Br/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
+      "id": "CL/16WpKXA9zSCWcer/f2ZlAXAK56cDQ1Z7GaaU7EEx6",
       "asMoveObject": {
         "contents": {
           "type": {
@@ -152,7 +200,7 @@ Response: {
           },
           "json": {
             "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
-            "balance": "299999997023999"
+            "balance": "299999992224843"
           }
         }
       }
@@ -160,12 +208,12 @@ Response: {
   }
 }
 
-task 9, lines 107-118:
-//# run-graphql --cursors bcs(8u8,digest(@{digest_1}))
+task 12, lines 130-141:
+//# run-graphql --cursors bcs(10u8,digest(@{digest_1}))
 Response: {
   "data": {
     "node": {
-      "id": "CCDg6cuvDBzNzyV2rREJA5T73yWG8hXfaB3C1EJGcQR20w==",
+      "id": "CiDg6cuvDBzNzyV2rREJA5T73yWG8hXfaB3C1EJGcQR20w==",
       "digest": "G8y6UPLMoougiKa8vFkXH3N5TVFqAhLAdxEjdz7WdrC2",
       "effects": {
         "status": "SUCCESS"

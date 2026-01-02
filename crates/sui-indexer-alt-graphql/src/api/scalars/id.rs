@@ -13,6 +13,8 @@ use sui_types::{
 pub(crate) enum Id {
     Address(NativeSuiAddress),
     Checkpoint(u64),
+    DynamicFieldByAddress(NativeSuiAddress),
+    DynamicFieldByRef(NativeSuiAddress, SequenceNumber, ObjectDigest),
     Epoch(u64),
     MoveObjectByAddress(NativeSuiAddress),
     MoveObjectByRef(NativeSuiAddress, SequenceNumber, ObjectDigest),

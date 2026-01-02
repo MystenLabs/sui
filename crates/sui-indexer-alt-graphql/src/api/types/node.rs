@@ -6,6 +6,7 @@ use async_graphql::Interface;
 use crate::api::scalars::id::Id;
 use crate::api::types::address::Address;
 use crate::api::types::checkpoint::Checkpoint;
+use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_package::MovePackage;
@@ -17,6 +18,7 @@ use crate::api::types::transaction::Transaction;
 pub(crate) enum Node {
     Address(Box<Address>),
     Checkpoint(Box<Checkpoint>),
+    DynamicField(Box<DynamicField>),
     Epoch(Box<Epoch>),
     MoveObject(Box<MoveObject>),
     MovePackage(Box<MovePackage>),
