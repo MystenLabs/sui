@@ -8,10 +8,16 @@ mod checked {
 
     use crate::execution_mode::{self, ExecutionMode};
     use crate::execution_value::SuiResolver;
+    use csv::Writer;
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
     use mysten_common::debug_fatal;
+    use once_cell::sync::Lazy;
+    use similar::TextDiff;
+    use std::fs::File;
+    use std::io::BufWriter;
+    use std::sync::Mutex;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
     use sui_types::balance::{
@@ -20,6 +26,7 @@ mod checked {
     };
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
+    use sui_types::gas_model::tables::GasDetails;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::object::OBJECT_START_VERSION;
@@ -57,12 +64,12 @@ mod checked {
     use sui_types::digests::{
         ChainIdentifier, get_mainnet_chain_identifier, get_testnet_chain_identifier,
     };
-    use sui_types::effects::TransactionEffects;
+    use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::{ExecutionTiming, ResultWithTimings};
-    use sui_types::execution_status::ExecutionStatus;
-    use sui_types::gas::GasCostSummary;
+    use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
     use sui_types::gas::SuiGasStatus;
+    use sui_types::gas::{GasCostSummary, GasUsageReport};
     use sui_types::id::UID;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::storage::BackingStore;
@@ -71,7 +78,7 @@ mod checked {
     use sui_types::sui_system_state::{ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME, AdvanceEpochParams};
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
-        Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
+        Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, InputObjects, ObjectArg,
         ProgrammableTransaction, StoredExecutionTimeObservations, TransactionKind,
         WriteAccumulatorStorageCost, is_gas_paid_from_address_balance,
     };
@@ -83,6 +90,70 @@ mod checked {
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
     };
+
+    static CSV_WRITER: Lazy<Mutex<csv::Writer<std::io::BufWriter<std::fs::File>>>> =
+        once_cell::sync::Lazy::new(|| {
+            let file = File::create("/opt/sui/gas.csv").expect("failed to create file");
+            let buf = BufWriter::new(file);
+            let mut writer = Writer::from_writer(buf);
+            writer
+                .write_record([
+                    "tx_digest",
+                    "gas_budget",
+                    "new_computation_cost",
+                    "old_computation_cost",
+                    "new_storage_cost",
+                    "old_storage_cost",
+                    "new_storage_rebate",
+                    "old_storage_rebate",
+                    "new_gas_used",
+                    "old_gas_used",
+                    "new_instructions",
+                    "old_instructions",
+                    "new_stack_height",
+                    "old_stack_height",
+                    "new_memory_allocated",
+                    "old_memory_allocated",
+                    "translation",
+                ])
+                .expect("failed to write gas header");
+            Mutex::new(writer)
+        });
+
+    fn write_gas_row(
+        transaction_digest: String,
+        new_gas: &GasUsageReport,
+        old_gas: &GasUsageReport,
+        new_details: &GasDetails,
+        old_details: &GasDetails,
+    ) {
+        if new_gas.cost_summary == old_gas.cost_summary {
+            return;
+        }
+        let mut writer = CSV_WRITER.lock().unwrap();
+        writer
+            .write_record([
+                &transaction_digest,
+                &new_gas.gas_budget.to_string(),
+                &new_gas.cost_summary.computation_cost.to_string(),
+                &old_gas.cost_summary.computation_cost.to_string(),
+                &new_gas.cost_summary.storage_cost.to_string(),
+                &old_gas.cost_summary.storage_cost.to_string(),
+                &new_gas.cost_summary.storage_rebate.to_string(),
+                &old_gas.cost_summary.storage_rebate.to_string(),
+                &new_gas.gas_used.to_string(),
+                &old_gas.gas_used.to_string(),
+                &new_details.instructions_executed.to_string(),
+                &old_details.instructions_executed.to_string(),
+                &new_details.stack_height.to_string(),
+                &old_details.stack_height.to_string(),
+                &new_details.memory_allocated.to_string(),
+                &old_details.memory_allocated.to_string(),
+                &new_details.transl_gas_used.to_string(),
+            ])
+            .expect("failed to write gas row");
+        writer.flush().expect("failed to flush gas writer");
+    }
 
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
@@ -109,6 +180,76 @@ mod checked {
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
         let input_objects = input_objects.into_inner();
+        let normal_effects = execute_transaction_to_effects_::<Mode>(
+            store,
+            input_objects.clone(),
+            gas_data.clone(),
+            gas_status.clone(),
+            transaction_kind.clone(),
+            transaction_signer,
+            transaction_digest,
+            move_vm,
+            epoch_id,
+            epoch_timestamp_ms,
+            protocol_config,
+            metrics.clone(),
+            enable_expensive_checks,
+            execution_params.clone(),
+            trace_builder_opt,
+        );
+
+        let mut new_protocol_config = protocol_config.clone();
+        new_protocol_config.set_enable_ptb_execution_v2_for_testing(true);
+
+        let new_effects = execute_transaction_to_effects_::<Mode>(
+            store,
+            input_objects,
+            gas_data,
+            gas_status,
+            transaction_kind.clone(),
+            transaction_signer,
+            transaction_digest,
+            move_vm,
+            epoch_id,
+            epoch_timestamp_ms,
+            &new_protocol_config,
+            metrics,
+            enable_expensive_checks,
+            execution_params.clone(),
+            trace_builder_opt,
+        );
+
+        compare_effects::<Mode>(&normal_effects, &new_effects);
+
+        let (temp_store, gas_status, effects, _gas_details, timing, res) = normal_effects;
+        (temp_store, gas_status, effects, timing, res)
+    }
+
+    #[instrument(name = "new_tx_execute_to_effects", level = "debug", skip_all)]
+    fn execute_transaction_to_effects_<Mode: ExecutionMode>(
+        store: &dyn BackingStore,
+        input_objects: InputObjects,
+        gas_data: GasData,
+        gas_status: SuiGasStatus,
+        transaction_kind: TransactionKind,
+        transaction_signer: SuiAddress,
+        transaction_digest: TransactionDigest,
+        move_vm: &Arc<MoveVM>,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        GasDetails,
+        Vec<ExecutionTiming>,
+        Result<Mode::ExecutionResults, ExecutionError>,
+    ) {
         let mutable_inputs = if enable_expensive_checks {
             input_objects.all_mutable_inputs().keys().copied().collect()
         } else {
@@ -179,6 +320,8 @@ mod checked {
             execution_params,
             trace_builder_opt,
         );
+
+        let gas_details = gas_charger.move_gas_status().gas_details();
 
         let status = if let Err(error) = &execution_result {
             // Elaborate errors in logs if they are unexpected or their status is terse.
@@ -272,9 +415,90 @@ mod checked {
             inner,
             gas_charger.into_gas_status(),
             effects,
+            gas_details,
             timings,
             execution_result,
         )
+    }
+
+    fn compare_effects<Mode: ExecutionMode>(
+        normal_effects: &(
+            InnerTemporaryStore,
+            SuiGasStatus,
+            TransactionEffects,
+            GasDetails,
+            Vec<ExecutionTiming>,
+            Result<Mode::ExecutionResults, ExecutionError>,
+        ),
+        new_effects: &(
+            InnerTemporaryStore,
+            SuiGasStatus,
+            TransactionEffects,
+            GasDetails,
+            Vec<ExecutionTiming>,
+            Result<Mode::ExecutionResults, ExecutionError>,
+        ),
+    ) {
+        let ok = match (normal_effects.2.status(), new_effects.2.status()) {
+            // success => success
+            (ExecutionStatus::Success, ExecutionStatus::Success) => true,
+            // Invariant violation in new
+            (
+                _,
+                ExecutionStatus::Failure {
+                    error: ExecutionFailureStatus::InvariantViolation,
+                    ..
+                },
+            ) => false,
+            // failure => failure
+            (
+                ExecutionStatus::Failure { error: _, .. },
+                ExecutionStatus::Failure {
+                    error: _other_error,
+                    ..
+                },
+            ) => true,
+            // Ran out of gas in the new one
+            (
+                _,
+                ExecutionStatus::Failure {
+                    error: ExecutionFailureStatus::InsufficientGas,
+                    ..
+                },
+            ) => true,
+            _ => false,
+        };
+
+        write_gas_row(
+            normal_effects.2.transaction_digest().to_string(),
+            &new_effects.1.gas_usage_report(),
+            &normal_effects.1.gas_usage_report(),
+            &new_effects.3,
+            &normal_effects.3,
+        );
+
+        if !ok {
+            tracing::warn!(
+                "{} TransactionEffects differ",
+                normal_effects.2.transaction_digest()
+            );
+            let t1 = format!("{:#?}", normal_effects.2);
+            let t2 = format!("{:#?}", new_effects.2);
+            let s = TextDiff::from_lines(&t1, &t2).unified_diff().to_string();
+            let data = format!(
+                "---\nDIGEST: {}\n>>\n{}\n<<<",
+                normal_effects.2.transaction_digest(),
+                s,
+            );
+            let output_file = format!("/opt/sui/outputs/{}", normal_effects.2.transaction_digest());
+
+            std::fs::write(&output_file, &data).expect("Failed to write output file");
+        } else {
+            tracing::info!(
+                "{} TransactionEffects are the same for both executions",
+                normal_effects.2.transaction_digest()
+            );
+        }
     }
 
     pub fn execute_genesis_state_update(
