@@ -64,7 +64,7 @@ impl Owner {
 
         match native {
             NO::AddressOwner(a) => O::Address(AddressOwner {
-                address: Some(Address::with_address(scope.without_root_version(), a)),
+                address: Some(Address::with_address(scope.without_root_bound(), a)),
             }),
 
             NO::ObjectOwner(a) => O::Object(ObjectOwner {
@@ -84,7 +84,7 @@ impl Owner {
                 owner,
             } => O::ConsensusAddress(ConsensusAddressOwner {
                 start_version: Some(start_version.into()),
-                address: Some(Address::with_address(scope.without_root_version(), owner)),
+                address: Some(Address::with_address(scope.without_root_bound(), owner)),
             }),
         }
     }

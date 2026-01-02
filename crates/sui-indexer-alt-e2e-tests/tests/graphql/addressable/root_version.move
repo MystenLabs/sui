@@ -133,6 +133,56 @@ fragment DOF on DynamicField {
 }
 
 //# run-graphql
+{ # Fetching an address at another checkpoint, and fetching its objects,
+  # balances, and transactions. The owned objects and balances are scoped to
+  # the address' checkpoint, while the transactions are scoped by the
+  # checkpoint being viewed, which means it doesn't change between checkpoints.
+  atCp0: address(address: "@{A}", atCheckpoint: 0) {
+    balance(coinType: "sui::sui::SUI") {
+      totalBalance
+    }
+
+    objects {
+      nodes {
+        address
+        contents {
+          type { repr }
+          json
+        }
+      }
+    }
+
+    transactions {
+      nodes {
+        digest
+      }
+    }
+  }
+
+  atCp1: address(address: "@{A}", atCheckpoint: 1) {
+    balance(coinType: "sui::sui::SUI") {
+      totalBalance
+    }
+
+    objects {
+      nodes {
+        address
+        contents {
+          type { repr }
+          json
+        }
+      }
+    }
+
+    transactions {
+      nodes {
+        digest
+      }
+    }
+  }
+}
+
+//# run-graphql
 { # Error - cannot query owned objects on an address with root version set
   address(address: "0x2", rootVersion: 1) {
     objects { nodes { address } }

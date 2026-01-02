@@ -102,7 +102,7 @@ async fn name_record(
     let config: &NameServiceConfig = ctx.data()?;
 
     let address = config.record_field_id(domain).into();
-    let Some(object) = Object::latest(ctx, scope.without_root_version(), address).await? else {
+    let Some(object) = Object::latest(ctx, scope.without_root_bound(), address).await? else {
         return Ok(None);
     };
 
@@ -125,7 +125,7 @@ async fn reverse_record(
     let config: &NameServiceConfig = ctx.data()?;
 
     let address = config.reverse_record_field_id(address.as_ref()).into();
-    let Some(object) = Object::latest(ctx, scope.without_root_version(), address).await? else {
+    let Some(object) = Object::latest(ctx, scope.without_root_bound(), address).await? else {
         return Ok(None);
     };
 

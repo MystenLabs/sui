@@ -108,7 +108,7 @@ impl MoveValue {
             T::Address => {
                 let address = bcs::from_bytes(&self.native)?;
                 Ok(Some(Address::with_address(
-                    self.type_.scope.without_root_version(),
+                    self.type_.scope.without_root_bound(),
                     address,
                 )))
             }
@@ -116,7 +116,7 @@ impl MoveValue {
             T::Struct(s) if *s == ID::type_() => {
                 let address = bcs::from_bytes(&self.native)?;
                 Ok(Some(Address::with_address(
-                    self.type_.scope.without_root_version(),
+                    self.type_.scope.without_root_bound(),
                     address,
                 )))
             }
@@ -369,15 +369,9 @@ impl<'f, 'r> sui_display::v2::Store for DisplayStore<'f, 'r> {
     ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
         // NOTE: We can't use `anyhow::Context` here because `RpcError` doesn't implement
         // `std::error::Error`.
-        let object = if let Some(version) = self.scope.root_version() {
-            Object::version_bounded(self.ctx, self.scope.clone(), id.into(), version.into())
-                .await
-                .map_err(|e| anyhow!("Failed to fetch object: {e:?}"))?
-        } else {
-            Object::latest(self.ctx, self.scope.clone(), id.into())
-                .await
-                .map_err(|e| anyhow!("Failed to fetch object: {e:?}"))?
-        };
+        let object = Object::latest(self.ctx, self.scope.clone(), id.into())
+            .await
+            .map_err(|e| anyhow!("Failed to fetch object: {e:?}"))?;
 
         let Some(object) = object else {
             return Ok(None);

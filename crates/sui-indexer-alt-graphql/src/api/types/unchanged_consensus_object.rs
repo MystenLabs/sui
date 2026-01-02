@@ -105,8 +105,9 @@ impl PerEpochConfig {
                 return Ok(None);
             };
 
-            let cp: UInt53 = (epoch_start.cp_lo as u64).into();
-            Object::checkpoint_bounded(ctx, self.scope.clone(), self.object_id.into(), cp).await
+            let cp = epoch_start.cp_lo as u64;
+            let scope = self.scope.with_root_checkpoint(cp);
+            Object::latest(ctx, scope, self.object_id.into()).await
         }
         .await
         .transpose()

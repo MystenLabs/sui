@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use async_graphql::Context;
 use async_graphql::Enum;
 use async_graphql::InputObject;
@@ -40,6 +42,7 @@ use crate::error::bad_user_input;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 /// The possible relationship types for a transaction: sent or affected.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -454,10 +457,13 @@ impl Address {
             let scope = scope.with_root_version(v.into());
             Ok(Self::with_address(scope, key.address.into()))
         } else if let Some(cp) = key.at_checkpoint {
-            let scope = scope
-                .with_checkpoint_viewed_at(ctx, cp.into())
-                .ok_or_else(|| bad_user_input(Error::Future(cp.into())))?;
+            // Validate checkpoint isn't in the future
+            let watermark: &Arc<Watermarks> = ctx.data()?;
+            if u64::from(cp) > watermark.high_watermark().checkpoint() {
+                return Err(bad_user_input(Error::Future(cp.into())));
+            }
 
+            let scope = scope.with_root_checkpoint(cp.into());
             Ok(Self::with_address(scope, key.address.into()))
         } else {
             Ok(Self::with_address(scope, key.address.into()))
