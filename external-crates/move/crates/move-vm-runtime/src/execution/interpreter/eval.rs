@@ -352,7 +352,14 @@ fn control_flow_instruction(instruction: &Bytecode) -> bool {
         | Bytecode::UnpackVariantMutRef(_)
         | Bytecode::UnpackVariantGeneric(_)
         | Bytecode::UnpackVariantGenericImmRef(_)
-        | Bytecode::UnpackVariantGenericMutRef(_) => false,
+        | Bytecode::UnpackVariantGenericMutRef(_)
+        // Super-instructions: most don't affect control flow
+        | Bytecode::MoveLocPop(_)
+        | Bytecode::ImmBorrowFieldReadRef(_)
+        | Bytecode::CopyLocFreezeRef(_)
+        | Bytecode::CallGenericStLoc(_, _) => false,
+        // BrFalseBranch is a control flow instruction (sets PC directly)
+        Bytecode::BrFalseBranch(_, _) => true,
     }
 }
 
@@ -833,6 +840,77 @@ fn op_step_impl(
             for reference in references {
                 state.push_operand(reference)?;
             }
+        }
+
+        // -------------------------------------------------------------------------
+        // Super-instructions: fused instruction pairs for performance
+        // -------------------------------------------------------------------------
+
+        // MoveLocPop: MoveLoc followed by Pop - move local and immediately discard
+        Bytecode::MoveLocPop(idx) => {
+            let local = state
+                .call_stack
+                .current_frame
+                .stack_frame
+                .move_loc(*idx as usize)?;
+            // Charge for both MoveLoc and Pop operations
+            gas_meter.charge_move_loc(&local)?;
+            gas_meter.charge_pop(local)?;
+            // Value is moved out and immediately dropped - no stack operations needed
+        }
+
+        // ImmBorrowFieldReadRef: ImmBorrowField followed by ReadRef
+        Bytecode::ImmBorrowFieldReadRef(fh_ptr) => {
+            // First: ImmBorrowField
+            gas_meter.charge_simple_instr(S::ImmBorrowField)?;
+            let struct_ref = state.pop_operand_as::<StructRef>()?;
+            let offset = fh_ptr.offset;
+            let field_ref = struct_ref.borrow_field(offset)?;
+            // Second: ReadRef on the field reference
+            // The field_ref is a Value containing a Reference
+            let reference: Reference = field_ref.value_as()?;
+            gas_meter.charge_read_ref(reference.value_view())?;
+            let value = reference.read_ref()?;
+            state.push_operand(value)?;
+        }
+
+        // CopyLocFreezeRef: CopyLoc followed by FreezeRef
+        Bytecode::CopyLocFreezeRef(idx) => {
+            // First: CopyLoc
+            let local = state
+                .call_stack
+                .current_frame
+                .stack_frame
+                .copy_loc(*idx as usize)?;
+            gas_meter.charge_copy_loc(&local)?;
+            // Second: FreezeRef - converts mutable reference to immutable
+            // FreezeRef is a no-op at the value level in this implementation
+            gas_meter.charge_simple_instr(S::FreezeRef)?;
+            state.push_operand(local)?;
+        }
+
+        // BrFalseBranch: BrFalse followed by Branch - else branch pattern
+        Bytecode::BrFalseBranch(false_target, true_target) => {
+            // Charge for both branch instructions
+            gas_meter.charge_simple_instr(S::BrFalse)?;
+            gas_meter.charge_simple_instr(S::Branch)?;
+            // If condition is false, jump to false_target; if true, jump to true_target
+            state.call_stack.current_frame.pc = if !state.pop_operand_as::<bool>()? {
+                *false_target
+            } else {
+                *true_target
+            };
+        }
+
+        // CallGenericStLoc: exists in AST but not fused in peephole optimizer
+        // because it doesn't work well with the call frame mechanism
+        Bytecode::CallGenericStLoc(_, _) => {
+            // This should never be reached because we don't fuse CallGeneric+StLoc
+            // in the peephole optimizer. If we ever enable it, this needs proper handling.
+            return Err(PartialVMError::new(
+                move_core_types::vm_status::StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message("CallGenericStLoc super-instruction is not implemented".to_string()));
         }
     }
     if !control_flow_instruction(instruction) {

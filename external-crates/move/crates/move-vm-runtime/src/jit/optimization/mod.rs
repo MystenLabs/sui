@@ -4,6 +4,7 @@
 use crate::validation::verification::ast as input;
 
 pub mod ast;
+pub mod peephole;
 pub mod translate;
 
 pub fn to_optimized_form(input: input::Package) -> ast::Package {
@@ -11,6 +12,8 @@ pub fn to_optimized_form(input: input::Package) -> ast::Package {
 }
 
 pub fn optimize(input: input::Package) -> ast::Package {
-    // There are currently no optimizations implemented.
-    translate::package(input)
+    // First translate to optimization AST
+    let package = translate::package(input);
+    // Then apply peephole optimizations (super-instruction fusion)
+    peephole::optimize_package(package)
 }

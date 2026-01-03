@@ -137,6 +137,18 @@ pub enum Bytecode {
     UnpackVariantGenericImmRef(VariantInstantiationHandleIndex),
     UnpackVariantGenericMutRef(VariantInstantiationHandleIndex),
     VariantSwitch(VariantJumpTableIndex),
+
+    // Super-instructions: fused instruction pairs for performance
+    /// MoveLoc followed by Pop - move local and immediately discard
+    MoveLocPop(LocalIndex),
+    /// CallGeneric followed by StLoc - call generic function and store result
+    CallGenericStLoc(FunctionInstantiationIndex, LocalIndex),
+    /// ImmBorrowField followed by ReadRef - borrow field and read value
+    ImmBorrowFieldReadRef(FieldHandleIndex),
+    /// CopyLoc followed by FreezeRef - copy local and freeze reference
+    CopyLocFreezeRef(LocalIndex),
+    /// BrFalse followed by Branch - conditional with else branch pattern
+    BrFalseBranch(Label, Label),
 }
 
 impl ::std::fmt::Debug for Bytecode {
@@ -230,6 +242,12 @@ impl ::std::fmt::Debug for Bytecode {
                 write!(f, "UnpackVariantGenericMutRef({:?})", handle)
             }
             Bytecode::VariantSwitch(jt) => write!(f, "VariantSwitch({:?})", jt),
+            // Super-instructions
+            Bytecode::MoveLocPop(a) => write!(f, "MoveLocPop({})", a),
+            Bytecode::CallGenericStLoc(a, b) => write!(f, "CallGenericStLoc({}, {})", a, b),
+            Bytecode::ImmBorrowFieldReadRef(a) => write!(f, "ImmBorrowFieldReadRef({:?})", a),
+            Bytecode::CopyLocFreezeRef(a) => write!(f, "CopyLocFreezeRef({})", a),
+            Bytecode::BrFalseBranch(a, b) => write!(f, "BrFalseBranch({}, {})", a, b),
         }
     }
 }
@@ -252,6 +270,10 @@ impl Bytecode {
                         Some(vec.iter().map(|ndx| *ndx as Label).collect())
                     }
                 }
+            }
+            // Super-instruction: BrFalseBranch has two targets
+            Bytecode::BrFalseBranch(false_target, true_target) => {
+                Some(vec![*false_target as Label, *true_target as Label])
             }
             Bytecode::Pop
             | Bytecode::Ret
@@ -324,7 +346,12 @@ impl Bytecode {
             | Bytecode::UnpackVariantMutRef(_)
             | Bytecode::UnpackVariantGeneric(_)
             | Bytecode::UnpackVariantGenericImmRef(_)
-            | Bytecode::UnpackVariantGenericMutRef(_) => None,
+            | Bytecode::UnpackVariantGenericMutRef(_)
+            // Super-instructions without branch targets
+            | Bytecode::MoveLocPop(_)
+            | Bytecode::CallGenericStLoc(_, _)
+            | Bytecode::ImmBorrowFieldReadRef(_)
+            | Bytecode::CopyLocFreezeRef(_) => None,
         }
     }
 
@@ -404,7 +431,14 @@ impl Bytecode {
             | Bytecode::UnpackVariantMutRef(_)
             | Bytecode::UnpackVariantGeneric(_)
             | Bytecode::UnpackVariantGenericImmRef(_)
-            | Bytecode::UnpackVariantGenericMutRef(_) => false,
+            | Bytecode::UnpackVariantGenericMutRef(_)
+            // Super-instructions - BrFalseBranch is unconditional (always jumps somewhere)
+            | Bytecode::MoveLocPop(_)
+            | Bytecode::CallGenericStLoc(_, _)
+            | Bytecode::ImmBorrowFieldReadRef(_)
+            | Bytecode::CopyLocFreezeRef(_) => false,
+            // BrFalseBranch always takes one of two branches, so it's unconditional
+            Bytecode::BrFalseBranch(_, _) => true,
         }
     }
 }

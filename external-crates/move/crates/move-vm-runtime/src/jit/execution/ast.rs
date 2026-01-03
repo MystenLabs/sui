@@ -835,6 +835,46 @@ pub(crate) enum Bytecode {
     /// Stack transition:
     /// ```..., enum_value_ref -> ...```
     VariantSwitch(VMPointer<VariantJumpTable>),
+
+    // -------------------------------------------------------------------------
+    // Super-instructions: fused instruction pairs for performance
+    // -------------------------------------------------------------------------
+
+    /// MoveLoc followed by Pop - move local to stack and immediately discard.
+    /// Equivalent to: MoveLoc(idx); Pop
+    ///
+    /// Stack transition:
+    /// ```... -> ...```
+    MoveLocPop(LocalIndex),
+
+    /// CallGeneric followed by StLoc - call generic function and store result.
+    /// Equivalent to: CallGeneric(func); StLoc(idx)
+    ///
+    /// Stack transition:
+    /// ```..., arg(1), ..., arg(n) -> ...```
+    CallGenericStLoc(VMPointer<FunctionInstantiation>, LocalIndex),
+
+    /// ImmBorrowField followed by ReadRef - borrow field and read value.
+    /// Equivalent to: ImmBorrowField(field); ReadRef
+    ///
+    /// Stack transition:
+    /// ```..., struct_ref -> ..., field_value```
+    ImmBorrowFieldReadRef(VMPointer<FieldHandle>),
+
+    /// CopyLoc followed by FreezeRef - copy local reference and freeze.
+    /// Equivalent to: CopyLoc(idx); FreezeRef
+    ///
+    /// Stack transition:
+    /// ```... -> ..., immutable_ref```
+    CopyLocFreezeRef(LocalIndex),
+
+    /// BrFalse followed by Branch - conditional with else branch pattern.
+    /// If false, jump to first offset; if true, jump to second offset.
+    /// Equivalent to: BrFalse(false_offset); Branch(true_offset)
+    ///
+    /// Stack transition:
+    /// ```..., bool_value -> ...```
+    BrFalseBranch(CodeOffset, CodeOffset),
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -1394,6 +1434,12 @@ impl From<&Bytecode> for Opcodes {
             Bytecode::UnpackVariantGenericImmRef(_) => Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF,
             Bytecode::UnpackVariantGenericMutRef(_) => Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF,
             Bytecode::VariantSwitch(_) => Opcodes::VARIANT_SWITCH,
+            // Super-instructions - map to the first instruction's opcode for gas purposes
+            Bytecode::MoveLocPop(_) => Opcodes::MOVE_LOC,
+            Bytecode::CallGenericStLoc(_, _) => Opcodes::CALL_GENERIC,
+            Bytecode::ImmBorrowFieldReadRef(_) => Opcodes::IMM_BORROW_FIELD,
+            Bytecode::CopyLocFreezeRef(_) => Opcodes::COPY_LOC,
+            Bytecode::BrFalseBranch(_, _) => Opcodes::BR_FALSE,
         }
     }
 }
@@ -1502,6 +1548,14 @@ impl ::std::fmt::Debug for Bytecode {
                 write!(f, "UnpackVariantGenericMutRef({:?})", handle)
             }
             Bytecode::VariantSwitch(jt) => write!(f, "VariantSwitch({:?})", jt),
+            // Super-instructions
+            Bytecode::MoveLocPop(a) => write!(f, "MoveLocPop({})", a),
+            Bytecode::CallGenericStLoc(inst, idx) => {
+                write!(f, "CallGenericStLoc({:?}, {})", inst.handle.vtable_key(), idx)
+            }
+            Bytecode::ImmBorrowFieldReadRef(a) => write!(f, "ImmBorrowFieldReadRef({:?})", a),
+            Bytecode::CopyLocFreezeRef(a) => write!(f, "CopyLocFreezeRef({})", a),
+            Bytecode::BrFalseBranch(a, b) => write!(f, "BrFalseBranch({}, {})", a, b),
         }
     }
 }
@@ -1970,6 +2024,20 @@ impl<B: std::fmt::Write> InternedDisplay<B> for Bytecode {
 
             // Still using Debug for the jump table unless you have an InternedDisplay for it
             Bytecode::VariantSwitch(jt) => write!(f, "VariantSwitch({:?})", jt),
+            // Super-instructions
+            Bytecode::MoveLocPop(a) => write!(f, "MoveLocPop({})", a),
+            Bytecode::CallGenericStLoc(inst, idx) => {
+                write!(f, "CallGenericStLoc(")?;
+                inst.to_ref().fmt(f, interner)?;
+                write!(f, ", {})", idx)
+            }
+            Bytecode::ImmBorrowFieldReadRef(h) => {
+                write!(f, "ImmBorrowFieldReadRef(")?;
+                h.to_ref().fmt(f, interner)?;
+                write!(f, ")")
+            }
+            Bytecode::CopyLocFreezeRef(a) => write!(f, "CopyLocFreezeRef({})", a),
+            Bytecode::BrFalseBranch(a, b) => write!(f, "BrFalseBranch({}, {})", a, b),
         }
     }
 }
