@@ -102,6 +102,7 @@ pub(crate) enum IMoveObject {
 /// A MoveObject is a kind of Object that reprsents data stored on-chain.
 #[Object]
 impl MoveObject {
+    /// The Move object's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {
         let a = self.super_.super_.address;
         if let Some((v, d)) = self.super_.version_digest {

@@ -59,6 +59,7 @@ pub struct Query {
 
 #[Object]
 impl Query {
+    /// Fetch a `Node` by its globally unique `ID`. Returns `null` if the node cannot be found (e.g., the underlying data was pruned or never existed).
     async fn node(&self, ctx: &Context<'_>, id: Id) -> Result<Option<Node>, RpcError> {
         let scope = self.scope(ctx)?;
         Ok(match id {

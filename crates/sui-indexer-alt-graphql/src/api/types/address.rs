@@ -105,6 +105,7 @@ pub(crate) struct Address {
 
 #[Object]
 impl Address {
+    /// The address's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {
         Id::Address(self.address)
     }

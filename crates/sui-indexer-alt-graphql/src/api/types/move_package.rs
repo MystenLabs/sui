@@ -126,6 +126,7 @@ pub(crate) type CSysPackage = BcsCursor<Vec<u8>>;
 /// A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
 #[Object]
 impl MovePackage {
+    /// The package's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {
         Id::MovePackage(self.super_.super_.address)
     }

@@ -64,6 +64,7 @@ pub(crate) type CCheckpoint = JsonCursor<u64>;
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
 impl Checkpoint {
+    /// The checkpoint's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {
         Id::Checkpoint(self.sequence_number)
     }

@@ -68,6 +68,7 @@ pub(crate) type CTransaction = JsonCursor<u64>;
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
 impl Transaction {
+    /// The transaction's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {
         Id::Transaction(self.digest)
     }
