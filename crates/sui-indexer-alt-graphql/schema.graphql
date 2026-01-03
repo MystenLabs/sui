@@ -2741,6 +2741,32 @@ type Mutation {
 }
 
 """
+A Name Service NameRecord representing a domain name registration.
+"""
+type NameRecord {
+	"""
+	On-chain representation of the underlying Name Service `NameRecord` Move value.
+	"""
+	contents: MoveValue!
+	"""
+	The domain name this record is for.
+	"""
+	domain: String!
+	"""
+	The Name Service Name Record of the parent domain, if this is a subdomain.
+	
+	Returns `null` if this is not a subdomain.
+	"""
+	parent: NameRecord
+	"""
+	The address this domain points to.
+	
+	`rootVersion` and `atCheckpoint` control how the target `Address` is scoped. If neither is provided, the `Address` is scoped to the latest checkpoint known to the RPC.
+	"""
+	target(rootVersion: UInt53, atCheckpoint: UInt53): Address
+}
+
+"""
 An interface implemented by types that can be uniquely identified by a globally unique `ID`, following the GraphQL Global Object Identification specification.
 """
 interface Node {
@@ -3372,6 +3398,12 @@ type Query {
 	Returns a list of types that is guaranteed to be the same length as `keys`. If a type in `keys` could not be found, its corresponding entry in the result will be `null`.
 	"""
 	multiGetTypes(keys: [String!]!): [MoveType]!
+	"""
+	Look-up a Name Service NameRecord by its domain name.
+	
+	Returns `null` if the record does not exist or has expired.
+	"""
+	nameRecord(name: String!): NameRecord
 	"""
 	Fetch a `Node` by its globally unique `ID`. Returns `null` if the node cannot be found (e.g., the underlying data was pruned or never existed).
 	"""

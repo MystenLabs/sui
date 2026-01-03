@@ -34,7 +34,7 @@ const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 macro_rules! assert_resolved {
     ($target:expr, $resp:expr) => {
         let resp = $resp;
-        let address = resp["data"]["suinsName"]["address"]
+        let address = resp["data"]["nameRecord"]["target"]["address"]
             .as_str()
             .expect("result should be string");
 
@@ -51,7 +51,7 @@ macro_rules! assert_not_resolved {
     ($resp:expr) => {
         let resp = $resp;
         assert!(
-            resp["data"]["suinsName"].is_null(),
+            resp["data"]["nameRecord"].is_null(),
             "Expected null result for expired/invalid domain, got {resp:#?}"
         );
     };
@@ -93,7 +93,10 @@ async fn test_resolve_domain() {
 
     c.cluster.create_checkpoint().await;
 
-    assert_resolved!(target, c.resolve_address("foo.sui").await.unwrap());
+    let resp = c.resolve_address("foo.sui").await.unwrap();
+    assert_resolved!(target, &resp);
+    assert!(resp["data"]["nameRecord"]["parent"].is_null());
+
     assert_resolved!(target, c.resolve_address("@foo").await.unwrap());
     assert_reverse!("foo.sui", c.resolve_name(target).await.unwrap());
 }
@@ -111,7 +114,7 @@ async fn test_resolve_domain_no_target() {
     c.cluster.create_checkpoint().await;
 
     let resp = c.resolve_address("foo.sui").await.unwrap();
-    assert!(resp["data"]["suinsName"].is_null());
+    assert!(resp["data"]["nameRecord"]["target"]["address"].is_null());
     assert!(resp["errors"].is_null());
 }
 
@@ -168,7 +171,11 @@ async fn test_resolve_subdomain() {
 
     c.cluster.create_checkpoint().await;
 
-    assert_resolved!(target, c.resolve_address("bar.foo.sui").await.unwrap());
+    let resp = c.resolve_address("bar.foo.sui").await.unwrap();
+    assert_resolved!(target, &resp);
+    assert!(resp["data"]["nameRecord"]["parent"].is_object());
+    assert!(resp["data"]["nameRecord"]["parent"]["target"].is_null());
+
     assert_resolved!(target, c.resolve_address("bar@foo").await.unwrap());
     assert_reverse!("bar.foo.sui", c.resolve_name(target).await.unwrap());
 }
@@ -488,15 +495,20 @@ impl SuiNSCluster {
     /// Send a GraphQL request to the cluster to resolve the given SuiNS name.
     async fn resolve_address(&self, name: &str) -> anyhow::Result<Value> {
         let query = r#"
-            query($address: String!) {
-                suinsName(address: $address) {
-                    address
+            query($name: String!) {
+                nameRecord(name: $name) {
+                    target { address }
+
+                    parent {
+                        domain
+                        target { address }
+                    }
                 }
             }
         "#;
 
         let variables = json!({
-            "address": name,
+            "name": name,
         });
 
         let response = self
