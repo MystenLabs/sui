@@ -20,6 +20,10 @@ pub struct SoftBundleTransactionResult {
     pub effects: Option<ExecutionEffects>,
     /// Error message if the transaction was rejected.
     pub error: Option<String>,
+    /// True if the error is retriable (e.g., epoch change, expired).
+    /// This allows payloads to distinguish between permanent failures (like ObjectLockConflict)
+    /// and temporary failures that should not trigger validation assertions.
+    pub is_retriable_error: bool,
 }
 
 /// A Payload is a transaction wrapper of a particular type (transfer object, shared counter, etc).

@@ -1001,11 +1001,13 @@ async fn run_bench_worker(
                                     // Convert to SoftBundleExecutionResults
                                     let mut soft_bundle_results = Vec::new();
                                     let mut any_success = false;
+                                    let mut all_retriable = true;
 
                                     for (_digest, response) in results {
                                         match response {
                                             WaitForEffectsResponse::Executed { details, .. } => {
                                                 any_success = true;
+                                                all_retriable = false;
                                                 let effects = details.map(|d| {
                                                     // Use QuorumExecuted since the transaction was executed by consensus
                                                     let epoch = d.effects.executed_epoch();
@@ -1021,13 +1023,25 @@ async fn run_bench_worker(
                                                     success: true,
                                                     effects,
                                                     error: None,
+                                                    is_retriable_error: false,
                                                 });
                                             }
                                             WaitForEffectsResponse::Rejected { error } => {
+                                                // Check if the error indicates an epoch change or other retriable condition.
+                                                // If error is None, the transaction was rejected without a specific reason -
+                                                // we treat it as retriable.
+                                                let is_retriable = error
+                                                    .as_ref()
+                                                    .map(|e| e.individual_error_indicates_epoch_change())
+                                                    .unwrap_or(true);
+                                                if !is_retriable {
+                                                    all_retriable = false;
+                                                }
                                                 soft_bundle_results.push(SoftBundleTransactionResult {
                                                     success: false,
                                                     effects: None,
                                                     error: error.map(|e| format!("{:?}", e)),
+                                                    is_retriable_error: is_retriable,
                                                 });
                                             }
                                             WaitForEffectsResponse::Expired { epoch, round } => {
@@ -1035,6 +1049,7 @@ async fn run_bench_worker(
                                                     success: false,
                                                     effects: None,
                                                     error: Some(format!("Expired at epoch {}, round {:?}", epoch, round)),
+                                                    is_retriable_error: true,
                                                 });
                                             }
                                         }
@@ -1056,8 +1071,19 @@ async fn run_bench_worker(
                                             gas_used: 0, // Gas tracking for soft bundles is complex
                                             payload,
                                         }
+                                    } else if all_retriable {
+                                        // All transactions failed with retriable errors (e.g., epoch change).
+                                        // Return the payload so it can be retried with the same state.
+                                        // Don't increment success or error metrics - will be counted on retry.
+                                        debug!("Soft bundle failed with all retriable errors, returning payload for retry");
+                                        NextOp::Response {
+                                            latency,
+                                            num_commands: 0, // No commands succeeded
+                                            gas_used: 0,
+                                            payload,
+                                        }
                                     } else {
-                                        // All transactions in the bundle failed
+                                        // All transactions in the bundle failed with non-retriable errors
                                         metrics_clone
                                             .num_error
                                             .with_label_values(&[&payload.to_string(), "soft_bundle_all_failed", "soft_bundle"])

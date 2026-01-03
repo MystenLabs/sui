@@ -84,6 +84,7 @@ impl Payload for SoftBundleConflictingTransferPayload {
     fn handle_soft_bundle_results(&mut self, results: &SoftBundleExecutionResults) {
         let mut success_count = 0;
         let mut conflict_count = 0;
+        let mut retriable_error_count = 0;
 
         for (i, result) in results.results.iter().enumerate() {
             if result.success {
@@ -105,6 +106,13 @@ impl Payload for SoftBundleConflictingTransferPayload {
                         self.transfer_object = *obj_ref;
                     }
                 }
+            } else if result.is_retriable_error {
+                // Retriable errors (epoch change, expired) - the bundle wasn't fully processed
+                retriable_error_count += 1;
+                debug!(
+                    "Transaction {} rejected with retriable error: {:?}",
+                    i, result.error
+                );
             } else {
                 // Check if it's an ObjectLockConflict
                 let is_lock_conflict = result
@@ -123,6 +131,16 @@ impl Payload for SoftBundleConflictingTransferPayload {
                     debug!("Transaction {} rejected with error: {:?}", i, result.error);
                 }
             }
+        }
+
+        // If all transactions failed due to retriable errors (e.g., epoch change),
+        // skip validation as the bundle wasn't actually processed for conflict detection.
+        if retriable_error_count == results.results.len() {
+            debug!(
+                "All {} transactions failed with retriable errors, skipping conflict validation",
+                retriable_error_count
+            );
+            return;
         }
 
         // Validate: exactly one should succeed, rest should be conflicts.
