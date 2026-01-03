@@ -45,6 +45,9 @@ Address.balance
 Address.balances
   => {"consistent"}
 
+Address.defaultNameRecord
+  => {"obj_versions"}
+
 Address.defaultSuinsName
   => {"obj_versions"}
 
@@ -246,6 +249,9 @@ CoinMetadata.contents
 CoinMetadata.decimals
   => {}
 
+CoinMetadata.defaultNameRecord
+  => {"obj_versions"}
+
 CoinMetadata.defaultSuinsName
   => {"obj_versions"}
 
@@ -407,6 +413,9 @@ DynamicField.balances
 
 DynamicField.contents
   => {}
+
+DynamicField.defaultNameRecord
+  => {"obj_versions"}
 
 DynamicField.defaultSuinsName
   => {"obj_versions"}
@@ -656,6 +665,9 @@ IAddressable.balance
 
 IAddressable.balances
   => {"consistent"}
+
+IAddressable.defaultNameRecord
+  => {"obj_versions"}
 
 IAddressable.defaultSuinsName
   => {"obj_versions"}
@@ -927,6 +939,9 @@ MoveObject.balances
 MoveObject.contents
   => {}
 
+MoveObject.defaultNameRecord
+  => {"obj_versions"}
+
 MoveObject.defaultSuinsName
   => {"obj_versions"}
 
@@ -1001,6 +1016,9 @@ MovePackage.balance
 
 MovePackage.balances
   => {"consistent"}
+
+MovePackage.defaultNameRecord
+  => {"obj_versions"}
 
 MovePackage.defaultSuinsName
   => {"obj_versions"}
@@ -1163,6 +1181,9 @@ Object.balance
 
 Object.balances
   => {"consistent"}
+
+Object.defaultNameRecord
+  => {"obj_versions"}
 
 Object.defaultSuinsName
   => {"obj_versions"}

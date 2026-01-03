@@ -38,6 +38,7 @@ use crate::api::types::balance::{self as balance};
 use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_type::MoveType;
 use crate::api::types::move_value::MoveValue;
+use crate::api::types::name_record::NameRecord;
 use crate::api::types::object::CLive;
 use crate::api::types::object::CVersion;
 use crate::api::types::object::Object;
@@ -198,6 +199,14 @@ impl DynamicField {
     /// The structured representation of the object's contents.
     pub(crate) async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
         self.super_.contents(ctx).await
+    }
+
+    /// The domain explicitly configured as the default Name Service name for this address.
+    pub(crate) async fn default_name_record(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Option<Result<NameRecord, RpcError<object::Error>>> {
+        self.super_.default_name_record(ctx).await.ok()?
     }
 
     /// The domain explicitly configured as the default SuiNS name for this address.

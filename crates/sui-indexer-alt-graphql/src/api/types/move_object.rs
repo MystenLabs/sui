@@ -29,6 +29,7 @@ use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::dynamic_field::DynamicFieldName;
 use crate::api::types::move_type::MoveType;
 use crate::api::types::move_value::MoveValue;
+use crate::api::types::name_record::NameRecord;
 use crate::api::types::object::CLive;
 use crate::api::types::object::CVersion;
 use crate::api::types::object::Object;
@@ -209,6 +210,14 @@ impl MoveObject {
 
         let type_ = MoveType::from_native(native.type_().clone().into(), scope);
         Ok(Some(MoveValue::new(type_, native.contents().to_owned())))
+    }
+
+    /// The domain explicitly configured as the default Name Service name for this address.
+    pub(crate) async fn default_name_record(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Option<Result<NameRecord, RpcError<object::Error>>> {
+        self.super_.default_name_record(ctx).await.ok()?
     }
 
     /// The domain explicitly configured as the default SuiNS name for this address.
