@@ -70,6 +70,7 @@ pub(crate) struct Epoch {
 /// - validators in the committee.
 #[Object]
 impl Epoch {
+    /// The epoch's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {
         Id::Epoch(self.epoch_id)
     }

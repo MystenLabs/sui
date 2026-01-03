@@ -221,6 +221,7 @@ pub(crate) type CVersion = JsonCursor<u64>;
 /// Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
 #[Object]
 impl Object {
+    /// The object's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {
         let a = self.super_.address;
         if let Some((v, d)) = self.version_digest {

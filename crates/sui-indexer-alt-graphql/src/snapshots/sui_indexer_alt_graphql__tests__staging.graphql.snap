@@ -114,6 +114,9 @@ type Address implements Node & IAddressable {
 	Returns `null` if a dynamic object field with that name could not be found attached to the object with this address.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	The address's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
 	id: ID!
 	"""
 	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
@@ -423,6 +426,9 @@ type Checkpoint implements Node {
 	The epoch that this checkpoint is part of.
 	"""
 	epoch: Epoch
+	"""
+	The checkpoint's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
 	id: ID!
 	"""
 	The total number of transactions in the network by the end of this checkpoint.
@@ -887,7 +893,7 @@ There are two sub-types of dynamic fields:
 - Dynamic fields can store any value that has `store`. Objects stored in this kind of field will be considered wrapped (not accessible via its ID by external tools like explorers, wallets, etc. accessing storage).
 - Dynamic object fields can only store objects (values that have the `key` ability, and an `id: UID` as its first field) that have `store`, but they will still be directly accessible off-chain via their ID after being attached as a field.
 """
-type DynamicField implements IAddressable & IMoveObject & IObject {
+type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	The DynamicField's ID.
 	"""
@@ -938,6 +944,10 @@ type DynamicField implements IAddressable & IMoveObject & IObject {
 	Both these operations require the object to have both the `key` and `store` abilities.
 	"""
 	hasPublicTransfer: Boolean
+	"""
+	The dynamic field's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
+	id: ID!
 	"""
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
@@ -1143,6 +1153,9 @@ type Epoch implements Node {
 	This fund is used to redistribute storage fees from past transactions to future validators.
 	"""
 	fundSize: BigInt
+	"""
+	The epoch's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
 	id: ID!
 	"""
 	A commitment by the committee at the end of epoch on the contents of the live object set at that time.
@@ -2106,7 +2119,7 @@ type MoveModuleEdge {
 """
 A MoveObject is a kind of Object that reprsents data stored on-chain.
 """
-type MoveObject implements IAddressable & IMoveObject & IObject {
+type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	The MoveObject's ID.
 	"""
@@ -2165,6 +2178,10 @@ type MoveObject implements IAddressable & IMoveObject & IObject {
 	Both these operations require the object to have both the `key` and `store` abilities.
 	"""
 	hasPublicTransfer: Boolean
+	"""
+	The Move object's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
+	id: ID!
 	"""
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
@@ -2286,6 +2303,9 @@ type MovePackage implements Node & IAddressable & IObject {
 	32-byte hash that identifies the package's contents, encoded in Base58.
 	"""
 	digest: String
+	"""
+	The package's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
 	id: ID!
 	"""
 	The transitive dependencies of this package.
@@ -2612,7 +2632,13 @@ type Mutation {
 	executeTransaction(transactionDataBcs: Base64!, signatures: [Base64!]!): ExecutionResult!
 }
 
+"""
+An interface implemented by types that can be uniquely identified by a globally unique `ID`, following the GraphQL Global Object Identification specification.
+"""
 interface Node {
+	"""
+	The node's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
 	id: ID!
 }
 
@@ -2668,6 +2694,9 @@ type Object implements Node & IAddressable & IObject {
 	Returns `null` if a dynamic object field with that name could not be found attached to this object.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	The object's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
 	id: ID!
 	"""
 	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
@@ -3219,6 +3248,9 @@ type Query {
 	Returns a list of types that is guaranteed to be the same length as `keys`. If a type in `keys` could not be found, its corresponding entry in the result will be `null`.
 	"""
 	multiGetTypes(keys: [String!]!): [MoveType]!
+	"""
+	Fetch a `Node` by its globally unique `ID`. Returns `null` if the node cannot be found (e.g., the underlying data was pruned or never existed).
+	"""
 	node(id: ID!): Node
 	"""
 	Fetch an object by its address.
@@ -3738,6 +3770,9 @@ type Transaction implements Node {
 	The gas input field provides information on what objects were used as gas as well as the owner of the gas object(s) and information on the gas price and budget.
 	"""
 	gasInput: GasInput
+	"""
+	The transaction's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
 	id: ID!
 	"""
 	The type of this transaction as well as the commands and/or parameters comprising the transaction of this kind.

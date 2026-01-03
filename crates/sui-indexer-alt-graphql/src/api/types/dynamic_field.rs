@@ -98,6 +98,7 @@ pub(crate) enum DynamicFieldValue {
 /// - Dynamic object fields can only store objects (values that have the `key` ability, and an `id: UID` as its first field) that have `store`, but they will still be directly accessible off-chain via their ID after being attached as a field.
 #[Object]
 impl DynamicField {
+    /// The dynamic field's globally unique identifier, which can be passed to `Query.node` to refetch it.
     pub(crate) async fn id(&self) -> Id {
         let a = self.super_.super_.super_.address;
         if let Some((v, d)) = self.super_.super_.version_digest {
