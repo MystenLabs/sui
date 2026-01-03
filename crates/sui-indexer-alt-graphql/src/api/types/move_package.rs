@@ -46,6 +46,7 @@ use crate::api::types::balance::{self as balance};
 use crate::api::types::linkage::Linkage;
 use crate::api::types::move_module::MoveModule;
 use crate::api::types::move_object::MoveObject;
+use crate::api::types::name_record::NameRecord;
 use crate::api::types::object::CLive;
 use crate::api::types::object::CVersion;
 use crate::api::types::object::Object;
@@ -194,6 +195,14 @@ impl MovePackage {
             .balances(ctx, first, after, last, before)
             .await
             .ok()?
+    }
+
+    /// The domain explicitly configured as the default Name Service name for this address.
+    pub(crate) async fn default_name_record(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Option<Result<NameRecord, RpcError<object::Error>>> {
+        self.super_.default_name_record(ctx).await.ok()?
     }
 
     /// The domain explicitly configured as the default SuiNS name for this address.

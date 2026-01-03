@@ -99,6 +99,10 @@ type Address implements Node & IAddressable {
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
+	The domain explicitly configured as the default Name Service name for this address.
+	"""
+	defaultNameRecord: NameRecord
+	"""
 	The domain explicitly configured as the default SuiNS name for this address.
 	"""
 	defaultSuinsName: String
@@ -606,6 +610,10 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	decimals: Int
 	"""
+	The domain explicitly configured as the default Name Service name for this address.
+	"""
+	defaultNameRecord: NameRecord
+	"""
 	The domain explicitly configured as the default SuiNS name for this address.
 	"""
 	defaultSuinsName: String
@@ -970,6 +978,10 @@ type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	The structured representation of the object's contents.
 	"""
 	contents: MoveValue
+	"""
+	The domain explicitly configured as the default Name Service name for this address.
+	"""
+	defaultNameRecord: NameRecord
 	"""
 	The domain explicitly configured as the default SuiNS name for this address.
 	"""
@@ -1603,6 +1615,10 @@ interface IAddressable {
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
+	The domain explicitly configured as the default Name Service name for this address.
+	"""
+	defaultNameRecord: NameRecord
+	"""
 	The domain explicitly configured as the default SuiNS name for this address.
 	"""
 	defaultSuinsName: String
@@ -2227,6 +2243,10 @@ type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	contents: MoveValue
 	"""
+	The domain explicitly configured as the default Name Service name for this address.
+	"""
+	defaultNameRecord: NameRecord
+	"""
 	The domain explicitly configured as the default SuiNS name for this address.
 	"""
 	defaultSuinsName: String
@@ -2381,6 +2401,10 @@ type MovePackage implements Node & IAddressable & IObject {
 	Total balance across coins owned by this address, grouped by coin type.
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The domain explicitly configured as the default Name Service name for this address.
+	"""
+	defaultNameRecord: NameRecord
 	"""
 	The domain explicitly configured as the default SuiNS name for this address.
 	"""
@@ -2814,6 +2838,10 @@ type Object implements Node & IAddressable & IObject {
 	Total balance across coins owned by this address, grouped by coin type.
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
+	"""
+	The domain explicitly configured as the default Name Service name for this address.
+	"""
+	defaultNameRecord: NameRecord
 	"""
 	The domain explicitly configured as the default SuiNS name for this address.
 	"""

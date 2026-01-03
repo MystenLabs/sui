@@ -7,7 +7,7 @@ use anyhow::Context as _;
 use async_graphql::{Context, Object};
 use futures::future::try_join_all;
 use sui_name_service::{Domain as NativeDomain, NameRecord as NativeNameRecord, NameServiceConfig};
-use sui_types::dynamic_field::Field;
+use sui_types::{base_types::SuiAddress as NativeSuiAddress, dynamic_field::Field};
 
 use crate::{
     api::scalars::uint53::UInt53,
@@ -148,6 +148,24 @@ impl NameRecord {
         }))
     }
 
+    /// Fetch the record corresponding to the default Name Service domain name for the given
+    /// `address`, as long as a default mapping exists and its forward mapping is still valid (not
+    /// expired).
+    pub(crate) async fn by_address(
+        ctx: &Context<'_>,
+        scope: Scope,
+        address: NativeSuiAddress,
+    ) -> Result<Option<Self>, RpcError<object::Error>> {
+        let Some(reverse) = reverse_record(ctx, scope.clone(), address)
+            .await
+            .map_err(upcast)?
+        else {
+            return Ok(None);
+        };
+
+        Self::by_domain(ctx, scope, reverse.value).await
+    }
+
     fn scope(&self) -> &Scope {
         &self.super_.type_.scope
     }
@@ -183,4 +201,31 @@ async fn name_record(
         bcs::from_bytes(&bytes).context("Failed to deserialize name record")?;
 
     Ok(Some((bytes, field.name, field.value)))
+}
+
+/// Fetch the latest version of the reverse record for the given `address`.
+async fn reverse_record(
+    ctx: &Context<'_>,
+    scope: Scope,
+    address: NativeSuiAddress,
+) -> Result<Option<Field<NativeSuiAddress, NativeDomain>>, RpcError> {
+    let config: &NameServiceConfig = ctx.data()?;
+
+    let address = config.reverse_record_field_id(address.as_ref()).into();
+    let Some(object) = Object::latest(ctx, scope.without_root_bound(), address).await? else {
+        return Ok(None);
+    };
+
+    let Some(object) = object.contents(ctx).await? else {
+        return Ok(None);
+    };
+
+    let Some(move_object) = object.data.try_as_move() else {
+        return Ok(None);
+    };
+
+    let record =
+        bcs::from_bytes(move_object.contents()).context("Failed to deserialize reverse record")?;
+
+    Ok(Some(record))
 }

@@ -61,9 +61,9 @@ macro_rules! assert_not_resolved {
 macro_rules! assert_reverse {
     ($target:expr, $resp:expr) => {
         let resp = $resp;
-        let name = resp["data"]["address"]["defaultSuinsName"]
+        let name = resp["data"]["address"]["defaultNameRecord"]["domain"]
             .as_str()
-            .expect("defaultSuinsName should be a string");
+            .expect("defaultNameRecord.domain should be a string");
 
         assert_eq!($target, name, "Expected name {}, got {resp:#?}", $target);
     };
@@ -74,8 +74,8 @@ macro_rules! assert_no_reverse {
     ($resp:expr) => {
         let resp = $resp;
         assert!(
-            resp["data"]["address"]["defaultSuinsName"].is_null(),
-            "Expected null for defaultSuinsName, got {resp:#?}",
+            resp["data"]["address"]["defaultNameRecord"].is_null(),
+            "Expected null for defaultNameRecord, got {resp:#?}",
         );
     };
 }
@@ -535,7 +535,7 @@ impl SuiNSCluster {
         let query = r#"
             query($address: SuiAddress!) {
                 address(address: $address) {
-                    defaultSuinsName
+                    defaultNameRecord { domain }
                 }
             }
         "#;
