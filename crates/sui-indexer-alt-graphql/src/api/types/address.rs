@@ -28,7 +28,6 @@ use crate::api::types::dynamic_field::DynamicFieldName;
 use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_package::MovePackage;
 use crate::api::types::name_record::NameRecord;
-use crate::api::types::name_service::address_to_name;
 use crate::api::types::object::Object;
 use crate::api::types::object::ObjectKey;
 use crate::api::types::object::{self as object};
@@ -88,11 +87,6 @@ pub(crate) enum AddressTransactionRelationship {
         name = "default_name_record",
         ty = "Option<Result<NameRecord, RpcError<object::Error>>>",
         desc = "The domain explicitly configured as the default Name Service name for this address."
-    ),
-    field(
-        name = "default_suins_name",
-        ty = "Option<Result<String, RpcError>>",
-        desc = "The domain explicitly configured as the default SuiNS name for this address."
     ),
     field(
         name = "multi_get_balances",
@@ -245,16 +239,6 @@ impl Address {
         ctx: &Context<'_>,
     ) -> Option<Result<NameRecord, RpcError<object::Error>>> {
         NameRecord::by_address(ctx, self.scope.without_root_bound(), self.address)
-            .await
-            .transpose()
-    }
-
-    /// The domain explicitly configured as the default SuiNS name for this address.
-    pub(crate) async fn default_suins_name(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Option<Result<String, RpcError>> {
-        address_to_name(ctx, &self.scope, self.address)
             .await
             .transpose()
     }

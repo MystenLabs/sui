@@ -48,9 +48,6 @@ Address.balances
 Address.defaultNameRecord
   => {"obj_versions"}
 
-Address.defaultSuinsName
-  => {"obj_versions"}
-
 Address.dynamicField
   => {"obj_versions"}
 
@@ -252,9 +249,6 @@ CoinMetadata.decimals
 CoinMetadata.defaultNameRecord
   => {"obj_versions"}
 
-CoinMetadata.defaultSuinsName
-  => {"obj_versions"}
-
 CoinMetadata.description
   => {}
 
@@ -415,9 +409,6 @@ DynamicField.contents
   => {}
 
 DynamicField.defaultNameRecord
-  => {"obj_versions"}
-
-DynamicField.defaultSuinsName
   => {"obj_versions"}
 
 DynamicField.dynamicField
@@ -667,9 +658,6 @@ IAddressable.balances
   => {"consistent"}
 
 IAddressable.defaultNameRecord
-  => {"obj_versions"}
-
-IAddressable.defaultSuinsName
   => {"obj_versions"}
 
 IAddressable.multiGetBalances
@@ -942,9 +930,6 @@ MoveObject.contents
 MoveObject.defaultNameRecord
   => {"obj_versions"}
 
-MoveObject.defaultSuinsName
-  => {"obj_versions"}
-
 MoveObject.dynamicField
   => {"obj_versions"}
 
@@ -1018,9 +1003,6 @@ MovePackage.balances
   => {"consistent"}
 
 MovePackage.defaultNameRecord
-  => {"obj_versions"}
-
-MovePackage.defaultSuinsName
   => {"obj_versions"}
 
 MovePackage.module
@@ -1183,9 +1165,6 @@ Object.balances
   => {"consistent"}
 
 Object.defaultNameRecord
-  => {"obj_versions"}
-
-Object.defaultSuinsName
   => {"obj_versions"}
 
 Object.dynamicField
@@ -1402,9 +1381,6 @@ Query.protocolConfigs
   => {}
 
 Query.serviceConfig
-  => {}
-
-Query.suinsName
   => {}
 
 Query.transaction
