@@ -1305,6 +1305,9 @@ Query.node
 Query.address
   => {}
 
+Query.address (filter: name)
+  => {"obj_versions"}
+
 Query.chainIdentifier
   => {}
 

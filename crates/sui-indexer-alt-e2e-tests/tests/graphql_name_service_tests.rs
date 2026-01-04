@@ -80,6 +80,33 @@ macro_rules! assert_no_reverse {
     };
 }
 
+/// Tests successful address resolution by name.
+macro_rules! assert_address_by_name {
+    ($target:expr, $resp:expr) => {
+        let resp = $resp;
+        let address = resp["data"]["address"]["address"]
+            .as_str()
+            .expect("address should be a string");
+
+        assert_eq!(
+            $target,
+            address.parse().expect("failed to parse result address"),
+            "Expected successful response from GraphQL, got {resp:#?}",
+        );
+    };
+}
+
+/// Tests that address resolution by name returns null (no match).
+macro_rules! assert_no_address_by_name {
+    ($resp:expr) => {
+        let resp = $resp;
+        assert!(
+            resp["data"]["address"].is_null(),
+            "Expected null for address, got {resp:#?}",
+        );
+    };
+}
+
 /// Test resolving a simple domain name, using both formats.
 #[tokio::test]
 async fn test_resolve_domain() {
@@ -282,6 +309,104 @@ async fn test_resolve_subdomain_no_parent() {
 
     assert_not_resolved!(c.resolve_address("bar.foo.sui").await.unwrap());
     assert_no_reverse!(c.resolve_name(target).await.unwrap());
+}
+
+/// Test looking up an address by its SuiNS name via Query.address(name: ...).
+#[tokio::test]
+async fn test_address_by_name() {
+    let mut c = SuiNSCluster::new().await;
+
+    let nft = ObjectID::random();
+    let target = SuiAddress::random_for_testing_only();
+    c.add_domain(nft, &["sui", "foo"], Some(target), 1000)
+        .await
+        .expect("Failed to add domain");
+
+    c.cluster.create_checkpoint().await;
+
+    // Resolve using the domain name
+    assert_address_by_name!(target, c.address_by_name("foo.sui").await.unwrap());
+    assert_address_by_name!(target, c.address_by_name("@foo").await.unwrap());
+}
+
+/// If a domain name exists but has no target, Query.address returns null.
+#[tokio::test]
+async fn test_address_by_name_no_target() {
+    let mut c = SuiNSCluster::new().await;
+
+    let nft = ObjectID::random();
+    c.add_domain(nft, &["sui", "foo"], None, 1000)
+        .await
+        .expect("Failed to add domain");
+
+    c.cluster.create_checkpoint().await;
+
+    assert_no_address_by_name!(c.address_by_name("foo.sui").await.unwrap());
+}
+
+/// If the domain doesn't exist, Query.address returns null.
+#[tokio::test]
+async fn test_address_by_name_nonexistent() {
+    let mut c = SuiNSCluster::new().await;
+    c.cluster.create_checkpoint().await;
+
+    assert_no_address_by_name!(c.address_by_name("foo.sui").await.unwrap());
+}
+
+/// Test Query.address with neither address nor name returns an error.
+#[tokio::test]
+async fn test_address_no_identifier_error() {
+    let mut c = SuiNSCluster::new().await;
+    c.cluster.create_checkpoint().await;
+
+    let resp = c.query("{ address { address } }", json!({})).await.unwrap();
+
+    assert!(
+        resp["errors"].as_array().unwrap().iter().any(|e| {
+            e["message"]
+                .as_str()
+                .is_some_and(|m| m.contains("Exactly one of `address` or `name` must be specified"))
+        }),
+        "Expected error for missing identifier, got {resp:#?}"
+    );
+}
+
+/// Test Query.address with both address and name returns an error.
+#[tokio::test]
+async fn test_address_both_identifiers_error() {
+    let mut c = SuiNSCluster::new().await;
+
+    let nft = ObjectID::random();
+    let target = SuiAddress::random_for_testing_only();
+    c.add_domain(nft, &["sui", "foo"], Some(target), 1000)
+        .await
+        .expect("Failed to add domain");
+
+    c.cluster.create_checkpoint().await;
+
+    let resp = c
+        .query(
+            r#"
+            query($address: SuiAddress!, $name: String!) {
+                address(address: $address, name: $name) { address }
+            }
+            "#,
+            json!({
+                "address": target.to_string(),
+                "name": "foo.sui",
+            }),
+        )
+        .await
+        .unwrap();
+
+    assert!(
+        resp["errors"].as_array().unwrap().iter().any(|e| {
+            e["message"]
+                .as_str()
+                .is_some_and(|m| m.contains("Exactly one of `address` or `name` must be specified"))
+        }),
+        "Expected error for duplicate identifier, got {resp:#?}"
+    );
 }
 
 struct SuiNSCluster {
@@ -492,74 +617,71 @@ impl SuiNSCluster {
         Ok(())
     }
 
+    /// Send a GraphQL query to the cluster with the given variables.
+    async fn query(&self, query: &str, variables: Value) -> anyhow::Result<Value> {
+        let response = self
+            .client
+            .post(self.cluster.graphql_url())
+            .json(&json!({
+                "query": query,
+                "variables": variables,
+            }))
+            .send()
+            .await
+            .context("Request to GraphQL server failed")?;
+
+        response
+            .json()
+            .await
+            .context("Failed to parse GraphQL response")
+    }
+
     /// Send a GraphQL request to the cluster to resolve the given SuiNS name.
     async fn resolve_address(&self, name: &str) -> anyhow::Result<Value> {
-        let query = r#"
+        self.query(
+            r#"
             query($name: String!) {
                 nameRecord(name: $name) {
                     target { address }
-
                     parent {
                         domain
                         target { address }
                     }
                 }
             }
-        "#;
-
-        let variables = json!({
-            "name": name,
-        });
-
-        let response = self
-            .client
-            .post(self.cluster.graphql_url())
-            .json(&json!({
-                "query": query,
-                "variables": variables,
-            }))
-            .send()
-            .await
-            .context("Request to GraphQL server failed")?;
-
-        let body: Value = response
-            .json()
-            .await
-            .context("Failed to parse GraphQL response")?;
-
-        Ok(body)
+            "#,
+            json!({ "name": name }),
+        )
+        .await
     }
 
     /// Send a GraphQL request to the cluster to resolve the SuiNS name for a given address.
     async fn resolve_name(&self, addr: SuiAddress) -> anyhow::Result<Value> {
-        let query = r#"
+        self.query(
+            r#"
             query($address: SuiAddress!) {
                 address(address: $address) {
                     defaultNameRecord { domain }
                 }
             }
-        "#;
+            "#,
+            json!({ "address": addr.to_string() }),
+        )
+        .await
+    }
 
-        let variables = json!({
-            "address": addr.to_string(),
-        });
-
-        let response = self
-            .client
-            .post(self.cluster.graphql_url())
-            .json(&json!({
-                "query": query,
-                "variables": variables,
-            }))
-            .send()
-            .await
-            .context("Request to GraphQL server failed")?;
-
-        let body: Value = response
-            .json()
-            .await
-            .context("Failed to parse GraphQL response")?;
-
-        Ok(body)
+    /// Send a GraphQL request to resolve an address by its SuiNS name.
+    async fn address_by_name(&self, name: &str) -> anyhow::Result<Value> {
+        self.query(
+            r#"
+            query($name: String!) {
+                address(name: $name) {
+                    address
+                }
+            }
+            "#,
+            json!({ "name": name }),
+        )
+        .await
     }
 }

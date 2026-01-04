@@ -9,7 +9,9 @@ A: object(0,0)
 task 1, lines 8-15:
 //# run-graphql --cursors bcs(42u64)
 Response: {
-  "data": null,
+  "data": {
+    "address": null
+  },
   "errors": [
     {
       "message": "Name must specify either both 'type' and 'bcs', or 'literal'",
@@ -33,7 +35,9 @@ Response: {
 task 2, lines 17-24:
 //# run-graphql --cursors bcs(42u64)
 Response: {
-  "data": null,
+  "data": {
+    "address": null
+  },
   "errors": [
     {
       "message": "Name must specify either both 'type' and 'bcs', or 'literal'",
@@ -57,7 +61,9 @@ Response: {
 task 3, lines 26-33:
 //# run-graphql --cursors bcs(42u64)
 Response: {
-  "data": null,
+  "data": {
+    "address": null
+  },
   "errors": [
     {
       "message": "Name must specify either both 'type' and 'bcs', or 'literal'",
@@ -81,7 +87,9 @@ Response: {
 task 4, lines 35-42:
 //# run-graphql
 Response: {
-  "data": null,
+  "data": {
+    "address": null
+  },
   "errors": [
     {
       "message": "Literal error: Unexpected \"'hello\" at byte offset 0, expected one of 'b', 'false', 'true', 'x', '@', an identifier, a decimal number, a hexadecimal number, or a string",
@@ -105,7 +113,9 @@ Response: {
 task 5, lines 44-51:
 //# run-graphql
 Response: {
-  "data": null,
+  "data": {
+    "address": null
+  },
   "errors": [
     {
       "message": "Name literals cannot contain field accesses",

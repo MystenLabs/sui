@@ -150,22 +150,27 @@ impl Query {
     /// If `atCheckpoint` is specified, the address will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
     ///
     /// If none of the above are specified, the address is fetched at the checkpoint being viewed.
+    ///
+    /// If the address is fetched by name and the name does not resolve to an address (e.g. the name does not exist or has expired), `null` is returned.
     async fn address(
         &self,
         ctx: &Context<'_>,
-        address: SuiAddress,
+        address: Option<SuiAddress>,
+        name: Option<Domain>,
         root_version: Option<UInt53>,
         at_checkpoint: Option<UInt53>,
-    ) -> Result<Address, RpcError<address::Error>> {
+    ) -> Result<Option<Address>, RpcError<address::Error>> {
         Address::by_key(
             ctx,
             self.scope(ctx)?,
             AddressKey {
                 address,
+                name,
                 root_version,
                 at_checkpoint,
             },
         )
+        .await
     }
 
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
@@ -272,16 +277,18 @@ impl Query {
 
     /// Fetch addresses by their keys.
     ///
-    /// Returns a list of addresses that is guaranteed to be the same length as `keys`.
+    /// Returns a list of addresses that is guaranteed to be the same length as `keys`. If an address in `keys` is fetched by name and the name does not resolve to an address, its corresponding entry in the result will be `null`.
     async fn multi_get_addresses(
         &self,
         ctx: &Context<'_>,
         keys: Vec<AddressKey>,
-    ) -> Result<Vec<Address>, RpcError<address::Error>> {
+    ) -> Result<Vec<Option<Address>>, RpcError<address::Error>> {
         let scope = self.scope(ctx)?;
-        keys.into_iter()
-            .map(|k| Address::by_key(ctx, scope.clone(), k))
-            .collect()
+        try_join_all(
+            keys.into_iter()
+                .map(|k| Address::by_key(ctx, scope.clone(), k)),
+        )
+        .await
     }
 
     /// Fetch checkpoints by their sequence numbers.
