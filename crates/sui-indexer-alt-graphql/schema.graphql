@@ -164,7 +164,7 @@ type AddressAliasStateCreateTransaction {
 """
 Identifies a specific version of an address.
 
-The `address` field must be specified, as well as at most one of `rootVersion`, or `atCheckpoint`. If neither is provided, the package is fetched at the checkpoint being viewed.
+Exactly one of `address` or `name` must be specified. Additionally, at most one of `rootVersion` or `atCheckpoint` can be specified. If neither bound is provided, the address is fetched at the checkpoint being viewed.
 
 See `Query.address` for more details.
 """
@@ -172,11 +172,15 @@ input AddressKey {
 	"""
 	The address.
 	"""
-	address: SuiAddress!
+	address: SuiAddress
 	"""
 	If specified, sets a checkpoint bound for this address.
 	"""
 	atCheckpoint: UInt53
+	"""
+	A SuiNS name to resolve to an address.
+	"""
+	name: String
 	"""
 	If specified, sets a root version bound for this address.
 	"""
@@ -3312,8 +3316,10 @@ type Query {
 	If `atCheckpoint` is specified, the address will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
 	
 	If none of the above are specified, the address is fetched at the checkpoint being viewed.
+	
+	If the address is fetched by name and the name does not resolve to an address (e.g. the name does not exist or has expired), `null` is returned.
 	"""
-	address(address: SuiAddress!, rootVersion: UInt53, atCheckpoint: UInt53): Address!
+	address(address: SuiAddress, name: String, rootVersion: UInt53, atCheckpoint: UInt53): Address
 	"""
 	First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
 	"""
@@ -3351,9 +3357,9 @@ type Query {
 	"""
 	Fetch addresses by their keys.
 	
-	Returns a list of addresses that is guaranteed to be the same length as `keys`.
+	Returns a list of addresses that is guaranteed to be the same length as `keys`. If an address in `keys` is fetched by name and the name does not resolve to an address, its corresponding entry in the result will be `null`.
 	"""
-	multiGetAddresses(keys: [AddressKey!]!): [Address!]!
+	multiGetAddresses(keys: [AddressKey!]!): [Address]!
 	"""
 	Fetch checkpoints by their sequence numbers.
 	

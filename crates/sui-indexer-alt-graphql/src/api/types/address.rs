@@ -14,6 +14,7 @@ use futures::future::try_join_all;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::dynamic_field::DynamicFieldType;
 
+use crate::api::scalars::domain::Domain;
 use crate::api::scalars::id::Id;
 use crate::api::scalars::owner_kind::OwnerKind;
 use crate::api::scalars::sui_address::SuiAddress;
@@ -39,6 +40,7 @@ use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
+use crate::error::convert;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
@@ -122,13 +124,16 @@ pub(crate) struct Address {
 
 /// Identifies a specific version of an address.
 ///
-/// The `address` field must be specified, as well as at most one of `rootVersion`, or `atCheckpoint`. If neither is provided, the package is fetched at the checkpoint being viewed.
+/// Exactly one of `address` or `name` must be specified. Additionally, at most one of `rootVersion` or `atCheckpoint` can be specified. If neither bound is provided, the address is fetched at the checkpoint being viewed.
 ///
 /// See `Query.address` for more details.
-#[derive(InputObject, Debug, Clone, Eq, PartialEq)]
+#[derive(InputObject)]
 pub(crate) struct AddressKey {
     /// The address.
-    pub(crate) address: SuiAddress,
+    pub(crate) address: Option<SuiAddress>,
+
+    /// A SuiNS name to resolve to an address.
+    pub(crate) name: Option<Domain>,
 
     /// If specified, sets a root version bound for this address.
     pub(crate) root_version: Option<UInt53>,
@@ -142,10 +147,16 @@ pub(crate) enum Error {
     #[error("Checkpoint {0} in the future")]
     Future(u64),
 
+    #[error(transparent)]
+    Object(#[from] Arc<object::Error>),
+
     #[error(
         "At most one of a root version, or a checkpoint bound can be specified when fetching an address"
     )]
     OneBound,
+
+    #[error("Exactly one of `address` or `name` must be specified")]
+    OneId,
 }
 
 #[Object]
@@ -169,15 +180,17 @@ impl Address {
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
     ) -> Result<Option<Address>, RpcError<Error>> {
-        Ok(Some(Address::by_key(
+        Address::by_key(
             ctx,
             Scope::new(ctx)?,
             AddressKey {
-                address: self.address.into(),
+                address: Some(self.address.into()),
+                name: None,
                 root_version,
                 at_checkpoint: checkpoint,
             },
-        )?))
+        )
+        .await
     }
 
     /// Attempts to fetch the object at this address.
@@ -442,32 +455,57 @@ impl Address {
 }
 
 impl Address {
-    /// Fetch an address by its key. The key can either specify a root version bound, or a
-    /// checkpoint bound, or neither.
-    pub(crate) fn by_key(
+    /// Fetch an address by its key. Exactly one of an address or a name must be provided.
+    /// Additionally, the key can specify a root version bound, or a checkpoint bound, or neither.
+    ///
+    /// If a name is provided, it is resolved to an address using SuiNS. If the name does not
+    /// resolve to an address (e.g. the name does not exist or has expired), `Ok(None)` is
+    /// returned.
+    pub(crate) async fn by_key(
         ctx: &Context<'_>,
         scope: Scope,
         key: AddressKey,
-    ) -> Result<Self, RpcError<Error>> {
+    ) -> Result<Option<Self>, RpcError<Error>> {
         let bounds = key.root_version.is_some() as u8 + key.at_checkpoint.is_some() as u8;
 
         if bounds > 1 {
-            Err(bad_user_input(Error::OneBound))
-        } else if let Some(v) = key.root_version {
-            let scope = scope.with_root_version(v.into());
-            Ok(Self::with_address(scope, key.address.into()))
+            return Err(bad_user_input(Error::OneBound));
+        }
+
+        // Determine the scope based on bounds
+        let scope = if let Some(v) = key.root_version {
+            scope.with_root_version(v.into())
         } else if let Some(cp) = key.at_checkpoint {
-            // Validate checkpoint isn't in the future
             let watermark: &Arc<Watermarks> = ctx.data()?;
             if u64::from(cp) > watermark.high_watermark().checkpoint() {
                 return Err(bad_user_input(Error::Future(cp.into())));
             }
-
-            let scope = scope.with_root_checkpoint(cp.into());
-            Ok(Self::with_address(scope, key.address.into()))
+            scope.with_root_checkpoint(cp.into())
         } else {
-            Ok(Self::with_address(scope, key.address.into()))
-        }
+            scope
+        };
+
+        // Resolve the address either directly or via name lookup.
+        let address = match (key.address, key.name) {
+            (Some(addr), None) => addr.into(),
+            (None, Some(name)) => {
+                let Some(target) = NameRecord::by_domain(ctx, scope.clone(), name.into())
+                    .await
+                    .map_err(convert)?
+                    .and_then(|r| r.record.target_address)
+                else {
+                    return Ok(None);
+                };
+
+                target
+            }
+
+            (None, None) | (Some(_), Some(_)) => {
+                return Err(bad_user_input(Error::OneId));
+            }
+        };
+
+        Ok(Some(Self::with_address(scope, address)))
     }
 
     /// Construct an address that is represented by just its identifier (`SuiAddress`).

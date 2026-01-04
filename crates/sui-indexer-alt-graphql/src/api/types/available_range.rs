@@ -338,6 +338,11 @@ collect_pipelines! {
     Object.[digest, objectBcs, owner, previousTransaction, storageRebate, version] => IObject.*;
     Object.[receivedTransactions] => IObject.receivedTransactions();
 
+    Query.[address] |pipelines, filters| {
+        if filters.contains("name") {
+            pipelines.insert("obj_versions".to_string());
+        }
+    };
     Query.[checkpoints] |pipelines, _filters| {
         pipelines.insert("cp_sequence_numbers".to_string());
     };

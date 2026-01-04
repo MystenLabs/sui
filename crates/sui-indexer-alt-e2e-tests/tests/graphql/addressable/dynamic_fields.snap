@@ -222,7 +222,9 @@ Response: {
 task 12, lines 127-137:
 //# run-graphql
 Response: {
-  "data": null,
+  "data": {
+    "address": null
+  },
   "errors": [
     {
       "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",
