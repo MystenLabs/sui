@@ -65,18 +65,6 @@ const config = {
         trackLocalhost: false,
       },
     ],
-    [
-      "@graphql-markdown/docusaurus",
-      {
-        id: "alpha",
-        schema: "../../crates/sui-graphql-rpc/schema.graphql",
-        rootPath: "../content", // docs will be generated under rootPath/baseURL
-        baseURL: "references/sui-api/sui-graphql/alpha/reference",
-        loaders: {
-          GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
-        },
-      },
-    ],
     function stepHeadingLoader() {
       return {
         name: "step-heading-loader",
