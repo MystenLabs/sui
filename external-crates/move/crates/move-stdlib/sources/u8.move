@@ -42,7 +42,7 @@ public fun pow(base: u8, exponent: u8): u8 {
 /// to get perfect (or precise) integer square root for some numbers.
 ///
 /// Example:
-/// ```
+/// ```move
 /// math::sqrt(9) => 3
 /// math::sqrt(8) => 2 // the nearest lower square root is 4;
 /// ```
@@ -52,7 +52,7 @@ public fun pow(base: u8, exponent: u8): u8 {
 /// value by some bigger number. Ideally if this is a square of 10 or 100.
 ///
 /// Example:
-/// ```
+/// ```move
 /// math::sqrt(8) => 2;
 /// math::sqrt(8 * 10000) => 282;
 /// // now we can use this value as if it was 2.82;
