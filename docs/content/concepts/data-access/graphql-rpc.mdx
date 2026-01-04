@@ -99,16 +99,17 @@ In the following example, a variable supplies the ID of the epoch being queried:
 
 ```graphql
 query ($epochID: Int) {
-  epoch(id: $epochID) {
-    referenceGasPrice
-  }
+	epoch(id: $epochID) {
+		referenceGasPrice
+	}
 }
 ```
 
 **Variables**:
+
 ```json
 {
-   "epochID": 100
+	"epochID": 100
 }
 ```
 
@@ -135,48 +136,43 @@ Fragments are reusable units that you can include in queries as needed. To learn
 
 ```graphql
 query DynamicField {
-  object(
-    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
-  ) {
-    dynamicField(
-      name: {
-        type: "0x2::kiosk::Lock",
-        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1Vhfw=",
-      }
-    ) {
-      ...DynamicFieldSelect
-    }
-  }
+	object(address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac") {
+		dynamicField(
+			name: { type: "0x2::kiosk::Lock", bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1Vhfw=" }
+		) {
+			...DynamicFieldSelect
+		}
+	}
 }
 
 fragment DynamicFieldSelect on DynamicField {
-  name {
-    ...MoveValueFields
-  }
-  value {
-    ...DynamicFieldValueSelection
-  }
+	name {
+		...MoveValueFields
+	}
+	value {
+		...DynamicFieldValueSelection
+	}
 }
 
 fragment DynamicFieldValueSelection on DynamicFieldValue {
-  __typename
-  ... on MoveValue {
-    ...MoveValueFields
-  }
-  ... on MoveObject {
-    hasPublicTransfer
-    contents {
-      ...MoveValueFields
-    }
-  }
+	__typename
+	... on MoveValue {
+		...MoveValueFields
+	}
+	... on MoveObject {
+		hasPublicTransfer
+		contents {
+			...MoveValueFields
+		}
+	}
 }
 
 fragment MoveValueFields on MoveValue {
-  type {
-    repr
-  }
-  json
-  bcs
+	type {
+		repr
+	}
+	json
+	bcs
 }
 ```
 
@@ -186,31 +182,31 @@ GraphQL supports queries that fetch multiple kinds of potentially nested data. F
 
 ```graphql
 query {
-  epoch(epochId: 97) {
-    transactions(first: 10) {
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      nodes {
-        digest
-        sender {
-          address
-        }
-        effects {
-          gasEffects {
-            gasObject {
-              address
-            }
-          }
-        }
-        gasInput {
-          gasPrice
-          gasBudget
-        }
-      }
-    }
-  }
+	epoch(epochId: 97) {
+		transactions(first: 10) {
+			pageInfo {
+				hasNextPage
+				endCursor
+			}
+			nodes {
+				digest
+				sender {
+					address
+				}
+				effects {
+					gasEffects {
+						gasObject {
+							address
+						}
+					}
+				}
+				gasInput {
+					gasPrice
+					gasBudget
+				}
+			}
+		}
+	}
 }
 ```
 
@@ -455,20 +451,123 @@ If a request performs more rich queries than the allowed limit, excess rich quer
 
 ## Retention
 
-Different queries are subject to their own retention policies. For example, live object set queries work only for recent checkpoints (measured in minutes or hours), while transaction pagination might be available only back to certain checkpoints (measured in weeks or months), depending on the filters applied. Data outside these ranges is pruned. You can query the upper and lower bounds of that range for your query as follows:
+Different queries are subject to their own retention policies. For example, live object set queries work only for recent checkpoints (measured in minutes or hours), while transaction pagination may be available only back to certain checkpoints (measured in weeks or months), depending on the filters applied. Data outside these ranges is pruned.
+
+### Data Source Retention
+
+GraphQL queries rely on different data sources with different retention ranges:
+
+| Data Source          | Examples                                                  | Typical Retention          |
+| -------------------- | --------------------------------------------------------- | -------------------------- |
+| **Consistent Store** | `Query.objects`, `Address.balance`, objects by owner/type | ~1 hour                    |
+| **DB Store**         | `Query.transactions`, `Query.events`, `Query.checkpoints` | ~(30-90) days              |
+| **Archival Service** | Point lookups (tx by digest, object by ID+version)        | Indefinite (if configured) |
+
+:::tip Operators
+
+Retention is configured by the stack operator. For production configuration examples, see [Indexer Stack Setup](/guides/operator/indexer-stack-setup).
+
+:::
+
+### Querying Available Range
+
+Query the available checkpoint range using `serviceConfig.availableRange`:
 
 ```graphql
+availableRange(type: String!, field: String, filters: [String!]): AvailableRange!
+```
+
+- **`type`**: The GraphQL type name (e.g., `"Query"`, `"Address"`)
+- **`field`**: The field on that type (e.g., `"transactions"`, `"events"`)
+- **`filters`**: Filter field names from the filter input type (e.g., `["affectedAddress"]` for `TransactionFilter`, `["module"]` for `EventFilter`), or direct query parameter names (e.g., `["version"]`)
+
+Match your query parameters to filter names: if your query uses `filter: { affectedAddress: "0x..." }`, pass `filters: ["affectedAddress"]`.
+
+### Examples
+
+```graphql
+# Check available range for basic transaction pagination
 {
-  serviceConfig {
-    retention(type: "Query", field: "transactions", filter: "affectedAddress") {
-      first { sequenceNumber }
-      last { sequenceNumber }
-    }
-  }
+	serviceConfig {
+		availableRange(type: "Query", field: "transactions") {
+			first {
+				sequenceNumber
+			}
+			last {
+				sequenceNumber
+			}
+		}
+	}
 }
 ```
 
-The results are the first and last checkpoint for which pagination continues to work and produce a consistent result.
+```graphql
+# Check available range for transactions filtered by affected address
+{
+	serviceConfig {
+		availableRange(type: "Query", field: "transactions", filters: ["affectedAddress"]) {
+			first {
+				sequenceNumber
+			}
+			last {
+				sequenceNumber
+			}
+		}
+	}
+}
+```
+
+```graphql
+# Check available range for events filtered by emitting module
+{
+	serviceConfig {
+		availableRange(type: "Query", field: "events", filters: ["module"]) {
+			first {
+				sequenceNumber
+			}
+			last {
+				sequenceNumber
+			}
+		}
+	}
+}
+```
+
+:::info Nested queries
+
+Each field in a nested query has its own retention limit:
+
+```graphql
+query {
+	address(address: "0x...") {
+		# Uses Consistent Store (~1 hour retention)
+		dynamicFields(first: 10) {
+			nodes {
+				value {
+					... on MoveObject {
+						# Uses DB Store (may have different retention)
+						objectAt(checkpoint: 10579000) {
+							version
+						}
+					}
+				}
+			}
+		}
+	}
+}
+```
+
+Use `serviceConfig.availableRange` to check retention for each field separately.
+
+:::
+
+### Handling "Outside Available Range" Errors
+
+If you encounter an error indicating data is outside the available range, it means your query is requesting data that has been pruned. To resolve this:
+
+1. **Check the available range first** using `serviceConfig.availableRange` before starting long pagination runs.
+2. **Use fresh cursors** - old cursors may reference checkpoints that have since been pruned.
+3. **Adjust your query bounds** - ensure `afterCheckpoint`/`beforeCheckpoint` filters fall within the available range.
 
 ## Beta schema changes
 
