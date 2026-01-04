@@ -341,14 +341,6 @@ impl Object {
         self.super_.default_name_record(ctx).await.ok()?
     }
 
-    /// The domain explicitly configured as the default SuiNS name for this address.
-    pub(crate) async fn default_suins_name(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Option<Result<String, RpcError>> {
-        self.super_.default_suins_name(ctx).await.ok()?
-    }
-
     /// Access a dynamic field on an object using its type and BCS-encoded name.
     ///
     /// Returns `null` if a dynamic field with that name could not be found attached to this object.

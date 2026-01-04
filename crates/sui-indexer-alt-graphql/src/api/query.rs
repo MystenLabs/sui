@@ -42,7 +42,6 @@ use crate::api::types::move_package::{self as move_package};
 use crate::api::types::move_type::MoveType;
 use crate::api::types::move_type::{self as move_type};
 use crate::api::types::name_record::NameRecord;
-use crate::api::types::name_service::name_to_address;
 use crate::api::types::node::Node;
 use crate::api::types::object::Object;
 use crate::api::types::object::ObjectKey;
@@ -600,21 +599,6 @@ impl Query {
     async fn service_config(&self, ctx: &Context<'_>) -> Result<ServiceConfig, RpcError> {
         let scope = self.scope(ctx)?;
         Ok(ServiceConfig { scope })
-    }
-
-    /// Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
-    async fn suins_name(
-        &self,
-        ctx: &Context<'_>,
-        address: Domain,
-        root_version: Option<UInt53>,
-    ) -> Result<Option<Address>, RpcError> {
-        let mut scope = self.scope(ctx)?;
-        if let Some(version) = root_version {
-            scope = scope.with_root_version(version.into());
-        }
-
-        name_to_address(ctx, &scope, &address).await
     }
 
     /// Fetch a transaction by its digest.

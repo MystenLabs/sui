@@ -205,14 +205,6 @@ impl MovePackage {
         self.super_.default_name_record(ctx).await.ok()?
     }
 
-    /// The domain explicitly configured as the default SuiNS name for this address.
-    pub(crate) async fn default_suins_name(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Option<Result<String, RpcError>> {
-        self.super_.default_suins_name(ctx).await.ok()?
-    }
-
     /// The module named `name` in this package.
     async fn module(
         &self,

@@ -193,14 +193,6 @@ impl CoinMetadata {
         self.super_.default_name_record(ctx).await.ok()?
     }
 
-    /// The domain explicitly configured as the default SuiNS name for this address.
-    pub(crate) async fn default_suins_name(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Option<Result<String, RpcError>> {
-        self.super_.default_suins_name(ctx).await.ok()?
-    }
-
     /// Description of the coin.
     pub(crate) async fn description(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
         let Some(contents) = self.metadata_contents(ctx).await? else {
