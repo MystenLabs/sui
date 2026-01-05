@@ -24,7 +24,6 @@ use std::{
     sync::{Arc, Mutex},
     vec,
 };
-use tempfile::tempdir;
 use vfs::{
     VfsPath,
     impls::{memory::MemoryFS, overlay::OverlayFS, physical::PhysicalFS},
@@ -306,13 +305,11 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     flavor: Option<Flavor>,
     cursor_file_opt: Option<&PathBuf>,
 ) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
-    let cached_deps_exist = has_precompiled_deps(pkg_path, packages_info.clone());
     let build_config = move_package_alt_compilation::build_config::BuildConfig {
         test_mode: true,
-        install_dir: Some(tempdir().unwrap().path().to_path_buf()),
         default_flavor: flavor,
         lint_flag: lint.into(),
-        force_lock_file: cached_deps_exist,
+        allow_dirty: true,
         ..Default::default()
     };
 
@@ -806,11 +803,6 @@ fn merge_diagnostics_for_file(
     } else {
         ide_diags.insert(file_path.clone(), diagnostics.clone());
     }
-}
-
-fn has_precompiled_deps(pkg_path: &Path, pkg_dependencies: Arc<Mutex<CachedPackages>>) -> bool {
-    let pkg_deps = pkg_dependencies.lock().unwrap();
-    pkg_deps.pkg_info.contains_key(pkg_path)
 }
 
 fn compute_mapped_files<F: MoveFlavor>(

@@ -104,6 +104,7 @@ pub struct BuildConfig {
 
     /// Forces use of lock file without checking if it needs to be updated
     /// (regenerates it only if it doesn't exist)
+    /// TODO(pkg-alt): Remove this as this is not used (and has no usage, OR rename to ignore-digests)
     #[clap(skip)]
     pub force_lock_file: bool,
 

@@ -242,7 +242,17 @@ impl GitTree {
             &self.path_in_repo.to_string_lossy()
         };
 
-        let Ok(output) = self.run_git(&["status", "--porcelain", path_in_repo]).await else {
+        let Ok(output) = self
+            .run_git(&[
+                "status",
+                "--porcelain",
+                "--",
+                path_in_repo,
+                ":!*/Move.lock",
+                ":!*/Published.toml",
+            ])
+            .await
+        else {
             // if there's an error, the git repo has probably been tampered with - it's dirty
             return true;
         };
@@ -783,6 +793,52 @@ mod tests {
 
         // fetch_allow_dirty should succeed despite the dirty state
         git_tree.checkout_repo(true).await.unwrap();
+    }
+
+    /// If we touch the `Move.lock` file, we
+    #[test(tokio::test)]
+    async fn test_fetch_dirty_lockfile_should_succeed() {
+        let project = git::new().await;
+        let _commit = project
+            .commit(|project| project.add_packages(["pkg_a"]))
+            .await;
+
+        let cache_dir = tempdir().unwrap();
+        let cache = GitCache::new_from_dir(cache_dir.path());
+
+        let git_tree = cache
+            .resolve_to_tree(
+                &project.repo_path_str(),
+                &None,
+                Some(PathBuf::from("pkg_a")),
+            )
+            .await
+            .unwrap();
+
+        // First do a clean checkout
+        git_tree.checkout_repo(false).await.unwrap();
+
+        fs::write(git_tree.path_to_tree().join("Move.lock"), "random content").unwrap();
+        fs::write(
+            git_tree.path_to_tree().join("Published.toml"),
+            "random content",
+        )
+        .unwrap();
+
+        fs::create_dir(git_tree.path_to_tree().join("random_dir")).unwrap();
+        fs::write(
+            git_tree.path_to_tree().join("random_dir/Move.lock"),
+            "random content",
+        )
+        .unwrap();
+        fs::write(
+            git_tree.path_to_tree().join("random_dir/Published.toml"),
+            "random content",
+        )
+        .unwrap();
+
+        // checkout_repo should succeed despite the dirty state because `Move.lock` is excluded.
+        git_tree.checkout_repo(false).await.unwrap();
     }
 
     /// Fetching should succeed if a clean checkout exists
