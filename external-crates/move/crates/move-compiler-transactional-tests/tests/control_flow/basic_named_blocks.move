@@ -26,7 +26,7 @@ module 0x42::m {
         'outer: loop {
             let _x = 'inner: loop {
                 break 'outer 10;
-                break 'inner 20
+                break 'inner 20u64
             };
         }
     }

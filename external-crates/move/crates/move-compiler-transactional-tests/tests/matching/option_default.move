@@ -16,10 +16,10 @@ module 0x42::m {
     }
 
     public fun run() {
-        let x = Option::Some(42);
+        let x = Option::Some(42u64);
         let y = Option::None;
         assert!(x.or_default(0) == 42);
-        assert!(y.or_default(0) == 0);
+        assert!(y.or_default(0) == 0u64);
     }
 }
 

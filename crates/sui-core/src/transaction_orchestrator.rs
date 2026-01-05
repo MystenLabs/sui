@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::SocketAddr;
-use std::ops::Deref;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,13 +25,13 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{ErrorCategory, SuiError, SuiErrorKind, SuiResult};
 use sui_types::messages_grpc::{SubmitTxRequest, TxType};
-use sui_types::quorum_driver_types::{
-    EffectsFinalityInfo, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
-    ExecuteTransactionResponseV3, FinalizedEffects, IsTransactionExecutedLocally,
-    QuorumDriverError,
-};
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::{Transaction, TransactionData, VerifiedTransaction};
+use sui_types::transaction_driver_types::{
+    EffectsFinalityInfo, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
+    ExecuteTransactionResponseV3, FinalizedEffects, IsTransactionExecutedLocally,
+    TransactionSubmissionError,
+};
 use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
 use tokio::sync::broadcast::Receiver;
 use tokio::time::{Instant, sleep, timeout};
@@ -41,7 +40,7 @@ use tracing::{Instrument, debug, error_span, info, instrument, warn};
 use crate::authority::AuthorityState;
 use crate::authority_aggregator::AuthorityAggregator;
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
+use crate::transaction_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
 use crate::transaction_driver::{
     QuorumTransactionResponse, SubmitTransactionOptions, TransactionDriver, TransactionDriverError,
     TransactionDriverMetrics,
@@ -54,8 +53,10 @@ const LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(10);
 // Timeout for waiting for finality for each transaction.
 const WAIT_FOR_FINALITY_TIMEOUT: Duration = Duration::from_secs(90);
 
-pub type QuorumTransactionEffectsResult =
-    Result<(Transaction, QuorumTransactionResponse), (TransactionDigest, QuorumDriverError)>;
+pub type QuorumTransactionEffectsResult = Result<
+    (Transaction, QuorumTransactionResponse),
+    (TransactionDigest, TransactionSubmissionError),
+>;
 
 /// Transaction Orchestrator is a Node component that utilizes Transaction Driver to
 /// submit transactions to validators for finality. It adds inflight deduplication,
@@ -80,7 +81,6 @@ impl TransactionOrchestrator<NetworkAuthorityClient> {
             validator_state.get_object_cache_reader().clone(),
             validator_state.clone_committee_store(),
             validators.safe_client_metrics_base.clone(),
-            validators.metrics.deref().clone(),
         );
         TransactionOrchestrator::new(
             validators,
@@ -181,8 +181,10 @@ where
         request: ExecuteTransactionRequestV3,
         request_type: ExecuteTransactionRequestType,
         client_addr: Option<SocketAddr>,
-    ) -> Result<(ExecuteTransactionResponseV3, IsTransactionExecutedLocally), QuorumDriverError>
-    {
+    ) -> Result<
+        (ExecuteTransactionResponseV3, IsTransactionExecutedLocally),
+        TransactionSubmissionError,
+    > {
         let timer = Instant::now();
         let tx_type = if request.transaction.is_consensus_tx() {
             TxType::SharedObject
@@ -196,7 +198,7 @@ where
             Inner::<A>::execute_transaction_with_retry(inner, request, client_addr)
         )
         .await
-        .map_err(|e| QuorumDriverError::TransactionFailed {
+        .map_err(|e| TransactionSubmissionError::TransactionFailed {
             category: ErrorCategory::Internal,
             details: e.to_string(),
         })??;
@@ -258,7 +260,7 @@ where
         &self,
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
-    ) -> Result<ExecuteTransactionResponseV3, QuorumDriverError> {
+    ) -> Result<ExecuteTransactionResponseV3, TransactionSubmissionError> {
         let timer = Instant::now();
         let tx_type = if request.transaction.is_consensus_tx() {
             TxType::SharedObject
@@ -273,7 +275,7 @@ where
             client_addr
         ))
         .await
-        .map_err(|e| QuorumDriverError::TransactionFailed {
+        .map_err(|e| TransactionSubmissionError::TransactionFailed {
             category: ErrorCategory::Internal,
             details: e.to_string(),
         })??;
@@ -343,7 +345,8 @@ where
         inner: Arc<Inner<A>>,
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
-    ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), QuorumDriverError> {
+    ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), TransactionSubmissionError>
+    {
         let result = inner
             .execute_transaction_with_effects_waiting(
                 request.clone(),
@@ -377,18 +380,40 @@ where
                         )
                         .await;
                     match result {
-                        Ok(_) => break,
+                        Ok(_) => {
+                            inner
+                                .metrics
+                                .background_retry_attempts
+                                .with_label_values(&["success"])
+                                .inc();
+                            debug!(
+                                "Background retry {i} for transaction {} succeeded",
+                                request.transaction.digest()
+                            );
+                            break;
+                        }
                         Err(e) => {
                             if !e.is_retriable() {
-                                break;
-                            }
-                            inner.metrics.background_retry_errors.inc();
-                            if i % 100 == 0 {
+                                inner
+                                    .metrics
+                                    .background_retry_attempts
+                                    .with_label_values(&["non-retriable"])
+                                    .inc();
                                 debug!(
-                                    "Background retry {i} for transaction {}: {e:?}",
+                                    "Background retry {i} for transaction {} has non-retriable error: {e:?}. Terminating...",
                                     request.transaction.digest()
                                 );
+                                break;
                             }
+                            inner
+                                .metrics
+                                .background_retry_attempts
+                                .with_label_values(&["retriable"])
+                                .inc();
+                            debug!(
+                                "Background retry {i} for transaction {} has retriable error: {e:?}. Continuing...",
+                                request.transaction.digest()
+                            );
                         }
                     };
                     sleep(delay).await;
@@ -405,11 +430,12 @@ where
         request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
         enforce_live_input_objects: bool,
-    ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), QuorumDriverError> {
+    ) -> Result<(QuorumTransactionResponse, IsTransactionExecutedLocally), TransactionSubmissionError>
+    {
         let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
         let verified_transaction = epoch_store
             .verify_transaction_with_current_aliases(request.transaction.clone())
-            .map_err(QuorumDriverError::InvalidUserSignature)?
+            .map_err(TransactionSubmissionError::InvalidUserSignature)?
             .into_tx();
         let tx_digest = *verified_transaction.digest();
 
@@ -435,7 +461,7 @@ where
                         "Transaction rejected during early validation"
                     );
 
-                    return Err(QuorumDriverError::TransactionFailed {
+                    return Err(TransactionSubmissionError::TransactionFailed {
                         category: error_category,
                         details: e.to_string(),
                     });
@@ -512,7 +538,7 @@ where
         }
 
         // Track the last execution error.
-        let mut last_execution_error: Option<QuorumDriverError> = None;
+        let mut last_execution_error: Option<TransactionSubmissionError> = None;
 
         // Wait for execution result outside of this call to become available.
         let digests = [tx_digest];
@@ -547,7 +573,7 @@ where
                                 let events = if include_events {
                                     if effects.events_digest().is_some() {
                                         Some(self.validator_state.get_transaction_events(effects.transaction_digest())
-                                            .map_err(QuorumDriverError::QuorumDriverInternalError)?)
+                                            .map_err(TransactionSubmissionError::TransactionDriverInternalError)?)
                                     } else {
                                         None
                                     }
@@ -557,11 +583,11 @@ where
                                 let input_objects = include_input_objects
                                     .then(|| self.validator_state.get_transaction_input_objects(&effects))
                                     .transpose()
-                                    .map_err(QuorumDriverError::QuorumDriverInternalError)?;
+                                    .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
                                 let output_objects = include_output_objects
                                     .then(|| self.validator_state.get_transaction_output_objects(&effects))
                                     .transpose()
-                                    .map_err(QuorumDriverError::QuorumDriverInternalError)?;
+                                    .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
                                 let response = QuorumTransactionResponse {
                                     effects: FinalizedEffects {
                                         effects,
@@ -629,7 +655,7 @@ where
                     self.metrics.wait_for_finality_timeout.inc();
 
                     // TODO: Return the last execution error.
-                    break Err(QuorumDriverError::TimeoutBeforeFinality);
+                    break Err(TransactionSubmissionError::TimeoutBeforeFinality);
                 }
             }
         }
@@ -642,7 +668,7 @@ where
         verified_transaction: VerifiedTransaction,
         client_addr: Option<SocketAddr>,
         finality_timeout: Option<Duration>,
-    ) -> Result<QuorumTransactionResponse, QuorumDriverError> {
+    ) -> Result<QuorumTransactionResponse, TransactionSubmissionError> {
         debug!("TO Received transaction execution request.");
 
         let timer = Instant::now();
@@ -697,7 +723,7 @@ where
         verified_transaction: &VerifiedTransaction,
         good_response_metrics: &GenericCounter<AtomicU64>,
         timeout_duration: Option<Duration>,
-    ) -> Result<QuorumTransactionResponse, QuorumDriverError> {
+    ) -> Result<QuorumTransactionResponse, TransactionSubmissionError> {
         let tx_digest = *verified_transaction.digest();
         debug!("Using TransactionDriver for transaction {:?}", tx_digest);
 
@@ -717,12 +743,12 @@ where
                     last_error,
                     attempts,
                     timeout,
-                } => QuorumDriverError::TimeoutBeforeFinalityWithErrors {
+                } => TransactionSubmissionError::TimeoutBeforeFinalityWithErrors {
                     last_error: last_error.map(|e| e.to_string()).unwrap_or_default(),
                     attempts,
                     timeout,
                 },
-                other => QuorumDriverError::TransactionFailed {
+                other => TransactionSubmissionError::TransactionFailed {
                     category: other.categorize(),
                     details: other.to_string(),
                 },
@@ -914,7 +940,7 @@ pub struct TransactionOrchestratorMetrics {
     early_validation_rejections: IntCounterVec,
 
     background_retry_started: IntGauge,
-    background_retry_errors: IntCounter,
+    background_retry_attempts: IntCounterVec,
 
     request_latency: HistogramVec,
     local_execution_latency: HistogramVec,
@@ -1025,9 +1051,10 @@ impl TransactionOrchestratorMetrics {
                 registry,
             )
             .unwrap(),
-            background_retry_errors: register_int_counter_with_registry!(
-                "tx_orchestrator_background_retry_errors",
-                "Total number of background retry errors, by error type",
+            background_retry_attempts: register_int_counter_vec_with_registry!(
+                "tx_orchestrator_background_retry_attempts",
+                "Total number of background retry attempts, by status",
+                &["status"],
                 registry,
             )
             .unwrap(),
@@ -1073,7 +1100,7 @@ where
         &self,
         request: ExecuteTransactionRequestV3,
         client_addr: Option<std::net::SocketAddr>,
-    ) -> Result<ExecuteTransactionResponseV3, QuorumDriverError> {
+    ) -> Result<ExecuteTransactionResponseV3, TransactionSubmissionError> {
         self.execute_transaction_v3(request, client_addr).await
     }
 

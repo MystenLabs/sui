@@ -24,14 +24,14 @@ module a::m {
 
     public entry fun add_dynamic_object_field(inner: Inner, ctx: &mut TxContext) {
         let mut outer = Outer {id: object::new(ctx)};
-        add(&mut outer.id, 0, inner);
+        add(&mut outer.id, 0u64, inner);
         transfer::transfer(outer, ctx.sender());
     }
 
     public entry fun add_and_remove_dynamic_object_field(inner: Inner, ctx: &mut TxContext) {
         let mut outer = Outer {id: object::new(ctx)};
-        add(&mut outer.id, 0, inner);
-        let removed: Inner = remove(&mut outer.id, 0);
+        add(&mut outer.id, 0u64, inner);
+        let removed: Inner = remove(&mut outer.id, 0u64);
         transfer::public_share_object(removed);
         transfer::transfer(outer, ctx.sender());
     }

@@ -528,10 +528,10 @@ fn check_mutability(
 //**************************************************************************************************
 
 fn add_drop_ability_tip(context: &Context, diag: &mut Diagnostic, st: SingleType) {
-    use N::{Type_ as T, TypeName_ as TN};
+    use N::{TypeInner as T, TypeName_ as TN};
     let ty = single_type_to_naming_type(st);
     let owned_abilities;
-    let (declared_loc_opt, declared_abilities, ty_args) = match &ty.value {
+    let (declared_loc_opt, declared_abilities, ty_args) = match &ty.value.inner() {
         T::Param(TParam {
             user_specified_name,
             abilities,
@@ -560,7 +560,7 @@ fn add_drop_ability_tip(context: &Context, diag: &mut Diagnostic, st: SingleType
         declared_loc_opt,
         declared_abilities,
         ty_args.iter().map(|ty_arg| {
-            let abilities = match &ty_arg.value {
+            let abilities = match &ty_arg.value.inner() {
                 T::Unit => AbilitySet::collection(ty_arg.loc),
                 T::Ref(_, _) => AbilitySet::references(ty_arg.loc),
                 T::UnresolvedError | T::Anything | T::Void => AbilitySet::all(ty_arg.loc),
@@ -579,10 +579,10 @@ fn single_type_to_naming_type(sp!(loc, st_): SingleType) -> N::Type {
 }
 
 fn single_type_to_naming_type_(st_: SingleType_) -> N::Type_ {
-    use N::Type_ as T;
+    use N::TypeInner as T;
     use SingleType_ as S;
     match st_ {
-        S::Ref(mut_, b) => T::Ref(mut_, Box::new(base_type_to_naming_type(b))),
+        S::Ref(mut_, b) => T::Ref(mut_, base_type_to_naming_type(b)).into(),
         S::Base(sp!(_, b_)) => base_type_to_naming_type_(b_),
     }
 }
@@ -593,16 +593,17 @@ fn base_type_to_naming_type(sp!(loc, bt_): BaseType) -> N::Type {
 
 fn base_type_to_naming_type_(bt_: BaseType_) -> N::Type_ {
     use BaseType_ as B;
-    use N::Type_ as T;
+    use N::TypeInner as T;
     match bt_ {
-        B::Unreachable => T::Anything,
-        B::UnresolvedError => T::UnresolvedError,
-        B::Param(tp) => T::Param(tp),
+        B::Unreachable => N::ANYTHING_TYPE.clone(),
+        B::UnresolvedError => N::UNRESOLVED_ERROR_TYPE.clone(),
+        B::Param(tp) => T::Param(tp).into(),
         B::Apply(abilities, tn, ty_args) => T::Apply(
             Some(abilities),
             type_name_to_naming_type_name(tn),
             ty_args.into_iter().map(base_type_to_naming_type).collect(),
-        ),
+        )
+        .into(),
     }
 }
 

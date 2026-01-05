@@ -351,11 +351,7 @@ impl Database {
         }
     }
 
-    pub fn write(&self, batch: StorageWriteBatch) -> Result<(), TypedStoreError> {
-        self.write_opt(batch, &rocksdb::WriteOptions::default())
-    }
-
-    pub fn write_opt(
+    pub(crate) fn write_opt_internal(
         &self,
         batch: StorageWriteBatch,
         write_options: &rocksdb::WriteOptions,
@@ -1204,12 +1200,14 @@ impl DBBatch {
     /// Consume the batch and write its operations to the database
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
-        self.write_opt(&rocksdb::WriteOptions::default())
+        let mut write_options = rocksdb::WriteOptions::default();
+        write_options.set_sync(true);
+        self.write_opt(write_options)
     }
 
     /// Consume the batch and write its operations to the database with custom write options
     #[instrument(level = "trace", skip_all, err)]
-    pub fn write_opt(self, write_options: &rocksdb::WriteOptions) -> Result<(), TypedStoreError> {
+    pub fn write_opt(self, write_options: rocksdb::WriteOptions) -> Result<(), TypedStoreError> {
         let db_name = self.database.db_name();
         let timer = self
             .db_metrics
@@ -1224,7 +1222,10 @@ impl DBBatch {
         } else {
             None
         };
-        self.database.write_opt(self.batch, write_options)?;
+
+        self.database
+            .write_opt_internal(self.batch, &write_options)?;
+
         self.db_metrics
             .op_metrics
             .rocksdb_batch_commit_bytes

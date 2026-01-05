@@ -22,49 +22,49 @@ entry fun t0(ctx: &mut TxContext) {
 
 entry fun t1(obj: &mut Obj) {
     let id = &mut obj.id;
-    add<u64, u64>(id, 0, 0);
+    add<u64, u64>(id, 0u64, 0);
     add<vector<u8>, u64>(id, b"", 1);
     add<bool, u64>(id, false, 2);
 }
 
 entry fun t2(obj: &Obj) {
     let id = &obj.id;
-    assert!(exists_with_type<u64, u64>(id, 0), 0);
+    assert!(exists_with_type<u64, u64>(id, 0u64), 0);
     assert!(exists_with_type<vector<u8>, u64>(id, b""), 0);
     assert!(exists_with_type<bool, u64>(id, false), 0);
 }
 
 entry fun t3(obj: &Obj) {
     let id = &obj.id;
-    assert!(*borrow(id, 0) == 0, 0);
-    assert!(*borrow(id, b"") == 1, 0);
-    assert!(*borrow(id, false) == 2, 0);
+    assert!(*borrow(id, 0u64) == 0u64, 0);
+    assert!(*borrow(id, b"") == 1u64, 0);
+    assert!(*borrow(id, false) == 2u64, 0);
 }
 
 entry fun t4(obj: &mut Obj) {
     let id = &mut obj.id;
-    *borrow_mut(id, 0) = 3 + *borrow(id, 0);
-    *borrow_mut(id, b"") = 4 + *borrow(id, b"");
-    *borrow_mut(id, false) = 5 + *borrow(id, false);
+    *borrow_mut(id, 0u64) = 3u64 + *borrow(id, 0u64);
+    *borrow_mut(id, b"") = 4u64 + *borrow(id, b"");
+    *borrow_mut(id, false) = 5u64 + *borrow(id, false);
 }
 
 entry fun t5(obj: &mut Obj) {
     let id = &mut obj.id;
-    assert!(*borrow(id, 0) == 3, 0);
-    assert!(*borrow(id, b"") == 5, 0);
-    assert!(*borrow(id, false) == 7, 0);
+    assert!(*borrow(id, 0u64) == 3u64, 0);
+    assert!(*borrow(id, b"") == 5u64, 0);
+    assert!(*borrow(id, false) == 7u64, 0);
 }
 
 entry fun t6(obj: &mut Obj) {
     let id = &mut obj.id;
-    assert!(remove(id, 0) == 3, 0);
-    assert!(remove(id, b"") == 5, 0);
+    assert!(remove(id, 0u64) == 3u64, 0);
+    assert!(remove(id, b"") == 5u64, 0);
     // do not remove at least one
 }
 
 entry fun t7(obj: &Obj) {
     let id = &obj.id;
-    assert!(!exists_with_type<u64, u64>(id, 0), 0);
+    assert!(!exists_with_type<u64, u64>(id, 0u64), 0);
     assert!(!exists_with_type<vector<u8>, u64>(id, b""), 0);
     assert!(exists_with_type<bool, u64>(id, false), 0);
 }

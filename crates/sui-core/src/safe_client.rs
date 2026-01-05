@@ -19,11 +19,10 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::messages_grpc::{
-    ExecutedData, HandleCertificateRequestV3, HandleCertificateResponseV2,
-    HandleCertificateResponseV3, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest,
-    SubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionStatus,
-    ValidatorHealthRequest, ValidatorHealthResponse, VerifiedObjectInfoResponse,
-    WaitForEffectsRequest, WaitForEffectsResponse,
+    ExecutedData, ObjectInfoRequest, ObjectInfoResponse, SubmitTxRequest, SubmitTxResponse,
+    SystemStateRequest, TransactionInfoRequest, TransactionStatus, ValidatorHealthRequest,
+    ValidatorHealthResponse, VerifiedObjectInfoResponse, WaitForEffectsRequest,
+    WaitForEffectsResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::object::Object;
@@ -34,19 +33,7 @@ use sui_types::{
     transaction::*,
 };
 use tap::TapFallible;
-use tracing::{debug, error, instrument};
-
-macro_rules! check_error {
-    ($address:expr, $cond:expr, $msg:expr) => {
-        $cond.tap_err(|err| {
-            if err.individual_error_indicates_epoch_change() {
-                debug!(?err, authority=?$address, "Not a real client error");
-            } else {
-                error!(?err, authority=?$address, $msg);
-            }
-        })
-    }
-}
+use tracing::{error, instrument};
 
 #[derive(Clone)]
 pub struct SafeClientMetricsBase {
@@ -92,7 +79,6 @@ pub struct SafeClientMetrics {
     total_ok_responses_handle_transaction_info_request: GenericCounter<prometheus::core::AtomicU64>,
     total_requests_handle_object_info_request: GenericCounter<prometheus::core::AtomicU64>,
     total_ok_responses_handle_object_info_request: GenericCounter<prometheus::core::AtomicU64>,
-    handle_transaction_latency: Histogram,
     handle_certificate_latency: Histogram,
     handle_obj_info_latency: Histogram,
     handle_tx_info_latency: Histogram,
@@ -116,9 +102,6 @@ impl SafeClientMetrics {
             .total_responses_by_address_method
             .with_label_values(&[&validator_address, "handle_object_info_request"]);
 
-        let handle_transaction_latency = metrics_base
-            .latency
-            .with_label_values(&["handle_transaction"]);
         let handle_certificate_latency = metrics_base
             .latency
             .with_label_values(&["handle_certificate"]);
@@ -134,7 +117,6 @@ impl SafeClientMetrics {
             total_ok_responses_handle_transaction_info_request,
             total_requests_handle_object_info_request,
             total_ok_responses_handle_object_info_request,
-            handle_transaction_latency,
             handle_certificate_latency,
             handle_obj_info_latency,
             handle_tx_info_latency,
@@ -360,62 +342,6 @@ where
         Ok(wait_for_effects_resp)
     }
 
-    /// Initiate a new transfer to a Sui or Primary account.
-    pub async fn handle_transaction(
-        &self,
-        transaction: Transaction,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<PlainTransactionInfoResponse, SuiError> {
-        let _timer = self.metrics.handle_transaction_latency.start_timer();
-        let digest = *transaction.digest();
-        let response = self
-            .authority_client
-            .handle_transaction(transaction.clone(), client_addr)
-            .await?;
-        let response = check_error!(
-            self.address,
-            self.check_transaction_info(&digest, transaction, response.status),
-            "Client error in handle_transaction"
-        )?;
-        Ok(response)
-    }
-
-    fn verify_certificate_response_v2(
-        &self,
-        digest: &TransactionDigest,
-        response: HandleCertificateResponseV2,
-    ) -> SuiResult<HandleCertificateResponseV2> {
-        let signed_effects =
-            self.check_signed_effects_plain(digest, response.signed_effects, None)?;
-
-        Ok(HandleCertificateResponseV2 {
-            signed_effects,
-            events: response.events,
-            fastpath_input_objects: vec![], // unused field
-        })
-    }
-
-    /// Execute a certificate.
-    pub async fn handle_certificate_v2(
-        &self,
-        certificate: CertifiedTransaction,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<HandleCertificateResponseV2, SuiError> {
-        let digest = *certificate.digest();
-        let _timer = self.metrics.handle_certificate_latency.start_timer();
-        let response = self
-            .authority_client
-            .handle_certificate_v2(certificate, client_addr)
-            .await?;
-
-        let verified = check_error!(
-            self.address,
-            self.verify_certificate_response_v2(&digest, response),
-            "Client error in handle_certificate"
-        )?;
-        Ok(verified)
-    }
-
     fn verify_events(
         &self,
         events: &Option<TransactionEvents>,
@@ -473,49 +399,6 @@ where
         Ok(())
     }
 
-    fn verify_certificate_response_v3(
-        &self,
-        digest: &TransactionDigest,
-        HandleCertificateResponseV3 {
-            effects,
-            events,
-            input_objects,
-            output_objects,
-            auxiliary_data,
-        }: HandleCertificateResponseV3,
-    ) -> SuiResult<HandleCertificateResponseV3> {
-        let effects = self.check_signed_effects_plain(digest, effects, None)?;
-
-        // Check Events
-        self.verify_events(&events, effects.events_digest())?;
-
-        // Check Input Objects
-        self.verify_objects(
-            &input_objects,
-            effects
-                .old_object_metadata()
-                .into_iter()
-                .map(|(object_ref, _owner)| (object_ref.0, object_ref)),
-        )?;
-
-        // Check Output Objects
-        self.verify_objects(
-            &output_objects,
-            effects
-                .all_changed_objects()
-                .into_iter()
-                .map(|(object_ref, _, _)| (object_ref.0, object_ref)),
-        )?;
-
-        Ok(HandleCertificateResponseV3 {
-            effects,
-            events,
-            input_objects,
-            output_objects,
-            auxiliary_data,
-        })
-    }
-
     fn verify_executed_data(
         &self,
         ExecutedData {
@@ -547,27 +430,6 @@ where
         )?;
 
         Ok(())
-    }
-
-    /// Execute a certificate.
-    pub async fn handle_certificate_v3(
-        &self,
-        request: HandleCertificateRequestV3,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<HandleCertificateResponseV3, SuiError> {
-        let digest = *request.certificate.digest();
-        let _timer = self.metrics.handle_certificate_latency.start_timer();
-        let response = self
-            .authority_client
-            .handle_certificate_v3(request, client_addr)
-            .await?;
-
-        let verified = check_error!(
-            self.address,
-            self.verify_certificate_response_v3(&digest, response),
-            "Client error in handle_certificate"
-        )?;
-        Ok(verified)
     }
 
     pub async fn handle_object_info_request(

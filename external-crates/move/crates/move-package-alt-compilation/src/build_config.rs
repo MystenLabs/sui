@@ -20,6 +20,7 @@ use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_model_2::source_model;
 use move_package_alt::{
     graph::NamedAddress,
+    package::package_loader::PackageLoader,
     schema::{EnvironmentName, ModeName, OriginalID},
 };
 use move_symbol_pool::Symbol;
@@ -59,6 +60,10 @@ pub struct BuildConfig {
     #[clap(name = "force-recompilation", long = "force", global = true)]
     pub force_recompilation: bool,
 
+    /// Allow building, even if some cached git dependencies in `~/.move` are modified
+    #[clap(name = "allow-dirty", long = "allow-dirty", global = true)]
+    pub allow_dirty: bool,
+
     /// Default flavor for move compilation, if not specified in the package's config
     #[clap(long = "default-move-flavor", global = true)]
     pub default_flavor: Option<Flavor>,
@@ -66,10 +71,6 @@ pub struct BuildConfig {
     /// Default edition for move compilation, if not specified in the package's config
     #[clap(long = "default-move-edition", global = true)]
     pub default_edition: Option<Edition>,
-
-    /// Optional location to save the lock file to, if package resolution succeeds.
-    #[clap(skip)]
-    pub lock_file: Option<PathBuf>,
 
     /// If set, ignore any compiler warnings
     #[clap(long = move_compiler::command_line::SILENCE_WARNINGS, global = true)]
@@ -103,6 +104,7 @@ pub struct BuildConfig {
 
     /// Forces use of lock file without checking if it needs to be updated
     /// (regenerates it only if it doesn't exist)
+    /// TODO(pkg-alt): Remove this as this is not used (and has no usage, OR rename to ignore-digests)
     #[clap(skip)]
     pub force_lock_file: bool,
 
@@ -131,8 +133,17 @@ impl BuildConfig {
         env: &Environment,
         writer: &mut W,
     ) -> anyhow::Result<CompiledPackage> {
-        let root_pkg = RootPackage::<F>::load(path, env.clone(), self.mode_set()).await?;
+        let root_pkg: RootPackage<F> = self.package_loader(path, env).load().await?;
         BuildPlan::create(&root_pkg, self)?.compile(writer, |compiler| compiler)
+    }
+
+    /// Create a [PackageLoader] for the package at `path` in environment `env` using the
+    /// configuration options from `self`
+    pub fn package_loader(&self, path: &Path, env: &Environment) -> PackageLoader {
+        PackageLoader::new(path, env.clone())
+            .modes(self.mode_set())
+            .allow_dirty(self.allow_dirty)
+            .output_path(self.install_dir.clone())
     }
 
     /// Migrate the package at `path`.
@@ -145,7 +156,7 @@ impl BuildConfig {
     ) -> anyhow::Result<()> {
         // we set test to migrate all the code
         self.test_mode = true;
-        let root_pkg = RootPackage::<F>::load(path, env, self.mode_set()).await?;
+        let root_pkg: RootPackage<F> = self.package_loader(path, &env).load().await?;
         let build_plan = BuildPlan::create(&root_pkg, &self)?;
 
         migrate(build_plan, writer, reader)?;
@@ -158,7 +169,7 @@ impl BuildConfig {
         env: Environment,
         writer: &mut W,
     ) -> anyhow::Result<source_model::Model> {
-        let root_pkg = RootPackage::<F>::load(path, env, self.mode_set()).await?;
+        let root_pkg: RootPackage<F> = self.package_loader(path, &env).load().await?;
         self.move_model_from_root_pkg(&root_pkg, writer).await
     }
 

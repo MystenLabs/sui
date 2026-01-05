@@ -1328,11 +1328,9 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     SuiValue::Digest(_) => bail!("digest is not supported as an input"),
                     SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
                     SuiValue::Receiving(_, _) => bail!("receiving is not supported as an input"),
-                    SuiValue::ImmShared(_, _) => {
-                        bail!("read-only shared object is not supported as an input")
-                    }
-                    SuiValue::NonExclusiveWrite(_, _) => {
-                        bail!("non-exclusive write object is not supported as an input")
+                    SuiValue::Owned(_, _) => bail!("owned object is not supported as an input"),
+                    SuiValue::Shared(_, _, _) => {
+                        bail!("shared object is not supported as an input")
                     }
                     SuiValue::Withdraw(_, _) => {
                         bail!("withdraw reservation is not supported as an input for set-address")

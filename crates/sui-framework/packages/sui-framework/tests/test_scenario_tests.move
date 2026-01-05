@@ -960,7 +960,7 @@ fun dynamic_field_still_borrowed() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut parent = scenario.new_object();
-    dynamic_field::add(&mut parent, b"", 10);
+    dynamic_field::add(&mut parent, b"", 10u64);
     let r = dynamic_field::borrow<vector<u8>, u64>(&parent, b"");
     scenario.end();
     assert!(*r == 10);

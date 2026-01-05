@@ -248,11 +248,12 @@ impl OutputPath {
     /// directory at `dir` and that it contains a valid Move package, i.e., it has a `Move.toml`
     /// file.
     pub fn new(dir: PathBuf) -> PackagePathResult<Self> {
-        if !dir.is_dir() {
-            Err(PackagePathError::InvalidDirectory { path: dir.clone() })
-        } else {
-            Ok(Self(dir))
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            debug!("unexpected error creating directory: {e:?}");
+            return Err(PackagePathError::InvalidDirectory { path: dir.clone() });
         }
+
+        Ok(Self(dir))
     }
 
     /// Acquire an exclusive lock for the files in this package

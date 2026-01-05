@@ -1,0 +1,63 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15006]: IDE path autocomplete
+  ┌─ tests/move_2024/ide_mode/string_info.move:1:1
+  │  
+1 │ ╭ module a::m;
+2 │ │ 
+3 │ │ const S_0: vector<u8> = b"hello";
+4 │ │ const S_1: vector<u8> = "hello";
+5 │ │ const S_2: vector<u8> = x"68656c6c6f";
+  │ ╰──────────────────────────────────────^ Possible in-scope names
+  │  
+  = members: 'Option -> std::option::Option', 'S_0 -> a::m::S_0', 'S_1 -> a::m::S_1', or 'S_2 -> a::m::S_2'
+  = modules: 'Self -> a::m', 'internal -> std::internal', 'option -> std::option', or 'vector -> std::vector'
+  = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
+  = type params: 
+
+warning[W09011]: unused constant
+  ┌─ tests/move_2024/ide_mode/string_info.move:3:7
+  │
+3 │ const S_0: vector<u8> = b"hello";
+  │       ^^^ The constant 'S_0' is never used. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+note[I15007]: IDE string value
+  ┌─ tests/move_2024/ide_mode/string_info.move:3:25
+  │
+3 │ const S_0: vector<u8> = b"hello";
+  │                         ^^^^^^^^ String value: b"hello"
+
+warning[W09011]: unused constant
+  ┌─ tests/move_2024/ide_mode/string_info.move:4:7
+  │
+4 │ const S_1: vector<u8> = "hello";
+  │       ^^^ The constant 'S_1' is never used. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+note[I15007]: IDE string value
+  ┌─ tests/move_2024/ide_mode/string_info.move:4:25
+  │
+4 │ const S_1: vector<u8> = "hello";
+  │                         ^^^^^^^ String value: "hello"
+
+warning[W09011]: unused constant
+  ┌─ tests/move_2024/ide_mode/string_info.move:5:7
+  │
+5 │ const S_2: vector<u8> = x"68656c6c6f";
+  │       ^^^ The constant 'S_2' is never used. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+note[I15007]: IDE string value
+  ┌─ tests/move_2024/ide_mode/string_info.move:5:25
+  │
+5 │ const S_2: vector<u8> = x"68656c6c6f";
+  │                         ^^^^^^^^^^^^^ String value: x"68656c6c6f"

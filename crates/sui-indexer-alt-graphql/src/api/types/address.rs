@@ -53,7 +53,7 @@ pub(crate) enum AddressTransactionRelationship {
     field(
         name = "balance",
         arg(name = "coin_type", ty = "TypeInput"),
-        ty = "Result<Option<Balance>, RpcError<balance::Error>>",
+        ty = "Option<Result<Balance, RpcError<balance::Error>>>",
         desc = "Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.\n\nIf the address does not own any coins of that type, a balance of zero is returned.",
     ),
     field(
@@ -62,18 +62,18 @@ pub(crate) enum AddressTransactionRelationship {
         arg(name = "after", ty = "Option<balance::Cursor>"),
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<balance::Cursor>"),
-        ty = "Result<Option<Connection<String, Balance>>, RpcError<balance::Error>>",
+        ty = "Option<Result<Connection<String, Balance>, RpcError<balance::Error>>>",
         desc = "Total balance across coins owned by this address, grouped by coin type.",
     ),
     field(
         name = "default_suins_name",
-        ty = "Result<Option<String>, RpcError<object::Error>>",
+        ty = "Option<Result<String, RpcError>>",
         desc = "The domain explicitly configured as the default SuiNS name for this address."
     ),
     field(
         name = "multi_get_balances",
         arg(name = "keys", ty = "Vec<TypeInput>"),
-        ty = "Result<Option<Vec<Balance>>, RpcError<balance::Error>>",
+        ty = "Option<Result<Vec<Balance>, RpcError<balance::Error>>>",
         desc = "Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.\n\nReturns `null` when no checkpoint is set in scope (e.g. execution scope). If the address does not own any coins of a given type, a balance of zero is returned for that type.",
     ),
     field(
@@ -83,7 +83,7 @@ pub(crate) enum AddressTransactionRelationship {
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<object::CLive>"),
         arg(name = "filter", ty = "Option<ObjectFilter>"),
-        ty = "Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>>",
+        ty = "Option<Result<Connection<String, MoveObject>, RpcError<object::Error>>>",
         desc = "Objects owned by this address, optionally filtered by type."
     )
 )]
@@ -114,7 +114,7 @@ impl Address {
     pub(crate) async fn as_object(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Object>, RpcError<object::Error>> {
+    ) -> Option<Result<Object, RpcError<object::Error>>> {
         Object::by_key(
             ctx,
             self.scope.clone(),
@@ -126,6 +126,7 @@ impl Address {
             },
         )
         .await
+        .transpose()
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
@@ -136,8 +137,10 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         coin_type: TypeInput,
-    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        Balance::fetch_one(ctx, &self.scope, self.address, coin_type.into()).await
+    ) -> Option<Result<Balance, RpcError<balance::Error>>> {
+        Balance::fetch_one(ctx, &self.scope, self.address, coin_type.into())
+            .await
+            .transpose()
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -148,21 +151,26 @@ impl Address {
         after: Option<balance::Cursor>,
         last: Option<u64>,
         before: Option<balance::Cursor>,
-    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("IAddressable", "balances");
-        let page = Page::from_params(limits, first, after, last, before)?;
-        Balance::paginate(ctx, self.scope.clone(), self.address, page)
-            .await
-            .map(Some)
+    ) -> Option<Result<Connection<String, Balance>, RpcError<balance::Error>>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("IAddressable", "balances");
+                let page = Page::from_params(limits, first, after, last, before)?;
+                Balance::paginate(ctx, self.scope.clone(), self.address, page).await
+            }
+            .await,
+        )
     }
 
     /// The domain explicitly configured as the default SuiNS name for this address.
     pub(crate) async fn default_suins_name(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError> {
-        address_to_name(ctx, &self.scope, self.address).await
+    ) -> Option<Result<String, RpcError>> {
+        address_to_name(ctx, &self.scope, self.address)
+            .await
+            .transpose()
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
@@ -270,9 +278,11 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
+    ) -> Option<Result<Vec<Balance>, RpcError<balance::Error>>> {
         let coin_types = keys.into_iter().map(|k| k.into()).collect();
-        Balance::fetch_many(ctx, &self.scope, self.address, coin_types).await
+        Balance::fetch_many(ctx, &self.scope, self.address, coin_types)
+            .await
+            .transpose()
     }
 
     /// Objects owned by this address, optionally filtered by type.
@@ -284,29 +294,35 @@ impl Address {
         last: Option<u64>,
         before: Option<object::CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("IAddressable", "objects");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MoveObject>, RpcError<object::Error>>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("IAddressable", "objects");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        // Create a filter that constrains to ADDRESS kind and this owner
-        let Some(filter) = filter.unwrap_or_default().intersect(ObjectFilter {
-            owner_kind: Some(OwnerKind::Address),
-            owner: Some(self.address.into()),
-            ..Default::default()
-        }) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+                // Create a filter that constrains to ADDRESS kind and this owner
+                let Some(filter) = filter.unwrap_or_default().intersect(ObjectFilter {
+                    owner_kind: Some(OwnerKind::Address),
+                    owner: Some(self.address.into()),
+                    ..Default::default()
+                }) else {
+                    return Ok(Connection::new(false, false));
+                };
 
-        let objects = Object::paginate_live(ctx, self.scope.clone(), page, filter).await?;
-        let mut move_objects = Connection::new(objects.has_previous_page, objects.has_next_page);
+                let objects = Object::paginate_live(ctx, self.scope.clone(), page, filter).await?;
+                let mut move_objects =
+                    Connection::new(objects.has_previous_page, objects.has_next_page);
 
-        for edge in objects.edges {
-            let move_obj = MoveObject::from_super(edge.node);
-            move_objects.edges.push(Edge::new(edge.cursor, move_obj));
-        }
+                for edge in objects.edges {
+                    let move_obj = MoveObject::from_super(edge.node);
+                    move_objects.edges.push(Edge::new(edge.cursor, move_obj));
+                }
 
-        Ok(Some(move_objects))
+                Ok(move_objects)
+            }
+            .await,
+        )
     }
 
     /// Transactions associated with this address.
@@ -321,34 +337,37 @@ impl Address {
         before: Option<CTransaction>,
         relation: Option<AddressTransactionRelationship>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Address", "transactions");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Address", "transactions");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        // Default relation to SENT if not provided
-        let relation = relation.unwrap_or(AddressTransactionRelationship::Sent);
+                // Default relation to SENT if not provided
+                let relation = relation.unwrap_or(AddressTransactionRelationship::Sent);
 
-        // Create address-specific filter based on relationship
-        let address_filter = match relation {
-            AddressTransactionRelationship::Sent => TransactionFilter {
-                sent_address: Some(self.address.into()),
-                ..Default::default()
-            },
-            AddressTransactionRelationship::Affected => TransactionFilter {
-                affected_address: Some(self.address.into()),
-                ..Default::default()
-            },
-        };
+                // Create address-specific filter based on relationship
+                let address_filter = match relation {
+                    AddressTransactionRelationship::Sent => TransactionFilter {
+                        sent_address: Some(self.address.into()),
+                        ..Default::default()
+                    },
+                    AddressTransactionRelationship::Affected => TransactionFilter {
+                        affected_address: Some(self.address.into()),
+                        ..Default::default()
+                    },
+                };
 
-        // Intersect with user-provided filter
-        let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+                // Intersect with user-provided filter
+                let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
+                    return Ok(Connection::new(false, false));
+                };
 
-        Transaction::paginate(ctx, self.scope.clone(), page, filter)
-            .await
-            .map(Some)
+                Transaction::paginate(ctx, self.scope.clone(), page, filter).await
+            }
+            .await,
+        )
     }
 }
 

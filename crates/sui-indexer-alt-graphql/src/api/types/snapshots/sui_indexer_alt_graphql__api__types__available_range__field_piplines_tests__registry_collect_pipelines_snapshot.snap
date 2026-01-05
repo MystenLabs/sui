@@ -1763,6 +1763,9 @@ ValidatorSet.validatorCandidatesId
 ValidatorSet.validatorCandidatesSize
   => {}
 
+WriteAccumulatorStorageCostTransaction._
+  => {}
+
 ZkLoginVerifyResult.success
   => {}
 

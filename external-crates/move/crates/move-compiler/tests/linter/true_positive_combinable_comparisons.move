@@ -147,10 +147,10 @@ module a::m {
         x <= y && y >= x;
     }
 
-    const Values: bool = 5 > 3 || 5 == 3;
+    const Values: bool = 5 > 3u64 || 5 == 3u64;
 
     fun values(): bool {
-        5 != 3 && 5 > 3
+        5 != 3u64 && 5 > 3u64
     }
 
     #[allow(lint(redundant_ref_deref))]

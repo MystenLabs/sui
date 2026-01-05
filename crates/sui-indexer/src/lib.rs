@@ -81,7 +81,7 @@ fn get_http_client(rpc_client_url: &str) -> Result<HttpClient, IndexerError> {
 
     HttpClientBuilder::default()
         .max_request_size(2 << 30)
-        .set_headers(headers.clone())
+        .set_headers(headers)
         .build(rpc_client_url)
         .map_err(|e| {
             warn!("Failed to get new Http client with error: {:?}", e);

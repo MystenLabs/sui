@@ -26,7 +26,6 @@ use sui_types::{
 };
 
 use crate::{
-    config::NodeConfig,
     context::Context,
     data::load_live,
     error::{InternalContext, RpcError, client_error_to_error_object, invalid_params},
@@ -111,9 +110,8 @@ struct BalanceCursor {
 type Cursor = BcsCursor<BalanceCursor>;
 
 impl DelegationCoins {
-    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> anyhow::Result<Self> {
-        let client = config.client(fullnode_rpc_url)?;
-        Ok(Self(client))
+    pub(crate) fn new(client: HttpClient) -> Self {
+        Self(client)
     }
 }
 

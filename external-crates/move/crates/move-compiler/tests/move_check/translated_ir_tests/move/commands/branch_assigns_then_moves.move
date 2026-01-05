@@ -3,7 +3,7 @@ fun main() {
     let x;
     let y;
     if (true) {
-        x = 1;
+        x = 1u64;
         y = move x;
         y;
     } else {

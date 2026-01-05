@@ -50,6 +50,7 @@ pub(crate) enum EndOfEpochTransactionKind {
     CoinRegistryCreate(CoinRegistryCreateTransaction),
     DisplayRegistryCreate(DisplayRegistryCreateTransaction),
     AddressAliasStateCreate(AddressAliasStateCreateTransaction),
+    WriteAccumulatorStorageCost(WriteAccumulatorStorageCostTransaction),
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -132,6 +133,14 @@ pub(crate) struct DisplayRegistryCreateTransaction {
 
 #[derive(SimpleObject, Clone, PartialEq, Eq)]
 pub(crate) struct AddressAliasStateCreateTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
+/// System transaction for writing the pre-computed storage cost for accumulator objects.
+#[derive(SimpleObject, Clone, PartialEq, Eq)]
+pub(crate) struct WriteAccumulatorStorageCostTransaction {
     /// A workaround to define an empty variant of a GraphQL union.
     #[graphql(name = "_")]
     dummy: Option<bool>,
@@ -357,6 +366,11 @@ impl EndOfEpochTransactionKind {
             }
             N::AddressAliasStateCreate => {
                 K::AddressAliasStateCreate(AddressAliasStateCreateTransaction { dummy: None })
+            }
+            N::WriteAccumulatorStorageCost(_) => {
+                K::WriteAccumulatorStorageCost(WriteAccumulatorStorageCostTransaction {
+                    dummy: None,
+                })
             }
         }
     }

@@ -11,6 +11,7 @@ use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiErrorKind, UserInputError};
+use sui_types::messages_grpc::SubmitTxRequest;
 use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction};
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -39,7 +40,10 @@ async fn receive_object_feature_deny() {
         .next()
         .unwrap()
         .authority_client()
-        .handle_transaction(txn, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
+        .submit_transaction(
+            SubmitTxRequest::new_transaction(txn),
+            Some(SocketAddr::new([127, 0, 0, 1].into(), 0)),
+        )
         .await
         .map(|_| ())
         .unwrap_err();

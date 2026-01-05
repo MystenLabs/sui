@@ -32,6 +32,8 @@ Options:
           Installation directory for compiled artifacts. Defaults to current directory
       --force
           Force recompilation of all packages
+      --allow-dirty
+          Allow building, even if some cached git dependencies in `~/.move` are modified
       --default-move-flavor <DEFAULT_FLAVOR>
           Default flavor for move compilation, if not specified in the package's config
       --default-move-edition <DEFAULT_EDITION>

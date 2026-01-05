@@ -25,12 +25,12 @@ entry fun create_parent(ctx: &mut TxContext) {
 }
 
 entry fun claim_and_wrap(parent: &mut Parent) {
-  parent.wrapped.fill(derived_object::claim(&mut parent.id, 0));
+  parent.wrapped.fill(derived_object::claim(&mut parent.id, 0u64));
 }
 
 entry fun transfer_to_wrapped(parent: &Parent, ctx: &mut TxContext) {
   let obj = Obj { id: object::new(ctx) };
-  let recipient = derived_object::derive_address(parent.id.to_inner(), 0);
+  let recipient = derived_object::derive_address(parent.id.to_inner(), 0u64);
   transfer::transfer(obj, recipient);
 }
 

@@ -10,18 +10,17 @@ error[E04007]: incompatible types
   │
 8 │         R { s1: S { f }, s2 } = &R { s1: S{f: 0}, s2: S{f: 1} };
   │                     - Expected: '&u64'
-9 │         f = 0;
-  │         ^
-  │         │
+9 │         f = 0u64;
+  │         ^   ---- Given: 'u64'
+  │         │    
   │         Invalid assignment to variable 'f'
-  │         Given: integer
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/assign_unpack_references_invalid.move:10:9
    │
  8 │         R { s1: S { f }, s2 } = &R { s1: S{f: 0}, s2: S{f: 1} };
    │                          -- Expected: '&0x8675309::M::S'
- 9 │         f = 0;
+ 9 │         f = 0u64;
 10 │         s2 = S { f: 0 }
    │         ^^   ---------- Given: '0x8675309::M::S'
    │         │     
@@ -32,18 +31,17 @@ error[E04007]: incompatible types
    │
 16 │         R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
    │                     - Expected: '&mut u64'
-17 │         f = 0;
-   │         ^
-   │         │
+17 │         f = 0u64;
+   │         ^   ---- Given: 'u64'
+   │         │    
    │         Invalid assignment to variable 'f'
-   │         Given: integer
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/assign_unpack_references_invalid.move:18:9
    │
 16 │         R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
    │                          -- Expected: '&mut 0x8675309::M::S'
-17 │         f = 0;
+17 │         f = 0u64;
 18 │         s2 = S { f: 0 }
    │         ^^   ---------- Given: '0x8675309::M::S'
    │         │     
@@ -54,8 +52,8 @@ error[E04006]: invalid subtype
    │
 25 │         R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
    │                     - Expected: '&mut u64'
-26 │         f = &0;
-   │         ^   -- Given: '&{integer}'
+26 │         f = &0u64;
+   │         ^   ----- Given: '&u64'
    │         │    
    │         Invalid assignment to variable 'f'
 
@@ -64,7 +62,7 @@ error[E04006]: invalid subtype
    │
 25 │         R { s1: S { f }, s2 } = &mut R { s1: S{f: 0}, s2: S{f: 1} };
    │                          -- Expected: '&mut 0x8675309::M::S'
-26 │         f = &0;
+26 │         f = &0u64;
 27 │         s2 = &S { f: 0 }
    │         ^^   ----------- Given: '&0x8675309::M::S'
    │         │     

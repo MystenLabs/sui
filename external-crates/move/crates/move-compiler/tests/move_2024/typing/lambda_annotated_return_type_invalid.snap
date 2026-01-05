@@ -8,19 +8,19 @@ info:
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/lambda_annotated_return_type_invalid.move:13:9
    │
-13 │         call!(|| -> X { 0 }).foo();
-   │         ^^^^^^^^^^^^^^^^^^^^
+13 │         call!(|| -> X { 0u64 }).foo();
+   │         ^^^^^^^^^^^^^^^^^^^^^^^
    │         │           │ │
-   │         │           │ Given: integer
+   │         │           │ Given: 'u64'
    │         │           Expected: 'a::m::X'
    │         Invalid type annotation
 
 error[E04006]: invalid subtype
    ┌─ tests/move_2024/typing/lambda_annotated_return_type_invalid.move:14:9
    │
-14 │         call!(|| -> &mut u64 { &0 });
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+14 │         call!(|| -> &mut u64 { &0u64 });
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │           │        │
-   │         │           │        Given: '&{integer}'
+   │         │           │        Given: '&u64'
    │         │           Expected: '&mut u64'
    │         Invalid type annotation

@@ -31,7 +31,9 @@ Response: {
   "data": {
     "object": {
       "asMoveObject": {
-        "contents": null
+        "contents": {
+          "display": null
+        }
       }
     }
   },

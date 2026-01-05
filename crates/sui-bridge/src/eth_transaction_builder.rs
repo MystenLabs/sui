@@ -26,9 +26,9 @@ pub async fn build_eth_transaction(
     action: VerifiedCertifiedBridgeAction,
 ) -> BridgeResult<ContractCall<EthSigner, ()>> {
     if !action.is_governace_action() {
-        return Err(BridgeError::ActionIsNotGovernanceAction(
+        return Err(BridgeError::ActionIsNotGovernanceAction(Box::new(
             action.data().clone(),
-        ));
+        )));
     }
     // TODO: Check chain id?
     let sigs = action.auth_sig();
@@ -39,7 +39,13 @@ pub async fn build_eth_transaction(
         BridgeAction::SuiToEthTokenTransfer(_) => {
             unreachable!()
         }
+        BridgeAction::SuiToEthTokenTransferV2(_) => {
+            unreachable!()
+        }
         BridgeAction::EthToSuiBridgeAction(_) => {
+            unreachable!()
+        }
+        BridgeAction::EthToSuiTokenTransferV2(_) => {
             unreachable!()
         }
         BridgeAction::EmergencyAction(action) => {

@@ -5,12 +5,12 @@ module 0x8675309::M {
     }
 
     fun t2() {
-        let _No = 100;
+        let _No = 100u64;
     }
 
     fun t3() {
         let _No;
-        _No = 100;
+        _No = 100u64;
     }
 
     fun t4() {

@@ -1,3 +1,3 @@
 module a::m {
-    fun test() { let _x = "inferred stringŻ"; }
+    fun test() { let _x: vector<u8> = "inferred stringŻ"; }
 }

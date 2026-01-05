@@ -2,7 +2,7 @@
 
 module a::m {
     fun test_equal_operand() {
-        let x = 0;
+        let x = 0u64;
         &x == &0;
     }
 }

@@ -32,8 +32,8 @@ use sui_types::{
     SUI_RANDOMNESS_STATE_OBJECT_ID,
     authenticator_state::ActiveJwk,
     base_types::{
-        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, SequenceNumber,
-        TransactionDigest,
+        AuthorityName, ConciseableName, ConsensusObjectSequenceKey, ObjectID, ObjectRef,
+        SequenceNumber, TransactionDigest,
     },
     crypto::RandomnessRound,
     digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest},
@@ -49,7 +49,8 @@ use sui_types::{
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
-        SenderSignedData, TransactionKey, VerifiedCertificate, VerifiedTransaction, WithAliases,
+        InputObjectKind, SenderSignedData, TransactionDataAPI, TransactionKey, VerifiedCertificate,
+        VerifiedTransaction, WithAliases,
     },
 };
 use tokio::task::JoinSet;
@@ -87,6 +88,13 @@ use crate::{
     scoring_decision::update_low_scoring_authorities,
     traffic_controller::{TrafficController, policies::TrafficTally},
 };
+
+/// Output from filtering consensus transactions.
+/// Contains the filtered transactions and any owned object locks acquired post-consensus.
+struct FilteredConsensusOutput {
+    transactions: Vec<(SequencedConsensusTransactionKind, u32)>,
+    owned_object_locks: HashMap<ObjectRef, TransactionDigest>,
+}
 
 pub struct ConsensusHandlerInitializer {
     state: Arc<AuthorityState>,
@@ -845,11 +853,18 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .clone(),
         };
 
-        let transactions = self.filter_consensus_txns(
+        let FilteredConsensusOutput {
+            transactions,
+            owned_object_locks,
+        } = self.filter_consensus_txns(
             state.initial_reconfig_state.clone(),
             &commit_info,
             &consensus_commit,
         );
+        // Buffer owned object locks for batch write when preconsensus locking is disabled
+        if !owned_object_locks.is_empty() {
+            state.output.set_owned_object_locks(owned_object_locks);
+        }
         let transactions = self.deduplicate_consensus_txns(&mut state, &commit_info, transactions);
 
         let mut randomness_manager = state.init_randomness(&self.epoch_store, &commit_info);
@@ -1008,7 +1023,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut deferred_transactions = self
             .epoch_store
             .consensus_output_cache
-            .deferred_transactions_v2
+            .deferred_transactions
             .lock();
         for deleted_deferred_key in state.output.get_deleted_deferred_txn_keys() {
             deferred_transactions.remove(&deleted_deferred_key);
@@ -1169,7 +1184,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let mut deferred_transactions = self
                 .epoch_store
                 .consensus_output_cache
-                .deferred_transactions_v2
+                .deferred_transactions
                 .lock();
             for (key, txns) in deferred_txns.into_iter() {
                 total_deferred_txns += txns.len();
@@ -1833,8 +1848,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         reconfig_state.close_all_certs();
 
         let commit_has_deferred_txns = state.output.has_deferred_transactions();
-        let previous_commits_have_deferred_txns =
-            !self.epoch_store.deferred_transactions_empty_v2();
+        let previous_commits_have_deferred_txns = !self.epoch_store.deferred_transactions_empty();
 
         if !commit_has_deferred_txns && !previous_commits_have_deferred_txns {
             if !start_state_is_reject_all_tx {
@@ -1930,14 +1944,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     // Filters out rejected or deprecated transactions.
+    // Returns FilteredConsensusOutput containing transactions and owned_object_locks
+    // (collected when preconsensus locking is disabled).
     #[instrument(level = "trace", skip_all)]
     fn filter_consensus_txns(
         &mut self,
         initial_reconfig_state: ReconfigState,
         commit_info: &ConsensusCommitInfo,
         consensus_commit: &impl ConsensusCommitAPI,
-    ) -> Vec<(SequencedConsensusTransactionKind, u32)> {
+    ) -> FilteredConsensusOutput {
         let mut transactions = Vec::new();
+        let mut owned_object_locks = HashMap::new();
         let epoch = self.epoch_store.epoch();
         let mut num_finalized_user_transactions = vec![0; self.committee.size()];
         let mut num_rejected_user_transactions = vec![0; self.committee.size()];
@@ -2009,11 +2026,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // TODO(fastpath): Handle unlocking.
                     continue;
                 }
-                if matches!(
-                    parsed.transaction.kind,
-                    ConsensusTransactionKind::UserTransaction(_)
-                        | ConsensusTransactionKind::UserTransactionV2(_)
-                ) {
+                // Set Finalized status for user transactions.
+                // For UserTransactionV2 with disable_preconsensus_locking, we defer setting
+                // Finalized until after successful lock acquisition (see below).
+                let defer_finalized_status = self
+                    .epoch_store
+                    .protocol_config()
+                    .disable_preconsensus_locking()
+                    && matches!(
+                        parsed.transaction.kind,
+                        ConsensusTransactionKind::UserTransactionV2(_)
+                    );
+                if !defer_finalized_status
+                    && matches!(
+                        parsed.transaction.kind,
+                        ConsensusTransactionKind::UserTransaction(_)
+                            | ConsensusTransactionKind::UserTransactionV2(_)
+                    )
+                {
                     self.epoch_store
                         .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
                     num_finalized_user_transactions[author] += 1;
@@ -2141,6 +2171,66 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
+                // When preconsensus locking is disabled, perform post-consensus owned object
+                // conflict detection. If lock acquisition fails, the transaction has
+                // invalid/conflicting owned inputs and should be dropped.
+                // This must happen AFTER all filtering checks above to avoid acquiring locks
+                // for transactions that will be dropped (e.g., during epoch change).
+                // Only applies to UserTransactionV2 - other transaction types don't need lock acquisition.
+                if self
+                    .epoch_store
+                    .protocol_config()
+                    .disable_preconsensus_locking()
+                    && let ConsensusTransactionKind::UserTransactionV2(tx_with_claims) =
+                        &parsed.transaction.kind
+                {
+                    let immutable_object_ids: HashSet<ObjectID> =
+                        tx_with_claims.get_immutable_objects().into_iter().collect();
+                    let tx = tx_with_claims.tx();
+
+                    let Ok(input_objects) = tx.transaction_data().input_objects() else {
+                        debug_fatal!("Invalid input objects for transaction {}", tx.digest());
+                        continue;
+                    };
+
+                    // Filter ImmOrOwnedMoveObject inputs, excluding those claimed to be immutable.
+                    // Immutable objects don't need lock acquisition as they can be used concurrently.
+                    let owned_object_refs: Vec<_> = input_objects
+                        .iter()
+                        .filter_map(|obj| match obj {
+                            InputObjectKind::ImmOrOwnedMoveObject(obj_ref)
+                                if !immutable_object_ids.contains(&obj_ref.0) =>
+                            {
+                                Some(*obj_ref)
+                            }
+                            _ => None,
+                        })
+                        .collect();
+
+                    match self
+                        .epoch_store
+                        .try_acquire_owned_object_locks_post_consensus(
+                            &owned_object_refs,
+                            *tx.digest(),
+                            &owned_object_locks,
+                        ) {
+                        Ok(new_locks) => {
+                            owned_object_locks.extend(new_locks.into_iter());
+                            // Lock acquisition succeeded - now set Finalized status
+                            self.epoch_store
+                                .set_consensus_tx_status(position, ConsensusTxStatus::Finalized);
+                            num_finalized_user_transactions[author] += 1;
+                        }
+                        Err(e) => {
+                            debug!("Dropping transaction {}: {}", tx.digest(), e);
+                            self.epoch_store
+                                .set_consensus_tx_status(position, ConsensusTxStatus::Dropped);
+                            self.epoch_store.set_rejection_vote_reason(position, &e);
+                            continue;
+                        }
+                    }
+                }
+
                 let transaction = SequencedConsensusTransactionKind::External(parsed.transaction);
                 transactions.push((transaction, author as u32));
             }
@@ -2170,7 +2260,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .add(num_rejected_user_transactions[i.value()] as i64);
         }
 
-        transactions
+        FilteredConsensusOutput {
+            transactions,
+            owned_object_locks,
+        }
     }
 
     fn deduplicate_consensus_txns(
@@ -2287,15 +2380,25 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                                 ));
                         }
                         ConsensusTransactionKind::UserTransactionV2(tx) => {
-                            let (tx, used_alias_versions) = tx.into_inner();
+                            // Extract the aliases claim (required) from the claims
+                            let used_alias_versions = tx.aliases();
+                            let inner_tx = tx.into_tx();
                             // Safe because transactions are certified by consensus.
-                            let tx = VerifiedTransaction::new_unchecked(tx);
+                            let tx = VerifiedTransaction::new_unchecked(inner_tx);
                             // TODO(fastpath): accept position in consensus, after plumbing consensus round, authority index, and transaction index here.
                             let transaction =
                                 VerifiedExecutableTransaction::new_from_consensus(tx, epoch);
-                            commit_handler_input
-                                .user_transactions
-                                .push(WithAliases::new(transaction, used_alias_versions));
+                            if let Some(used_alias_versions) = used_alias_versions {
+                                commit_handler_input
+                                    .user_transactions
+                                    .push(WithAliases::new(transaction, used_alias_versions));
+                            } else {
+                                commit_handler_input.user_transactions.push(
+                                    VerifiedExecutableTransactionWithAliases::no_aliases(
+                                        transaction,
+                                    ),
+                                );
+                            }
                         }
 
                         // === State machines ===
@@ -2823,7 +2926,11 @@ impl ConsensusBlockHandler {
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         Self {
-            enabled: epoch_store.protocol_config().mysticeti_fastpath(),
+            // Disable mysticeti fastpath execution when preconsensus locking is disabled,
+            // ensuring all transactions go through normal consensus commit path
+            // where post-consensus conflict detection runs.
+            enabled: epoch_store.protocol_config().mysticeti_fastpath()
+                && !epoch_store.protocol_config().disable_preconsensus_locking(),
             epoch_store,
             execution_scheduler_sender,
             backpressure_subscriber,
@@ -3011,6 +3118,7 @@ mod tests {
         object::Object,
         transaction::{
             CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+            VerifiedCertificate,
         },
     };
 
@@ -3021,9 +3129,7 @@ mod tests {
             test_authority_builder::TestAuthorityBuilder,
         },
         checkpoints::CheckpointServiceNoop,
-        consensus_adapter::consensus_tests::{
-            test_certificates_with_gas_objects, test_user_transaction,
-        },
+        consensus_adapter::consensus_tests::test_user_transaction,
         consensus_test_utils::make_consensus_adapter_for_test,
         post_consensus_tx_reorder::PostConsensusTxReorder,
     };
@@ -3105,35 +3211,31 @@ mod tests {
             user_transactions.push(transaction);
         }
 
-        // AND create 4 certified transactions with remaining gas objects and 2 shared objects.
+        // AND create 4 more user transactions with remaining gas objects and 2 shared objects.
         // Having more txns on the same shared object may get deferred.
-        let certified_transactions = [
-            test_certificates_with_gas_objects(
+        for (i, gas_object) in gas_objects[8..12].iter().enumerate() {
+            let shared_object = if i < 2 {
+                shared_objects[4].clone()
+            } else {
+                shared_objects[5].clone()
+            };
+            let transaction = test_user_transaction(
                 &state,
-                &gas_objects[8..10],
-                shared_objects[4].clone(),
+                sender,
+                &keypair,
+                gas_object.clone(),
+                vec![shared_object],
             )
-            .await,
-            test_certificates_with_gas_objects(
-                &state,
-                &gas_objects[10..12],
-                shared_objects[5].clone(),
-            )
-            .await,
-        ]
-        .concat();
+            .await;
+            user_transactions.push(transaction);
+        }
 
-        // AND create block for each user and certified transaction
+        // AND create block for each user transaction
         let mut blocks = Vec::new();
         for (i, consensus_transaction) in user_transactions
             .iter()
             .cloned()
             .map(|t| ConsensusTransaction::new_user_transaction_v2_message(&state.name, t.into()))
-            .chain(
-                certified_transactions
-                    .iter()
-                    .map(|t| ConsensusTransaction::new_certificate_message(&state.name, t.clone())),
-            )
             .enumerate()
         {
             let transaction_bytes = bcs::to_bytes(&consensus_transaction).unwrap();
@@ -3181,7 +3283,7 @@ mod tests {
 
         // THEN check the consensus stats
         let num_blocks = blocks.len();
-        let num_transactions = user_transactions.len() + certified_transactions.len();
+        let num_transactions = user_transactions.len();
         let last_consensus_stats_1 = consensus_handler.last_consensus_stats.clone();
         assert_eq!(
             last_consensus_stats_1.index.transaction_index,
@@ -3211,21 +3313,6 @@ mod tests {
                 // Effects exist as expected.
             } else {
                 panic!("User transaction {} {} did not execute", i, digest);
-            }
-        }
-
-        // THEN check for execution status of certified transactions.
-        for (i, t) in certified_transactions.iter().enumerate() {
-            let digest = t.digest();
-            if let Ok(Ok(_)) = tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                state.notify_read_effects("", *digest),
-            )
-            .await
-            {
-                // Effects exist as expected.
-            } else {
-                panic!("Certified transaction {} {} did not execute", i, digest);
             }
         }
 

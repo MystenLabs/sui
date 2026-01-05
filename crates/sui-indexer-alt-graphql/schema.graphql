@@ -1062,7 +1062,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, after: String, last: Int, before: String): EndOfEpochTransactionKindConnection
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction | DisplayRegistryCreateTransaction | AddressAliasStateCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | StoreExecutionTimeObservationsTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | AccumulatorRootCreateTransaction | CoinRegistryCreateTransaction | DisplayRegistryCreateTransaction | AddressAliasStateCreateTransaction | WriteAccumulatorStorageCostTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -3282,8 +3282,11 @@ type Query {
 	`{"bcs": {"value": "<base64>"}}`
 	
 	Unlike `executeTransaction`, this does not require signatures since the transaction is not committed to the blockchain. This allows for previewing transaction effects, estimating gas costs, and testing transaction logic without spending gas or requiring valid signatures.
+	
+	- `checksEnabled`: If true, enables transaction validation checks during simulation. Defaults to true.
+	- `doGasSelection`: If true, enables automatic gas coin selection and budget estimation. Defaults to false.
 	"""
-	simulateTransaction(transaction: JSON!): SimulationResult!
+	simulateTransaction(transaction: JSON!, checksEnabled: Boolean, doGasSelection: Boolean): SimulationResult!
 	"""
 	Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
 	"""
@@ -4310,6 +4313,16 @@ input VersionFilter {
 	Filter to versions that are strictly older than this one, defaults to fetching up to the latest version (inclusive).
 	"""
 	beforeVersion: UInt53
+}
+
+"""
+System transaction for writing the pre-computed storage cost for accumulator objects.
+"""
+type WriteAccumulatorStorageCostTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
 }
 
 """

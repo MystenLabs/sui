@@ -3,11 +3,11 @@ module 0x8675309::M {
 
     fun t0(s: &mut S) {
         *(s: &S) = S { f: 0 };
-        *&0 = 1;
+        *&0u64 = 1u64;
         let x = 0;
         let x_ref = &mut x;
         let x_ref: &u64 = x_ref;
-        *x_ref = 0;
+        *x_ref = 0u64;
     }
 
 }
