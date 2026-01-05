@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
+
 use prometheus::{
     HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
@@ -8,42 +8,30 @@ use prometheus::{
 };
 
 #[derive(Clone)]
-pub struct AnalyticsMetrics {
-    pub total_received: IntCounterVec,
-    pub last_uploaded_checkpoint: IntGaugeVec,
+pub struct Metrics {
     pub max_checkpoint_on_store: IntGaugeVec,
     pub total_too_large_to_deserialize: IntCounterVec,
     pub file_size_bytes: HistogramVec,
+    /// Latest uploaded checkpoint (inclusive) per pipeline.
+    pub latest_uploaded_checkpoint: IntGaugeVec,
+    /// Latest uploaded epoch per pipeline.
+    pub latest_uploaded_epoch: IntGaugeVec,
 }
 
-impl AnalyticsMetrics {
+impl Metrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            total_received: register_int_counter_vec_with_registry!(
-                "total_received",
-                "Number of checkpoints received",
-                &["data_type"],
-                registry
-            )
-            .unwrap(),
-            last_uploaded_checkpoint: register_int_gauge_vec_with_registry!(
-                "last_uploaded_checkpoint",
-                "Number of uploaded checkpoints.",
-                &["data_type"],
-                registry,
-            )
-            .unwrap(),
             max_checkpoint_on_store: register_int_gauge_vec_with_registry!(
                 "max_checkpoint_on_store",
                 "Max checkpoint on the db table.",
-                &["data_type"],
+                &["pipeline"],
                 registry,
             )
             .unwrap(),
             total_too_large_to_deserialize: register_int_counter_vec_with_registry!(
                 "total_too_large_to_deserialize",
                 "Total number of rows skipped due to size.",
-                &["data_type"],
+                &["pipeline"],
                 registry,
             )
             .unwrap(),
@@ -62,7 +50,21 @@ impl AnalyticsMetrics {
                         1_000_000_000.0, // 1 GB
                         2_000_000_000.0, // 2 GB
                     ]),
-                &["source"],
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            latest_uploaded_checkpoint: register_int_gauge_vec_with_registry!(
+                "latest_uploaded_checkpoint",
+                "Latest checkpoint uploaded to object store (inclusive).",
+                &["pipeline"],
+                registry,
+            )
+            .unwrap(),
+            latest_uploaded_epoch: register_int_gauge_vec_with_registry!(
+                "latest_uploaded_epoch",
+                "Latest epoch uploaded to object store.",
+                &["pipeline"],
                 registry,
             )
             .unwrap(),
