@@ -60,7 +60,7 @@ pub struct BuildConfig {
     #[clap(name = "force-recompilation", long = "force", global = true)]
     pub force_recompilation: bool,
 
-    /// Don't fail if the files in `~/.move` have been changed
+    /// Allow building, even if some cached git dependencies in `~/.move` are modified
     #[clap(name = "allow-dirty", long = "allow-dirty", global = true)]
     pub allow_dirty: bool,
 

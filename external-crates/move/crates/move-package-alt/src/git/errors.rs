@@ -18,7 +18,7 @@ pub enum GitError {
 
     {repo}
 
-Please clean it up before proceeding or pass the `--allow-dirty` flag."
+Please clean it up before proceeding or pass the `--allow-dirty` flag to proceed with the modified files."
     )]
     Dirty { repo: String },
 
