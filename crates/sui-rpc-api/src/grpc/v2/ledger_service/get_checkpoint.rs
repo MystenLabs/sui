@@ -67,6 +67,26 @@ pub fn get_checkpoint(
     let sequence_number = summary.sequence_number;
     let timestamp_ms = summary.timestamp_ms;
 
+    if requires_indexed_data(&read_mask) {
+        let highest_indexed = service
+            .reader
+            .inner()
+            .indexes()
+            .and_then(|idx| idx.get_highest_indexed_checkpoint_seq_number().ok())
+            .flatten()
+            .unwrap_or(0);
+
+        if sequence_number > highest_indexed {
+            return Err(RpcError::new(
+                tonic::Code::NotFound,
+                format!(
+                    "Checkpoint {} is not yet indexed. Highest indexed checkpoint is {}",
+                    sequence_number, highest_indexed
+                ),
+            ));
+        }
+    }
+
     let mut checkpoint = Checkpoint::default();
 
     checkpoint.merge(summary, &read_mask);
@@ -111,25 +131,21 @@ pub fn get_checkpoint(
                     .transactions
                     .into_iter()
                     .map(|t| {
-                        let balance_changes =
-                            if submask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD) {
-                                let digest = t.transaction.digest();
+                        let balance_changes = submask
+                            .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD)
+                            .then(|| {
                                 service
                                     .reader
-                                    .get_transaction_info(&digest)
-                                    .ok_or_else(|| {
-                                        sui_types::storage::error::Error::missing(format!(
-                                            "balance_changes not yet indexed for transaction {}",
-                                            digest
-                                        ))
-                                    })?
-                                    .balance_changes
-                                    .into_iter()
-                                    .map(sui_rpc::proto::sui::rpc::v2::BalanceChange::from)
-                                    .collect::<Vec<_>>()
-                            } else {
-                                vec![]
-                            };
+                                    .get_transaction_info(&t.transaction.digest())
+                                    .map(|info| {
+                                        info.balance_changes
+                                            .into_iter()
+                                            .map(sui_rpc::proto::sui::rpc::v2::BalanceChange::from)
+                                            .collect::<Vec<_>>()
+                                    })
+                            })
+                            .flatten()
+                            .unwrap_or_default();
                         let mut transaction = ExecutedTransaction::merge_from(&t, &submask);
                         transaction.checkpoint = submask
                             .contains(ExecutedTransaction::CHECKPOINT_FIELD)
@@ -154,12 +170,17 @@ pub fn get_checkpoint(
                             }
                         }
 
-                        Ok(transaction)
+                        transaction
                     })
-                    .collect::<Result<Vec<_>, RpcError>>()?;
+                    .collect();
             }
         }
     }
 
     Ok(GetCheckpointResponse::new(checkpoint))
+}
+
+fn requires_indexed_data(mask: &FieldMaskTree) -> bool {
+    mask.contains(Checkpoint::TRANSACTIONS_FIELD.name)
+        || mask.contains(Checkpoint::OBJECTS_FIELD.name)
 }

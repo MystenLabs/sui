@@ -57,6 +57,26 @@ pub fn get_transaction(
 
     let transaction_read = service.reader.get_transaction_read(transaction_digest)?;
 
+    if requires_indexed_data(&read_mask) {
+        let highest_indexed = service
+            .reader
+            .inner()
+            .indexes()
+            .and_then(|idx| idx.get_highest_indexed_checkpoint_seq_number().ok())
+            .flatten()
+            .unwrap_or(0);
+
+        if transaction_read
+            .checkpoint
+            .is_none_or(|cp| cp > highest_indexed)
+        {
+            return Err(RpcError::new(
+                tonic::Code::NotFound,
+                "Transaction is not yet indexed",
+            ));
+        }
+    }
+
     let transaction = transaction_to_response(service, transaction_read, &read_mask)?;
 
     Ok(GetTransactionResponse::new(transaction))
@@ -81,6 +101,14 @@ pub fn batch_get_transactions(
         FieldMaskTree::from(read_mask)
     };
 
+    let highest_indexed = service
+        .reader
+        .inner()
+        .indexes()
+        .and_then(|idx| idx.get_highest_indexed_checkpoint_seq_number().ok())
+        .flatten()
+        .unwrap_or(0);
+
     let transactions = digests
         .into_iter()
         .enumerate()
@@ -91,12 +119,20 @@ pub fn batch_get_transactions(
                     .with_reason(ErrorReason::FieldInvalid)
             })?;
 
-            service
-                .reader
-                .get_transaction_read(digest)
-                .and_then(|transaction_read| {
-                    transaction_to_response(service, transaction_read, &read_mask)
-                })
+            let transaction_read = service.reader.get_transaction_read(digest)?;
+
+            if requires_indexed_data(&read_mask)
+                && transaction_read
+                    .checkpoint
+                    .is_none_or(|cp| cp > highest_indexed)
+            {
+                return Err(RpcError::new(
+                    tonic::Code::NotFound,
+                    "Transaction is not yet indexed",
+                ));
+            }
+
+            transaction_to_response(service, transaction_read, &read_mask)
         })
         .map(|result| match result {
             Ok(transaction) => GetTransactionResult::new_transaction(transaction),
@@ -163,16 +199,13 @@ fn transaction_to_response(
     if mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name) {
         message.balance_changes = source
             .balance_changes
-            .ok_or_else(|| {
-                sui_types::storage::error::Error::missing(format!(
-                    "balance_changes not yet indexed for transaction {}",
-                    source.digest
-                ))
-            })?
-            .into_iter()
-            .map(Into::into)
-            .collect();
+            .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
+            .unwrap_or_default();
     }
 
     Ok(message)
+}
+
+fn requires_indexed_data(mask: &FieldMaskTree) -> bool {
+    mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
 }
