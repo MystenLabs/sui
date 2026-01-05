@@ -106,7 +106,7 @@ pub trait IndexerStore: Clone + Sync + Send + 'static {
 
     async fn prune_epoch(&self, epoch: u64) -> Result<(), IndexerError>;
 
-    async fn get_network_total_transactions_by_end_of_epoch(
+    async fn get_first_tx_sequence_number_of_epoch(
         &self,
         epoch: u64,
     ) -> Result<Option<u64>, IndexerError>;
