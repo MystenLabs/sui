@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 106;
+const MAX_PROTOCOL_VERSION: u64 = 107;
 
 // Record history of protocol version allocations here:
 //
@@ -284,6 +284,7 @@ const MAX_PROTOCOL_VERSION: u64 = 106;
 //              nitro attestation native function in Devnet and Testnet.
 // Version 106: Framework update: accumulator storage fund calculations
 //              Enable address balances on devnet
+// Version 107: Support TxContext in all parameter positions.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -930,6 +931,10 @@ struct FeatureFlags {
     // If true, enable object funds withdraw.
     #[serde(skip_serializing_if = "is_false")]
     enable_object_funds_withdraw: bool,
+
+    // If true, enable tx contexts in all argument positions
+    #[serde(skip_serializing_if = "is_false")]
+    flexible_tx_context_positions: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2477,6 +2482,10 @@ impl ProtocolConfig {
 
     pub fn enable_object_funds_withdraw(&self) -> bool {
         self.feature_flags.enable_object_funds_withdraw
+    }
+
+    pub fn flexible_tx_context_positions(&self) -> bool {
+        self.feature_flags.flexible_tx_context_positions
     }
 }
 
@@ -4387,6 +4396,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_authenticated_event_streams = true;
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
+                }
+                107 => {
+                    cfg.feature_flags.flexible_tx_context_positions = true;
                 }
                 // Use this template when making changes:
                 //
