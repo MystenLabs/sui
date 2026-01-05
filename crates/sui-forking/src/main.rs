@@ -80,14 +80,10 @@ async fn main() -> Result<()> {
                 _ => Chain::Unknown,
             };
 
-            // let mut seeds = vec![];
-            // let graphql_endpoint = Network::from_str(&network)?;
-            // for addr in accounts.accounts.iter() {
-            //     let owned_objects = fetch_owned_objects(&graphql_endpoint, *addr).await?;
-            //     seeds.extend(owned_objects);
-            // }
-            // info!("Downloaded seeds for {} accounts", accounts.accounts.len());
-            info!("Starting forking server...");
+            info!(
+                "Starting forking server with {} as the starting point...",
+                chain.as_str()
+            );
 
             let data_ingestion_path = if let Some(data_dir) = data_dir {
                 let path = PathBuf::from(data_dir);

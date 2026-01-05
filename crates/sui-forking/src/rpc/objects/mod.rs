@@ -146,7 +146,7 @@ impl ObjectsApiServer for Objects {
 
             // If the object does not exist locally, try to fetch it from the RPC data store
             if let Some(SuiObjectResponseError::NotExists { object_id }) = &object.error {
-                info!("Need to fetch object from rpc ");
+                info!("Need to fetch object `{object_id}` from rpc ");
                 {
                     let obj = data_store
                         .get_rpc_data_store()
