@@ -14,7 +14,11 @@ pub type GitResult<T> = std::result::Result<T, GitError>;
 #[derive(Error, Debug)]
 pub enum GitError {
     #[error(
-        "{repo} repo is dirty. Please clean it up before proceeding or pass the `--allow-dirty` flag"
+        "The following cached dependency repository is dirty:
+
+    {repo}
+
+Please clean it up before proceeding or pass the `--allow-dirty` flag to proceed with the modified files."
     )]
     Dirty { repo: String },
 

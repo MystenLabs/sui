@@ -106,7 +106,8 @@ impl Summary {
         } else {
             let path = reroot_path(path)?;
             let env = find_env::<F>(&path, &config)?;
-            let root_pkg = RootPackage::<F>::load(&path, env, config.mode_set()).await?;
+            let root_pkg: RootPackage<F> = config.package_loader(&path, &env).load().await?;
+
             // Get named addresses from the root package graph
             let named_addresses: BuildNamedAddresses =
                 root_pkg.package_info().named_addresses()?.into();

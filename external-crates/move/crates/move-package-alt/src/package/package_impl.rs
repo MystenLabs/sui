@@ -15,11 +15,10 @@ use tracing::debug;
 use super::manifest::Manifest;
 use super::package_lock::PackageSystemLock;
 use super::paths::PackagePath;
-use crate::errors::FileHandle;
 use crate::{
     compatibility::legacy::LegacyData,
     dependency::Pinned,
-    package::manifest::ManifestError,
+    package::{manifest::ManifestError, package_loader::PackageLoader},
     schema::{
         CachedPackageInfo, DefaultDependency, ManifestDependencyInfo, ParsedManifest, Publication,
     },
@@ -32,6 +31,7 @@ use crate::{
     package::manifest::Digest,
     schema::{Environment, OriginalID, PackageMetadata, PackageName, PublishedID},
 };
+use crate::{errors::FileHandle, package::package_loader::PackageConfig};
 
 // TODO: is this the right way to handle this?
 static DUMMY_ADDRESSES: LazyLock<Mutex<u16>> = LazyLock::new(|| Mutex::new(0x1000));
@@ -82,9 +82,10 @@ impl<F: MoveFlavor> Package<F> {
         dep: Pinned,
         env: &Environment,
         mtx: &PackageSystemLock,
+        config: &PackageConfig,
     ) -> PackageResult<Self> {
         debug!("loading package {:?}", dep);
-        let path = FetchedDependency::fetch(&dep).await?;
+        let path = FetchedDependency::fetch(&dep, config.allow_dirty).await?;
 
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
@@ -343,11 +344,17 @@ pub async fn cache_package<F: MoveFlavor>(
         CombinedDependency::from_default(toml_handle, package, env.name().clone(), default_dep);
 
     // pin
-    let root = Pinned::Root(dummy_path);
+    let root = Pinned::Root(dummy_path.clone());
     let deps = PinnedDependencyInfo::pin::<F>(&root, vec![combined], env.id()).await?;
 
     // load
-    let package = Package::<F>::load(deps[0].as_ref().clone(), env, &mtx).await?;
+    let package = Package::<F>::load(
+        deps[0].as_ref().clone(),
+        env,
+        &mtx,
+        PackageLoader::new(dummy_path.path(), env.clone()).config(),
+    )
+    .await?;
 
     // summarize
     Ok(CachedPackageInfo {
