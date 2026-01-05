@@ -37,7 +37,7 @@
       "name": "saved_traces/0x1__calls__test_complex_nested_calls.json.zst",
       "unit": "none",
       "startValue": 0,
-      "endValue": 16891,
+      "endValue": 16475,
       "events": [
         {
           "type": "O",
@@ -62,52 +62,52 @@
         {
           "type": "O",
           "frame": 3,
-          "at": 3013
+          "at": 2965
         },
         {
           "type": "O",
           "frame": 4,
-          "at": 5676
+          "at": 5476
         },
         {
           "type": "C",
           "frame": 4,
-          "at": 9132
+          "at": 8732
         },
         {
           "type": "O",
           "frame": 5,
-          "at": 9132
+          "at": 8732
         },
         {
           "type": "C",
           "frame": 5,
-          "at": 12037
+          "at": 11637
         },
         {
           "type": "O",
           "frame": 5,
-          "at": 12069
+          "at": 11653
         },
         {
           "type": "C",
           "frame": 5,
-          "at": 14974
+          "at": 14558
         },
         {
           "type": "C",
           "frame": 3,
-          "at": 15613
+          "at": 15197
         },
         {
           "type": "C",
           "frame": 1,
-          "at": 16252
+          "at": 15836
         },
         {
           "type": "C",
           "frame": 0,
-          "at": 16891
+          "at": 16475
         }
       ]
     }
