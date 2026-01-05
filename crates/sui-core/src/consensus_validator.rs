@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
@@ -15,9 +15,12 @@ use sui_macros::fail_point_arg;
 #[cfg(msim)]
 use sui_types::base_types::AuthorityName;
 use sui_types::{
-    error::{SuiError, SuiErrorKind, SuiResult},
+    base_types::{ObjectID, ObjectRef},
+    error::{SuiError, SuiErrorKind, SuiResult, UserInputError},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
-    transaction::{TransactionDataAPI, TransactionWithAliases, WithAliases},
+    transaction::{
+        InputObjectKind, PlainTransactionWithClaims, TransactionDataAPI, TransactionWithClaims,
+    },
 };
 use tap::TapFallible;
 use tracing::{debug, info, instrument, warn};
@@ -33,6 +36,7 @@ use crate::{
 #[derive(Clone)]
 pub struct SuiTxValidator {
     authority_state: Arc<AuthorityState>,
+    epoch_store: Arc<AuthorityPerEpochStore>,
     consensus_overload_checker: Arc<dyn ConsensusOverloadChecker>,
     checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
     metrics: Arc<SuiTxValidatorMetrics>,
@@ -41,10 +45,10 @@ pub struct SuiTxValidator {
 impl SuiTxValidator {
     pub fn new(
         authority_state: Arc<AuthorityState>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
         metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Self {
-        let epoch_store = authority_state.load_epoch_store_one_call_per_task().clone();
         info!(
             "SuiTxValidator constructed for epoch {}",
             epoch_store.epoch()
@@ -53,6 +57,7 @@ impl SuiTxValidator {
         let consensus_overload_checker = Arc::new(NoopConsensusOverloadChecker {});
         Self {
             authority_state,
+            epoch_store,
             consensus_overload_checker,
             checkpoint_service,
             metrics,
@@ -60,14 +65,19 @@ impl SuiTxValidator {
     }
 
     fn validate_transactions(&self, txs: &[ConsensusTransactionKind]) -> Result<(), SuiError> {
-        let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
-
+        let epoch_store = self.epoch_store.clone();
         let mut cert_batch = Vec::new();
         let mut ckpt_messages = Vec::new();
         let mut ckpt_batch = Vec::new();
         for tx in txs.iter() {
             match tx {
                 ConsensusTransactionKind::CertifiedTransaction(certificate) => {
+                    if epoch_store.protocol_config().disable_preconsensus_locking() {
+                        return Err(SuiErrorKind::UnexpectedMessage(
+                            "CertifiedTransaction cannot be used when preconsensus locking is disabled".to_string(),
+                        )
+                        .into());
+                    }
                     cert_batch.push(certificate.as_ref());
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
@@ -108,16 +118,33 @@ impl SuiTxValidator {
                 | ConsensusTransactionKind::CapabilityNotificationV2(_)
                 | ConsensusTransactionKind::RandomnessStateUpdate(_, _) => {}
 
-                ConsensusTransactionKind::UserTransaction(_)
-                | ConsensusTransactionKind::UserTransactionV2(_) => {
-                    if !epoch_store.protocol_config().mysticeti_fastpath() {
+                ConsensusTransactionKind::UserTransaction(_) => {
+                    if epoch_store.protocol_config().address_aliases()
+                        || epoch_store.protocol_config().disable_preconsensus_locking()
+                    {
                         return Err(SuiErrorKind::UnexpectedMessage(
-                            "ConsensusTransactionKind::UserTransaction is unsupported".to_string(),
+                            "ConsensusTransactionKind::UserTransaction cannot be used when address aliases is enabled or preconsensus locking is disabled".to_string(),
                         )
                         .into());
                     }
-                    // TODO(fastpath): move deterministic verifications of user transactions here,
-                    // for example validity_check() and verify_transaction().
+                }
+
+                ConsensusTransactionKind::UserTransactionV2(tx) => {
+                    if !(epoch_store.protocol_config().address_aliases()
+                        || epoch_store.protocol_config().disable_preconsensus_locking())
+                    {
+                        return Err(SuiErrorKind::UnexpectedMessage(
+                            "ConsensusTransactionKind::UserTransactionV2 must be used when either address aliases is enabled or preconsensus locking is disabled".to_string(),
+                        )
+                        .into());
+                    }
+                    if epoch_store.protocol_config().address_aliases() && tx.aliases().is_none() {
+                        return Err(SuiErrorKind::UnexpectedMessage(
+                            "ConsensusTransactionKind::UserTransactionV2 must contain an aliases claim".to_string(),
+                        )
+                        .into());
+                    }
+                    // TODO(fastpath): move deterministic verifications of user transactions here.
                 }
 
                 ConsensusTransactionKind::ExecutionTimeObservation(obs) => {
@@ -169,21 +196,16 @@ impl SuiTxValidator {
         block_ref: &BlockRef,
         txs: Vec<ConsensusTransactionKind>,
     ) -> Vec<TransactionIndex> {
-        let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
+        let epoch_store = self.epoch_store.clone();
         if !epoch_store.protocol_config().mysticeti_fastpath() {
             return vec![];
         }
 
-        let mut result = Vec::new();
+        let mut reject_txn_votes = Vec::new();
         for (i, tx) in txs.into_iter().enumerate() {
-            let tx = match tx {
+            let tx: PlainTransactionWithClaims = match tx {
                 ConsensusTransactionKind::UserTransaction(tx) => {
-                    let no_aliases_allowed = tx
-                        .intent_message()
-                        .value
-                        .required_signers()
-                        .map(|s| (s, None));
-                    WithAliases::new(*tx, no_aliases_allowed)
+                    TransactionWithClaims::no_aliases(*tx)
                 }
                 ConsensusTransactionKind::UserTransactionV2(tx) => *tx,
                 _ => continue,
@@ -196,7 +218,7 @@ impl SuiTxValidator {
                     .transaction_reject_votes
                     .with_label_values(&[error.to_variant_name()])
                     .inc();
-                result.push(i as TransactionIndex);
+                reject_txn_votes.push(i as TransactionIndex);
                 // Cache the rejection vote reason (error) for the transaction
                 epoch_store.set_rejection_vote_reason(
                     ConsensusPosition {
@@ -211,24 +233,27 @@ impl SuiTxValidator {
             }
         }
 
-        result
+        reject_txn_votes
     }
 
     #[instrument(level = "debug", skip_all, err(level = "debug"), fields(tx_digest = ?tx.tx().digest()))]
     fn vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-        tx: TransactionWithAliases,
+        tx: PlainTransactionWithClaims,
     ) -> SuiResult<()> {
-        let (tx, aliases) = tx.into_inner();
+        // Extract claims before consuming the transaction
+        let aliases = tx.aliases();
+        let claimed_immutable_ids = tx.get_immutable_objects();
+        let inner_tx = tx.into_tx();
 
         // Currently validity_check() and verify_transaction() are not required to be consistent across validators,
         // so they do not run in validate_transactions(). They can run there once we confirm it is safe.
-        tx.validity_check(&epoch_store.tx_validity_check_context())?;
+        inner_tx.validity_check(&epoch_store.tx_validity_check_context())?;
 
         self.authority_state.check_system_overload(
             &*self.consensus_overload_checker,
-            tx.data(),
+            inner_tx.data(),
             self.authority_state.check_system_overload_at_signing(),
         )?;
 
@@ -244,13 +269,88 @@ impl SuiTxValidator {
             }
         );
 
-        let verified_tx = epoch_store.verify_transaction_with_current_aliases(tx)?;
-        if *verified_tx.aliases() != aliases || fail_point_always_report_aliases_changed {
+        let verified_tx = epoch_store.verify_transaction_with_current_aliases(inner_tx)?;
+
+        // aliases must have data when address_aliases() is enabled.
+        if epoch_store.protocol_config().address_aliases()
+            && (*verified_tx.aliases() != aliases.unwrap()
+                || fail_point_always_report_aliases_changed)
+        {
             return Err(SuiErrorKind::AliasesChanged.into());
         }
 
+        let inner_tx = verified_tx.into_tx();
         self.authority_state
-            .handle_vote_transaction(epoch_store, verified_tx.into_tx())?;
+            .handle_vote_transaction(epoch_store, inner_tx.clone())?;
+
+        if epoch_store.protocol_config().disable_preconsensus_locking()
+            && !claimed_immutable_ids.is_empty()
+        {
+            let owned_object_refs: HashSet<ObjectRef> = inner_tx
+                .data()
+                .transaction_data()
+                .input_objects()?
+                .iter()
+                .filter_map(|obj| match obj {
+                    InputObjectKind::ImmOrOwnedMoveObject(obj_ref) => Some(*obj_ref),
+                    _ => None,
+                })
+                .collect();
+            self.verify_immutable_object_claims(&claimed_immutable_ids, owned_object_refs)?;
+        }
+
+        Ok(())
+    }
+
+    /// Verify that all claimed immutable objects are actually immutable.
+    /// Rejects if any claimed object doesn't exist locally (can't verify) or is not immutable.
+    /// This is stricter than general voting because the claim directly controls locking behavior.
+    fn verify_immutable_object_claims(
+        &self,
+        claimed_ids: &[ObjectID],
+        owned_object_refs: HashSet<ObjectRef>,
+    ) -> SuiResult<()> {
+        if claimed_ids.is_empty() {
+            return Ok(());
+        }
+
+        let objects = self
+            .authority_state
+            .get_object_cache_reader()
+            .get_objects(claimed_ids);
+
+        for (obj, id) in objects.into_iter().zip(claimed_ids.iter()) {
+            match obj {
+                Some(o) => {
+                    // Object exists but is NOT immutable - invalid claim
+                    let object_ref = o.compute_object_reference();
+                    if !owned_object_refs.contains(&o.compute_object_reference()) {
+                        return Err(SuiErrorKind::ImmutableObjectClaimNotFoundInInput {
+                            object_id: *id,
+                        }
+                        .into());
+                    }
+                    if !o.is_immutable() {
+                        return Err(SuiErrorKind::InvalidImmutableObjectClaim {
+                            claimed_object_id: *id,
+                            found_object_ref: object_ref,
+                        }
+                        .into());
+                    }
+                }
+                None => {
+                    // Object not found - we can't verify the claim, so we must reject.
+                    // This branch should not happen because owned input objects are already validated to exist.
+                    return Err(SuiErrorKind::UserInputError {
+                        error: UserInputError::ObjectNotFound {
+                            object_id: *id,
+                            version: None,
+                        },
+                    }
+                    .into());
+                }
+            }
+        }
 
         Ok(())
     }
@@ -356,6 +456,7 @@ mod tests {
         messages_consensus::ConsensusTransaction,
         object::Object,
         signature::GenericSignature,
+        transaction::{PlainTransactionWithClaims, Transaction},
     };
 
     use crate::authority::ExecutionEnv;
@@ -363,15 +464,14 @@ mod tests {
         authority::test_authority_builder::TestAuthorityBuilder,
         checkpoints::CheckpointServiceNoop,
         consensus_adapter::consensus_tests::{
-            test_certificates, test_gas_objects, test_user_transaction,
+            test_gas_objects, test_user_transaction, test_user_transactions,
         },
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
     };
 
     #[sim_test]
     async fn accept_valid_transaction() {
-        // Initialize an authority with a (owned) gas object and a shared object; then
-        // make a test certificate.
+        // Initialize an authority with a (owned) gas object and a shared object.
         let mut objects = test_gas_objects();
         let shared_object = Object::shared_for_testing();
         objects.push(shared_object.clone());
@@ -386,25 +486,35 @@ mod tests {
             .build()
             .await;
         let name1 = state.name;
-        let certificates = test_certificates(&state, shared_object).await;
+        let transactions = test_user_transactions(&state, shared_object).await;
 
-        let first_transaction = certificates[0].clone();
-        let first_transaction_bytes: Vec<u8> = bcs::to_bytes(
-            &ConsensusTransaction::new_certificate_message(&name1, first_transaction),
-        )
-        .unwrap();
+        let first_transaction = transactions[0].clone();
+        let first_transaction_bytes: Vec<u8> =
+            bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
+                &name1,
+                first_transaction.into(),
+            ))
+            .unwrap();
 
         let metrics = SuiTxValidatorMetrics::new(&Default::default());
-        let validator =
-            SuiTxValidator::new(state.clone(), Arc::new(CheckpointServiceNoop {}), metrics);
+        let validator = SuiTxValidator::new(
+            state.clone(),
+            state.epoch_store_for_testing().clone(),
+            Arc::new(CheckpointServiceNoop {}),
+            metrics,
+        );
         let res = validator.verify_batch(&[&first_transaction_bytes]);
         assert!(res.is_ok(), "{res:?}");
 
-        let transaction_bytes: Vec<_> = certificates
+        let transaction_bytes: Vec<_> = transactions
             .clone()
             .into_iter()
-            .map(|cert| {
-                bcs::to_bytes(&ConsensusTransaction::new_certificate_message(&name1, cert)).unwrap()
+            .map(|tx| {
+                bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
+                    &name1,
+                    tx.into(),
+                ))
+                .unwrap()
             })
             .collect();
 
@@ -412,15 +522,22 @@ mod tests {
         let res_batch = validator.verify_batch(&batch);
         assert!(res_batch.is_ok(), "{res_batch:?}");
 
-        let bogus_transaction_bytes: Vec<_> = certificates
+        let bogus_transaction_bytes: Vec<_> = transactions
             .into_iter()
-            .map(|mut cert| {
-                // set it to an all-zero user signature
-                cert.tx_signatures_mut_for_testing()[0] =
+            .map(|tx| {
+                // Create a transaction with an invalid signature
+                let aliases = tx.aliases().clone();
+                let mut signed_tx: Transaction = tx.into_tx().into();
+                signed_tx.tx_signatures_mut_for_testing()[0] =
                     GenericSignature::Signature(sui_types::crypto::Signature::Ed25519SuiSignature(
                         Ed25519SuiSignature::default(),
                     ));
-                bcs::to_bytes(&ConsensusTransaction::new_certificate_message(&name1, cert)).unwrap()
+                let tx_with_claims = PlainTransactionWithClaims::from_aliases(signed_tx, aliases);
+                bcs::to_bytes(&ConsensusTransaction::new_user_transaction_v2_message(
+                    &name1,
+                    tx_with_claims,
+                ))
+                .unwrap()
             })
             .collect();
 
@@ -428,8 +545,17 @@ mod tests {
             .iter()
             .map(|t| t.as_slice())
             .collect();
-        let res_batch = validator.verify_batch(&batch);
-        assert!(res_batch.is_err());
+        // verify_batch doesn't verify user transaction signatures (that happens in vote_transaction).
+        // Use verify_and_vote_batch to test that bogus transactions are rejected during voting.
+        let res_batch = validator.verify_and_vote_batch(&BlockRef::MIN, &batch);
+        assert!(res_batch.is_ok());
+        // All transactions should be in the rejection list since they have invalid signatures
+        let rejections = res_batch.unwrap();
+        assert_eq!(
+            rejections.len(),
+            batch.len(),
+            "All bogus transactions should be rejected"
+        );
     }
 
     #[tokio::test]
@@ -508,6 +634,7 @@ mod tests {
 
         let validator = SuiTxValidator::new(
             state.clone(),
+            state.epoch_store_for_testing().clone(),
             Arc::new(CheckpointServiceNoop {}),
             SuiTxValidatorMetrics::new(&Default::default()),
         );
@@ -591,6 +718,7 @@ mod tests {
 
         let validator = SuiTxValidator::new(
             state.clone(),
+            state.epoch_store_for_testing().clone(),
             Arc::new(CheckpointServiceNoop {}),
             SuiTxValidatorMetrics::new(&Default::default()),
         );
@@ -644,6 +772,7 @@ mod tests {
 
         let validator = SuiTxValidator::new(
             state.clone(),
+            state.epoch_store_for_testing().clone(),
             Arc::new(CheckpointServiceNoop {}),
             SuiTxValidatorMetrics::new(&Default::default()),
         );
@@ -654,6 +783,14 @@ mod tests {
 
     #[sim_test]
     async fn accept_already_executed_transaction() {
+        // This test uses ConsensusTransaction::new_user_transaction_message which creates a
+        // UserTransaction. When disable_preconsensus_locking=true (protocol version 105+),
+        // UserTransaction is not allowed. Gate with disable_preconsensus_locking=false.
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_preconsensus_locking_for_testing(false);
+            config
+        });
+
         let (sender, keypair) = deterministic_random_account_key();
 
         let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
@@ -683,7 +820,7 @@ mod tests {
         .await
         .into_tx();
         let tx_digest = *transaction.digest();
-        let cert = VerifiedExecutableTransaction::new_from_quorum_execution(transaction.clone(), 0);
+        let cert = VerifiedExecutableTransaction::new_from_consensus(transaction.clone(), 0);
         let (executed_effects, _) = state
             .try_execute_immediately(&cert, ExecutionEnv::new(), &state.epoch_store_for_testing())
             .await
@@ -705,6 +842,7 @@ mod tests {
         .unwrap();
         let validator = SuiTxValidator::new(
             state.clone(),
+            state.epoch_store_for_testing().clone(),
             Arc::new(CheckpointServiceNoop {}),
             SuiTxValidatorMetrics::new(&Default::default()),
         );

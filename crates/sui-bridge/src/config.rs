@@ -205,7 +205,7 @@ impl BridgeNodeConfig {
             if !action.is_governace_action() {
                 anyhow::bail!(format!(
                     "{:?}",
-                    BridgeError::ActionIsNotGovernanceAction(action.clone())
+                    BridgeError::ActionIsNotGovernanceAction(Box::new(action.clone()))
                 ));
             }
         }

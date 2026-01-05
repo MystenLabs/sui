@@ -10,7 +10,7 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         setUpBridgeTest();
     }
 
-    function testBridgeCommitteeInitialization() public {
+    function testBridgeCommitteeInitialization() public view {
         assertEq(committee.committeeStake(committeeMemberA), 1000);
         assertEq(committee.committeeStake(committeeMemberB), 1000);
         assertEq(committee.committeeStake(committeeMemberC), 1000);
@@ -104,7 +104,7 @@ contract BridgeCommitteeTest is BridgeBaseTest {
         committee.initialize(_committeeNotSameLength, _stakeNotSameLength, minStakeRequired);
     }
 
-    function testVerifySignaturesWithValidSignatures() public {
+    function testVerifySignaturesWithValidSignatures() public view {
         // Create a message
         BridgeUtils.Message memory message = BridgeUtils.Message({
             messageType: BridgeUtils.TOKEN_TRANSFER,
@@ -369,7 +369,7 @@ contract BridgeCommitteeTest is BridgeBaseTest {
     }
 
     // An e2e update committee blocklist regression test covering message ser/de
-    function testUpdateCommitteeBlocklistRegressionTest() public {
+    function testUpdateCommitteeBlocklistRegressionTest() public pure {
         bytes memory payload =
             hex"010268b43fd906c0b8f024a18c56e06744f7c6157c65acaef39832cb995c4e049437a3e2ec6a7bad1ab5";
         // Create blocklist message
@@ -411,7 +411,15 @@ contract BridgeCommitteeTest is BridgeBaseTest {
             "BridgeConfig.sol",
             abi.encodeCall(
                 BridgeConfig.initialize,
-                (address(committee), chainID, supportedTokens, tokenPrices, tokenIds, suiDecimals, supportedChains)
+                (
+                    address(committee),
+                    chainID,
+                    supportedTokens,
+                    tokenPrices,
+                    tokenIds,
+                    suiDecimals,
+                    supportedChains
+                )
             ),
             opts
         );

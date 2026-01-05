@@ -121,17 +121,21 @@ impl MoveType {
 
     /// Structured representation of the "shape" of values that match this type. May return no
     /// layout if the type is invalid.
-    async fn layout(&self) -> Result<Option<MoveTypeLayout>, RpcError> {
-        let Some(layout) = self.layout_impl().await? else {
-            return Ok(None);
-        };
+    async fn layout(&self) -> Option<Result<MoveTypeLayout, RpcError>> {
+        async {
+            let Some(layout) = self.layout_impl().await? else {
+                return Ok(None);
+            };
 
-        Ok(Some(MoveTypeLayout::try_from(layout)?))
+            Ok(Some(MoveTypeLayout::try_from(layout)?))
+        }
+        .await
+        .transpose()
     }
 
     /// The abilities this concrete type has. Returns no abilities if the type is invalid.
-    async fn abilities(&self) -> Result<Option<Vec<MoveAbility>>, RpcError> {
-        Ok(self.abilities_impl().await?.map(abilities))
+    async fn abilities(&self) -> Option<Result<Vec<MoveAbility>, RpcError>> {
+        Some(Ok(abilities(self.abilities_impl().await.ok()??)))
     }
 }
 

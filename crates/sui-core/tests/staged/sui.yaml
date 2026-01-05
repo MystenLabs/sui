@@ -497,6 +497,10 @@ EndOfEpochTransactionKind:
       DisplayRegistryCreate: UNIT
     11:
       AddressAliasStateCreate: UNIT
+    12:
+      WriteAccumulatorStorageCost:
+        NEWTYPE:
+          TYPENAME: WriteAccumulatorStorageCost
 Event:
   STRUCT:
     - package_id:
@@ -1460,6 +1464,9 @@ WithdrawalTypeArg:
       Balance:
         NEWTYPE:
           TYPENAME: TypeInput
+WriteAccumulatorStorageCost:
+  STRUCT:
+    - storage_cost: U64
 ZkLoginAuthenticatorAsBytes:
   NEWTYPESTRUCT:
     SEQ: U8

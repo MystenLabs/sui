@@ -12,7 +12,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         setUpBridgeTest();
     }
 
-    function testSuiBridgeInitialization() public {
+    function testSuiBridgeInitialization() public view {
         assertEq(address(bridge.committee()), address(committee));
         assertEq(address(bridge.vault()), address(vault));
     }
@@ -500,7 +500,7 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         // approve
         bytes4 selector = bytes4(keccak256("approve(address,uint256)"));
         bytes memory data = abi.encodeWithSelector(selector, address(bridge), usdtAmount);
-        (bool success, bytes memory returnData) = USDT.call(data);
+        (bool success,) = USDT.call(data);
         require(success, "Call failed");
 
         assertEq(IERC20(USDT).balanceOf(address(vault)), 0);
@@ -677,7 +677,15 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
             "BridgeConfig.sol",
             abi.encodeCall(
                 BridgeConfig.initialize,
-                (address(committee), 11, _supportedTokens, tokenPrices, tokenIds, suiDecimals, _supportedDestinationChains)
+                (
+                    address(committee),
+                    11,
+                    _supportedTokens,
+                    tokenPrices,
+                    tokenIds,
+                    suiDecimals,
+                    _supportedDestinationChains
+                )
             ),
             opts
         );
@@ -871,7 +879,15 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
             "BridgeConfig.sol",
             abi.encodeCall(
                 BridgeConfig.initialize,
-                (address(committee), chainID, supportedTokens, tokenPrices, tokenIds, suiDecimals, supportedChains)
+                (
+                    address(committee),
+                    chainID,
+                    supportedTokens,
+                    tokenPrices,
+                    tokenIds,
+                    suiDecimals,
+                    supportedChains
+                )
             ),
             opts
         );

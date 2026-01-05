@@ -45,7 +45,7 @@ impl Processor for TxCalls {
 
                 calls
                     .iter()
-                    .map(|(package, module, function)| StoredTxCalls {
+                    .map(|(_cmd_idx, package, module, function)| StoredTxCalls {
                         tx_sequence_number,
                         package: package.to_vec(),
                         module: module.to_string(),

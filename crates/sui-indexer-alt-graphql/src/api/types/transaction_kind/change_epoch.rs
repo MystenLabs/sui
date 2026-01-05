@@ -65,10 +65,10 @@ impl ChangeEpochTransaction {
     }
 
     /// Unix timestamp when epoch started.
-    async fn epoch_start_timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        Ok(Some(DateTime::from_ms(
+    async fn epoch_start_timestamp(&self) -> Option<Result<DateTime, RpcError>> {
+        Some(DateTime::from_ms(
             self.native.epoch_start_timestamp_ms as i64,
-        )?))
+        ))
     }
 
     /// System packages that will be written by validators before the new epoch starts, to upgrade them on-chain. These objects do not have a "previous transaction" because they are not written on-chain yet. Consult `effects.objectChanges` for this transaction to see the actual objects written.
@@ -79,35 +79,40 @@ impl ChangeEpochTransaction {
         after: Option<CSystemPackage>,
         last: Option<u64>,
         before: Option<CSystemPackage>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("ChangeEpochTransaction", "systemPackages");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("ChangeEpochTransaction", "systemPackages");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        page.paginate_indices(self.native.system_packages.len(), |i| {
-            let (version, modules, deps) = &self.native.system_packages[i];
+                page.paginate_indices(self.native.system_packages.len(), |i| {
+                    let (version, modules, deps) = &self.native.system_packages[i];
 
-            // Deserialize the compiled modules
-            let compiled_modules = modules
-                .iter()
-                .map(|bytes| CompiledModule::deserialize_with_defaults(bytes))
-                .collect::<PartialVMResult<Vec<_>>>()
-                .context("Failed to deserialize system modules")?;
+                    // Deserialize the compiled modules
+                    let compiled_modules = modules
+                        .iter()
+                        .map(|bytes| CompiledModule::deserialize_with_defaults(bytes))
+                        .collect::<PartialVMResult<Vec<_>>>()
+                        .context("Failed to deserialize system modules")?;
 
-            // Create a native system package object
-            let native_object = NativeObject::new_system_package(
-                &compiled_modules,
-                *version,
-                deps.clone(),
-                TransactionDigest::ZERO,
-            );
+                    // Create a native system package object
+                    let native_object = NativeObject::new_system_package(
+                        &compiled_modules,
+                        *version,
+                        deps.clone(),
+                        TransactionDigest::ZERO,
+                    );
 
-            // Create MovePackage directly from native object for efficiency
-            let package = MovePackage::from_native_object(self.scope.clone(), native_object)
-                .context("Failed to create MovePackage from system package object")?;
+                    // Create MovePackage directly from native object for efficiency
+                    let package =
+                        MovePackage::from_native_object(self.scope.clone(), native_object)
+                            .context("Failed to create MovePackage from system package object")?;
 
-            Ok(package)
-        })
-        .map(Some)
+                    Ok(package)
+                })
+            }
+            .await,
+        )
     }
 }

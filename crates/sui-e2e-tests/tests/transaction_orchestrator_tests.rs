@@ -16,11 +16,11 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::ErrorCategory;
 use sui_types::messages_grpc::SubmitTxRequest;
 use sui_types::object::PastObjectRead;
-use sui_types::quorum_driver_types::{
-    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
-    FinalizedEffects, IsTransactionExecutedLocally, QuorumDriverError,
-};
 use sui_types::transaction::Transaction;
+use sui_types::transaction_driver_types::{
+    ExecuteTransactionRequestType, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
+    FinalizedEffects, IsTransactionExecutedLocally, TransactionSubmissionError,
+};
 use test_cluster::TestClusterBuilder;
 use tokio::time::timeout;
 use tracing::info;
@@ -274,7 +274,7 @@ async fn test_tx_across_epoch_boundaries() {
                 info!(?tx_digest, "tx result: ok");
                 result_tx.send(response.effects).await.unwrap();
             }
-            Err(QuorumDriverError::TimeoutBeforeFinality) => {
+            Err(TransactionSubmissionError::TimeoutBeforeFinality) => {
                 info!(?tx_digest, "tx result: timeout and will retry")
             }
             Err(other) => panic!("unexpected error: {:?}", other),
@@ -312,7 +312,8 @@ async fn execute_with_orchestrator(
     orchestrator: &TransactionOrchestrator<NetworkAuthorityClient>,
     txn: Transaction,
     request_type: ExecuteTransactionRequestType,
-) -> Result<(ExecuteTransactionResponseV3, IsTransactionExecutedLocally), QuorumDriverError> {
+) -> Result<(ExecuteTransactionResponseV3, IsTransactionExecutedLocally), TransactionSubmissionError>
+{
     orchestrator
         .execute_transaction_block(ExecuteTransactionRequestV3::new_v2(txn), request_type, None)
         .await
@@ -512,7 +513,7 @@ async fn test_early_validation_with_old_object_version() -> Result<(), anyhow::E
 
     let err = result.unwrap_err();
     match err {
-        QuorumDriverError::TransactionFailed { category, details } => {
+        TransactionSubmissionError::TransactionFailed { category, details } => {
             // Should be non-retriable
             assert_eq!(category, ErrorCategory::InvalidTransaction);
             assert!(!category.is_submission_retriable());

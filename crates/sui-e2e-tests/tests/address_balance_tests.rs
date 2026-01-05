@@ -18,6 +18,7 @@ use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
+use sui_types::accumulator_metadata::get_accumulator_object_count;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     accumulator_metadata::AccumulatorOwner,
@@ -407,6 +408,14 @@ async fn test_deposits() {
         input_consensus_objects.iter().find(|input_consensus_object| {
             matches!(input_consensus_object, InputConsensusObject::ReadOnly(obj_ref) if obj_ref.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
         }).expect("settlement should have accumulator root object as read-only input consensus object");
+
+
+        // Verify the accumulator object count after settlement.
+        // 1 account (recipient) with SUI balance = 5 objects.
+        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
+            .expect("read cannot fail")
+            .expect("accumulator object count should exist after settlement");
+        assert_eq!(object_count, 5);
     });
 
     // ensure that no conservation failures are detected during reconfig.
@@ -455,6 +464,13 @@ async fn test_multiple_settlement_txns() {
         for (amount, recipient) in amounts_and_recipients {
             verify_accumulator_exists(child_object_resolver, recipient, amount);
         }
+
+        // Verify the accumulator object count after settlement.
+        // 21 accounts (20 from first tx + 1 from second tx), each with 5 objects = 105.
+        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
+            .expect("read cannot fail")
+            .expect("accumulator object count should exist after settlement");
+        assert_eq!(object_count, 105);
     });
 
     // ensure that no conservation failures are detected during reconfig.
@@ -555,6 +571,13 @@ async fn test_deposit_and_withdraw() {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         verify_accumulator_exists(child_object_resolver, sender, 1000);
+
+        // Verify the accumulator object count after settlement.
+        // 1 account (sender) with SUI balance = 5 objects.
+        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
+            .expect("read cannot fail")
+            .expect("accumulator object count should exist after settlement");
+        assert_eq!(object_count, 5);
     });
 
     let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
@@ -620,6 +643,13 @@ async fn test_deposit_and_withdraw_with_larger_reservation() {
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         // Verify that the accumulator still exists, as the entire balance was not withdrawn
         verify_accumulator_exists(child_object_resolver, sender, 200);
+
+        // Verify the accumulator object count after settlement.
+        // 2 accounts (sender with 200, dbg_addr(2) with 800), each with 5 objects = 10.
+        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
+            .expect("read cannot fail")
+            .expect("accumulator object count should exist after settlement");
+        assert_eq!(object_count, 10);
     });
 
     // ensure that no conservation failures are detected during reconfig.
@@ -752,6 +782,13 @@ async fn test_address_balance_gas() {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         verify_accumulator_exists(child_object_resolver, sender, 10_000_000);
+
+        // Verify the accumulator object count after settlement.
+        // 1 account (sender) with SUI balance = 5 objects.
+        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
+            .expect("read cannot fail")
+            .expect("accumulator object count should exist after settlement");
+        assert_eq!(object_count, 5);
     });
 
     let rgp = test_cluster.get_reference_gas_price().await;
@@ -1470,11 +1507,11 @@ async fn test_transaction_expired_too_early() {
 
     match result {
         Err(err) => {
-            let err_str = format!("{:?}", err);
+            let err_str = err.to_string();
             assert!(
-                err_str.contains("TransactionExpired"),
-                "Expected TransactionExpired error, got: {:?}",
-                err
+                err_str.contains("Transaction Expired"),
+                "Expected Transaction Expired error, got: {}",
+                err_str
             );
         }
         Ok(_) => panic!("Transaction should be rejected when epoch is too early"),
@@ -1510,11 +1547,11 @@ async fn test_transaction_expired_too_late() {
 
     match result {
         Err(err) => {
-            let err_str = format!("{:?}", err);
+            let err_str = err.to_string();
             assert!(
-                err_str.contains("TransactionExpired"),
-                "Expected TransactionExpired error, got: {:?}",
-                err
+                err_str.contains("Transaction Expired"),
+                "Expected Transaction Expired error, got: {}",
+                err_str
             );
         }
         Ok(_) => panic!("Transaction should be rejected when epoch is too late"),
@@ -1550,11 +1587,11 @@ async fn test_transaction_invalid_chain_id() {
 
     match result {
         Err(err) => {
-            let err_str = format!("{:?}", err);
+            let err_str = err.to_string();
             assert!(
-                err_str.contains("InvalidChainId"),
-                "Expected InvalidChainId error, got: {:?}",
-                err
+                err_str.contains("does not match network chain ID"),
+                "Expected chain ID mismatch error, got: {}",
+                err_str
             );
         }
         Ok(_) => panic!("Transaction should be rejected with invalid chain ID"),
@@ -1645,11 +1682,11 @@ async fn test_transaction_expiration_edge_cases() {
         .execute_transaction_return_raw_effects(test_cluster.sign_transaction(&tx2).await)
         .await;
     let err2 = result2.expect_err("Transaction should be rejected when min_epoch is in the future");
-    let err_str2 = format!("{:?}", err2);
+    let err_str2 = err2.to_string();
     assert!(
-        err_str2.contains("TransactionExpired"),
-        "Expected TransactionExpired for future min_epoch, got: {:?}",
-        err2
+        err_str2.contains("Transaction Expired"),
+        "Expected Transaction Expired for future min_epoch, got: {}",
+        err_str2
     );
 
     // Test case 3: min_epoch: Some(past), max_epoch: Some(past) - expired
@@ -1673,11 +1710,11 @@ async fn test_transaction_expiration_edge_cases() {
         .await;
     match result3 {
         Err(err) => {
-            let err_str = format!("{:?}", err);
+            let err_str = err.to_string();
             assert!(
-                err_str.contains("TransactionExpired"),
-                "Expected TransactionExpired for past max_epoch, got: {:?}",
-                err
+                err_str.contains("Transaction Expired"),
+                "Expected Transaction Expired for past max_epoch, got: {}",
+                err_str
             );
         }
         Ok(_) => panic!("Transaction should be rejected when max_epoch is in the past"),
@@ -1858,6 +1895,13 @@ async fn test_address_balance_gas_charged_on_move_abort() {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         verify_accumulator_exists(child_object_resolver, sender, 10_000_000);
+
+        // Verify the accumulator object count after settlement.
+        // 1 account (sender) with SUI balance = 5 objects.
+        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
+            .expect("read cannot fail")
+            .expect("accumulator object count should exist after settlement");
+        assert_eq!(object_count, 5);
     });
 
     let rgp = test_cluster.get_reference_gas_price().await;
@@ -3356,8 +3400,7 @@ async fn test_reject_signing_transaction_executed_in_previous_epoch() {
             let epoch_store = node.state().epoch_store_for_testing();
             let verified_tx = VerifiedTransaction::new_unchecked(signed_tx);
             node.state()
-                .handle_sign_transaction(&epoch_store, verified_tx)
-                .await
+                .handle_vote_transaction(&epoch_store, verified_tx)
         })
         .await;
 
@@ -3365,14 +3408,14 @@ async fn test_reject_signing_transaction_executed_in_previous_epoch() {
         Err(e) => {
             let err_str = e.to_string();
             assert!(
-                err_str.contains("was already executed"),
-                "Expected 'was already executed' error when signing transaction that was executed in previous epoch, got: {}",
+                err_str.contains("already been executed"),
+                "Expected 'already been executed' error when voting on transaction that was executed in previous epoch, got: {}",
                 err_str
             );
         }
-        Ok(_) => {
+        Ok(()) => {
             panic!(
-                "Expected handle_sign_transaction to fail for transaction executed in previous epoch"
+                "Expected handle_vote_transaction to fail for transaction executed in previous epoch"
             );
         }
     }

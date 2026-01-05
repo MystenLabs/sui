@@ -1,0 +1,83 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 817
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 10:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 12-24:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "epochId": 0,
+      "referenceGasPrice": "1000",
+      "checkpoints": null
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot provide both 'first' and 'last' parameters for connection",
+      "locations": [
+        {
+          "line": 6,
+          "column": 5
+        }
+      ],
+      "path": [
+        "epoch",
+        "checkpoints"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 4, lines 26-44:
+//# run-graphql
+Response: {
+  "data": {
+    "validEpoch": {
+      "epochId": 0,
+      "referenceGasPrice": "1000"
+    },
+    "partialErrorEpoch": {
+      "epochId": 0,
+      "transactions": null
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot provide both 'first' and 'last' parameters for connection",
+      "locations": [
+        {
+          "line": 11,
+          "column": 5
+        }
+      ],
+      "path": [
+        "partialErrorEpoch",
+        "transactions"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}

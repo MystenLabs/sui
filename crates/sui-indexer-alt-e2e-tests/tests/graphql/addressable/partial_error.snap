@@ -1,0 +1,81 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 817
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs 1000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 10:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 12-25:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+      "objects": null
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot provide both 'first' and 'last' parameters for connection",
+      "locations": [
+        {
+          "line": 7,
+          "column": 5
+        }
+      ],
+      "path": [
+        "address",
+        "objects"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 4, lines 27-44:
+//# run-graphql
+Response: {
+  "data": {
+    "validAddress": {
+      "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+    },
+    "partialErrorAddress": {
+      "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+      "balances": null
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot provide both 'first' and 'last' parameters for connection",
+      "locations": [
+        {
+          "line": 10,
+          "column": 5
+        }
+      ],
+      "path": [
+        "partialErrorAddress",
+        "balances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}

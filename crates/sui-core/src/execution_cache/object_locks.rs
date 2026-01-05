@@ -146,7 +146,7 @@ impl ObjectLocks {
         Ok(())
     }
 
-    fn clear_cached_locks(&self, locks: &[(ObjectRef, LockDetails)]) {
+    pub(crate) fn clear_cached_locks(&self, locks: &[(ObjectRef, LockDetails)]) {
         for (obj_ref, lock) in locks {
             let entry = self.locked_transactions.entry(*obj_ref);
             let mut occupied = match entry {
@@ -203,13 +203,8 @@ impl ObjectLocks {
         tx_digest: TransactionDigest,
         signed_transaction: Option<VerifiedSignedTransaction>,
     ) -> SuiResult {
-        let object_ids = owned_input_objects.iter().map(|o| o.0).collect::<Vec<_>>();
-        let live_objects = Self::multi_get_objects_must_exist(cache, &object_ids)?;
-
-        // Only live objects can be locked
-        for (obj_ref, live_object) in owned_input_objects.iter().zip(live_objects.iter()) {
-            Self::verify_live_object(obj_ref, live_object)?;
-        }
+        // First validate all object versions match live objects
+        Self::validate_owned_object_versions(cache, owned_input_objects)?;
 
         let mut locks_to_write: Vec<(_, LockDetails)> =
             Vec::with_capacity(owned_input_objects.len());
@@ -254,6 +249,25 @@ impl ObjectLocks {
 
         // remove pending locks from unbounded storage
         self.clear_cached_locks(&locks_to_write);
+
+        Ok(())
+    }
+
+    /// Validates owned object versions and digests without acquiring locks.
+    /// Used when preconsensus locking is disabled to validate objects before signing,
+    /// since actual locking happens post-consensus in that mode.
+    #[instrument(level = "debug", skip_all)]
+    pub(crate) fn validate_owned_object_versions(
+        cache: &WritebackCache,
+        owned_input_objects: &[ObjectRef],
+    ) -> SuiResult {
+        let object_ids = owned_input_objects.iter().map(|o| o.0).collect::<Vec<_>>();
+        let live_objects = Self::multi_get_objects_must_exist(cache, &object_ids)?;
+
+        // Validate that all objects are live and versions/digests match
+        for (obj_ref, live_object) in owned_input_objects.iter().zip(live_objects.iter()) {
+            Self::verify_live_object(obj_ref, live_object)?;
+        }
 
         Ok(())
     }

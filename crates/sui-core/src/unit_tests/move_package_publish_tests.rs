@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::{
-    authority_tests::{call_move, init_state_with_ids, send_and_confirm_transaction},
+    authority_tests::{call_move, init_state_with_ids, submit_and_execute},
     move_integration_tests::{build_and_publish_test_package, build_test_package},
 };
 
@@ -109,7 +109,7 @@ async fn test_publish_empty_package() {
         rgp,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let err = send_and_confirm_transaction(&authority, transaction)
+    let err = submit_and_execute(&authority, transaction)
         .await
         .unwrap_err();
     assert_eq!(
@@ -129,10 +129,7 @@ async fn test_publish_empty_package() {
         rgp,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = send_and_confirm_transaction(&authority, transaction)
-        .await
-        .unwrap()
-        .1;
+    let result = submit_and_execute(&authority, transaction).await.unwrap().1;
     assert_eq!(
         result.status(),
         &ExecutionStatus::Failure {
@@ -165,10 +162,7 @@ async fn test_publish_duplicate_modules() {
         rgp,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = send_and_confirm_transaction(&authority, transaction)
-        .await
-        .unwrap()
-        .1;
+    let result = submit_and_execute(&authority, transaction).await.unwrap().1;
     assert_eq!(
         result.status(),
         &ExecutionStatus::Failure {
@@ -201,10 +195,7 @@ async fn test_publish_extraneous_bytes_modules() {
         rgp,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = send_and_confirm_transaction(&authority, transaction)
-        .await
-        .unwrap()
-        .1;
+    let result = submit_and_execute(&authority, transaction).await.unwrap().1;
     assert_eq!(result.status(), &ExecutionStatus::Success);
 
     // make the bytes invalid
@@ -222,10 +213,7 @@ async fn test_publish_extraneous_bytes_modules() {
         rgp,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = send_and_confirm_transaction(&authority, transaction)
-        .await
-        .unwrap()
-        .1;
+    let result = submit_and_execute(&authority, transaction).await.unwrap().1;
     assert_eq!(
         result.status(),
         &ExecutionStatus::Failure {
@@ -250,10 +238,7 @@ async fn test_publish_extraneous_bytes_modules() {
         rgp,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = send_and_confirm_transaction(&authority, transaction)
-        .await
-        .unwrap()
-        .1;
+    let result = submit_and_execute(&authority, transaction).await.unwrap().1;
     assert_eq!(
         result.status(),
         &ExecutionStatus::Failure {
@@ -287,10 +272,7 @@ async fn test_publish_extraneous_bytes_modules() {
         rgp,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let result = send_and_confirm_transaction(&authority, transaction)
-        .await
-        .unwrap()
-        .1;
+    let result = submit_and_execute(&authority, transaction).await.unwrap().1;
     assert_eq!(
         result.status(),
         &ExecutionStatus::Failure {

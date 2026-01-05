@@ -13,7 +13,6 @@ use mysten_metrics::{
     monitored_scope, spawn_logged_monitored_task,
 };
 use parking_lot::RwLock;
-use tokio::task::JoinSet;
 
 use crate::{
     BlockAPI, CommitIndex, CommittedSubDag, VerifiedBlock,
@@ -495,7 +494,7 @@ impl CommitFinalizer {
 
         // Process chunks in parallel.
         let mut all_finalized_transactions = vec![];
-        let mut join_set = JoinSet::new();
+        let mut handles = Vec::new();
         // TODO(fastpath): investigate using a cost based batching,
         // for example each block has cost num authorities + pending_transactions.len().
         for chunk in pending_blocks.chunks(BLOCKS_PER_INDIRECT_COMMIT_TASK) {
@@ -504,7 +503,7 @@ impl CommitFinalizer {
             let gc_rounds = gc_rounds.clone();
             let chunk: Vec<(BlockRef, BTreeSet<TransactionIndex>)> = chunk.to_vec();
 
-            join_set.spawn(tokio::task::spawn_blocking(move || {
+            let handle = tokio::task::spawn_blocking(move || {
                 let mut chunk_results = Vec::new();
 
                 for (block_ref, pending_transactions) in chunk {
@@ -522,25 +521,24 @@ impl CommitFinalizer {
                 }
 
                 chunk_results
-            }));
+            });
+
+            handles.push(handle);
         }
 
         // Collect results from all chunks
-        while let Some(result) = join_set.join_next().await {
-            let e = match result {
-                Ok(blocking_result) => match blocking_result {
-                    Ok(chunk_results) => {
-                        all_finalized_transactions.extend(chunk_results);
-                        continue;
-                    }
-                    Err(e) => e,
-                },
+        for handle in handles {
+            let result = match handle.await {
+                Ok(chunk_results) => {
+                    all_finalized_transactions.extend(chunk_results);
+                    continue;
+                }
                 Err(e) => e,
             };
-            if e.is_panic() {
-                std::panic::resume_unwind(e.into_panic());
+            if result.is_panic() {
+                std::panic::resume_unwind(result.into_panic());
             }
-            tracing::info!("Process likely shutting down: {:?}", e);
+            tracing::info!("Process likely shutting down: {:?}", result);
             // Ok to return. No potential inconsistency in state.
             return;
         }

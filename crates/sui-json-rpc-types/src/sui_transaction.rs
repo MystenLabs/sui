@@ -45,7 +45,6 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
-use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{DeleteKind, WriteKind};
 use sui_types::sui_serde::Readable;
@@ -58,6 +57,7 @@ use sui_types::transaction::{
     SenderSignedData, TransactionData, TransactionDataAPI, TransactionKind, WithdrawFrom,
     WithdrawalTypeArg,
 };
+use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_types::{authenticator_state::ActiveJwk, transaction::SharedObjectMutability};
 
 use crate::balance_changes::BalanceChange;
@@ -622,6 +622,9 @@ impl SuiTransactionBlockKind {
                             }
                             EndOfEpochTransactionKind::AddressAliasStateCreate => {
                                 SuiEndOfEpochTransactionKind::AddressAliasStateCreate
+                            }
+                            EndOfEpochTransactionKind::WriteAccumulatorStorageCost(_) => {
+                                SuiEndOfEpochTransactionKind::WriteAccumulatorStorageCost
                             }
                         })
                         .collect(),
@@ -1791,6 +1794,7 @@ pub enum SuiEndOfEpochTransactionKind {
     CoinRegistryCreate,
     DisplayRegistryCreate,
     AddressAliasStateCreate,
+    WriteAccumulatorStorageCost,
 }
 
 #[serde_as]
@@ -2595,11 +2599,16 @@ impl Filter<EffectsWithInput> for TransactionFilter {
                 package,
                 module,
                 function,
-            } => item.input.move_calls().into_iter().any(|(p, m, f)| {
-                p == package
-                    && (module.is_none() || matches!(module,  Some(m2) if m2 == &m.to_string()))
-                    && (function.is_none() || matches!(function, Some(f2) if f2 == &f.to_string()))
-            }),
+            } => item
+                .input
+                .move_calls()
+                .into_iter()
+                .any(|(_cmd_idx, p, m, f)| {
+                    p == package
+                        && (module.is_none() || matches!(module,  Some(m2) if m2 == &m.to_string()))
+                        && (function.is_none()
+                            || matches!(function, Some(f2) if f2 == &f.to_string()))
+                }),
             TransactionFilter::TransactionKind(kind) => item.input.kind().to_string() == *kind,
             TransactionFilter::TransactionKindIn(kinds) => {
                 kinds.contains(&item.input.kind().to_string())

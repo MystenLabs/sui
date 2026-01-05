@@ -42,6 +42,7 @@ pub enum EndOfEpochTransactionKind {
     CoinRegistryCreate(CoinRegistryCreateTransaction),
     DisplayRegistryCreate(DisplayRegistryCreateTransaction),
     AddressAliasStateCreate(AddressAliasStateCreateTransaction),
+    WriteAccumulatorStorageCost(WriteAccumulatorStorageCostTransaction),
     // TODO: Add more complex transaction types incrementally
 }
 
@@ -156,6 +157,14 @@ pub struct AddressAliasStateCreateTransaction {
     dummy: Option<bool>,
 }
 
+/// System transaction for writing the pre-computed storage cost for accumulator objects.
+#[derive(SimpleObject, Clone)]
+pub struct WriteAccumulatorStorageCostTransaction {
+    /// A workaround to define an empty variant of a GraphQL union.
+    #[graphql(name = "_")]
+    dummy: Option<bool>,
+}
+
 /// System transaction that supersedes `ChangeEpochTransaction` as the new way to run transactions at the end of an epoch. Behaves similarly to `ChangeEpochTransaction` but can accommodate other optional transactions to run at the end of the epoch.
 #[Object]
 impl EndOfEpochTransaction {
@@ -167,18 +176,22 @@ impl EndOfEpochTransaction {
         after: Option<CTransaction>,
         last: Option<u64>,
         before: Option<CTransaction>,
-    ) -> Result<Option<Connection<String, EndOfEpochTransactionKind>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("EndOfEpochTransaction", "transactions");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, EndOfEpochTransactionKind>, RpcError>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("EndOfEpochTransaction", "transactions");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        page.paginate_indices(self.native.len(), |i| {
-            Ok(EndOfEpochTransactionKind::from(
-                self.native[i].clone(),
-                self.scope.clone(),
-            ))
-        })
-        .map(Some)
+                page.paginate_indices(self.native.len(), |i| {
+                    Ok(EndOfEpochTransactionKind::from(
+                        self.native[i].clone(),
+                        self.scope.clone(),
+                    ))
+                })
+            }
+            .await,
+        )
     }
 }
 
@@ -228,6 +241,11 @@ impl EndOfEpochTransactionKind {
             }
             N::AddressAliasStateCreate => {
                 K::AddressAliasStateCreate(AddressAliasStateCreateTransaction { dummy: None })
+            }
+            N::WriteAccumulatorStorageCost(_) => {
+                K::WriteAccumulatorStorageCost(WriteAccumulatorStorageCostTransaction {
+                    dummy: None,
+                })
             }
         }
     }
