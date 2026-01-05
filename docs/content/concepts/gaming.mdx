@@ -8,33 +8,17 @@ Gaming on Sui leverages blockchain technology to enhance in-game economies, owne
 
 This topic explores the key features of Sui for gaming, real-world use cases, and essential tools for builders. Whether you're building an RPG, a racing game, or a digital card game, Sui provides the Web3 infrastructure to power your next-generation gaming projects.
 
-## Player experience
+## Representing in-game objects on-chain
 
-Video games are less fun when there is a large barrier to entry. Sui provides primitives that allow you to create a simple pathway from player account and profile creation, to actually playing your game.
-
-### Simplified onboarding
-
-Most players are familiar with using some sort of single sign-on (SSO) or social login to create their game accounts. On Sui, you can leverage [zkLogin](/concepts/cryptography/zklogin.mdx) to simplify player account creation through a Web2-like onboarding process, removing the friction of wallet setup.
-
-### Sponsored transactions
-
-With the rising cost of AAA titles, modern players are often opting for free-to-play (F2P) games that do not require an upfront cost. Sponsored transactions allow you, or a designated entity, to cover the required gas fees for a player, removing the friction of purchasing SUI tokens.
-
-## Fair and transparent gameplay
-
-Trusting that a game is fair is essential to a positive gaming experience and player retention. Modern game mechanics such as loot boxes, procedural world generation, and player versus player (PVP) matchmaking, will often drive players away from a game if they perceive the systems as rigged or predetermined.
+One of the aspects that defines a Web3 game is having objects within the game reside on a blockchain. Whether it's in-game currency, battle passes, skins, or any number of other objects, knowing how to create and integrate these items is the first step in building the desired user experience on Sui.
 
 ### On-chain randomness and verification
 
 Sui provides [native randomness](/guides/developer/advanced/randomness-onchain.mdx), allowing games to operate without requiring players to trust a centralized operator.
 
-Additionally, all transactions on the Sui network are viewable and verifiable. Sui leverages threshold cryptography and Distributed Key Generation (DKG), which generates secret shares of a distributed key at the beginning of each epoch, and continuously uses them to produce randomness. 
+Additionally, all transactions on the Sui network are viewable and verifiable. Sui leverages threshold cryptography and Distributed Key Generation (DKG), which generates secret shares of a distributed key at the beginning of each epoch, and continuously uses them to produce randomness.
 
 Off-chain computation can also be verified on-chain by using [Nautilus](/concepts/cryptography/nautilus.mdx). 
-
-## Representing in-game objects on-chain
-
-One of the aspects that defines a Web3 game is having objects within the game reside on a blockchain. Whether it's in-game currency, battle passes, skins, or any number of other objects, knowing how to create and integrate these items is the first step in building the desired user experience on Sui.
 
 ### In-game currencies
 
@@ -48,13 +32,11 @@ Similar to in-game currencies, [Closed-Loop Tokens](/standards/closed-loop-token
 
 For example, you can create tokens associated with your game that [reward loyalty](/guides/developer/coin/loyalty.mdx) amongst your user base. You can also produce [regulated tokens](/guides/developer/coin/regulated.mdx) that allow the bearer of a specific capability to control the addresses that have access to the token, facilitating gated access to special events, leagues, or other game features. 
 
-### Game features
+## Game features
 
-[Non-fungible tokens (NFTs)](/guides/developer/nft.mdx) are able to represent many traditional game features. 
+[Non-fungible tokens (NFTs)](/guides/developer/nft.mdx) are able to represent many traditional game features such as in-game objects, battle passes, rewards, skins, game cards or keys, and loot boxes.
 
-For example, in-game objects, battle passes, rewards, skins, game cards or keys, and loot boxes are just a few of the features that you can create using NFTs.
-
-On Sui, everything is an object and all objects are NFTs. For gaming discussions, you can also think of these NFTs as game assets that can be generally categorized as either [dynamic assets](#dynamic-assets) or [soulbound assets](#soulbound-assets).
+You can think of these NFTs as game assets that are generally categorized as either [dynamic assets](#dynamic-assets) or [soulbound assets](#soulbound-assets).
 
 ### Dynamic assets {#dynamic-assets}
 
@@ -281,59 +263,51 @@ There are a number of tools available in the Sui ecosystem to help you realize y
 
 <Tabs>
 
+<TabItem label="zkLogin" value="zklogin" >
+
+Most players are familiar with using some sort of single sign-on (SSO) or social login to create their game accounts. On Sui, you can leverage [zkLogin](https://www.sui.io/zklogin) to simplify player account creation through a Web2-like onboarding process, removing the friction of wallet setup.
+
+</TabItem>
+
 <TabItem label="Playtron GameOS" value="playtron-os" >
 
-Playtron GameOS is a Linux-based operating system that seeks to turn PCs, handhelds, and desktops into dedicated gaming consoles. It supports multiple game stores like Steam and Epic Games, offering a seamless gaming experience across devices such as Steam Deck, ROG Ally, and Lenovo Legion Go. 
-
-https://www.playtron.one/playtron-os 
+[Playtron GameOS](https://www.playtron.one/playtron-os) is a Linux-based operating system that seeks to turn PCs, handhelds, and desktops into dedicated gaming consoles. It supports multiple game stores like Steam and Epic Games, offering a seamless gaming experience across devices such as Steam Deck, ROG Ally, and Lenovo Legion Go.  
 
 </TabItem>
 
 <TabItem label="E4C: Ludus" value="ludus" >
 
-E4C: Ludus is a cross-platform gaming layer designed to unify Web2 and Web3 gaming experiences on a single platform. Leveraging the Sui blockchain, it offers developers access to dynamic NFTs and zkLogin, facilitating integration of blockchain features into games across various platforms. The native E4C token is its primary currency, enabling in-game purchases and transactions. E4C: Ludus also provides a unified frontend for players to access a range of games, with the aim to enhance player engagement and simplify the gaming experience. The platform is set to launch globally in 2025, with a demo currently available to explore. 
-
-https://ludus.ambrus.studio/ 
+[E4C: Ludus](https://ludus.ambrus.studio/) is a cross-platform gaming layer designed to unify Web2 and Web3 gaming experiences on a single platform. Leveraging the Sui blockchain, it offers developers access to dynamic NFTs and zkLogin, facilitating integration of blockchain features into games across various platforms. The native E4C token is its primary currency, enabling in-game purchases and transactions. E4C: Ludus also provides a unified frontend for players to access a range of games, with the aim to enhance player engagement and simplify the gaming experience. The platform is set to launch globally in 2025, with a demo currently available to explore. 
 
 </TabItem>
 
 <TabItem label="Sui Coins" value="suicoins" >
 
-Sui Coins is the utility layer for tokens and NFTs on the Sui network, offering asset management tools that include token swaps, automated dollar-cost averaging, airdrops, an incinerator for deleting assets, zkSend for private transfers, and a merger tool to consolidate small balances. Sui Coins also features an open source SuiCoins Terminal for integrating crypto swaps across platforms.
-
-https://www.suicoins.com/ 
-https://terminal.suicoins.com/
+[Sui Coins](https://www.suicoins.com/) is the utility layer for tokens and NFTs on the Sui network, offering asset management tools that include token swaps, automated dollar-cost averaging, airdrops, an incinerator for deleting assets, zkSend for private transfers, and a merger tool to consolidate small balances. Sui Coins also features an open source [SuiCoins Terminal](https://terminal.suicoins.com/) for integrating crypto swaps across platforms.
 
 </TabItem>
 
 <TabItem label="Beamable" value="beamable" >
 
-Beamable is a development platform that helps you integrate live services and backend features into your games. It offers SDKs for both Unity and Unreal Engine, facilitating development and deployment of online game functionalities. You can incorporate features such as player authentication, inventory management, and microservices within the environments of your chosen game engines. Beamable provides support for the Sui blockchain, allowing for the integration of Web3 elements like NFTs and on-chain assets into games. The Beamable SDKs offer tools and sample projects to help you build on the Sui network.
-
-https://beamable.com/ 
+[Beamable](https://beamable.com/) is a development platform that helps you integrate live services and backend features into your games. It offers SDKs for both Unity and Unreal Engine, facilitating development and deployment of online game functionalities. You can incorporate features such as player authentication, inventory management, and microservices within the environments of your chosen game engines. Beamable provides support for the Sui blockchain, allowing for the integration of Web3 elements like NFTs and on-chain assets into games. The Beamable SDKs offer tools and sample projects to help you build on the Sui network. 
 
 </TabItem>
 
 <TabItem label="Forge.gg" value="forge" >
 
-Forge is a platform that enables game developers to create custom loyalty programs, rewarding players for engaging in community activities and in-game challenges. Players earn loyalty points by completing actions you define, which can be redeemed for in-game items and digital content. Forge also offers analytics tools to help developers understand their audience and improve monetization strategies.
+[Forge](https://forge.gg/) is a platform that enables game developers to create custom loyalty programs, rewarding players for engaging in community activities and in-game challenges. Players earn loyalty points by completing actions you define, which can be redeemed for in-game items and digital content. Forge also offers analytics tools to help developers understand their audience and improve monetization strategies.
 
-https://forge.gg/
 </TabItem>
 
 <TabItem label="Snag Solutions" value="snagsolutions" >
 
-Snag Solutions provides white-label loyalty and marketplace platforms to enhance community engagement and control your digital ecosystems. Their solutions enable you to track and reward user contributions, create customizable marketplaces, and integrate social features like peer-to-peer trading and user profiles. Snag Solutions offers customization options, APIs, and SDKs to align with your brand's identity.
-
-https://www.snagsolutions.io/ 
+[Snag Solutions](https://www.snagsolutions.io/) provides white-label loyalty and marketplace platforms to enhance community engagement and control your digital ecosystems. Their solutions enable you to track and reward user contributions, create customizable marketplaces, and integrate social features like peer-to-peer trading and user profiles. Snag Solutions offers customization options, APIs, and SDKs to align with your brand's identity.
 
 </TabItem>
 
 <TabItem label="Venly" value="venly" >
 
-Venly is a developer platform that aids blockchain integration for businesses through secure digital wallets, tokenization services, and payment solutions. It offers APIs and SDKs for management of digital assets. Venly enables you to create, trade, and manage NFTs, tokens, and payments securely while maintaining full ownership of your assets.
-
-https://www.venly.io/ 
+[Venly](https://www.venly.io/) is a developer platform that aids blockchain integration for businesses through secure digital wallets, tokenization services, and payment solutions. It offers APIs and SDKs for management of digital assets. Venly enables you to create, trade, and manage NFTs, tokens, and payments securely while maintaining full ownership of your assets. 
 
 </TabItem>
 
@@ -360,7 +334,7 @@ ShadowQuest is a multiplayer game that combines fantasy with RPG battle mechanic
 
 **Seamless player onboarding and wallet integration**
     
-ShadowQuest wants to onboard players without adding complexity, especially those unfamiliar with Web3. By using [zkLogin](/concepts/cryptography/zklogin.mdx), players can sign in using social platforms like Google, Facebook, Twitch, and Apple. This automatically creates a Sui wallet linked to their ShadowQuest account, making blockchain interactions seamless.
+ShadowQuest wants to onboard players without adding complexity, especially those unfamiliar with Web3. By using zkLogin, players can sign in using social platforms like Google, Facebook, Twitch, and Apple. This automatically creates a Sui wallet linked to their ShadowQuest account, making blockchain interactions seamless.
     
 **Simplified transaction handling**
     
