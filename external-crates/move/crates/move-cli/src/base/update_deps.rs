@@ -31,14 +31,12 @@ impl UpdateDeps {
     ) -> anyhow::Result<()> {
         let default = PathBuf::from(".");
         let path = path.unwrap_or(&default);
-        let modes = build_config
-            .modes
-            .clone()
-            .into_iter()
-            .map(|x| x.to_string())
-            .collect::<Vec<_>>();
 
-        let mut root_package = RootPackage::<F>::load_force_repin(&path, env, modes).await?;
+        let mut root_package: RootPackage<F> = build_config
+            .package_loader(path, &env)
+            .force_repin(true)
+            .load()
+            .await?;
         root_package.save_lockfile_to_disk()?;
         Ok(())
     }

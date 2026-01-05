@@ -57,7 +57,9 @@ use crate::{
         vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME, default_environment},
     },
     package::{
-        EnvironmentID, EnvironmentName, RootPackage, package_lock::PackageSystemLock,
+        EnvironmentID, EnvironmentName, RootPackage,
+        package_loader::{LoadType, PackageConfig, PackageLoader},
+        package_lock::PackageSystemLock,
         paths::PackagePath,
     },
     schema::{Environment, ModeName, OriginalID, PublishAddresses, PublishedID},
@@ -771,16 +773,37 @@ impl Scenario {
         &self,
         package: impl AsRef<str>,
     ) -> PackageResult<PackageGraph<Vanilla>> {
-        let path = PackagePath::new(self.path_for(package)).unwrap();
+        let path = PackagePath::new(self.path_for(&package)).unwrap();
+
+        let config = PackageLoader::new(self.path_for(&package), default_environment())
+            .config()
+            .clone();
+
         let mtx = path.lock().unwrap();
 
-        PackageGraph::<Vanilla>::load_from_manifests(&path, &vanilla::default_environment(), &mtx)
-            .await
+        PackageGraph::<Vanilla>::load_from_manifests(
+            &path,
+            &vanilla::default_environment(),
+            &mtx,
+            &config,
+        )
+        .await
     }
 
     /// Loads the root package for `package` in the default environment and with no modes
     pub async fn root_package(&self, package: impl AsRef<str>) -> RootPackage<Vanilla> {
-        self.try_root_package(package)
+        self.try_root_package(package, |cfg| cfg)
+            .await
+            .map_err(|e| e.emit())
+            .expect("could load package")
+    }
+
+    pub async fn root_package_with_config(
+        &self,
+        package: impl AsRef<str>,
+        config: impl Fn(PackageLoader) -> PackageLoader,
+    ) -> RootPackage<Vanilla> {
+        self.try_root_package(package, config)
             .await
             .map_err(|e| e.emit())
             .expect("could load package")
@@ -789,7 +812,7 @@ impl Scenario {
     /// Loads the root package for `package` and expects an error; returns the (redacted) contents
     /// of the error
     pub async fn root_package_err(&self, package: impl AsRef<str>) -> String {
-        match self.try_root_package(package).await {
+        match self.try_root_package(package, |cfg| cfg).await {
             Ok(_) => panic!("expected root package to fail to load"),
             Err(err) => err
                 .to_string()
@@ -801,8 +824,14 @@ impl Scenario {
     pub async fn try_root_package(
         &self,
         package: impl AsRef<str>,
+        config: impl Fn(PackageLoader) -> PackageLoader,
     ) -> PackageResult<RootPackage<Vanilla>> {
-        RootPackage::<Vanilla>::load(self.path_for(package), default_environment(), vec![]).await
+        config(PackageLoader::new(
+            self.path_for(package),
+            default_environment(),
+        ))
+        .load()
+        .await
     }
 
     pub fn read_file(&self, file: impl AsRef<Path>) -> String {

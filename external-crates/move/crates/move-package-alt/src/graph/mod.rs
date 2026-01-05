@@ -19,6 +19,7 @@ use tracing::debug;
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::package::package_loader::PackageConfig;
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{LockfileDependencyInfo, ModeName, Publication};
 use crate::{
@@ -61,8 +62,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         path: &PackagePath,
         env: &Environment,
         mtx: &PackageSystemLock,
+        config: &PackageConfig,
     ) -> PackageResult<Self> {
-        let builder = PackageGraphBuilder::<F>::new();
+        let builder = PackageGraphBuilder::<F>::new(config);
 
         if let Some(graph) = builder.load_from_lockfile(path, env, mtx).await? {
             debug!("successfully loaded lockfile");
@@ -79,8 +81,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         path: &PackagePath,
         env: &Environment,
         mtx: &PackageSystemLock,
+        config: &PackageConfig,
     ) -> PackageResult<Self> {
-        PackageGraphBuilder::new()
+        PackageGraphBuilder::new(config)
             .load_from_manifests(path, env, mtx)
             .await
     }
@@ -92,8 +95,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         path: &PackagePath,
         env: &Environment,
         mtx: &PackageSystemLock,
+        config: &PackageConfig,
     ) -> PackageResult<Option<Self>> {
-        PackageGraphBuilder::new()
+        PackageGraphBuilder::new(config)
             .load_from_lockfile_ignore_digests(path, env, mtx)
             .await
     }
