@@ -1927,6 +1927,15 @@ pub struct GasData {
     pub budget: u64,
 }
 
+impl GasData {
+    pub fn is_unmetered(&self) -> bool {
+        self.payment.len() == 1
+            && self.payment[0].0 == ObjectID::ZERO
+            && self.payment[0].1 == SequenceNumber::default()
+            && self.payment[0].2 == ObjectDigest::MIN
+    }
+}
+
 pub fn is_gas_paid_from_address_balance(
     gas_data: &GasData,
     transaction_kind: &TransactionKind,

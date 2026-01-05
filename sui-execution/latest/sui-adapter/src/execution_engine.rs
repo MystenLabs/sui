@@ -8,6 +8,7 @@ mod checked {
 
     use crate::execution_mode::{self, ExecutionMode};
     use crate::execution_value::SuiResolver;
+    use crate::gas_charger::PaymentMethod;
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
@@ -137,18 +138,20 @@ mod checked {
         };
         let gas_price = gas_status.gas_price();
         let rgp = gas_status.reference_gas_price();
-        let address_balance_gas_payer =
-            if is_gas_paid_from_address_balance(&gas_data, &transaction_kind) {
-                Some(gas_data.owner)
-            } else {
-                None
-            };
+
+        let payment_method = if gas_data.is_unmetered() || transaction_kind.is_system_tx() {
+            PaymentMethod::Unmetered
+        } else if is_gas_paid_from_address_balance(&gas_data, &transaction_kind) {
+            PaymentMethod::AddressBalance(gas_data.owner)
+        } else {
+            PaymentMethod::Coins(gas_data.payment)
+        };
+
         let mut gas_charger = GasCharger::new(
             transaction_digest,
-            gas_data.payment,
+            payment_method,
             gas_status,
             protocol_config,
-            address_balance_gas_payer,
         );
 
         let tx_ctx = TxContext::new_from_components(
