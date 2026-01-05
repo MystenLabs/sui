@@ -128,7 +128,7 @@ When using the online IDE, supply variables as a JSON object to the query in the
 When making a request to the GraphQL service (for example, using `curl`), pass the query and variables as two fields of a single JSON object:
 
 ```sh
-$ curl -X POST https://sui-testnet.mystenlabs.com/graphql \
+$ curl -X POST https://graphql.testnet.sui.io/graphql \
     --header 'Content-Type: application/json' \
     --data '{
       "query": "query ($epochID: Int) { epoch(id: $epochID) { referenceGasPrice } }",
