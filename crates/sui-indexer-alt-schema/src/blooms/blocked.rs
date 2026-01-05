@@ -1,33 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Blocked Bloom Filter for I/O-optimized database storage.
-//!
-//! Bloom filters are split into 128 blocks stored as separate database rows.
-//! This enables queries to fetch only the blocks they need (typically 1-3)
-//! instead of the entire 256KB filter.
-//!
-//! ## How It Works
+//! Blocked bloom filters are split into 128 blocks stored as separate database rows.
 //!
 //! 1. First hash selects which 2KB block (0-127)
 //! 2. Remaining k-1 hashes select bit positions within that block
 //! 3. Each block is stored as a separate database row
-//!
-//! For queries, only the required blocks are fetched.
-//!
-//! ## Configuration
-//!
-//! - 128 blocks × 2KB = 256KB total
-//! - k=5 hash functions per key
-//! - Target FPR: <1% for up to 1,500 items per checkpoint block
-
 use super::hash;
 
 /// Size of each bloom block in bytes.
-///
-/// Bloom filters are split into 128 blocks stored as separate database rows.
-/// This enables queries to fetch only the blocks they need (typically 1-3)
-/// instead of the entire 256KB filter, reducing I/O significantly.
 pub const BLOOM_BLOCK_BYTES: usize = 2048;
 
 /// Number of bits per bloom block (BLOOM_BLOCK_BYTES * 8).
@@ -42,9 +23,8 @@ pub const TOTAL_BLOOM_BITS: usize = 2097152;
 /// Number of hash functions (k) used per key.
 pub const NUM_HASHES: u32 = 5;
 
-/// Blocked Bloom Filter for I/O-optimized database storage.
 pub struct BlockedBloomFilter {
-    blocks: Vec<Vec<u8>>, // 128 blocks, each 2048 bytes
+    blocks: Vec<Vec<u8>>,
     seed: u128,
 }
 
@@ -76,8 +56,6 @@ impl BlockedBloomFilter {
     }
 
     /// Get all non-zero blocks with their indices (for sparse storage).
-    ///
-    /// Returns: Vec<(block_index, block_bytes)>
     pub fn to_sparse_blocks(&self) -> Vec<(usize, Vec<u8>)> {
         self.blocks
             .iter()
@@ -98,12 +76,12 @@ pub fn compute_key_hash_positions(key: &[u8], seed: u128) -> (usize, Vec<usize>)
 
 #[cfg(test)]
 impl BlockedBloomFilter {
-    /// Get a specific 2048-byte block by index (test-only).
+    /// Get a specific 2048-byte block by index.
     pub fn get_block(&self, block_idx: usize) -> Option<&[u8]> {
         self.blocks.get(block_idx).map(|b| b.as_slice())
     }
 
-    /// Check if a block contains any set bits (test-only).
+    /// Check if a block contains any set bits.
     pub fn is_block_nonzero(&self, block_idx: usize) -> bool {
         self.blocks
             .get(block_idx)
@@ -244,24 +222,6 @@ mod tests {
         let avg_saturated_bytes = total_saturated_bytes as f64 / sparse_blocks.len() as f64;
         let avg_nonzero_bytes = total_nonzero_bytes as f64 / sparse_blocks.len() as f64;
 
-        println!(
-            "Saturation test with {} items, {} non-zero blocks:",
-            num_items,
-            sparse_blocks.len()
-        );
-        println!(
-            "  Average saturated bytes per block: {:.2}",
-            avg_saturated_bytes
-        );
-        println!(
-            "  Average nonzero bytes per block: {:.2}",
-            avg_nonzero_bytes
-        );
-        println!(
-            "  Max saturated bytes in any block: {}",
-            max_saturated_bytes
-        );
-
         // Healthy thresholds for 1,292 items across 128 blocks (~10 items/block)
         assert!(
             avg_saturated_bytes < 3.0,
@@ -327,13 +287,6 @@ mod tests {
             .enumerate()
             .filter(|&(_, count)| *count > 0)
             .collect();
-
-        println!("Single item test:");
-        println!("  Total bits set: {}", bits_after);
-        println!("  Non-zero blocks: {}", non_zero_blocks.len());
-        for (block_idx, bits) in &non_zero_blocks {
-            println!("    Block {}: {} bits", block_idx, bits);
-        }
 
         // Should be exactly NUM_HASHES bits, all in ONE block
         assert_eq!(

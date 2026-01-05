@@ -3,12 +3,9 @@
 
 //! Double hashing for bloom filters.
 //!
-//! Based on the fastbloom approach: a single SipHash-1-3 call produces one 64-bit
-//! hash, which is split into h1 and h2 components. Subsequent positions use
+//! a single SipHash-1-3 call produces one 64-bit hash, which is split
+//! into h1 and h2 components. Subsequent positions use
 //! enhanced double hashing with rotation: `h1 = h1 + h2; rotate_left(5)`.
-//!
-//! This is more efficient than standard Kirsch-Mitzenmacher (1 hash call vs 2)
-//! while maintaining good bit distribution.
 //!
 //! Reference: <https://github.com/tomtomwombat/fastbloom>
 
@@ -46,9 +43,6 @@ pub fn compute_positions(key: &[u8], num_bits: usize, num_hashes: u32, seed: u12
 }
 
 /// Compute block index for blocked bloom filters.
-///
-/// Uses a separate hash call with the base seed to select the block,
-/// ensuring block selection is independent from bit position selection.
 pub fn compute_block_index(key: &[u8], num_blocks: usize, seed: u128) -> usize {
     let mut hasher = SipHasher13::new_with_keys(seed as u64, (seed >> 64) as u64);
     hasher.write(key);
@@ -60,8 +54,6 @@ pub fn compute_block_index(key: &[u8], num_blocks: usize, seed: u128) -> usize {
 /// For blocked bloom filters:
 /// 1. Block index is computed with base seed
 /// 2. Bit positions are computed with seed+1 using fastbloom approach
-///
-/// Returns (block_index, [bit_positions_within_block])
 pub fn compute_blocked_positions(
     key: &[u8],
     num_blocks: usize,
