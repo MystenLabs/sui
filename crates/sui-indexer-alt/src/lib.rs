@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context;
-
 use prometheus::Registry;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
@@ -189,9 +188,7 @@ pub async fn setup_indexer(
     // Unpruned concurrent pipelines
     add_concurrent!(CpBlooms, cp_blooms);
     add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
-
-    // Sequential pipeline to prevent concurrent overlapping batches
-    add_sequential!(CpBloomBlocks, cp_bloom_blocks);
+    add_concurrent!(CpBloomBlocks, cp_bloom_blocks);
     add_concurrent!(EvEmitMod, ev_emit_mod);
     add_concurrent!(EvStructInst, ev_struct_inst);
     add_concurrent!(KvCheckpoints, kv_checkpoints);

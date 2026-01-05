@@ -32,7 +32,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    cp_bloom_items_wal (cp_block_id, cp_sequence_number) {
+    cp_bloom_items_pending (cp_block_id, cp_sequence_number) {
         cp_block_id -> Int8,
         cp_sequence_number -> Int8,
         items -> Array<Nullable<Bytea>>,
@@ -271,7 +271,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     coin_balance_buckets,
     coin_balance_buckets_deletion_reference,
     cp_bloom_blocks,
-    cp_bloom_items_wal,
+    cp_bloom_items_pending,
     cp_blooms,
     cp_sequence_numbers,
     ev_emit_mod,

@@ -9,6 +9,7 @@ use anyhow::bail;
 use diesel::OptionalExtension;
 use diesel::QueryDsl;
 use diesel::SelectableHelper;
+
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
@@ -23,6 +24,7 @@ use sui_types::transaction::TransactionDataAPI;
 use tracing::info;
 
 use crate::Indexer;
+use crate::handlers::cp_bloom_blocks::cleanup_orphaned_pending_partitions;
 
 pub struct BootstrapGenesis {
     pub stored_genesis: StoredGenesis,
@@ -138,6 +140,11 @@ pub async fn bootstrap(
         .execute(&mut conn)
         .await
         .context("Failed to write genesis epoch start record")?;
+
+    // Clean up any orphaned pending partitions from previous crashes
+    cleanup_orphaned_pending_partitions(&mut conn)
+        .await
+        .context("Failed to clean up orphaned pending partitions")?;
 
     Ok(stored_genesis)
 }
