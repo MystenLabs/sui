@@ -8,7 +8,7 @@ A Move package is a collection of Move modules that you publish together as a si
 
 :::info
 
-Version 1.63 introduced major changes to the Move package system. This document describes the new system. See [automated address management](/concepts/sui-move-concepts/packages/automated-address-management.mdx) for the documentation on the old system, and [the migration guide](/references/package-managers/package-manager-migration.mdx) for a description of the differences and how to migrate to the new system.
+Version 1.63 introduced major changes to the Move package system. This document describes the new system. See [automated address management](/guides/developer/packages/automated-address-management.mdx) for the documentation on the old system, and [the migration guide](/references/package-managers/package-manager-migration.mdx) for a description of the differences and how to migrate to the new system.
 
 :::
 
@@ -71,7 +71,7 @@ The preferred way to depend on another package is using the Move registry, calle
 To depend on a package with `mvr` name `@example/package`, add `example = { r.mvr = "@example/package" }` to your `[dependencies]` section.
 
 **Advantages:**
-- Automatically resolves correct version for your environment (Mainnet versus Testnet).
+- Automatically resolves correct version for your environment (Mainnet and Testnet).
 - Ensures package source code is verified and available.
 - Simplest way to depend on published packages.
 
@@ -86,7 +86,7 @@ Local dependencies are useful when you want to depend on another package in the 
 
 #### Git dependencies
 
-Git dependencies can be used to depend on packages stored in git repositories. A git dependency must include the repository URL, the subdirectory inside the repository that contains the package, and a revision (branch, tag, or 40-character commit hash). For example, to add a dependency to the `usdc` package, you could add the following to your manifest:
+Git dependencies can be used to depend on packages stored in git repositories. A git dependency must include the repository URL, the subdirectory inside the repository that contains the package, and a revision (branch, tag, or 40 character commit hash). For example, to add a dependency to the `usdc` package, you could add the following to your manifest:
 
 ```toml
 [dependencies]
@@ -104,7 +104,7 @@ rev = "master"
 
 :::caution
 
-Although you can use a shortened commit hash, doing so requires downloading the entire git history, which is less efficient than including the full 40-character hash.
+Although you can use a shortened commit hash, doing so requires downloading the entire git history, which is less efficient than including the full 40 character hash.
 
 :::
 
@@ -121,7 +121,6 @@ Several packages are built into Sui. The `system` dependency type can be used to
 However:
 
  - The `std` and `sui` packages are implicitly included unless you write `implicit-dependencies = false` in your `[package]` section. You do not need to explicitly include them.
-
  - The `deepbook` system package is for the deprecated DeepBook version 2. New applications should use DeepBook version 3 by adding `deepbook = { mvr = "@deepbook/core" }`.
 
 To include a system dependency, write `{ system = "<name>" }`. For example, to use `sui_system`, add `sui_system = { system = "sui_system" }` to your `[dependencies]` section.
@@ -155,7 +154,7 @@ use math_b::muldiv;
 
 #### Overriding dependency versions
 
-The `override` flag is used for combining packages that depend on different versions of the same package. The Move package system requires that there is only one version of each package in use within a package. For example, suppose that your package `a` wants to depend on packages `b` and `c`, but that `b` depends on version 1 of `d`, and `c` depends on version `2` of `d`:
+The `override` flag is used for combining packages that depend on different versions of the same package. The Move package system requires that there is only 1 version of each package in use within a package. For example, suppose that your package `a` wants to depend on packages `b` and `c`, but that `b` depends on version 1 of `d`, and `c` depends on version 2 of `d`:
 
 ```mermaid
 graph LR;
@@ -193,7 +192,6 @@ This dependency is included whenever you run `sui move test` or pass `-m test` t
 There is not currently a way to have different dependencies in different modes, only to include or omit a dependency based on the mode.
 
 :::
-
 
 ## Environments
 
@@ -363,7 +361,9 @@ If `<pubfile>` is omitted, it defaults to `Pub.<env-name>.toml` where `<env-name
 If `--build-env <env>` is omitted, it defaults to the `build-env` name of the file at `<file>`. If that is missing, the system errors. The build environment determines how the system resolves dependencies for the package.
 
 :::info
+
 The old system did not support ephemeral publication.
+
 :::
 
 Although publication files and ephemeral publication files are similar, they hold different information:
@@ -372,7 +372,7 @@ Although publication files and ephemeral publication files are similar, they hol
 |---------|----------------------------|----------------------------|
 | **Networks** | Mainnet, Testnet | Localnet, Devnet |
 | **Contents** | Your package addresses only | Package and dependency addresses |
-| **Scope** | Multiple networks in one file | Single network per file |
+| **Scope** | Multiple networks in 1 file | Single network per file |
 | **Commit to source control** | Yes since others can depend on your package | No since it contains local development data |
 | **Created by** | `sui client publish` | `sui client test-publish` |
 

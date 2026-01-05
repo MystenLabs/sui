@@ -53,9 +53,9 @@
       { "source": "/build/rust-sdk", "destination": "/references/sdk/rust-sdk", "permanent": true },
       { "source": "/build/rpc-best-practices", "destination": "/references/sui-api/rpc-best-practices", "permanent": true },
       { "source": "/build/zk_login", "destination": "/concepts/cryptography/zklogin", "permanent": true },
-      { "source": "/build/package-upgrades", "destination": "/concepts/sui-move-concepts/packages/upgrade", "permanent": true },
-      { "source": "/build/custom-upgrade-policy", "destination": "/concepts/sui-move-concepts/packages/custom-policies", "permanent": true },
-      { "source": "/build/automated-address-management", "destination": "/concepts/sui-move-concepts/packages/automated-address-management", "permanent": true },
+      { "source": "/build/package-upgrades", "destination": "/guides/developer/packages/upgrade", "permanent": true },
+      { "source": "/build/custom-upgrade-policy", "destination": "/guides/developer/packages/custom-policies", "permanent": true },
+      { "source": "/build/automated-address-management", "destination": "/guides/developer/packages/automated-address-management", "permanent": true },
       { "source": "/build/cli-client", "destination": "/references/cli/client", "permanent": true },
       { "source": "/build/connect-sui-network", "destination": "/guides/developer/sui-101/connect", "permanent": true },
       { "source": "/build/prog-trans-ts-sdk", "destination": "/guides/developer/sui-101/building-ptb", "permanent": true },
@@ -173,6 +173,13 @@
       { "source": "/concepts/transfers/:path*", "destination": "/guides/developer/objects/transfers/:path*"},
       { "source": "/concepts/versioning", "destination": "/guides/developer/objects/versioning"},
       { "source": "/concepts/tokenomics/vesting-strategies", "destination": "/guides/developer/coin/vesting-strategies"},
-      { "source": "/guides/developer/sui-101/connect", "destination": "/guides/developer/getting-started/hello-world"}
+      { "source": "/guides/developer/sui-101/connect", "destination": "/guides/developer/getting-started/hello-world"},
+      { "source": "/concepts/sui-move-concepts/derived-objects", "destination": "/guides/developer/objects/derived-objects"},
+      { "source": "/guides/developer/sui-101/move-package-management", "destination": "/guides/developer/packages/move-package-management"},
+      { "source": "/concepts/sui-move-concepts/packages/upgrade", "destination": "/guides/developer/packages/upgrade"},
+      { "source": "/concepts/sui-move-concepts/packages/custom-policies", "destination": "/guides/developer/packages/custom-policies"},
+      { "source": "/concepts/sui-move-concepts/packages/automated-address-management", "destination": "/guides/developer/packages/automated-address-management"},
+      { "source": "/concepts/sui-move-concepts/dynamic-fields", "destination": "/guides/developer/objects/dynamic-fields"},
+      { "source": "/concepts/sui-move-concepts/dynamic-fields/tables-bags", "destination": "/guides/developer/objects/tables-bags"}
     ]
   }

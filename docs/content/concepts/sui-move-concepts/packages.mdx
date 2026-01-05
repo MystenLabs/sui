@@ -15,7 +15,7 @@ If developers could modify on-chain packages after publication, downstream behav
 
 Although you cannot edit a published package directly, you can **upgrade** it. Upgrading creates a new package object on-chain, leaving the original intact. This lets you add features or fix issues without breaking existing dependencies.
 
-See [Upgrading packages](/concepts/sui-move-concepts/packages/upgrade.mdx) for details on the process.
+See [Upgrading packages](/guides/developer/packages/upgrade.mdx) for details on the process.
 
 ## Using the Sui Client CLI
 
@@ -29,4 +29,4 @@ This workflow is convenient when you're starting development or iterating quickl
 
 You can call the Move function `sui::package::make_immutable` to destroy a package's `UpgradeCap` and make the package permanently immutable. This eliminates single-key risk but also prevents all future bug fixes and feature additions.
 
-For a more flexible approach, use [custom upgrade policies](/concepts/sui-move-concepts/packages/custom-policies.mdx) to protect `UpgradeCap` access without giving up the ability to upgrade.
+For a more flexible approach, use [custom upgrade policies](/guides/developer/packages/custom-policies.mdx) to protect `UpgradeCap` access without giving up the ability to upgrade.
