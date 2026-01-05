@@ -1023,7 +1023,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut deferred_transactions = self
             .epoch_store
             .consensus_output_cache
-            .deferred_transactions_v2
+            .deferred_transactions
             .lock();
         for deleted_deferred_key in state.output.get_deleted_deferred_txn_keys() {
             deferred_transactions.remove(&deleted_deferred_key);
@@ -1184,7 +1184,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let mut deferred_transactions = self
                 .epoch_store
                 .consensus_output_cache
-                .deferred_transactions_v2
+                .deferred_transactions
                 .lock();
             for (key, txns) in deferred_txns.into_iter() {
                 total_deferred_txns += txns.len();
@@ -1848,8 +1848,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         reconfig_state.close_all_certs();
 
         let commit_has_deferred_txns = state.output.has_deferred_transactions();
-        let previous_commits_have_deferred_txns =
-            !self.epoch_store.deferred_transactions_empty_v2();
+        let previous_commits_have_deferred_txns = !self.epoch_store.deferred_transactions_empty();
 
         if !commit_has_deferred_txns && !previous_commits_have_deferred_txns {
             if !start_state_is_reject_all_tx {
