@@ -111,21 +111,25 @@ pub fn get_checkpoint(
                     .transactions
                     .into_iter()
                     .map(|t| {
-                        let balance_changes = submask
-                            .contains(ExecutedTransaction::BALANCE_CHANGES_FIELD)
-                            .then(|| {
+                        let balance_changes =
+                            if submask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD) {
+                                let digest = t.transaction.digest();
                                 service
                                     .reader
-                                    .get_transaction_info(&t.transaction.digest())
-                                    .map(|info| {
-                                        info.balance_changes
-                                            .into_iter()
-                                            .map(sui_rpc::proto::sui::rpc::v2::BalanceChange::from)
-                                            .collect::<Vec<_>>()
-                                    })
-                            })
-                            .flatten()
-                            .unwrap_or_default();
+                                    .get_transaction_info(&digest)
+                                    .ok_or_else(|| {
+                                        sui_types::storage::error::Error::missing(format!(
+                                            "balance_changes not yet indexed for transaction {}",
+                                            digest
+                                        ))
+                                    })?
+                                    .balance_changes
+                                    .into_iter()
+                                    .map(sui_rpc::proto::sui::rpc::v2::BalanceChange::from)
+                                    .collect::<Vec<_>>()
+                            } else {
+                                vec![]
+                            };
                         let mut transaction = ExecutedTransaction::merge_from(&t, &submask);
                         transaction.checkpoint = submask
                             .contains(ExecutedTransaction::CHECKPOINT_FIELD)
@@ -150,9 +154,9 @@ pub fn get_checkpoint(
                             }
                         }
 
-                        transaction
+                        Ok(transaction)
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>, RpcError>>()?;
             }
         }
     }

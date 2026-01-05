@@ -57,7 +57,7 @@ pub fn get_transaction(
 
     let transaction_read = service.reader.get_transaction_read(transaction_digest)?;
 
-    let transaction = transaction_to_response(service, transaction_read, &read_mask);
+    let transaction = transaction_to_response(service, transaction_read, &read_mask)?;
 
     Ok(GetTransactionResponse::new(transaction))
 }
@@ -94,7 +94,7 @@ pub fn batch_get_transactions(
             service
                 .reader
                 .get_transaction_read(digest)
-                .map(|transaction_read| {
+                .and_then(|transaction_read| {
                     transaction_to_response(service, transaction_read, &read_mask)
                 })
         })
@@ -111,7 +111,7 @@ fn transaction_to_response(
     service: &RpcService,
     source: crate::reader::TransactionRead,
     mask: &FieldMaskTree,
-) -> ExecutedTransaction {
+) -> Result<ExecutedTransaction, RpcError> {
     let mut message = ExecutedTransaction::default();
 
     if mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
@@ -163,9 +163,16 @@ fn transaction_to_response(
     if mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name) {
         message.balance_changes = source
             .balance_changes
-            .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
-            .unwrap_or_default();
+            .ok_or_else(|| {
+                sui_types::storage::error::Error::missing(format!(
+                    "balance_changes not yet indexed for transaction {}",
+                    source.digest
+                ))
+            })?
+            .into_iter()
+            .map(Into::into)
+            .collect();
     }
 
-    message
+    Ok(message)
 }
