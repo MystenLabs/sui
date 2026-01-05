@@ -31,12 +31,10 @@ impl BloomFilter {
         }
     }
 
-    /// Get the number of bits in this filter.
     pub fn num_bits(&self) -> usize {
         self.bits.len() * 8
     }
 
-    /// Insert a key into the filter.
     pub fn insert(&mut self, key: &[u8]) {
         let positions = hash::compute_positions(key, self.num_bits(), self.num_hashes, self.seed);
         for bit_pos in positions {
@@ -44,17 +42,14 @@ impl BloomFilter {
         }
     }
 
-    /// Serialize to bytes (for DB storage).
     pub fn to_bytes(&self) -> Vec<u8> {
         self.bits.clone()
     }
 
-    /// Get the seed used for hashing.
     pub fn seed(&self) -> u128 {
         self.seed
     }
 
-    /// Get the number of hash functions.
     pub fn num_hashes(&self) -> u32 {
         self.num_hashes
     }
@@ -116,7 +111,7 @@ impl BloomFilter {
             .all(|&pos| self.bits[pos / 8] & (1 << (pos % 8)) != 0)
     }
 
-    /// Calculate the current bit density (test-only).
+    /// Calculate the current bit density.
     pub fn density(&self) -> f64 {
         let popcount: usize = self.bits.iter().map(|b| b.count_ones() as usize).sum();
         popcount as f64 / self.num_bits() as f64
