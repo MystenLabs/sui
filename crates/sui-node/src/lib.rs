@@ -567,7 +567,7 @@ impl SuiNode {
         let chain_id = ChainIdentifier::from(*genesis.checkpoint().digest());
         let chain = match config.chain_override_for_testing {
             Some(chain) => chain,
-            None => ChainIdentifier::from(*genesis.checkpoint().digest()).chain(),
+            None => chain_id.chain(),
         };
 
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
