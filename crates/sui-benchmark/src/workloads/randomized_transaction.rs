@@ -4,7 +4,7 @@
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{ConcurrentTransactionResult, Payload};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder,
 };
@@ -52,8 +52,10 @@ pub struct RandomizedTransactionPayload {
     immutable_object: ObjectRef,
     randomness_initial_shared_version: SequenceNumber,
     transfer_to: SuiAddress,
-    gas: Gas,
+    gas_objects: Vec<Gas>,
     system_state_observer: Arc<SystemStateObserver>,
+    /// Number of transactions to submit concurrently (1 = single transaction mode)
+    concurrency: u64,
 }
 
 impl std::fmt::Display for RandomizedTransactionPayload {
@@ -78,11 +80,16 @@ struct RandomizedTransactionConfig {
 }
 
 fn generate_random_transaction_config(
-    num_shared_objects_exist: u64,
+    total_shared_objects: u64,
+    concurrency: u64,
 ) -> RandomizedTransactionConfig {
-    let num_shared_inputs = rand::thread_rng().gen_range(0..=num_shared_objects_exist);
+    let num_shared_inputs = rand::thread_rng().gen_range(0..=total_shared_objects);
     RandomizedTransactionConfig {
-        contain_owned_object: rand::thread_rng().gen_bool(0.5),
+        contain_owned_object: if concurrency <= 1 {
+            rand::thread_rng().gen_bool(0.5)
+        } else {
+            rand::thread_rng().gen_bool(0.1)
+        },
         contain_immutable_object: rand::thread_rng().gen_bool(0.5),
         num_pure_input: rand::thread_rng().gen_range(0..=5),
         num_shared_inputs,
@@ -94,22 +101,17 @@ fn generate_random_transaction_config(
 enum MoveCallType {
     ContractCall,
     Randomness,
-    NativeCall,
 }
 
 /// Choose a random move call type.
 fn choose_move_call_type(next_shared_input_index: usize, num_shared_inputs: u64) -> MoveCallType {
     if next_shared_input_index < num_shared_inputs as usize {
-        match rand::thread_rng().gen_range(0..=2) {
+        match rand::thread_rng().gen_range(0..=1) {
             0 => MoveCallType::ContractCall,
-            1 => MoveCallType::Randomness,
-            _ => MoveCallType::NativeCall,
+            _ => MoveCallType::Randomness,
         }
     } else {
-        match rand::thread_rng().gen_range(0..=1) {
-            0 => MoveCallType::Randomness,
-            _ => MoveCallType::NativeCall,
-        }
+        MoveCallType::Randomness
     }
 }
 
@@ -223,7 +225,7 @@ impl Payload for RandomizedTransactionPayload {
                 effects.status()
             );
         }
-        self.gas.0 = effects.gas_object().0;
+        self.gas_objects[0].0 = effects.gas_object().0;
 
         // Update owned object if it's mutated in this transaction
         if let Some(owned_in_effects) = effects
@@ -262,78 +264,137 @@ impl Payload for RandomizedTransactionPayload {
     }
 
     fn make_transaction(&mut self) -> Transaction {
+        unimplemented!("Randomized transaction should not be executed as a single transaction");
+    }
+
+    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
+        // We do not expect randomized transaction to fail
+        Some(ExpectedFailureType::NoFailure)
+    }
+
+    fn is_concurrent_batch(&self) -> bool {
+        true
+    }
+
+    fn make_concurrent_transactions(&mut self) -> Vec<Transaction> {
         let rgp = self
             .system_state_observer
             .state
             .borrow()
             .reference_gas_price;
 
-        let config = generate_random_transaction_config(self.shared_objects.len() as u64);
+        // Decide the shape of this batch of concurrent transactions.
+        let config =
+            generate_random_transaction_config(self.shared_objects.len() as u64, self.concurrency);
 
-        let mut tx_builder = TestTransactionBuilder::new(self.gas.1, self.gas.0, rgp);
-        {
-            let builder = tx_builder.ptb_builder_mut();
+        let mut transactions = Vec::with_capacity(self.concurrency as usize);
+        for i in 0..self.concurrency as usize {
+            let mut tx_builder =
+                TestTransactionBuilder::new(self.gas_objects[i].1, self.gas_objects[i].0, rgp);
+            {
+                let builder = tx_builder.ptb_builder_mut();
 
-            // Generate inputs in addition to move calls.
-            if config.contain_owned_object {
-                builder
-                    .obj(ObjectArg::ImmOrOwnedObject(self.owned_object))
-                    .unwrap();
-            }
-            for i in 0..config.num_shared_inputs {
-                builder
-                    .obj(ObjectArg::SharedObject {
-                        id: self.shared_objects[i as usize].0,
-                        initial_shared_version: self.shared_objects[i as usize].1,
-                        mutability: if rand::thread_rng().gen_bool(0.5) {
-                            SharedObjectMutability::Mutable
-                        } else {
-                            SharedObjectMutability::Immutable
-                        },
-                    })
-                    .unwrap();
-            }
-            for _i in 0..config.num_pure_input {
-                let len = rand::thread_rng().gen_range(0..=3);
-                let mut bytes = vec![0u8; len];
-                rand::thread_rng().fill(&mut bytes[..]);
-                builder.pure_bytes(bytes, false);
-            }
+                // Include owned object based on random config.
+                if config.contain_owned_object {
+                    builder
+                        .obj(ObjectArg::ImmOrOwnedObject(self.owned_object))
+                        .unwrap();
+                    self.make_transfer(builder);
+                }
 
-            // Generate move calls.
-            let mut next_shared_input_index: usize = 0;
-            for _i in 0..config.num_commands {
-                match choose_move_call_type(next_shared_input_index, config.num_shared_inputs) {
-                    MoveCallType::ContractCall => {
-                        self.make_counter_move_call(builder, next_shared_input_index);
-                        next_shared_input_index += 1;
-                    }
-                    MoveCallType::Randomness => {
-                        self.make_randomness_move_call(builder);
-                        // TODO: add TransferObject move call after randomness command.
-                        break;
-                    }
-                    MoveCallType::NativeCall => {
-                        self.make_transfer(builder);
+                // Add immutable object call to test immutable object handling.
+                if config.contain_immutable_object {
+                    self.make_immutable_object_call(builder);
+                }
+
+                // Add pure inputs
+                for _j in 0..config.num_pure_input {
+                    let len = rand::thread_rng().gen_range(0..=3);
+                    let mut bytes = vec![0u8; len];
+                    rand::thread_rng().fill(&mut bytes[..]);
+                    builder.pure_bytes(bytes, false);
+                }
+
+                // Generate move calls
+                let mut next_shared_input_index: usize = 0;
+                for _j in 0..config.num_commands {
+                    match choose_move_call_type(next_shared_input_index, config.num_shared_inputs) {
+                        MoveCallType::ContractCall => {
+                            self.make_counter_move_call(builder, next_shared_input_index);
+                            next_shared_input_index += 1;
+                        }
+                        MoveCallType::Randomness => {
+                            self.make_randomness_move_call(builder);
+                            break;
+                        }
                     }
                 }
             }
 
-            // Add immutable object call to test immutable object handling
-            if config.contain_immutable_object {
-                self.make_immutable_object_call(builder);
+            let signed_tx = tx_builder.build_and_sign(self.gas_objects[i].2.as_ref());
+            transactions.push(signed_tx);
+        }
+
+        tracing::debug!(
+            "Created {} concurrent transactions (config: {:?})",
+            transactions.len(),
+            config,
+        );
+        transactions
+    }
+
+    fn handle_concurrent_results(&mut self, results: &[ConcurrentTransactionResult]) {
+        let mut success_count = 0;
+        let mut lock_conflict_count = 0;
+
+        for (i, result) in results.iter().enumerate() {
+            match result {
+                ConcurrentTransactionResult::Success { effects } => {
+                    success_count += 1;
+                    // Update gas object ref
+                    self.gas_objects[i].0 = effects.gas_object().0;
+
+                    // Update owned object if it was mutated by this transaction
+                    if let Some(owned_in_effects) = effects
+                        .mutated()
+                        .iter()
+                        .find(|(obj_ref, _)| obj_ref.0 == self.owned_object.0)
+                        .map(|x| x.0)
+                    {
+                        self.owned_object = owned_in_effects;
+                    }
+
+                    // Verify immutable object is NOT in changed objects
+                    let immutable_obj_id = self.immutable_object.0;
+                    assert!(
+                        !effects
+                            .mutated()
+                            .iter()
+                            .any(|(obj_ref, _)| obj_ref.0 == immutable_obj_id),
+                        "Immutable object should not be in mutated objects"
+                    );
+                }
+                ConcurrentTransactionResult::Failure { error } => {
+                    // Check if it's an ObjectLockConflict (expected when owned object is included)
+                    if error.contains("ObjectLockConflict") {
+                        lock_conflict_count += 1;
+                        tracing::debug!(
+                            "Transaction {} rejected with ObjectLockConflict (expected)",
+                            i
+                        );
+                    } else {
+                        tracing::debug!("Transaction {} failed with error: {:?}", i, error);
+                    }
+                }
             }
         }
 
-        let signed_tx = tx_builder.build_and_sign(self.gas.2.as_ref());
-
-        tracing::debug!("Signed transaction digest: {:?}", signed_tx.digest());
-        signed_tx
-    }
-
-    fn get_failure_type(&self) -> Option<ExpectedFailureType> {
-        // We do not expect randomized transaction to fail
-        Some(ExpectedFailureType::NoFailure)
+        tracing::debug!(
+            "Concurrent batch results: {} success, {} lock conflicts out of {} transactions",
+            success_count,
+            lock_conflict_count,
+            results.len()
+        );
     }
 }
 
@@ -341,6 +402,7 @@ impl Payload for RandomizedTransactionPayload {
 pub struct RandomizedTransactionWorkloadBuilder {
     num_payloads: u64,
     rgp: u64,
+    concurrency: u64,
 }
 
 impl RandomizedTransactionWorkloadBuilder {
@@ -352,17 +414,19 @@ impl RandomizedTransactionWorkloadBuilder {
         reference_gas_price: u64,
         duration: Interval,
         group: u32,
+        concurrency: u64,
     ) -> Option<WorkloadBuilderInfo> {
-        let target_qps = (workload_weight * target_qps as f32).ceil() as u64;
+        let worker_target_qps =
+            (workload_weight * target_qps as f32 / concurrency as f32).ceil() as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
-        let max_ops = target_qps * in_flight_ratio;
+        let max_ops = worker_target_qps * in_flight_ratio;
 
         if max_ops == 0 || num_workers == 0 {
             None
         } else {
             let workload_params = WorkloadParams {
                 group,
-                target_qps,
+                target_qps: worker_target_qps,
                 num_workers,
                 max_ops,
                 duration,
@@ -371,6 +435,7 @@ impl RandomizedTransactionWorkloadBuilder {
                 RandomizedTransactionWorkloadBuilder {
                     num_payloads: max_ops,
                     rgp: reference_gas_price,
+                    concurrency,
                 },
             ));
             Some(WorkloadBuilderInfo {
@@ -422,13 +487,17 @@ impl WorkloadBuilder<dyn Payload> for RandomizedTransactionWorkloadBuilder {
             + STORAGE_COST_PER_COUNTER * self.num_payloads
             + MAX_GAS_FOR_TESTING;
         // Gas coins for running workload
+        // Each payload needs `concurrency` gas objects for concurrent transactions
         for _i in 0..self.num_payloads {
-            let (address, keypair) = get_key_pair();
-            configs.push(GasCoinConfig {
-                amount,
-                address,
-                keypair: Arc::new(keypair),
-            });
+            let (address, keypair): (SuiAddress, AccountKeyPair) = get_key_pair();
+            let keypair = Arc::new(keypair);
+            for _j in 0..self.concurrency {
+                configs.push(GasCoinConfig {
+                    amount,
+                    address,
+                    keypair: keypair.clone(),
+                });
+            }
         }
         configs
     }
@@ -447,6 +516,7 @@ impl WorkloadBuilder<dyn Payload> for RandomizedTransactionWorkloadBuilder {
             init_gas,
             payload_gas,
             randomness_initial_shared_version: None,
+            concurrency: self.concurrency,
         }))
     }
 }
@@ -456,12 +526,12 @@ pub struct RandomizedTransactionWorkload {
     pub basics_package_id: Option<ObjectID>,
     pub shared_objects: Vec<ObjectRef>,
     pub owned_objects: Vec<ObjectRef>,
-    /// Immutable object (frozen) shared across all payloads
     pub immutable_object: Option<ObjectRef>,
     pub transfer_to: Option<SuiAddress>,
     pub init_gas: Vec<Gas>,
     pub payload_gas: Vec<Gas>,
     pub randomness_initial_shared_version: Option<SequenceNumber>,
+    pub concurrency: u64,
 }
 
 #[async_trait]
@@ -637,7 +707,9 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
             .immutable_object
             .expect("immutable_object not initialized");
 
-        for (i, g) in self.payload_gas.iter().enumerate() {
+        // Each payload gets `concurrency` gas objects
+        let concurrency = self.concurrency as usize;
+        for (i, gas_chunk) in self.payload_gas.chunks(concurrency).enumerate() {
             payloads.push(Box::new(RandomizedTransactionPayload {
                 package_id: self.basics_package_id.unwrap(),
                 shared_objects: self.shared_objects.clone(),
@@ -645,8 +717,9 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                 immutable_object,
                 randomness_initial_shared_version: self.randomness_initial_shared_version.unwrap(),
                 transfer_to: self.transfer_to.unwrap(),
-                gas: g.clone(),
+                gas_objects: gas_chunk.to_vec(),
                 system_state_observer: system_state_observer.clone(),
+                concurrency: self.concurrency,
             }));
         }
 
