@@ -4,9 +4,11 @@ description: Details on how to customize Nautilus server logic, test functionali
 keywords: [ nautilus, using nautilus, deploy aws nitro enclave, aws nitro, enclaves, tee, ec2 ]
 ---
 
-You can customize the Nautilus server to define allowed endpoints and specify any external domains your application needs to access. You can create `mod.rs` to define your `process_data` logic and register any additional endpoints.
-
 The Nautilus server logic is located in the directory [`src/nautilus-server`](https://github.com/MystenLabs/nautilus/tree/main/src/nautilus-server). To customize the application, refer to the [Using Nautilus guide](/guides/developer/nautilus/using-nautilus.mdx) as a template.
+
+## Create custom server logic
+
+You can customize the Nautilus server to define allowed endpoints and specify any external domains your application needs to access. You can create `mod.rs` to define your `process_data` logic and register any additional endpoints.
 
 The following files typically do not require modification:
 
@@ -48,7 +50,7 @@ $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fr
 
 </details>
 
-## Build locally to check reproducibility
+## Check reproducibility
 
 Every enclave built from the same source code (everything in `/src`) can produce identical PCRs through reproducible builds. This includes any traffic forwarding changes made in `run.sh` (see branch `example-configuration`).
 
@@ -87,7 +89,7 @@ This design allows the admin to run multiple instances of the same enclave with 
 
 The deployer of the smart contract holds the `EnclaveCap`, which allows for updating the PCRs and enclave public key if the Nautilus server code has been modified. You can retrieve the new PCRs using `make ENCLAVE_APP=<APP> && cat out/nitro.pcrs`. To update the PCRs or register the enclave again, reuse the steps outlined in the previous section.
 
-## Use the verified computation in Move
+## Verified computation in Move
 
 Write frontend code to interact with the enclave for computation, and then send the resulting data to the Move contract for use. For the [weather example](/guides/developer/nautilus/using-nautilus.mdx), you can request the enclave to retrieve weather data for a specific location:
 
