@@ -67,6 +67,16 @@ pub fn get_checkpoint(
     let sequence_number = summary.sequence_number;
     let timestamp_ms = summary.timestamp_ms;
 
+    let latest_checkpoint = service
+        .reader
+        .inner()
+        .get_latest_checkpoint()?
+        .sequence_number;
+
+    if sequence_number > latest_checkpoint {
+        return Err(CheckpointNotFoundError::sequence_number(sequence_number).into());
+    }
+
     let mut checkpoint = Checkpoint::default();
 
     checkpoint.merge(summary, &read_mask);
