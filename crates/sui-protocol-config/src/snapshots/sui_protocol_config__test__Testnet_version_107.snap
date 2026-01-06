@@ -134,6 +134,7 @@ feature_flags:
   consensus_skip_gced_accept_votes: true
   include_cancelled_randomness_txns_in_prologue: true
   gas_rounding_halve_digits: true
+  flexible_tx_context_positions: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
