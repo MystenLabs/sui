@@ -119,9 +119,9 @@ const guides = [
         label: 'Packages',
   				items: [
           'guides/developer/packages/move-package-management',
-					'guides/developer/packages/packages/upgrade',
-					'guides/developer/packages/packages/custom-policies',
-					'guides/developer/packages/packages/automated-address-management',
+					'guides/developer/packages/upgrade',
+					'guides/developer/packages/custom-policies',
+					'guides/developer/packages/automated-address-management',
 				],
 			},
   {
