@@ -58,6 +58,7 @@ thiserror.workspace = true
 reqwest.workspace = true
 
 [dev-dependencies]
+bincode.workspace = true
 sui-config.workspace = true
 sui-test-transaction-builder.workspace = true
 maplit = "1.0.2"

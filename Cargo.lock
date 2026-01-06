@@ -14273,6 +14273,7 @@ dependencies = [
  "backoff",
  "bcs",
  "bin-version",
+ "bincode 1.3.3",
  "clap",
  "enum_dispatch",
  "eyre",
