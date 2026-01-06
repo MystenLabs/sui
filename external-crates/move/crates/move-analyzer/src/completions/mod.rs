@@ -15,6 +15,7 @@ use crate::{
         runner::SymbolicatorRunner,
     },
 };
+
 use lsp_server::{Message, Request, Response};
 use lsp_types::{CompletionItem, CompletionItemKind, CompletionParams, Position};
 use move_command_line_common::files::FileHash;
@@ -26,15 +27,13 @@ use move_compiler::{
         lexer::{Lexer, Tok},
     },
 };
+use move_package_alt::flavor::MoveFlavor;
 use move_symbol_pool::Symbol;
 
-use once_cell::sync::Lazy;
-
-use move_package_alt::flavor::MoveFlavor;
 use std::{
     collections::HashSet,
     path::Path,
-    sync::{Arc, Mutex},
+    sync::{Arc, LazyLock, Mutex},
 };
 use vfs::VfsPath;
 
@@ -49,7 +48,7 @@ pub mod utils;
 /// request's cursor position, but in the future it ought to. For example, this function returns
 /// all specification language keywords, but in the future it should be modified to only do so
 /// within a spec block.
-static KEYWORD_COMPLETIONS: Lazy<Vec<CompletionItem>> = Lazy::new(|| {
+static KEYWORD_COMPLETIONS: LazyLock<Vec<CompletionItem>> = LazyLock::new(|| {
     let mut keywords = KEYWORDS
         .iter()
         .chain(CONTEXTUAL_KEYWORDS.iter())
@@ -68,7 +67,7 @@ static KEYWORD_COMPLETIONS: Lazy<Vec<CompletionItem>> = Lazy::new(|| {
 });
 
 /// List of completion items corresponding to each one of Move's builtin functions.
-static BUILTIN_COMPLETIONS: Lazy<Vec<CompletionItem>> = Lazy::new(|| {
+static BUILTIN_COMPLETIONS: LazyLock<Vec<CompletionItem>> = LazyLock::new(|| {
     BUILTINS
         .iter()
         .map(|label| completion_item(label, CompletionItemKind::FUNCTION))
