@@ -179,8 +179,8 @@
       { "source": "/concepts/sui-move-concepts/packages/upgrade", "destination": "/guides/developer/packages/upgrade"},
       { "source": "/concepts/sui-move-concepts/packages/custom-policies", "destination": "/guides/developer/packages/custom-policies"},
       { "source": "/concepts/sui-move-concepts/packages/automated-address-management", "destination": "/guides/developer/packages/automated-address-management"},
-      { "source": "/concepts/sui-move-concepts/dynamic-fields", "destination": "/guides/developer/objects/dynamic-fields"},
-      { "source": "/concepts/sui-move-concepts/dynamic-fields/tables-bags", "destination": "/guides/developer/objects/tables-bags"},
+      { "source": "/concepts/dynamic-fields", "destination": "/guides/developer/objects/dynamic-fields"},
+      { "source": "/concepts/dynamic-fields/tables-bags", "destination": "/guides/developer/objects/tables-bags"},
       { "source": "/concepts/cryptography/nautilus", "destination": "/guides/developer/nautilus/index"},
       { "source": "/concepts/cryptography/nautilus/using-nautilus", "destination": "/guides/developer/nautilus/using-nautilus"}
     ]
