@@ -29,7 +29,7 @@ module M {
     }
 
     fun bar(): u64 {
-        let s = s(0);
+        let s = s(0u64);
         s.f
     }
 

@@ -131,13 +131,13 @@ impl MovePackage {
     }
 
     /// The version of this package that this content comes from.
-    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
-        self.super_.version(ctx).await
+    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
+        self.super_.version(ctx).await.ok()?
     }
 
     /// 32-byte hash that identifies the package's contents, encoded in Base58.
-    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
-        self.super_.digest(ctx).await
+    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Option<Result<String, RpcError>> {
+        self.super_.digest(ctx).await.ok()?
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
@@ -147,8 +147,8 @@ impl MovePackage {
         &self,
         ctx: &Context<'_>,
         coin_type: TypeInput,
-    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        self.super_.balance(ctx, coin_type).await
+    ) -> Option<Result<Balance, RpcError<balance::Error>>> {
+        self.super_.balance(ctx, coin_type).await.ok()?
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -159,16 +159,19 @@ impl MovePackage {
         after: Option<balance::Cursor>,
         last: Option<u64>,
         before: Option<balance::Cursor>,
-    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        self.super_.balances(ctx, first, after, last, before).await
+    ) -> Option<Result<Connection<String, Balance>, RpcError<balance::Error>>> {
+        self.super_
+            .balances(ctx, first, after, last, before)
+            .await
+            .ok()?
     }
 
     /// The domain explicitly configured as the default SuiNS name for this address.
     pub(crate) async fn default_suins_name(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError> {
-        self.super_.default_suins_name(ctx).await
+    ) -> Option<Result<String, RpcError>> {
+        self.super_.default_suins_name(ctx).await.ok()?
     }
 
     /// The module named `name` in this package.
@@ -176,16 +179,14 @@ impl MovePackage {
         &self,
         ctx: &Context<'_>,
         name: String,
-    ) -> Result<Option<MoveModule>, RpcError> {
-        let Some(parsed) = self.parsed(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+    ) -> Option<Result<MoveModule, RpcError>> {
+        let parsed = self.parsed(ctx).await.ok()?.as_ref()?;
 
         if parsed.module(&name).is_err() {
-            return Ok(None);
+            return None;
         }
 
-        Ok(Some(MoveModule::with_fq_name(self.clone(), name)))
+        Some(Ok(MoveModule::with_fq_name(self.clone(), name)))
     }
 
     /// Paginate through this package's modules.
@@ -196,69 +197,77 @@ impl MovePackage {
         after: Option<CModule>,
         last: Option<u64>,
         before: Option<CModule>,
-    ) -> Result<Option<Connection<String, MoveModule>>, RpcError> {
+    ) -> Option<Result<Connection<String, MoveModule>, RpcError>> {
         use std::ops::Bound as B;
 
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("MovePackage", "modules");
-        let page = Page::from_params(limits, first, after, last, before)?;
+        async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("MovePackage", "modules");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(parsed) = self.parsed(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+            let Some(parsed) = self.parsed(ctx).await?.as_ref() else {
+                return Ok(None);
+            };
 
-        let module_range = parsed
-            .modules()
-            .range::<String, _>((
-                page.after().map_or(B::Unbounded, |a| B::Excluded(&**a)),
-                page.before().map_or(B::Unbounded, |b| B::Excluded(&**b)),
-            ))
-            .map(|(name, _)| name.clone());
-
-        let mut conn = Connection::new(false, false);
-        let modules = if page.is_from_front() {
-            module_range.take(page.limit()).collect()
-        } else {
-            let mut ms: Vec<_> = module_range.rev().take(page.limit()).collect();
-            ms.reverse();
-            ms
-        };
-
-        conn.has_previous_page = modules.first().is_some_and(|fst| {
-            parsed
+            let module_range = parsed
                 .modules()
-                .range::<String, _>((B::Unbounded, B::Excluded(fst)))
-                .next()
-                .is_some()
-        });
+                .range::<String, _>((
+                    page.after().map_or(B::Unbounded, |a| B::Excluded(&**a)),
+                    page.before().map_or(B::Unbounded, |b| B::Excluded(&**b)),
+                ))
+                .map(|(name, _)| name.clone());
 
-        conn.has_next_page = modules.last().is_some_and(|lst| {
-            parsed
-                .modules()
-                .range::<String, _>((B::Excluded(lst), B::Unbounded))
-                .next()
-                .is_some()
-        });
+            let mut conn = Connection::new(false, false);
+            let modules = if page.is_from_front() {
+                module_range.take(page.limit()).collect()
+            } else {
+                let mut ms: Vec<_> = module_range.rev().take(page.limit()).collect();
+                ms.reverse();
+                ms
+            };
 
-        for module in modules {
-            conn.edges.push(Edge::new(
-                JsonCursor::new(module.clone()).encode_cursor(),
-                MoveModule::with_fq_name(self.clone(), module),
-            ));
+            conn.has_previous_page = modules.first().is_some_and(|fst| {
+                parsed
+                    .modules()
+                    .range::<String, _>((B::Unbounded, B::Excluded(fst)))
+                    .next()
+                    .is_some()
+            });
+
+            conn.has_next_page = modules.last().is_some_and(|lst| {
+                parsed
+                    .modules()
+                    .range::<String, _>((B::Excluded(lst), B::Unbounded))
+                    .next()
+                    .is_some()
+            });
+
+            for module in modules {
+                conn.edges.push(Edge::new(
+                    JsonCursor::new(module.clone()).encode_cursor(),
+                    MoveModule::with_fq_name(self.clone(), module),
+                ));
+            }
+
+            Ok(Some(conn))
         }
-
-        Ok(Some(conn))
+        .await
+        .transpose()
     }
 
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module name, followed by module bytes), in alphabetic order by module name.
-    async fn module_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError> {
-        let Some(native) = self.native(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+    async fn module_bcs(&self, ctx: &Context<'_>) -> Option<Result<Base64, RpcError>> {
+        async {
+            let Some(native) = self.native(ctx).await?.as_ref() else {
+                return Ok(None);
+            };
 
-        let bytes = bcs::to_bytes(native.serialized_module_map())
-            .context("Failed to serialize module map")?;
-        Ok(Some(bytes.into()))
+            let bytes = bcs::to_bytes(native.serialized_module_map())
+                .context("Failed to serialize module map")?;
+            Ok(Some(bytes.into()))
+        }
+        .await
+        .transpose()
     }
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
@@ -268,8 +277,8 @@ impl MovePackage {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
-        self.super_.multi_get_balances(ctx, keys).await
+    ) -> Option<Result<Vec<Balance>, RpcError<balance::Error>>> {
+        self.super_.multi_get_balances(ctx, keys).await.ok()?
     }
 
     /// Objects owned by this package, optionally filtered by type.
@@ -281,10 +290,11 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
+    ) -> Option<Result<Connection<String, MoveObject>, RpcError<object::Error>>> {
         self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// Fetch the package as an object with the same ID, at a different version, root version bound, or checkpoint.
@@ -296,15 +306,16 @@ impl MovePackage {
         version: Option<UInt53>,
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
-    ) -> Result<Option<Object>, RpcError<object::Error>> {
+    ) -> Option<Result<Object, RpcError<object::Error>>> {
         self.super_
             .object_at(ctx, version, root_version, checkpoint)
             .await
+            .ok()?
     }
 
     /// The Base64-encoded BCS serialization of this package, as an `Object`.
-    pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError> {
-        self.super_.object_bcs(ctx).await
+    pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Option<Result<Base64, RpcError>> {
+        self.super_.object_bcs(ctx).await.ok()?
     }
 
     /// Paginate all versions of this package treated as an object, after this one.
@@ -316,10 +327,11 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, Object>>, RpcError> {
+    ) -> Option<Result<Connection<String, Object>, RpcError>> {
         self.super_
             .object_versions_after(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// Paginate all versions of this package treated as an object, before this one.
@@ -331,15 +343,16 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, Object>>, RpcError> {
+    ) -> Option<Result<Connection<String, Object>, RpcError>> {
         self.super_
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// The object's owner kind.
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Result<Option<Owner>, RpcError> {
-        self.super_.owner(ctx).await
+    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<Result<Owner, RpcError>> {
+        self.super_.owner(ctx).await.ok()?
     }
 
     /// Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
@@ -350,7 +363,7 @@ impl MovePackage {
         ctx: &Context<'_>,
         version: Option<UInt53>,
         checkpoint: Option<UInt53>,
-    ) -> Result<Option<MovePackage>, RpcError<Error>> {
+    ) -> Option<Result<MovePackage, RpcError<Error>>> {
         MovePackage::by_key(
             ctx,
             self.super_.super_.scope.clone(),
@@ -361,16 +374,21 @@ impl MovePackage {
             },
         )
         .await
+        .transpose()
     }
 
     /// The Base64-encoded BCS serialization of this package, as a `MovePackage`.
-    async fn package_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError> {
-        let Some(native) = self.native(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+    async fn package_bcs(&self, ctx: &Context<'_>) -> Option<Result<Base64, RpcError>> {
+        async {
+            let Some(native) = self.native(ctx).await?.as_ref() else {
+                return Ok(None);
+            };
 
-        let bytes = bcs::to_bytes(native).context("Failed to serialize MovePackage")?;
-        Ok(Some(Base64(bytes)))
+            let bytes = bcs::to_bytes(native).context("Failed to serialize MovePackage")?;
+            Ok(Some(Base64(bytes)))
+        }
+        .await
+        .transpose()
     }
 
     /// Paginate all versions of this package after this one.
@@ -382,34 +400,36 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("MovePackage", "packageVersionsAfter");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+        let version = self.version(ctx).await.ok()??;
 
-        let Some(version) = self.super_.version(ctx).await? else {
-            return Ok(None);
-        };
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("MovePackage", "packageVersionsAfter");
+                let page = Page::from_params(limits, first, after, last, before)?;
+                let version = version?;
 
-        // Apply any filter that was supplied to the query, but add an additional version
-        // lowerbound constraint.
-        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
-            after_version: Some(version),
-            ..VersionFilter::default()
-        }) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+                // Apply any filter that was supplied to the query, but add an additional version
+                // lowerbound constraint.
+                let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
+                    after_version: Some(version),
+                    ..VersionFilter::default()
+                }) else {
+                    return Ok(Connection::new(false, false));
+                };
 
-        Ok(Some(
-            MovePackage::paginate_by_version(
-                ctx,
-                self.super_.super_.scope.clone(),
-                page,
-                self.super_.super_.address,
-                filter,
-            )
-            .await?,
-        ))
+                MovePackage::paginate_by_version(
+                    ctx,
+                    self.super_.super_.scope.clone(),
+                    page,
+                    self.super_.super_.address,
+                    filter,
+                )
+                .await
+            }
+            .await,
+        )
     }
 
     /// Paginate all versions of this package before this one.
@@ -421,49 +441,49 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, MovePackage>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("MovePackage", "packageVersionsBefore");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+        let version = self.version(ctx).await.ok()??;
 
-        let Some(version) = self.super_.version(ctx).await? else {
-            return Ok(None);
-        };
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("MovePackage", "packageVersionsBefore");
+                let page = Page::from_params(limits, first, after, last, before)?;
+                let version = version?;
 
-        // Apply any filter that was supplied to the query, but add an additional version
-        // upperbound constraint.
-        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
-            before_version: Some(version),
-            ..VersionFilter::default()
-        }) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+                // Apply any filter that was supplied to the query, but add an additional version
+                // upperbound constraint.
+                let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
+                    before_version: Some(version),
+                    ..VersionFilter::default()
+                }) else {
+                    return Ok(Connection::new(false, false));
+                };
 
-        Ok(Some(
-            MovePackage::paginate_by_version(
-                ctx,
-                self.super_.super_.scope.clone(),
-                page,
-                self.super_.super_.address,
-                filter,
-            )
-            .await?,
-        ))
+                MovePackage::paginate_by_version(
+                    ctx,
+                    self.super_.super_.scope.clone(),
+                    page,
+                    self.super_.super_.address,
+                    filter,
+                )
+                .await
+            }
+            .await,
+        )
     }
 
     /// The transaction that created this version of the object.
     pub(crate) async fn previous_transaction(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Transaction>, RpcError> {
-        self.super_.previous_transaction(ctx).await
+    ) -> Option<Result<Transaction, RpcError>> {
+        self.super_.previous_transaction(ctx).await.ok()?
     }
 
     /// The transitive dependencies of this package.
-    async fn linkage(&self, ctx: &Context<'_>) -> Result<Option<Vec<Linkage<'_>>>, RpcError> {
-        let Some(native) = self.native(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+    async fn linkage(&self, ctx: &Context<'_>) -> Option<Result<Vec<Linkage<'_>>, RpcError>> {
+        let native = self.native(ctx).await.ok()?.as_ref()?;
 
         let linkage = native
             .linkage_table()
@@ -474,15 +494,15 @@ impl MovePackage {
             })
             .collect();
 
-        Ok(Some(linkage))
+        Some(Ok(linkage))
     }
 
     /// The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
     pub(crate) async fn storage_rebate(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<BigInt>, RpcError> {
-        self.super_.storage_rebate(ctx).await
+    ) -> Option<Result<BigInt, RpcError>> {
+        self.super_.storage_rebate(ctx).await.ok()?
     }
 
     /// The transactions that sent objects to this object.
@@ -494,17 +514,16 @@ impl MovePackage {
         last: Option<u64>,
         before: Option<CTransaction>,
         filter: Option<TransactionFilter>,
-    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
         self.super_
             .received_transactions(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// A table identifying which versions of a package introduced each of its types.
-    async fn type_origins(&self, ctx: &Context<'_>) -> Result<Option<Vec<TypeOrigin>>, RpcError> {
-        let Some(native) = self.native(ctx).await?.as_ref() else {
-            return Ok(None);
-        };
+    async fn type_origins(&self, ctx: &Context<'_>) -> Option<Result<Vec<TypeOrigin>, RpcError>> {
+        let native = self.native(ctx).await.ok()?.as_ref()?;
 
         let type_origins = native
             .type_origin_table()
@@ -512,7 +531,7 @@ impl MovePackage {
             .map(|native| TypeOrigin::from(native.clone()))
             .collect();
 
-        Ok(Some(type_origins))
+        Some(Ok(type_origins))
     }
 }
 
@@ -549,7 +568,7 @@ impl MovePackage {
         object: &Object,
         ctx: &Context<'_>,
     ) -> Result<Option<Self>, RpcError> {
-        let Some(super_contents) = object.contents(ctx).await?.as_ref() else {
+        let Some(super_contents) = object.contents(ctx).await? else {
             return Ok(None);
         };
 
@@ -881,7 +900,7 @@ impl MovePackage {
     ) -> Result<&Option<NativeMovePackage>, RpcError> {
         self.native
             .get_or_try_init(async || {
-                let Some(contents) = self.super_.contents(ctx).await?.as_ref() else {
+                let Some(contents) = self.super_.contents(ctx).await? else {
                     return Ok(None);
                 };
 

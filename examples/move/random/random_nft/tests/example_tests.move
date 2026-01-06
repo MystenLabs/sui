@@ -32,7 +32,7 @@ fun test_e2e() {
     let mut seen_gold = false;
     let mut seen_silver = false;
     let mut seen_bronze = false;
-    let mut i = 0;
+    let mut i = 0u64;
     while (i < 20) {
         if (i % 2 == 1) {
             nfts.pop_back().reveal(&random_state, ts.ctx())

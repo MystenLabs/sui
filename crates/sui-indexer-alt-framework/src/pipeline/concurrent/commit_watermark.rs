@@ -7,12 +7,11 @@ use std::{
     sync::Arc,
 };
 
+use sui_futures::service::Service;
 use tokio::{
     sync::mpsc,
-    task::JoinHandle,
     time::{MissedTickBehavior, interval},
 };
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
@@ -40,8 +39,7 @@ use super::Handler;
 /// The task regularly traces its progress, outputting at a higher log level every
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
 ///
-/// The task will shutdown if the `cancel` token is signalled, or if the `rx` channel closes and the
-/// watermark cannot be progressed.
+/// The task will shutdown if the `rx` channel closes and the watermark cannot be progressed.
 pub(super) fn commit_watermark<H: Handler + 'static>(
     mut next_checkpoint: u64,
     config: CommitterConfig,
@@ -49,11 +47,10 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     store: H::Store,
     task: Option<String>,
     metrics: Arc<IndexerMetrics>,
-    cancel: CancellationToken,
-) -> JoinHandle<()> {
+) -> Service {
     // SAFETY: on indexer instantiation, we've checked that the pipeline name is valid.
     let pipeline_task = pipeline_task::<H::Store>(H::NAME, task.as_deref()).unwrap();
-    tokio::spawn(async move {
+    Service::new().spawn_aborting(async move {
         let mut poll = interval(config.watermark_interval());
         poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
@@ -81,7 +78,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
         loop {
             tokio::select! {
-                _ = cancel.cancelled() => {}
                 _ = poll.tick() => {}
                 Some(parts) = rx.recv() => {
                     for part in parts {
@@ -244,11 +240,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                 }
             }
 
-            if cancel.is_cancelled() {
-                info!(pipeline = H::NAME, "Shutdown received");
-                break;
-            }
-
             if rx.is_closed() && rx.is_empty() {
                 info!(pipeline = H::NAME, "Committer closed channel");
                 break;
@@ -256,6 +247,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
         }
 
         info!(pipeline = H::NAME, "Stopping committer watermark task");
+        Ok(())
     })
 }
 
@@ -266,7 +258,6 @@ mod tests {
     use async_trait::async_trait;
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::sync::mpsc;
-    use tokio_util::sync::CancellationToken;
 
     use crate::{
         FieldCount,
@@ -319,8 +310,8 @@ mod tests {
     struct TestSetup {
         store: MockStore,
         watermark_tx: mpsc::Sender<Vec<WatermarkPart>>,
-        commit_watermark_handle: JoinHandle<()>,
-        cancel: CancellationToken,
+        #[allow(unused)]
+        commit_watermark: Service,
     }
 
     fn setup_test<H: Handler<Store = MockStore> + 'static>(
@@ -330,26 +321,22 @@ mod tests {
     ) -> TestSetup {
         let (watermark_tx, watermark_rx) = mpsc::channel(100);
         let metrics = IndexerMetrics::new(None, &Default::default());
-        let cancel = CancellationToken::new();
 
         let store_clone = store.clone();
-        let cancel_clone = cancel.clone();
 
-        let commit_watermark_handle = commit_watermark::<H>(
+        let commit_watermark = commit_watermark::<H>(
             next_checkpoint,
             config,
             watermark_rx,
             store_clone,
             None,
             metrics,
-            cancel_clone,
         );
 
         TestSetup {
             store,
             watermark_tx,
-            commit_watermark_handle,
-            cancel,
+            commit_watermark,
         }
     }
 
@@ -381,10 +368,6 @@ mod tests {
         // Verify watermark progression
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 3);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -420,10 +403,6 @@ mod tests {
         // Verify watermark has progressed to 4
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 4);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -452,10 +431,6 @@ mod tests {
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -489,10 +464,6 @@ mod tests {
         // Verify watermark is still none
         let watermark = setup.store.watermark(DataPipeline::NAME);
         assert!(watermark.is_none());
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -534,10 +505,6 @@ mod tests {
 
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 11);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -579,10 +546,6 @@ mod tests {
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
     }
 
     #[tokio::test]
@@ -617,46 +580,5 @@ mod tests {
         // Verify watermark has progressed
         let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
         assert_eq!(watermark.checkpoint_hi_inclusive, 1);
-
-        // Clean up
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
-    }
-
-    #[tokio::test]
-    async fn test_final_watermark_sync_on_shutdown() {
-        let config = CommitterConfig {
-            // Set to u64::MAX to ensure watermark isn't updated until shutdown.
-            watermark_interval_ms: u64::MAX,
-            ..Default::default()
-        };
-        let setup = setup_test::<DataPipeline>(config, 10, MockStore::default());
-
-        setup
-            .watermark_tx
-            .send(vec![create_watermark_part_for_checkpoint(10)])
-            .await
-            .unwrap();
-        setup
-            .watermark_tx
-            .send(vec![create_watermark_part_for_checkpoint(11)])
-            .await
-            .unwrap();
-
-        // Wait until all watermark parts have been received on the channel.
-        tokio::time::timeout(Duration::from_secs(1), async {
-            let mut interval = tokio::time::interval(Duration::from_millis(100));
-            while setup.watermark_tx.capacity() != setup.watermark_tx.max_capacity() {
-                interval.tick().await;
-            }
-        })
-        .await
-        .unwrap();
-
-        setup.cancel.cancel();
-        let _ = setup.commit_watermark_handle.await;
-
-        let watermark = setup.store.watermark(DataPipeline::NAME).unwrap();
-        assert_eq!(watermark.checkpoint_hi_inclusive, 11);
     }
 }

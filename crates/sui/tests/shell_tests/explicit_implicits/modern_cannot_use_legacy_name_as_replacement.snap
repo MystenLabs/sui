@@ -1,0 +1,17 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# tests that building a package that has explicit deps (through dep-replacements) on legacy system names errors
+sui move --client.config $CONFIG build -p modern_using_legacy_name_as_replacement
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+Error while loading dependency .: Dependency `MoveStdlib` is a legacy system name and cannot be used. See https://docs.sui.io/guides/developer/sui-101/move-package-management#system-dependencies
+
+----- stderr -----

@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use crate::{
     command_line::compiler::Visitor,
     diagnostics::warning_filters::WarningFilters,
@@ -261,22 +263,23 @@ pub trait TypingVisitorContext {
     /// `VISIT_TYPES` is set to `false`.
     #[growing_stack]
     fn visit_type(&mut self, exp_loc: Option<Loc>, ty: &N::Type) {
+        use N::TypeInner as NT;
         if self.visit_type_custom(exp_loc, ty) {
             return;
         }
-        match &ty.value {
-            N::Type_::Unit => (),
-            N::Type_::Ref(_, inner) => self.visit_type(exp_loc, inner),
-            N::Type_::Param(_) => (),
-            N::Type_::Apply(_, _, args) => args.iter().for_each(|ty| self.visit_type(exp_loc, ty)),
-            N::Type_::Fun(args, ret) => {
+        match &ty.value.inner() {
+            NT::Unit => (),
+            NT::Ref(_, inner) => self.visit_type(exp_loc, inner),
+            NT::Param(_) => (),
+            NT::Apply(_, _, args) => args.iter().for_each(|ty| self.visit_type(exp_loc, ty)),
+            NT::Fun(args, ret) => {
                 args.iter().for_each(|ty| self.visit_type(exp_loc, ty));
                 self.visit_type(exp_loc, ret);
             }
-            N::Type_::Var(_) => (),
-            N::Type_::Anything => (),
-            N::Type_::Void => (),
-            N::Type_::UnresolvedError => (),
+            NT::Var(_) => (),
+            NT::Anything => (),
+            NT::Void => (),
+            NT::UnresolvedError => (),
         }
     }
 
@@ -867,24 +870,25 @@ pub trait TypingMutVisitorContext {
     /// `VISIT_TYPES` is set to `false`.
     #[growing_stack]
     fn visit_type(&mut self, exp_loc: Option<Loc>, ty: &mut N::Type) {
+        use N::TypeInner as NT;
         if self.visit_type_custom(exp_loc, ty) {
             return;
         }
-        match &mut ty.value {
-            N::Type_::Unit => (),
-            N::Type_::Ref(_, inner) => self.visit_type(exp_loc, inner),
-            N::Type_::Param(_) => (),
-            N::Type_::Apply(_, _, args) => {
-                args.iter_mut().for_each(|ty| self.visit_type(exp_loc, ty))
-            }
-            N::Type_::Fun(args, ret) => {
+        // This is copy-on-write, but there is really nothing else to do here. It is expensive, but
+        // woefully annoying otherwise. We should consider simply removing the mutable visitor.
+        match Arc::make_mut(&mut ty.value.0) {
+            NT::Unit => (),
+            NT::Ref(_, inner) => self.visit_type(exp_loc, inner),
+            NT::Param(_) => (),
+            NT::Apply(_, _, args) => args.iter_mut().for_each(|ty| self.visit_type(exp_loc, ty)),
+            NT::Fun(args, ret) => {
                 args.iter_mut().for_each(|ty| self.visit_type(exp_loc, ty));
                 self.visit_type(exp_loc, ret);
             }
-            N::Type_::Var(_) => (),
-            N::Type_::Anything => (),
-            N::Type_::Void => (),
-            N::Type_::UnresolvedError => (),
+            NT::Var(_) => (),
+            NT::Anything => (),
+            NT::Void => (),
+            NT::UnresolvedError => (),
         }
     }
 

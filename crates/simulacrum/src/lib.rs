@@ -263,19 +263,29 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     /// created.
     pub fn create_checkpoint(&mut self) -> VerifiedCheckpoint {
         if self.epoch_state.protocol_config().enable_accumulators() {
-            let settlement_txns = self
+            let (settlement_txns, checkpoint_height) = self
                 .checkpoint_builder
                 .get_settlement_txns(self.epoch_state.protocol_config());
 
-            // The final transaction (the barrier transaction) must be executed after
-            // all the settlement transactions.
+            // Execute settlement transactions and collect their effects
+            let mut settlement_effects = Vec::with_capacity(settlement_txns.len());
             for txn in settlement_txns {
-                self.execute_system_transaction(txn)
-                    .expect("settlement txn cannot fail")
-                    .0
-                    .status()
-                    .unwrap();
+                let (effects, _) = self
+                    .execute_system_transaction(txn)
+                    .expect("settlement txn cannot fail");
+                effects.status().unwrap();
+                settlement_effects.push(effects);
             }
+
+            // Build and execute the barrier transaction using settlement effects
+            let barrier_tx = self
+                .checkpoint_builder
+                .get_barrier_tx(checkpoint_height, &settlement_effects);
+            self.execute_system_transaction(barrier_tx)
+                .expect("barrier txn cannot fail")
+                .0
+                .status()
+                .unwrap();
         }
 
         let committee = CommitteeWithKeys::new(&self.keystore, self.epoch_state.committee());

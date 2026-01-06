@@ -905,7 +905,7 @@ impl<'outer, 'env> Context<'outer, 'env> {
                 if let Some((suggestion, defn_loc_opt)) =
                     find_suggestion(&self.unscoped_types, n.value.as_str())
                 {
-                    add_suggestion(&mut diag.clone(), loc, &suggestion, defn_loc_opt);
+                    add_suggestion(&mut diag.clone(), loc, suggestion, defn_loc_opt);
                 }
                 self.add_diag(diag);
                 ResolvedType::Unbound
@@ -2279,7 +2279,7 @@ fn resolve_stdlib_function(
 }
 
 fn resolve_stdlib_type(context: &mut Context, ma: E::ModuleAccess_) -> Option<N::Type> {
-    use N::{Type_ as NT, TypeName_ as NN};
+    use N::{TypeInner as NT, TypeName_ as NN};
 
     let E::ModuleAccess_::ModuleAccess(m, n) = ma else {
         return None;
@@ -2301,7 +2301,7 @@ fn resolve_stdlib_type(context: &mut Context, ma: E::ModuleAccess_) -> Option<N:
     };
     assert!(arity == 0, "Cannot resolve stdlib types with arguments");
     let tys = vec![];
-    Some(sp(decl_loc, NT::Apply(None, tn, tys)))
+    Some(sp(decl_loc, NT::Apply(None, tn, tys).into()))
 }
 
 //**************************************************************************************************
@@ -2698,25 +2698,25 @@ fn types(context: &mut Context, case: TypeAnnotation, tys: Vec<E::Type>) -> Vec<
 
 fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -> N::Type {
     use E::Type_ as ET;
-    use N::{Type_ as NT, TypeName_ as NN};
+    use N::{Type_ as NT_, TypeInner as NT, TypeName_ as NN};
     use ResolvedType as RT;
     let ty_ = match ety_ {
-        ET::Unit => NT::Unit,
-        ET::Multiple(tys) => NT::multiple_(
+        ET::Unit => N::UNIT_TYPE.clone(),
+        ET::Multiple(tys) => NT_::multiple_(
             loc,
             tys.into_iter().map(|t| type_(context, case, t)).collect(),
         ),
-        ET::Ref(mut_, inner) => NT::Ref(mut_, Box::new(type_(context, case, *inner))),
+        ET::Ref(mut_, inner) => NT::Ref(mut_, type_(context, case, *inner)).into(),
         ET::UnresolvedError => {
             assert!(context.env.has_errors());
-            NT::UnresolvedError
+            N::UNRESOLVED_ERROR_TYPE.clone()
         }
         ET::Apply(ma, tys) => {
             let original_loc = ma.loc;
             match context.resolve_type(ma) {
                 RT::Unbound => {
                     assert!(context.env.has_errors());
-                    NT::UnresolvedError
+                    N::UNRESOLVED_ERROR_TYPE.clone()
                 }
                 RT::Hole => {
                     let case_str_opt = match case {
@@ -2743,10 +2743,10 @@ fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -
                             diag.add_note("Only 'macro' functions can use '_' in their signatures");
                         }
                         context.add_diag(diag);
-                        NT::UnresolvedError
+                        N::UNRESOLVED_ERROR_TYPE.clone()
                     } else {
                         // replaced with a type variable during type instantiation
-                        NT::Anything
+                        N::ANYTHING_TYPE.clone()
                     }
                 }
                 RT::BuiltinType(bn_) => {
@@ -2754,7 +2754,7 @@ fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -
                     let arity = bn_.tparam_constraints(loc).len();
                     let tys = types(context, case, tys);
                     let tys = check_type_instantiation_arity(context, loc, name_f, tys, arity);
-                    NT::builtin_(sp(ma.loc, bn_), tys)
+                    NT_::builtin_(sp(ma.loc, bn_), tys)
                 }
                 RT::TParam(_, tp) => {
                     if !tys.is_empty() {
@@ -2762,12 +2762,12 @@ fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -
                             NameResolution::NamePositionMismatch,
                             (loc, "Generic type parameters cannot take type arguments"),
                         ));
-                        NT::UnresolvedError
+                        N::UNRESOLVED_ERROR_TYPE.clone()
                     } else {
                         if context.translating_fun {
                             context.used_fun_tparams.insert(tp.id);
                         }
-                        NT::Param(tp)
+                        NT::Param(tp).into()
                     }
                 }
                 RT::ModuleType(mt) => {
@@ -2786,14 +2786,14 @@ fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -
                     let tys = types(context, case, tys);
                     let name_f = || format!("{}", tn);
                     let tys = check_type_instantiation_arity(context, loc, name_f, tys, arity);
-                    NT::Apply(None, tn, tys)
+                    NT::Apply(None, tn, tys).into()
                 }
             }
         }
         ET::Fun(tys, ty) => {
             let tys = types(context, case, tys);
             let ty = Box::new(type_(context, case, *ty));
-            NT::Fun(tys, ty)
+            NT::Fun(tys, *ty).into()
         }
     };
     sp(loc, ty_)
@@ -2841,7 +2841,7 @@ fn check_type_instantiation_arity<F: FnOnce() -> String>(
     }
 
     while ty_args.len() < arity {
-        ty_args.push(sp(loc, N::Type_::UnresolvedError))
+        ty_args.push(sp(loc, N::UNRESOLVED_ERROR_TYPE.clone()))
     }
 
     ty_args
@@ -4460,7 +4460,7 @@ fn exp_types_opt_with_arity_check(
     }
 
     while args.len() < arity {
-        args.push(sp(tyarg_error_loc, N::Type_::UnresolvedError));
+        args.push(sp(tyarg_error_loc, N::UNRESOLVED_ERROR_TYPE.clone()));
     }
 
     Some(args)

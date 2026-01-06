@@ -3,9 +3,9 @@ fun main() {
     let x;
     let y;
     if (true) {
-        y = 0;
+        y = 0u64;
     } else {
-        x = 42;
+        x = 42u64;
         x;
     };
     assert!(y == 0, 42);

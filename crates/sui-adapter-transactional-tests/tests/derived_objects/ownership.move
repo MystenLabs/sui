@@ -24,17 +24,17 @@ entry fun create_parent(ctx: &mut TxContext) {
 }
 
 entry fun derive_and_share(parent: &mut Parent) {
-  let derived = Derived { id: derived_object::claim(&mut parent.id, 0) };
+  let derived = Derived { id: derived_object::claim(&mut parent.id, 0u64) };
   transfer::share_object(derived);
 }
 
 entry fun derive_and_make_party(parent: &mut Parent, ctx: &TxContext) {
-  let derived = Derived { id: derived_object::claim(&mut parent.id, 1) };
+  let derived = Derived { id: derived_object::claim(&mut parent.id, 1u64) };
   party::single_owner(ctx.sender()).transfer!(derived);
 }
 
 entry fun derive_and_make_immutable(parent: &mut Parent) {
-  let derived = Derived { id: derived_object::claim(&mut parent.id, 2) };
+  let derived = Derived { id: derived_object::claim(&mut parent.id, 2u64) };
   transfer::freeze_object(derived);
 }
 

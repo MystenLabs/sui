@@ -3,7 +3,7 @@ module 0x8675309::M {
         while (cond) ();
         while (cond) (());
         while (cond) {};
-        while (cond) { let x = 0; x; };
+        while (cond) { let x = 0u64; x; };
         while (cond) { if (cond) () };
         while (cond) break;
         while (cond) { break };

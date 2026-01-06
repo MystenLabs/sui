@@ -684,15 +684,15 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
             crate::transaction::TransactionExpiration::ValidDuring {
                 min_epoch,
                 max_epoch,
-                min_timestamp_seconds,
-                max_timestamp_seconds,
+                min_timestamp,
+                max_timestamp,
                 chain,
                 nonce,
             } => Self::ValidDuring {
                 min_epoch,
                 max_epoch,
-                min_timestamp: min_timestamp_seconds,
-                max_timestamp: max_timestamp_seconds,
+                min_timestamp,
+                max_timestamp,
                 chain: Digest::new(*chain.as_bytes()),
                 nonce,
             },
@@ -715,8 +715,8 @@ impl From<TransactionExpiration> for crate::transaction::TransactionExpiration {
             } => Self::ValidDuring {
                 min_epoch,
                 max_epoch,
-                min_timestamp_seconds: min_timestamp,
-                max_timestamp_seconds: max_timestamp,
+                min_timestamp,
+                max_timestamp,
                 chain: crate::digests::CheckpointDigest::from(chain).into(),
                 nonce,
             },
@@ -929,8 +929,8 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::MoveVectorElemTooBig { value_size, max_scaled_size } => Self::MoveVectorElemTooBig { value_size, max_scaled_size },
             crate::execution_status::ExecutionFailureStatus::MoveRawValueTooBig { value_size, max_scaled_size } => Self::MoveRawValueTooBig { value_size, max_scaled_size },
             crate::execution_status::ExecutionFailureStatus::InvalidLinkage => Self::InvalidLinkage,
-            crate::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw => {
-                Self::InsufficientBalanceForWithdraw
+            crate::execution_status::ExecutionFailureStatus::InsufficientFundsForWithdraw => {
+                Self::InsufficientFundsForWithdraw
             }
             crate::execution_status::ExecutionFailureStatus::NonExclusiveWriteInputObjectModified { id } => {
                 Self::NonExclusiveWriteInputObjectModified { object: id.into() }
@@ -1609,7 +1609,10 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
                 Self::DisplayRegistryCreate
             }
             crate::transaction::EndOfEpochTransactionKind::AddressAliasStateCreate => {
-                todo!("AddressAliasStateCreate needs to be added to sdk")
+                Self::AddressAliasStateCreate
+            }
+            crate::transaction::EndOfEpochTransactionKind::WriteAccumulatorStorageCost(_) => {
+                todo!("WriteAccumulatorStorageCost needs to be added to sdk")
             }
         }
     }

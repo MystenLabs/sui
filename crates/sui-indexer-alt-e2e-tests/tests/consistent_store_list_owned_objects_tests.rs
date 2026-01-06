@@ -21,7 +21,6 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{Argument, Command, Transaction, TransactionData},
 };
-use tokio_util::sync::CancellationToken;
 
 /// 5 SUI gas budget
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
@@ -553,7 +552,6 @@ async fn test_coin_balance_change_cleanup() {
         Simulacrum::new_with_protocol_version(OsRng, 27.into()),
         Default::default(),
         &Registry::new(),
-        CancellationToken::new(),
     )
     .await
     .unwrap();

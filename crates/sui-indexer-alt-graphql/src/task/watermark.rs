@@ -14,6 +14,7 @@ use diesel::{
     sql_types::{BigInt, Text},
 };
 use futures::future::OptionFuture;
+use sui_futures::service::Service;
 use sui_indexer_alt_reader::{
     bigtable_reader::BigtableReader,
     consistent_reader::{self, ConsistentReader, proto::AvailableRangeResponse},
@@ -21,9 +22,8 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
 };
 use sui_sql_macro::query;
-use tokio::{sync::RwLock, task::JoinHandle, time};
-use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tokio::{sync::RwLock, time};
+use tracing::{debug, warn};
 
 use crate::{
     api::types::available_range::pipeline_unavailable, config::WatermarkConfig, error::RpcError,
@@ -60,9 +60,6 @@ pub(crate) struct WatermarkTask {
 
     /// Access to metrics to report watermark updates.
     metrics: Arc<RpcMetrics>,
-
-    /// Signal to cancel the task.
-    cancel: CancellationToken,
 }
 
 /// Snapshot of current watermarks. The upperbound is global across all pipelines, and the
@@ -125,7 +122,6 @@ impl WatermarkTask {
         ledger_grpc_reader: Option<LedgerGrpcReader>,
         consistent_reader: ConsistentReader,
         metrics: Arc<RpcMetrics>,
-        cancel: CancellationToken,
     ) -> Self {
         let WatermarkConfig {
             watermark_polling_interval,
@@ -140,7 +136,6 @@ impl WatermarkTask {
             interval: watermark_polling_interval,
             pg_pipelines,
             metrics,
-            cancel,
         }
     }
 
@@ -150,11 +145,8 @@ impl WatermarkTask {
     }
 
     /// Start a new task that regularly polls the database for watermarks.
-    ///
-    /// This operation consume the `self` and returns a handle to the spawned tokio task. The task
-    /// will continue to run until its cancellation token is triggered.
-    pub(crate) fn run(self) -> JoinHandle<()> {
-        tokio::spawn(async move {
+    pub(crate) fn run(self) -> Service {
+        Service::new().spawn_aborting(async move {
             let Self {
                 watermarks,
                 pg_reader,
@@ -164,60 +156,50 @@ impl WatermarkTask {
                 interval,
                 pg_pipelines,
                 metrics,
-                cancel,
             } = self;
 
             let mut interval = time::interval(interval);
 
             loop {
-                tokio::select! {
-                    biased;
+                interval.tick().await;
 
-                    _ = cancel.cancelled() => {
-                        info!("Shutdown signal received, terminating watermark task");
-                        break;
+                let rows = match WatermarkRow::read(&pg_reader, bigtable_reader.as_ref(), ledger_grpc_reader.as_ref(), &pg_pipelines).await {
+                    Ok(rows) => rows,
+                    Err(e) => {
+                        warn!("Failed to read watermarks: {e:#}");
+                        continue;
                     }
+                };
 
-                    _ = interval.tick() => {
-                        let rows = match WatermarkRow::read(&pg_reader, bigtable_reader.as_ref(), ledger_grpc_reader.as_ref(), &pg_pipelines).await {
-                            Ok(rows) => rows,
-                            Err(e) => {
-                                warn!("Failed to read watermarks: {e:#}");
-                                continue;
-                            }
-                        };
-
-                        let mut w = Watermarks::default();
-                        for row in rows {
-                            row.record_metrics(&metrics);
-                            w.merge(row);
-                        }
-
-                        match watermark_from_consistent(&consistent_reader, w.global_hi.checkpoint as u64).await {
-                            Ok(None) => {}
-                            Ok(Some(consistent_row)) => {
-                                // Merge the consistent store watermark
-                                consistent_row.record_metrics(&metrics);
-                                w.merge(consistent_row);
-                            }
-
-                            Err(e) => {
-                                warn!("Failed to get consistent store watermark: {e:#}");
-                                continue;
-                            }
-                        };
-
-                        debug!(
-                            epoch = w.global_hi.epoch,
-                            checkpoint = w.global_hi.checkpoint,
-                            transaction = w.global_hi.transaction,
-                            timestamp = ?DateTime::from_timestamp_millis(w.timestamp_ms_hi_inclusive).unwrap_or_default(),
-                            "Watermark updated"
-                        );
-
-                        *watermarks.write().await = Arc::new(w);
-                    }
+                let mut w = Watermarks::default();
+                for row in rows {
+                    row.record_metrics(&metrics);
+                    w.merge(row);
                 }
+
+                match watermark_from_consistent(&consistent_reader, w.global_hi.checkpoint as u64).await {
+                    Ok(None) => {}
+                    Ok(Some(consistent_row)) => {
+                        // Merge the consistent store watermark
+                        consistent_row.record_metrics(&metrics);
+                        w.merge(consistent_row);
+                    }
+
+                    Err(e) => {
+                        warn!("Failed to get consistent store watermark: {e:#}");
+                        continue;
+                    }
+                };
+
+                debug!(
+                    epoch = w.global_hi.epoch,
+                    checkpoint = w.global_hi.checkpoint,
+                    transaction = w.global_hi.transaction,
+                    timestamp = ?DateTime::from_timestamp_millis(w.timestamp_ms_hi_inclusive).unwrap_or_default(),
+                    "Watermark updated"
+                );
+
+                *watermarks.write().await = Arc::new(w);
             }
         })
     }

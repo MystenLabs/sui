@@ -1252,8 +1252,8 @@ async fn authenticated_events_multiple_commits_per_checkpoint() {
                 expiration: sui_types::transaction::TransactionExpiration::ValidDuring {
                     min_epoch: Some(0),
                     max_epoch: Some(0),
-                    min_timestamp_seconds: None,
-                    max_timestamp_seconds: None,
+                    min_timestamp: None,
+                    max_timestamp: None,
                     chain: chain_id,
                     nonce: i,
                 },

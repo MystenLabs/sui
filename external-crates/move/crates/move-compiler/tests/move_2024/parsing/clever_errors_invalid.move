@@ -11,13 +11,13 @@ fun f1(): u64 {
 }
 
 fun f2(): u64 {
-    1 + 2;
+    1 + 2u64;
     abort;
     1 + 1
 }
 
 fun f3(): u64 {
-    1 + abort;
+    1u64 + abort;
     1 + 1
 }
 

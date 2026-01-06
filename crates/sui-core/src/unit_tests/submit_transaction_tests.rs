@@ -599,3 +599,62 @@ async fn test_submit_soft_bundle_transactions_with_already_executed() {
         _ => panic!("Expected Submitted status for second transaction"),
     }
 }
+
+#[tokio::test]
+async fn test_submit_oversized_transaction() {
+    use sui_types::base_types::dbg_addr;
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::TransactionData;
+
+    let test_context = TestContext::new().await;
+
+    let max_txn_size = test_context
+        .state
+        .epoch_store_for_testing()
+        .protocol_config()
+        .max_tx_size_bytes() as usize;
+
+    // Get the gas object to use for the transaction
+    let gas_object = test_context
+        .state
+        .get_object(&test_context.gas_object_ref.0)
+        .await
+        .unwrap();
+    let full_object_ref = gas_object.compute_full_object_reference();
+    let recipient = dbg_addr(2);
+
+    // Construct an oversized transaction by putting lots of commands in it
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        // Put a lot of commands in the txn so it's large
+        for _ in 0..(1024 * 16) {
+            builder.transfer_object(recipient, full_object_ref).unwrap();
+        }
+        builder.finish()
+    };
+
+    let txn_data = TransactionData::new_programmable(
+        test_context.sender,
+        vec![test_context.gas_object_ref],
+        pt,
+        0,
+        0,
+    );
+
+    let txn = to_sender_signed_transaction(txn_data, &test_context.keypair);
+    let tx_size = bcs::serialized_size(&txn).unwrap();
+
+    // Making sure the txn is larger than the max txn size
+    assert!(tx_size > max_txn_size);
+
+    let request = test_context.build_submit_request(txn);
+    let response = test_context.client.submit_transaction(request, None).await;
+
+    // The txn should be rejected due to its size
+    assert!(response.is_err());
+    let error_str = response.unwrap_err().to_string();
+    assert!(
+        error_str.contains("serialized transaction size exceeded maximum"),
+        "Expected size limit error but got: {error_str}"
+    );
+}

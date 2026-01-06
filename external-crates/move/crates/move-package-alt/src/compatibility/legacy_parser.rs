@@ -8,16 +8,17 @@ use crate::{
         find_module_name_for_package,
     },
     errors::FileHandle,
+    flavor::MoveFlavor,
+    logging::user_note,
     package::paths::PackagePath,
     schema::{
         DefaultDependency, Environment, ExternalDependency, LocalDepInfo, ManifestDependencyInfo,
         ManifestGitDependency, ModeName, OnChainDepInfo, PackageMetadata, PackageName,
-        ParsedManifest, PublishAddresses,
+        ParsedManifest, PublishAddresses, SystemDepName,
     },
 };
 use anyhow::{Context, Result, anyhow, bail, format_err};
 
-use colored::Colorize as _;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use serde_spanned::Spanned;
 use std::{
@@ -26,7 +27,7 @@ use std::{
     str::FromStr,
 };
 use toml::Value as TV;
-use tracing::{debug, warn};
+use tracing::debug;
 
 use super::{legacy::LegacyData, legacy_lockfile::load_legacy_lockfile, parse_address_literal};
 use move_compiler::editions::Edition;
@@ -74,7 +75,7 @@ pub struct LegacyPackageMetadata {
 /// the unsupported sections: `[addresses]`, `[dev-addresses]`, or `[dev-dependencies]`. Although
 /// these fields are not technically required in the old system, we want to process manifests that
 /// don't have them using the modern parser.
-pub fn try_load_legacy_manifest(
+pub fn try_load_legacy_manifest<F: MoveFlavor>(
     path: &PackagePath,
     default_env: &Environment,
     is_root: bool,
@@ -104,7 +105,7 @@ pub fn try_load_legacy_manifest(
     }
 
     debug!("parsing legacy manifest");
-    let manifest = parse_source_manifest(parsed, is_root, path, default_env)?;
+    let manifest = parse_source_manifest::<F>(parsed, is_root, path, default_env)?;
     debug!("successfully parsed");
     Ok(Some((file_handle, manifest)))
 }
@@ -113,7 +114,7 @@ fn parse_move_manifest_string(manifest_string: &str) -> Result<TV> {
     toml::from_str::<TV>(manifest_string).context("Unable to parse Move package manifest")
 }
 
-fn parse_source_manifest(
+fn parse_source_manifest<F: MoveFlavor>(
     tval: TV,
     is_root: bool,
     path: &PackagePath,
@@ -194,11 +195,12 @@ fn parse_source_manifest(
                 programmatic_addresses.insert(name, addr);
             }
 
-            let implicit_dependencies = check_implicits(
+            let implicit_dependencies = check_implicits::<F>(
                 metadata.legacy_name.as_str(),
                 is_root,
                 &dependencies,
                 metadata.implicit_deps,
+                env,
             );
 
             // We create a normalized legacy name, to make sure we can always use a package
@@ -251,24 +253,28 @@ fn parse_source_manifest(
 ///  - implicit_deps_flag is false,
 ///  - name is a system dep name,
 ///  - deps or contains a system dep name
-fn check_implicits(
+fn check_implicits<F: MoveFlavor>(
     name: &str,
     is_root: bool,
     deps: &BTreeMap<Identifier, DefaultDependency>,
     implicit_deps_flag: bool,
+    env: &Environment,
 ) -> bool {
     if !implicit_deps_flag {
         return false;
     }
 
-    if LEGACY_SYSTEM_DEPS_NAMES.contains(&name) {
+    let system_deps = F::system_deps(env.id());
+    let system_deps_names = system_deps.keys().collect::<BTreeSet<_>>();
+
+    if is_legacy_system_dep_name(name, &system_deps_names) {
         return false;
     }
 
     let explicit_implicits: Vec<&str> = deps
         .keys()
         .map(|id| id.as_str())
-        .filter(|name| LEGACY_SYSTEM_DEPS_NAMES.contains(name))
+        .filter(|name| is_legacy_system_dep_name(name, &system_deps_names))
         .collect();
 
     if explicit_implicits.is_empty() {
@@ -276,11 +282,10 @@ fn check_implicits(
     }
 
     if is_root {
-        warn!(
-            "[{}] Dependencies on {} are automatically added, but this feature is \
+        user_note!(
+            "Dependencies on {} are automatically added, but this feature is \
                 disabled for your package because you have explicitly included dependencies on {}. Consider \
                 removing these dependencies from `Move.toml`.",
-            "NOTE".yellow().bold(),
             move_compiler::format_oxford_list!("and", "{}", LEGACY_SYSTEM_DEPS_NAMES),
             move_compiler::format_oxford_list!("and", "{}", explicit_implicits),
         );
@@ -803,6 +808,24 @@ fn derive_modern_name(
         Ok(Some(PackageName::new(zero_addresses[0].to_string())?))
     } else {
         find_module_name_for_package(path)
+    }
+}
+
+fn is_legacy_system_dep_name(name: &str, system_deps_names: &BTreeSet<&SystemDepName>) -> bool {
+    LEGACY_SYSTEM_DEPS_NAMES.contains(&name)
+        && system_deps_names.contains(&to_modern_system_dep_name(name))
+}
+
+/// Takes a string, and returns its modern name, and
+/// The bool is true if the name is a system dependency (legacy)
+fn to_modern_system_dep_name(name: &str) -> SystemDepName {
+    match name {
+        "Sui" => "sui".to_string(),
+        "MoveStdlib" => "std".to_string(),
+        "Bridge" => "bridge".to_string(),
+        "DeepBook" => "deepbook".to_string(),
+        "SuiSystem" => "sui_system".to_string(),
+        _ => name.to_string(),
     }
 }
 

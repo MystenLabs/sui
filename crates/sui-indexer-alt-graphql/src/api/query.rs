@@ -6,7 +6,6 @@ use async_graphql::{Context, Object, Result, connection::Connection};
 use futures::future::try_join_all;
 use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
 use sui_rpc::proto::sui::rpc::v2 as proto;
-use sui_types::digests::ChainIdentifier;
 
 use crate::{
     api::{
@@ -20,6 +19,7 @@ use crate::{
     error::{RpcError, bad_user_input, upcast},
     pagination::{Page, PaginationConfig},
     scope::Scope,
+    task::chain_identifier::ChainIdentifier,
 };
 
 use super::{
@@ -82,8 +82,8 @@ impl Query {
 
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
-        let chain_id: ChainIdentifier = *ctx.data()?;
-        Ok(chain_id.to_string())
+        let chain_id: &ChainIdentifier = ctx.data()?;
+        Ok(chain_id.wait().await.to_string())
     }
 
     /// Fetch a checkpoint by its sequence number, or the latest checkpoint if no sequence number is provided.
@@ -569,10 +569,15 @@ impl Query {
     /// `{"bcs": {"value": "<base64>"}}`
     ///
     /// Unlike `executeTransaction`, this does not require signatures since the transaction is not committed to the blockchain. This allows for previewing transaction effects, estimating gas costs, and testing transaction logic without spending gas or requiring valid signatures.
+    ///
+    /// - `checksEnabled`: If true, enables transaction validation checks during simulation. Defaults to true.
+    /// - `doGasSelection`: If true, enables automatic gas coin selection and budget estimation. Defaults to false.
     async fn simulate_transaction(
         &self,
         ctx: &Context<'_>,
         transaction: Json,
+        checks_enabled: Option<bool>,
+        do_gas_selection: Option<bool>,
     ) -> Result<SimulationResult, RpcError<TransactionInputError>> {
         let fullnode_client: &FullnodeClient = ctx.data()?;
 
@@ -584,7 +589,14 @@ impl Query {
             .map_err(|err| bad_user_input(TransactionInputError::InvalidTransactionJson(err)))?;
 
         // Simulate transaction using proto
-        match fullnode_client.simulate_transaction(proto_tx).await {
+        match fullnode_client
+            .simulate_transaction(
+                proto_tx,
+                checks_enabled.unwrap_or(true),
+                do_gas_selection.unwrap_or(false),
+            )
+            .await
+        {
             Ok(response) => {
                 let scope = self.scope(ctx)?;
                 let tx_data = response

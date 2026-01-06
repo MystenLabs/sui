@@ -38,6 +38,8 @@ pub struct ReadWriteOptions {
     /// When set, debug log the hash of the key and value bytes when inserting to
     /// this table.
     pub log_value_hash: bool,
+    /// Whether to sync to disk on every write.
+    pub sync_writes: bool,
 }
 
 impl ReadWriteOptions {
@@ -63,6 +65,7 @@ impl Default for ReadWriteOptions {
         Self {
             ignore_range_deletions: true,
             log_value_hash: false,
+            sync_writes: false,
         }
     }
 }

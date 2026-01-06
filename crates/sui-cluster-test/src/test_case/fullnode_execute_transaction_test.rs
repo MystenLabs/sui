@@ -8,7 +8,7 @@ use sui_json_rpc_types::{
 };
 use sui_sdk::SuiClient;
 use sui_types::{
-    base_types::TransactionDigest, quorum_driver_types::ExecuteTransactionRequestType,
+    base_types::TransactionDigest, transaction_driver_types::ExecuteTransactionRequestType,
 };
 use tracing::info;
 

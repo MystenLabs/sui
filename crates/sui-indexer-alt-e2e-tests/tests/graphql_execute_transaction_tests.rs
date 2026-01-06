@@ -20,8 +20,7 @@ use sui_pg_db::{DbArgs, temp::get_available_port};
 use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::{gas_coin::GasCoin, transaction::SharedObjectMutability};
 
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
+use sui_futures::service::Service;
 use url::Url;
 
 use sui_types::{base_types::SuiAddress, transaction::ObjectArg};
@@ -101,8 +100,10 @@ struct ConsensusObject {
 
 struct GraphQlTestCluster {
     url: Url,
-    handle: JoinHandle<()>,
-    cancel: CancellationToken,
+    /// Hold on to the service so it doesn't get dropped (and therefore aborted) until the cluster
+    /// goes out of scope.
+    #[allow(unused)]
+    service: Service,
 }
 
 impl GraphQlTestCluster {
@@ -127,11 +128,6 @@ impl GraphQlTestCluster {
             .context("Failed to parse GraphQL response")?;
 
         Ok(body)
-    }
-
-    async fn stopped(self) {
-        self.cancel.cancel();
-        let _ = self.handle.await;
     }
 }
 
@@ -164,10 +160,8 @@ async fn create_graphql_test_cluster(validator_cluster: &TestCluster) -> GraphQl
         fullnode_rpc_url: Some(validator_cluster.rpc_url().to_string()),
     };
 
-    let cancel = CancellationToken::new();
-
     // Start GraphQL server that connects directly to TestCluster's RPC
-    let graphql_handle = start_graphql(
+    let service = start_graphql(
         None, // No database - GraphQL will use fullnode RPC for executeTransaction
         fullnode_args,
         DbArgs::default(),
@@ -179,7 +173,6 @@ async fn create_graphql_test_cluster(validator_cluster: &TestCluster) -> GraphQl
         GraphQlConfig::default(),
         vec![], // No pipelines since we're not using database
         &Registry::new(),
-        cancel.child_token(),
     )
     .await
     .expect("Failed to start GraphQL server");
@@ -187,11 +180,7 @@ async fn create_graphql_test_cluster(validator_cluster: &TestCluster) -> GraphQl
     let url = Url::parse(&format!("http://{}/graphql", graphql_listen_address))
         .expect("Failed to parse GraphQL URL");
 
-    GraphQlTestCluster {
-        url,
-        handle: graphql_handle,
-        cancel,
-    }
+    GraphQlTestCluster { url, service }
 }
 
 #[sim_test]
@@ -264,8 +253,6 @@ async fn test_execute_transaction_mutation_schema() {
     for (returned, original) in transaction.signatures.iter().zip(signatures.iter()) {
         assert_eq!(returned.signature_bytes, original.encoded());
     }
-
-    graphql_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -296,8 +283,6 @@ async fn test_execute_transaction_input_validation() {
         .unwrap();
 
     assert!(result.get("errors").is_some());
-
-    graphql_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -376,8 +361,6 @@ async fn test_execute_transaction_with_events() {
             "Event sender should match transaction sender"
         );
     }
-
-    graphql_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -433,8 +416,6 @@ async fn test_execute_transaction_grpc_errors() {
     );
     let error_array = errors.as_array().unwrap();
     assert!(!error_array.is_empty());
-
-    graphql_cluster.stopped().await;
 }
 
 #[sim_test]
@@ -531,8 +512,6 @@ async fn test_execute_transaction_unchanged_consensus_objects() {
     let object = first_edge.node.object.as_ref().unwrap();
     assert_eq!(object.address, sui_types::SUI_CLOCK_OBJECT_ID.to_string());
     assert!(object.version > 0, "Version should be greater than 0");
-
-    graphql_cluster.stopped().await;
 }
 
 #[sim_test]

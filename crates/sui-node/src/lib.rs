@@ -81,7 +81,7 @@ use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority::submitted_transaction_cache::SubmittedTransactionCacheMetrics;
-use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
+use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
 use sui_core::checkpoints::checkpoint_executor::metrics::CheckpointExecutorMetrics;
 use sui_core::checkpoints::checkpoint_executor::{CheckpointExecutor, StopReason};
@@ -140,9 +140,7 @@ use sui_types::base_types::{AuthorityName, EpochId};
 use sui_types::committee::Committee;
 use sui_types::crypto::KeypairTraits;
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages_consensus::{
-    AuthorityCapabilitiesV1, ConsensusTransaction, check_total_jwk_size,
-};
+use sui_types::messages_consensus::{ConsensusTransaction, check_total_jwk_size};
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -234,7 +232,6 @@ use simulator::*;
 use sui_core::authority::authority_store_pruner::{ObjectsCompactionFilter, PrunerWatermarks};
 use sui_core::{
     consensus_handler::ConsensusHandlerInitializer, safe_client::SafeClientMetricsBase,
-    validator_tx_finalizer::ValidatorTxFinalizer,
 };
 
 const DEFAULT_GRPC_CONNECT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -556,13 +553,11 @@ impl SuiNode {
 
         let auth_agg = {
             let safe_client_metrics_base = SafeClientMetricsBase::new(&prometheus_registry);
-            let auth_agg_metrics = Arc::new(AuthAggMetrics::new(&prometheus_registry));
             Arc::new(ArcSwap::new(Arc::new(
                 AuthorityAggregator::new_from_epoch_start_state(
                     epoch_start_configuration.epoch_start_state(),
                     &committee_store,
                     safe_client_metrics_base,
-                    auth_agg_metrics,
                 ),
             )))
         };
@@ -740,14 +735,6 @@ impl SuiNode {
         }
 
         let authority_name = config.protocol_public_key();
-        let validator_tx_finalizer =
-            config
-                .enable_validator_tx_finalizer
-                .then_some(Arc::new(ValidatorTxFinalizer::new(
-                    auth_agg.clone(),
-                    authority_name,
-                    &prometheus_registry,
-                )));
 
         info!("create authority state");
         let state = AuthorityState::new(
@@ -765,7 +752,6 @@ impl SuiNode {
             genesis.objects(),
             &db_checkpoint_config,
             config.clone(),
-            validator_tx_finalizer,
             chain_identifier,
             pruner_db,
             config.policy_config.clone(),
@@ -1430,7 +1416,7 @@ impl SuiNode {
             let epoch_store = epoch_store.clone();
             let sui_tx_validator = SuiTxValidator::new(
                 state.clone(),
-                consensus_adapter.clone(),
+                epoch_store.clone(),
                 checkpoint_service.clone(),
                 sui_tx_validator_metrics.clone(),
             );
@@ -1626,7 +1612,12 @@ impl SuiNode {
             match tx.kind {
                 // Shared object txns cannot be re-executed at this point, because we must wait for
                 // consensus replay to assign shared object versions.
-                ConsensusTransactionKind::CertifiedTransaction(tx) if !tx.is_consensus_tx() => {
+                // Similarly, when preconsensus locking is disabled, owned object transactions
+                // must go through consensus to determine execution order.
+                ConsensusTransactionKind::CertifiedTransaction(tx)
+                    if !tx.is_consensus_tx()
+                        && !epoch_store.protocol_config().disable_preconsensus_locking() =>
+                {
                     let tx = *tx;
                     // new_unchecked is safe because we never submit a transaction to consensus
                     // without verifying it
@@ -1819,28 +1810,16 @@ impl SuiNode {
                 }
 
                 let binary_config = config.binary_config(None);
-                let transaction = if config.authority_capabilities_v2() {
-                    ConsensusTransaction::new_capability_notification_v2(
-                        AuthorityCapabilitiesV2::new(
-                            self.state.name,
-                            cur_epoch_store.get_chain_identifier().chain(),
-                            supported_protocol_versions,
-                            self.state
-                                .get_available_system_packages(&binary_config)
-                                .await,
-                        ),
-                    )
-                } else {
-                    ConsensusTransaction::new_capability_notification(AuthorityCapabilitiesV1::new(
+                let transaction = ConsensusTransaction::new_capability_notification_v2(
+                    AuthorityCapabilitiesV2::new(
                         self.state.name,
-                        self.config
-                            .supported_protocol_versions
-                            .expect("Supported versions should be populated"),
+                        cur_epoch_store.get_chain_identifier().chain(),
+                        supported_protocol_versions,
                         self.state
                             .get_available_system_packages(&binary_config)
                             .await,
-                    ))
-                };
+                    ),
+                );
                 info!(?transaction, "submitting capabilities to consensus");
                 components.consensus_adapter.submit(
                     transaction,

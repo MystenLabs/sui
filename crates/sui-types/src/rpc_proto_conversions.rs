@@ -4,6 +4,13 @@
 //! Module for conversions from sui-core types to rpc protos
 
 use crate::crypto::SuiSignature;
+
+fn ms_to_timestamp(ms: u64) -> prost_types::Timestamp {
+    prost_types::Timestamp {
+        seconds: (ms / 1000) as _,
+        nanos: ((ms % 1000) * 1_000_000) as _,
+    }
+}
 use crate::message_envelope::Message as _;
 use fastcrypto::traits::ToFromBytes;
 use sui_rpc::field::FieldMaskTree;
@@ -388,17 +395,31 @@ impl Merge<crate::messages_checkpoint::CheckpointContents> for CheckpointContent
         }
 
         if mask.contains(Self::VERSION_FIELD) {
-            self.version = Some(1);
+            self.set_version(match &source {
+                crate::messages_checkpoint::CheckpointContents::V1(_) => 1,
+                crate::messages_checkpoint::CheckpointContents::V2(_) => 2,
+            });
         }
 
         if mask.contains(Self::TRANSACTIONS_FIELD) {
             self.transactions = source
-                .into_iter_with_signatures()
+                .inner()
+                .iter()
                 .map(|(digests, sigs)| {
                     let mut info = CheckpointedTransactionInfo::default();
                     info.transaction = Some(digests.transaction.to_string());
                     info.effects = Some(digests.effects.to_string());
-                    info.signatures = sigs.into_iter().map(Into::into).collect();
+                    let (signatures, versions) = sigs
+                        .map(|(s, v)| {
+                            (s.into(), {
+                                let mut message = AddressAliasesVersion::default();
+                                message.version = v.map(Into::into);
+                                message
+                            })
+                        })
+                        .unzip();
+                    info.signatures = signatures;
+                    info.address_aliases_versions = versions;
                     info
                 })
                 .collect();
@@ -1162,7 +1183,7 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                 ExecutionErrorKind::MoveRawValueTooBig
             }
             E::InvalidLinkage => ExecutionErrorKind::InvalidLinkage,
-            E::InsufficientBalanceForWithdraw => ExecutionErrorKind::InsufficientBalanceForWithdraw,
+            E::InsufficientFundsForWithdraw => ExecutionErrorKind::InsufficientFundsForWithdraw,
             E::NonExclusiveWriteInputObjectModified { id } => {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
@@ -1596,9 +1617,9 @@ impl From<&crate::multisig::MultiSig> for MultisigAggregatedSignature {
 // UserSignature
 //
 
-impl From<crate::signature::GenericSignature> for UserSignature {
-    fn from(value: crate::signature::GenericSignature) -> Self {
-        Self::merge_from(&value, &FieldMaskTree::new_wildcard())
+impl From<&crate::signature::GenericSignature> for UserSignature {
+    fn from(value: &crate::signature::GenericSignature) -> Self {
+        Self::merge_from(value, &FieldMaskTree::new_wildcard())
     }
 }
 
@@ -2035,23 +2056,15 @@ impl From<crate::transaction::TransactionExpiration> for TransactionExpiration {
             E::ValidDuring {
                 min_epoch,
                 max_epoch,
-                min_timestamp_seconds,
-                max_timestamp_seconds,
+                min_timestamp,
+                max_timestamp,
                 chain,
                 nonce,
             } => {
                 message.epoch = max_epoch;
                 message.min_epoch = min_epoch;
-                message.min_timestamp =
-                    min_timestamp_seconds.map(|seconds| prost_types::Timestamp {
-                        seconds: seconds as _,
-                        nanos: 0,
-                    });
-                message.max_timestamp =
-                    max_timestamp_seconds.map(|seconds| prost_types::Timestamp {
-                        seconds: seconds as _,
-                        nanos: 0,
-                    });
+                message.min_timestamp = min_timestamp.map(ms_to_timestamp);
+                message.max_timestamp = max_timestamp.map(ms_to_timestamp);
                 message.set_chain(sui_sdk_types::Digest::new(*chain.as_bytes()));
                 message.set_nonce(nonce);
 
@@ -2397,8 +2410,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             K::AccumulatorRootCreate => message.with_kind(Kind::AccumulatorRootCreate),
             K::CoinRegistryCreate => message.with_kind(Kind::CoinRegistryCreate),
             K::DisplayRegistryCreate => message.with_kind(Kind::DisplayRegistryCreate),
-            K::AddressAliasStateCreate => {
-                todo!("AddressAliasStateCreate needs to be added to proto in sui-apis")
+            K::AddressAliasStateCreate => message.with_kind(Kind::AddressAliasStateCreate),
+            K::WriteAccumulatorStorageCost(_) => {
+                todo!("WriteAccumulatorStorageCost needs to be added to proto in sui-apis")
             }
         }
     }

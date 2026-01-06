@@ -28,7 +28,7 @@ use std::{
 };
 use url::Url;
 
-use move_compiler::naming::ast::Type_;
+use move_compiler::naming::ast::TypeInner;
 use move_ir_types::location::*;
 
 /// Handles go-to-def request of the language server
@@ -395,7 +395,7 @@ pub fn maybe_convert_for_guard(
     if gloc.contains(&loc) {
         let new_ty = sp(
             ty.loc,
-            Type_::Ref(false, Box::new(sp(ty.loc, ty.value.base_type_()))),
+            TypeInner::Ref(false, sp(ty.loc, ty.value.base_type_())).into(),
         );
         return Some(DefInfo::Local(*name, new_ty, *is_let, *is_mut, *guard_loc));
     }

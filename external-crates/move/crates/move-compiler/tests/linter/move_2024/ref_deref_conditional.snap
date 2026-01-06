@@ -89,8 +89,8 @@ warning[Lint W01009]: redundant reference/dereference
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:64:17
    │
-64 │     let _ref = &*&0; // Should be flagged
-   │                 ^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
+64 │     let _ref = &*&0u64; // Should be flagged
+   │                 ^^^^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -113,7 +113,7 @@ warning[Lint W01009]: redundant reference/dereference
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/move_2024/ref_deref_conditional.move:88:17
    │
-88 │     let _ref = &*&vector[1, 2, 3]; // Should be flagged
-   │                 ^^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
+88 │     let _ref = &*&vector[1u64,2,3]; // Should be flagged
+   │                 ^^^^^^^^^^^^^^^^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

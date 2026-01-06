@@ -188,6 +188,7 @@ const references = [
 			'references/contribute/mdx-components',
 		],
 	},
+	'references/release-notes',
 ];
 
 export default references;

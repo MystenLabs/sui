@@ -87,7 +87,12 @@ fn live_object_set_index_task<T: LiveObjectIndexer>(
     for object in authority_store
         .perpetual_tables
         .range_iter_live_object_set(Some(start_id), Some(end_id), false)
-        .filter_map(LiveObject::to_normal)
+        .map(|live| {
+            let LiveObject::Normal(object) = live else {
+                unreachable!("range_iter_live_object_set(false) must not yield wrapped objects");
+            };
+            object
+        })
     {
         object_scanned += 1;
         if object_scanned.is_multiple_of(2_000_000) {

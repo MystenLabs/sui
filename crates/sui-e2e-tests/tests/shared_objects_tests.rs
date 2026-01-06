@@ -5,23 +5,23 @@ use futures::future::join_all;
 use futures::join;
 use rand::distributions::Distribution;
 use std::net::SocketAddr;
-use std::ops::Deref;
 use std::time::{Duration, SystemTime};
-use sui_config::node::AuthorityOverloadConfig;
-use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::{register_fail_point_async, sim_test};
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::{
     TestTransactionBuilder, publish_basics_package, publish_basics_package_and_make_counter,
 };
+use sui_types::base_types::FullObjectRef;
+use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
-use sui_types::messages_grpc::{LayoutGenerationOption, ObjectInfoRequest};
+use sui_types::messages_grpc::WaitForEffectsResponse;
 use sui_types::transaction::{CallArg, ObjectArg, SharedObjectMutability};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
+use tracing::info;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
@@ -111,18 +111,13 @@ async fn shared_object_deletion_multiple_times() {
             .build();
         let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
-        test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
-        txs.push(signed);
+        txs.push((signed, client_ip));
     }
 
     // Submit all the deletion transactions to the validators.
-    let validators = test_cluster.get_validator_pubkeys();
-    let submissions = txs.iter().map(|tx| async {
+    let submissions = txs.iter().map(|(tx, client_ip)| async {
         test_cluster
-            .submit_transaction_to_validators(tx.clone(), &validators)
+            .submit_and_execute(tx.clone(), Some(*client_ip))
             .await
             .unwrap();
         *tx.digest()
@@ -164,7 +159,6 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
     let gas_coins = accounts_and_gas[0].1.clone();
 
     // Make a bunch transactions that all want to delete the counter object.
-    let validators = test_cluster.get_validator_pubkeys();
     let mut digests = vec![];
     for coin_ref in gas_coins.into_iter() {
         let transaction = test_cluster
@@ -175,11 +169,7 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
         let signed = test_cluster.sign_transaction(&transaction).await;
         let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
-            .create_certificate(signed.clone(), Some(client_ip))
-            .await
-            .unwrap();
-        test_cluster
-            .submit_transaction_to_validators(signed.clone(), &validators)
+            .submit_and_execute(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         digests.push(*signed.digest());
@@ -205,7 +195,7 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
 ///
 /// The two execution certs should be immediately executable (because they have a missing
 /// input). Therefore validators may execute them in either order. The injected delay ensures that
-/// we will explore all possible orders, and `submit_transaction_to_validators` verifies that we
+/// we will explore all possible orders, and `submit_and_execute` verifies that we
 /// get the same effects regardless of the order. (checkpoint fork detection will also test this).
 #[sim_test]
 async fn shared_object_deletion_multi_certs() {
@@ -262,24 +252,9 @@ async fn shared_object_deletion_multi_certs() {
     let inc_tx_b_digest = *inc_tx_b.digest();
     let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
 
-    let _ = test_cluster
-        .create_certificate(delete_tx.clone(), Some(client_ip))
-        .await
-        .unwrap();
-    let _ = test_cluster
-        .create_certificate(inc_tx_a.clone(), Some(client_ip))
-        .await
-        .unwrap();
-    let _ = test_cluster
-        .create_certificate(inc_tx_b.clone(), Some(client_ip))
-        .await
-        .unwrap();
-
-    let validators = test_cluster.get_validator_pubkeys();
-
     // delete obj on all validators, await effects
     test_cluster
-        .submit_transaction_to_validators(delete_tx, &validators)
+        .submit_and_execute(delete_tx, Some(client_ip))
         .await
         .unwrap();
 
@@ -287,13 +262,13 @@ async fn shared_object_deletion_multi_certs() {
     join!(
         async {
             test_cluster
-                .submit_transaction_to_validators(inc_tx_a, &validators)
+                .submit_and_execute(inc_tx_a, Some(client_ip))
                 .await
                 .unwrap()
         },
         async {
             test_cluster
-                .submit_transaction_to_validators(inc_tx_b, &validators)
+                .submit_and_execute(inc_tx_b, Some(client_ip))
                 .await
                 .unwrap()
         }
@@ -543,104 +518,6 @@ async fn access_clock_object_test() {
     }
 }
 
-#[sim_test]
-async fn shared_object_sync() {
-    let test_cluster = TestClusterBuilder::new()
-        // Set the threshold high enough so it won't be triggered.
-        .with_authority_overload_config(AuthorityOverloadConfig {
-            max_txn_age_in_queue: Duration::from_secs(60),
-            ..Default::default()
-        })
-        .build()
-        .await;
-    let package_id = publish_basics_package(&test_cluster.wallet).await.0;
-
-    // Since we use submit_transaction_to_validators in this test, which does not go through fullnode,
-    // we need to manage gas objects ourselves.
-    let (sender, mut objects) = test_cluster.wallet.get_one_account().await.unwrap();
-    let rgp = test_cluster.get_reference_gas_price().await;
-    // Send a transaction to create a counter, to all but one authority.
-    let create_counter_transaction = test_cluster
-        .wallet
-        .sign_transaction(
-            &TestTransactionBuilder::new(sender, objects.pop().unwrap(), rgp)
-                .call_counter_create(package_id)
-                .build(),
-        )
-        .await;
-    let committee = test_cluster.committee().deref().clone();
-    let validators = test_cluster.get_validator_pubkeys();
-    let (slow_validators, fast_validators): (Vec<_>, Vec<_>) =
-        validators.iter().partition(|name| {
-            position_submit_certificate(&committee, name, create_counter_transaction.digest()) > 0
-        });
-
-    let (effects, _) = test_cluster
-        .submit_transaction_to_validators(create_counter_transaction.clone(), &slow_validators)
-        .await
-        .unwrap();
-    assert!(effects.status().is_ok());
-    let ((counter_id, counter_initial_shared_version, _), _) = effects.created()[0];
-
-    // Check that the counter object exists in at least one of the validators the transaction was
-    // sent to.
-    for validator in test_cluster.swarm.validator_node_handles() {
-        if slow_validators.contains(&validator.state().name) {
-            assert!(
-                validator
-                    .state()
-                    .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                        counter_id,
-                        LayoutGenerationOption::None,
-                    ))
-                    .await
-                    .is_ok()
-            );
-        }
-    }
-
-    // Check that the validator that wasn't sent the transaction is unaware of the counter object
-    for validator in test_cluster.swarm.validator_node_handles() {
-        if fast_validators.contains(&validator.state().name) {
-            assert!(
-                validator
-                    .state()
-                    .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                        counter_id,
-                        LayoutGenerationOption::None,
-                    ))
-                    .await
-                    .is_err()
-            );
-        }
-    }
-
-    // Make a transaction to increment the counter.
-    let increment_counter_transaction = test_cluster
-        .wallet
-        .sign_transaction(
-            &TestTransactionBuilder::new(sender, objects.pop().unwrap(), rgp)
-                .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
-                .build(),
-        )
-        .await;
-
-    // Let's submit the transaction to the original set of validators, except the first.
-    let (effects, _) = test_cluster
-        .submit_transaction_to_validators(increment_counter_transaction.clone(), &validators[1..])
-        .await
-        .unwrap();
-    assert!(effects.status().is_ok());
-
-    // Submit transactions to the out-of-date authority.
-    // It will succeed because we share owned object certificates through narwhal
-    let (effects, _) = test_cluster
-        .submit_transaction_to_validators(increment_counter_transaction, &validators[0..1])
-        .await
-        .unwrap();
-    assert!(effects.status().is_ok());
-}
-
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
 async fn replay_shared_object_transaction() {
@@ -677,5 +554,128 @@ async fn replay_shared_object_transaction() {
         }
 
         version = Some(curr);
+    }
+}
+
+/// Test that when preconsensus locking is disabled, conflicting owned object transactions
+/// in the same consensus commit are handled correctly via post-consensus lock conflict detection.
+/// The first transaction in consensus order should succeed, and the second should be dropped
+/// with ObjectLockConflict status.
+///
+/// This test uses soft bundle submission to guarantee both transactions end up in the same
+/// consensus commit, ensuring we always test the post-consensus conflict detection path.
+#[sim_test]
+async fn test_disable_preconsensus_locking_conflicting_owned_transactions() {
+    // Create cluster with multiple gas coins for the sender
+    let test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![AccountConfig {
+            address: None,
+            gas_amounts: vec![DEFAULT_GAS_AMOUNT; 3], // 3 gas coins
+        }])
+        .build()
+        .await;
+
+    let accounts_and_gas = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+    let sender = accounts_and_gas[0].0;
+    let mut gas_coins: Vec<_> = accounts_and_gas[0].1.clone();
+
+    // The coin we'll try to double-spend (use for both transactions)
+    let contested_coin = gas_coins.pop().unwrap();
+    let gas_coin_1 = gas_coins.pop().unwrap();
+    let gas_coin_2 = gas_coins.pop().unwrap();
+
+    let rgp = test_cluster.get_reference_gas_price().await;
+
+    // Create two recipients
+    let recipient1 = get_key_pair::<AccountKeyPair>().0;
+    let recipient2 = get_key_pair::<AccountKeyPair>().0;
+
+    info!(
+        "Creating two conflicting transactions for coin {:?}",
+        contested_coin.0
+    );
+
+    // Transaction 1: Transfer contested_coin to recipient1
+    let tx1 = TestTransactionBuilder::new(sender, gas_coin_1, rgp)
+        .transfer(FullObjectRef::from_fastpath_ref(contested_coin), recipient1)
+        .build();
+    let signed_tx1 = test_cluster.wallet.sign_transaction(&tx1).await;
+
+    // Transaction 2: Transfer the SAME contested_coin to recipient2
+    let tx2 = TestTransactionBuilder::new(sender, gas_coin_2, rgp)
+        .transfer(FullObjectRef::from_fastpath_ref(contested_coin), recipient2)
+        .build();
+    let signed_tx2 = test_cluster.wallet.sign_transaction(&tx2).await;
+
+    let tx1_digest = *signed_tx1.digest();
+    let tx2_digest = *signed_tx2.digest();
+
+    info!(
+        "Submitting conflicting transactions via soft bundle: tx1={:?}, tx2={:?}",
+        tx1_digest, tx2_digest
+    );
+
+    // Submit both transactions via soft bundle and wait for results
+    let results = test_cluster
+        .execute_soft_bundle_with_conflicts(&[signed_tx1, signed_tx2])
+        .await
+        .expect("soft bundle submission should succeed");
+
+    assert_eq!(results.len(), 2, "Expected 2 results");
+
+    let response1 = &results[0].1;
+    let response2 = &results[1].1;
+
+    info!("tx1 response: {:?}", response1);
+    info!("tx2 response: {:?}", response2);
+
+    // One should be Executed, one should be Rejected
+    let (executed_response, rejected_response) = match (response1, response2) {
+        (WaitForEffectsResponse::Executed { .. }, WaitForEffectsResponse::Rejected { .. }) => {
+            info!("tx1 executed, tx2 rejected");
+            (response1, response2)
+        }
+        (WaitForEffectsResponse::Rejected { .. }, WaitForEffectsResponse::Executed { .. }) => {
+            info!("tx1 rejected, tx2 executed");
+            (response2, response1)
+        }
+        _ => {
+            panic!(
+                "Expected one Executed and one Rejected response, got: tx1={:?}, tx2={:?}",
+                response1, response2
+            );
+        }
+    };
+
+    // Verify the executed transaction succeeded
+    match executed_response {
+        WaitForEffectsResponse::Executed { effects_digest, .. } => {
+            info!("Executed transaction effects digest: {:?}", effects_digest);
+        }
+        _ => unreachable!(),
+    }
+
+    // Verify the rejected transaction has ObjectLockConflict error
+    match rejected_response {
+        WaitForEffectsResponse::Rejected { error } => {
+            let error_str = error
+                .as_ref()
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "no error details".to_string());
+            info!("Rejected transaction error: {}", error_str);
+
+            // The critical assertion: the rejection error should be ObjectLockConflict,
+            // indicating the object is already locked by another transaction in the same commit.
+            assert!(
+                error_str.contains("already locked by a different transaction"),
+                "Expected 'already locked by a different transaction' error, got: {}",
+                error_str
+            );
+        }
+        _ => unreachable!(),
     }
 }

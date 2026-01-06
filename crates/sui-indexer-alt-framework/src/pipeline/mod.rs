@@ -55,17 +55,6 @@ struct WatermarkPart {
     total_rows: usize,
 }
 
-/// Internal type used by workers to propagate errors or shutdown signals up to their
-/// supervisor.
-#[derive(thiserror::Error, Debug)]
-enum Break {
-    #[error("Shutdown received")]
-    Cancel,
-
-    #[error(transparent)]
-    Err(#[from] anyhow::Error),
-}
-
 impl CommitterConfig {
     pub fn collect_interval(&self) -> Duration {
         Duration::from_millis(self.collect_interval_ms)

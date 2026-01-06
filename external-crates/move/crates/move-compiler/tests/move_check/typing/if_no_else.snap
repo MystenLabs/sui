@@ -8,10 +8,10 @@ info:
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/if_no_else.move:4:9
   │
-4 │         if (cond) 0;
-  │         ^^^^^^^^^^^
+4 │         if (cond) 0u64;
+  │         ^^^^^^^^^^^^^^
   │         │         │
-  │         │         Given: integer
+  │         │         Given: 'u64'
   │         Invalid 'if'. The body of an 'if' without an 'else' must have type '()'
   │         Expected: '()'
 
@@ -32,8 +32,8 @@ error[E04007]: incompatible types
    │    
  6 │ ╭ ╭         if (cond) {
  7 │ │ │             let x = 0;
- 8 │ │ │             let y = 1;
-   │ │ │                 - Given: integer
+ 8 │ │ │             let y = 1u64;
+   │ │ │                     ---- Given: 'u64'
  9 │ │ │             x * y
 10 │ │ │         }
    │ ╰─│─────────^ Invalid 'if'. The body of an 'if' without an 'else' must have type '()'

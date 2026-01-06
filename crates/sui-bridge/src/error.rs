@@ -52,7 +52,7 @@ pub enum BridgeError {
     // Signature is over a mismatched action
     MismatchedAction,
     // Action is not a governance action
-    ActionIsNotGovernanceAction(BridgeAction),
+    ActionIsNotGovernanceAction(Box<BridgeAction>),
     // Client requested a non-approved governace action
     GovernanceActionIsNotApproved,
     // Authority has invalid url

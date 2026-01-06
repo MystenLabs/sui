@@ -15,13 +15,13 @@ error[E04007]: incompatible types
   │             Found: 'u8'. It is not compatible with the other type.
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/typing/neq_invalid.move:10:11
+   ┌─ tests/move_2024/typing/neq_invalid.move:10:14
    │
-10 │         0 != false;
-   │         - ^^ ----- Found: 'bool'. It is not compatible with the other type.
-   │         │ │   
-   │         │ Incompatible arguments to '!='
-   │         Found: integer. It is not compatible with the other type.
+10 │         0u64 != false;
+   │         ---- ^^ ----- Found: 'bool'. It is not compatible with the other type.
+   │         │    │   
+   │         │    Incompatible arguments to '!='
+   │         Found: 'u64'. It is not compatible with the other type.
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/neq_invalid.move:18:9
@@ -141,26 +141,26 @@ error[E04005]: expected a single type
 error[E04005]: expected a single type
    ┌─ tests/move_2024/typing/neq_invalid.move:29:9
    │
-29 │         (0, 1) != (0, 1);
-   │         ^^^^^^^^^^^^^^^^
+29 │         (0, 1) != (0u64, 1u64);
+   │         ^^^^^^^^^^^^^^^^^^^^^^
    │         │         │
-   │         │         Expected a single type, but found expression list type: '({integer}, {integer})'
+   │         │         Expected a single type, but found expression list type: '(u64, u64)'
    │         Incompatible arguments to '!='
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/typing/neq_invalid.move:30:19
+   ┌─ tests/move_2024/typing/neq_invalid.move:30:28
    │
-30 │         (1, 2, 3) != (0, 1);
-   │         --------- ^^ ------ Found expression list of length 2: '({integer}, {integer})'. It is not compatible with the other type of length 3.
-   │         │         │   
-   │         │         Incompatible arguments to '!='
-   │         Found expression list of length 3: '({integer}, {integer}, {integer})'. It is not compatible with the other type of length 2.
+30 │         (1u64, 2u64, 3u64) != (0u64, 1u64);
+   │         ------------------ ^^ ------------ Found expression list of length 2: '(u64, u64)'. It is not compatible with the other type of length 3.
+   │         │                  │   
+   │         │                  Incompatible arguments to '!='
+   │         Found expression list of length 3: '(u64, u64, u64)'. It is not compatible with the other type of length 2.
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/typing/neq_invalid.move:31:16
+   ┌─ tests/move_2024/typing/neq_invalid.move:31:22
    │
-31 │         (0, 1) != (1, 2, 3);
-   │         ------ ^^ --------- Found expression list of length 3: '({integer}, {integer}, {integer})'. It is not compatible with the other type of length 2.
-   │         │      │   
-   │         │      Incompatible arguments to '!='
-   │         Found expression list of length 2: '({integer}, {integer})'. It is not compatible with the other type of length 3.
+31 │         (0u64, 1u64) != (1u64, 2u64, 3u64);
+   │         ------------ ^^ ------------------ Found expression list of length 3: '(u64, u64, u64)'. It is not compatible with the other type of length 2.
+   │         │            │   
+   │         │            Incompatible arguments to '!='
+   │         Found expression list of length 2: '(u64, u64)'. It is not compatible with the other type of length 3.

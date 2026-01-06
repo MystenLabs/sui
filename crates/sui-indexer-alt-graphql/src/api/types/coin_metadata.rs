@@ -105,13 +105,13 @@ impl CoinMetadata {
     }
 
     /// The version of this object that this content comes from.
-    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
-        self.super_.version(ctx).await
+    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
+        self.super_.version(ctx).await.ok()?
     }
 
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
-    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
-        self.super_.digest(ctx).await
+    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Option<Result<String, RpcError>> {
+        self.super_.digest(ctx).await.ok()?
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
@@ -121,8 +121,8 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         coin_type: TypeInput,
-    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        self.super_.balance(ctx, coin_type).await
+    ) -> Option<Result<Balance, RpcError<balance::Error>>> {
+        self.super_.balance(ctx, coin_type).await.ok()?
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -133,8 +133,11 @@ impl CoinMetadata {
         after: Option<balance::Cursor>,
         last: Option<u64>,
         before: Option<balance::Cursor>,
-    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        self.super_.balances(ctx, first, after, last, before).await
+    ) -> Option<Result<Connection<String, Balance>, RpcError<balance::Error>>> {
+        self.super_
+            .balances(ctx, first, after, last, before)
+            .await
+            .ok()?
     }
 
     /// The structured representation of the object's contents.
@@ -158,8 +161,8 @@ impl CoinMetadata {
     pub(crate) async fn default_suins_name(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError> {
-        self.super_.default_suins_name(ctx).await
+    ) -> Option<Result<String, RpcError>> {
+        self.super_.default_suins_name(ctx).await.ok()?
     }
 
     /// Description of the coin.
@@ -271,8 +274,8 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
-        self.super_.multi_get_balances(ctx, keys).await
+    ) -> Option<Result<Vec<Balance>, RpcError<balance::Error>>> {
+        self.super_.multi_get_balances(ctx, keys).await.ok()?
     }
 
     /// Name for the coin.
@@ -294,15 +297,16 @@ impl CoinMetadata {
         version: Option<UInt53>,
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
-    ) -> Result<Option<Object>, RpcError<object::Error>> {
+    ) -> Option<Result<Object, RpcError<object::Error>>> {
         self.super_
             .object_at(ctx, version, root_version, checkpoint)
             .await
+            .ok()?
     }
 
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
-    pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError> {
-        self.super_.object_bcs(ctx).await
+    pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Option<Result<Base64, RpcError>> {
+        self.super_.object_bcs(ctx).await.ok()?
     }
 
     /// Paginate all versions of this object after this one.
@@ -314,10 +318,11 @@ impl CoinMetadata {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, Object>>, RpcError> {
+    ) -> Option<Result<Connection<String, Object>, RpcError>> {
         self.super_
             .object_versions_after(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// Paginate all versions of this object before this one.
@@ -329,10 +334,11 @@ impl CoinMetadata {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, Object>>, RpcError> {
+    ) -> Option<Result<Connection<String, Object>, RpcError>> {
         self.super_
             .object_versions_before(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// Objects owned by this object, optionally filtered by type.
@@ -344,31 +350,32 @@ impl CoinMetadata {
         last: Option<u64>,
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
+    ) -> Option<Result<Connection<String, MoveObject>, RpcError<object::Error>>> {
         self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// The object's owner kind.
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Result<Option<Owner>, RpcError> {
-        self.super_.owner(ctx).await
+    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<Result<Owner, RpcError>> {
+        self.super_.owner(ctx).await.ok()?
     }
 
     /// The transaction that created this version of the object.
     pub(crate) async fn previous_transaction(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Transaction>, RpcError> {
-        self.super_.previous_transaction(ctx).await
+    ) -> Option<Result<Transaction, RpcError>> {
+        self.super_.previous_transaction(ctx).await.ok()?
     }
 
     /// The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object.
     pub(crate) async fn storage_rebate(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<BigInt>, RpcError> {
-        self.super_.storage_rebate(ctx).await
+    ) -> Option<Result<BigInt, RpcError>> {
+        self.super_.storage_rebate(ctx).await.ok()?
     }
 
     /// The transactions that sent objects to this object.
@@ -380,10 +387,11 @@ impl CoinMetadata {
         last: Option<u64>,
         before: Option<CTransaction>,
         filter: Option<TransactionFilter>,
-    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
         self.super_
             .received_transactions(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     #[graphql(flatten)]

@@ -17,6 +17,8 @@ pub struct CompilerAnalysisInfo {
     pub expanded_lambdas: BTreeSet<Loc>,
     /// Ellipsis-generated binders (to filter from IDE)
     pub ellipsis_binders: BTreeSet<Loc>,
+    /// Original string values recorded during parsing
+    pub string_values: BTreeMap<Loc, String>,
 }
 
 /// Compiler information used for IDE autocomplete features.
@@ -102,6 +104,9 @@ pub fn process_ide_annotations(
             }
             CI::IDEAnnotation::MissingMatchArms(_) => {
                 // TODO: Not much to do with this yet.
+            }
+            CI::IDEAnnotation::StringValue(string) => {
+                analysis.string_values.insert(loc, *string);
             }
         }
     }

@@ -315,7 +315,6 @@ mod tests {
     use sui_indexer_alt_schema::{MIGRATIONS, schema::obj_versions};
     use sui_pg_db::{Db, DbArgs, temp::TempDb};
     use sui_types::digests::ObjectDigest;
-    use tokio_util::sync::CancellationToken;
 
     use super::*;
 
@@ -327,15 +326,9 @@ mod tests {
         let url = temp_db.database().url();
 
         let writer = Db::for_write(url.clone(), DbArgs::default()).await.unwrap();
-        let reader = PgReader::new(
-            None,
-            Some(url.clone()),
-            DbArgs::default(),
-            &registry,
-            CancellationToken::new(),
-        )
-        .await
-        .unwrap();
+        let reader = PgReader::new(None, Some(url.clone()), DbArgs::default(), &registry)
+            .await
+            .unwrap();
 
         writer.run_migrations(Some(&MIGRATIONS)).await.unwrap();
         (temp_db, writer, reader)

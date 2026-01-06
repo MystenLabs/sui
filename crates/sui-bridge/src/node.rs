@@ -345,9 +345,20 @@ async fn start_client_components(
     );
     all_handles.push(spawn_logged_monitored_task!(monitor.run()));
 
+    // Create a dummy channel for the grpc sui_events_rx that the orchestrator expects
+    // This channel will never receive any events since we have not yet switched to the grpc syncer
+    let (_sui_grpc_events_tx, sui_grpc_events_rx) = mysten_metrics::metered_channel::channel(
+        1,
+        &mysten_metrics::get_metrics()
+            .unwrap()
+            .channel_inflight
+            .with_label_values(&["sui_events_queue_dummy"]),
+    );
+
     let orchestrator = BridgeOrchestrator::new(
         sui_client,
         sui_events_rx,
+        sui_grpc_events_rx,
         eth_events_rx,
         store.clone(),
         sui_monitor_tx,
@@ -357,6 +368,56 @@ async fn start_client_components(
 
     all_handles.extend(orchestrator.run(bridge_action_executor).await);
     Ok(all_handles)
+}
+
+// NOTE: This function will be used later when we switch to the gRPC based event syncer.
+#[allow(unused)]
+async fn get_next_sequence_number<C: crate::sui_client::SuiClientInner>(
+    store: &BridgeOrchestratorTables,
+    sui_client: &crate::sui_client::SuiClient<C>,
+    last_processed_bridge_event_id: Option<EventID>,
+    next_sequence_number_override: Option<u64>,
+) -> u64 {
+    if let Some(next_sequence_number_override) = next_sequence_number_override {
+        info!("Overriding next sequence number to {next_sequence_number_override}",);
+        return next_sequence_number_override;
+    }
+
+    if let Ok(Some(sequence_number)) = store.get_sui_sequence_number_cursor() {
+        info!("Using sequence number {sequence_number} from storage",);
+        return sequence_number;
+    }
+
+    if let Some(event_id) = last_processed_bridge_event_id {
+        match sui_client.get_sequence_number_from_event_id(event_id).await {
+            Ok(Some(sequence_number)) => {
+                let next = sequence_number + 1;
+                info!(
+                    ?event_id,
+                    last_processed_seq = sequence_number,
+                    next_seq_to_read = next,
+                    "Migrated from legacy event cursor to sequence number cursor"
+                );
+                return next;
+            }
+            Ok(None) => {
+                info!(
+                    ?event_id,
+                    "Could not extract sequence number from legacy event cursor, starting from 0"
+                );
+            }
+            Err(e) => {
+                info!(
+                    ?event_id,
+                    ?e,
+                    "Failed to get sequence number from legacy event cursor, starting from 0"
+                );
+            }
+        }
+    }
+
+    info!("No cursor found for gRPC syncer, starting from sequence number 0");
+    0
 }
 
 fn get_sui_modules_to_watch(
@@ -619,6 +680,7 @@ mod tests {
                 bridge_client_key_path: None,
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: None,
+                sui_bridge_next_sequence_number_override: None,
             },
             eth: EthConfig {
                 eth_rpc_url: bridge_test_cluster.eth_rpc_url(),
@@ -686,6 +748,7 @@ mod tests {
                     tx_digest: TransactionDigest::random(),
                     event_seq: 0,
                 }),
+                sui_bridge_next_sequence_number_override: None,
             },
             eth: EthConfig {
                 eth_rpc_url: bridge_test_cluster.eth_rpc_url(),
@@ -764,6 +827,7 @@ mod tests {
                     tx_digest: TransactionDigest::random(),
                     event_seq: 0,
                 }),
+                sui_bridge_next_sequence_number_override: None,
             },
             eth: EthConfig {
                 eth_rpc_url: bridge_test_cluster.eth_rpc_url(),

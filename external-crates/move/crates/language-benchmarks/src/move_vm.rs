@@ -17,10 +17,13 @@ use move_core_types::{
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::BlankStorage;
 use move_vm_types::gas::UnmeteredGasMeter;
-use once_cell::sync::Lazy;
-use std::{path::PathBuf, sync::Arc};
 
-static PRECOMPILED_MOVE_STDLIB: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
+use std::{
+    path::PathBuf,
+    sync::{Arc, LazyLock},
+};
+
+static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,

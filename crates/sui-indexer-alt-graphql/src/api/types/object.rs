@@ -70,12 +70,12 @@ use super::{
     name = "IObject",
     field(
         name = "version",
-        ty = "Result<Option<UInt53>, RpcError>",
+        ty = "Option<Result<UInt53, RpcError>>",
         desc = "The version of this object that this content comes from.",
     ),
     field(
         name = "digest",
-        ty = "Result<Option<String>, RpcError>",
+        ty = "Option<Result<String, RpcError>>",
         desc = "32-byte hash that identifies the object's contents, encoded in Base58.",
     ),
     field(
@@ -83,12 +83,12 @@ use super::{
         arg(name = "version", ty = "Option<UInt53>"),
         arg(name = "root_version", ty = "Option<UInt53>"),
         arg(name = "checkpoint", ty = "Option<UInt53>"),
-        ty = "Result<Option<Object>, RpcError<Error>>",
+        ty = "Option<Result<Object, RpcError<Error>>>",
         desc = "Fetch the object with the same ID, at a different version, root version bound, or checkpoint.",
     ),
     field(
         name = "object_bcs",
-        ty = "Result<Option<Base64>, RpcError>",
+        ty = "Option<Result<Base64, RpcError>>",
         desc = "The Base64-encoded BCS serialization of this object, as an `Object`."
     ),
     field(
@@ -98,7 +98,7 @@ use super::{
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<CVersion>"),
         arg(name = "filter", ty = "Option<VersionFilter>"),
-        ty = "Result<Option<Connection<String, Object>>, RpcError>",
+        ty = "Option<Result<Connection<String, Object>, RpcError>>",
         desc = "Paginate all versions of this object after this one."
     ),
     field(
@@ -108,22 +108,22 @@ use super::{
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<CVersion>"),
         arg(name = "filter", ty = "Option<VersionFilter>"),
-        ty = "Result<Option<Connection<String, Object>>, RpcError>",
+        ty = "Option<Result<Connection<String, Object>, RpcError>>",
         desc = "Paginate all versions of this object before this one."
     ),
     field(
         name = "owner",
-        ty = "Result<Option<Owner>, RpcError<Error>>",
+        ty = "Option<Result<Owner, RpcError>>",
         desc = "The object's owner kind."
     ),
     field(
         name = "previous_transaction",
-        ty = "Result<Option<Transaction>, RpcError<Error>>",
+        ty = "Option<Result<Transaction, RpcError>>",
         desc = "The transaction that created this version of the object"
     ),
     field(
         name = "storage_rebate",
-        ty = "Result<Option<BigInt>, RpcError<Error>>",
+        ty = "Option<Result<BigInt, RpcError>>",
         desc = "The SUI returned to the sponsor or sender of the transaction that modifies or deletes this object."
     ),
     field(
@@ -133,7 +133,7 @@ use super::{
         arg(name = "last", ty = "Option<u64>"),
         arg(name = "before", ty = "Option<CTransaction>"),
         arg(name = "filter", ty = "Option<TransactionFilter>"),
-        ty = "Result<Option<Connection<String, Transaction>>, RpcError>",
+        ty = "Option<Result<Connection<String, Transaction>, RpcError>>",
         desc = "The transactions that sent objects to this object."
     )
 )]
@@ -226,44 +226,46 @@ impl Object {
     }
 
     /// The version of this object that this content comes from.
-    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Result<Option<UInt53>, RpcError> {
+    pub(crate) async fn version(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
         if let Some((version, _)) = self.version_digest {
-            return Ok(Some(version.into()));
+            return Some(Ok(version.into()));
         }
 
         // Fall back to loading from contents
-        let Some(contents) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
+        let contents = match self.contents(ctx).await.transpose()? {
+            Ok(contents) => contents,
+            Err(e) => return Some(Err(e)),
         };
 
-        Ok(Some(contents.version().into()))
+        Some(Ok(contents.version().into()))
     }
 
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
-    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Result<Option<String>, RpcError> {
+    pub(crate) async fn digest(&self, ctx: &Context<'_>) -> Option<Result<String, RpcError>> {
         if let Some((_, digest)) = self.version_digest {
-            return Ok(Some(Base58::encode(digest.inner())));
+            return Some(Ok(Base58::encode(digest.inner())));
         }
 
         // Fall back to loading from contents
-        let Some(contents) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
+        let contents = match self.contents(ctx).await.transpose()? {
+            Ok(contents) => contents,
+            Err(e) => return Some(Err(e)),
         };
 
-        Ok(Some(Base58::encode(contents.digest().inner())))
+        Some(Ok(Base58::encode(contents.digest().inner())))
     }
 
     /// Attempts to convert the object into a MoveObject.
     pub(crate) async fn as_move_object(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<MoveObject>, RpcError> {
-        MoveObject::from_object(self, ctx).await
+    ) -> Option<Result<MoveObject, RpcError>> {
+        MoveObject::from_object(self, ctx).await.transpose()
     }
 
     /// Attempts to convert the object into a MovePackage.
-    async fn as_move_package(&self, ctx: &Context<'_>) -> Result<Option<MovePackage>, RpcError> {
-        MovePackage::from_object(self, ctx).await
+    async fn as_move_package(&self, ctx: &Context<'_>) -> Option<Result<MovePackage, RpcError>> {
+        MovePackage::from_object(self, ctx).await.transpose()
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
@@ -273,8 +275,8 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         coin_type: TypeInput,
-    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        self.super_.balance(ctx, coin_type).await
+    ) -> Option<Result<Balance, RpcError<balance::Error>>> {
+        self.super_.balance(ctx, coin_type).await.ok()?
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -285,16 +287,19 @@ impl Object {
         after: Option<balance::Cursor>,
         last: Option<u64>,
         before: Option<balance::Cursor>,
-    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        self.super_.balances(ctx, first, after, last, before).await
+    ) -> Option<Result<Connection<String, Balance>, RpcError<balance::Error>>> {
+        self.super_
+            .balances(ctx, first, after, last, before)
+            .await
+            .ok()?
     }
 
     /// The domain explicitly configured as the default SuiNS name for this address.
     pub(crate) async fn default_suins_name(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError> {
-        self.super_.default_suins_name(ctx).await
+    ) -> Option<Result<String, RpcError>> {
+        self.super_.default_suins_name(ctx).await.ok()?
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
@@ -409,8 +414,8 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
-        self.super_.multi_get_balances(ctx, keys).await
+    ) -> Option<Result<Vec<Balance>, RpcError<balance::Error>>> {
+        self.super_.multi_get_balances(ctx, keys).await.ok()?
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
@@ -422,7 +427,7 @@ impl Object {
         version: Option<UInt53>,
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
-    ) -> Result<Option<Self>, RpcError<Error>> {
+    ) -> Option<Result<Self, RpcError<Error>>> {
         let key = ObjectKey {
             address: self.super_.address.into(),
             version,
@@ -430,17 +435,24 @@ impl Object {
             at_checkpoint: checkpoint,
         };
 
-        Object::by_key(ctx, self.super_.scope.without_root_version(), key).await
+        Object::by_key(ctx, self.super_.scope.without_root_version(), key)
+            .await
+            .transpose()
     }
 
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
-    pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>, RpcError> {
-        let Some(object) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
+    pub(crate) async fn object_bcs(&self, ctx: &Context<'_>) -> Option<Result<Base64, RpcError>> {
+        let contents = match self.contents(ctx).await.transpose()? {
+            Ok(contents) => contents,
+            Err(e) => return Some(Err(e)),
         };
 
-        let bytes = bcs::to_bytes(object).context("Failed to serialize object")?;
-        Ok(Some(Base64(bytes)))
+        Some(
+            bcs::to_bytes(contents)
+                .context("Failed to serialize object")
+                .map(Base64)
+                .map_err(RpcError::from),
+        )
     }
 
     /// Paginate all versions of this object after this one.
@@ -452,25 +464,24 @@ impl Object {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, Object>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("IObject", "objectVersionsAfter");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Object>, RpcError>> {
+        let version = self.version(ctx).await.ok()??;
 
-        let Some(version) = self.version(ctx).await? else {
-            return Ok(None);
-        };
+        let result = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("IObject", "objectVersionsAfter");
+            let page = Page::from_params(limits, first, after, last, before)?;
+            let version = version?;
 
-        // Apply any filter that was supplied to the query, but add an additional version
-        // lowerbound constraint.
-        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
-            after_version: Some(version),
-            ..VersionFilter::default()
-        }) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+            // Apply any filter that was supplied to the query, but add an additional version
+            // lowerbound constraint.
+            let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
+                after_version: Some(version),
+                ..VersionFilter::default()
+            }) else {
+                return Ok(Connection::new(false, false));
+            };
 
-        Ok(Some(
             Object::paginate_by_version(
                 ctx,
                 self.super_.scope.without_root_version(),
@@ -478,8 +489,11 @@ impl Object {
                 self.super_.address,
                 filter,
             )
-            .await?,
-        ))
+            .await
+        }
+        .await;
+
+        Some(result)
     }
 
     /// Paginate all versions of this object before this one.
@@ -491,25 +505,24 @@ impl Object {
         last: Option<u64>,
         before: Option<CVersion>,
         filter: Option<VersionFilter>,
-    ) -> Result<Option<Connection<String, Object>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("IObject", "objectVersionsBefore");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Object>, RpcError>> {
+        let version = self.version(ctx).await.ok()??;
 
-        let Some(version) = self.version(ctx).await? else {
-            return Ok(None);
-        };
+        let result = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("IObject", "objectVersionsBefore");
+            let page = Page::from_params(limits, first, after, last, before)?;
+            let version = version?;
 
-        // Apply any filter that was supplied to the query, but add an additional version
-        // upperbound constraint.
-        let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
-            before_version: Some(version),
-            ..VersionFilter::default()
-        }) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+            // Apply any filter that was supplied to the query, but add an additional version
+            // upperbound constraint.
+            let Some(filter) = filter.unwrap_or_default().intersect(VersionFilter {
+                before_version: Some(version),
+                ..VersionFilter::default()
+            }) else {
+                return Ok(Connection::new(false, false));
+            };
 
-        Ok(Some(
             Object::paginate_by_version(
                 ctx,
                 self.super_.scope.without_root_version(),
@@ -517,8 +530,11 @@ impl Object {
                 self.super_.address,
                 filter,
             )
-            .await?,
-        ))
+            .await
+        }
+        .await;
+
+        Some(result)
     }
 
     /// Objects owned by this object, optionally filtered by type.
@@ -530,21 +546,23 @@ impl Object {
         last: Option<u64>,
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<Error>> {
+    ) -> Option<Result<Connection<String, MoveObject>, RpcError<Error>>> {
         self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// The object's owner kind.
-    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Result<Option<Owner>, RpcError> {
-        let Some(object) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
+    pub(crate) async fn owner(&self, ctx: &Context<'_>) -> Option<Result<Owner, RpcError>> {
+        let contents = match self.contents(ctx).await.transpose()? {
+            Ok(contents) => contents,
+            Err(e) => return Some(Err(e)),
         };
 
-        Ok(Some(Owner::from_native(
+        Some(Ok(Owner::from_native(
             self.super_.scope.clone(),
-            object.owner.clone(),
+            contents.owner.clone(),
         )))
     }
 
@@ -552,14 +570,15 @@ impl Object {
     pub(crate) async fn previous_transaction(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Transaction>, RpcError> {
-        let Some(object) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
+    ) -> Option<Result<Transaction, RpcError>> {
+        let contents = match self.contents(ctx).await.transpose()? {
+            Ok(contents) => contents,
+            Err(e) => return Some(Err(e)),
         };
 
-        Ok(Some(Transaction::with_id(
+        Some(Ok(Transaction::with_id(
             self.super_.scope.without_root_version(),
-            object.previous_transaction,
+            contents.previous_transaction,
         )))
     }
 
@@ -567,12 +586,13 @@ impl Object {
     pub(crate) async fn storage_rebate(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<BigInt>, RpcError> {
-        let Some(object) = self.contents(ctx).await?.as_ref() else {
-            return Ok(None);
+    ) -> Option<Result<BigInt, RpcError>> {
+        let contents = match self.contents(ctx).await.transpose()? {
+            Ok(contents) => contents,
+            Err(e) => return Some(Err(e)),
         };
 
-        Ok(Some(BigInt::from(object.storage_rebate)))
+        Some(Ok(BigInt::from(contents.storage_rebate)))
     }
 
     /// The transactions that sent objects to this object
@@ -584,25 +604,28 @@ impl Object {
         last: Option<u64>,
         before: Option<CTransaction>,
         filter: Option<TransactionFilter>,
-    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("IObject", "receivedTransactions");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+        let result = async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("IObject", "receivedTransactions");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        // Create filter for transactions that affected this object's address
-        let address_filter = TransactionFilter {
-            affected_address: Some(self.super_.address.into()),
-            ..Default::default()
-        };
+            // Create filter for transactions that affected this object's address
+            let address_filter = TransactionFilter {
+                affected_address: Some(self.super_.address.into()),
+                ..Default::default()
+            };
 
-        // Intersect with user-provided filter
-        let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+            // Intersect with user-provided filter
+            let Some(filter) = filter.unwrap_or_default().intersect(address_filter) else {
+                return Ok(Connection::new(false, false));
+            };
 
-        Transaction::paginate(ctx, self.super_.scope.clone(), page, filter)
-            .await
-            .map(Some)
+            Transaction::paginate(ctx, self.super_.scope.clone(), page, filter).await
+        }
+        .await;
+
+        Some(result)
     }
 }
 
@@ -1101,7 +1124,7 @@ impl Object {
     pub(crate) async fn contents(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<&Option<NativeObject>, RpcError> {
+    ) -> Result<Option<&NativeObject>, RpcError> {
         self.contents
             .get_or_try_init(async || {
                 let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
@@ -1143,6 +1166,7 @@ impl Object {
                 }
             })
             .await
+            .map(Option::as_ref)
     }
 }
 

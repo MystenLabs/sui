@@ -32,7 +32,9 @@ use sui_types::bridge::{
 };
 use sui_types::bridge::{BridgeTrait, BridgeTreasurySummary};
 use sui_types::bridge::{MoveTypeBridgeMessage, MoveTypeParsedTokenTransferMessage};
-use sui_types::bridge::{MoveTypeCommitteeMember, MoveTypeTokenTransferPayload};
+use sui_types::bridge::{
+    MoveTypeCommitteeMember, MoveTypeTokenTransferPayload, MoveTypeTokenTransferPayloadV2,
+};
 use sui_types::collection_types::LinkedTableNode;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
@@ -405,6 +407,56 @@ where
             .get_gas_data_panic_if_not_gas(gas_object_id)
             .await
     }
+
+    pub async fn get_bridge_records_in_range(
+        &self,
+        source_chain_id: u8,
+        start_seq_num: u64,
+        end_seq_num: u64,
+    ) -> Result<Vec<(u64, MoveTypeBridgeRecord)>, BridgeError> {
+        self.inner
+            .get_bridge_records_in_range(source_chain_id, start_seq_num, end_seq_num)
+            .await
+    }
+
+    pub async fn get_token_transfer_next_seq_number(
+        &self,
+        source_chain_id: u8,
+    ) -> Result<u64, BridgeError> {
+        self.inner
+            .get_token_transfer_next_seq_number(source_chain_id)
+            .await
+    }
+
+    /// Temporary measure to get corresponding sequence number cursor from a Bridge Module EventID
+    pub async fn get_sequence_number_from_event_id(
+        &self,
+        event_id: EventID,
+    ) -> BridgeResult<Option<u64>> {
+        let events = self
+            .inner
+            .get_events_by_tx_digest(event_id.tx_digest)
+            .await?;
+
+        let event = events
+            .events
+            .get(event_id.event_seq as usize)
+            .ok_or(BridgeError::NoBridgeEventsInTxPosition)?;
+
+        if event.type_.address.as_ref() != BRIDGE_PACKAGE_ID.as_ref() {
+            return Ok(None);
+        }
+
+        let bridge_event = match SuiBridgeEvent::try_from_sui_event(event)? {
+            Some(e) => e,
+            None => return Ok(None),
+        };
+
+        match bridge_event {
+            SuiBridgeEvent::SuiToEthTokenBridgeV1(event) => Ok(Some(event.nonce)),
+            _ => Ok(None),
+        }
+    }
 }
 
 /// Use a trait to abstract over the SuiSDKClient and SuiMockClient for testing.
@@ -467,6 +519,18 @@ pub trait SuiClientInner: Send + Sync {
         &self,
         gas_object_id: ObjectID,
     ) -> (GasCoin, ObjectRef, Owner);
+
+    async fn get_bridge_records_in_range(
+        &self,
+        source_chain_id: u8,
+        start_seq_num: u64,
+        end_seq_num: u64,
+    ) -> Result<Vec<(u64, MoveTypeBridgeRecord)>, BridgeError>;
+
+    async fn get_token_transfer_next_seq_number(
+        &self,
+        source_chain_id: u8,
+    ) -> Result<u64, BridgeError>;
 }
 
 #[async_trait]
@@ -535,7 +599,7 @@ impl SuiClientInner for SuiSdkClient {
         match self.quorum_driver_api().execute_transaction_block(
             tx,
             SuiTransactionBlockResponseOptions::new().with_effects().with_events(),
-            Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
+            Some(sui_types::transaction_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
         ).await {
             Ok(response) => {
                 let effects = response.effects.expect("We requested effects but got None.");
@@ -592,6 +656,22 @@ impl SuiClientInner for SuiSdkClient {
                 }
             }
         }
+    }
+
+    async fn get_bridge_records_in_range(
+        &self,
+        _source_chain_id: u8,
+        _start_seq_num: u64,
+        _end_seq_num: u64,
+    ) -> Result<Vec<(u64, MoveTypeBridgeRecord)>, BridgeError> {
+        unimplemented!("use gRPC implementation")
+    }
+
+    async fn get_token_transfer_next_seq_number(
+        &self,
+        _source_chain_id: u8,
+    ) -> Result<u64, BridgeError> {
+        unimplemented!("use gRPC implementation")
     }
 }
 
@@ -909,10 +989,16 @@ impl SuiClientInner for sui_rpc::Client {
             payload,
         } = record.message;
 
-        let mut parsed_payload: MoveTypeTokenTransferPayload = bcs::from_bytes(&payload)?;
-
-        // we deser'd le bytes but this needs to be interpreted as be bytes
-        parsed_payload.amount = u64::from_be_bytes(parsed_payload.amount.to_le_bytes());
+        // Parse payload based on message version.
+        let parsed_payload: MoveTypeTokenTransferPayload = if message_version == 2 {
+            let mut v2: MoveTypeTokenTransferPayloadV2 = bcs::from_bytes(&payload)?;
+            v2.amount = u64::from_be_bytes(v2.amount.to_le_bytes());
+            v2.into()
+        } else {
+            let mut v1: MoveTypeTokenTransferPayload = bcs::from_bytes(&payload)?;
+            v1.amount = u64::from_be_bytes(v1.amount.to_le_bytes());
+            v1
+        };
 
         Ok(Some(MoveTypeParsedTokenTransferMessage {
             message_version,
@@ -1026,6 +1112,35 @@ impl SuiClientInner for sui_rpc::Client {
             }
         }
     }
+
+    async fn get_bridge_records_in_range(
+        &self,
+        source_chain_id: u8,
+        start_seq_num: u64,
+        end_seq_num: u64,
+    ) -> Result<Vec<(u64, MoveTypeBridgeRecord)>, BridgeError> {
+        let mut records = Vec::new();
+        for seq_num in start_seq_num..=end_seq_num {
+            if let Some(record) = self.get_bridge_record(source_chain_id, seq_num).await? {
+                records.push((seq_num, record));
+            }
+        }
+        Ok(records)
+    }
+
+    async fn get_token_transfer_next_seq_number(
+        &self,
+        source_chain_id: u8,
+    ) -> Result<u64, BridgeError> {
+        let summary = self.get_bridge_summary().await?;
+        let seq_num = summary
+            .sequence_nums
+            .iter()
+            .find(|(chain_id, _)| *chain_id == source_chain_id)
+            .map(|(_, seq)| *seq)
+            .unwrap_or(0);
+        Ok(seq_num)
+    }
 }
 
 #[async_trait]
@@ -1133,6 +1248,26 @@ impl SuiClientInner for SuiClientInternal {
     ) -> (GasCoin, ObjectRef, Owner) {
         self.jsonrpc_client
             .get_gas_data_panic_if_not_gas(gas_object_id)
+            .await
+    }
+
+    async fn get_bridge_records_in_range(
+        &self,
+        source_chain_id: u8,
+        start_seq_num: u64,
+        end_seq_num: u64,
+    ) -> Result<Vec<(u64, MoveTypeBridgeRecord)>, BridgeError> {
+        self.grpc_client
+            .get_bridge_records_in_range(source_chain_id, start_seq_num, end_seq_num)
+            .await
+    }
+
+    async fn get_token_transfer_next_seq_number(
+        &self,
+        source_chain_id: u8,
+    ) -> Result<u64, BridgeError> {
+        self.grpc_client
+            .get_token_transfer_next_seq_number(source_chain_id)
             .await
     }
 }

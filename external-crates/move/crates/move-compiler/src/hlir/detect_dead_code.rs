@@ -936,11 +936,15 @@ where
         .map(|alt| arm_recur(context, alt))
         .unwrap_or(CF::None);
     if tail_pos
-        && matches!(conseq.ty, sp!(_, N::Type_::Unit | N::Type_::Anything))
         && matches!(
-            alt_opt.map(|alt| &alt.ty),
-            None | Some(sp!(_, N::Type_::Unit | N::Type_::Anything))
+            conseq.ty.value.inner(),
+            N::TypeInner::Unit | N::TypeInner::Anything
         )
+        && (alt_opt.is_none()
+            || matches!(
+                alt_opt.unwrap().ty.value.inner(),
+                N::TypeInner::Unit | N::TypeInner::Anything
+            ))
     {
         return CF::None;
     };
@@ -983,8 +987,8 @@ where
     if tail_pos
         && arms.value.iter().all(|arm| {
             matches!(
-                arm.value.rhs.ty,
-                sp!(_, N::Type_::Unit | N::Type_::Anything)
+                arm.value.rhs.ty.value.inner(),
+                N::TypeInner::Unit | N::TypeInner::Anything
             )
         })
     {

@@ -83,7 +83,7 @@ module 0x42::M {
     // New cases for non-local borrows
 
     public fun non_local_borrow_literal() {
-        let _ref = &*&0;  // Redundant borrow-dereference on literal
+        let _ref = &*&0u64;  // Redundant borrow-dereference on literal
     }
 
     public fun get_resource(): MyResource {

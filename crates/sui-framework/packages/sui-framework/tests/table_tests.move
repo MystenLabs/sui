@@ -26,7 +26,7 @@ fun simple_all_functions() {
     *&mut table[b"goodbye"] = table[b"goodbye"] * 2;
     // check the new value
     assert!(table[b"hello"] == 0);
-    assert!(table[b"goodbye"] == 2);
+    assert!(table[b"goodbye"] == 2u64);
     // remove the value and check it
     assert!(table.remove(b"hello") == 0);
     assert!(table.remove(b"goodbye") == 2);
@@ -43,7 +43,7 @@ fun add_duplicate() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut table = table::new(scenario.ctx());
-    table.add(b"hello", 0);
+    table.add(b"hello", 0u64);
     table.add(b"hello", 1);
     abort 42
 }

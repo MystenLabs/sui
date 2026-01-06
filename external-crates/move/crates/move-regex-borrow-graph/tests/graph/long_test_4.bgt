@@ -1,0 +1,20 @@
+0 = &mut local_0
+1 = &local_1
+writable: 0
+2 = &call(0,1)
+writable:
+3 = &mut local_2
+writable: 3
+4 = &call(1)
+writable: 3
+5 = &mut local_3
+6 = &mut call(5,2,1)
+writable: 3,6
+7 = &6.a
+writable: 3
+8 = &mut local_4
+writable: 3,8
+9 = &mut call(8,7)
+writable: 3,9
+10 = &call(9,3)
+writable:

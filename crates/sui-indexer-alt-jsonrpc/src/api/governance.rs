@@ -24,7 +24,6 @@ use sui_types::{
 };
 
 use crate::{
-    config::NodeConfig,
     context::Context,
     data::load_live_deserialized,
     error::{RpcError, client_error_to_error_object, rpc_bail},
@@ -67,9 +66,8 @@ pub(crate) struct Governance(pub Context);
 pub(crate) struct DelegationGovernance(HttpClient);
 
 impl DelegationGovernance {
-    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> anyhow::Result<Self> {
-        let client = config.client(fullnode_rpc_url)?;
-        Ok(Self(client))
+    pub(crate) fn new(client: HttpClient) -> Self {
+        Self(client)
     }
 }
 

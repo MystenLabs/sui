@@ -12,7 +12,7 @@ module M {
     }
 
     fun t1(): u64 {
-        loop { let x = 0; x; }
+        loop { let x = 0u64; x; }
     }
 
     fun t2() {
@@ -22,7 +22,7 @@ module M {
     fun foo(_x: u64) {}
 
     fun t3(): X::R {
-        let x: X::R = loop { 0; };
+        let x: X::R = loop { 0u64; };
         x
     }
 

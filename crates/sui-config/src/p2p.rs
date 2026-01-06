@@ -323,7 +323,7 @@ pub struct DiscoveryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub access_type: Option<AccessType>,
 
-    /// Like `seed_peers` in `P2pConfig`, allowlisted peers will awlays be allowed to establish
+    /// Like `seed_peers` in `P2pConfig`, allowlisted peers will always be allowed to establish
     /// connection with this node regardless of the concurrency limit.
     /// Unlike `seed_peers`, a node does not reach out to `allowlisted_peers` preferentially.
     /// It is also used to determine if a peer is accessible when its AccessType is Private.

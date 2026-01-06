@@ -12,13 +12,13 @@ module a::m {
 
 
     macro fun return_imm($f: || -> &u64) {
-        *$f() = 0;
+        *$f() = 0u64;
     }
 
     fun t() {
         // this should error since it was annotated as taking a &u64
-        pass_imm!(|x| *x = 0);
-        pass_mut!(|x: &u64| *x = 0);
+        pass_imm!(|x| *x = 0u64);
+        pass_mut!(|x: &u64| *x = 0u64);
         // this should error since it was annotated as returning a &u64
         let mut x = 0;
         return_imm!(|| &mut x);

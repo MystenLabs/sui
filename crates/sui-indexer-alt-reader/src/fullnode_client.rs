@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use prometheus::Registry;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
@@ -11,18 +11,10 @@ use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::{Transaction, TransactionData};
-use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::instrument;
 
 use crate::metrics::FullnodeClientMetrics;
-
-/// Like `anyhow::bail!`, but returns this module's `Error` type, not `anyhow::Error`.
-macro_rules! bail {
-    ($e:expr) => {
-        return Err(Error::Internal(anyhow!($e)));
-    };
-}
 
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct FullnodeArgs {
@@ -36,7 +28,6 @@ pub struct FullnodeArgs {
 pub struct FullnodeClient {
     execution_client: Option<TransactionExecutionServiceClient<Channel>>,
     metrics: Arc<FullnodeClientMetrics>,
-    cancel: CancellationToken,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -56,7 +47,6 @@ impl FullnodeClient {
         prefix: Option<&str>,
         args: FullnodeArgs,
         registry: &Registry,
-        cancel: CancellationToken,
     ) -> Result<Self, Error> {
         let execution_client = if let Some(url) = &args.fullnode_rpc_url {
             let channel = Channel::from_shared(url.clone())
@@ -73,7 +63,6 @@ impl FullnodeClient {
         Ok(Self {
             execution_client,
             metrics,
-            cancel,
         })
     }
 
@@ -124,23 +113,36 @@ impl FullnodeClient {
 
     /// Simulate a transaction on the Sui network via gRPC.
     /// Note: Simulation does not require signatures since the transaction is not committed to the blockchain.
+    ///
+    /// - `checks_enabled`: If true, enables transaction validation checks during simulation. Defaults to true.
+    /// - `do_gas_selection`: If true, enables automatic gas coin selection and budget estimation. Defaults to false.
     #[instrument(skip(self, transaction), level = "debug")]
     pub async fn simulate_transaction(
         &self,
         transaction: proto::Transaction,
+        checks_enabled: bool,
+        do_gas_selection: bool,
     ) -> Result<proto::SimulateTransactionResponse, Error> {
-        // No signatures needed for simulation
-        let mut request = proto::SimulateTransactionRequest::default();
-        request.transaction = Some(transaction);
-        request.read_mask = Some(FieldMask::from_paths([
-            "transaction.effects.bcs",
-            "transaction.effects.lamport_version",
-            "transaction.events.bcs",
-            "transaction.balance_changes",
-            "transaction.objects.objects.bcs",
-            "transaction.transaction.bcs",
-            "command_outputs",
-        ]));
+        use proto::simulate_transaction_request::TransactionChecks;
+
+        let checks = if checks_enabled {
+            TransactionChecks::Enabled
+        } else {
+            TransactionChecks::Disabled
+        };
+
+        let request = proto::SimulateTransactionRequest::new(transaction)
+            .with_read_mask(FieldMask::from_paths([
+                "transaction.effects.bcs",
+                "transaction.effects.lamport_version",
+                "transaction.events.bcs",
+                "transaction.balance_changes",
+                "transaction.objects.objects.bcs",
+                "transaction.transaction.bcs",
+                "command_outputs",
+            ]))
+            .with_checks(checks)
+            .with_do_gas_selection(do_gas_selection);
 
         self.request(
             "simulate_transaction",
@@ -175,15 +177,10 @@ impl FullnodeClient {
             .with_label_values(&[method])
             .start_timer();
 
-        let response = tokio::select! {
-            _ = self.cancel.cancelled() => {
-                bail!("Request cancelled");
-            }
-
-            r = response(client) => {
-                r.map(|r| r.into_inner()).map_err(Error::from)
-            }
-        };
+        let response = response(client)
+            .await
+            .map(|r| r.into_inner())
+            .map_err(Into::into);
 
         if response.is_ok() {
             self.metrics

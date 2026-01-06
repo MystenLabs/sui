@@ -28,40 +28,40 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/module_call_explicit_type_arguments_invalid.move:7:9
   │
-7 │         foo<bool, bool>(0, false);
-  │         ^^^^^^^^^^^^^^^^^^^^^^^^^
+7 │         foo<bool, bool>(0u64, false);
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   │         │   │           │
-  │         │   │           Given: integer
+  │         │   │           Given: 'u64'
   │         │   Expected: 'bool'
   │         Invalid call of '0x8675309::M::foo'. Invalid argument for parameter '_'
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/module_call_explicit_type_arguments_invalid.move:8:9
   │
-8 │         foo<bool, bool>(false, 0);
-  │         ^^^^^^^^^^^^^^^^^^^^^^^^^
+8 │         foo<bool, bool>(false, 0u64);
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   │         │         │            │
-  │         │         │            Given: integer
+  │         │         │            Given: 'u64'
   │         │         Expected: 'bool'
   │         Invalid call of '0x8675309::M::foo'. Invalid argument for parameter '_'
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/module_call_explicit_type_arguments_invalid.move:9:9
   │
-9 │         foo<bool, bool>(0, 0);
-  │         ^^^^^^^^^^^^^^^^^^^^^
+9 │         foo<bool, bool>(0u64, 0u64);
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
   │         │   │           │
-  │         │   │           Given: integer
+  │         │   │           Given: 'u64'
   │         │   Expected: 'bool'
   │         Invalid call of '0x8675309::M::foo'. Invalid argument for parameter '_'
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/module_call_explicit_type_arguments_invalid.move:9:9
   │
-9 │         foo<bool, bool>(0, 0);
-  │         ^^^^^^^^^^^^^^^^^^^^^
-  │         │         │        │
-  │         │         │        Given: integer
+9 │         foo<bool, bool>(0u64, 0u64);
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  │         │         │           │
+  │         │         │           Given: 'u64'
   │         │         Expected: 'bool'
   │         Invalid call of '0x8675309::M::foo'. Invalid argument for parameter '_'
 

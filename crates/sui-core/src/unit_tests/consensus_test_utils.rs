@@ -195,6 +195,14 @@ pub fn make_consensus_adapter_for_test(
                             .expect("Should not fail");
                         executed_via_checkpoint += 1;
                     }
+                } else if let ConsensusTransactionKind::UserTransactionV2(tx) = &txn.kind {
+                    let transaction_digest = tx.tx().digest();
+                    if self.process_via_checkpoint.contains(transaction_digest) {
+                        epoch_store
+                            .insert_finalized_transactions(vec![*transaction_digest].as_slice(), 10)
+                            .expect("Should not fail");
+                        executed_via_checkpoint += 1;
+                    }
                 }
             }
 
@@ -229,6 +237,12 @@ pub fn make_consensus_adapter_for_test(
                                 ConsensusTransactionKind::UserTransaction(tx) => {
                                     Some(VerifiedExecutableTransaction::new_from_consensus(
                                         VerifiedTransaction::new_unchecked(*tx.clone()),
+                                        0,
+                                    ))
+                                }
+                                ConsensusTransactionKind::UserTransactionV2(tx) => {
+                                    Some(VerifiedExecutableTransaction::new_from_consensus(
+                                        VerifiedTransaction::new_unchecked(tx.tx().clone()),
                                         0,
                                     ))
                                 }

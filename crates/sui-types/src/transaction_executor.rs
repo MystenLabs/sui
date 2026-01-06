@@ -8,11 +8,11 @@ use crate::error::ExecutionError;
 use crate::error::SuiError;
 use crate::execution::ExecutionResult;
 use crate::full_checkpoint_content::ObjectSet;
-use crate::quorum_driver_types::ExecuteTransactionRequestV3;
-use crate::quorum_driver_types::ExecuteTransactionResponseV3;
-use crate::quorum_driver_types::QuorumDriverError;
 use crate::storage::ObjectKey;
 use crate::transaction::TransactionData;
+use crate::transaction_driver_types::ExecuteTransactionRequestV3;
+use crate::transaction_driver_types::ExecuteTransactionResponseV3;
+use crate::transaction_driver_types::TransactionSubmissionError;
 
 /// Trait to define the interface for how the gRPC service interacts with a  QuorumDriver or a
 /// simulated transaction executor.
@@ -22,7 +22,7 @@ pub trait TransactionExecutor: Send + Sync {
         &self,
         request: ExecuteTransactionRequestV3,
         client_addr: Option<std::net::SocketAddr>,
-    ) -> Result<ExecuteTransactionResponseV3, QuorumDriverError>;
+    ) -> Result<ExecuteTransactionResponseV3, TransactionSubmissionError>;
 
     fn simulate_transaction(
         &self,

@@ -494,7 +494,7 @@ impl CheckpointHandler {
             let move_calls = tx
                 .move_calls()
                 .into_iter()
-                .map(|(p, m, f)| (*p, m.to_string(), f.to_string()))
+                .map(|(_cmd_idx, p, m, f)| (*p, m.to_string(), f.to_string()))
                 .collect();
 
             db_tx_indices.push(TxIndex {

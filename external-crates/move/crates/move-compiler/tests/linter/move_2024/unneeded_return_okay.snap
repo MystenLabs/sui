@@ -16,10 +16,10 @@ warning[W09002]: unused variable
 error[E04007]: incompatible types
    ┌─ tests/linter/move_2024/unneeded_return_okay.move:15:14
    │
-13 │     let mut x = 0;
-   │         ----- Given: integer
+13 │     let mut x = 0u64;
+   │                 ---- Given: 'u64'
 14 │     let y = &mut x;
-15 │     return (*x = 1)
+15 │     return (*x = 1u64)
    │              ^
    │              │
    │              Invalid mutation. Expected a mutable reference
@@ -28,11 +28,11 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/linter/move_2024/unneeded_return_okay.move:19:12
    │
-19 │ fun t3() { 'a: { return { return 'a 0 } } }
-   │     --     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │     │      │
+19 │ fun t3() { 'a: { return { return 'a 0u64 } } }
+   │     --     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │     │      │                        │
+   │     │      │                        Given: 'u64'
    │     │      Invalid return expression
-   │     │      Given: integer
    │     Expected: '()'
 
 error[E04014]: invalid loop control

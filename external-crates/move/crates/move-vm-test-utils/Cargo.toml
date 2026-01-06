@@ -13,7 +13,6 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
-once_cell.workspace = true
 serde = { workspace = true, features = ["derive", "rc"] }
 
 move-binary-format.workspace = true

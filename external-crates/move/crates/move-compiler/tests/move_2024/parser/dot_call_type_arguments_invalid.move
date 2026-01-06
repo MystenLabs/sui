@@ -8,7 +8,7 @@ module a::m {
     }
 
     fun t() {
-        let c = Cup { value: 0 };
+        let c = Cup { value: 0u64 };
         c.uncup <u64> ();
     }
 }

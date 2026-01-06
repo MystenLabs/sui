@@ -45,15 +45,6 @@ error[E04023]: invalid method call
    │         Method calls are only supported on single types. Got an expression of type: '(a::m::X, a::m::Y)'
 
 error[E04023]: invalid method call
-   ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:23:9
-   │
-23 │         0.next();
-   │         ^^^^^^^^
-   │         │
-   │         Invalid method call
-   │         Unable to infer type for method call. Try annotating this type
-
-error[E04023]: invalid method call
    ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:24:9
    │
 24 │         while (cond) { }.xeat();

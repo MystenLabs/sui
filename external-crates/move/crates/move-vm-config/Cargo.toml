@@ -9,7 +9,6 @@ edition = "2024"
 
 [dependencies]
 move-binary-format.workspace = true
-once_cell.workspace = true
 
 [features]
 tracing = []

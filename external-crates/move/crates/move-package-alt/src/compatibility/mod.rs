@@ -2,21 +2,25 @@ pub mod legacy;
 pub mod legacy_lockfile;
 pub mod legacy_parser;
 
-use std::collections::{BTreeMap, HashSet};
-use std::fs;
-use std::path::{Path, PathBuf};
+use crate::{
+    compatibility::legacy_parser::{LegacyPackageMetadata, parse_package_info},
+    package::layout::SourcePackageLayout,
+    package::paths::PackagePath,
+    schema::PackageName,
+};
+
+use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 
 use anyhow::{Context, Result, bail};
-use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
-use once_cell::sync::Lazy;
 use regex::Regex;
-use tracing::debug;
-
-use crate::compatibility::legacy_parser::{LegacyPackageMetadata, parse_package_info};
-use crate::package::layout::SourcePackageLayout;
-use crate::package::paths::PackagePath;
-use crate::schema::PackageName;
+use std::{
+    collections::{BTreeMap, HashSet},
+    fs,
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
 use toml::value::Value as TV;
+use tracing::debug;
 
 pub type LegacyVersion = (u64, u64, u64);
 pub type LegacySubstitution = BTreeMap<String, LegacySubstOrRename>;
@@ -36,7 +40,22 @@ pub enum LegacySubstOrRename {
 const MODULE_REGEX: &str = r"\bmodule\s+([a-zA-Z_][\w]*)::([a-zA-Z_][\w]*)";
 
 // Compile regex once at program startup
-static MODULE_REGEX_COMPILED: Lazy<Regex> = Lazy::new(|| Regex::new(MODULE_REGEX).unwrap());
+#[cfg(not(msim))]
+fn get_module_regex() -> &'static Regex {
+    static MODULE_REGEX_COMPILED: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(MODULE_REGEX).unwrap());
+    &MODULE_REGEX_COMPILED
+}
+
+// In simtests we need to use a thread local to avoid breaking determinism.
+#[cfg(msim)]
+fn get_module_regex() -> Regex {
+    thread_local! {
+        static MODULE_REGEX_COMPILED: LazyLock<Regex> = LazyLock::new(|| Regex::new(MODULE_REGEX).unwrap());
+    }
+
+    MODULE_REGEX_COMPILED.with(|val| (*val).clone())
+}
 
 /// This is a naive way to detect all module names that are part of the source code
 /// for a given package.
@@ -118,7 +137,7 @@ fn parse_module_names(contents: &str) -> Result<HashSet<String>> {
 
     // This matches `module a::b {}`, and `module a::b;` cases.
     // In both cases, the match is the 2nd group (so `match.get(1)`)
-    Ok(MODULE_REGEX_COMPILED
+    Ok(get_module_regex()
         .captures_iter(&clean)
         .filter_map(|cap| {
             let name = &cap[1];

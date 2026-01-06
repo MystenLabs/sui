@@ -13,6 +13,7 @@ pub mod errors;
 pub mod flavor;
 pub mod git;
 pub mod graph;
+pub(crate) mod logging;
 pub mod package;
 pub mod schema;
 pub mod test_utils;

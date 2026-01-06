@@ -58,13 +58,20 @@ impl BridgeClient {
                 "sign/bridge_tx/sui/eth/{}/{}",
                 e.sui_tx_digest, e.sui_tx_event_index
             ),
-            BridgeAction::SuiToEthTokenTransfer(_action) => format!(
-                "/sign/bridge_action/sui/eth/{source_chain}/{message_type}/{bridge_seq_num}",
-                source_chain = event.chain_id() as u8,
-                message_type = event.action_type() as u8,
-                bridge_seq_num = event.seq_number(),
-            ),
+            BridgeAction::SuiToEthTokenTransfer(_) | BridgeAction::SuiToEthTokenTransferV2(_) => {
+                format!(
+                    "/sign/bridge_action/sui/eth/{source_chain}/{message_type}/{bridge_seq_num}",
+                    source_chain = event.chain_id() as u8,
+                    message_type = event.action_type() as u8,
+                    bridge_seq_num = event.seq_number(),
+                )
+            }
             BridgeAction::EthToSuiBridgeAction(e) => format!(
+                "sign/bridge_tx/eth/sui/{}/{}",
+                Hex::encode(e.eth_tx_hash.0),
+                e.eth_event_index
+            ),
+            BridgeAction::EthToSuiTokenTransferV2(e) => format!(
                 "sign/bridge_tx/eth/sui/{}/{}",
                 Hex::encode(e.eth_tx_hash.0),
                 e.eth_event_index
