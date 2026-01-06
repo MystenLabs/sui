@@ -365,11 +365,19 @@ impl OffchainCluster {
         .await
         .context("Failed to start Consistent Store")?;
 
+        let consistent_reader_args = ConsistentReaderArgs {
+            consistent_store_url: Some(
+                Url::parse(&format!("http://{consistent_listen_address}")).unwrap(),
+            ),
+            consistent_store_statement_timeout_ms: None,
+        };
+
         let jsonrpc = start_jsonrpc(
             Some(database_url.clone()),
             None,
             DbArgs::default(),
             BigtableArgs::default(),
+            consistent_reader_args.clone(),
             jsonrpc_args,
             JsonRpcNodeArgs::default(),
             SystemPackageTaskArgs::default(),
@@ -378,13 +386,6 @@ impl OffchainCluster {
         )
         .await
         .context("Failed to start JSON-RPC server")?;
-
-        let consistent_reader_args = ConsistentReaderArgs {
-            consistent_store_url: Some(
-                Url::parse(&format!("http://{consistent_listen_address}")).unwrap(),
-            ),
-            consistent_store_statement_timeout_ms: None,
-        };
 
         let graphql = start_graphql(
             Some(database_url.clone()),

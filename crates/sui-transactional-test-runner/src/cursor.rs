@@ -99,6 +99,19 @@ impl Serialize for Value {
     }
 }
 
+impl Value {
+    fn bitwise_not(self) -> Self {
+        match self {
+            Value::U8(v) => Value::U8(!v),
+            Value::U16(v) => Value::U16(!v),
+            Value::U32(v) => Value::U32(!v),
+            Value::U64(v) => Value::U64(!v),
+            Value::U128(v) => Value::U128(!v),
+            other => panic!("bitwise NOT not supported for {other:?}"),
+        }
+    }
+}
+
 /// Parse a string representing an encoded cursor. Cursors can either be BCS-encoded or bincoded,
 /// and can contain:
 ///
@@ -235,17 +248,20 @@ fn address(input: &mut &str) -> Result<AccountAddress> {
 }
 
 fn number(input: &mut &str) -> Result<Value> {
+    let negate = opt("!").parse_next(input)?.is_some();
     let num = take_while(1.., |c: char| c.is_ascii_digit()).parse_next(input)?;
     let suffix = opt(suffix).parse_next(input)?.unwrap_or(Suffix::U64);
 
-    Ok(match suffix {
+    let value = match suffix {
         Suffix::U8 => Value::U8(num.parse().map_err(|e| CE::from_external_error(input, e))?),
         Suffix::U16 => Value::U16(num.parse().map_err(|e| CE::from_external_error(input, e))?),
         Suffix::U32 => Value::U32(num.parse().map_err(|e| CE::from_external_error(input, e))?),
         Suffix::U64 => Value::U64(num.parse().map_err(|e| CE::from_external_error(input, e))?),
         Suffix::U128 => Value::U128(num.parse().map_err(|e| CE::from_external_error(input, e))?),
         Suffix::U256 => Value::U256(num.parse().map_err(|e| CE::from_external_error(input, e))?),
-    })
+    };
+
+    Ok(if negate { value.bitwise_not() } else { value })
 }
 
 fn suffix(input: &mut &str) -> Result<Suffix> {
@@ -341,6 +357,16 @@ mod tests {
         let (bcs_u128, bin_u128) = expect(u128_value);
         assert_eq!(parse("bcs(1000000u128)").unwrap(), bcs_u128);
         assert_eq!(parse("bin(1000000u128)").unwrap(), bin_u128);
+    }
+    #[test]
+    fn test_bitwise_not() {
+        let (bcs, bin) = expect(!20u64);
+        assert_eq!(parse("bcs(!20u64)").unwrap(), bcs);
+        assert_eq!(parse("bin(!20u64)").unwrap(), bin);
+
+        let (bcs_u8, bin_u8) = expect(!0u8);
+        assert_eq!(parse("bcs(!0u8)").unwrap(), bcs_u8);
+        assert_eq!(parse("bin(!0u8)").unwrap(), bin_u8);
     }
     #[test]
     fn test_string() {
