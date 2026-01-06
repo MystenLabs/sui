@@ -181,6 +181,6 @@ pub fn get_checkpoint(
 }
 
 fn requires_indexed_data(mask: &FieldMaskTree) -> bool {
-    mask.contains(Checkpoint::TRANSACTIONS_FIELD.name)
-        || mask.contains(Checkpoint::OBJECTS_FIELD.name)
+    mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name)
+        .is_some_and(|submask| submask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name))
 }
