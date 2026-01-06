@@ -33,6 +33,9 @@ pub const ESTIMATED_COMPUTATION_COST: u64 = 1_000_000;
 pub enum ExpectedFailureType {
     Random = 0,
     InvalidSignature,
+    /// Expected to fail due to object lock conflict with another concurrent transaction.
+    /// This can happen when multiple transactions try to use the same owned object.
+    ObjectLockConflict,
     // TODO: Add other failure types
 
     // This is not a failure type, but a placeholder for no failure. Marking no failure asserts that
@@ -40,15 +43,22 @@ pub enum ExpectedFailureType {
     NoFailure,
 }
 
+/// Failure types that can be artificially created by modifying a transaction.
+/// ObjectLockConflict is excluded because it can only occur through natural contention
+/// (e.g., via ConflictingTransferWorkload), not by modifying a transaction.
+const ARTIFICIALLY_CREATABLE_FAILURES: &[ExpectedFailureType] =
+    &[ExpectedFailureType::InvalidSignature];
+
 impl TryFrom<u32> for ExpectedFailureType {
     type Error = anyhow::Error;
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
             0 => {
+                // Random selection from artificially creatable failure types only
                 let mut rng = rand::thread_rng();
-                let n = rng.gen_range(1..ExpectedFailureType::COUNT - 1);
-                Ok(ExpectedFailureType::iter().nth(n).unwrap())
+                let n = rng.gen_range(0..ARTIFICIALLY_CREATABLE_FAILURES.len());
+                Ok(ARTIFICIALLY_CREATABLE_FAILURES[n])
             }
             _ => ExpectedFailureType::iter()
                 .nth(value as usize)

@@ -6,7 +6,7 @@ keywords: [ using events, notify events, notify assets, notify on-chain assets, 
 
 The Sui network stores countless objects on chain where Move code can perform actions using those objects. Tracking this activity is often desired, for example, to discover how many times a module mints an NFT or to tally the amount of SUI in transactions that a smart contract generates.
 
-To support activity monitoring, Move provides a structure to emit events on the Sui network. You can then leverage a custom indexer to process checkpoint data that includes events that have been emitted. See the [custom indexer](../advanced/custom-indexer.mdx) topic in the Advanced section to learn how to stream checkpoints and filter events continuously. 
+To support activity monitoring, Move provides a structure to emit events on the Sui network. You can then leverage a custom indexer to process checkpoint data that includes events that have been emitted. See the [custom indexer](../advanced/custom-indexer.mdx) topic in the Advanced section to learn how to stream checkpoints and filter events continuously.
 
 If you don't want to run a custom indexer, you can poll the Sui network to query for emitted events instead. This approach typically includes a database to store the data retrieved from these calls. The [Poll events](#poll-events) section provides an example of using this method.
 
@@ -228,7 +228,7 @@ export function Creategame({ onCreated }: { onCreated: (id: string) => void }) {
 }
 ```
 
-The example displays the following JSON representation of the event. 
+The example displays the following JSON representation of the event.
 
 ```json
 {
@@ -260,13 +260,13 @@ To filter the events returned from your queries, use the following data structur
 | `Transaction`     | Events emitted from the specified transaction            | `{"Transaction":"DGUe2TXiJdN3FI6MH1FwghYbiHw+NKu8Nh579zdFtUk="}`                                      |
 | `MoveModule`      | Events emitted from the specified Move module            | `{"MoveModule":{"package":"<PACKAGE-ID>", "module":"nft"}}`                                           |
 | `MoveEventModule` | Events emitted, defined on the specified Move module.    | `{"MoveEventModule": {"package": "<DEFINING-PACKAGE-ID>", "module": "nft"}}`                          |
-| `MoveEventType`   | Move struct name of the event                            | `{"MoveEventType":"::nft::MintNFTEvent"}`                                                             |                                                                   
+| `MoveEventType`   | Move struct name of the event                            | `{"MoveEventType":"::nft::MintNFTEvent"}`                                                             |
 | `Sender`          | Query by sender address                                  | `{"Sender":"0x008e9c621f4fdb210b873aab59a1e5bf32ddb1d33ee85eb069b348c234465106"}`                     |
-| `TimeRange`       | Return events emitted in [start_time, end_time] interval | `{"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}`                                  | 
+| `TimeRange`       | Return events emitted in [start_time, end_time] interval | `{"TimeRange":{"startTime":1669039504014, "endTime":1669039604014}}`                                  |
 
 ### Query events in Rust
 
-The [Sui by Example](https://github.com/gdanezis/sui-by-example/blob/main/src/05_reading_events/bin/main.rs) repo on GitHub contains a code sample that demonstrates how to query events using the `query_events` function. The package that `PACKAGE_ID_CONST` points to exists on Mainnet, so you can test this code using Cargo. To do so, clone the `sui-by-example` repo locally and follow the [Example 05 directions](https://github.com/gdanezis/sui-by-example/tree/main/src/05_reading_events). 
+The [Sui by Example](https://github.com/gdanezis/sui-by-example/blob/main/src/05_reading_events/bin/main.rs) repo on GitHub contains a code sample that demonstrates how to query events using the `query_events` function. The package that `PACKAGE_ID_CONST` points to exists on Mainnet, so you can test this code using Cargo. To do so, clone the `sui-by-example` repo locally and follow the [Example 05 directions](https://github.com/gdanezis/sui-by-example/tree/main/src/05_reading_events).
 
 ```rust
 use sui_sdk::{rpc_types::EventFilter, types::Identifier, SuiClientBuilder};
@@ -304,7 +304,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 <BetaTag beta="true" slim="true"/>
 
-You can use GraphQL to query events instead of JSON RPC. The following example queries are in the [`sui-graphql-rpc` crate](https://github.com/MystenLabs/sui/tree/main/crates/sui-graphql-rpc/examples/event_connection) in the Sui repo. 
+You can use GraphQL to query events instead of JSON RPC.
 
 <details>
 
@@ -314,7 +314,33 @@ Event connection
 
 </summary>
 
-<ImportContent source="crates/sui-graphql-rpc/examples/event_connection/event_connection.graphql" mode="code" />
+```graphql
+{
+  events(
+    filter: {type: "0x3164fcf73eb6b41ff3d2129346141bd68469964c2d95a5b1533e8d16e6ea6e13::Market::ChangePriceEvent<0x2::sui::SUI>"}
+  ) {
+    nodes {
+      transactionModule {
+        name
+        package {
+          digest
+        }
+      }
+      sender {
+        address
+      }
+      timestamp
+      contents {
+        type {
+          repr
+        }
+        json
+      }
+      eventBcs
+    }
+  }
+}
+```
 
 </details>
 
@@ -326,7 +352,37 @@ Filter events by sender
 
 </summary>
 
-<ImportContent source="crates/sui-graphql-rpc/examples/event_connection/filter_by_sender.graphql" mode="code" />
+```graphql
+query ByTxSender {
+  events(
+    first: 1
+    filter: {
+      sender: "0xdff57c401e125a7e0e06606380560b459a179aacd08ed396d0162d57dbbdadfb"
+    }
+  ) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      transactionModule {
+        name
+      }
+      contents {
+        type {
+          repr
+        }
+        json
+      }
+      sender {
+        address
+      }
+      timestamp
+      eventBcs
+    }
+  }
+}
+```
 
 </details>
 
@@ -342,7 +398,7 @@ Using a custom indexer provides a near-real time monitoring of events, so is mos
 
 ### Poll events {#poll-events}
 
-To monitor events, you need a database to store checkpoint data. The [Trustless Swap](/guides/developer/app-examples/trustless-swap.mdx) example uses a Prisma database to store checkpoint data from the Sui network. The database is populated from polling the network to retrieve emitted events. 
+To monitor events, you need a database to store checkpoint data. The [Trustless Swap](/guides/developer/app-examples/trustless-swap.mdx) example uses a Prisma database to store checkpoint data from the Sui network. The database is populated from polling the network to retrieve emitted events.
 
 <details>
 

@@ -63,8 +63,6 @@ use tokio::{task::JoinHandle, time::sleep};
 use tonic::IntoRequest;
 use tracing::{error, info};
 
-mod test_indexer_handle;
-
 const NUM_VALIDATOR: usize = 4;
 
 pub struct FullNodeHandle {
@@ -94,29 +92,19 @@ pub struct TestCluster {
     pub swarm: Swarm,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
-    indexer_handle: Option<test_indexer_handle::IndexerHandle>,
 }
 
 impl TestCluster {
     pub fn rpc_client(&self) -> &HttpClient {
-        self.indexer_handle
-            .as_ref()
-            .map(|h| &h.rpc_client)
-            .unwrap_or(&self.fullnode_handle.rpc_client)
+        &self.fullnode_handle.rpc_client
     }
 
     pub fn sui_client(&self) -> &SuiClient {
-        self.indexer_handle
-            .as_ref()
-            .map(|h| &h.sui_client)
-            .unwrap_or(&self.fullnode_handle.sui_client)
+        &self.fullnode_handle.sui_client
     }
 
     pub fn rpc_url(&self) -> &str {
-        self.indexer_handle
-            .as_ref()
-            .map(|h| h.rpc_url.as_str())
-            .unwrap_or(&self.fullnode_handle.rpc_url)
+        &self.fullnode_handle.rpc_url
     }
 
     pub fn quorum_driver_api(&self) -> &QuorumDriverApi {
@@ -688,6 +676,88 @@ impl TestCluster {
         Ok(digests.into_iter().zip(effects.into_iter()).collect())
     }
 
+    /// Execute signed transactions in a soft bundle and return results for each transaction.
+    /// Unlike `execute_signed_txns_in_soft_bundle`, this method handles conflicting transactions
+    /// where some may be executed and others rejected.
+    ///
+    /// Returns a vector of (digest, WaitForEffectsResponse) for each transaction.
+    pub async fn execute_soft_bundle_with_conflicts(
+        &self,
+        signed_txs: &[Transaction],
+    ) -> SuiResult<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
+        let digests: Vec<_> = signed_txs.iter().map(|tx| *tx.digest()).collect();
+
+        let request = RawSubmitTxRequest {
+            transactions: signed_txs
+                .iter()
+                .map(|tx| bcs::to_bytes(tx).unwrap().into())
+                .collect(),
+            submit_type: SubmitTxType::SoftBundle.into(),
+        };
+
+        let authority_aggregator = self.authority_aggregator();
+        let (_, safe_client) = authority_aggregator
+            .authority_clients
+            .iter()
+            .next()
+            .unwrap();
+        let mut validator_client = safe_client
+            .authority_client()
+            .get_client_for_testing()
+            .unwrap();
+
+        let result = validator_client
+            .submit_transaction(request.into_request())
+            .await
+            .map(tonic::Response::into_inner)?;
+        assert_eq!(result.results.len(), signed_txs.len());
+
+        // Extract consensus positions from submission results
+        let mut consensus_positions = Vec::new();
+        for (i, raw_result) in result.results.iter().enumerate() {
+            let submit_result: SubmitTxResult = raw_result.clone().try_into()?;
+            match submit_result {
+                SubmitTxResult::Submitted { consensus_position } => {
+                    consensus_positions.push(consensus_position);
+                }
+                SubmitTxResult::Executed { .. } => {
+                    panic!(
+                        "Transaction {} was already executed during submission",
+                        i + 1
+                    );
+                }
+                SubmitTxResult::Rejected { error } => {
+                    return Err(error);
+                }
+            }
+        }
+
+        // Wait for effects using consensus positions
+        let wait_futures: Vec<_> = digests
+            .iter()
+            .zip(consensus_positions.iter())
+            .map(|(digest, position)| {
+                let request = WaitForEffectsRequest {
+                    transaction_digest: Some(*digest),
+                    consensus_position: Some(*position),
+                    include_details: false,
+                    ping_type: None,
+                };
+                safe_client.wait_for_effects(request, None)
+            })
+            .collect();
+
+        let responses = futures::future::join_all(wait_futures).await;
+
+        let results: SuiResult<Vec<_>> = digests
+            .into_iter()
+            .zip(responses.into_iter())
+            .map(|(digest, response)| Ok((digest, response?)))
+            .collect();
+
+        results
+    }
+
     pub async fn wait_for_tx_settlement(&self, digests: &[TransactionDigest]) {
         self.fullnode_handle
             .sui_node
@@ -953,7 +1023,6 @@ pub struct TestClusterBuilder {
     submit_delay_step_override_millis: Option<u64>,
     validator_global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
 
-    indexer_backed_rpc: bool,
     rpc_config: Option<sui_config::RpcConfig>,
 
     chain_override: Option<Chain>,
@@ -997,7 +1066,6 @@ impl TestClusterBuilder {
             validator_global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig::Global(
                 true,
             ),
-            indexer_backed_rpc: false,
             rpc_config: None,
             execution_time_observer_config: None,
             state_sync_config: None,
@@ -1228,11 +1296,6 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_indexer_backed_rpc(mut self) -> Self {
-        self.indexer_backed_rpc = true;
-        self
-    }
-
     pub fn with_rpc_config(mut self, config: sui_config::RpcConfig) -> Self {
         self.rpc_config = Some(config);
         self
@@ -1279,25 +1342,6 @@ impl TestClusterBuilder {
             }));
         }
 
-        let mut temp_data_ingestion_dir = None;
-        let mut data_ingestion_path = None;
-
-        if self.indexer_backed_rpc {
-            if self.data_ingestion_dir.is_none() {
-                temp_data_ingestion_dir = Some(mysten_common::tempdir().unwrap());
-                self.data_ingestion_dir = Some(
-                    temp_data_ingestion_dir
-                        .as_ref()
-                        .unwrap()
-                        .path()
-                        .to_path_buf(),
-                );
-                assert!(self.data_ingestion_dir.is_some());
-            }
-            assert!(self.data_ingestion_dir.is_some());
-            data_ingestion_path = Some(self.data_ingestion_dir.as_ref().unwrap().to_path_buf());
-        }
-
         let swarm = self.start_swarm().await.unwrap();
         let working_dir = swarm.dir();
 
@@ -1306,23 +1350,11 @@ impl TestClusterBuilder {
         let fullnode_handle =
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
 
-        let (rpc_url, indexer_handle) = if self.indexer_backed_rpc {
-            let handle = test_indexer_handle::IndexerHandle::new(
-                fullnode_handle.rpc_url.clone(),
-                temp_data_ingestion_dir,
-                data_ingestion_path.unwrap(),
-            )
-            .await;
-            (handle.rpc_url.clone(), Some(handle))
-        } else {
-            (fullnode_handle.rpc_url.clone(), None)
-        };
-
         let mut wallet_conf: SuiClientConfig =
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
         wallet_conf.envs.push(SuiEnv {
             alias: "localnet".to_string(),
-            rpc: rpc_url,
+            rpc: fullnode_handle.rpc_url.clone(),
             ws: None,
             basic_auth: None,
             chain_id: None,
@@ -1341,7 +1373,6 @@ impl TestClusterBuilder {
             swarm,
             wallet,
             fullnode_handle,
-            indexer_handle,
         }
     }
 

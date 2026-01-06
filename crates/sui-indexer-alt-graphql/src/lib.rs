@@ -45,11 +45,12 @@ use task::{
     watermark::{WatermarkTask, WatermarksLock},
 };
 use tokio::{net::TcpListener, sync::oneshot};
-use tower_http::cors;
+use tower_http::{catch_panic, cors};
 use tracing::info;
 use url::Url;
 
 use crate::api::{mutation::Mutation, query::Query};
+use crate::error::PanicHandler;
 use crate::extensions::logging::{Logging, Session};
 use crate::metrics::RpcMetrics;
 use crate::middleware::version::Version;
@@ -180,7 +181,7 @@ where
             version,
             mut router,
             schema,
-            metrics: _,
+            metrics,
         } = self;
 
         if with_ide {
@@ -201,7 +202,10 @@ where
                     .allow_methods([Method::POST])
                     .allow_origin(cors::Any)
                     .allow_headers(cors::Any),
-            );
+            )
+            .layer(catch_panic::CatchPanicLayer::custom(PanicHandler::new(
+                metrics,
+            )));
 
         info!("Starting GraphQL service on {rpc_listen_address}");
         let listener = TcpListener::bind(rpc_listen_address)
@@ -404,12 +408,20 @@ async fn graphiql(path: MatchedPath) -> Html<String> {
 
 #[cfg(test)]
 mod tests {
-    use async_graphql::SDLExportOptions;
+    use async_graphql::{EmptyMutation, EmptySubscription, Object, SDLExportOptions, Schema};
+    use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+    use axum::routing::post;
     use insta::assert_snapshot;
+    use reqwest::Client;
+    use serde_json::{Value, json};
     use std::fs;
+    use std::net::{IpAddr, Ipv4Addr};
     use std::path::PathBuf;
+    use sui_pg_db::temp::get_available_port;
 
     use super::*;
+    use crate::error::code;
+    use crate::extensions::logging::Session;
 
     /// Check that the exported schema is up-to-date.
     #[test]
@@ -428,5 +440,84 @@ mod tests {
         fs::write(path, &sdl).unwrap();
 
         assert_snapshot!(file, sdl);
+    }
+
+    #[tokio::test]
+    async fn test_panic_handling() {
+        struct Query;
+
+        #[Object]
+        impl Query {
+            async fn panic(&self) -> bool {
+                assert_eq!(1, 2, "Boom!");
+                true
+            }
+        }
+
+        async fn graphql(
+            Extension(schema): Extension<Schema<Query, EmptyMutation, EmptySubscription>>,
+            request: GraphQLRequest,
+        ) -> GraphQLResponse {
+            let request = request
+                .into_inner()
+                .data(Session::new("0.0.0.0:0".parse().unwrap()));
+            schema.execute(request).await.into()
+        }
+
+        let registry = Registry::new();
+        let rpc_listen_address =
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), get_available_port());
+
+        let rpc = RpcService::new(
+            RpcArgs {
+                rpc_listen_address,
+                no_ide: true,
+            },
+            "test",
+            Schema::build(Query, EmptyMutation, EmptySubscription),
+            &registry,
+        )
+        .route("/graphql", post(graphql));
+
+        let metrics = rpc.metrics();
+        let _svc = rpc.run().await.unwrap();
+
+        let url = format!("http://{rpc_listen_address}/graphql");
+        let client = Client::new();
+
+        let resp = client
+            .post(&url)
+            .json(&json!({
+                "query": "{ panic }"
+            }))
+            .send()
+            .await
+            .expect("Request should succeed");
+
+        assert_eq!(resp.status(), 500);
+
+        let body: Value = resp.json().await.expect("Response should be JSON");
+
+        // Verify the response is a GraphQL error
+        let error = &body["errors"].as_array().unwrap()[0];
+
+        assert!(
+            error["message"]
+                .as_str()
+                .unwrap()
+                .contains("Request panicked")
+        );
+
+        assert_eq!(
+            error["extensions"]["code"].as_str(),
+            Some(code::INTERNAL_SERVER_ERROR)
+        );
+
+        // The panic message is in the chain
+        let chain = error["extensions"]["chain"].as_array().unwrap();
+        assert!(chain.iter().any(|c| c.as_str().unwrap().contains("Boom!")));
+
+        // Verify the panic is recorded in metrics
+        assert_eq!(metrics.queries_panicked.get(), 1);
     }
 }

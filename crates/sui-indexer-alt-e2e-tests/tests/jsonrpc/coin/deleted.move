@@ -6,7 +6,7 @@
 // Then we merge the coins and call the rpc method again to see that only the merged coin with
 // balance 46 is in the results.
 
-//# init --protocol-version 70 --addresses Test=0x0 --accounts A B --simulator --objects-snapshot-min-checkpoint-lag 2
+//# init --protocol-version 70 --addresses Test=0x0 --accounts A B --simulator --consistent-range 2
 
 //# programmable --sender A --inputs 12 @A
 //> 0: SplitCoins(Gas, [Input(0)]);

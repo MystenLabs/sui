@@ -173,6 +173,8 @@
       { "source": "/concepts/transfers/:path*", "destination": "/guides/developer/objects/transfers/:path*"},
       { "source": "/concepts/versioning", "destination": "/guides/developer/objects/versioning"},
       { "source": "/concepts/tokenomics/vesting-strategies", "destination": "/guides/developer/coin/vesting-strategies"},
-      { "source": "/guides/developer/sui-101/connect", "destination": "/guides/developer/getting-started/hello-world"}
+      { "source": "/guides/developer/sui-101/connect", "destination": "/guides/developer/getting-started/hello-world"},
+      { "source": "/concepts/cryptography/nautilus", "destination": "/guides/developer/nautilus/"},
+      { "source": "/concepts/cryptography/nautilus/using-nautilus", "destination": "/guides/developer/nautilus/using-nautilus"}
     ]
   }

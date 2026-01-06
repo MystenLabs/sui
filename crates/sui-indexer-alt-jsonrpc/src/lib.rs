@@ -27,12 +27,14 @@ use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_open_rpc::Project;
 use timeout::TimeoutLayer;
+use tower_http::catch_panic;
 use tower_layer::Identity;
 use tracing::{info, warn};
 use url::Url;
 
 use crate::api::governance::{DelegationGovernance, Governance};
 use crate::context::Context;
+use crate::error::PanicHandler;
 
 pub mod api;
 pub mod args;
@@ -176,7 +178,7 @@ impl RpcService {
         let middleware = RpcServiceBuilder::new()
             .layer(TimeoutLayer::new(request_timeout))
             .layer(MetricsLayer::new(
-                metrics,
+                metrics.clone(),
                 modules.method_names().map(|n| n.to_owned()).collect(),
                 slow_request_threshold,
             ));
@@ -184,12 +186,16 @@ impl RpcService {
         let handle = server
             .set_rpc_middleware(middleware)
             .set_http_middleware(
-                tower::builder::ServiceBuilder::new().layer(
-                    tower_http::cors::CorsLayer::new()
-                        .allow_methods([http::Method::GET, http::Method::POST])
-                        .allow_origin(tower_http::cors::Any)
-                        .allow_headers(tower_http::cors::Any),
-                ),
+                tower::builder::ServiceBuilder::new()
+                    .layer(
+                        tower_http::cors::CorsLayer::new()
+                            .allow_methods([http::Method::GET, http::Method::POST])
+                            .allow_origin(tower_http::cors::Any)
+                            .allow_headers(tower_http::cors::Any),
+                    )
+                    .layer(catch_panic::CatchPanicLayer::custom(PanicHandler::new(
+                        metrics,
+                    ))),
             )
             .build(rpc_listen_address)
             .await
@@ -309,7 +315,11 @@ mod tests {
         time::Duration,
     };
 
-    use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::METHOD_NOT_FOUND_CODE};
+    use jsonrpsee::{
+        core::RpcResult,
+        proc_macros::rpc,
+        types::error::{INTERNAL_ERROR_CODE, METHOD_NOT_FOUND_CODE},
+    };
     use reqwest::Client;
     use serde_json::{Value, json};
     use sui_open_rpc::Module;
@@ -541,6 +551,53 @@ mod tests {
             .expect("Shutdown should succeed");
     }
 
+    #[tokio::test]
+    async fn test_panic_handling() {
+        let rpc_listen_address = test_listen_address();
+        let mut rpc = RpcService::new(
+            RpcArgs {
+                rpc_listen_address,
+                ..Default::default()
+            },
+            &Registry::new(),
+        )
+        .unwrap();
+
+        rpc.add_module(Panic).unwrap();
+
+        let metrics = rpc.metrics();
+        let svc = rpc.run().await.unwrap();
+
+        let url = format!("http://{rpc_listen_address}/");
+        let client = Client::new();
+
+        let resp = client
+            .post(&url)
+            .json(&json!({
+                "jsonrpc": "2.0",
+                "method": "test_panic",
+                "id": 1,
+            }))
+            .send()
+            .await
+            .expect("Request should succeed");
+
+        let body: Value = resp.json().await.expect("Response should be JSON");
+
+        // Verify the response is a JSON-RPC error
+        assert_eq!(body["jsonrpc"], "2.0");
+        assert_eq!(body["error"]["code"], INTERNAL_ERROR_CODE);
+        assert!(body["error"]["message"].as_str().unwrap().contains("Boom!"));
+
+        // Verify the panic is recorded in metrics
+        assert_eq!(metrics.requests_panicked.get(), 1);
+
+        tokio::time::timeout(Duration::from_millis(500), svc.shutdown())
+            .await
+            .expect("Shutdown should not timeout")
+            .expect("Shutdown should succeed");
+    }
+
     // Test Helpers
 
     #[open_rpc(namespace = "test", tag = "Test API")]
@@ -567,9 +624,17 @@ mod tests {
         fn baz(&self) -> RpcResult<u64>;
     }
 
+    #[open_rpc(namespace = "test", tag = "Test API")]
+    #[rpc(server, namespace = "test")]
+    trait PanicApi {
+        #[method(name = "panic")]
+        fn panic(&self) -> RpcResult<u64>;
+    }
+
     struct Foo;
     struct Bar;
     struct Baz;
+    struct Panic;
 
     impl FooApiServer for Foo {
         fn bar(&self) -> RpcResult<u64> {
@@ -590,6 +655,12 @@ mod tests {
     impl BazApiServer for Baz {
         fn baz(&self) -> RpcResult<u64> {
             Ok(45)
+        }
+    }
+
+    impl PanicApiServer for Panic {
+        fn panic(&self) -> RpcResult<u64> {
+            panic!("Boom!");
         }
     }
 
@@ -616,6 +687,16 @@ mod tests {
     impl RpcModule for Baz {
         fn schema(&self) -> Module {
             BazApiOpenRpc::module_doc()
+        }
+
+        fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
+            self.into_rpc()
+        }
+    }
+
+    impl RpcModule for Panic {
+        fn schema(&self) -> Module {
+            PanicApiOpenRpc::module_doc()
         }
 
         fn into_impl(self) -> jsonrpsee::RpcModule<Self> {

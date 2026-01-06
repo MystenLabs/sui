@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::{
-    AuthorityEpochTables, EncG, ExecutionIndicesWithStats, PkG,
+    AuthorityEpochTables, EncG, ExecutionIndicesWithStats, LockDetails, LockDetailsWrapper, PkG,
 };
 use crate::authority::transaction_deferral::DeferralKey;
 use crate::checkpoints::BuilderCheckpointSummary;
@@ -17,7 +17,7 @@ use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque, hash_map};
 use sui_types::authenticator_state::ActiveJwk;
-use sui_types::base_types::{AuthorityName, SequenceNumber};
+use sui_types::base_types::{AuthorityName, ObjectRef, SequenceNumber};
 use sui_types::crypto::RandomnessRound;
 use sui_types::error::SuiResult;
 use sui_types::executable_transaction::{
@@ -39,11 +39,10 @@ use typed_store::rocks::DBBatch;
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
-        epoch_start_configuration::{EpochStartConfigTrait, EpochStartConfiguration},
         shared_object_congestion_tracker::CongestionPerObjectDebt,
     },
     checkpoints::{CheckpointHeight, PendingCheckpoint},
-    consensus_handler::{SequencedConsensusTransactionKey, VerifiedSequencedConsensusTransaction},
+    consensus_handler::SequencedConsensusTransactionKey,
     epoch::{
         randomness::{VersionedProcessedMessage, VersionedUsedProcessedMessages},
         reconfiguration::ReconfigState,
@@ -65,12 +64,7 @@ pub(crate) struct ConsensusCommitOutput {
     // transaction scheduling state
     next_shared_object_versions: Option<HashMap<ConsensusObjectSequenceKey, SequenceNumber>>,
 
-    // TODO: If we delay committing consensus output until after all deferrals have been loaded,
-    // we can move deferred_txns to the ConsensusOutputCache and save disk bandwidth.
-    deferred_txns: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>,
-    // TODO(commit-handler-rewrite): remove the original once we no longer need to support the old consensus handler
-    deferred_txns_v2: Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>,
-    // deferred txns that have been loaded and can be removed
+    deferred_txns: Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>,
     deleted_deferred_txns: BTreeSet<DeferralKey>,
 
     // checkpoint state
@@ -96,6 +90,9 @@ pub(crate) struct ConsensusCommitOutput {
         u64, /* generation */
         Vec<(ExecutionTimeObservationKey, Duration)>,
     )>,
+
+    // Owned object locks acquired post-consensus (when disable_preconsensus_locking=true)
+    owned_object_locks: HashMap<ObjectRef, LockDetails>,
 }
 
 impl ConsensusCommitOutput {
@@ -111,7 +108,7 @@ impl ConsensusCommitOutput {
     }
 
     pub fn has_deferred_transactions(&self) -> bool {
-        !self.deferred_txns.is_empty() || !self.deferred_txns_v2.is_empty()
+        !self.deferred_txns.is_empty()
     }
 
     fn get_randomness_last_round_timestamp(&self) -> Option<TimestampMs> {
@@ -197,7 +194,7 @@ impl ConsensusCommitOutput {
         key: DeferralKey,
         transactions: Vec<VerifiedExecutableTransactionWithAliases>,
     ) {
-        self.deferred_txns_v2.push((key, transactions));
+        self.deferred_txns.push((key, transactions));
     }
 
     pub fn delete_loaded_deferred_transactions(&mut self, deferral_keys: &[DeferralKey]) {
@@ -254,6 +251,11 @@ impl ConsensusCommitOutput {
         self.congestion_control_randomness_object_debts = object_debts;
     }
 
+    pub fn set_owned_object_locks(&mut self, locks: HashMap<ObjectRef, LockDetails>) {
+        assert!(self.owned_object_locks.is_empty());
+        self.owned_object_locks = locks;
+    }
+
     pub fn write_to_batch(
         self,
         epoch_store: &AuthorityPerEpochStore,
@@ -293,6 +295,15 @@ impl ConsensusCommitOutput {
             batch.insert_batch(&tables.next_shared_object_versions_v2, next_versions)?;
         }
 
+        if !self.owned_object_locks.is_empty() {
+            batch.insert_batch(
+                &tables.owned_object_locked_transactions,
+                self.owned_object_locks
+                    .into_iter()
+                    .map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
+            )?;
+        }
+
         batch.delete_batch(
             &tables.deferred_transactions_v2,
             &self.deleted_deferred_txns,
@@ -304,7 +315,7 @@ impl ConsensusCommitOutput {
 
         batch.insert_batch(
             &tables.deferred_transactions_with_aliases_v2,
-            self.deferred_txns_v2.into_iter().map(|(key, txs)| {
+            self.deferred_txns.into_iter().map(|(key, txs)| {
                 (
                     key,
                     txs.into_iter()
@@ -395,7 +406,7 @@ impl ConsensusCommitOutput {
 pub(crate) struct ConsensusOutputCache {
     // deferred transactions is only used by consensus handler so there should never be lock contention
     // - hence no need for a DashMap.
-    pub(crate) deferred_transactions_v2:
+    pub(crate) deferred_transactions:
         Mutex<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>>>,
 
     // user_signatures_for_checkpoints is written to by consensus handler and read from by checkpoint builder
@@ -409,23 +420,15 @@ pub(crate) struct ConsensusOutputCache {
 }
 
 impl ConsensusOutputCache {
-    pub(crate) fn new(
-        epoch_start_configuration: &EpochStartConfiguration,
-        tables: &AuthorityEpochTables,
-    ) -> Self {
-        let deferred_transactions_v2 = tables
+    pub(crate) fn new(tables: &AuthorityEpochTables) -> Self {
+        let deferred_transactions = tables
             .get_all_deferred_transactions_v2()
             .expect("load deferred transactions cannot fail");
-
-        assert!(
-            epoch_start_configuration.is_data_quarantine_active_from_beginning_of_epoch(),
-            "This version of sui-node can only run after data quarantining has been enabled. Please run version 1.45.0 or later to the end of the current epoch and retry"
-        );
 
         let executed_in_epoch_cache_capacity = 50_000;
 
         Self {
-            deferred_transactions_v2: Mutex::new(deferred_transactions_v2),
+            deferred_transactions: Mutex::new(deferred_transactions),
             user_signatures_for_checkpoints: Default::default(),
             executed_in_epoch: RwLock::new(DashMap::with_shard_amount(2048)),
             executed_in_epoch_cache: MokaCache::builder(8)
@@ -495,6 +498,9 @@ pub(crate) struct ConsensusOutputQuarantine {
 
     processed_consensus_messages: RefCountedHashMap<SequencedConsensusTransactionKey, ()>,
 
+    // Owned object locks acquired post-consensus.
+    owned_object_locks: HashMap<ObjectRef, LockDetails>,
+
     metrics: Arc<EpochMetrics>,
 }
 
@@ -513,6 +519,7 @@ impl ConsensusOutputQuarantine {
             processed_consensus_messages: RefCountedHashMap::new(),
             congestion_control_randomness_object_debts: RefCountedHashMap::new(),
             congestion_control_object_debts: RefCountedHashMap::new(),
+            owned_object_locks: HashMap::new(),
             metrics: authority_metrics,
         }
     }
@@ -530,6 +537,7 @@ impl ConsensusOutputQuarantine {
         self.insert_shared_object_next_versions(&output);
         self.insert_congestion_control_debts(&output);
         self.insert_processed_consensus_messages(&output);
+        self.insert_owned_object_locks(&output);
         self.output_queue.push_back(output);
 
         self.metrics
@@ -672,6 +680,7 @@ impl ConsensusOutputQuarantine {
                 self.remove_shared_object_next_versions(&output);
                 self.remove_processed_consensus_messages(&output);
                 self.remove_congestion_control_debts(&output);
+                self.remove_owned_object_locks(&output);
 
                 output.write_to_batch(epoch_store, batch)?;
             } else {
@@ -749,6 +758,18 @@ impl ConsensusOutputQuarantine {
             }
         }
     }
+
+    fn insert_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
+        for (obj_ref, lock) in &output.owned_object_locks {
+            self.owned_object_locks.insert(*obj_ref, *lock);
+        }
+    }
+
+    fn remove_owned_object_locks(&mut self, output: &ConsensusCommitOutput) {
+        for obj_ref in output.owned_object_locks.keys() {
+            self.owned_object_locks.remove(obj_ref);
+        }
+    }
 }
 
 // Read methods - all methods in this block return data from the quarantine which would otherwise
@@ -803,6 +824,31 @@ impl ConsensusOutputQuarantine {
                 tables
                     .next_shared_object_versions_v2
                     .multi_get(object_keys)
+                    .expect("db error")
+            },
+        ))
+    }
+
+    /// Gets owned object locks, checking quarantine first then falling back to DB.
+    /// Used for post-consensus conflict detection when preconsensus locking is disabled.
+    /// After crash recovery, quarantine is empty so we naturally fall back to DB.
+    pub(super) fn get_owned_object_locks(
+        &self,
+        tables: &AuthorityEpochTables,
+        obj_refs: &[ObjectRef],
+    ) -> SuiResult<Vec<Option<LockDetails>>> {
+        Ok(do_fallback_lookup(
+            obj_refs,
+            |obj_ref| {
+                if let Some(lock) = self.owned_object_locks.get(obj_ref) {
+                    CacheResult::Hit(Some(*lock))
+                } else {
+                    CacheResult::Miss
+                }
+            },
+            |obj_refs| {
+                tables
+                    .multi_get_locked_transactions(obj_refs)
                     .expect("db error")
             },
         ))

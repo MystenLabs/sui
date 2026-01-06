@@ -4,6 +4,7 @@
 use crate::benchmark_context::BenchmarkContext;
 use crate::command::Component;
 use crate::workload::Workload;
+use sui_protocol_config::ProtocolConfig;
 
 pub(crate) mod benchmark_context;
 pub mod command;
@@ -23,6 +24,13 @@ pub async fn run_benchmark(
     checkpoint_size: usize,
     print_sample_tx: bool,
 ) {
+    // This benchmark uses certify_transactions (QD path) which requires
+    // disable_preconsensus_locking=false for signed transaction storage.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let mut ctx = BenchmarkContext::new(workload.clone(), component, print_sample_tx).await;
     let tx_generator = workload.create_tx_generator(&mut ctx).await;
     let transactions = ctx.generate_transactions(tx_generator).await;

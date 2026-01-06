@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::source_package::parsed_manifest::{OnChainInfo, SourceManifest};
+
 use anyhow::bail;
 use move_symbol_pool::Symbol;
-use once_cell::sync::Lazy;
-use std::sync::Mutex;
+
+use std::sync::{LazyLock, Mutex};
 
 pub type PackageIdentifier = Symbol;
 
@@ -31,8 +32,8 @@ pub trait PackageHooks {
 
     fn resolve_version(&self, manifest: &SourceManifest) -> anyhow::Result<Option<Symbol>>;
 }
-static HOOKS: Lazy<Mutex<Option<Box<dyn PackageHooks + Send + Sync>>>> =
-    Lazy::new(|| Mutex::new(None));
+static HOOKS: LazyLock<Mutex<Option<Box<dyn PackageHooks + Send + Sync>>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 /// Registers package hooks for the process in which the package system is used.
 pub fn register_package_hooks(hooks: Box<dyn PackageHooks + Send + Sync>) {

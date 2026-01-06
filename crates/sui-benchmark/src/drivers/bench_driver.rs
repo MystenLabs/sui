@@ -27,7 +27,7 @@ use tokio_util::sync::CancellationToken;
 use crate::drivers::HistogramWrapper;
 use crate::drivers::driver::Driver;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionResult};
 use crate::workloads::workload::ExpectedFailureType;
 use crate::workloads::{GroupID, WorkloadInfo};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -39,6 +39,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use sui_types::committee::Committee;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::messages_grpc::WaitForEffectsResponse;
 use sui_types::transaction::{Transaction, TransactionDataAPI};
 use sui_types::transaction_driver_types::TransactionSubmissionError;
 use sysinfo::System;
@@ -981,19 +983,114 @@ async fn run_bench_worker(
                     let mut payload = free_pool.pop_front().unwrap();
                     num_in_flight += 1;
                     num_submitted += 1;
-                    let tx = payload.make_transaction();
-                    let start = Arc::new(Instant::now());
-                    let metrics = Arc::clone(&metrics);
-                    let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
-                    // TODO: clone committee for each request is not ideal.
-                    let committee = worker.proxy.clone_committee();
-                    let res = worker.proxy
-                        .execute_transaction_block(tx.clone())
-                    .then(|(client_type, res)| async move {
-                        metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
-                        handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
-                    }).count_in_flight(num_in_flight_metric);
-                    futures.push(Box::pin(res));
+
+                    // Check if this is a soft bundle payload
+                    if payload.is_soft_bundle() {
+                        let txs = payload.make_soft_bundle_transactions();
+                        let num_txs = txs.len();
+                        let start = Arc::new(Instant::now());
+                        let metrics_clone = Arc::clone(&metrics);
+                        let proxy = worker.proxy.clone_new();
+
+                        let res = async move {
+                            let bundle_result = proxy.execute_soft_bundle(txs).await;
+                            let latency = start.elapsed();
+
+                            match bundle_result {
+                                Ok(results) => {
+                                    // Convert to SoftBundleExecutionResults
+                                    let mut soft_bundle_results = Vec::new();
+                                    let mut any_success = false;
+
+                                    for (_digest, response) in results {
+                                        match response {
+                                            WaitForEffectsResponse::Executed { details, .. } => {
+                                                any_success = true;
+                                                let effects = details.map(|d| {
+                                                    // Use QuorumExecuted since the transaction was executed by consensus
+                                                    let epoch = d.effects.executed_epoch();
+                                                    ExecutionEffects::FinalizedTransactionEffects(
+                                                        sui_types::transaction_driver_types::FinalizedEffects {
+                                                            effects: d.effects,
+                                                            finality_info: sui_types::transaction_driver_types::EffectsFinalityInfo::QuorumExecuted(epoch),
+                                                        },
+                                                        d.events.unwrap_or_default(),
+                                                    )
+                                                });
+                                                soft_bundle_results.push(SoftBundleTransactionResult {
+                                                    success: true,
+                                                    effects,
+                                                    error: None,
+                                                });
+                                            }
+                                            WaitForEffectsResponse::Rejected { error } => {
+                                                soft_bundle_results.push(SoftBundleTransactionResult {
+                                                    success: false,
+                                                    effects: None,
+                                                    error: error.map(|e| format!("{:?}", e)),
+                                                });
+                                            }
+                                            WaitForEffectsResponse::Expired { epoch, round } => {
+                                                soft_bundle_results.push(SoftBundleTransactionResult {
+                                                    success: false,
+                                                    effects: None,
+                                                    error: Some(format!("Expired at epoch {}, round {:?}", epoch, round)),
+                                                });
+                                            }
+                                        }
+                                    }
+
+                                    // Let the payload handle the results
+                                    payload.handle_soft_bundle_results(&SoftBundleExecutionResults {
+                                        results: soft_bundle_results,
+                                    });
+
+                                    if any_success {
+                                        metrics_clone
+                                            .num_success
+                                            .with_label_values(&[&payload.to_string(), "soft_bundle"])
+                                            .inc();
+                                        NextOp::Response {
+                                            latency,
+                                            num_commands: num_txs as u16,
+                                            gas_used: 0, // Gas tracking for soft bundles is complex
+                                            payload,
+                                        }
+                                    } else {
+                                        // All transactions in the bundle failed
+                                        metrics_clone
+                                            .num_error
+                                            .with_label_values(&[&payload.to_string(), "soft_bundle_all_failed", "soft_bundle"])
+                                            .inc();
+                                        NextOp::Failure
+                                    }
+                                }
+                                Err(err) => {
+                                    error!("Soft bundle execution failed: {:?}", err);
+                                    metrics_clone
+                                        .num_error
+                                        .with_label_values(&[&payload.to_string(), "soft_bundle_error", "soft_bundle"])
+                                        .inc();
+                                    NextOp::Failure
+                                }
+                            }
+                        };
+                        futures.push(Box::pin(res));
+                    } else {
+                        let tx = payload.make_transaction();
+                        let start = Arc::new(Instant::now());
+                        let metrics = Arc::clone(&metrics);
+                        let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
+                        // TODO: clone committee for each request is not ideal.
+                        let committee = worker.proxy.clone_committee();
+                        let res = worker.proxy
+                            .execute_transaction_block(tx.clone())
+                        .then(|(client_type, res)| async move {
+                            metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
+                            handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
+                        }).count_in_flight(num_in_flight_metric);
+                        futures.push(Box::pin(res));
+                    }
                 }
             }
             Some(op) = futures.next() => {

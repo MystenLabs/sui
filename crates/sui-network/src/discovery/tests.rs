@@ -8,7 +8,7 @@ use anemo::types::PeerAffinity;
 use fastcrypto::ed25519::Ed25519PublicKey;
 use futures::stream::FuturesUnordered;
 use std::collections::HashSet;
-use sui_config::p2p::AllowlistedPeer;
+use sui_config::p2p::{AllowlistedPeer, SeedPeer};
 use tokio::time::timeout;
 
 #[tokio::test]
@@ -270,8 +270,8 @@ async fn peers_are_added_from_reconfig_channel() -> Result<()> {
 #[tokio::test]
 async fn test_access_types() {
     // This test case constructs a mesh graph of 11 nodes, with the following topology.
-    // For allowlisted nodes, `+` means the peer is allowlisted with an address, otherwise not.
-    // An allowlisted peer with address will be proactively connected in anemo network.
+    // Only seed peers are proactively connected. Allowlisted peers allow inbound connections
+    // but do NOT proactively connect outbound.
     //
     //
     // The topology:
@@ -279,15 +279,15 @@ async fn test_access_types() {
     //                                     /
     //                       ------ 1 (public) ------
     //                      /                        \
-    //    2 (public, seed: 1, allowed: 7, 8)          3 (private, seed: 1, allowed: 4+, 5+)
+    //    2 (public, seed: 1, allowed: 7, 8)          3 (private, seed: 1, 4, 5)
     //       |                                       /             \
-    //       |                 4 (private, allowed: 3+, 5, 6)     5 (private, allowed: 3, 4+)
+    //       |                 4 (private, seed: 3, allowed: 5, 6)  5 (private, seed: 4, allowed: 3)
     //       |                                        \
-    //       |                                      6 (private, allowed: 4+)
-    //     7 (private, allowed: 2+, 8+)
+    //       |                                      6 (private, seed: 4)
+    //     7 (private, seed: 2, 8)
     //       |
     //       |
-    //     8 (private, allowed: 7+, 9+)  p.s. 8's max connection is 0
+    //     8 (private, seed: 7, 9)  p.s. 8's max connection is 0
     //       |
     //       |
     //     9 (public)
@@ -333,45 +333,64 @@ async fn test_access_types() {
     // Node 4, private, allowlist: Node 3, 5, and 6
     let (mut builder_4, network_4, key_4) = set_up_network(P2pConfig::default());
 
-    // Node 5, private, allowlisted: Node 3 and Node 4
+    // Node 5, private, seed: 4, allowed: 3
     let (builder_5, network_5, key_5) = {
         let mut private_discovery_config = default_private_discovery_config.clone();
-        private_discovery_config.allowlisted_peers = vec![
-            // Intitially 5 does not know how to contact 3 or 4.
-            local_allowlisted_peer(network_3.peer_id(), None),
-            local_allowlisted_peer(network_4.peer_id(), Some(network_4.local_addr().port())),
-        ];
-        set_up_network(P2pConfig::default().set_discovery_config(private_discovery_config))
+        private_discovery_config.allowlisted_peers =
+            vec![local_allowlisted_peer(network_3.peer_id(), None)];
+        let mut p2p_config = P2pConfig::default().set_discovery_config(private_discovery_config);
+        p2p_config.seed_peers.push(SeedPeer {
+            peer_id: Some(network_4.peer_id()),
+            address: format!("/dns/localhost/udp/{}", network_4.local_addr().port())
+                .parse()
+                .unwrap(),
+        });
+        set_up_network(p2p_config)
     };
 
-    // Node 6, private, allowlisted: Node 4
+    // Node 6, private, seed: 4
     let (builder_6, network_6, key_6) = {
-        let mut private_discovery_config = default_private_discovery_config.clone();
-        private_discovery_config.allowlisted_peers = vec![local_allowlisted_peer(
-            network_4.peer_id(),
-            Some(network_4.local_addr().port()),
-        )];
-        set_up_network(P2pConfig::default().set_discovery_config(private_discovery_config))
+        let mut p2p_config =
+            P2pConfig::default().set_discovery_config(default_private_discovery_config.clone());
+        p2p_config.seed_peers.push(SeedPeer {
+            peer_id: Some(network_4.peer_id()),
+            address: format!("/dns/localhost/udp/{}", network_4.local_addr().port())
+                .parse()
+                .unwrap(),
+        });
+        set_up_network(p2p_config)
     };
 
-    // Node 3: Add Node 4 and Node 5 to allowlist
-    let mut private_discovery_config = default_private_discovery_config.clone();
-    private_discovery_config.allowlisted_peers = vec![
-        local_allowlisted_peer(network_4.peer_id(), Some(network_4.local_addr().port())),
-        local_allowlisted_peer(network_5.peer_id(), Some(network_5.local_addr().port())),
-    ];
-    builder_3.config.discovery = Some(private_discovery_config);
+    // Node 3: Add Node 4 and Node 5 as seeds
+    builder_3.config.discovery = Some(default_private_discovery_config.clone());
+    builder_3.config.seed_peers.push(SeedPeer {
+        peer_id: Some(network_4.peer_id()),
+        address: format!("/dns/localhost/udp/{}", network_4.local_addr().port())
+            .parse()
+            .unwrap(),
+    });
+    builder_3.config.seed_peers.push(SeedPeer {
+        peer_id: Some(network_5.peer_id()),
+        address: format!("/dns/localhost/udp/{}", network_5.local_addr().port())
+            .parse()
+            .unwrap(),
+    });
 
-    // Node 4: Add Node 3, Node 5, and Node 6 to allowlist
+    // Node 4: Add Node 3 as seed, Node 5 and Node 6 to allowlist
     let mut private_discovery_config = default_private_discovery_config.clone();
     private_discovery_config.allowlisted_peers = vec![
-        local_allowlisted_peer(network_3.peer_id(), Some(network_3.local_addr().port())),
         local_allowlisted_peer(network_5.peer_id(), None),
         local_allowlisted_peer(network_6.peer_id(), None),
     ];
     builder_4.config.discovery = Some(private_discovery_config);
+    builder_4.config.seed_peers.push(SeedPeer {
+        peer_id: Some(network_3.peer_id()),
+        address: format!("/dns/localhost/udp/{}", network_3.local_addr().port())
+            .parse()
+            .unwrap(),
+    });
 
-    // Node 7, private, allowlisted: Node 2, Node 8
+    // Node 7, private, seed: 2, 8
     let (mut builder_7, network_7, key_7) = set_up_network(
         P2pConfig::default().set_discovery_config(default_private_discovery_config.clone()),
     );
@@ -379,18 +398,26 @@ async fn test_access_types() {
     // Node 9, public
     let (builder_9, network_9, key_9) = set_up_network(default_p2p_config.clone());
 
-    // Node 8, private, allowlisted: Node 7, Node 9
+    // Node 8, private, seed: 7, 9.  p.s. 8's max connection is 0
     let (builder_8, network_8, key_8) = {
-        let mut private_discovery_config = default_private_discovery_config.clone();
-        private_discovery_config.allowlisted_peers = vec![
-            local_allowlisted_peer(network_7.peer_id(), Some(network_7.local_addr().port())),
-            local_allowlisted_peer(network_9.peer_id(), Some(network_9.local_addr().port())),
-        ];
         let mut p2p_config = P2pConfig::default();
         let mut anemo_config = anemo::Config::default();
         anemo_config.max_concurrent_connections = Some(0);
         p2p_config.anemo_config = Some(anemo_config);
-        set_up_network(p2p_config.set_discovery_config(private_discovery_config))
+        p2p_config.discovery = Some(default_private_discovery_config.clone());
+        p2p_config.seed_peers.push(SeedPeer {
+            peer_id: Some(network_7.peer_id()),
+            address: format!("/dns/localhost/udp/{}", network_7.local_addr().port())
+                .parse()
+                .unwrap(),
+        });
+        p2p_config.seed_peers.push(SeedPeer {
+            peer_id: Some(network_9.peer_id()),
+            address: format!("/dns/localhost/udp/{}", network_9.local_addr().port())
+                .parse()
+                .unwrap(),
+        });
+        set_up_network(p2p_config)
     };
 
     // Node 2, Add Node 7 and Node 8 to allowlist
@@ -401,13 +428,20 @@ async fn test_access_types() {
     ];
     builder_2.config.discovery = Some(discovery_config);
 
-    // Node 7: Add Node 2, and Node 8 to allowlist
-    let mut private_discovery_config = default_private_discovery_config.clone();
-    private_discovery_config.allowlisted_peers = vec![
-        local_allowlisted_peer(network_2.peer_id(), Some(network_2.local_addr().port())),
-        local_allowlisted_peer(network_8.peer_id(), Some(network_8.local_addr().port())),
-    ];
-    builder_7.config.discovery = Some(private_discovery_config);
+    // Node 7: Add Node 2 and Node 8 as seeds
+    builder_7.config.discovery = Some(default_private_discovery_config.clone());
+    builder_7.config.seed_peers.push(SeedPeer {
+        peer_id: Some(network_2.peer_id()),
+        address: format!("/dns/localhost/udp/{}", network_2.local_addr().port())
+            .parse()
+            .unwrap(),
+    });
+    builder_7.config.seed_peers.push(SeedPeer {
+        peer_id: Some(network_8.peer_id()),
+        address: format!("/dns/localhost/udp/{}", network_8.local_addr().port())
+            .parse()
+            .unwrap(),
+    });
 
     // Node 10, private, seed: 9
     let (builder_10, network_10, key_10) = {
@@ -494,7 +528,7 @@ async fn test_access_types() {
     // Let them fully connect
     tokio::time::sleep(Duration::from_secs(10)).await;
 
-    // Node 1 is connected to everyone. But it does not "know" private nodes.
+    // Node 1 is connected to everyone. But it only "knows" public nodes (2, 9).
     assert_peers(
         "Node 1",
         &network_1,
@@ -511,7 +545,7 @@ async fn test_access_types() {
         ]),
     );
 
-    // Node 1 is connected to everyone. But it does not "know" private nodes except the allowlisted ones 7 and 8.
+    // Node 2 is connected to everyone. But it does not "know" private nodes except the allowlisted ones 7 and 8.
     assert_peers(
         "Node 2",
         &network_2,
@@ -528,6 +562,7 @@ async fn test_access_types() {
         ]),
     );
 
+    // Node 3 connects to seeds 1, 4, 5 and discovers more via gossip.
     assert_peers(
         "Node 3",
         &network_3,
@@ -538,6 +573,7 @@ async fn test_access_types() {
         HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_4, peer_id_5, peer_id_9]),
     );
 
+    // Node 4 connects to seed 3 and discovers more via gossip.
     assert_peers(
         "Node 4",
         &network_4,
@@ -554,6 +590,7 @@ async fn test_access_types() {
         ]),
     );
 
+    // Node 5 connects to seed 4 and discovers more via gossip.
     assert_peers(
         "Node 5",
         &network_5,
@@ -564,6 +601,7 @@ async fn test_access_types() {
         HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_3, peer_id_4, peer_id_9]),
     );
 
+    // Node 6 connects to seed 4 and discovers more via gossip.
     assert_peers(
         "Node 6",
         &network_6,
@@ -574,19 +612,20 @@ async fn test_access_types() {
         HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_4, peer_id_9]),
     );
 
-    // Node 11 finds Node 7 via Node 2, and invites Node 7 to connect. Node 7 says yes.
+    // Node 7 connects to seeds 2 and 8 and discovers more via gossip.
+    // Node 7 is private so its info is NOT shared via gossip - Node 11 can't discover it.
     assert_peers(
         "Node 7",
         &network_7,
         &state_7,
         HashSet::from_iter(vec![peer_id_2, peer_id_8]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_8, peer_id_9, peer_id_11]),
         HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_8, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_8, peer_id_9, peer_id_11]),
+        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_8, peer_id_9]),
+        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_8, peer_id_9]),
     );
 
-    // Node 11 finds Node 8 via Node 2, and invites Node 8 to connect. Node 8 said No
-    // because its `max_concurrent_connections` is 0.
+    // Node 8 has seeds 7 and 9, but max_concurrent_connections is 0 so it can't accept more connections.
+    // Node 8 is private so its info is NOT shared via gossip.
     assert_peers(
         "Node 8",
         &network_8,
@@ -597,6 +636,7 @@ async fn test_access_types() {
         HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_7, peer_id_9]),
     );
 
+    // Node 9 (public, no seeds) is connected by many nodes that discover it.
     assert_peers(
         "Node 9",
         &network_9,
@@ -613,7 +653,7 @@ async fn test_access_types() {
         ]),
     );
 
-    // Node 10 does not talk to any other private nodes.
+    // Node 10 connects to Node 9 (seed) and discovers more.
     assert_peers(
         "Node 10",
         &network_10,
@@ -624,16 +664,17 @@ async fn test_access_types() {
         HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
     );
 
-    // 11 allowlists 8 but 8 does not 11, so they can't connect
-    // although 8 is still in 11's known peer list
+    // Node 11 connects to seed 1 and discovers more.
+    // Node 11 allowlists 7 and 8 (no addresses), but they're private so their info isn't shared via gossip.
+    // Node 11 can't discover them.
     assert_peers(
         "Node 11",
         &network_11,
         &state_11,
         HashSet::from_iter(vec![peer_id_1, peer_id_7, peer_id_8]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_7, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_7, peer_id_8, peer_id_9]),
-        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_7, peer_id_9]),
+        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
+        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
+        HashSet::from_iter(vec![peer_id_1, peer_id_2, peer_id_9]),
     );
 }
 

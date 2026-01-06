@@ -21,7 +21,6 @@ tempfile.workspace = true
 sha2.workspace = true
 regex.workspace = true
 treeline.workspace = true
-once_cell.workspace = true
 named-lock.workspace = true
 itertools.workspace = true
 vfs.workspace = true
