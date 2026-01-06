@@ -28,6 +28,8 @@ use super::STORAGE_COST_PER_COUNTER;
 
 pub const MAX_GAS_IN_UNIT: u64 = 1_000_000_000;
 
+const NUM_COUNTERS: usize = 8;
+
 /// A workload that generates random transactions to test the system under different transaction patterns.
 /// The workload can:
 /// - Create shared counter objects
@@ -46,6 +48,8 @@ pub struct RandomizedTransactionPayload {
     package_id: ObjectID,
     shared_objects: Vec<ObjectRef>,
     owned_object: ObjectRef,
+    /// Immutable object (frozen) shared across all payloads
+    immutable_object: ObjectRef,
     randomness_initial_shared_version: SequenceNumber,
     transfer_to: SuiAddress,
     gas: Gas,
@@ -63,12 +67,14 @@ impl std::fmt::Display for RandomizedTransactionPayload {
 struct RandomizedTransactionConfig {
     // Whether the transaction contains the owned object
     contain_owned_object: bool,
+    // Whether the transaction contains the immutable object
+    contain_immutable_object: bool,
     // Number of pure inputs
     num_pure_input: u64,
     // Number of shared inputs
     num_shared_inputs: u64,
-    // Number of move calls
-    num_move_calls: u64,
+    // Number of commands per PTB
+    num_commands: u64,
 }
 
 fn generate_random_transaction_config(
@@ -77,9 +83,10 @@ fn generate_random_transaction_config(
     let num_shared_inputs = rand::thread_rng().gen_range(0..=num_shared_objects_exist);
     RandomizedTransactionConfig {
         contain_owned_object: rand::thread_rng().gen_bool(0.5),
+        contain_immutable_object: rand::thread_rng().gen_bool(0.5),
         num_pure_input: rand::thread_rng().gen_range(0..=5),
         num_shared_inputs,
-        num_move_calls: std::cmp::min(rand::thread_rng().gen_range(0..=3), num_shared_inputs),
+        num_commands: std::cmp::min(rand::thread_rng().gen_range(0..=3), num_shared_inputs),
     }
 }
 
@@ -183,11 +190,25 @@ impl RandomizedTransactionPayload {
             .unwrap();
     }
 
-    fn make_native_move_call(&mut self, builder: &mut ProgrammableTransactionBuilder) {
+    fn make_transfer(&mut self, builder: &mut ProgrammableTransactionBuilder) {
         builder
             .pay_sui(
                 vec![self.transfer_to],
                 vec![rand::thread_rng().gen_range(0..=1)],
+            )
+            .unwrap();
+    }
+
+    fn make_immutable_object_call(&self, builder: &mut ProgrammableTransactionBuilder) {
+        builder
+            .move_call(
+                self.package_id,
+                Identifier::new("object_basics").unwrap(),
+                Identifier::new("get_value").unwrap(),
+                vec![],
+                vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                    self.immutable_object,
+                ))],
             )
             .unwrap();
     }
@@ -214,6 +235,30 @@ impl Payload for RandomizedTransactionPayload {
             tracing::debug!("Owned object mutated: {:?}", owned_in_effects);
             self.owned_object = owned_in_effects;
         }
+
+        // Verify immutable object is NOT in changed objects
+        let immutable_obj_id = self.immutable_object.0;
+        assert!(
+            !effects
+                .mutated()
+                .iter()
+                .any(|(obj_ref, _)| obj_ref.0 == immutable_obj_id),
+            "Immutable object should not be in mutated objects"
+        );
+        assert!(
+            !effects
+                .created()
+                .iter()
+                .any(|(obj_ref, _)| obj_ref.0 == immutable_obj_id),
+            "Immutable object should not be in created objects"
+        );
+        assert!(
+            !effects
+                .deleted()
+                .iter()
+                .any(|obj_ref| obj_ref.0 == immutable_obj_id),
+            "Immutable object should not be in deleted objects"
+        );
     }
 
     fn make_transaction(&mut self) -> Transaction {
@@ -257,7 +302,7 @@ impl Payload for RandomizedTransactionPayload {
 
             // Generate move calls.
             let mut next_shared_input_index: usize = 0;
-            for _i in 0..config.num_move_calls {
+            for _i in 0..config.num_commands {
                 match choose_move_call_type(next_shared_input_index, config.num_shared_inputs) {
                     MoveCallType::ContractCall => {
                         self.make_counter_move_call(builder, next_shared_input_index);
@@ -269,9 +314,14 @@ impl Payload for RandomizedTransactionPayload {
                         break;
                     }
                     MoveCallType::NativeCall => {
-                        self.make_native_move_call(builder);
+                        self.make_transfer(builder);
                     }
                 }
+            }
+
+            // Add immutable object call to test immutable object handling
+            if config.contain_immutable_object {
+                self.make_immutable_object_call(builder);
             }
         }
 
@@ -345,7 +395,7 @@ impl WorkloadBuilder<dyn Payload> for RandomizedTransactionWorkloadBuilder {
         });
 
         // Gas coins for creating counters
-        for _i in 0..self.num_payloads {
+        for _i in 0..NUM_COUNTERS {
             let (address, keypair) = get_key_pair();
             configs.push(GasCoinConfig {
                 amount: MAX_GAS_FOR_TESTING,
@@ -353,6 +403,15 @@ impl WorkloadBuilder<dyn Payload> for RandomizedTransactionWorkloadBuilder {
                 keypair: Arc::new(keypair),
             });
         }
+
+        // Gas coin for creating and freezing immutable object
+        let (address, keypair) = get_key_pair();
+        configs.push(GasCoinConfig {
+            amount: MAX_GAS_FOR_TESTING,
+            address,
+            keypair: Arc::new(keypair),
+        });
+
         configs
     }
 
@@ -383,6 +442,7 @@ impl WorkloadBuilder<dyn Payload> for RandomizedTransactionWorkloadBuilder {
             basics_package_id: None,
             shared_objects: vec![],
             owned_objects: vec![],
+            immutable_object: None,
             transfer_to: None,
             init_gas,
             payload_gas,
@@ -396,6 +456,8 @@ pub struct RandomizedTransactionWorkload {
     pub basics_package_id: Option<ObjectID>,
     pub shared_objects: Vec<ObjectRef>,
     pub owned_objects: Vec<ObjectRef>,
+    /// Immutable object (frozen) shared across all payloads
+    pub immutable_object: Option<ObjectRef>,
     pub transfer_to: Option<SuiAddress>,
     pub init_gas: Vec<Gas>,
     pub payload_gas: Vec<Gas>,
@@ -417,10 +479,17 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
             return;
         }
         let gas_price = system_state_observer.state.borrow().reference_gas_price;
+
         let (head, tail) = self
             .init_gas
             .split_first()
             .expect("Not enough gas to initialize randomized transaction workload");
+
+        // Split tail: first NUM_COUNTERS for counters, last one for immutable object
+        let (counter_gas, immutable_gas) = tail.split_at(NUM_COUNTERS);
+        let immutable_gas = immutable_gas
+            .first()
+            .expect("Not enough gas for immutable object");
 
         // Publish basics package
         info!("Publishing basics package");
@@ -436,7 +505,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
         // Create shared objects
         {
             let mut futures = vec![];
-            for (gas, sender, keypair) in tail.iter() {
+            for (gas, sender, keypair) in counter_gas.iter() {
                 let transaction = TestTransactionBuilder::new(*sender, *gas, gas_price)
                     .call_counter_create(self.basics_package_id.unwrap())
                     .build_and_sign(keypair.as_ref());
@@ -448,6 +517,55 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                 });
             }
             self.shared_objects = join_all(futures).await;
+        }
+
+        // Create and freeze immutable object
+        {
+            let (gas, sender, keypair) = immutable_gas;
+            let mut current_gas = *gas;
+
+            // Create object
+            let transaction = TestTransactionBuilder::new(*sender, current_gas, gas_price)
+                .move_call(
+                    self.basics_package_id.unwrap(),
+                    "object_basics",
+                    "create",
+                    vec![
+                        CallArg::Pure(bcs::to_bytes(&(42_u64)).unwrap()),
+                        CallArg::Pure(bcs::to_bytes(&sender).unwrap()),
+                    ],
+                )
+                .build_and_sign(keypair.as_ref());
+            let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+            let effects = execution_result.expect("Failed to create immutable object");
+            let created_obj = effects.created()[0].0;
+            current_gas = effects.gas_object().0;
+            info!("Created object for freezing: {:?}", created_obj);
+
+            // Freeze object
+            let transaction = TestTransactionBuilder::new(*sender, current_gas, gas_price)
+                .move_call(
+                    self.basics_package_id.unwrap(),
+                    "object_basics",
+                    "freeze_object",
+                    vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(created_obj))],
+                )
+                .build_and_sign(keypair.as_ref());
+            let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+            let effects = execution_result.expect("Failed to freeze object");
+
+            // After freezing, the object becomes immutable - find it in mutated objects
+            let frozen_obj = effects
+                .mutated()
+                .iter()
+                .find(|(obj_ref, owner)| {
+                    obj_ref.0 == created_obj.0 && matches!(owner, Owner::Immutable)
+                })
+                .map(|(obj_ref, _)| *obj_ref)
+                .expect("Frozen object not found");
+
+            info!("Frozen immutable object: {:?}", frozen_obj);
+            self.immutable_object = Some(frozen_obj);
         }
 
         // create owned objects
@@ -515,11 +633,16 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
         info!("Creating randomized transaction payloads...");
         let mut payloads = vec![];
 
+        let immutable_object = self
+            .immutable_object
+            .expect("immutable_object not initialized");
+
         for (i, g) in self.payload_gas.iter().enumerate() {
             payloads.push(Box::new(RandomizedTransactionPayload {
                 package_id: self.basics_package_id.unwrap(),
                 shared_objects: self.shared_objects.clone(),
                 owned_object: self.owned_objects[i],
+                immutable_object,
                 randomness_initial_shared_version: self.randomness_initial_shared_version.unwrap(),
                 transfer_to: self.transfer_to.unwrap(),
                 gas: g.clone(),
