@@ -130,32 +130,29 @@ impl Payload for SoftBundleConflictingTransferPayload {
             }
         }
 
-        // If all transactions failed due to retriable errors (e.g., epoch change),
-        // skip validation entirely as the bundle wasn't processed for conflict detection.
-        if retriable_error_count == results.results.len() {
+        // If any transaction had a retriable error (e.g., epoch change, expiration),
+        // skip validation as the results are unreliable for conflict detection testing.
+        if retriable_error_count > 0 {
             debug!(
-                "All {} transactions failed with retriable errors, skipping conflict validation",
+                "Skipping conflict validation due to {} retriable error(s)",
                 retriable_error_count
             );
             return;
         }
 
-        // Validate results, adjusting expectations for any retriable errors.
-        // Retriable errors mean some transactions weren't processed, so we relax the
-        // strict "exactly 1 success, N-1 conflicts" requirement proportionally.
+        // Validate conflict detection results.
+        // With no retriable errors, we expect exactly 1 success and (N-1) ObjectLockConflicts.
         let total_transactions = self.gas_objects.len();
 
-        // We factor in the retriable errors to the expected counts.
-        let min_expected_success = 1usize.saturating_sub(retriable_error_count);
-        let min_expected_conflicts = (total_transactions - 1).saturating_sub(retriable_error_count);
-
-        assert!(
-            success_count >= min_expected_success,
-            "Expected at least {min_expected_success} successful transaction(s) in soft bundle, got {success_count}",
+        assert_eq!(
+            success_count, 1,
+            "Expected exactly 1 successful transaction, got {success_count}"
         );
-        assert!(
-            conflict_count >= min_expected_conflicts,
-            "Expected at least {min_expected_conflicts} ObjectLockConflict rejections, got {conflict_count}"
+        assert_eq!(
+            conflict_count,
+            total_transactions - 1,
+            "Expected {} ObjectLockConflict rejections, got {conflict_count}",
+            total_transactions - 1
         );
 
         debug!(

@@ -1049,9 +1049,7 @@ async fn run_bench_worker(
 
                                     // Compute summary statistics from results
                                     let any_success = soft_bundle_results.iter().any(|r| r.is_success());
-                                    let all_retriable = soft_bundle_results
-                                        .iter()
-                                        .all(|r| r.is_success() || r.is_retriable());
+                                    let any_retriable = soft_bundle_results.iter().any(|r| r.is_retriable());
 
                                     // Let the payload handle the results
                                     payload.handle_soft_bundle_results(&SoftBundleExecutionResults {
@@ -1069,11 +1067,10 @@ async fn run_bench_worker(
                                             gas_used: 0, // Gas tracking for soft bundles is complex
                                             payload,
                                         }
-                                    } else if all_retriable {
-                                        // All transactions failed with retriable errors (e.g., epoch change).
+                                    } else if any_retriable {
+                                        // At least one transaction had a retriable error (e.g., epoch change).
                                         // Return the payload so it can be retried with the same state.
-                                        // Don't increment success or error metrics - will be counted on retry.
-                                        debug!("Soft bundle failed with all retriable errors, returning payload for retry");
+                                        debug!("Soft bundle had retriable error(s), returning payload for retry");
                                         NextOp::Response {
                                             latency,
                                             num_commands: 0, // No commands succeeded
@@ -1081,8 +1078,7 @@ async fn run_bench_worker(
                                             payload,
                                         }
                                     } else {
-                                        // No transactions succeeded, and at least one had a non-retriable error.
-                                        // Treat this as a failure - the payload's validation will handle the details.
+                                        // No transactions succeeded, and all failures were non-retriable.
                                         metrics_clone
                                             .num_error
                                             .with_label_values(&[&payload.to_string(), "soft_bundle_all_failed", "soft_bundle"])
