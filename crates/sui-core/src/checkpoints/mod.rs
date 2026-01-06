@@ -146,8 +146,6 @@ pub struct CheckpointStoreTables {
     // TODO: Once the switch to `full_checkpoint_content_v2` is fully active on mainnet,
     // deprecate this table (and remove when possible).
     full_checkpoint_content: DBMap<CheckpointSequenceNumber, FullCheckpointContents>,
-    #[default_options_override_fn = "full_checkpoint_content_table_default_config"]
-    full_checkpoint_content_v2: DBMap<CheckpointSequenceNumber, VersionedFullCheckpointContents>,
 
     /// Stores certified checkpoints
     pub(crate) certified_checkpoints: DBMap<CheckpointSequenceNumber, TrustedCheckpoint>,
@@ -175,6 +173,8 @@ pub struct CheckpointStoreTables {
             TransactionEffectsDigest,
         ),
     >,
+    #[default_options_override_fn = "full_checkpoint_content_table_default_config"]
+    full_checkpoint_content_v2: DBMap<CheckpointSequenceNumber, VersionedFullCheckpointContents>,
 }
 
 fn full_checkpoint_content_table_default_config() -> DBOptions {
