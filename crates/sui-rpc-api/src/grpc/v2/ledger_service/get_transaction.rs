@@ -4,6 +4,7 @@
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
+use crate::TransactionNotFoundError;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
@@ -55,29 +56,27 @@ pub fn get_transaction(
         FieldMaskTree::from(read_mask)
     };
 
-    let transaction_read = service.reader.get_transaction_read(transaction_digest)?;
+    let Some(transaction_checkpoint) = service
+        .reader
+        .inner()
+        .get_transaction_checkpoint(&transaction_digest.into())
+    else {
+        return Err(TransactionNotFoundError(transaction_digest).into());
+    };
 
-    if requires_indexed_data(&read_mask) {
-        let highest_indexed = service
-            .reader
-            .inner()
-            .indexes()
-            .and_then(|idx| idx.get_highest_indexed_checkpoint_seq_number().ok())
-            .flatten()
-            .unwrap_or(0);
+    let latest_checkpoint = service
+        .reader
+        .inner()
+        .get_latest_checkpoint()?
+        .sequence_number;
 
-        if transaction_read
-            .checkpoint
-            .is_none_or(|cp| cp > highest_indexed)
-        {
-            return Err(RpcError::new(
-                tonic::Code::NotFound,
-                "Transaction is not yet indexed",
-            ));
-        }
+    if transaction_checkpoint > latest_checkpoint {
+        return Err(TransactionNotFoundError(transaction_digest).into());
     }
 
-    let transaction = transaction_to_response(service, transaction_read, &read_mask)?;
+    let transaction_read = service.reader.get_transaction_read(transaction_digest)?;
+
+    let transaction = transaction_to_response(service, transaction_read, &read_mask);
 
     Ok(GetTransactionResponse::new(transaction))
 }
@@ -101,38 +100,41 @@ pub fn batch_get_transactions(
         FieldMaskTree::from(read_mask)
     };
 
-    let highest_indexed = service
+    let latest_checkpoint = service
         .reader
         .inner()
-        .indexes()
-        .and_then(|idx| idx.get_highest_indexed_checkpoint_seq_number().ok())
-        .flatten()
-        .unwrap_or(0);
+        .get_latest_checkpoint()?
+        .sequence_number;
 
     let transactions = digests
         .into_iter()
         .enumerate()
-        .map(|(idx, digest)| {
-            let digest = digest.parse().map_err(|e| {
+        .map(|(idx, digest)| -> Result<ExecutedTransaction, RpcError> {
+            let digest: Digest = digest.parse().map_err(|e| {
                 FieldViolation::new_at("digests", idx)
                     .with_description(format!("invalid digest: {e}"))
                     .with_reason(ErrorReason::FieldInvalid)
             })?;
 
-            let transaction_read = service.reader.get_transaction_read(digest)?;
+            let Some(transaction_checkpoint) = service
+                .reader
+                .inner()
+                .get_transaction_checkpoint(&digest.into())
+            else {
+                return Err(TransactionNotFoundError(digest).into());
+            };
 
-            if requires_indexed_data(&read_mask)
-                && transaction_read
-                    .checkpoint
-                    .is_none_or(|cp| cp > highest_indexed)
-            {
-                return Err(RpcError::new(
-                    tonic::Code::NotFound,
-                    "Transaction is not yet indexed",
-                ));
+            if transaction_checkpoint > latest_checkpoint {
+                return Err(TransactionNotFoundError(digest).into());
             }
 
-            transaction_to_response(service, transaction_read, &read_mask)
+            let transaction_read = service.reader.get_transaction_read(digest)?;
+
+            Ok(transaction_to_response(
+                service,
+                transaction_read,
+                &read_mask,
+            ))
         })
         .map(|result| match result {
             Ok(transaction) => GetTransactionResult::new_transaction(transaction),
@@ -147,7 +149,7 @@ fn transaction_to_response(
     service: &RpcService,
     source: crate::reader::TransactionRead,
     mask: &FieldMaskTree,
-) -> Result<ExecutedTransaction, RpcError> {
+) -> ExecutedTransaction {
     let mut message = ExecutedTransaction::default();
 
     if mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
@@ -203,10 +205,5 @@ fn transaction_to_response(
             .unwrap_or_default();
     }
 
-    Ok(message)
-}
-
-fn requires_indexed_data(mask: &FieldMaskTree) -> bool {
-    mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
-        || mask.contains(ExecutedTransaction::EFFECTS_FIELD.name)
+    message
 }

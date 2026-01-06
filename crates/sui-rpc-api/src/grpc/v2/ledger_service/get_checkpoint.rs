@@ -67,24 +67,14 @@ pub fn get_checkpoint(
     let sequence_number = summary.sequence_number;
     let timestamp_ms = summary.timestamp_ms;
 
-    if requires_indexed_data(&read_mask) {
-        let highest_indexed = service
-            .reader
-            .inner()
-            .indexes()
-            .and_then(|idx| idx.get_highest_indexed_checkpoint_seq_number().ok())
-            .flatten()
-            .unwrap_or(0);
+    let latest_checkpoint = service
+        .reader
+        .inner()
+        .get_latest_checkpoint()?
+        .sequence_number;
 
-        if sequence_number > highest_indexed {
-            return Err(RpcError::new(
-                tonic::Code::NotFound,
-                format!(
-                    "Checkpoint {} is not yet indexed. Highest indexed checkpoint is {}",
-                    sequence_number, highest_indexed
-                ),
-            ));
-        }
+    if sequence_number > latest_checkpoint {
+        return Err(CheckpointNotFoundError::sequence_number(sequence_number).into());
     }
 
     let mut checkpoint = Checkpoint::default();
@@ -178,9 +168,4 @@ pub fn get_checkpoint(
     }
 
     Ok(GetCheckpointResponse::new(checkpoint))
-}
-
-fn requires_indexed_data(mask: &FieldMaskTree) -> bool {
-    mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name)
-        .is_some_and(|submask| submask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name))
 }
