@@ -136,7 +136,7 @@ impl ObjectsApiServer for Objects {
 
         let options = options.unwrap_or_default();
         let mut simulacrum = simulacrum.write().await;
-        let data_store: &mut ForkingStore = simulacrum.store_1_mut();
+        let data_store = simulacrum.store_mut();
         let obj = data_store.get_object(&object_id);
         if obj.is_none() {
             info!("Object not found locally: {:?}", object_id);
@@ -351,7 +351,7 @@ impl QueryObjectsApiServer for QueryObjects {
         // TODO: this only works if all owned objects are stored locally in the simulacrum
         // we probably need to fetch from the RPC data store if not found locally, but it's tricky
         // if we're trying to get owned objects at a past checkpoint (older than 1h)
-        let owned_objs = simulacrum.store_1().owned_objects(address);
+        let owned_objs = simulacrum.store_static().owned_objects(address);
 
         let mut data = vec![];
         for object in owned_objs {

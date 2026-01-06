@@ -9,7 +9,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 
 use simulacrum::SimulatorStore;
-use sui_config::genesis;
+use sui_config::genesis::Genesis;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
@@ -61,7 +61,7 @@ pub struct ForkingStore {
 
 impl ForkingStore {
     pub fn new(
-        genesis: &genesis::Genesis,
+        genesis: &Genesis,
         forked_at_checkpoint: u64,
         rpc_data_store: Arc<
             ReadThroughStore<LruMemoryStore, ReadThroughStore<FileSystemStore, DataStore>>,
@@ -136,6 +136,7 @@ impl ForkingStore {
     pub fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<&Committee> {
         self.epoch_to_committee.get(epoch as usize)
     }
+
     pub fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedTransaction> {
         self.transactions.get(digest)
     }

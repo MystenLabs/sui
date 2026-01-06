@@ -4,6 +4,7 @@
 use std::{
     collections::{BTreeMap, HashMap},
     net::SocketAddr,
+    num::NonZeroUsize,
     path::PathBuf,
     sync::{
         Arc,
@@ -28,7 +29,7 @@ use tower_http::cors::CorsLayer;
 use tracing::info;
 
 use mysten_common::tempdir;
-use simulacrum::{AdvanceEpochConfig, SimulacrumBuilder};
+use simulacrum::AdvanceEpochConfig;
 use sui_data_store::{Node, ObjectKey, ObjectStore, VersionQuery};
 use sui_indexer_alt_jsonrpc::{RpcArgs, RpcService, config::RpcConfig};
 use sui_indexer_alt_metrics::MetricsService;
@@ -52,6 +53,7 @@ use crate::{
     rpc::start_rpc,
     store::ForkingStore,
 };
+use sui_swarm_config::network_config_builder::ConfigBuilder;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AdvanceClockRequest {
@@ -329,15 +331,18 @@ pub async fn start_server(
         crate::store::rpc_data_store::new_rpc_data_store(Node::Testnet, version)
             .expect("Failed to create RPC data store"),
     );
-    let mut simulacrum = SimulacrumBuilder::new()
-        .with_chain(chain)
+
+    let mut rng = rand::rngs::OsRng;
+    let config = ConfigBuilder::new_with_temp_dir()
+        .rng(&mut rng)
+        .with_chain_start_timestamp_ms(0)
+        .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
         .with_protocol_version(protocol_version.into())
-        .build_with_store_creator(|genesis| {
-            ForkingStore::new(genesis, at_checkpoint, rpc_data_store.clone())
-        });
-
+        .with_chain_override(chain)
+        .build();
+    let store = ForkingStore::new(&config.genesis, at_checkpoint, rpc_data_store.clone());
+    let mut simulacrum = simulacrum::Simulacrum::new_with_network_config_store(&config, rng, store);
     simulacrum.set_data_ingestion_path(data_ingestion_path.clone());
-
     let simulacrum = Arc::new(RwLock::new(simulacrum));
 
     let registry = Registry::new_custom(Some("sui_forking".into()), None)
@@ -497,7 +502,7 @@ async fn update_system_objects(context: crate::context::Context) -> anyhow::Resu
     } = context;
 
     let mut simulacrum = context.simulacrum.write().await;
-    let data_store: &mut ForkingStore = simulacrum.store_1_mut();
+    let data_store = simulacrum.store_mut();
     let x1 = ObjectID::from_hex_literal("0x1").unwrap();
     let x2 = ObjectID::from_hex_literal("0x2").unwrap();
     let objs: HashMap<ObjectID, _> = data_store
@@ -506,7 +511,7 @@ async fn update_system_objects(context: crate::context::Context) -> anyhow::Resu
         .filter(|x| x.0 == &x1 || x.0 == &x2)
         .map(|(obj_id, map)| (*obj_id, map.clone()))
         .collect();
-    println!(
+    info!(
         "Fetching system objects from RPC at checkpoint {}",
         at_checkpoint
     );

@@ -17,12 +17,10 @@ use std::sync::Arc;
 use anyhow::{Context, Result, anyhow, ensure};
 use fastcrypto::traits::Signer;
 use rand::rngs::OsRng;
-
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
-use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_framework_snapshot::load_bytecode_snapshot;
-use sui_protocol_config::{Chain, ProtocolVersion};
+use sui_protocol_config::ProtocolVersion;
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
@@ -33,13 +31,13 @@ use sui_types::crypto::{
 };
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::{Object, Owner};
 use sui_types::storage::ObjectKey;
 use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::transaction::{EndOfEpochTransactionKind, TransactionDataAPI};
+use sui_types::transaction::EndOfEpochTransactionKind;
+use sui_types::transaction::TransactionDataAPI;
 use sui_types::{
     base_types::{EpochId, SuiAddress},
     committee::Committee,
@@ -51,19 +49,18 @@ use sui_types::{
     signature::VerifyParams,
     transaction::{Transaction, VerifiedTransaction},
 };
+
+use self::epoch_state::EpochState;
+pub use self::store::SimulatorStore;
+pub use self::store::in_mem_store::InMemoryStore;
+use self::store::in_mem_store::KeyStore;
+use sui_core::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
+use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
 use sui_types::{
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{GasData, TransactionData, TransactionKind},
 };
-
-use self::epoch_state::EpochState;
-use self::store::in_mem_store::KeyStore;
-
-mod epoch_state;
-pub mod store;
-pub use self::store::SimulatorStore;
-pub use self::store::in_mem_store::InMemoryStore;
 
 /// Configuration for advancing epochs in the Simulacrum.
 ///
@@ -90,6 +87,9 @@ pub struct AdvanceEpochConfig {
     pub system_packages_snapshot: Option<u64>,
 }
 
+mod epoch_state;
+pub mod store;
+
 /// A `Simulacrum` of Sui.
 ///
 /// This type represents a simulated instantiation of a Sui blockchain that needs to be driven
@@ -98,10 +98,8 @@ pub struct AdvanceEpochConfig {
 ///
 /// See [module level][mod] documentation for more details.
 ///
-/// Use [`SimulacrumBuilder`] to construct instances with custom store implementations.
-///
 /// [mod]: index.html
-pub struct Simulacrum<R, Store: SimulatorStore> {
+pub struct Simulacrum<R = OsRng, Store: SimulatorStore = InMemoryStore> {
     rng: R,
     keystore: KeyStore,
     #[allow(unused)]
@@ -118,166 +116,22 @@ pub struct Simulacrum<R, Store: SimulatorStore> {
     verifier_signing_config: VerifierSigningConfig,
 }
 
-/// Builder for creating a Simulacrum instance.
-///
-/// This builder provides a flexible way to construct a Simulacrum with custom configuration.
-/// The store implementation must be explicitly specified - there is no default.
-///
-/// # Examples
-///
-/// ```
-/// use simulacrum::{SimulacrumBuilder, InMemoryStore};
-/// use rand::rngs::OsRng;
-///
-/// # fn main() {
-/// // Create with InMemoryStore
-/// let sim = SimulacrumBuilder::new()
-///     .with_rng(OsRng)
-///     .with_store_creator(|genesis| InMemoryStore::new(genesis))
-///     .build();
-/// # }
-/// ```
-pub struct SimulacrumBuilder<R = OsRng> {
-    rng: R,
-    protocol_version: Option<ProtocolVersion>,
-    chain: Option<Chain>,
-    chain_start_timestamp_ms: u64,
-    accounts: Vec<AccountConfig>,
-    committee_size: NonZeroUsize,
-}
-
-impl SimulacrumBuilder<OsRng> {
-    /// Create a new builder with default configuration using OsRng.
-    pub fn new() -> Self {
-        Self {
-            rng: OsRng,
-            protocol_version: None,
-            chain: None,
-            chain_start_timestamp_ms: 1,
-            accounts: vec![],
-            committee_size: NonZeroUsize::new(1).unwrap(),
-        }
-    }
-}
-
-impl Default for SimulacrumBuilder<OsRng> {
-    fn default() -> Self {
-        Self {
-            rng: OsRng,
-            protocol_version: None,
-            chain: None,
-            chain_start_timestamp_ms: 1,
-            accounts: vec![],
-            committee_size: NonZeroUsize::new(1).unwrap(),
-        }
-    }
-}
-
-impl<R> SimulacrumBuilder<R> {
-    /// Set a custom RNG
-    pub fn with_rng<NewR>(self, rng: NewR) -> SimulacrumBuilder<NewR> {
-        SimulacrumBuilder {
-            rng,
-            protocol_version: self.protocol_version,
-            chain: self.chain,
-            chain_start_timestamp_ms: self.chain_start_timestamp_ms,
-            accounts: self.accounts,
-            committee_size: self.committee_size,
-        }
-    }
-
-    /// Set the protocol version.
-    pub fn with_protocol_version(mut self, version: ProtocolVersion) -> Self {
-        self.protocol_version = Some(version);
-        self
-    }
-
-    /// Set the chain identifier.
-    pub fn with_chain(mut self, chain: Chain) -> Self {
-        self.chain = Some(chain);
-        self
-    }
-
-    /// Set the chain start timestamp in milliseconds.
-    pub fn with_chain_start_timestamp_ms(mut self, timestamp_ms: u64) -> Self {
-        self.chain_start_timestamp_ms = timestamp_ms;
-        self
-    }
-
-    /// Set the account configurations.
-    pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
-        self.accounts = accounts;
-        self
-    }
-
-    /// Set the committee size.
-    pub fn with_committee_size(mut self, size: NonZeroUsize) -> Self {
-        self.committee_size = size;
-        self
-    }
-
-    /// Build the Simulacrum with a store created from the genesis configuration.
-    ///
-    /// The `store_creator` function receives the genesis configuration and should return
-    /// an initialized store instance.
-    pub fn build_with_store_creator<S, F>(mut self, store_creator: F) -> Simulacrum<R, S>
-    where
-        R: rand::RngCore + rand::CryptoRng,
-        S: SimulatorStore,
-        F: FnOnce(&genesis::Genesis) -> S,
-    {
-        let mut builder = ConfigBuilder::new_with_temp_dir()
-            .rng(&mut self.rng)
-            .with_chain_start_timestamp_ms(self.chain_start_timestamp_ms)
-            .deterministic_committee_size(self.committee_size);
-
-        if let Some(version) = self.protocol_version {
-            builder = builder.with_protocol_version(version);
-        }
-
-        if let Some(chain) = self.chain {
-            builder = builder.with_chain_override(chain);
-        }
-
-        if !self.accounts.is_empty() {
-            builder = builder.with_accounts(self.accounts);
-        }
-
-        let config = builder.build();
-        let store = store_creator(&config.genesis);
-        Simulacrum::new_with_network_config_store(&config, self.rng, store)
-    }
-
-    /// Build the Simulacrum with an InMemoryStore (convenience method).
-    pub fn build_in_mem(self) -> Simulacrum<R, InMemoryStore>
-    where
-        R: rand::RngCore + rand::CryptoRng,
-    {
-        self.build_with_store_creator(InMemoryStore::new)
-    }
-}
-
-impl Simulacrum<OsRng, InMemoryStore> {
-    /// Create a new, random Simulacrum instance using an `OsRng` as the source of randomness
-    /// with an in-memory store.
-    ///
-    /// For more control over store selection, use [`SimulacrumBuilder`].
+impl Simulacrum {
+    /// Create a new, random Simulacrum instance using an `OsRng` as the source of randomness.
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self::new_with_rng(OsRng)
     }
 }
 
-impl<R> Simulacrum<R, InMemoryStore>
+impl<R> Simulacrum<R>
 where
     R: rand::RngCore + rand::CryptoRng,
 {
-    /// Create a new Simulacrum instance using the provided `rng` with an in-memory store.
+    /// Create a new Simulacrum instance using the provided `rng`.
     ///
     /// This allows you to create a fully deterministic initial chainstate when a seeded rng is
     /// used.
-    ///
-    /// For more control over store selection, use [`SimulacrumBuilder`].
     ///
     /// ```
     /// use simulacrum::Simulacrum;
@@ -297,9 +151,7 @@ where
         Self::new_with_network_config_in_mem(&config, rng)
     }
 
-    /// Create a new Simulacrum instance with a specific protocol version and in-memory store.
-    ///
-    /// For more control over store selection, use [`SimulacrumBuilder`].
+    /// Create a new Simulacrum instance with a specific protocol version.
     pub fn new_with_protocol_version(mut rng: R, protocol_version: ProtocolVersion) -> Self {
         let config = ConfigBuilder::new_with_temp_dir()
             .rng(&mut rng)
@@ -310,9 +162,6 @@ where
         Self::new_with_network_config_in_mem(&config, rng)
     }
 
-    /// Create a new Simulacrum instance with protocol version, accounts, and in-memory store.
-    ///
-    /// For more control over store selection, use [`SimulacrumBuilder`].
     pub fn new_with_protocol_version_and_accounts(
         mut rng: R,
         chain_start_timestamp_ms: u64,
@@ -329,27 +178,9 @@ where
         Self::new_with_network_config_in_mem(&config, rng)
     }
 
-    /// Create a new Simulacrum instance with protocol version, chain override, and in-memory store.
-    ///
-    /// For more control over store selection, use [`SimulacrumBuilder`].
-    pub fn new_with_protocol_version_and_chain_override(
-        mut rng: R,
-        protocol_version: ProtocolVersion,
-        chain: Chain,
-    ) -> Self {
-        let config = ConfigBuilder::new_with_temp_dir()
-            .rng(&mut rng)
-            .with_chain_start_timestamp_ms(1)
-            .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
-            .with_protocol_version(protocol_version)
-            .with_chain_override(chain)
-            .build();
-        Self::new_with_network_config_in_mem(&config, rng)
-    }
-
     fn new_with_network_config_in_mem(config: &NetworkConfig, rng: R) -> Self {
         let store = InMemoryStore::new(&config.genesis);
-        Simulacrum::new_with_network_config_store(config, rng, store)
+        Self::new_with_network_config_store(config, rng, store)
     }
 }
 
@@ -372,63 +203,6 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             verifier_signing_config: VerifierSigningConfig::default(),
             data_ingestion_path: None,
         }
-    }
-
-    /// Attempts to execute the provided Transaction.
-    ///
-    /// The provided Transaction undergoes the same types of checks that a Validator does prior to
-    /// signing and executing in the production system. Some of these checks are as follows:
-    /// - User signature is valid
-    /// - Sender owns all OwnedObject inputs
-    /// - etc
-    ///
-    /// If the above checks are successful then the transaction is immediately executed, enqueued
-    /// to be included in the next checkpoint (the next time `create_checkpoint` is called) and the
-    /// corresponding TransactionEffects are returned.
-    pub fn execute_transaction(
-        &mut self,
-        transaction: Transaction,
-    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
-        let transaction = transaction
-            .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
-        self.execute_transaction_impl(transaction)
-    }
-
-    fn execute_transaction_impl(
-        &mut self,
-        transaction: VerifiedTransaction,
-    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
-        let (inner_temporary_store, _, effects, execution_error_opt) =
-            self.epoch_state.execute_transaction(
-                &self.store,
-                &self.deny_config,
-                &self.verifier_signing_config,
-                &transaction,
-            )?;
-
-        let InnerTemporaryStore {
-            written, events, ..
-        } = inner_temporary_store;
-
-        self.store.insert_executed_transaction(
-            transaction.clone(),
-            effects.clone(),
-            events,
-            written,
-        );
-
-        // Insert into checkpoint builder
-        self.checkpoint_builder
-            .push_transaction(transaction, effects.clone());
-        Ok((effects, execution_error_opt.err()))
-    }
-
-    fn execute_system_transaction(
-        &mut self,
-        transaction: Transaction,
-    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
-        let transaction = VerifiedTransaction::new_unchecked(transaction);
-        self.execute_transaction_impl(transaction)
     }
 
     // TODO: forking: move this to main
@@ -488,6 +262,63 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         let verified_transaction = VerifiedTransaction::new_unchecked(transaction);
 
         self.execute_transaction_impl(verified_transaction)
+    }
+
+    /// Attempts to execute the provided Transaction.
+    ///
+    /// The provided Transaction undergoes the same types of checks that a Validator does prior to
+    /// signing and executing in the production system. Some of these checks are as follows:
+    /// - User signature is valid
+    /// - Sender owns all OwnedObject inputs
+    /// - etc
+    ///
+    /// If the above checks are successful then the transaction is immediately executed, enqueued
+    /// to be included in the next checkpoint (the next time `create_checkpoint` is called) and the
+    /// corresponding TransactionEffects are returned.
+    pub fn execute_transaction(
+        &mut self,
+        transaction: Transaction,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        let transaction = transaction
+            .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
+        self.execute_transaction_impl(transaction)
+    }
+
+    fn execute_transaction_impl(
+        &mut self,
+        transaction: VerifiedTransaction,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        let (inner_temporary_store, _, effects, execution_error_opt) =
+            self.epoch_state.execute_transaction(
+                &self.store,
+                &self.deny_config,
+                &self.verifier_signing_config,
+                &transaction,
+            )?;
+
+        let InnerTemporaryStore {
+            written, events, ..
+        } = inner_temporary_store;
+
+        self.store.insert_executed_transaction(
+            transaction.clone(),
+            effects.clone(),
+            events,
+            written,
+        );
+
+        // Insert into checkpoint builder
+        self.checkpoint_builder
+            .push_transaction(transaction, effects.clone());
+        Ok((effects, execution_error_opt.err()))
+    }
+
+    fn execute_system_transaction(
+        &mut self,
+        transaction: Transaction,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        let transaction = VerifiedTransaction::new_unchecked(transaction);
+        self.execute_transaction_impl(transaction)
     }
 
     /// Creates the next Checkpoint using the Transactions enqueued since the last checkpoint was
@@ -665,13 +496,11 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         &self.store
     }
 
-    // TODO: forking: merge this with the previous one
-    pub fn store_1(&self) -> &S {
+    pub fn store_static(&self) -> &S {
         &self.store
     }
 
-    // TODO: forking: merge this with the previous one
-    pub fn store_1_mut(&mut self) -> &mut S {
+    pub fn store_mut(&mut self) -> &mut S {
         &mut self.store
     }
 
@@ -999,7 +828,7 @@ impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for 
     }
 }
 
-impl<R, S: SimulatorStore> Simulacrum<R, S> {
+impl Simulacrum {
     /// Generate a random transfer transaction.
     /// TODO: This is here today to make it easier to write tests. But we should utilize all the
     /// existing code for generating transactions in sui-test-transaction-builder by defining a trait
@@ -1150,82 +979,5 @@ mod tests {
         } else {
             assert_eq!(checkpoint.network_total_transactions, 2); // genesis + 1 user txn
         };
-    }
-
-    #[test]
-    fn test_impersonation() {
-        let mut sim = Simulacrum::new();
-
-        // Create a funded account with a known address and gas
-        let (sender, _key, gas_ref) = sim.funded_account(MIST_PER_SUI).unwrap();
-
-        // Create a recipient address that we want to send to
-        let recipient = SuiAddress::random_for_testing_only();
-
-        // Build a transaction that transfers SUI from sender to recipient
-        // We will execute this WITHOUT using the sender's private key
-        let transfer_amount = MIST_PER_SUI / 2;
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            builder.transfer_sui(recipient, Some(transfer_amount));
-            builder.finish()
-        };
-
-        let kind = TransactionKind::ProgrammableTransaction(pt);
-        let gas_data = GasData {
-            payment: vec![gas_ref],
-            owner: sender,
-            price: sim.reference_gas_price(),
-            budget: MIST_PER_SUI / 4,
-        };
-        let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
-
-        // Execute the transaction while impersonating the sender
-        // This should work even though we don't have the sender's private key
-        let (effects, error) = sim
-            .execute_transaction_impersonating(tx_data)
-            .expect("impersonated transaction should execute");
-
-        // Verify the transaction succeeded
-        assert!(
-            error.is_none(),
-            "transaction should not have execution error"
-        );
-        assert!(
-            effects.status().is_ok(),
-            "transaction should have ok status"
-        );
-
-        // Verify the recipient received the funds
-        let recipient_balance = sim
-            .store()
-            .owned_objects(recipient)
-            .find(|obj| obj.is_gas_coin())
-            .and_then(|obj| GasCoin::try_from(&obj).ok())
-            .map(|coin| coin.value())
-            .expect("recipient should have a gas coin");
-
-        assert_eq!(
-            recipient_balance, transfer_amount,
-            "recipient should have received the transfer amount"
-        );
-
-        // Verify the gas coin was updated (reduced by transfer + gas)
-        let sender_balance = sim
-            .store()
-            .owned_objects(sender)
-            .find(|obj| obj.is_gas_coin())
-            .and_then(|obj| GasCoin::try_from(&obj).ok())
-            .map(|coin| coin.value())
-            .expect("sender should still have a gas coin");
-
-        let gas_used = effects.gas_cost_summary().net_gas_usage();
-        let expected_sender_balance =
-            (MIST_PER_SUI as i64 - transfer_amount as i64 - gas_used) as u64;
-
-        assert_eq!(
-            sender_balance, expected_sender_balance,
-            "sender balance should be reduced by transfer amount and gas"
-        );
     }
 }

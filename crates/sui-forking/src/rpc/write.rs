@@ -5,8 +5,6 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use tracing::info;
 
-use crate::store::ForkingStore;
-
 use sui_indexer_alt_jsonrpc::{api::rpc_module::RpcModule, error::invalid_params};
 use sui_json_rpc_types::{
     DryRunTransactionBlockResponse, SuiTransactionBlockEffects, SuiTransactionBlockResponse,
@@ -104,7 +102,7 @@ impl WriteApiServer for Write {
 
         // Fetch and cache input objects
         let mut simulacrum = self.0.simulacrum.write().await;
-        let data_store: &mut ForkingStore = simulacrum.store_1_mut();
+        let data_store = simulacrum.store_mut();
         for object_id in input_objs_ids {
             crate::rpc::fetch_and_cache_object_from_rpc(data_store, &self.0, &object_id)
                 .await

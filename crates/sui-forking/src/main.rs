@@ -145,7 +145,7 @@ async fn main() -> Result<()> {
             )
             .await?;
 
-            let _ = send_command(&server_url, "advance-checkpoint", None).await?;
+            send_command(&server_url, "advance-checkpoint", None).await?;
             println!("Faucet request completed");
         }
     }
