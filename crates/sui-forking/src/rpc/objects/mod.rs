@@ -23,7 +23,7 @@ use sui_indexer_alt_jsonrpc::{
 use crate::{context::Context, store::ForkingStore};
 
 use self::error::Error;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use sui_data_store::{ObjectKey, ObjectStore};
 use tracing::{error, info};
 
@@ -153,7 +153,7 @@ impl ObjectsApiServer for Objects {
                         .get_objects(&[ObjectKey {
                             object_id: *object_id,
                             version_query: sui_data_store::VersionQuery::AtCheckpoint(
-                                at_checkpoint.clone(),
+                                *at_checkpoint,
                             ),
                         }])
                         .unwrap();
@@ -177,14 +177,48 @@ impl ObjectsApiServer for Objects {
                             )
                             .await?,
                         );
-                        let written_objects = BTreeMap::from([(object_id.clone(), object.clone())]);
+                        // objects need to be available in the network for execution
+                        let written_objects = BTreeMap::from([(*object_id, object.clone())]);
                         data_store.update_objects(written_objects, vec![]);
 
                         // If this is a package, insert it into kv_packages table
+                        // TODO maybe have a better way to do this
                         if object.is_package() {
+                            let Some(package) = object.data.try_as_package() else {
+                                panic!("Object {} is not a package", object.id());
+                            };
+
+                            // when we find a package, we need to download all related packages
+                            // that define types used by this package and also add them to the
+                            // forked network store
+                            let packages_to_add = package
+                                .type_origin_map()
+                                .values()
+                                .cloned()
+                                .collect::<BTreeSet<_>>();
+
+                            let mut downloaded_packages =
+                                download_packages(packages_to_add, data_store, at_checkpoint)
+                                    .await
+                                    .expect("Failed to download packages");
+
+                            let written_objects = downloaded_packages
+                                .clone()
+                                .into_iter()
+                                .map(|o| (o.id(), o.clone()))
+                                .collect();
+                            data_store.update_objects(written_objects, vec![]);
+
+                            downloaded_packages.push(object.clone());
+
                             let Self(Context { db_writer, .. }) = self;
-                            if let Err(e) =
-                                insert_package_into_db(db_writer, &object, *at_checkpoint).await
+
+                            if let Err(e) = insert_package_into_db(
+                                db_writer,
+                                &downloaded_packages,
+                                *at_checkpoint,
+                            )
+                            .await
                             {
                                 eprintln!("Failed to insert package into DB: {:?}", e);
                             }
@@ -235,39 +269,6 @@ impl ObjectsApiServer for Objects {
             .map(|(r, _)| r)
             .collect::<Result<Vec<_>, _>>()?)
     }
-
-    // async fn multi_get_objects(
-    //     &self,
-    //     object_ids: Vec<ObjectID>,
-    //     options: Option<SuiObjectDataOptions>,
-    // ) -> RpcResult<Vec<SuiObjectResponse>> {
-    //     let Self(Context {
-    //         pg_context: ctx, ..
-    //     }) = self;
-    //     let config = &ctx.config().objects;
-    //     if object_ids.len() > config.max_multi_get_objects {
-    //         return Err(invalid_params(Error::TooManyKeys {
-    //             requested: object_ids.len(),
-    //             max: config.max_multi_get_objects,
-    //         })
-    //         .into());
-    //     }
-    //
-    //     let options = options.unwrap_or_default();
-    //
-    //     let obj_futures = object_ids
-    //         .iter()
-    //         .map(|id| response::live_object(ctx, *id, &options));
-    //
-    //     Ok(future::join_all(obj_futures)
-    //         .await
-    //         .into_iter()
-    //         .zip(object_ids)
-    //         .map(|(r, o)| {
-    //             r.with_internal_context(|| format!("Failed to get object {o} at latest version"))
-    //         })
-    //         .collect::<Result<Vec<_>, _>>()?)
-    // }
 
     async fn try_get_past_object(
         &self,
@@ -355,10 +356,10 @@ impl QueryObjectsApiServer for QueryObjects {
         let mut data = vec![];
         for object in owned_objs {
             // Apply filter if provided
-            if let Some(ref filter) = query.filter {
-                if !filter.matches(&object) {
-                    continue;
-                }
+            if let Some(ref filter) = query.filter
+                && !filter.matches(object)
+            {
+                continue;
             }
 
             let obj_data =
@@ -374,49 +375,78 @@ impl QueryObjectsApiServer for QueryObjects {
     }
 }
 
+/// Download package objects from the RPC data store given a set of package IDs
+async fn download_packages(
+    package_ids: BTreeSet<ObjectID>,
+    data_store: &mut ForkingStore,
+    at_checkpoint: &u64,
+) -> anyhow::Result<Vec<Object>> {
+    let mut output = Vec::with_capacity(package_ids.len());
+    let objects_to_retrieve = package_ids
+        .into_iter()
+        .map(|id| ObjectKey {
+            object_id: id,
+            version_query: sui_data_store::VersionQuery::AtCheckpoint(*at_checkpoint),
+        })
+        .collect::<Vec<_>>();
+    let obj = data_store
+        .get_rpc_data_store()
+        .get_objects(&objects_to_retrieve)
+        .unwrap();
+
+    for o in obj.into_iter().by_ref().flatten() {
+        output.push(o.0);
+    }
+
+    Ok(output)
+}
+
 /// Insert a package object into the kv_packages table
 pub(crate) async fn insert_package_into_db(
     db_writer: &sui_pg_db::Db,
-    object: &Object,
+    object: &[Object],
     checkpoint: u64,
 ) -> anyhow::Result<()> {
     use diesel::prelude::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_schema::schema::kv_packages;
 
-    let Some(package) = object.data.try_as_package() else {
-        error!("Object {} is not a package", object.id());
-        anyhow::bail!("Object is not a package");
-    };
+    for object in object.iter() {
+        // Ensure the object is a package
+        let Some(package) = object.data.try_as_package() else {
+            error!("Object {} is not a package", object.id());
+            anyhow::bail!("Object is not a package");
+        };
 
-    let package_id = package.id().to_vec();
-    let package_version = object.version().value() as i64;
-    let original_id = package.original_package_id().to_vec();
-    let is_system_package = sui_types::is_system_package(package.id());
-    let serialized_object = bcs::to_bytes(object)?;
-    let cp_sequence_number = checkpoint as i64;
+        let package_id = package.id().to_vec();
+        let package_version = object.version().value() as i64;
+        let original_id = package.original_package_id().to_vec();
+        let is_system_package = sui_types::is_system_package(package.id());
+        let serialized_object = bcs::to_bytes(object)?;
+        let cp_sequence_number = checkpoint as i64;
 
-    let mut conn = db_writer.connect().await?;
+        let mut conn = db_writer.connect().await?;
 
-    diesel::insert_into(kv_packages::table)
-        .values((
-            kv_packages::package_id.eq(package_id),
-            kv_packages::package_version.eq(package_version),
-            kv_packages::original_id.eq(original_id),
-            kv_packages::is_system_package.eq(is_system_package),
-            kv_packages::serialized_object.eq(serialized_object),
-            kv_packages::cp_sequence_number.eq(cp_sequence_number),
-        ))
-        .on_conflict((kv_packages::package_id, kv_packages::package_version))
-        .do_nothing()
-        .execute(&mut conn)
-        .await?;
+        diesel::insert_into(kv_packages::table)
+            .values((
+                kv_packages::package_id.eq(package_id),
+                kv_packages::package_version.eq(package_version),
+                kv_packages::original_id.eq(original_id),
+                kv_packages::is_system_package.eq(is_system_package),
+                kv_packages::serialized_object.eq(serialized_object),
+                kv_packages::cp_sequence_number.eq(cp_sequence_number),
+            ))
+            .on_conflict((kv_packages::package_id, kv_packages::package_version))
+            .do_nothing()
+            .execute(&mut conn)
+            .await?;
 
-    info!(
-        "Inserted package {} version {} into kv_packages table",
-        package.id(),
-        package_version
-    );
+        info!(
+            "Inserted package {} version {} into kv_packages table",
+            package.id(),
+            package_version
+        );
+    }
 
     Ok(())
 }

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// use diesel::QueryDsl;
 use move_core_types::language_storage::StructTag;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -111,22 +110,22 @@ impl SuiObjectDataFilter {
                     return false;
                 };
 
-                if let Some(package_filter) = self.package() {
-                    if ObjectID::from(struct_tag.address) != package_filter {
-                        return false;
-                    }
+                if let Some(package_filter) = self.package()
+                    && ObjectID::from(struct_tag.address) != package_filter
+                {
+                    return false;
                 }
 
-                if let Some(module_filter) = self.module() {
-                    if struct_tag.module.as_str() != module_filter {
-                        return false;
-                    }
+                if let Some(module_filter) = self.module()
+                    && struct_tag.module.as_str() != module_filter
+                {
+                    return false;
                 }
 
-                if let Some(name_filter) = self.name() {
-                    if struct_tag.name.as_str() != name_filter {
-                        return false;
-                    }
+                if let Some(name_filter) = self.name()
+                    && struct_tag.name.as_str() != name_filter
+                {
+                    return false;
                 }
 
                 if let Some(type_params_filter) = self.type_params() {

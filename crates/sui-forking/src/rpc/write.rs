@@ -59,11 +59,11 @@ pub enum Error {
     #[error("Invalid base64: {0}")]
     InvalidBase64(String),
     #[error("Failed to decode transaction data: {0}")]
-    DecodeError(String),
+    DecodeErr(String),
     #[error("Failed to execute transaction: {0}")]
-    ExecutionError(String),
+    ExecutionErr(String),
     #[error("Failed to convert: {0}")]
-    ConversionError(String),
+    ConversionErr(String),
     #[error("Not implemented: {0}")]
     NotImplemented(String),
 }
@@ -85,13 +85,13 @@ impl WriteApiServer for Write {
             .to_vec()
             .map_err(|e| invalid_params(Error::InvalidBase64(e.to_string())))?;
         let tx_data = bcs::from_bytes::<TransactionData>(&tx_data_decoded)
-            .map_err(|e| invalid_params(Error::DecodeError(e.to_string())))?;
+            .map_err(|e| invalid_params(Error::DecodeErr(e.to_string())))?;
 
         // we need the input objects part of simulacrum and package resolver
         let input_objs_ids: Vec<ObjectID> = tx_data
             .input_objects()
             .clone()
-            .map_err(|e| invalid_params(Error::ExecutionError(e.to_string())))?
+            .map_err(|e| invalid_params(Error::ExecutionErr(e.to_string())))?
             .into_iter()
             .map(|o| match o {
                 sui_types::transaction::InputObjectKind::MovePackage(object_id) => object_id,
@@ -104,23 +104,23 @@ impl WriteApiServer for Write {
 
         // Fetch and cache input objects
         let mut simulacrum = self.0.simulacrum.write().await;
-        let mut data_store: &mut ForkingStore = simulacrum.store_1_mut();
+        let data_store: &mut ForkingStore = simulacrum.store_1_mut();
         for object_id in input_objs_ids {
-            crate::rpc::fetch_and_cache_object_from_rpc(&mut data_store, &self.0, &object_id)
+            crate::rpc::fetch_and_cache_object_from_rpc(data_store, &self.0, &object_id)
                 .await
-                .map_err(|e| invalid_params(Error::ExecutionError(e.to_string())))?;
+                .map_err(|e| invalid_params(Error::ExecutionErr(e.to_string())))?;
         }
 
         // Execute the transaction using Simulacrum
         let (effects, _execution_error) = simulacrum
             .execute_transaction_impersonating(transaction.transaction_data().clone())
-            .map_err(|e| invalid_params(Error::ExecutionError(e.to_string())))?;
+            .map_err(|e| invalid_params(Error::ExecutionErr(e.to_string())))?;
 
         simulacrum.create_checkpoint();
 
         // Build the response based on options
         let options = options.unwrap_or_default();
-        let mut response = SuiTransactionBlockResponse::new(effects.transaction_digest().clone());
+        let mut response = SuiTransactionBlockResponse::new(*effects.transaction_digest());
 
         info!(
             "Executed transaction with digest: {:?}",
@@ -129,9 +129,8 @@ impl WriteApiServer for Write {
 
         if options.show_effects {
             response.effects = Some(
-                SuiTransactionBlockEffects::try_from(effects.clone()).map_err(|e| {
-                    invalid_params(Error::ConversionError(format!("effects: {}", e)))
-                })?,
+                SuiTransactionBlockEffects::try_from(effects.clone())
+                    .map_err(|e| invalid_params(Error::ConversionErr(format!("effects: {}", e))))?,
             );
         }
 

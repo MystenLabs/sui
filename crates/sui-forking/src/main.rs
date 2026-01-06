@@ -6,7 +6,6 @@ mod context;
 mod graphql;
 mod indexers;
 mod rpc;
-// mod seeds;
 mod server;
 mod store;
 
@@ -17,8 +16,7 @@ use tracing::info;
 use sui_types::supported_protocol_versions::Chain;
 
 use crate::cli::{Args, Commands};
-// use crate::seeds::Network;
-use crate::server::server::start_server;
+use crate::server::start_server;
 use crate::server::{AdvanceClockRequest, ApiResponse, ExecuteTxRequest, ForkingStatus};
 use std::path::PathBuf;
 

@@ -162,7 +162,7 @@ impl ForkingStore {
         else {
             let _objs = self
                 .rpc_data_store
-                .get_objects(&vec![sui_data_store::ObjectKey {
+                .get_objects(&[sui_data_store::ObjectKey {
                     object_id: *id,
                     version_query: sui_data_store::VersionQuery::AtCheckpoint(
                         self.forked_at_checkpoint,

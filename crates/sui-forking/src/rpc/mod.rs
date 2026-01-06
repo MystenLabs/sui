@@ -18,6 +18,7 @@ use sui_indexer_alt_metrics::MetricsService;
 use crate::context::Context;
 use crate::rpc::objects::insert_package_into_db;
 use crate::store::ForkingStore;
+use std::slice::from_ref;
 use sui_data_store::ObjectKey;
 use sui_data_store::ObjectStore;
 use sui_data_store::VersionQuery;
@@ -49,7 +50,7 @@ pub(crate) async fn fetch_and_cache_object_from_rpc(
             .get_rpc_data_store()
             .get_objects(&[ObjectKey {
                 object_id: *object_id,
-                version_query: VersionQuery::AtCheckpoint(at_checkpoint.clone()),
+                version_query: VersionQuery::AtCheckpoint(*at_checkpoint),
             }])
             .unwrap();
         let obj = obj.into_iter().next().unwrap();
@@ -57,16 +58,15 @@ pub(crate) async fn fetch_and_cache_object_from_rpc(
         if let Some((ref object, _version)) = obj {
             info!("Fetched object from rpc: {:?}", object.id());
             println!("Fetched object from rpc: {:?}", object.id());
-            let written_objects = BTreeMap::from([(object_id.clone(), object.clone())]);
+            let written_objects = BTreeMap::from([(*object_id, object.clone())]);
             data_store.update_objects(written_objects, vec![]);
 
             // If this is a package, insert it into kv_packages table
-            if object.is_package() {
-                if let Err(e) =
-                    insert_package_into_db(&db_writer, &object, at_checkpoint.clone()).await
-                {
-                    eprintln!("Failed to insert package into DB: {:?}", e);
-                }
+            if object.is_package()
+                && let Err(e) =
+                    insert_package_into_db(db_writer, from_ref(object), *at_checkpoint).await
+            {
+                eprintln!("Failed to insert package into DB: {:?}", e);
             }
 
             Ok(object.clone())
