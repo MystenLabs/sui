@@ -108,6 +108,7 @@ static_symbols!(
     "internal",
     "permit",
     "address_alias",
+    "00000000000000000000000000000000",
 );
 
 /// The global, unique cache of strings.
