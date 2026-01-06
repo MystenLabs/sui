@@ -546,7 +546,6 @@ impl BridgeTestCluster {
 
         // Step 5: Execute the upgrade
         let tx = build_evm_upgrade_transaction(eth_signer.clone(), upgrade_action, &sigs)
-            .await
             .map_err(|e| anyhow::anyhow!("Failed to build upgrade transaction: {:?}", e))?;
         let pending_tx = tx.send().await?;
         let receipt = pending_tx
