@@ -208,4 +208,5 @@ fn transaction_to_response(
 
 fn requires_indexed_data(mask: &FieldMaskTree) -> bool {
     mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name)
+        || mask.contains(ExecutedTransaction::EFFECTS_FIELD.name)
 }
