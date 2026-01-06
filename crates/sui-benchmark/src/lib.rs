@@ -480,7 +480,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 let request = WaitForEffectsRequest {
                     transaction_digest: Some(*digest),
                     consensus_position: Some(*position),
-                    include_details: false,
+                    include_details: true,
                     ping_type: None,
                 };
                 safe_client.wait_for_effects(request, None)
