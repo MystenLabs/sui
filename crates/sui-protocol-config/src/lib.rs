@@ -284,7 +284,8 @@ const MAX_PROTOCOL_VERSION: u64 = 107;
 //              nitro attestation native function in Devnet and Testnet.
 // Version 106: Framework update: accumulator storage fund calculations
 //              Enable address balances on devnet
-// Version 107: Support TxContext in all parameter positions.
+// Version 107: Enable new digit based gas rounding.
+//              Support TxContext in all parameter positions.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -931,6 +932,10 @@ struct FeatureFlags {
     // If true, enable object funds withdraw.
     #[serde(skip_serializing_if = "is_false")]
     enable_object_funds_withdraw: bool,
+
+    // If true, uses a new rounding mechanism for gas calculations, replacing the step-based one
+    #[serde(skip_serializing_if = "is_false")]
+    gas_rounding_halve_digits: bool,
 
     // If true, enable tx contexts in all argument positions
     #[serde(skip_serializing_if = "is_false")]
@@ -2482,6 +2487,10 @@ impl ProtocolConfig {
 
     pub fn enable_object_funds_withdraw(&self) -> bool {
         self.feature_flags.enable_object_funds_withdraw
+    }
+
+    pub fn gas_rounding_halve_digits(&self) -> bool {
+        self.feature_flags.gas_rounding_halve_digits
     }
 
     pub fn flexible_tx_context_positions(&self) -> bool {
@@ -4398,6 +4407,7 @@ impl ProtocolConfig {
                     }
                 }
                 107 => {
+                    cfg.feature_flags.gas_rounding_halve_digits = true;
                     cfg.feature_flags.flexible_tx_context_positions = true;
                 }
                 // Use this template when making changes:

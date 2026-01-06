@@ -4,7 +4,6 @@
 //! Implements lint to warn against freezing capability-like types in Sui, identifying function calls that may incorrectly freeze such types.
 //! The lint checks for specific freezing functions defined in constants and inspects their type arguments for capability-like type names.
 
-use super::{LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode};
 use crate::{
     diag,
     diagnostics::codes::{DiagnosticInfo, Severity, custom},
@@ -12,14 +11,19 @@ use crate::{
     shared::Identifier,
     sui_mode::{
         SUI_ADDR_VALUE,
-        linters::{FREEZE_FUN, PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME},
+        linters::{
+            FREEZE_FUN, LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode,
+            PUBLIC_FREEZE_FUN, TRANSFER_MOD_NAME,
+        },
     },
     typing::{ast as T, core, visitor::simple_visitor},
 };
 use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
-use once_cell::sync::Lazy;
+
 use regex::Regex;
+
+use std::sync::LazyLock;
 
 const FREEZE_CAPABILITY_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
@@ -34,7 +38,8 @@ const FREEZE_FUNCTIONS: &[(AccountAddress, &str, &str)] = &[
     (SUI_ADDR_VALUE, TRANSFER_MOD_NAME, FREEZE_FUN),
 ];
 
-static REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r".*Cap(?:[A-Z0-9_]+|ability|$).*").unwrap());
+static REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r".*Cap(?:[A-Z0-9_]+|ability|$).*").unwrap());
 
 simple_visitor!(
     WarnFreezeCapability,
