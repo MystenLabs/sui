@@ -107,18 +107,7 @@ const concepts = [
 		items: [
 			'concepts/cryptography/zklogin',
 			'concepts/cryptography/passkeys',
-			{
-				type: 'category',
-				label: 'Nautilus',
-				link: {
-					type: 'doc',
-					id: 'concepts/cryptography/nautilus',
-				},
-				items: [
-					'concepts/cryptography/nautilus/nautilus-design',
-					'concepts/cryptography/nautilus/using-nautilus',
-				],
-			},
+			'concepts/cryptography/nautilus/nautilus-design',
 			'concepts/cryptography/system/checkpoint-verification',
 			/*{
 				type: 'category',
@@ -130,7 +119,6 @@ const concepts = [
 				items: [
 					'concepts/cryptography/system/validator-signatures',
 					'concepts/cryptography/system/intents-for-validation',
-					'concepts/cryptography/system/checkpoint-verification',
 				],
 			},*/
 		],

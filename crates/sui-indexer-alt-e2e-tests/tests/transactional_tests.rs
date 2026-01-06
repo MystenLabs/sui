@@ -142,7 +142,7 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
     // The test config includes every pipeline, we configure its consistent range using the
     // off-chain config that was passed in.
     let pruner = PrunerLayer {
-        retention: Some(config.snapshot_config.snapshot_min_lag as u64),
+        retention: Some(config.consistent_range as u64),
         ..Default::default()
     };
 

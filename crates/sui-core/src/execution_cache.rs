@@ -613,6 +613,11 @@ pub trait ExecutionCacheWrite: Send + Sync {
         signed_transaction: Option<VerifiedSignedTransaction>,
     ) -> SuiResult;
 
+    /// Validate owned object versions and digests without acquiring locks.
+    /// Used when preconsensus locking is disabled to validate objects without locking,
+    /// since locking happens post-consensus in that mode.
+    fn validate_owned_object_versions(&self, owned_input_objects: &[ObjectRef]) -> SuiResult;
+
     /// Write an object entry directly to the cache for testing.
     /// This allows us to write an object without constructing the entire
     /// transaction outputs.

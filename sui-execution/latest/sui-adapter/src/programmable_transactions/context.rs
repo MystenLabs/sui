@@ -1535,42 +1535,55 @@ mod checked {
         let mut receiving_funds_type_and_owners = BTreeMap::new();
         let accumulator_events = accumulator_events
             .into_iter()
-            .map(|accum_event| {
-                if let Some(ty) = Balance::maybe_get_balance_type_param(&accum_event.target_ty) {
-                    receiving_funds_type_and_owners
-                        .entry(ty)
-                        .or_insert_with(BTreeSet::new)
-                        .insert(accum_event.target_addr.into());
-                }
-                let value = match accum_event.value {
-                    MoveAccumulatorValue::U64(amount) => AccumulatorValue::Integer(amount),
-                    MoveAccumulatorValue::EventRef(event_idx) => {
-                        let Some(event) = user_events.get(event_idx as usize) else {
-                            invariant_violation!(
-                                "Could not find authenticated event at index {}",
-                                event_idx
-                            );
-                        };
-                        let digest = event.digest();
-                        AccumulatorValue::EventDigest(nonempty![(event_idx, digest)])
+            .try_fold(
+                BTreeMap::<ObjectID, Vec<AccumulatorWriteV1>>::new(),
+                |mut map, accum_event| -> Result<BTreeMap<ObjectID, Vec<AccumulatorWriteV1>>, ExecutionError> {
+                    if let Some(ty) = Balance::maybe_get_balance_type_param(&accum_event.target_ty)
+                    {
+                        receiving_funds_type_and_owners
+                            .entry(ty)
+                            .or_insert_with(BTreeSet::new)
+                            .insert(accum_event.target_addr.into());
                     }
-                };
+                    let value = match accum_event.value {
+                        MoveAccumulatorValue::U64(amount) => AccumulatorValue::Integer(amount),
+                        MoveAccumulatorValue::EventRef(event_idx) => {
+                            let Some(event) = user_events.get(event_idx as usize) else {
+                                invariant_violation!(
+                                    "Could not find authenticated event at index {}",
+                                    event_idx
+                                );
+                            };
+                            let digest = event.digest();
+                            AccumulatorValue::EventDigest(nonempty![(event_idx, digest)])
+                        }
+                    };
 
-                let address =
-                    AccumulatorAddress::new(accum_event.target_addr.into(), accum_event.target_ty);
+                    let address = AccumulatorAddress::new(
+                        accum_event.target_addr.into(),
+                        accum_event.target_ty,
+                    );
 
-                let write = AccumulatorWriteV1 {
-                    address,
-                    operation: accum_event.action.into_sui_accumulator_action(),
-                    value,
-                };
+                    let write = AccumulatorWriteV1 {
+                        address,
+                        operation: accum_event.action.into_sui_accumulator_action(),
+                        value,
+                    };
 
-                Ok(AccumulatorEvent::new(
-                    AccumulatorObjId::new_unchecked(accum_event.accumulator_id),
-                    write,
-                ))
+                    map.entry(accum_event.accumulator_id)
+                        .or_default()
+                        .push(write);
+                    Ok(map)
+                },
+            )?
+            .into_iter()
+            .map(|(obj_id, writes)| {
+                AccumulatorEvent::new(
+                    AccumulatorObjId::new_unchecked(obj_id),
+                    AccumulatorWriteV1::merge(writes),
+                )
             })
-            .collect::<Result<Vec<_>, ExecutionError>>()?;
+            .collect::<Vec<_>>();
 
         if protocol_config.enable_coin_deny_list_v2() {
             for object in written_objects.values() {

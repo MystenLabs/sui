@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::code_writer::{CodeWriter, CodeWriterLabel};
-use clap::*;
-use itertools::Itertools;
+
 use move_binary_format::file_format;
 use move_compiler::{
     expansion::ast::{self as E, Visibility},
@@ -22,7 +21,9 @@ use move_model_2::{
     source_model::{self, Model},
 };
 use move_symbol_pool::Symbol;
-use once_cell::sync::Lazy;
+
+use clap::*;
+use itertools::Itertools;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -32,6 +33,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    sync::LazyLock,
 };
 
 /// The maximum number of subheadings that are allowed
@@ -296,7 +298,7 @@ impl<'env> Docgen<'env> {
 
     /// Parse a root template.
     fn parse_root_template(&mut self, file_name: &str) -> anyhow::Result<Vec<TemplateElement>> {
-        static REX: Lazy<Regex> = Lazy::new(|| {
+        static REX: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(
                 r"(?xm)^\s*>\s*\{\{
                 ( (?P<include>move-include\s+(?P<include_name>\w+))
@@ -1372,7 +1374,7 @@ impl<'env> Docgen<'env> {
     /// Decorates a code fragment, for use in an html block. Replaces < and >, bolds keywords and
     /// tries to resolve and cross-link references.
     fn decorate_code(&self, env: &Model, code: &str) -> String {
-        static REX: Lazy<Regex> = Lazy::new(|| {
+        static REX: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(
                 r"(?P<ident>(\b\w+\b\s*::\s*)*\b\w+\b)(?P<call>\s*[(<])?|(?P<lt><)|(?P<gt>>)",
             )

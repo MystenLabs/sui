@@ -104,76 +104,79 @@ impl EffectsContents {
     }
 
     /// Whether the transaction executed successfully or not.
-    async fn status(&self) -> Result<Option<ExecutionStatus>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn status(&self) -> Option<Result<ExecutionStatus, RpcError>> {
+        let content = self.contents.as_ref()?;
 
-        let effects = content.effects()?;
-        let status = match effects.status() {
-            NativeExecutionStatus::Success => ExecutionStatus::Success,
-            NativeExecutionStatus::Failure { .. } => ExecutionStatus::Failure,
-        };
-
-        Ok(Some(status))
+        Some(
+            content
+                .effects()
+                .map(|effects| match effects.status() {
+                    NativeExecutionStatus::Success => ExecutionStatus::Success,
+                    NativeExecutionStatus::Failure { .. } => ExecutionStatus::Failure,
+                })
+                .map_err(RpcError::from),
+        )
     }
 
     /// The latest version of all objects (apart from packages) that have been created or modified by this transaction, immediately following this transaction.
-    async fn lamport_version(&self) -> Result<Option<UInt53>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn lamport_version(&self) -> Option<Result<UInt53, RpcError>> {
+        let content = self.contents.as_ref()?;
 
-        let effects = content.effects()?;
-        Ok(Some(UInt53::from(effects.lamport_version().value())))
+        Some(
+            content
+                .effects()
+                .map(|effects| UInt53::from(effects.lamport_version().value()))
+                .map_err(RpcError::from),
+        )
     }
 
     /// Rich execution error information for failed transactions.
-    async fn execution_error(&self) -> Result<Option<ExecutionError>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn execution_error(&self) -> Option<Result<ExecutionError, RpcError>> {
+        let content = self.contents.as_ref()?;
 
-        let effects = content.effects()?;
-        let status = effects.status();
+        let result = async {
+            let effects = content.effects()?;
+            let status = effects.status();
 
-        // Extract programmable transaction if available
-        let programmable_tx = content
-            .data()
-            .ok()
-            .and_then(|tx_data| match tx_data.into_kind() {
-                sui_types::transaction::TransactionKind::ProgrammableTransaction(tx) => Some(tx),
-                _ => None,
-            });
+            // Extract programmable transaction if available
+            let programmable_tx =
+                content
+                    .data()
+                    .ok()
+                    .and_then(|tx_data| match tx_data.into_kind() {
+                        sui_types::transaction::TransactionKind::ProgrammableTransaction(tx) => {
+                            Some(tx)
+                        }
+                        _ => None,
+                    });
 
-        ExecutionError::from_execution_status(&self.scope, status, programmable_tx.as_ref()).await
+            ExecutionError::from_execution_status(&self.scope, status, programmable_tx.as_ref())
+                .await
+        }
+        .await;
+
+        result.transpose()
     }
 
     /// Timestamp corresponding to the checkpoint this transaction was finalized in.
     ///
     /// `null` for executed/simulated transactions that have not been included in a checkpoint.
-    async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
-
-        content
-            .timestamp_ms()
-            .map(|ms| DateTime::from_ms(ms as i64))
-            .transpose()
+    async fn timestamp(&self) -> Option<Result<DateTime, RpcError>> {
+        let content = self.contents.as_ref()?;
+        let timestamp_ms = content.timestamp_ms()?;
+        Some(DateTime::from_ms(timestamp_ms as i64))
     }
 
     /// The epoch this transaction was finalized in.
-    async fn epoch(&self) -> Result<Option<Epoch>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn epoch(&self) -> Option<Result<Epoch, RpcError>> {
+        let content = self.contents.as_ref()?;
 
-        let effects = content.effects()?;
-        Ok(Some(Epoch::with_id(
-            self.scope.clone(),
-            effects.executed_epoch(),
-        )))
+        Some(
+            content
+                .effects()
+                .map(|effects| Epoch::with_id(self.scope.clone(), effects.executed_epoch()))
+                .map_err(RpcError::from),
+        )
     }
 
     /// Events emitted by this transaction.
@@ -184,29 +187,31 @@ impl EffectsContents {
         after: Option<CEvent>,
         last: Option<u64>,
         before: Option<CEvent>,
-    ) -> Result<Option<Connection<String, Event>>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+    ) -> Option<Result<Connection<String, Event>, RpcError>> {
+        let content = self.contents.as_ref()?;
 
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("TransactionEffects", "events");
-        let page = Page::from_params(limits, first, after, last, before)?;
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("TransactionEffects", "events");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        let events = content.events()?;
-        page.paginate_indices(events.len(), |i| {
-            let transaction_digest = content.digest()?;
-            let timestamp_ms = content.timestamp_ms();
+                let events = content.events()?;
+                page.paginate_indices(events.len(), |i| {
+                    let transaction_digest = content.digest()?;
+                    let timestamp_ms = content.timestamp_ms();
 
-            Ok(Event {
-                scope: self.scope.clone(),
-                native: events[i].clone(),
-                transaction_digest,
-                sequence_number: i as u64,
-                timestamp_ms,
-            })
-        })
-        .map(Some)
+                    Ok(Event {
+                        scope: self.scope.clone(),
+                        native: events[i].clone(),
+                        transaction_digest,
+                        sequence_number: i as u64,
+                        timestamp_ms,
+                    })
+                })
+            }
+            .await,
+        )
     }
 
     /// The effect this transaction had on the balances (sum of coin values per coin type) of addresses and objects.
@@ -217,64 +222,63 @@ impl EffectsContents {
         after: Option<CBalanceChange>,
         last: Option<u64>,
         before: Option<CBalanceChange>,
-    ) -> Result<Option<Connection<String, BalanceChange>>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+    ) -> Option<Result<Connection<String, BalanceChange>, RpcError>> {
+        let content = self.contents.as_ref()?;
 
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("TransactionEffects", "balanceChanges");
-        let page = Page::from_params(limits, first, after, last, before)?;
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("TransactionEffects", "balanceChanges");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        // First try to get balance changes from execution context (content)
-        if let Some(grpc_balance_changes) = content.balance_changes() {
-            return page
-                .paginate_indices(grpc_balance_changes.len(), |i| {
-                    BalanceChange::from_grpc(self.scope.clone(), &grpc_balance_changes[i])
+                // First try to get balance changes from execution context (content)
+                if let Some(grpc_balance_changes) = content.balance_changes() {
+                    return page.paginate_indices(grpc_balance_changes.len(), |i| {
+                        BalanceChange::from_grpc(self.scope.clone(), &grpc_balance_changes[i])
+                    });
+                }
+
+                // Fall back to loading from database
+                let transaction_digest = content.digest()?;
+                let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+                let key = TxBalanceChangeKey(transaction_digest);
+
+                let Some(stored_balance_changes) = pg_loader
+                    .load_one(key)
+                    .await
+                    .context("Failed to load balance changes")?
+                else {
+                    return Ok(Connection::new(false, false));
+                };
+
+                // Deserialize balance changes from BCS bytes
+                let balance_changes: Vec<StoredBalanceChange> =
+                    bcs::from_bytes(&stored_balance_changes.balance_changes)
+                        .context("Failed to deserialize balance changes")?;
+
+                page.paginate_indices(balance_changes.len(), |i| {
+                    BalanceChange::from_stored(self.scope.clone(), balance_changes[i].clone())
                 })
-                .map(Some);
-        }
-
-        // Fall back to loading from database
-        let transaction_digest = content.digest()?;
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-        let key = TxBalanceChangeKey(transaction_digest);
-
-        let Some(stored_balance_changes) = pg_loader
-            .load_one(key)
-            .await
-            .context("Failed to load balance changes")?
-        else {
-            return Ok(Some(Connection::new(false, false)));
-        };
-
-        // Deserialize balance changes from BCS bytes
-        let balance_changes: Vec<StoredBalanceChange> =
-            bcs::from_bytes(&stored_balance_changes.balance_changes)
-                .context("Failed to deserialize balance changes")?;
-
-        page.paginate_indices(balance_changes.len(), |i| {
-            BalanceChange::from_stored(self.scope.clone(), balance_changes[i].clone())
-        })
-        .map(Some)
+            }
+            .await,
+        )
     }
 
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
-    async fn effects_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
-
-        Ok(Some(Base64(content.raw_effects()?)))
+    async fn effects_bcs(&self) -> Option<Result<Base64, RpcError>> {
+        let content = self.contents.as_ref()?;
+        Some(content.raw_effects().map(Base64).map_err(RpcError::from))
     }
 
     /// A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
-    async fn effects_digest(&self) -> Result<Option<String>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
-
-        Ok(Some(Base58::encode(content.effects_digest()?)))
+    async fn effects_digest(&self) -> Option<Result<String, RpcError>> {
+        let content = self.contents.as_ref()?;
+        Some(
+            content
+                .effects_digest()
+                .map(Base58::encode)
+                .map_err(RpcError::from),
+        )
     }
 
     /// The before and after state of objects that were modified by this transaction.
@@ -285,33 +289,37 @@ impl EffectsContents {
         after: Option<CObjectChange>,
         last: Option<u64>,
         before: Option<CObjectChange>,
-    ) -> Result<Option<Connection<String, ObjectChange>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("TransactionEffects", "objectChanges");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, ObjectChange>, RpcError>> {
+        let content = self.contents.as_ref()?;
 
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("TransactionEffects", "objectChanges");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        let object_changes = content.effects()?.object_changes();
-        page.paginate_indices(object_changes.len(), |i| {
-            Ok(ObjectChange {
-                scope: self.scope.clone(),
-                native: object_changes[i].clone(),
-            })
-        })
-        .map(Some)
+                let object_changes = content.effects()?.object_changes();
+                page.paginate_indices(object_changes.len(), |i| {
+                    Ok(ObjectChange {
+                        scope: self.scope.clone(),
+                        native: object_changes[i].clone(),
+                    })
+                })
+            }
+            .await,
+        )
     }
 
     /// Effects related to the gas object used for the transaction (costs incurred and the identity of the smashed gas object returned).
-    async fn gas_effects(&self) -> Result<Option<GasEffects>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn gas_effects(&self) -> Option<Result<GasEffects, RpcError>> {
+        let content = self.contents.as_ref()?;
 
-        let effects = content.effects()?;
-        Ok(Some(GasEffects::from_effects(self.scope.clone(), &effects)))
+        Some(
+            content
+                .effects()
+                .map(|effects| GasEffects::from_effects(self.scope.clone(), &effects))
+                .map_err(RpcError::from),
+        )
     }
 
     /// The unchanged consensus-managed objects that were referenced by this transaction.
@@ -322,25 +330,27 @@ impl EffectsContents {
         after: Option<CUnchangedConsensusObject>,
         last: Option<u64>,
         before: Option<CUnchangedConsensusObject>,
-    ) -> Result<Option<Connection<String, UnchangedConsensusObject>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("TransactionEffects", "unchangedConsensusObjects");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, UnchangedConsensusObject>, RpcError>> {
+        let content = self.contents.as_ref()?;
 
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("TransactionEffects", "unchangedConsensusObjects");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        let epoch = content.effects()?.executed_epoch();
-        let unchanged_consensus_objects = content.effects()?.unchanged_consensus_objects();
-        page.paginate_indices(unchanged_consensus_objects.len(), |i| {
-            Ok(UnchangedConsensusObject::from_native(
-                self.scope.clone(),
-                unchanged_consensus_objects[i].clone(),
-                epoch,
-            ))
-        })
-        .map(Some)
+                let epoch = content.effects()?.executed_epoch();
+                let unchanged_consensus_objects = content.effects()?.unchanged_consensus_objects();
+                page.paginate_indices(unchanged_consensus_objects.len(), |i| {
+                    Ok(UnchangedConsensusObject::from_native(
+                        self.scope.clone(),
+                        unchanged_consensus_objects[i].clone(),
+                        epoch,
+                    ))
+                })
+            }
+            .await,
+        )
     }
 
     /// Transactions whose outputs this transaction depends upon.
@@ -351,21 +361,23 @@ impl EffectsContents {
         after: Option<CDependency>,
         last: Option<u64>,
         before: Option<CDependency>,
-    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("TransactionEffects", "dependencies");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+        let content = self.contents.as_ref()?;
 
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("TransactionEffects", "dependencies");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        let effects = content.effects()?;
-        let dependencies = effects.dependencies();
-        page.paginate_indices(dependencies.len(), |i| {
-            Ok(Transaction::with_id(self.scope.clone(), dependencies[i]))
-        })
-        .map(Some)
+                let effects = content.effects()?;
+                let dependencies = effects.dependencies();
+                page.paginate_indices(dependencies.len(), |i| {
+                    Ok(Transaction::with_id(self.scope.clone(), dependencies[i]))
+                })
+            }
+            .await,
+        )
     }
 }
 

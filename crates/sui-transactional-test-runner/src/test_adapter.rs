@@ -56,7 +56,6 @@ use sui_core::authority::AuthorityState;
 use sui_core::authority::shared_object_version_manager::AssignedVersions;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
-use sui_graphql_rpc::test_infra::cluster::{RetentionConfig, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionBlockResponse, SuiAccumulatorOperation, SuiExecutionStatus,
@@ -145,19 +144,6 @@ const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 
 const DEFAULT_CHAIN_START_TIMESTAMP: u64 = 0;
 
-/// Extra args related to configuring the indexer and reader.
-// TODO: the configs are still tied to the indexer crate, eventually we'd like a new command that is
-// more agnostic
-pub struct OffChainConfig {
-    pub snapshot_config: SnapshotLagConfig,
-    pub retention_config: Option<RetentionConfig>,
-    /// Dir for simulacrum to write checkpoint files to. To be passed to the offchain indexer if it
-    /// uses file-based ingestion.
-    pub data_ingestion_path: PathBuf,
-    /// URL for the Sui REST API. To be passed to the offchain indexer if it uses the REST API.
-    pub rest_api_url: Option<String>,
-}
-
 pub struct SuiTestAdapter {
     pub(crate) compiled_state: CompiledState,
     /// For upgrades: maps an upgraded package name to the original package name.
@@ -182,6 +168,16 @@ pub struct SuiTestAdapter {
     pub offchain_config: Option<OffChainConfig>,
     /// A trait encapsulating methods to interact with offchain state.
     pub offchain_reader: Option<Box<dyn OffchainStateReader>>,
+}
+
+/// Extra args related to configuring the indexer and reader.
+pub struct OffChainConfig {
+    pub consistent_range: usize,
+    /// Dir for simulacrum to write checkpoint files to. To be passed to the offchain indexer if it
+    /// uses file-based ingestion.
+    pub data_ingestion_path: PathBuf,
+    /// URL for the Sui REST API. To be passed to the offchain indexer if it uses the REST API.
+    pub rest_api_url: Option<String>,
 }
 
 struct AdapterInitConfig {
@@ -238,9 +234,8 @@ impl AdapterInitConfig {
             num_custom_validator_accounts,
             reference_gas_price,
             default_gas_price,
-            snapshot_config,
             flavor,
-            epochs_to_keep,
+            consistent_range,
             data_ingestion_path,
             rest_api_url,
             enable_accumulators,
@@ -312,12 +307,8 @@ impl AdapterInitConfig {
         }
 
         let offchain_config = if simulator {
-            let retention_config =
-                epochs_to_keep.map(RetentionConfig::new_with_default_retention_only_for_testing);
-
             Some(OffChainConfig {
-                snapshot_config,
-                retention_config,
+                consistent_range,
                 data_ingestion_path: data_ingestion_path.unwrap_or(tempdir().unwrap().keep()),
                 rest_api_url,
             })

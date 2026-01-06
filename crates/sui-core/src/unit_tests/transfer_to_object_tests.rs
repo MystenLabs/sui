@@ -3,6 +3,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
@@ -1027,6 +1028,13 @@ fn assert_effects_equivalent(ef1: &TransactionEffects, ef2: &TransactionEffects)
 
 #[tokio::test]
 async fn test_tto_not_locked() {
+    // This test uses certify_transaction (QD path) which requires
+    // disable_preconsensus_locking=false for signed transaction storage.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     for aggressive_pruning_enabled in [true, false] {
         // The transaction effects for the valid and invalid transactions should be the same regardless
         // of the order in which they are run.

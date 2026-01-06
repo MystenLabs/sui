@@ -37,18 +37,22 @@ impl ProgrammableTransaction {
         after: Option<CInput>,
         last: Option<u64>,
         before: Option<CInput>,
-    ) -> Result<Option<Connection<String, TransactionInput>>, RpcError> {
-        let pagination = ctx.data::<PaginationConfig>()?;
-        let limits = pagination.limits("ProgrammableTransaction", "inputs");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, TransactionInput>, RpcError>> {
+        Some(
+            async {
+                let pagination = ctx.data::<PaginationConfig>()?;
+                let limits = pagination.limits("ProgrammableTransaction", "inputs");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        page.paginate_indices(self.native.inputs.len(), |i| {
-            Ok(TransactionInput::from(
-                self.native.inputs[i].clone(),
-                self.scope.clone(),
-            ))
-        })
-        .map(Some)
+                page.paginate_indices(self.native.inputs.len(), |i| {
+                    Ok(TransactionInput::from(
+                        self.native.inputs[i].clone(),
+                        self.scope.clone(),
+                    ))
+                })
+            }
+            .await,
+        )
     }
 
     /// The transaction commands, executed sequentially.
@@ -59,17 +63,21 @@ impl ProgrammableTransaction {
         after: Option<CCommand>,
         last: Option<u64>,
         before: Option<CCommand>,
-    ) -> Result<Option<Connection<String, Command>>, RpcError> {
-        let pagination = ctx.data::<PaginationConfig>()?;
-        let limits = pagination.limits("ProgrammableTransaction", "commands");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Command>, RpcError>> {
+        Some(
+            async {
+                let pagination = ctx.data::<PaginationConfig>()?;
+                let limits = pagination.limits("ProgrammableTransaction", "commands");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        page.paginate_indices(self.native.commands.len(), |i| {
-            Ok(Command::from(
-                self.scope.clone(),
-                self.native.commands[i].clone(),
-            ))
-        })
-        .map(Some)
+                page.paginate_indices(self.native.commands.len(), |i| {
+                    Ok(Command::from(
+                        self.scope.clone(),
+                        self.native.commands[i].clone(),
+                    ))
+                })
+            }
+            .await,
+        )
     }
 }

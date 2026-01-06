@@ -176,6 +176,41 @@ mod test {
         test_simulated_load(test_cluster, 15).await;
     }
 
+    /// Tests conflicting transfer workload which creates contention by submitting
+    /// conflicting transactions as soft bundles. The soft bundle ensures deterministic
+    /// ordering: first transaction succeeds, subsequent ones fail with ObjectLockConflict.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_conflicting_transfers() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(4, 5000, 1).await;
+        let mut simulated_load_config = SimulatedLoadConfig::default();
+        // Use LocalValidatorAggregatorProxy for soft bundle support
+        simulated_load_config.remote_env = false;
+        // Enable conflicting transfer workload
+        simulated_load_config.conflicting_transfer_weight = 1;
+        simulated_load_config.num_contested_objects = 5;
+        // Disable other workloads to isolate testing
+        simulated_load_config.shared_counter_weight = 0;
+        simulated_load_config.transfer_object_weight = 1;
+        simulated_load_config.delegation_weight = 0;
+        simulated_load_config.batch_payment_weight = 0;
+        simulated_load_config.shared_deletion_weight = 0;
+        simulated_load_config.randomness_weight = 0;
+        simulated_load_config.slow_weight = 0;
+        info!("Simulated load config: {:?}", simulated_load_config);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            30,
+            simulated_load_config,
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false, // disable surfer to isolate the test
+        )
+        .await;
+    }
+
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_restarts() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
@@ -1013,6 +1048,8 @@ mod test {
         expected_failure_weight: u32,
         expected_failure_config: ExpectedFailurePayloadCfg,
         party_weight: u32,
+        conflicting_transfer_weight: u32,
+        num_contested_objects: u64,
     }
 
     impl Default for SimulatedLoadConfig {
@@ -1038,6 +1075,8 @@ mod test {
                 },
                 // TODO: Set this to 1 once party object is enabled in mainnet protocol config.
                 party_weight: 0,
+                conflicting_transfer_weight: 0,
+                num_contested_objects: 2,
             }
         }
     }
@@ -1145,6 +1184,7 @@ mod test {
             randomized_transaction: config.randomized_transaction_weight,
             slow: config.slow_weight,
             party: config.party_weight,
+            conflicting_transfer: config.conflicting_transfer_weight,
         };
 
         let workload_config = WorkloadConfig {
@@ -1158,6 +1198,7 @@ mod test {
             shared_counter_hotness_factor: config.shared_counter_hotness_factor,
             num_shared_counters: config.num_shared_counters,
             shared_counter_max_tip,
+            num_contested_objects: config.num_contested_objects,
             target_qps,
             in_flight_ratio,
             duration,

@@ -79,17 +79,21 @@ impl Transaction {
     }
 
     /// The type of this transaction as well as the commands and/or parameters comprising the transaction of this kind.
-    async fn kind(&self, ctx: &Context<'_>) -> Result<Option<TransactionKind>, RpcError> {
-        let contents = self.contents.fetch(ctx, self.digest).await?;
-        let Some(content) = &contents.contents else {
-            return Ok(None);
-        };
+    async fn kind(&self, ctx: &Context<'_>) -> Option<Result<TransactionKind, RpcError>> {
+        async {
+            let contents = self.contents.fetch(ctx, self.digest).await?;
+            let Some(content) = &contents.contents else {
+                return Ok(None);
+            };
 
-        let transaction_data = content.data()?;
-        Ok(TransactionKind::from(
-            transaction_data.kind().clone(),
-            contents.scope.clone(),
-        ))
+            let transaction_data = content.data()?;
+            Ok(TransactionKind::from(
+                transaction_data.kind().clone(),
+                contents.scope.clone(),
+            ))
+        }
+        .await
+        .transpose()
     }
 
     #[graphql(flatten)]
@@ -101,58 +105,74 @@ impl Transaction {
 #[Object]
 impl TransactionContents {
     /// This field is set by senders of a transaction block. It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid. By default, there is no deadline for when a transaction must execute.
-    async fn expiration(&self) -> Result<Option<Epoch>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn expiration(&self) -> Option<Result<Epoch, RpcError>> {
+        async {
+            let Some(content) = &self.contents else {
+                return Ok(None);
+            };
 
-        let transaction_data = content.data()?;
-        match transaction_data.expiration() {
-            TransactionExpiration::None => Ok(None),
-            TransactionExpiration::Epoch(epoch_id) => {
-                Ok(Some(Epoch::with_id(self.scope.clone(), *epoch_id)))
-            }
-            TransactionExpiration::ValidDuring { max_epoch, .. } => {
-                if let Some(epoch_id) = max_epoch {
+            let transaction_data = content.data()?;
+            match transaction_data.expiration() {
+                TransactionExpiration::None => Ok(None),
+                TransactionExpiration::Epoch(epoch_id) => {
                     Ok(Some(Epoch::with_id(self.scope.clone(), *epoch_id)))
-                } else {
-                    Ok(None)
+                }
+                TransactionExpiration::ValidDuring { max_epoch, .. } => {
+                    if let Some(epoch_id) = max_epoch {
+                        Ok(Some(Epoch::with_id(self.scope.clone(), *epoch_id)))
+                    } else {
+                        Ok(None)
+                    }
                 }
             }
         }
+        .await
+        .transpose()
     }
 
     /// The gas input field provides information on what objects were used as gas as well as the owner of the gas object(s) and information on the gas price and budget.
-    async fn gas_input(&self) -> Result<Option<GasInput>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn gas_input(&self) -> Option<Result<GasInput, RpcError>> {
+        async {
+            let Some(content) = &self.contents else {
+                return Ok(None);
+            };
 
-        let transaction_data = content.data()?;
-        Ok(Some(GasInput::from_gas_data(
-            self.scope.clone(),
-            transaction_data.gas_data().clone(),
-        )))
+            let transaction_data = content.data()?;
+            Ok(Some(GasInput::from_gas_data(
+                self.scope.clone(),
+                transaction_data.gas_data().clone(),
+            )))
+        }
+        .await
+        .transpose()
     }
 
     /// The address corresponding to the public key that signed this transaction. System transactions do not have senders.
-    async fn sender(&self) -> Result<Option<Address>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn sender(&self) -> Option<Result<Address, RpcError>> {
+        async {
+            let Some(content) = &self.contents else {
+                return Ok(None);
+            };
 
-        let sender = content.data()?.sender();
-        Ok((sender != NativeSuiAddress::ZERO)
-            .then(|| Address::with_address(self.scope.clone(), sender)))
+            let sender = content.data()?.sender();
+            Ok((sender != NativeSuiAddress::ZERO)
+                .then(|| Address::with_address(self.scope.clone(), sender)))
+        }
+        .await
+        .transpose()
     }
 
     /// The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
-    async fn transaction_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn transaction_bcs(&self) -> Option<Result<Base64, RpcError>> {
+        async {
+            let Some(content) = &self.contents else {
+                return Ok(None);
+            };
 
-        Ok(Some(Base64(content.raw_transaction()?)))
+            Ok(Some(Base64(content.raw_transaction()?)))
+        }
+        .await
+        .transpose()
     }
 
     /// User signatures for this transaction.

@@ -1,22 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::bail;
 use clap::Parser;
 use sui_indexer_alt_framework::{
+    Result,
     cluster::{self, IndexerClusterBuilder},
     pipeline::sequential::SequentialConfig,
-    Result,
+    service::Error,
 };
 use url::Url;
-use walrus_attributes_indexer::{handlers::BlogPostPipeline, MIGRATIONS};
+use walrus_attributes_indexer::{MIGRATIONS, handlers::BlogPostPipeline};
 
 // Indexers should be chain agnostic, so in a production deployment, this should be a value that
 // is passed to the service, rather than hardcoded here.
-const METADATA_DYNAMIC_FIELD_TYPE: &str =
-    "0x2::dynamic_field::Field<vector<u8>, 0xfdc88f7d7cf30afab2f82e8380d11ee8f70efb90e863d1de8616fae1bb09ea77::metadata::Metadata>";
+const METADATA_DYNAMIC_FIELD_TYPE: &str = "0x2::dynamic_field::Field<vector<u8>, 0xfdc88f7d7cf30afab2f82e8380d11ee8f70efb90e863d1de8616fae1bb09ea77::metadata::Metadata>";
 
 #[derive(clap::Parser, Debug)]
-struct Args {
+struct WalrusIndexerArgs {
     #[clap(
         long,
         default_value = "postgres://postgres:postgrespw@localhost:5432/walrus_attributes"
@@ -29,7 +30,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    let args = WalrusIndexerArgs::parse();
 
     // The `IndexerClusterBuilder` offers a convenient way to quickly set up an `IndexerCluster`,
     // which consists of the base indexer, metrics service, and a cancellation token.
@@ -48,6 +49,13 @@ async fn main() -> Result<()> {
         .sequential_pipeline(blog_post_pipeline, SequentialConfig::default())
         .await?;
 
-    let _ = indexer.run().await?.await;
-    Ok(())
+    match indexer.run().await?.main().await {
+        Ok(()) | Err(Error::Terminated) => Ok(()),
+        Err(Error::Aborted) => {
+            bail!("Indexer aborted due to an unexpected error")
+        }
+        Err(Error::Task(e)) => {
+            bail!(e)
+        }
+    }
 }

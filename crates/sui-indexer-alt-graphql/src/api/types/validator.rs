@@ -61,8 +61,8 @@ impl Validator {
         &self,
         ctx: &Context<'_>,
         coin_type: TypeInput,
-    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        self.super_().balance(ctx, coin_type).await
+    ) -> Option<Result<Balance, RpcError<balance::Error>>> {
+        self.super_().balance(ctx, coin_type).await.ok()?
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -73,18 +73,19 @@ impl Validator {
         after: Option<balance::Cursor>,
         last: Option<u64>,
         before: Option<balance::Cursor>,
-    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
+    ) -> Option<Result<Connection<String, Balance>, RpcError<balance::Error>>> {
         self.super_()
             .balances(ctx, first, after, last, before)
             .await
+            .ok()?
     }
 
     /// The domain explicitly configured as the default SuiNS name for this address.
     pub(crate) async fn default_suins_name(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError> {
-        self.super_().default_suins_name(ctx).await
+    ) -> Option<Result<String, RpcError>> {
+        self.super_().default_suins_name(ctx).await.ok()?
     }
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
@@ -95,8 +96,8 @@ impl Validator {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
-        self.super_().multi_get_balances(ctx, keys).await
+    ) -> Option<Result<Vec<Balance>, RpcError<balance::Error>>> {
+        self.super_().multi_get_balances(ctx, keys).await.ok()?
     }
 
     /// Objects owned by this object, optionally filtered by type.
@@ -108,10 +109,11 @@ impl Validator {
         last: Option<u64>,
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<Error>> {
+    ) -> Option<Result<Connection<String, MoveObject>, RpcError<Error>>> {
         self.super_()
             .objects(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// Validator's set of credentials such as public keys, network addresses and others.
@@ -174,15 +176,19 @@ impl Validator {
     async fn operation_cap(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<MoveObject>, RpcError<Error>> {
+    ) -> Option<Result<MoveObject, RpcError<Error>>> {
         let address = Address::with_address(
             self.contents.scope.clone(),
             self.validator().operation_cap_id.bytes.into(),
         );
-        let Some(object) = address.as_object(ctx).await? else {
-            return Ok(None);
+        let object = match address.as_object(ctx).await.ok()?? {
+            Ok(obj) => obj,
+            Err(e) => return Some(Err(e)),
         };
-        object.as_move_object(ctx).await.map_err(upcast)
+        match object.as_move_object(ctx).await.ok()?? {
+            Ok(obj) => Some(Ok(obj)),
+            Err(e) => Some(Err(upcast(e))),
+        }
     }
 
     /// The ID of this validator's `0x3::staking_pool::StakingPool`.
@@ -300,26 +306,30 @@ impl Validator {
         before: Option<CAddr>,
         last: Option<u64>,
         after: Option<CAddr>,
-    ) -> Result<Option<Connection<String, Validator>>, RpcError> {
-        let Some(report_records) = self
-            .contents
-            .report_records
-            .get(&self.validator().metadata.sui_address)
-        else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+    ) -> Option<Result<Connection<String, Validator>, RpcError>> {
+        Some(
+            async {
+                let Some(report_records) = self
+                    .contents
+                    .report_records
+                    .get(&self.validator().metadata.sui_address)
+                else {
+                    return Ok(Connection::new(false, false));
+                };
 
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Validator", "reportRecords");
-        let page = Page::from_params(limits, first, after, last, before)?;
-        page.paginate_indices(report_records.len(), |i| {
-            let idx = report_records[i];
-            Ok(Validator {
-                contents: Arc::clone(&self.contents),
-                idx,
-            })
-        })
-        .map(Some)
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Validator", "reportRecords");
+                let page = Page::from_params(limits, first, after, last, before)?;
+                page.paginate_indices(report_records.len(), |i| {
+                    let idx = report_records[i];
+                    Ok(Validator {
+                        contents: Arc::clone(&self.contents),
+                        idx,
+                    })
+                })
+            }
+            .await,
+        )
     }
 }
 
