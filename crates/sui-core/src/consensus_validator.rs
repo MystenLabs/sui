@@ -299,40 +299,44 @@ impl SuiTxValidator {
         Ok(())
     }
 
-    /// Verify that all claimed immutable objects are actually immutable.
-    /// Rejects if any claimed object doesn't exist locally (can't verify) or is not immutable.
+    /// Verify immutable object claims are complete and accurate.
+    /// 1. All immutable object claims must actually be immutable
+    /// 2. All immutable objects in inputs must be claimed
+    /// 3. All claimed objects must exist locally
+    ///
     /// This is stricter than general voting because the claim directly controls locking behavior.
     fn verify_immutable_object_claims(
         &self,
         claimed_ids: &[ObjectID],
         owned_object_refs: HashSet<ObjectRef>,
     ) -> SuiResult<()> {
-        if claimed_ids.is_empty() {
-            return Ok(());
-        }
+        let input_object_ids: Vec<ObjectID> =
+            owned_object_refs.iter().map(|(id, _, _)| *id).collect();
 
         let objects = self
             .authority_state
             .get_object_cache_reader()
-            .get_objects(claimed_ids);
+            .get_objects(&input_object_ids);
 
-        for (obj, id) in objects.into_iter().zip(claimed_ids.iter()) {
+        for (obj, obj_ref) in objects.into_iter().zip(owned_object_refs.iter()) {
+            let object_id = obj_ref.0;
             match obj {
                 Some(o) => {
-                    // Object exists but is NOT immutable - invalid claim
-                    let object_ref = o.compute_object_reference();
-                    if !owned_object_refs.contains(&o.compute_object_reference()) {
-                        return Err(SuiErrorKind::ImmutableObjectClaimNotFoundInInput {
-                            object_id: *id,
+                    let is_immutable = o.is_immutable();
+                    let is_claimed = claimed_ids.contains(&object_id);
+
+                    if is_claimed && !is_immutable {
+                        // Claimed as immutable but object is NOT immutable
+                        return Err(SuiErrorKind::InvalidImmutableObjectClaim {
+                            claimed_object_id: object_id,
+                            found_object_ref: o.compute_object_reference(),
                         }
                         .into());
                     }
-                    if !o.is_immutable() {
-                        return Err(SuiErrorKind::InvalidImmutableObjectClaim {
-                            claimed_object_id: *id,
-                            found_object_ref: object_ref,
-                        }
-                        .into());
+
+                    if is_immutable && !is_claimed {
+                        // Object IS immutable but was NOT claimed
+                        return Err(SuiErrorKind::ImmutableObjectNotClaimed { object_id }.into());
                     }
                 }
                 None => {
@@ -340,12 +344,24 @@ impl SuiTxValidator {
                     // This branch should not happen because owned input objects are already validated to exist.
                     return Err(SuiErrorKind::UserInputError {
                         error: UserInputError::ObjectNotFound {
-                            object_id: *id,
+                            object_id,
                             version: None,
                         },
                     }
                     .into());
                 }
+            }
+        }
+
+        // Note: Existence of claimed objects is already verified in the loop above,
+        // since all claimed objects must be in owned_object_refs.
+        // This loop only ensures no claimed objects are missing from inputs.
+        for claimed_id in claimed_ids {
+            if !input_object_ids.contains(claimed_id) {
+                return Err(SuiErrorKind::ImmutableObjectClaimNotFoundInInput {
+                    object_id: *claimed_id,
+                }
+                .into());
             }
         }
 
