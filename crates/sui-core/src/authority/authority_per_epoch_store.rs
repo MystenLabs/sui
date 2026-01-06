@@ -537,6 +537,8 @@ pub struct AuthorityEpochTables {
     #[rename = "running_root_accumulators"]
     pub running_root_state_hash: DBMap<CheckpointSequenceNumber, GlobalStateHash>,
 
+    #[cfg(tidehunter)] // tidehunter does not support table deletion yet
+    authority_capabilities: DBMap<AuthorityName, AuthorityCapabilitiesV1>,
     /// Record of the capabilities advertised by each authority.
     authority_capabilities_v2: DBMap<AuthorityName, AuthorityCapabilitiesV2>,
 
