@@ -50,11 +50,11 @@ Frontend code is not included in this guide.
 </TabItem>
 </Tabs>
 
-##step Create an AWS developer account 
+###step Create an AWS developer account 
 
 Set up an AWS developer account and install the AWS CLI. For detailed instructions, see the [AWS Nitro Enclaves getting started guide](https://docs.aws.amazon.com/enclaves/latest/user/getting-started.html#launch-instance).
 
-##step Configure AWS SSO
+###step Configure AWS SSO
 
 Confirm AWS CLI version:
 
@@ -87,11 +87,11 @@ rm ~/.aws/credentials
 rm ~/.aws/config
 ```
 
-##step Log in to AWS SSO 
+###step Log in to AWS SSO 
 
 After configuring AWS SSO, you will be redirected to login through a browser window. Choose an account and the role `AdministratorAccess`. AWS should create a profile such as `AdministratorAccess-094557288217`.
 
-##step List existing EC2 SSH key pairwise
+###step List existing EC2 SSH key pairwise
 
 Run the following command to list all key pairs created in your AWS account. These are used only for SSH into EC2.
 
@@ -101,7 +101,7 @@ aws ec2 describe-key-pairs \
   --profile AdministratorAccess-094557288217
 ```
 
-###substep Create a new EC2 SSH key pair (optional)
+####substep Create a new EC2 SSH key pair (optional)
 
 If you don't already have one you want to use, create a new EC2 SSH key pair with the command:
 
@@ -119,7 +119,7 @@ Configure the SSH key's permissions:
 chmod 400 ~/.ssh/<your-alias>.pem
 ```
 
-##step Set environment variables
+###step Set environment variables
 
 Set the `KEY_PAIR` variable with the name of your EC2 key pair:
 
@@ -167,7 +167,7 @@ Expected output:
 
 If this works, then your AWS environment is ready to use with Nautilus. 
 
-##step View the Nautilus repository structure
+###step View the Nautilus repository structure
 
 View the contents of the Nautilus repository that you have downloaded or cloned.
 
@@ -214,7 +214,7 @@ To create your own Nautilus app:
 
 Most of the template can remain unmodified, which streamlines development while giving you full control over app-specific logic.
 
-##step Run the Nautilus provisioning script
+###step Run the Nautilus provisioning script
 
 Run from the root of the Nautilus directory:
 
@@ -250,7 +250,7 @@ $ export AMI_ID=<find-an-amazon-linux-ami-for-your-region>
 
 You might need to create a VPC with a public subnet. Refer to this [AWS guide](https://000058.awsstudygroup.com/2-prerequiste/2.1-createec2/2.1.2-createpublicsubnet/) for instructions.
 
-##step Run the example 
+###step Run the example 
 
 To run the weather example as is, you do not need to modify `allowed_endpoints.yaml` because it already includes `api.weatherapi.com`. Follow the prompts to enter the required values. This step demonstrates how to store a secret (an API key) using AWS Secrets Manager, so you can avoid including the secret in the public application code.
 
@@ -281,7 +281,7 @@ Public IP: 18.208.226.122
 
 Wait 2 to 3 minutes for EC2 initialisation.
 
-##step Copy the Nautilus repo to EC2
+###step Copy the Nautilus repo to EC2
 
 When the script completes successfully, changes are generated in `/src/nautilus-server/run.sh` and `expose_enclave.sh`. You must copy these changes to EC2, as they are required when building the enclave image.
 
@@ -303,7 +303,7 @@ You can optionally create a secret to store any sensitive value you do not want 
 
 :::
 
-##step SSH into EC2
+###step SSH into EC2
 
 ```bash 
 ssh -i ~/.ssh/<your-alias>.pem ec2-user@<public-ip>
@@ -336,7 +336,7 @@ $ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Fr
 
 Optionally, you can set up an application load balancer (ALB) for the EC2 instance with an SSL/TLS certificate from AWS Certificate Manager (ACM), and configure Amazon Route 53 for DNS routing. For more information, see the [ACM User Guide](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) and the [ALB Guide](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html).
 
-##step Stop your EC2 instance 
+###step Stop your EC2 instance 
 
 It is important that you stop your EC2 instance when done, otherwise AWS charges $0.19/hour.
 
@@ -360,7 +360,7 @@ make run
 sh expose_enclave.sh
 ```
 
-### Artifacts for Twitter example
+## Artifacts for Twitter example
 
 If you'd like to try out the other example, `apps/twitter-example`, use the following artifacts:
 
