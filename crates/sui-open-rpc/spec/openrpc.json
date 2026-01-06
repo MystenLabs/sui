@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "106",
+              "maxSupportedProtocolVersion": "107",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1368,6 +1368,7 @@
                 "end_of_epoch_transaction_supported": false,
                 "enforce_checkpoint_timestamp_monotonicity": false,
                 "fresh_vm_on_framework_upgrade": false,
+                "gas_rounding_halve_digits": false,
                 "generate_df_type_layouts": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
