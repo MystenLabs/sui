@@ -29,6 +29,7 @@ pub(crate) struct Read(pub crate::context::Context);
 
 #[async_trait::async_trait]
 impl ReadApiServer for Read {
+    /// Retrieve the chain identifier of the network from the genesis checkpoint.
     async fn get_chain_identifier(&self) -> RpcResult<String> {
         let simulacrum = self.0.simulacrum.read().await;
         let chain_id: ChainIdentifier = simulacrum
@@ -42,6 +43,8 @@ impl ReadApiServer for Read {
         Ok(chain_id)
     }
 
+    /// Retrieve the protocol configuration for a specific protocol version or the latest if none
+    /// is specified.
     async fn get_protocol_config(
         &self,
         version: Option<BigInt<u64>>,

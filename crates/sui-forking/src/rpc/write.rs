@@ -17,9 +17,9 @@ use sui_open_rpc_macros::open_rpc;
 use sui_types::{
     base_types::ObjectID,
     effects::TransactionEffectsAPI,
-    quorum_driver_types::ExecuteTransactionRequestType,
     transaction::TransactionDataAPI,
     transaction::{Transaction, TransactionData},
+    transaction_driver_types::ExecuteTransactionRequestType,
 };
 
 #[open_rpc(namespace = "sui", tag = "Write API")]

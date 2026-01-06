@@ -45,9 +45,7 @@ async fn send_command(url: &str, endpoint: &str, body: Option<serde_json::Value>
 
     if response.status().is_success() {
         let result: ApiResponse<serde_json::Value> = response.json().await?;
-        if result.success {
-            println!("Success: {:?}", result.data);
-        } else {
+        if !result.success {
             println!("Error: {:?}", result.error);
         }
     } else {
@@ -147,7 +145,8 @@ async fn main() -> Result<()> {
             )
             .await?;
 
-            send_command(&server_url, "advance-checkpoint", None).await?
+            let _ = send_command(&server_url, "advance-checkpoint", None).await?;
+            println!("Faucet request completed");
         }
     }
 
