@@ -436,7 +436,6 @@ async fn test_add_new_coins_on_sui_and_eth() {
     let config_address = bridge_test_cluster.contracts().bridge_config;
     let eth_signer = bridge_test_cluster.get_eth_signer().await;
     let eth_call = build_eth_transaction(config_address, eth_signer, certified_eth_action)
-        .await
         .unwrap();
     let eth_receipt = send_eth_tx_and_get_tx_receipt(eth_call).await;
     assert_eq!(eth_receipt.status.unwrap().as_u64(), 1);
