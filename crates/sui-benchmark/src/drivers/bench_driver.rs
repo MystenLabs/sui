@@ -999,15 +999,10 @@ async fn run_bench_worker(
                             match bundle_result {
                                 Ok(results) => {
                                     // Convert to SoftBundleExecutionResults
-                                    let mut soft_bundle_results = Vec::new();
-                                    let mut any_success = false;
-                                    let mut all_retriable = true;
-
-                                    for (_digest, response) in results {
-                                        match response {
+                                    let soft_bundle_results: Vec<_> = results
+                                        .into_iter()
+                                        .map(|(_digest, response)| match response {
                                             WaitForEffectsResponse::Executed { details, .. } => {
-                                                any_success = true;
-                                                all_retriable = false;
                                                 let effects = details.map(|d| {
                                                     // Use QuorumExecuted since the transaction was executed by consensus
                                                     let epoch = d.effects.executed_epoch();
@@ -1019,12 +1014,13 @@ async fn run_bench_worker(
                                                         d.events.unwrap_or_default(),
                                                     )
                                                 });
-                                                soft_bundle_results.push(SoftBundleTransactionResult {
-                                                    success: true,
-                                                    effects,
-                                                    error: None,
-                                                    is_retriable_error: false,
-                                                });
+                                                // Success requires effects for the workload to continue
+                                                match effects {
+                                                    Some(effects) => SoftBundleTransactionResult::Success { effects: Box::new(effects) },
+                                                    None => SoftBundleTransactionResult::PermanentFailure {
+                                                        error: "Executed but no effects returned".to_string(),
+                                                    },
+                                                }
                                             }
                                             WaitForEffectsResponse::Rejected { error } => {
                                                 // Check if the error indicates an epoch change or other retriable condition.
@@ -1034,26 +1030,28 @@ async fn run_bench_worker(
                                                     .as_ref()
                                                     .map(|e| e.individual_error_indicates_epoch_change())
                                                     .unwrap_or(true);
-                                                if !is_retriable {
-                                                    all_retriable = false;
+                                                let error_str = error
+                                                    .map(|e| format!("{:?}", e))
+                                                    .unwrap_or_else(|| "Unknown rejection".to_string());
+                                                if is_retriable {
+                                                    SoftBundleTransactionResult::RetriableFailure { error: error_str }
+                                                } else {
+                                                    SoftBundleTransactionResult::PermanentFailure { error: error_str }
                                                 }
-                                                soft_bundle_results.push(SoftBundleTransactionResult {
-                                                    success: false,
-                                                    effects: None,
-                                                    error: error.map(|e| format!("{:?}", e)),
-                                                    is_retriable_error: is_retriable,
-                                                });
                                             }
                                             WaitForEffectsResponse::Expired { epoch, round } => {
-                                                soft_bundle_results.push(SoftBundleTransactionResult {
-                                                    success: false,
-                                                    effects: None,
-                                                    error: Some(format!("Expired at epoch {}, round {:?}", epoch, round)),
-                                                    is_retriable_error: true,
-                                                });
+                                                SoftBundleTransactionResult::RetriableFailure {
+                                                    error: format!("Expired at epoch {}, round {:?}", epoch, round),
+                                                }
                                             }
-                                        }
-                                    }
+                                        })
+                                        .collect();
+
+                                    // Compute summary statistics from results
+                                    let any_success = soft_bundle_results.iter().any(|r| r.is_success());
+                                    let all_retriable = soft_bundle_results
+                                        .iter()
+                                        .all(|r| r.is_success() || r.is_retriable());
 
                                     // Let the payload handle the results
                                     payload.handle_soft_bundle_results(&SoftBundleExecutionResults {
@@ -1083,7 +1081,8 @@ async fn run_bench_worker(
                                             payload,
                                         }
                                     } else {
-                                        // All transactions in the bundle failed with non-retriable errors
+                                        // No transactions succeeded, and at least one had a non-retriable error.
+                                        // Treat this as a failure - the payload's validation will handle the details.
                                         metrics_clone
                                             .num_error
                                             .with_label_values(&[&payload.to_string(), "soft_bundle_all_failed", "soft_bundle"])

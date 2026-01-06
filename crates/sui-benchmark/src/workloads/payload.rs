@@ -8,22 +8,55 @@ use sui_types::transaction::Transaction;
 /// Results from executing a soft bundle of transactions.
 pub struct SoftBundleExecutionResults {
     /// Results for each transaction in the bundle.
-    /// Each result contains the transaction index, whether it succeeded, and optional effects.
     pub results: Vec<SoftBundleTransactionResult>,
 }
 
 /// Result for a single transaction within a soft bundle.
-pub struct SoftBundleTransactionResult {
-    /// Whether this transaction was successfully executed.
-    pub success: bool,
-    /// The execution effects, if the transaction was executed (not rejected).
-    pub effects: Option<ExecutionEffects>,
-    /// Error message if the transaction was rejected.
-    pub error: Option<String>,
-    /// True if the error is retriable (e.g., epoch change, expired).
-    /// This allows payloads to distinguish between permanent failures (like ObjectLockConflict)
-    /// and temporary failures that should not trigger validation assertions.
-    pub is_retriable_error: bool,
+#[derive(Debug)]
+pub enum SoftBundleTransactionResult {
+    /// Transaction executed successfully.
+    Success {
+        /// The execution effects from the successful transaction.
+        effects: Box<ExecutionEffects>,
+    },
+    /// Transaction failed with a non-retriable error (e.g., ObjectLockConflict).
+    PermanentFailure {
+        /// Error message describing the failure.
+        error: String,
+    },
+    /// Transaction failed with a retriable error (e.g., epoch change, expired).
+    RetriableFailure {
+        /// Error message describing the failure.
+        error: String,
+    },
+}
+
+impl SoftBundleTransactionResult {
+    /// Returns true if this result represents a successful transaction.
+    pub fn is_success(&self) -> bool {
+        matches!(self, Self::Success { .. })
+    }
+
+    /// Returns true if this result represents a retriable failure.
+    pub fn is_retriable(&self) -> bool {
+        matches!(self, Self::RetriableFailure { .. })
+    }
+
+    /// Returns the error message if this is a failure, None if success.
+    pub fn error(&self) -> Option<&str> {
+        match self {
+            Self::Success { .. } => None,
+            Self::PermanentFailure { error } | Self::RetriableFailure { error } => Some(error),
+        }
+    }
+
+    /// Returns the effects if this is a success, None if failure.
+    pub fn effects(&self) -> Option<&ExecutionEffects> {
+        match self {
+            Self::Success { effects } => Some(effects),
+            _ => None,
+        }
+    }
 }
 
 /// A Payload is a transaction wrapper of a particular type (transfer object, shared counter, etc).

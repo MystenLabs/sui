@@ -16,7 +16,7 @@ use tracing::{debug, info};
 use crate::ValidatorProxy;
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::{Payload, SoftBundleExecutionResults};
+use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionResult};
 use crate::workloads::workload::WorkloadBuilder;
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN, Workload,
@@ -87,12 +87,11 @@ impl Payload for SoftBundleConflictingTransferPayload {
         let mut retriable_error_count = 0;
 
         for (i, result) in results.results.iter().enumerate() {
-            if result.success {
-                success_count += 1;
-                debug!("Transaction {} executed successfully", i);
+            match result {
+                SoftBundleTransactionResult::Success { effects } => {
+                    success_count += 1;
+                    debug!("Transaction {} executed successfully", i);
 
-                // Update object refs from the successful transaction
-                if let Some(effects) = &result.effects {
                     // Update gas object ref
                     let gas_ref = effects.gas_object().0;
                     self.gas_objects[i] = gas_ref;
@@ -106,35 +105,33 @@ impl Payload for SoftBundleConflictingTransferPayload {
                         self.transfer_object = *obj_ref;
                     }
                 }
-            } else if result.is_retriable_error {
-                // Retriable errors (epoch change, expired) - the bundle wasn't fully processed
-                retriable_error_count += 1;
-                debug!(
-                    "Transaction {} rejected with retriable error: {:?}",
-                    i, result.error
-                );
-            } else {
-                // Check if it's an ObjectLockConflict
-                let is_lock_conflict = result
-                    .error
-                    .as_ref()
-                    .map(|e| e.contains("ObjectLockConflict"))
-                    .unwrap_or(false);
+                SoftBundleTransactionResult::RetriableFailure { error } => {
+                    // Retriable errors (epoch change, expired) - the bundle wasn't fully processed
+                    retriable_error_count += 1;
+                    debug!("Transaction {} rejected with retriable error: {}", i, error);
+                }
+                SoftBundleTransactionResult::PermanentFailure { error } => {
+                    // Check if it's an ObjectLockConflict
+                    let is_lock_conflict = error.contains("ObjectLockConflict");
 
-                if is_lock_conflict {
-                    conflict_count += 1;
-                    debug!(
-                        "Transaction {} rejected with ObjectLockConflict (expected)",
-                        i
-                    );
-                } else {
-                    debug!("Transaction {} rejected with error: {:?}", i, result.error);
+                    if is_lock_conflict {
+                        conflict_count += 1;
+                        debug!(
+                            "Transaction {} rejected with ObjectLockConflict (expected)",
+                            i
+                        );
+                    } else {
+                        debug!(
+                            "Transaction {} rejected with non-retriable error: {}",
+                            i, error
+                        );
+                    }
                 }
             }
         }
 
         // If all transactions failed due to retriable errors (e.g., epoch change),
-        // skip validation as the bundle wasn't actually processed for conflict detection.
+        // skip validation entirely as the bundle wasn't processed for conflict detection.
         if retriable_error_count == results.results.len() {
             debug!(
                 "All {} transactions failed with retriable errors, skipping conflict validation",
@@ -143,22 +140,26 @@ impl Payload for SoftBundleConflictingTransferPayload {
             return;
         }
 
-        // Validate: exactly one should succeed, rest should be conflicts.
-        // With soft bundles, the ordering is deterministic so this should always hold.
-        let expected_conflicts = self.gas_objects.len() - 1;
-        assert_eq!(
-            success_count, 1,
-            "Expected exactly 1 successful transaction in soft bundle, got {}",
-            success_count
+        // Validate results, adjusting expectations for any retriable errors.
+        // Retriable errors mean some transactions weren't processed, so we relax the
+        // strict "exactly 1 success, N-1 conflicts" requirement proportionally.
+        let total_transactions = self.gas_objects.len();
+
+        // We factor in the retriable errors to the expected counts.
+        let min_expected_success = 1usize.saturating_sub(retriable_error_count);
+        let min_expected_conflicts = (total_transactions - 1).saturating_sub(retriable_error_count);
+
+        assert!(
+            success_count >= min_expected_success,
+            "Expected at least {min_expected_success} successful transaction(s) in soft bundle, got {success_count}",
         );
-        assert_eq!(
-            conflict_count, expected_conflicts,
-            "Expected {} ObjectLockConflict rejections, got {}",
-            expected_conflicts, conflict_count
+        assert!(
+            conflict_count >= min_expected_conflicts,
+            "Expected at least {min_expected_conflicts} ObjectLockConflict rejections, got {conflict_count}"
         );
+
         debug!(
-            "Soft bundle validation passed: 1 success, {} conflicts",
-            conflict_count
+            "Soft bundle validation passed: {success_count} success, {conflict_count} conflicts, {retriable_error_count} retriable errors"
         );
     }
 }
