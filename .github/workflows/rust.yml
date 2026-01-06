@@ -138,7 +138,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test (sui-graphql staging)
         run: |
-          cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)' -E 'package(sui-indexer-alt-graphql)'
+          cargo nextest run --profile ci --features staging -E 'package(sui-indexer-alt-graphql)'
       # TODO: run stress against a local Sui network.
       # - name: benchmark (smoke)
       #   run: |
@@ -167,9 +167,6 @@ jobs:
           locked: true
           args: --no-default-features
           features: postgres
-      - name: Indexer schema
-        run: |
-          ./scripts/generate_indexer_schema.sh
       - name: Indexer Alt schema
         run: |
           ./crates/sui-indexer-alt-schema/generate_schema.sh

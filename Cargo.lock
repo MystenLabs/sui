@@ -938,7 +938,6 @@ dependencies = [
  "async-trait",
  "base64 0.13.1",
  "bytes",
- "chrono",
  "fast_chemail",
  "fnv",
  "futures-channel",
@@ -952,7 +951,6 @@ dependencies = [
  "multer",
  "num-traits",
  "once_cell",
- "opentelemetry 0.21.0",
  "pin-project-lite",
  "regex",
  "serde",
@@ -961,8 +959,6 @@ dependencies = [
  "static_assertions_next",
  "tempfile",
  "thiserror 1.0.69",
- "tracing",
- "tracing-futures",
 ]
 
 [[package]]
@@ -1730,17 +1726,6 @@ dependencies = [
  "instant",
  "pin-project-lite",
  "rand 0.8.5",
- "tokio",
-]
-
-[[package]]
-name = "backon"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49fef586913a57ff189f25c9b3d034356a5bf6b3fa9a7f067588fe1698ba1f5d"
-dependencies = [
- "fastrand 2.3.0",
- "gloo-timers 0.3.0",
  "tokio",
 ]
 
@@ -5431,7 +5416,7 @@ version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f288b0a4f20f9a56b5d1da57e2227c661b7b16168e2f72365f57b63326e29b24"
 dependencies = [
- "gloo-timers 0.2.6",
+ "gloo-timers",
  "send_wrapper 0.4.0",
 ]
 
@@ -5627,18 +5612,6 @@ name = "gloo-timers"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b995a66bb87bebce9a0f4a95aed01daca4872c050bfcb21653361c03bc35e5c"
-dependencies = [
- "futures-channel",
- "futures-core",
- "js-sys",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "gloo-timers"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -9558,22 +9531,6 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "opentelemetry"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e32339a5dc40459130b3bd269e9892439f55b33e772d2a9d402a789baaf4e8a"
-dependencies = [
- "futures-core",
- "futures-sink",
- "indexmap 2.8.0",
- "js-sys",
- "once_cell",
- "pin-project-lite",
- "thiserror 1.0.69",
- "urlencoding",
-]
-
-[[package]]
-name = "opentelemetry"
 version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab70038c28ed37b97d8ed414b6429d343a8bbf44c9f79ec854f3a643029ba6d7"
@@ -9595,7 +9552,7 @@ dependencies = [
  "async-trait",
  "futures-core",
  "http 1.3.1",
- "opentelemetry 0.27.1",
+ "opentelemetry",
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "prost 0.13.5",
@@ -9612,7 +9569,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6e05acbfada5ec79023c85368af14abd0b307c015e9064d249b2a950ef459a6"
 dependencies = [
  "hex",
- "opentelemetry 0.27.1",
+ "opentelemetry",
  "opentelemetry_sdk",
  "prost 0.13.5",
  "serde",
@@ -9630,7 +9587,7 @@ dependencies = [
  "futures-executor",
  "futures-util",
  "glob",
- "opentelemetry 0.27.1",
+ "opentelemetry",
  "percent-encoding",
  "rand 0.8.5",
  "serde_json",
@@ -13683,7 +13640,6 @@ dependencies = [
  "strum_macros 0.27.1",
  "sui-analytics-indexer-derive",
  "sui-futures",
- "sui-indexer",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
@@ -13913,7 +13869,6 @@ dependencies = [
  "sui-bridge-schema",
  "sui-config",
  "sui-data-ingestion-core",
- "sui-indexer",
  "sui-indexer-builder",
  "sui-json-rpc-types",
  "sui-pg-db",
@@ -14014,13 +13969,10 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-faucet",
- "sui-graphql-rpc",
- "sui-indexer",
  "sui-json",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-move-build",
- "sui-pg-db",
  "sui-sdk",
  "sui-swarm",
  "sui-swarm-config",
@@ -14639,123 +14591,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-graphql-e2e-tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "datatest-stable",
- "msim",
- "serde_json",
- "sui-graphql-rpc",
- "sui-transactional-test-runner",
- "telemetry-subscribers",
- "tokio",
-]
-
-[[package]]
-name = "sui-graphql-rpc"
-version = "1.64.0"
-dependencies = [
- "anyhow",
- "async-graphql",
- "async-graphql-axum",
- "async-graphql-value",
- "async-trait",
- "axum 0.7.5",
- "axum-extra 0.9.3",
- "bcs",
- "bin-version",
- "chrono",
- "clap",
- "const-str",
- "diesel",
- "diesel-async",
- "downcast",
- "either",
- "expect-test",
- "fastcrypto",
- "fastcrypto-zkp",
- "futures",
- "hex",
- "http 1.3.1",
- "hyper 1.8.1",
- "im",
- "insta",
- "itertools 0.13.0",
- "lru 0.10.0",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
- "move-disassembler",
- "move-ir-types",
- "mysten-metrics",
- "mysten-network",
- "once_cell",
- "prometheus",
- "rand 0.8.5",
- "regex",
- "reqwest 0.12.9",
- "serde",
- "serde_json",
- "serde_with",
- "serde_yaml 0.8.26",
- "shared-crypto",
- "similar",
- "simulacrum",
- "sui-default-config",
- "sui-display",
- "sui-framework",
- "sui-graphql-rpc-client",
- "sui-graphql-rpc-headers",
- "sui-indexer",
- "sui-json-rpc",
- "sui-json-rpc-types",
- "sui-move-build",
- "sui-name-service",
- "sui-package-resolver",
- "sui-pg-db",
- "sui-protocol-config",
- "sui-rpc-api",
- "sui-sdk",
- "sui-swarm-config",
- "sui-test-transaction-builder",
- "sui-types",
- "tap",
- "telemetry-subscribers",
- "tempfile",
- "test-cluster",
- "thiserror 1.0.69",
- "tokio",
- "tokio-util 0.7.13",
- "toml 0.7.4",
- "tower 0.5.2",
- "tower-http",
- "tracing",
- "uuid 1.2.2",
-]
-
-[[package]]
-name = "sui-graphql-rpc-client"
-version = "0.1.0"
-dependencies = [
- "async-graphql",
- "axum 0.8.3",
- "hyper 1.8.1",
- "reqwest 0.12.9",
- "serde_json",
- "sui-graphql-rpc-headers",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "sui-graphql-rpc-headers"
-version = "0.1.0"
-dependencies = [
- "axum 0.8.3",
-]
-
-[[package]]
 name = "sui-http"
 version = "0.0.0"
 dependencies = [
@@ -14774,81 +14609,6 @@ dependencies = [
  "tokio-util 0.7.13",
  "tower 0.5.2",
  "tracing",
-]
-
-[[package]]
-name = "sui-indexer"
-version = "1.64.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum 0.8.3",
- "backon",
- "bb8",
- "bcs",
- "bytes",
- "cached",
- "chrono",
- "clap",
- "csv",
- "dashmap",
- "diesel",
- "diesel-async",
- "diesel_migrations",
- "fastcrypto",
- "futures",
- "hex",
- "indicatif",
- "itertools 0.13.0",
- "jsonrpsee",
- "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
- "mysten-metrics",
- "object_store",
- "prometheus",
- "rand 0.8.5",
- "rayon",
- "regex",
- "serde",
- "serde_json",
- "serde_with",
- "simulacrum",
- "strum 0.27.1",
- "strum_macros 0.27.1",
- "sui-config",
- "sui-core",
- "sui-data-ingestion-core",
- "sui-json",
- "sui-json-rpc",
- "sui-json-rpc-api",
- "sui-json-rpc-types",
- "sui-keys",
- "sui-move-build",
- "sui-name-service",
- "sui-open-rpc",
- "sui-package-resolver",
- "sui-pg-db",
- "sui-protocol-config",
- "sui-rpc-api",
- "sui-sdk",
- "sui-snapshot",
- "sui-storage",
- "sui-swarm-config",
- "sui-test-transaction-builder",
- "sui-transaction-builder",
- "sui-types",
- "tap",
- "telemetry-subscribers",
- "tempfile",
- "test-cluster",
- "thiserror 1.0.69",
- "tokio",
- "tokio-stream",
- "tokio-util 0.7.13",
- "toml 0.7.4",
- "tracing",
- "url",
 ]
 
 [[package]]
@@ -17012,7 +16772,6 @@ dependencies = [
  "sui-core",
  "sui-framework",
  "sui-framework-snapshot",
- "sui-graphql-rpc",
  "sui-json-rpc",
  "sui-json-rpc-api",
  "sui-json-rpc-types",
@@ -17461,7 +17220,7 @@ dependencies = [
  "crossterm 0.25.0",
  "futures",
  "once_cell",
- "opentelemetry 0.27.1",
+ "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-proto",
  "opentelemetry_sdk",
@@ -17541,14 +17300,12 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-framework",
- "sui-indexer",
  "sui-json-rpc",
  "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-macros",
  "sui-node",
- "sui-pg-db",
  "sui-protocol-config",
  "sui-sdk",
  "sui-simulator",
@@ -18492,8 +18249,6 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97d095ae15e245a057c8e8451bab9b3ee1e1f68e9ba2b4fbc18d0ac5237835f2"
 dependencies = [
- "futures",
- "futures-task",
  "pin-project",
  "tracing",
 ]
@@ -18528,7 +18283,7 @@ checksum = "97a971f6058498b5c0f1affa23e7ea202057a7301dbff68e968b2d578bcbd053"
 dependencies = [
  "js-sys",
  "once_cell",
- "opentelemetry 0.27.1",
+ "opentelemetry",
  "opentelemetry_sdk",
  "smallvec",
  "tracing",

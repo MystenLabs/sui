@@ -106,12 +106,13 @@ fn write_last_checkpoint(output: &Path, checkpoint: u64) -> Result<()> {
 
 /// Read the max page size supported by the GraphQL service.
 async fn max_page_size(client: &Client) -> Result<i32> {
-    Ok(client
+    client
         .query(limits::build())
         .await
         .context("Failed to fetch max page size")?
         .service_config
-        .max_page_size)
+        .max_page_size
+        .context("Max page size not available for packages query")
 }
 
 /// Read all the packages between `after_checkpoint` and `before_checkpoint`, in batches of
@@ -130,11 +131,7 @@ async fn fetch_packages(
 ) -> Result<(Option<u64>, Vec<packages::MovePackage>)> {
     let packages::Query {
         checkpoint: checkpoint_viewed_at,
-        packages:
-            packages::MovePackageConnection {
-                mut page_info,
-                mut nodes,
-            },
+        packages,
     } = client
         .query(packages::build(
             page_size,
@@ -144,6 +141,11 @@ async fn fetch_packages(
         ))
         .await
         .with_context(|| "Failed to fetch page 1 of packages.")?;
+
+    let packages::MovePackageConnection {
+        mut page_info,
+        mut nodes,
+    } = packages.context("Packages query returned null")?;
 
     for i in 2.. {
         if !page_info.has_next_page {
@@ -159,7 +161,8 @@ async fn fetch_packages(
             ))
             .await
             .with_context(|| format!("Failed to fetch page {i} of packages."))?
-            .packages;
+            .packages
+            .with_context(|| format!("Packages query returned null on page {i}"))?;
 
         nodes.extend(packages.nodes);
         page_info = packages.page_info;
@@ -206,7 +209,7 @@ async fn fetch_packages(
 ///
 /// - `*.mv` -- a BCS serialization of each compiled module in the package.
 fn dump_package(output_dir: &Path, pkg: &packages::MovePackage) -> Result<()> {
-    let Some(query::Base64(bcs)) = &pkg.bcs else {
+    let Some(query::Base64(bcs)) = &pkg.object_bcs else {
         bail!("Missing BCS");
     };
 

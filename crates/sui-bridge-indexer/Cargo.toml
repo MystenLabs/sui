@@ -42,7 +42,6 @@ sui-indexer-builder.workspace = true
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 hex-literal = "0.3.4"
-sui-indexer.workspace = true
 diesel_migrations = "2.2.0"
 sui-indexer-builder = { workspace = true, features = ["test-utils"] }
 sui-bridge = { workspace = true, features = ["test-utils"] }
