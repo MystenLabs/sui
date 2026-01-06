@@ -169,10 +169,10 @@ pub fn inlay_hints_internal(
 /// containing options that are not supported for the type definition, such
 /// as go-to-declaration, and which jump to weird locations in the file).
 fn additional_type_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayHintTooltip> {
-    if let N::Type_::Ref(_, t) = t {
+    if let N::TypeInner::Ref(_, t) = t.inner() {
         return additional_type_hint_info(t, symbols);
     }
-    let N::Type_::Apply(_, sp!(_, type_name), _) = t else {
+    let N::TypeInner::Apply(_, sp!(_, type_name), _) = t.inner() else {
         return None;
     };
     let N::TypeName_::ModuleType(mod_ident, struct_name) = type_name else {

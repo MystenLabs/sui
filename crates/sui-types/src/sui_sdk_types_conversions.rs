@@ -1614,6 +1614,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             crate::transaction::EndOfEpochTransactionKind::AddressAliasStateCreate => {
                 Self::AddressAliasStateCreate
             }
+            crate::transaction::EndOfEpochTransactionKind::WriteAccumulatorStorageCost(_) => {
+                todo!("WriteAccumulatorStorageCost needs to be added to sdk")
+            }
         }
     }
 }

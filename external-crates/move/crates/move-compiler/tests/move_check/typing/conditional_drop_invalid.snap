@@ -58,12 +58,12 @@ error[E05001]: ability constraint not satisfied
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:15:9
    │
-15 │         (Pair<S, R> { f1: S{}, f2: R{} }, 0, @0x1);
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+15 │         (Pair<S, R> { f1: S{}, f2: R{} }, 0u64, @0x1);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         ││
-   │         │The type '(0x42::M::Pair<0x42::M::S, 0x42::M::R>, {integer}, address)' can have the ability 'drop' but the type argument '0x42::M::Pair<0x42::M::S, 0x42::M::R>' does not have the required ability 'drop'
+   │         │The type '(0x42::M::Pair<0x42::M::S, 0x42::M::R>, u64, address)' can have the ability 'drop' but the type argument '0x42::M::Pair<0x42::M::S, 0x42::M::R>' does not have the required ability 'drop'
    │         Cannot ignore values without the 'drop' ability. The value must be used
-   │         The type '(0x42::M::Pair<0x42::M::S, 0x42::M::R>, {integer}, address)' does not have the ability 'drop'
+   │         The type '(0x42::M::Pair<0x42::M::S, 0x42::M::R>, u64, address)' does not have the ability 'drop'
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_check/typing/conditional_drop_invalid.move:17:9

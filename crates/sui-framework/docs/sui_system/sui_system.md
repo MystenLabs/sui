@@ -41,6 +41,7 @@ the SuiSystemStateInner version, or vice versa.
 
 
 -  [Struct `SuiSystemState`](#sui_system_sui_system_SuiSystemState)
+-  [Struct `AccumulatorStorageCostKey`](#sui_system_sui_system_AccumulatorStorageCostKey)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#sui_system_sui_system_create)
 -  [Function `request_add_validator_candidate`](#sui_system_sui_system_request_add_validator_candidate)
@@ -93,6 +94,8 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `validator_voting_powers`](#sui_system_sui_system_validator_voting_powers)
 -  [Function `store_execution_time_estimates`](#sui_system_sui_system_store_execution_time_estimates)
 -  [Function `store_execution_time_estimates_v2`](#sui_system_sui_system_store_execution_time_estimates_v2)
+-  [Function `get_accumulator_storage_fund_amount`](#sui_system_sui_system_get_accumulator_storage_fund_amount)
+-  [Function `write_accumulator_storage_cost`](#sui_system_sui_system_write_accumulator_storage_cost)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -173,6 +176,28 @@ the SuiSystemStateInner version, or vice versa.
 </dt>
 <dd>
 </dd>
+</dl>
+
+
+</details>
+
+<a name="sui_system_sui_system_AccumulatorStorageCostKey"></a>
+
+## Struct `AccumulatorStorageCostKey`
+
+Key for storing the storage cost for accumulator objects, computed at end of epoch.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_AccumulatorStorageCostKey">AccumulatorStorageCostKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
 </dl>
 
 
@@ -1561,6 +1586,7 @@ gas coins.
 ): Balance&lt;SUI&gt; {
     // Validator will make a special system call with sender set <b>as</b> 0x0.
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui_system/sui_system.md#sui_system_sui_system_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>let</b> accumulator_storage_fund_amount = <a href="../sui_system/sui_system.md#sui_system_sui_system_get_accumulator_storage_fund_amount">get_accumulator_storage_fund_amount</a>(wrapper);
     <b>let</b> storage_rebate = wrapper
         .<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>()
         .<a href="../sui_system/sui_system.md#sui_system_sui_system_advance_epoch">advance_epoch</a>(
@@ -1573,6 +1599,7 @@ gas coins.
             storage_fund_reinvest_rate,
             reward_slashing_rate,
             epoch_start_timestamp_ms,
+            accumulator_storage_fund_amount,
             ctx,
         );
     storage_rebate
@@ -1768,6 +1795,77 @@ at the start of the next epoch.
     estimate_chunks: vector&lt;vector&lt;u8&gt;&gt;,
 ) {
     wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates_v2">store_execution_time_estimates_v2</a>(estimate_chunks)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_get_accumulator_storage_fund_amount"></a>
+
+## Function `get_accumulator_storage_fund_amount`
+
+Returns the storage fund amount for accumulator objects stored in extra_fields.
+Returns 0 if no value has been stored.
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_get_accumulator_storage_fund_amount">get_accumulator_storage_fund_amount</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_get_accumulator_storage_fund_amount">get_accumulator_storage_fund_amount</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): u64 {
+    <b>let</b> extra_fields = wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state">load_system_state</a>().extra_fields();
+    <b>let</b> key = <a href="../sui_system/sui_system.md#sui_system_sui_system_AccumulatorStorageCostKey">AccumulatorStorageCostKey</a>();
+    <b>if</b> (extra_fields.contains(key)) {
+        *extra_fields.borrow(key)
+    } <b>else</b> {
+        0
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_write_accumulator_storage_cost"></a>
+
+## Function `write_accumulator_storage_cost`
+
+Stores the computed storage cost for accumulator objects.
+This is called by an end-of-epoch transaction to record the storage cost
+that will be used by advance_epoch.
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_write_accumulator_storage_cost">write_accumulator_storage_cost</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>, storage_cost: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_write_accumulator_storage_cost">write_accumulator_storage_cost</a>(
+    wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>,
+    storage_cost: u64,
+    ctx: &TxContext,
+) {
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui_system/sui_system.md#sui_system_sui_system_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>let</b> extra_fields = wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>().extra_fields_mut();
+    <b>let</b> key = <a href="../sui_system/sui_system.md#sui_system_sui_system_AccumulatorStorageCostKey">AccumulatorStorageCostKey</a>();
+    <b>if</b> (extra_fields.contains(key)) {
+        <b>let</b> existing: &<b>mut</b> u64 = extra_fields.borrow_mut(key);
+        *existing = storage_cost;
+    } <b>else</b> {
+        extra_fields.add(key, storage_cost);
+    };
 }
 </code></pre>
 

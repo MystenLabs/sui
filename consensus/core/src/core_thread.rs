@@ -265,7 +265,7 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
             self.highest_received_rounds[block.author()].fetch_max(block.round(), Ordering::AcqRel);
         }
         let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::AddBlocks(blocks.clone(), sender))
+        self.send(CoreThreadCommand::AddBlocks(blocks, sender))
             .await;
         let missing_block_refs = receiver.await.map_err(|e| Shutdown(e.to_string()))?;
 
@@ -277,11 +277,8 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         block_refs: Vec<BlockRef>,
     ) -> Result<BTreeSet<BlockRef>, CoreError> {
         let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::CheckBlockRefs(
-            block_refs.clone(),
-            sender,
-        ))
-        .await;
+        self.send(CoreThreadCommand::CheckBlockRefs(block_refs, sender))
+            .await;
         let missing_block_refs = receiver.await.map_err(|e| Shutdown(e.to_string()))?;
 
         Ok(missing_block_refs)

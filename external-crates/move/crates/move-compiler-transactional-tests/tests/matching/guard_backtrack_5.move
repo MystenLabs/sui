@@ -17,7 +17,7 @@ module 0x42::m {
     public fun t0(): u64 {
         use 0x42::m::Pair as P;
         let o: P<P<u64>> = P::Both(P::Both(0, 1), P::Both(2, 3));
-        let _y = &10;
+        let _y = &10u64;
         match (o) {
             P::Both(P::Both(m, n), P::Both(q, r)) if (&(*q + *r) == 5) => m + n + q + r,
             z => default(z),

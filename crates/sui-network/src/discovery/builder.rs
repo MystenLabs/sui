@@ -6,6 +6,8 @@ use super::{
 };
 use crate::discovery::TrustedPeerChangeEvent;
 use anemo::codegen::InboundRequestLayer;
+use anemo::types::PeerAffinity;
+use anemo::{PeerId, types::PeerInfo};
 use anemo_tower::rate_limit;
 use fastcrypto::traits::KeyPair;
 use std::{
@@ -14,11 +16,12 @@ use std::{
 };
 use sui_config::p2p::P2pConfig;
 use sui_types::crypto::NetworkKeyPair;
-use tap::Pipe;
+use tap::{Pipe, TapFallible};
 use tokio::{
     sync::{oneshot, watch},
     task::JoinSet,
 };
+use tracing::warn;
 
 /// Discovery Service Builder.
 pub struct Builder {
@@ -134,23 +137,14 @@ impl UnstartedDiscovery {
         } = self;
 
         let discovery_config = config.discovery.clone().unwrap_or_default();
-        let allowlisted_peers = Arc::new(
-            discovery_config
-                .allowlisted_peers
-                .clone()
-                .into_iter()
-                .map(|ap| (ap.peer_id, ap.address))
-                .chain(config.seed_peers.iter().filter_map(|peer| {
-                    peer.peer_id
-                        .map(|peer_id| (peer_id, Some(peer.address.clone())))
-                }))
-                .collect::<HashMap<_, _>>(),
-        );
+        let (configured_peers, unidentified_seed_peers) =
+            build_peer_config(&config, &discovery_config);
         (
             DiscoveryEventLoop {
                 config,
                 discovery_config: Arc::new(discovery_config),
-                allowlisted_peers,
+                configured_peers: Arc::new(configured_peers),
+                unidentified_seed_peers,
                 network,
                 keypair,
                 tasks: JoinSet::new(),
@@ -178,4 +172,59 @@ impl UnstartedDiscovery {
 /// been dropped.
 pub struct Handle {
     _shutdown_handle: Arc<oneshot::Sender<()>>,
+}
+
+/// Returns (configured_peers, unidentified_seed_peers).
+fn build_peer_config(
+    config: &P2pConfig,
+    discovery_config: &sui_config::p2p::DiscoveryConfig,
+) -> (HashMap<PeerId, PeerInfo>, Vec<anemo::types::Address>) {
+    let mut configured_peers = HashMap::new();
+    let mut unidentified_seed_peers = Vec::new();
+
+    for seed in &config.seed_peers {
+        let anemo_addr = seed
+            .address
+            .to_anemo_address()
+            .tap_err(|_| warn!(p2p_address=?seed.address, "Skipping seed peer address: can't convert to anemo address"))
+            .ok();
+        match (seed.peer_id, anemo_addr) {
+            (Some(peer_id), addr) => {
+                configured_peers.insert(
+                    peer_id,
+                    PeerInfo {
+                        peer_id,
+                        affinity: PeerAffinity::High,
+                        address: addr.into_iter().collect(),
+                    },
+                );
+            }
+            (None, Some(addr)) => {
+                unidentified_seed_peers.push(addr);
+            }
+            (None, None) => {}
+        }
+    }
+
+    for ap in &discovery_config.allowlisted_peers {
+        let addresses = ap
+            .address
+            .iter()
+            .filter_map(|addr| {
+                addr.to_anemo_address()
+                    .tap_err(|_| warn!(p2p_address=?addr, "Skipping allowlisted peer address: can't convert to anemo address"))
+                    .ok()
+            })
+            .collect();
+        configured_peers.insert(
+            ap.peer_id,
+            PeerInfo {
+                peer_id: ap.peer_id,
+                affinity: PeerAffinity::Allowed,
+                address: addresses,
+            },
+        );
+    }
+
+    (configured_peers, unidentified_seed_peers)
 }

@@ -1,10 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::{
-    env::Env,
-    loading::ast as L,
-    metering::{self, translation_meter::TranslationMeter},
+use crate::{
+    execution_mode::ExecutionMode,
+    static_programmable_transactions::{
+        env::Env,
+        loading::ast as L,
+        metering::{self, translation_meter::TranslationMeter},
+    },
 };
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag, u256::U256};
 use sui_types::{
@@ -14,7 +17,7 @@ use sui_types::{
     transaction::{self as P, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability},
 };
 
-pub fn transaction(
+pub fn transaction<Mode: ExecutionMode>(
     meter: &mut TranslationMeter<'_, '_>,
     env: &Env,
     tx_context: &TxContext,
@@ -24,7 +27,7 @@ pub fn transaction(
     let P::ProgrammableTransaction { inputs, commands } = pt;
     let inputs = inputs
         .into_iter()
-        .map(|arg| input(env, tx_context, arg))
+        .map(|arg| input::<Mode>(env, tx_context, arg))
         .collect::<Result<Vec<_>, _>>()?;
     let commands = commands
         .into_iter()
@@ -36,7 +39,7 @@ pub fn transaction(
     Ok(loaded_tx)
 }
 
-fn input(
+fn input<Mode: ExecutionMode>(
     env: &Env,
     tx_context: &TxContext,
     arg: CallArg,
@@ -60,7 +63,12 @@ fn input(
                 Owner::ObjectOwner(_)
                 | Owner::Shared { .. }
                 | Owner::ConsensusAddressOwner { .. } => {
-                    invariant_violation!("Unexpected owner for ImmOrOwnedObject: {:?}", obj.owner);
+                    assert_invariant!(
+                        Mode::allow_arbitrary_values(),
+                        "Unexpected owner for ImmOrOwnedObject: {:?}",
+                        obj.owner,
+                    );
+                    L::ObjectArg::OwnedObject(oref)
                 }
             };
             (L::InputArg::Object(arg), L::InputType::Fixed(ty))
@@ -78,7 +86,12 @@ fn input(
             let ty = env.load_type_from_struct(&tag)?;
             let kind = match obj.owner {
                 Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
-                    invariant_violation!("Unexpected owner for SharedObject: {:?}", obj.owner)
+                    assert_invariant!(
+                        Mode::allow_arbitrary_values(),
+                        "Unexpected owner for SharedObject: {:?}",
+                        obj.owner
+                    );
+                    L::SharedObjectKind::Party
                 }
                 Owner::Shared { .. } => L::SharedObjectKind::Legacy,
                 Owner::ConsensusAddressOwner { .. } => L::SharedObjectKind::Party,

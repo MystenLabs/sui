@@ -264,7 +264,7 @@ Increase supply by <code><a href="../sui/balance.md#sui_balance_value">value</a>
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_increase_supply">increase_supply</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Supply">Supply</a>&lt;T&gt;, <a href="../sui/balance.md#sui_balance_value">value</a>: u64): <a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt; {
-    <b>assert</b>!(<a href="../sui/balance.md#sui_balance_value">value</a> &lt; (18446744073709551615u64 - self.<a href="../sui/balance.md#sui_balance_value">value</a>), <a href="../sui/balance.md#sui_balance_EOverflow">EOverflow</a>);
+    <b>assert</b>!(<a href="../sui/balance.md#sui_balance_value">value</a> &lt;= (<a href="../std/u64.md#std_u64_max_value">std::u64::max_value</a>!() - self.<a href="../sui/balance.md#sui_balance_value">value</a>), <a href="../sui/balance.md#sui_balance_EOverflow">EOverflow</a>);
     self.<a href="../sui/balance.md#sui_balance_value">value</a> = self.<a href="../sui/balance.md#sui_balance_value">value</a> + <a href="../sui/balance.md#sui_balance_value">value</a>;
     <a href="../sui/balance.md#sui_balance_Balance">Balance</a> { <a href="../sui/balance.md#sui_balance_value">value</a> }
 }

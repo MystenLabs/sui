@@ -9,13 +9,13 @@ module 0x1::errors {
     #[test]
     #[expected_failure]
     fun div_0() {
-        1/0;
+        1/0u64;
     }
 
     #[test]
     #[expected_failure]
     fun underflow() {
-        1 - 10;
+        1 - 10u64;
     }
 
     #[test]

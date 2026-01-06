@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use cache_coordinator::CacheReadyCoordinator;
 use lru::LruCache;
 use move_core_types::account_address::AccountAddress;
 use std::num::NonZeroUsize;
@@ -24,46 +23,6 @@ use sui_types::{
 use thiserror::Error;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::{DBMapUtils, Map, TypedStoreError};
-
-pub mod cache_coordinator;
-pub mod package_cache_worker;
-
-use std::sync::OnceLock;
-
-/// A lazy-initialized package cache that tracks whether it was ever accessed.
-pub struct LazyPackageCache {
-    cache: Option<OnceLock<Arc<PackageCache>>>,
-    constructor: Box<dyn Fn() -> Arc<PackageCache> + Send + Sync>,
-}
-
-impl LazyPackageCache {
-    pub fn new(path: std::path::PathBuf, rest_url: String) -> Self {
-        let constructor = Box::new(move || Arc::new(PackageCache::new(&path, &rest_url)));
-
-        Self {
-            cache: None,
-            constructor,
-        }
-    }
-
-    /// Initialize the cache if needed and return the package cache.
-    pub fn initialize_or_get_cache(&mut self) -> Arc<PackageCache> {
-        if self.cache.is_none() {
-            self.cache = Some(OnceLock::new());
-        }
-
-        self.cache
-            .as_ref()
-            .unwrap()
-            .get_or_init(|| (self.constructor)())
-            .clone()
-    }
-
-    /// Get the package cache if it was initialized, None otherwise.
-    pub fn get_cache_if_initialized(&self) -> Option<Arc<PackageCache>> {
-        self.cache.as_ref().and_then(|cell| cell.get().cloned())
-    }
-}
 
 const STORE: &str = "RocksDB";
 const MAX_EPOCH_CACHES: usize = 2; // keep at most two epochs in memory
@@ -134,18 +93,6 @@ impl LocalDBPackageStore {
         if object.data.try_as_package().is_some() {
             self.tables.update(object)?;
         }
-        Ok(())
-    }
-
-    fn update_batch<'a, I>(&self, objects: I) -> StdResult<(), Error>
-    where
-        I: IntoIterator<Item = &'a Object>,
-    {
-        let filtered = objects
-            .into_iter()
-            .filter(|o| o.data.try_as_package().is_some());
-
-        self.tables.update_batch(filtered)?;
         Ok(())
     }
 
@@ -244,7 +191,6 @@ pub struct PackageCache {
     pub global_cache: Arc<PackageStoreWithLruCache<LocalDBPackageStore>>,
     pub epochs: Arc<Mutex<LruCache<u64, Arc<PackageStoreWithLruCache<LocalDBPackageStore>>>>>,
     pub resolver: Resolver<GlobalArcStore>,
-    pub coordinator: CacheReadyCoordinator,
 }
 
 impl PackageCache {
@@ -258,7 +204,6 @@ impl PackageCache {
             epochs: Arc::new(Mutex::new(LruCache::new(
                 NonZeroUsize::new(MAX_EPOCH_CACHES).unwrap(),
             ))),
-            coordinator: CacheReadyCoordinator::new(),
         }
     }
 
@@ -269,19 +214,6 @@ impl PackageCache {
             base: self.base_store.clone(),
             epochs: self.epochs.clone(),
         })
-    }
-
-    pub fn update(&self, object: &Object) -> Result<()> {
-        self.base_store.update(object)?;
-        Ok(())
-    }
-
-    fn update_batch<'a, I>(&self, objects: I) -> Result<()>
-    where
-        I: IntoIterator<Item = &'a Object>,
-    {
-        self.base_store.update_batch(objects)?;
-        Ok(())
     }
 
     #[cfg(not(test))]

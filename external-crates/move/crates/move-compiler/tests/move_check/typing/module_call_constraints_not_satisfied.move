@@ -26,7 +26,7 @@ module 0x8675309::M {
 
     fun t0() {
         both(S{}, Coin{});
-        both(0, Coin{})
+        both(0u64, Coin{})
     }
 
     fun t1<R: key, C: drop>() {

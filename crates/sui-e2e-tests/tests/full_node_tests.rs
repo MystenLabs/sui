@@ -37,11 +37,13 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_grpc::TransactionInfoRequest;
 use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::{ExecuteTransactionRequestType, ExecuteTransactionRequestV3};
 use sui_types::storage::ObjectStore;
 use sui_types::transaction::{
     CallArg, GasData, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
     TransactionData, TransactionKind,
+};
+use sui_types::transaction_driver_types::{
+    ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
 };
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
@@ -1254,14 +1256,13 @@ async fn test_access_old_object_pruned() {
                 let epoch_store = state.epoch_store_for_testing();
                 assert_eq!(
                     state
-                        .handle_transaction(
+                        .handle_vote_transaction(
                             &epoch_store,
                             epoch_store
                                 .verify_transaction_require_no_aliases(tx.clone())
                                 .unwrap()
                                 .into_tx()
                         )
-                        .await
                         .unwrap_err(),
                     SuiErrorKind::UserInputError {
                         error: UserInputError::ObjectVersionUnavailableForConsumption {

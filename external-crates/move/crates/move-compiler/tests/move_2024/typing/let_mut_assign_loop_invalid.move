@@ -1,12 +1,12 @@
 module a::m {
     public fun t0(cond: bool) {
         let a;
-        while (cond) { a = 0; a; };
+        while (cond) { a = 0u64; a; };
     }
 
     public fun t1() {
         let b;
-        loop { b = 0; b; }
+        loop { b = 0u64; b; }
     }
 
     public fun t2(cond: bool): u64 {
@@ -19,7 +19,7 @@ module a::m {
     public fun t3(): u64 {
         let x;
         loop {
-            x = 0;
+            x = 0u64;
             move x;
         }
     }

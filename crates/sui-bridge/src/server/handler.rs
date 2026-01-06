@@ -168,7 +168,7 @@ where
         action: BridgeAction,
     ) -> Result<Json<SignedBridgeAction>, BridgeError> {
         if !action.is_governace_action() {
-            return Err(BridgeError::ActionIsNotGovernanceAction(action));
+            return Err(BridgeError::ActionIsNotGovernanceAction(Box::new(action)));
         }
         let bridge_action = self.governance_verifier.verify(action).await?;
         Ok(Json(self.sign(bridge_action)))
@@ -304,7 +304,20 @@ mod tests {
                 },
             )
             .unwrap();
-        mock_last_finalized_block(&eth_mock_provider, log.block_number.unwrap().as_u64());
+        let block_num = log.block_number.unwrap().as_u64();
+        mock_last_finalized_block(&eth_mock_provider, block_num);
+        // Mock eth_getBlockByNumber for the block timestamp fetch
+        eth_mock_provider
+            .add_response(
+                "eth_getBlockByNumber",
+                (format!("0x{:x}", block_num), false),
+                ethers::types::Block::<TxHash> {
+                    number: Some(block_num.into()),
+                    timestamp: ethers::types::U256::from(1),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
 
         handler
             .verify_eth((eth_tx_hash, eth_event_idx))

@@ -3,11 +3,11 @@
 module a::m;
 
 fun test_equal_operands_comparison() {
-    1 == 1;
-    {1} == 1;
-    1 == {1};
-    {1} == {1};
-    {{{1}}} == {{{{1}}}};
+    1 == 1u64;
+    {1} == 1u64;
+    1 == {1u64};
+    {1} == {1u64};
+    {{{1u64}}} == {{{{1}}}};
 }
 
 fun test_equal_operands_values() {
@@ -20,5 +20,5 @@ fun test_equal_operands_values() {
     5u256 == 5u256;
     @a == @a;
     vector<vector<u8>>[] == vector[];
-    vector[1] == vector[1];
+    vector[1] == vector[1u64];
 }

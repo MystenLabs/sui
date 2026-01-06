@@ -40,11 +40,16 @@ export default function Home() {
         />
       </Head>
       <Layout>
-        <div className="bg-sui-black overflow-hidden min-h-screen flex flex-col">
-          <div className="w-full mt-8 mb-4 mx-auto bg-sui-black">
+      <div 
+          className="overflow-hidden min-h-screen flex flex-col bg-cover bg-center bg-no-repeat"
+          style={{
+            backgroundColor: '#000000',
+          }}
+        >
+          <div className="w-full mt-8 mb-4 mx-auto">
             <div className={styles.heroText}>
               <h1 className="h1 center-text text-white">Sui Documentation</h1>
-              <h2 className="h2 text-gray center-text h3">
+              <h2 className="h2 center-text h3" style={{ color: '#89919F' }}>
                 Discover the power of Sui through examples, guides, and concepts
               </h2>
             </div>

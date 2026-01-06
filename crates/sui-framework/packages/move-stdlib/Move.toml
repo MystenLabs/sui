@@ -1,8 +1,7 @@
 [package]
 name = "MoveStdlib"
-version = "1.6.0"
-published-at = "0x1"
 edition = "2024.beta"
+published-at = "0x1" # Deprecated, kept for backwards compatibility
 
 [addresses]
 std = "0x1"

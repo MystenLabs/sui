@@ -11,8 +11,8 @@ error[E04017]: too many arguments
 19 │ fun borrow<K: copy + drop + store, V: store>(_x: &X, _k: K): &V {
    │     ------ Expected 2 argument(s)
    ·
-28 │     borrow<u64, u64>(&mut x, 0, 0);
-   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+28 │     borrow<u64, u64>(&mut x, 0, 0u64);
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │     │               │
    │     │               Found 3 argument(s) here
    │     Invalid call of '0x42::m::borrow'. The call expected 2 argument(s) but got 3

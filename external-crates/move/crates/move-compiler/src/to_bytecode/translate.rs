@@ -182,14 +182,14 @@ fn pre_compiled_decls(
             .parameters
             .into_iter()
             .map(|(mut_, v, tty)| {
-                let ty = hlir_single_type(&empty_reporter, tty);
+                let ty = hlir_single_type(&empty_reporter, &tty);
                 (mut_, translate_var(v), ty)
             })
             .collect();
         if !empty_reporter.is_empty() {
             panic!("ICE There should be no errors when translating pre-compiled type");
         }
-        let return_type = type_(&empty_reporter, sig.return_type);
+        let return_type = type_(&empty_reporter, &sig.return_type);
         H::FunctionSignature {
             type_parameters,
             parameters,

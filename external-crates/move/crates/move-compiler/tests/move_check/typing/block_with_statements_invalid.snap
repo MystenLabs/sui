@@ -6,34 +6,34 @@ info:
   lint: false
 ---
 error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/block_with_statements_invalid.move:4:29
+  ┌─ tests/move_check/typing/block_with_statements_invalid.move:4:32
   │
-4 │         ({ let x = 0; x } : bool);
-  │                -            ^^^^
-  │                │            │
-  │                │            Invalid type annotation
-  │                │            Expected: 'bool'
-  │                Given: integer
+4 │         ({ let x = 0u64; x } : bool);
+  │                    ----        ^^^^
+  │                    │           │
+  │                    │           Invalid type annotation
+  │                    │           Expected: 'bool'
+  │                    Given: 'u64'
 
 error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/block_with_statements_invalid.move:5:30
+  ┌─ tests/move_check/typing/block_with_statements_invalid.move:5:33
   │
-5 │         ({ let x = 0; &x } : u64);
-  │                       --     ^^^
-  │                       │      │
-  │                       │      Invalid type annotation
-  │                       │      Expected: 'u64'
-  │                       Given: '&{integer}'
+5 │         ({ let x = 0u64; &x } : u64);
+  │                          --     ^^^
+  │                          │      │
+  │                          │      Invalid type annotation
+  │                          │      Expected: 'u64'
+  │                          Given: '&u64'
 
 error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/block_with_statements_invalid.move:6:40
+  ┌─ tests/move_check/typing/block_with_statements_invalid.move:6:43
   │
-6 │         ({ let y = 0; &mut (y + 1) } : ());
-  │                       ------------     ^^
-  │                       │                │
-  │                       │                Invalid type annotation
-  │                       │                Expected: '()'
-  │                       Given: '&mut {integer}'
+6 │         ({ let y = 0u64; &mut (y + 1) } : ());
+  │                          ------------     ^^
+  │                          │                │
+  │                          │                Invalid type annotation
+  │                          │                Expected: '()'
+  │                          Given: '&mut u64'
 
 error[E05001]: ability constraint not satisfied
   ┌─ tests/move_check/typing/block_with_statements_invalid.move:7:9
@@ -48,11 +48,11 @@ error[E05001]: ability constraint not satisfied
   │         Cannot ignore values without the 'drop' ability. The value must be used
 
 error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/block_with_statements_invalid.move:8:45
+  ┌─ tests/move_check/typing/block_with_statements_invalid.move:8:48
   │
-8 │         ({ let x = 0; (x, false, false) } : (u64, bool));
-  │                       -----------------     ^^^^^^^^^^^
-  │                       │                     │
-  │                       │                     Invalid type annotation
-  │                       │                     Expected expression list of length 2: '(u64, bool)'
-  │                       Given expression list of length 3: '({integer}, bool, bool)'
+8 │         ({ let x = 0u64; (x, false, false) } : (u64, bool));
+  │                          -----------------     ^^^^^^^^^^^
+  │                          │                     │
+  │                          │                     Invalid type annotation
+  │                          │                     Expected expression list of length 2: '(u64, bool)'
+  │                          Given expression list of length 3: '(u64, bool, bool)'

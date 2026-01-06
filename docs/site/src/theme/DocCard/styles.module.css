@@ -1,17 +1,17 @@
 .cardContainer {
-  --ifm-link-color: var(--ifm-color-emphasis-800);
-  --ifm-link-hover-color: var(--ifm-color-emphasis-700);
+  --ifm-link-color: #000000;
+  --ifm-link-hover-color: #1759C4;
   --ifm-link-hover-decoration: none;
 
-  box-shadow: 0 1.5px 3px 0 rgb(0 0 0 / 15%);
-  border: 1px solid var(--ifm-color-emphasis-200);
+  box-shadow: 0 1.5px 3px 0 rgba(0, 0, 0, 0.15);
+  border: 1px solid #E0E2E6;
   transition: all var(--ifm-transition-fast) ease;
   transition-property: border, box-shadow;
 }
 
 .cardContainer:hover {
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 3px 6px 0 rgb(0 0 0 / 20%);
+  border-color: #298DFF;
+  box-shadow: 0 3px 6px 0 rgba(0, 0, 0, 0.2);
 }
 
 .cardContainer *:last-child {

@@ -59,7 +59,7 @@ pub fn execute<Mode: ExecutionMode>(
 
     let txn = {
         let tx_context_ref = tx_context.borrow();
-        loading::translate::transaction(&mut translation_meter, &env, &tx_context_ref, txn)
+        loading::translate::transaction::<Mode>(&mut translation_meter, &env, &tx_context_ref, txn)
             .map_err(|e| (e, vec![]))?
     };
     let txn = typing::translate_and_verify::<Mode>(&mut translation_meter, &env, txn)

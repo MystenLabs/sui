@@ -10,6 +10,7 @@ pub mod paths;
 pub mod root_package;
 pub use package_impl::*;
 pub use root_package::RootPackage;
+pub mod package_loader;
 
 /// Convert an async task into a single-threaded task. Copied from `sui-replay-2`
 macro_rules! block_on {

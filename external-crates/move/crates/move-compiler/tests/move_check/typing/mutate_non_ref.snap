@@ -8,9 +8,9 @@ info:
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/mutate_non_ref.move:7:10
   │
-6 │         let u = 0;
-  │             - Given: integer
-7 │         *u = 1;
+6 │         let u = 0u64;
+  │                 ---- Given: 'u64'
+7 │         *u = 1u64;
   │          ^
   │          │
   │          Invalid mutation. Expected a mutable reference
@@ -33,7 +33,7 @@ error[E04007]: incompatible types
  2 │     struct S has copy, drop { f: u64 }
    │                                  --- Given: 'u64'
    ·
-11 │         *s.f = 0;
+11 │         *s.f = 0u64;
    │          ^^^
    │          │
    │          Invalid mutation. Expected a mutable reference
@@ -45,7 +45,7 @@ error[E04007]: incompatible types
  2 │     struct S has copy, drop { f: u64 }
    │                                  --- Given: 'u64'
    ·
-14 │         *s_ref.f = 0;
+14 │         *s_ref.f = 0u64;
    │          ^^^^^^^
    │          │
    │          Invalid mutation. Expected a mutable reference
@@ -69,7 +69,7 @@ error[E04007]: incompatible types
  2 │     struct S has copy, drop { f: u64 }
    │                                  --- Given: 'u64'
    ·
-18 │         *x.s.f = 0;
+18 │         *x.s.f = 0u64;
    │          ^^^^^
    │          │
    │          Invalid mutation. Expected a mutable reference
@@ -93,7 +93,7 @@ error[E04007]: incompatible types
  2 │     struct S has copy, drop { f: u64 }
    │                                  --- Given: 'u64'
    ·
-22 │         *x_ref.s.f = 0;
+22 │         *x_ref.s.f = 0u64;
    │          ^^^^^^^^^
    │          │
    │          Invalid mutation. Expected a mutable reference

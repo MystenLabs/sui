@@ -23,18 +23,18 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3876000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 42-44:
-//# programmable --sender A --inputs object(2,0) object(2,1) @A 18446744073709551614
+//# programmable --sender A --inputs object(2,0) object(2,1) @A 18446744073709551615
 //> 0: test::large_balance::send_large_balance(Input(0), Input(2), Input(3));
 //> 1: test::large_balance::send_large_balance(Input(1), Input(2), Input(3));
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: sui::funds_accumulator::add_to_accumulator_address (function index 8) at offset 0. Arithmetic error, stack overflow, max value depth, etc.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 8, instruction: 0, function_name: Some("add_to_accumulator_address") }))), source: Some(VMError { major_status: ARITHMETIC_ERROR, sub_status: None, message: Some("accumulator merge overflow: total merges 36893488147419103228 exceed u64::MAX"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("funds_accumulator") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 0)] }), command: Some(1) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: sui, name: Identifier("funds_accumulator") }, function: 8, instruction: 0, function_name: Some("add_to_accumulator_address") }))), source: Some(VMError { major_status: ARITHMETIC_ERROR, sub_status: None, message: Some("accumulator merge overflow: total merges 36893488147419103230 exceed u64::MAX"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("funds_accumulator") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 0)] }), command: Some(1) } }
 
 task 4, lines 46-48:
 //# create-checkpoint
 Checkpoint created: 1
 
 task 5, line 49:
-//# run test::large_balance::send_large_balance --args object(2,0) @A 18446744073709551614 --sender A
+//# run test::large_balance::send_large_balance --args object(2,0) @A 18446744073709551615 --sender A
 mutated: object(0,0), object(2,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(5,0), A, sui::balance::Balance<test::large_balance::MARKER>, Merge)
@@ -45,7 +45,7 @@ task 6, lines 51-53:
 Checkpoint created: 2
 
 task 7, line 54:
-//# run test::large_balance::send_large_balance --args object(2,1) @A 18446744073709551614 --sender A
+//# run test::large_balance::send_large_balance --args object(2,1) @A 18446744073709551615 --sender A
 mutated: object(0,0), object(2,1)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 accumulators_written: (object(5,0), A, sui::balance::Balance<test::large_balance::MARKER>, Merge)
@@ -56,7 +56,7 @@ task 8, lines 56-58:
 Checkpoint created: 3
 
 task 9, lines 59-61:
-//# programmable --sender A --inputs withdraw<sui::balance::Balance<test::large_balance::MARKER>>(18446744073709551614) @B
+//# programmable --sender A --inputs withdraw<sui::balance::Balance<test::large_balance::MARKER>>(18446744073709551615) @B
 //> 0: sui::balance::redeem_funds<test::large_balance::MARKER>(Input(0));
 //> 1: sui::balance::send_funds<test::large_balance::MARKER>(Result(0), Input(1));
 mutated: object(0,0)
@@ -69,7 +69,7 @@ task 10, lines 63-65:
 Checkpoint created: 4
 
 task 11, lines 66-68:
-//# programmable --sender A --inputs withdraw<sui::balance::Balance<test::large_balance::MARKER>>(18446744073709551614) @B
+//# programmable --sender A --inputs withdraw<sui::balance::Balance<test::large_balance::MARKER>>(18446744073709551615) @B
 //> 0: sui::balance::redeem_funds<test::large_balance::MARKER>(Input(0));
 //> 1: sui::balance::send_funds<test::large_balance::MARKER>(Result(0), Input(1));
 mutated: object(0,0)
@@ -82,7 +82,7 @@ task 12, lines 70-72:
 Checkpoint created: 5
 
 task 13, lines 73-77:
-//# programmable --sender A --inputs withdraw<sui::balance::Balance<test::large_balance::MARKER>>(18446744073709551614) withdraw<sui::balance::Balance<test::large_balance::MARKER>>(18446744073709551614) @B
+//# programmable --sender A --inputs withdraw<sui::balance::Balance<test::large_balance::MARKER>>(18446744073709551615) withdraw<sui::balance::Balance<test::large_balance::MARKER>>(18446744073709551615) @B
 //> 0: sui::balance::redeem_funds<test::large_balance::MARKER>(Input(0));
 //> 1: sui::balance::redeem_funds<test::large_balance::MARKER>(Input(1));
 //> 2: sui::balance::join<test::large_balance::MARKER>(Result(0), Result(1));

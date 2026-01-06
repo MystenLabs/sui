@@ -6,7 +6,7 @@ module a::m {
     fun t() {
         let x1 = 5;
         x1;
-        x1 = 5; // we don't track values
+        x1 = 5u64; // we don't track values
         x1;
 
         let c1 = C;
@@ -14,29 +14,29 @@ module a::m {
         c1 = C; // we don't track values
         c1;
 
-        let x2 = 5;
+        let x2 = 5u64;
         x2;
         let x2 = x2; // shadowing is not self-assignment
         x2;
 
-        let (x3, x4) = (5, 5);
+        let (x3, x4) = (5, 5u64);
         x3;
         x4;
         (x4, x3) = (x3, x4); // swap is not self-assignment
         x3;
         x4;
 
-        let r1 = &mut 0;
+        let r1 = &mut 0u64;
         let r2 = &mut 0;
         *r1;
         *r2;
         *r1 = *r2; // different references
         *r1;
 
-        let r = &mut 0;
+        let r = &mut 0u64;
         *id(r) = *id(r);
 
-        let x5 = 0;
+        let x5 = 0u64;
         x5;
         x5 = { let x5 = 0; x5 }; // different x's
         x5;

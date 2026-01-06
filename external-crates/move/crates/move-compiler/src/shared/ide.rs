@@ -49,6 +49,8 @@ pub enum IDEAnnotation {
     MissingMatchArms(Box<MissingMatchArmsInfo>),
     /// Ellipsis Match Arm.
     EllipsisMatchEntries(Box<EllipsisMatchEntries>),
+    /// String Value.
+    StringValue(Box<String>),
 }
 
 #[derive(Debug, Clone)]
@@ -371,6 +373,9 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                 };
                 let msg = format!("Ellipsis expansion: {}", entries);
                 diag!(IDE::EllipsisExpansion, (loc, msg))
+            }
+            IDEAnnotation::StringValue(s) => {
+                diag!(IDE::StringValue, (loc, format!("String value: {}", s)))
             }
         }
     }

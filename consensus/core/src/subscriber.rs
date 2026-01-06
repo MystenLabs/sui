@@ -202,9 +202,7 @@ impl<C: NetworkClient, S: NetworkService> Subscriber<C, S> {
                             .subscribed_blocks
                             .with_label_values(&[peer_hostname])
                             .inc();
-                        let result = authority_service
-                            .handle_send_block(peer, block.clone())
-                            .await;
+                        let result = authority_service.handle_send_block(peer, block).await;
                         if let Err(e) = result {
                             match e {
                                 ConsensusError::BlockRejected { block_ref, reason } => {

@@ -35,8 +35,8 @@ error[E01015]: ambiguous 'as'
 error[E01015]: ambiguous 'as'
   ┌─ tests/move_2024/parser/cast_invalid.move:7:9
   │
-7 │         'l: { 0 } as u32;
-  │         ^^^^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+7 │         'l: { 0u64 } as u32;
+  │         ^^^^^^^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
 
 error[E04031]: invalid usage of lambda
   ┌─ tests/move_2024/parser/cast_invalid.move:8:9
@@ -65,5 +65,5 @@ error[E01015]: ambiguous 'as'
 error[E01015]: ambiguous 'as'
    ┌─ tests/move_2024/parser/cast_invalid.move:14:9
    │
-14 │         0 as u32 as u32;
-   │         ^^^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate
+14 │         0u64 as u32 as u32;
+   │         ^^^^^^^^^^^ Potentially ambiguous 'as'. Add parentheses to disambiguate

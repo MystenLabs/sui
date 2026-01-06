@@ -22,6 +22,8 @@ pub struct BridgeOrchestratorTables {
     pub(crate) sui_syncer_cursors: DBMap<Identifier, EventID>,
     /// contract address to the last processed block
     pub(crate) eth_syncer_cursors: DBMap<ethers::types::Address, u64>,
+    /// sequence number for the next record to be processed from the bridge records table
+    pub(crate) sui_syncer_sequence_number_cursor: DBMap<(), u64>,
 }
 
 impl BridgeOrchestratorTables {
@@ -84,6 +86,22 @@ impl BridgeOrchestratorTables {
             .map_err(|e| BridgeError::StorageError(format!("Couldn't write batch: {:?}", e)))
     }
 
+    pub(crate) fn update_sui_sequence_number_cursor(&self, cursor: u64) -> BridgeResult<()> {
+        let mut batch = self.sui_syncer_sequence_number_cursor.batch();
+
+        batch
+            .insert_batch(&self.sui_syncer_sequence_number_cursor, [((), cursor)])
+            .map_err(|e| {
+                BridgeError::StorageError(format!(
+                    "Couldn't insert into sui_syncer_sequence_number_cursor: {:?}",
+                    e
+                ))
+            })?;
+        batch
+            .write()
+            .map_err(|e| BridgeError::StorageError(format!("Couldn't write batch: {:?}", e)))
+    }
+
     pub(crate) fn update_eth_event_cursor(
         &self,
         contract_address: ethers::types::Address,
@@ -120,6 +138,17 @@ impl BridgeOrchestratorTables {
         })
     }
 
+    pub fn get_sui_sequence_number_cursor(&self) -> BridgeResult<Option<u64>> {
+        self.sui_syncer_sequence_number_cursor
+            .get(&())
+            .map_err(|e| {
+                BridgeError::StorageError(format!(
+                    "Couldn't get sui_syncer_sequence_number_cursor: {:?}",
+                    e
+                ))
+            })
+    }
+
     pub fn get_eth_event_cursors(
         &self,
         contract_addresses: &[ethers::types::Address],
@@ -127,7 +156,7 @@ impl BridgeOrchestratorTables {
         self.eth_syncer_cursors
             .multi_get(contract_addresses)
             .map_err(|e| {
-                BridgeError::StorageError(format!("Couldn't get sui_syncer_cursors: {:?}", e))
+                BridgeError::StorageError(format!("Couldn't get eth_syncer_cursors: {:?}", e))
             })
     }
 }
@@ -255,6 +284,17 @@ mod tests {
                 .unwrap()[0]
                 .unwrap(),
             sui_cursor
+        );
+
+        // update sui seq cursor
+        let sui_sequence_number_cursor = 100u64;
+        assert!(store.get_sui_sequence_number_cursor().unwrap().is_none());
+        store
+            .update_sui_sequence_number_cursor(sui_sequence_number_cursor)
+            .unwrap();
+        assert_eq!(
+            store.get_sui_sequence_number_cursor().unwrap().unwrap(),
+            sui_sequence_number_cursor
         );
     }
 }

@@ -187,8 +187,8 @@ impl Page<JsonCursor<usize>> {
         total: usize,
         node: impl Fn(usize) -> Result<N, E>,
     ) -> Result<Connection<String, N>, E> {
-        let mut lo = self.after().map_or(0, |a| a.saturating_add(1));
-        let mut hi = self.before().map_or(total, |b| **b);
+        let mut lo = self.after().map_or(0, |a| a.saturating_add(1)).min(total);
+        let mut hi = self.before().map_or(total, |b| **b).min(total);
         let mut conn = Connection::new(false, false);
 
         if hi <= lo {

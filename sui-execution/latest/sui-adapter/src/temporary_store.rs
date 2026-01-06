@@ -10,7 +10,7 @@ use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::deny_list_v2::check_coin_deny_list_v2_during_execution;
-use sui_types::effects::{AccumulatorWriteV1, TransactionEffects, TransactionEvents};
+use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::ExecutionErrorKind;
 use sui_types::execution::{
     DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
@@ -156,31 +156,6 @@ impl<'backing> TemporaryStore<'backing> {
         }
     }
 
-    fn merge_accumulator_events(
-        accumulator_events: &[AccumulatorEvent],
-    ) -> impl Iterator<Item = (ObjectID, EffectsObjectChange)> + '_ {
-        accumulator_events
-            .iter()
-            .fold(
-                BTreeMap::<ObjectID, Vec<AccumulatorWriteV1>>::new(),
-                |mut map, event| {
-                    map.entry(*event.accumulator_obj.inner())
-                        .or_default()
-                        .push(event.write.clone());
-                    map
-                },
-            )
-            .into_iter()
-            .map(|(obj_id, writes)| {
-                (
-                    obj_id,
-                    EffectsObjectChange::new_from_accumulator_write(AccumulatorWriteV1::merge(
-                        writes,
-                    )),
-                )
-            })
-    }
-
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
     pub fn into_inner(self) -> InnerTemporaryStore {
         let results = self.execution_results;
@@ -243,7 +218,17 @@ impl<'backing> TemporaryStore<'backing> {
                     ),
                 )
             })
-            .chain(Self::merge_accumulator_events(&results.accumulator_events))
+            .chain(results.accumulator_events.iter().cloned().map(
+                |AccumulatorEvent {
+                     accumulator_obj,
+                     write,
+                 }| {
+                    (
+                        *accumulator_obj.inner(),
+                        EffectsObjectChange::new_from_accumulator_write(write),
+                    )
+                },
+            ))
             .collect()
     }
 
@@ -589,7 +574,7 @@ impl TemporaryStore<'_> {
         mutable_inputs: &HashSet<ObjectID>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
-        let gas_objs: HashSet<&ObjectID> = gas_charger.gas_coins().iter().map(|g| &g.0).collect();
+        let gas_objs: HashSet<&ObjectID> = gas_charger.gas_coins().map(|g| &g.0).collect();
         let gas_owner = sponsor.as_ref().unwrap_or(sender);
 
         // mark input objects as authenticated

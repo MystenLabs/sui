@@ -4,6 +4,6 @@ module 0x8675309::M {
         freeze<>(x);
         assert!();
         assert!(false);
-        assert!(0 != 1);
+        assert!(0 != 1u64);
     }
 }

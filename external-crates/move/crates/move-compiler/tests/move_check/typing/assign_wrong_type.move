@@ -14,16 +14,16 @@ module 0x8675309::M {
         let b;
         let f;
         x = ();
-        () = 0;
-        (x, b, R{f}) = (0, false, R{f: 0}, R{f: 0});
-        (x, b, R{f}) = (0, false);
+        () = 0u64;
+        (x, b, R{f}) = (0u64, false, R{f: 0}, R{f: 0});
+        (x, b, R{f}) = (0u64, false);
     }
 
     fun t2() {
         let x = false;
-        let b = 0;
+        let b = 0u64;
         let f = @0x0;
         let r = S{ g: 0 };
-        (x, b, R{f}, r) = (0, false, R{f: 0}, R{f: 0});
+        (x, b, R{f}, r) = (0u64, false, R{f: 0}, R{f: 0});
     }
 }

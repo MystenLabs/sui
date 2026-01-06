@@ -285,15 +285,10 @@ pub async fn start_rpc(
     rpc.add_module(Transactions(context.clone()))?;
 
     if let Some(fullnode_rpc_url) = node_args.fullnode_rpc_url {
-        rpc.add_module(DelegationCoins::new(
-            fullnode_rpc_url.clone(),
-            context.config().node.clone(),
-        )?)?;
-        rpc.add_module(DelegationGovernance::new(
-            fullnode_rpc_url.clone(),
-            context.config().node.clone(),
-        )?)?;
-        rpc.add_module(Write::new(fullnode_rpc_url, context.config().node.clone())?)?;
+        let client = context.config().node.client(fullnode_rpc_url)?;
+        rpc.add_module(DelegationCoins::new(client.clone()))?;
+        rpc.add_module(DelegationGovernance::new(client.clone()))?;
+        rpc.add_module(Write::new(client))?;
     } else {
         warn!(
             "No fullnode rpc url provided, DelegationCoins, DelegationGovernance, and Write modules will not be added."

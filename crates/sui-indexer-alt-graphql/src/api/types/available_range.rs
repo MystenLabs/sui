@@ -53,16 +53,19 @@ pub(crate) struct AvailableRange {
 #[Object]
 impl AvailableRange {
     /// Inclusive lower checkpoint for which data is available.
-    async fn first(&self) -> Result<Option<Checkpoint>, RpcError> {
-        Ok(Checkpoint::with_sequence_number(
+    async fn first(&self) -> Option<Result<Checkpoint, RpcError>> {
+        Some(Ok(Checkpoint::with_sequence_number(
             self.scope.clone(),
             Some(self.first),
-        ))
+        )?))
     }
 
     /// Inclusive upper checkpoint for which data is available.
-    async fn last(&self) -> Result<Option<Checkpoint>, RpcError> {
-        Ok(Checkpoint::with_sequence_number(self.scope.clone(), None))
+    async fn last(&self) -> Option<Result<Checkpoint, RpcError>> {
+        Some(Ok(Checkpoint::with_sequence_number(
+            self.scope.clone(),
+            None,
+        )?))
     }
 }
 
