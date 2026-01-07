@@ -2,22 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
-use std::{
-    cmp,
-    collections::BTreeMap,
-    marker,
-    ops::{Bound, RangeBounds, RangeInclusive},
-    path::Path,
-    sync::{Arc, RwLock},
-};
+use std::cmp;
+use std::collections::BTreeMap;
+use std::marker;
+use std::ops::Bound;
+use std::ops::RangeBounds;
+use std::ops::RangeInclusive;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 use anyhow::Context;
 use bincode::Encode;
-use rocksdb::{AsColumnFamilyRef, properties};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use rocksdb::AsColumnFamilyRef;
+use rocksdb::properties;
+use serde::Deserialize;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use sui_indexer_alt_framework::store::CommitterWatermark;
 
-use self::error::Error;
+use crate::db::error::Error;
 
 pub(crate) mod config;
 pub(crate) mod error;
@@ -1103,7 +1107,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_forward_iteration() {
-        use Bound::{Excluded as E, Unbounded as U};
+        use Bound::Excluded as E;
+        use Bound::Unbounded as U;
 
         let d = tempfile::tempdir().unwrap();
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
@@ -1399,7 +1404,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_reverse_iteration() {
-        use Bound::{Excluded as E, Unbounded as U};
+        use Bound::Excluded as E;
+        use Bound::Unbounded as U;
 
         let d = tempfile::tempdir().unwrap();
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();

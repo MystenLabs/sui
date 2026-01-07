@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::{convert::Infallible, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Context;
 use axum::Router;
