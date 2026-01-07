@@ -1,24 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    ops::{Deref, DerefMut},
-    sync::Arc,
-};
+use std::ops::Deref;
+use std::ops::DerefMut;
+use std::sync::Arc;
 
 use anyhow::Context;
 use diesel_migrations::EmbeddedMigrations;
 use prometheus::Registry;
 use sui_futures::service::Service;
-use sui_indexer_alt_metrics::{MetricsArgs, MetricsService};
+use sui_indexer_alt_metrics::MetricsArgs;
+use sui_indexer_alt_metrics::MetricsService;
 use url::Url;
 
-use crate::{
-    Indexer, IndexerArgs, Result,
-    ingestion::{ClientArgs, IngestionConfig},
-    metrics::{IndexerMetrics, IngestionMetrics},
-    postgres::{Db, DbArgs},
-};
+use crate::Indexer;
+use crate::IndexerArgs;
+use crate::Result;
+use crate::ingestion::ClientArgs;
+use crate::ingestion::IngestionConfig;
+use crate::metrics::IndexerMetrics;
+use crate::metrics::IngestionMetrics;
+use crate::postgres::Db;
+use crate::postgres::DbArgs;
 
 /// Bundle of arguments for setting up an indexer cluster (an Indexer and its associated Metrics
 /// service). This struct is offered as a convenience for the common case of parsing command-line
@@ -212,10 +215,14 @@ impl DerefMut for IndexerCluster {
 
 #[cfg(test)]
 mod tests {
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
+    use std::net::SocketAddr;
 
     use async_trait::async_trait;
-    use diesel::{Insertable, QueryDsl, Queryable};
+    use diesel::Insertable;
+    use diesel::QueryDsl;
+    use diesel::Queryable;
     use diesel_async::RunQueryDsl;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
@@ -225,10 +232,11 @@ mod tests {
     use crate::ingestion::ingestion_client::IngestionClientArgs;
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::ConcurrentConfig;
-    use crate::postgres::{
-        Connection, Db, DbArgs,
-        temp::{TempDb, get_available_port},
-    };
+    use crate::postgres::Connection;
+    use crate::postgres::Db;
+    use crate::postgres::DbArgs;
+    use crate::postgres::temp::TempDb;
+    use crate::postgres::temp::get_available_port;
     use crate::types::full_checkpoint_content::Checkpoint;
 
     use super::*;

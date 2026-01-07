@@ -29,8 +29,11 @@
 
 use async_trait::async_trait;
 
-use super::{Connection, Db, FieldCount};
-use crate::pipeline::{Processor, concurrent};
+use crate::pipeline::Processor;
+use crate::pipeline::concurrent;
+use crate::postgres::Connection;
+use crate::postgres::Db;
+use crate::postgres::FieldCount;
 
 /// Postgres-specific handler trait for concurrent indexing pipelines.
 ///

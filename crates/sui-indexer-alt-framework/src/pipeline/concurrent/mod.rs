@@ -1,24 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use sui_futures::service::Service;
-use tokio::sync::{SetOnce, mpsc};
+use tokio::sync::SetOnce;
+use tokio::sync::mpsc;
 use tracing::info;
 
-use crate::{
-    Task, metrics::IndexerMetrics, store::Store, types::full_checkpoint_content::Checkpoint,
-};
-
-use super::{CommitterConfig, PIPELINE_BUFFER, Processor, WatermarkPart, processor::processor};
-
-use self::{
-    collector::collector, commit_watermark::commit_watermark, committer::committer,
-    main_reader_lo::track_main_reader_lo, pruner::pruner, reader_watermark::reader_watermark,
-};
+use crate::Task;
+use crate::metrics::IndexerMetrics;
+use crate::pipeline::CommitterConfig;
+use crate::pipeline::PIPELINE_BUFFER;
+use crate::pipeline::Processor;
+use crate::pipeline::WatermarkPart;
+use crate::pipeline::concurrent::collector::collector;
+use crate::pipeline::concurrent::commit_watermark::commit_watermark;
+use crate::pipeline::concurrent::committer::committer;
+use crate::pipeline::concurrent::main_reader_lo::track_main_reader_lo;
+use crate::pipeline::concurrent::pruner::pruner;
+use crate::pipeline::concurrent::reader_watermark::reader_watermark;
+use crate::pipeline::processor::processor;
+use crate::store::Store;
+use crate::types::full_checkpoint_content::Checkpoint;
 
 mod collector;
 mod commit_watermark;
@@ -289,21 +297,20 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, time::Duration};
+    use std::sync::Arc;
+    use std::time::Duration;
 
     use prometheus::Registry;
-    use tokio::{sync::mpsc, time::timeout};
+    use tokio::sync::mpsc;
+    use tokio::time::timeout;
 
-    use crate::{
-        FieldCount,
-        metrics::IndexerMetrics,
-        mocks::store::{MockConnection, MockStore},
-        pipeline::Processor,
-        types::{
-            full_checkpoint_content::Checkpoint,
-            test_checkpoint_data_builder::TestCheckpointBuilder,
-        },
-    };
+    use crate::FieldCount;
+    use crate::metrics::IndexerMetrics;
+    use crate::mocks::store::MockConnection;
+    use crate::mocks::store::MockStore;
+    use crate::pipeline::Processor;
+    use crate::types::full_checkpoint_content::Checkpoint;
+    use crate::types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
     use super::*;
 

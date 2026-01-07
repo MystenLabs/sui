@@ -1,26 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, btree_map::Entry},
-    sync::Arc,
-};
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
+use std::sync::Arc;
 
 use sui_futures::service::Service;
-use tokio::{
-    sync::mpsc,
-    time::{MissedTickBehavior, interval},
-};
-use tracing::{debug, error, info, warn};
+use tokio::sync::mpsc;
+use tokio::time::MissedTickBehavior;
+use tokio::time::interval;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use crate::{
-    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
-    pipeline::{CommitterConfig, WARN_PENDING_WATERMARKS, WatermarkPart, logging::WatermarkLogger},
-    store::{Connection, Store, pipeline_task},
-};
-
-use super::Handler;
+use crate::metrics::CheckpointLagMetricReporter;
+use crate::metrics::IndexerMetrics;
+use crate::pipeline::CommitterConfig;
+use crate::pipeline::WARN_PENDING_WATERMARKS;
+use crate::pipeline::WatermarkPart;
+use crate::pipeline::concurrent::Handler;
+use crate::pipeline::logging::WatermarkLogger;
+use crate::store::Connection;
+use crate::store::Store;
+use crate::store::pipeline_task;
 
 /// The watermark task is responsible for keeping track of a pipeline's out-of-order commits and
 /// updating its row in the `watermarks` table when a continuous run of checkpoints have landed
@@ -253,19 +257,21 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, time::Duration};
+    use std::sync::Arc;
+    use std::time::Duration;
 
     use async_trait::async_trait;
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::sync::mpsc;
 
-    use crate::{
-        FieldCount,
-        metrics::IndexerMetrics,
-        mocks::store::*,
-        pipeline::{CommitterConfig, Processor, WatermarkPart, concurrent::BatchStatus},
-        store::CommitterWatermark,
-    };
+    use crate::FieldCount;
+    use crate::metrics::IndexerMetrics;
+    use crate::mocks::store::*;
+    use crate::pipeline::CommitterConfig;
+    use crate::pipeline::Processor;
+    use crate::pipeline::WatermarkPart;
+    use crate::pipeline::concurrent::BatchStatus;
+    use crate::store::CommitterWatermark;
 
     use super::*;
 
