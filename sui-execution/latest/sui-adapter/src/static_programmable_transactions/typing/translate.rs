@@ -13,6 +13,7 @@ use crate::{
 };
 use indexmap::{IndexMap, IndexSet};
 use move_binary_format::file_format::{Ability, AbilitySet};
+use move_core_types::account_address::AccountAddress;
 use std::rc::Rc;
 use sui_types::{
     balance::RESOLVED_BALANCE_STRUCT,
@@ -862,16 +863,19 @@ fn determine_withdrawal_compatibility_inputs(
     _env: &Env,
     inputs: &mut L::Inputs,
 ) -> Result<IndexMap</* input withdrawal */ u16, /* owner address input */ u16>, ExecutionError> {
-    let mut withdrawal_compatibility_owners = IndexMap::new();
-    for (i, (input_arg, _)) in inputs.iter().enumerate() {
-        let L::InputArg::FundsWithdrawal(withdrawal) = input_arg else {
-            continue;
-        };
-        if !withdrawal.from_compatibility_object {
-            continue;
-        }
-        withdrawal_compatibility_owners.insert(i as u16, withdrawal.owner);
-    }
+    let withdrawal_compatibility_owners: IndexMap<u16, AccountAddress> = inputs
+        .iter()
+        .enumerate()
+        .filter_map(|(i, (input_arg, _))| {
+            if let L::InputArg::FundsWithdrawal(withdrawal) = input_arg
+                && withdrawal.from_compatibility_object
+            {
+                Some((i as u16, withdrawal.owner))
+            } else {
+                None
+            }
+        })
+        .collect();
     withdrawal_compatibility_owners
         .into_iter()
         .map(|(i, owner)| {

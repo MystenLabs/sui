@@ -136,6 +136,8 @@ mod refine {
             ast.withdrawal_compatibility_conversions
                 .values()
                 .filter(|conversion| {
+                    // The conversion result is always a single return value, as such we can specify
+                    // a secondary index of `0` without worrying about other results.
                     let conversion_location = T::Location::Result(conversion.conversion_result, 0);
                     !moved_locations.contains(&conversion_location)
                 })
@@ -148,7 +150,9 @@ mod refine {
                 owner,
                 conversion_result,
             } = *conversion_info;
-            let conversion_command = &ast.commands[conversion_result as usize];
+            let Some(conversion_command) = ast.commands.get(conversion_result as usize) else {
+                invariant_violation!("conversion result should be a valid command index")
+            };
             assert_invariant!(
                 conversion_command.value.result_type.len() == 1,
                 "conversion should have one result"
@@ -164,7 +168,9 @@ mod refine {
                 ast.pure[owner_pure_idx as usize].ty == T::Type::Address,
                 "owner pure input should be an address"
             );
-            let conversion_ty = &conversion_command.value.result_type[0];
+            let Some(conversion_ty) = conversion_command.value.result_type.get(0) else {
+                invariant_violation!("conversion should have a result type")
+            };
             let Some(inner_ty) = coin_inner_type(conversion_ty) else {
                 invariant_violation!("conversion result should be a coin type")
             };
