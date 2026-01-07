@@ -1,24 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{env, sync::Arc};
+use std::env;
 
-use consensus_config::AuthorityIndex;
-use parking_lot::RwLock;
 use rand::{Rng, SeedableRng, prelude::SliceRandom, rngs::StdRng};
 
 use crate::{
     block::{BlockAPI, Slot},
-    block_manager::BlockManager,
     commit::DecidedLeader,
-    context::Context,
-    dag_state::DagState,
-    leader_schedule::{LeaderSchedule, LeaderSwapTable},
-    storage::mem_store::MemStore,
+    commit_test_fixture::CommitTestFixture,
     test_dag::create_random_dag,
-    universal_committer::{
-        UniversalCommitter, universal_committer_builder::UniversalCommitterBuilder,
-    },
 };
 
 const NUM_RUNS: u32 = 100;
@@ -36,24 +27,25 @@ async fn test_randomized_dag_all_direct_commit() {
     for _ in 0..NUM_RUNS {
         let seed = random_test_setup.seeded_rng.gen_range(0..10000);
         let num_authorities = random_test_setup.seeded_rng.gen_range(4..10);
-        let authority = authority_setup(num_authorities, 0);
+        let mut fixture = CommitTestFixture::with_options(num_authorities, 0, None);
 
         let include_leader_percentage = 100;
         let dag_builder = create_random_dag(
             seed,
             include_leader_percentage,
             NUM_ROUNDS,
-            authority.context.clone(),
+            fixture.context.clone(),
         );
 
-        dag_builder.persist_all_blocks(authority.dag_state.clone());
+        // Add blocks to local state including TransactionCertifier and DagState.
+        fixture.add_blocks(dag_builder.blocks.values().cloned().collect());
 
         tracing::info!(
             "Running test with committee size {num_authorities} & {NUM_ROUNDS} rounds in the DAG..."
         );
 
         let last_decided = Slot::new_for_test(0, 0);
-        let sequence = authority.committer.try_decide(last_decided);
+        let sequence = fixture.committer.try_decide(last_decided);
         tracing::debug!("Commit sequence: {sequence:#?}");
 
         assert_eq!(sequence.len(), (NUM_ROUNDS - 2) as usize);
@@ -64,12 +56,20 @@ async fn test_randomized_dag_all_direct_commit() {
                 assert_eq!(block.round(), leader_round);
                 assert_eq!(
                     block.author(),
-                    authority.committer.get_leaders(leader_round)[0]
+                    fixture.committer.get_leaders(leader_round)[0]
                 );
             } else {
                 panic!("Expected a committed leader")
             };
         }
+
+        // Process commits through linearizer and commit finalizer
+        let finalized_commits = fixture.process_commits(sequence.clone()).await;
+        let expected_commit_count = sequence
+            .iter()
+            .filter(|s| matches!(s, DecidedLeader::Commit(_, _)))
+            .count();
+        assert_eq!(finalized_commits.len(), expected_commit_count);
     }
 }
 
@@ -84,6 +84,9 @@ async fn test_randomized_dag_all_direct_commit() {
 /// sequence is the same for both authorities. The resulting sequence will include
 /// Commit & Skip decisions and potentially will stop before coming to a decision
 /// on all waves as we may have an Undecided leader somewhere early in the sequence.
+///
+/// Additionally, this test processes commits through the Linearizer and CommitFinalizer
+/// incrementally after each try_decide() call, similar to the production flow.
 #[tokio::test]
 async fn test_randomized_dag_and_decision_sequence() {
     let mut random_test_setup = random_test_setup();
@@ -93,14 +96,14 @@ async fn test_randomized_dag_and_decision_sequence() {
         let num_authorities = random_test_setup.seeded_rng.gen_range(4..10);
 
         // Setup for Authority 1
-        let mut authority_1 = authority_setup(num_authorities, 1);
+        let mut fixture_1 = CommitTestFixture::with_options(num_authorities, 1, None);
 
         let include_leader_percentage = 50;
         let dag_builder = create_random_dag(
             seed,
             include_leader_percentage,
             NUM_ROUNDS,
-            authority_1.context.clone(),
+            fixture_1.context.clone(),
         );
 
         tracing::info!(
@@ -111,6 +114,7 @@ async fn test_randomized_dag_and_decision_sequence() {
         all_blocks.shuffle(&mut random_test_setup.seeded_rng);
 
         let mut sequenced_leaders_1 = vec![];
+        let mut finalized_commits_1 = vec![];
         let mut last_decided = Slot::new_for_test(0, 0);
         let mut i = 0;
         while i < all_blocks.len() {
@@ -119,11 +123,18 @@ async fn test_randomized_dag_and_decision_sequence() {
                 .gen_range(1..=(all_blocks.len() - i));
             let chunk = &all_blocks[i..i + chunk_size];
 
-            let _ = authority_1.block_manager.try_accept_blocks(chunk.to_vec());
-            let sequence = authority_1.committer.try_decide(last_decided);
+            // Try accept the blocks into DagState via BlockManager. Also votes for the blocks via TransactionCertifier.
+            fixture_1.try_accept_blocks(chunk.to_vec());
+
+            let sequence = fixture_1.committer.try_decide(last_decided);
 
             if !sequence.is_empty() {
                 sequenced_leaders_1.extend(sequence.clone());
+
+                // Process commits incrementally after each try_decide()
+                let finalized = fixture_1.process_commits(sequence.clone()).await;
+                finalized_commits_1.extend(finalized);
+
                 let leader_status = sequence.last().unwrap();
                 last_decided = Slot::new(leader_status.round(), leader_status.authority());
             }
@@ -131,15 +142,16 @@ async fn test_randomized_dag_and_decision_sequence() {
             i += chunk_size;
         }
 
-        assert!(authority_1.block_manager.is_empty());
+        assert!(fixture_1.has_no_suspended_blocks());
 
         // Setup for Authority 2
-        let mut authority_2 = authority_setup(num_authorities, 2);
+        let mut fixture_2 = CommitTestFixture::with_options(num_authorities, 2, None);
 
         let mut all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
         all_blocks.shuffle(&mut random_test_setup.seeded_rng);
 
         let mut sequenced_leaders_2 = vec![];
+        let mut finalized_commits_2 = vec![];
         let mut last_decided = Slot::new_for_test(0, 0);
         let mut i = 0;
         while i < all_blocks.len() {
@@ -148,11 +160,18 @@ async fn test_randomized_dag_and_decision_sequence() {
                 .gen_range(1..=(all_blocks.len() - i));
             let chunk = &all_blocks[i..i + chunk_size];
 
-            let _ = authority_2.block_manager.try_accept_blocks(chunk.to_vec());
-            let sequence = authority_2.committer.try_decide(last_decided);
+            // Try accept the blocks into DagState via BlockManager. Also votes for the blocks via TransactionCertifier.
+            fixture_2.try_accept_blocks(chunk.to_vec());
+
+            let sequence = fixture_2.committer.try_decide(last_decided);
 
             if !sequence.is_empty() {
                 sequenced_leaders_2.extend(sequence.clone());
+
+                // Process commits incrementally after each try_decide()
+                let finalized = fixture_2.process_commits(sequence.clone()).await;
+                finalized_commits_2.extend(finalized);
+
                 let leader_status = sequence.last().unwrap();
                 last_decided = Slot::new(leader_status.round(), leader_status.authority());
             }
@@ -160,49 +179,18 @@ async fn test_randomized_dag_and_decision_sequence() {
             i += chunk_size;
         }
 
-        assert!(authority_2.block_manager.is_empty());
+        assert!(fixture_2.has_no_suspended_blocks());
 
         // Ensure despite the difference in when blocks were received eventually after
         // receiving all blocks both authorities should return the same sequence of blocks.
         assert_eq!(sequenced_leaders_1, sequenced_leaders_2);
-    }
-}
 
-struct AuthorityTestFixture {
-    context: Arc<Context>,
-    dag_state: Arc<RwLock<DagState>>,
-    committer: UniversalCommitter,
-    block_manager: BlockManager,
-}
-
-fn authority_setup(num_authorities: usize, authority_index: u32) -> AuthorityTestFixture {
-    let context = Arc::new(
-        Context::new_for_test(num_authorities)
-            .0
-            .with_authority_index(AuthorityIndex::new_for_test(authority_index)),
-    );
-    let leader_schedule = Arc::new(LeaderSchedule::new(
-        context.clone(),
-        LeaderSwapTable::default(),
-    ));
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
-
-    // Create committer with pipelining and only 1 leader per leader round
-    let committer =
-        UniversalCommitterBuilder::new(context.clone(), leader_schedule, dag_state.clone())
-            .with_pipeline(true)
-            .build();
-
-    let block_manager = BlockManager::new(context.clone(), dag_state.clone());
-
-    AuthorityTestFixture {
-        context,
-        dag_state,
-        committer,
-        block_manager,
+        // Both authorities should produce identical finalized commit sequences
+        assert_eq!(finalized_commits_1.len(), finalized_commits_2.len());
+        for (f1, f2) in finalized_commits_1.iter().zip(finalized_commits_2.iter()) {
+            assert_eq!(f1.commit_ref, f2.commit_ref);
+            assert_eq!(f1.leader, f2.leader);
+        }
     }
 }
 
