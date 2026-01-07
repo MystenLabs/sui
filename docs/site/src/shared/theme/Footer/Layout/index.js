@@ -1,3 +1,7 @@
+/*
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+*/
 import Link from "@docusaurus/Link";
 import styles from "./index.module.css";
 

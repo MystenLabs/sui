@@ -1,3 +1,7 @@
+/*
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+*/
 
 // This plugin gets the descriptions from yaml header and
 // adds them to global data as

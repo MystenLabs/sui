@@ -1,3 +1,7 @@
+/*
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+*/
 // 
 // This rehype plugin runs rehype-raw on MD/MDX files so raw HTML inside them gets parsed 
 // and merged into the HAST (the HTML AST). 

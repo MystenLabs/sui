@@ -1,5 +1,7 @@
-/* Make plain <details> in both normal MDX pages and your heavy-HTML
-   wrapper look like the built-in Docusaurus Details component. */
+/*
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+*/
 .theme-doc-markdown details,
 .markdown details {
   @apply p-6 border border-solid rounded-lg;

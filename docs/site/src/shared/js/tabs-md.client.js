@@ -1,3 +1,7 @@
+/*
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+*/
 //
 // This code ensures that <Tabs> and <TabItems> are formatted correctly in
 // code that is inserted into a page with {@include: ...}

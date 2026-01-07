@@ -1,3 +1,7 @@
+/*
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+*/
 
 // This plugin does error checking to
 // prevent any URLs from blank anchors #
