@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use mock_store::MockStore;
 use object_store::ObjectStore;
+use object_store::ObjectStoreExt as _;
 use object_store::memory::InMemory;
 use parquet::file::reader::FileReader;
 use prost::Message;

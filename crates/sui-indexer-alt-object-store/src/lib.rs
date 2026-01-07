@@ -9,6 +9,7 @@ use anyhow::bail;
 use async_trait::async_trait;
 use bytes::Bytes;
 use object_store::Error as ObjectStoreError;
+use object_store::ObjectStoreExt as _;
 use object_store::PutMode;
 use object_store::PutPayload;
 use object_store::path::Path as ObjectPath;
