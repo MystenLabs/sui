@@ -457,15 +457,15 @@ Different queries are subject to their own retention policies. For example, live
 
 GraphQL queries rely on different data sources with different retention ranges:
 
-| Data source          | Examples                                                  | Typical retention          |
-| -------------------- | --------------------------------------------------------- | -------------------------- |
-| **Consistent store** | `Query.objects`, `Address.balance`, objects by owner or type | ~1 hour                    |
-| **Database store**         | `Query.transactions`, `Query.events`, `Query.checkpoints` | ~(30-90) days              |
-| **Archival service** | Point lookups (transaction by digest, object by ID and version)        | Indefinite (if configured) |
+| Data source          | Examples                                                        | Typical retention          |
+| -------------------- | --------------------------------------------------------------- | -------------------------- |
+| **Consistent store** | `Query.objects`, `Address.balance`, objects by owner or type    | ~1 hour                    |
+| **Database store**   | `Query.transactions`, `Query.events`, `Query.checkpoints`       | ~(30-90) days              |
+| **Archival service** | Point lookups (transaction by digest, object by ID and version) | Indefinite (if configured) |
 
 :::tip Operators
 
-Retention is configured by the stack operator. For production configuration examples, see [Indexer Stack Setup](/guides/operator/indexer-stack-setup).
+Retention is dependent on the pruning policies of datasource pipelines configured by the stack operator. For production configuration examples, see [Indexer Stack Setup](/guides/operator/indexer-stack-setup).
 
 :::
 
@@ -482,27 +482,15 @@ availableRange(type: String!, field: String, filters: [String!]): AvailableRange
 - **`filters`**: Filter field names from the filter input type, such as `["affectedAddress"]` for `TransactionFilter`, `["module"]` for `EventFilter`, or direct query parameter names like `["version"]`.
 
 Match your query parameters to filter names: if your query uses `filter: { affectedAddress: "0x..." }`, pass `filters: ["affectedAddress"]`.
+:::info Strictest retention is returned by the available range query.
+Datasource pipelines can be configured with different retention ranges based on pruning configurations.
+When multiple filters are passed to the available range query, the strictest retention range of the pipelines that support the filters is returned.
+:::
 
 ### Examples
 
 ```graphql
-# Check available range for basic transaction pagination
-{
-	serviceConfig {
-		availableRange(type: "Query", field: "transactions") {
-			first {
-				sequenceNumber
-			}
-			last {
-				sequenceNumber
-			}
-		}
-	}
-}
-```
-
-```graphql
-# Check available range for transactions filtered by affected address
+# Check available range for transaction queries filtered by affected address
 {
 	serviceConfig {
 		availableRange(type: "Query", field: "transactions", filters: ["affectedAddress"]) {
@@ -518,10 +506,10 @@ Match your query parameters to filter names: if your query uses `filter: { affec
 ```
 
 ```graphql
-# Check available range for events filtered by emitting module
+# Check available range for a checkpoint transactions queries filtered by affected object
 {
 	serviceConfig {
-		availableRange(type: "Query", field: "events", filters: ["module"]) {
+		availableRange(type: "Checkpoint", field: "Transactions", filters: ["affectedObject"]) {
 			first {
 				sequenceNumber
 			}
