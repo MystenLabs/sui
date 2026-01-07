@@ -182,7 +182,6 @@ async fn main() -> anyhow::Result<()> {
                 eth_signer_client.clone(),
                 certified_action,
             )
-            .await
             .expect("Failed to build eth transaction");
             println!("sending Eth tx: {:?}", tx);
             match tx.send().await {

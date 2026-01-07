@@ -20,7 +20,7 @@ use crate::{
 use ethers::prelude::*;
 use ethers::types::Address as EthAddress;
 
-pub async fn build_eth_transaction(
+pub fn build_eth_transaction(
     contract_address: EthAddress,
     signer: EthSigner,
     action: VerifiedCertifiedBridgeAction,
@@ -50,7 +50,6 @@ pub async fn build_eth_transaction(
         }
         BridgeAction::EmergencyAction(action) => {
             build_emergency_op_approve_transaction(contract_address, signer, action.clone(), sigs)
-                .await
         }
         BridgeAction::BlocklistCommitteeAction(action) => {
             build_committee_blocklist_approve_transaction(
@@ -59,11 +58,9 @@ pub async fn build_eth_transaction(
                 action.clone(),
                 sigs,
             )
-            .await
         }
         BridgeAction::LimitUpdateAction(action) => {
             build_limit_update_approve_transaction(contract_address, signer, action.clone(), sigs)
-                .await
         }
         BridgeAction::AssetPriceUpdateAction(action) => {
             build_asset_price_update_approve_transaction(
@@ -72,22 +69,20 @@ pub async fn build_eth_transaction(
                 action.clone(),
                 sigs,
             )
-            .await
         }
         BridgeAction::EvmContractUpgradeAction(action) => {
-            build_evm_upgrade_transaction(signer, action.clone(), sigs).await
+            build_evm_upgrade_transaction(signer, action.clone(), sigs)
         }
         BridgeAction::AddTokensOnSuiAction(_) => {
             unreachable!();
         }
         BridgeAction::AddTokensOnEvmAction(action) => {
             build_add_tokens_on_evm_transaction(contract_address, signer, action.clone(), sigs)
-                .await
         }
     }
 }
 
-pub async fn build_emergency_op_approve_transaction(
+pub fn build_emergency_op_approve_transaction(
     contract_address: EthAddress,
     signer: EthSigner,
     action: EmergencyAction,
@@ -104,7 +99,7 @@ pub async fn build_emergency_op_approve_transaction(
     Ok(contract.execute_emergency_op_with_signatures(signatures, message))
 }
 
-pub async fn build_committee_blocklist_approve_transaction(
+pub fn build_committee_blocklist_approve_transaction(
     contract_address: EthAddress,
     signer: EthSigner,
     action: BlocklistCommitteeAction,
@@ -121,7 +116,7 @@ pub async fn build_committee_blocklist_approve_transaction(
     Ok(contract.update_blocklist_with_signatures(signatures, message))
 }
 
-pub async fn build_limit_update_approve_transaction(
+pub fn build_limit_update_approve_transaction(
     contract_address: EthAddress,
     signer: EthSigner,
     action: LimitUpdateAction,
@@ -138,7 +133,7 @@ pub async fn build_limit_update_approve_transaction(
     Ok(contract.update_limit_with_signatures(signatures, message))
 }
 
-pub async fn build_asset_price_update_approve_transaction(
+pub fn build_asset_price_update_approve_transaction(
     contract_address: EthAddress,
     signer: EthSigner,
     action: AssetPriceUpdateAction,
@@ -154,7 +149,7 @@ pub async fn build_asset_price_update_approve_transaction(
     Ok(contract.update_token_price_with_signatures(signatures, message))
 }
 
-pub async fn build_add_tokens_on_evm_transaction(
+pub fn build_add_tokens_on_evm_transaction(
     contract_address: EthAddress,
     signer: EthSigner,
     action: AddTokensOnEvmAction,
@@ -170,7 +165,7 @@ pub async fn build_add_tokens_on_evm_transaction(
     Ok(contract.add_tokens_with_signatures(signatures, message))
 }
 
-pub async fn build_evm_upgrade_transaction(
+pub fn build_evm_upgrade_transaction(
     signer: EthSigner,
     action: EvmContractUpgradeAction,
     sigs: &BridgeCommitteeValiditySignInfo,
