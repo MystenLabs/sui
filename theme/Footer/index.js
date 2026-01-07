@@ -1,5 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
 import React from "react";
 import { useThemeConfig } from "@docusaurus/theme-common";
 import FooterLinks from "@theme/Footer/Links";
