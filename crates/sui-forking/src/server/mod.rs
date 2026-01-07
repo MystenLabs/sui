@@ -408,6 +408,8 @@ pub async fn start_server(
         update_system_objects(ctx.clone()).await.unwrap();
     });
 
+    println!("Ready to accept requests");
+
     let app = Router::new()
         .route("/health", get(health))
         .route("/status", get(get_status))
@@ -531,7 +533,6 @@ async fn update_system_objects(context: crate::context::Context) -> anyhow::Resu
 
     for (ref object, _version) in obj.into_iter().flatten() {
         info!("Fetched object from rpc: {:?}", object.id());
-        println!("Fetched object from rpc: {:?}", object.id());
         let written_objects = BTreeMap::from([(object.id(), object.clone())]);
         let old_obj = objs.get(&object.id()).unwrap();
         let old_obj_digest = old_obj.get(&(1.into())).unwrap().digest();

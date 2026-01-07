@@ -57,7 +57,6 @@ pub(crate) async fn fetch_and_cache_object_from_rpc(
 
         if let Some((ref object, _version)) = obj {
             info!("Fetched object from rpc: {:?}", object.id());
-            println!("Fetched object from rpc: {:?}", object.id());
             let written_objects = BTreeMap::from([(*object_id, object.clone())]);
             data_store.update_objects(written_objects, vec![]);
 
