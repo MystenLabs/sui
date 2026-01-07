@@ -7,6 +7,7 @@ use std::sync::LazyLock;
 use bytes::BufMut;
 use bytes::Bytes;
 use bytes::BytesMut;
+use object_store::ObjectStoreExt as _;
 use object_store::path::Path as ObjectPath;
 use prost::Message;
 use sui_indexer_alt_framework::pipeline::Processor;
