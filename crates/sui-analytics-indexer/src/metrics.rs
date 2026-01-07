@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{
-    HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry,
-};
+use prometheus::HistogramOpts;
+use prometheus::HistogramVec;
+use prometheus::IntCounterVec;
+use prometheus::IntGaugeVec;
+use prometheus::Registry;
+use prometheus::register_histogram_vec_with_registry;
+use prometheus::register_int_counter_vec_with_registry;
+use prometheus::register_int_gauge_vec_with_registry;
 
 #[derive(Clone)]
 pub struct Metrics {

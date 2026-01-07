@@ -23,15 +23,21 @@ use object_store::path::Path as ObjectPath;
 use sui_types::base_types::EpochId;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tracing::{debug, error, info, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use crate::config::{FileFormat, IndexerConfig};
+use crate::config::FileFormat;
+use crate::config::IndexerConfig;
 use crate::handlers::CheckpointRows;
 use crate::handlers::record_file_metrics;
 use crate::metrics::Metrics;
-use crate::writers::{CsvWriter, ParquetWriter};
-
-use super::{StoreMode, WatermarkUpdateError, construct_object_store_path};
+use crate::store::StoreMode;
+use crate::store::WatermarkUpdateError;
+use crate::store::construct_object_store_path;
+use crate::writers::CsvWriter;
+use crate::writers::ParquetWriter;
 
 /// Initial backoff delay for retries.
 const INITIAL_BACKOFF: Duration = Duration::from_millis(100);

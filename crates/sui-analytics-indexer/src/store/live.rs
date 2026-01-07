@@ -9,15 +9,14 @@ use std::time::Duration;
 use object_store::ObjectStore;
 use object_store::path::Path as ObjectPath;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
-use sui_storage::object_store::util::{
-    find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
-};
+use sui_storage::object_store::util::find_all_dirs_with_epoch_prefix;
+use sui_storage::object_store::util::find_all_files_with_epoch_prefix;
 use tracing::info;
 
-use crate::config::{BatchSizeConfig, PipelineConfig};
+use crate::config::BatchSizeConfig;
+use crate::config::PipelineConfig;
 use crate::handlers::CheckpointRows;
-
-use super::Batch;
+use crate::store::Batch;
 
 /// Live mode - derives watermarks from file names.
 ///
@@ -161,11 +160,14 @@ mod tests {
     use object_store::PutPayload;
     use object_store::memory::InMemory;
 
-    use crate::config::{IndexerConfig, OutputStoreConfig, PipelineConfig};
+    use crate::config::IndexerConfig;
+    use crate::config::OutputStoreConfig;
+    use crate::config::PipelineConfig;
     use crate::metrics::Metrics;
     use crate::pipeline::Pipeline;
     use crate::store::AnalyticsStore;
-    use sui_indexer_alt_framework::store::{Connection, Store};
+    use sui_indexer_alt_framework::store::Connection;
+    use sui_indexer_alt_framework::store::Store;
 
     fn test_metrics() -> Metrics {
         Metrics::new(&prometheus::Registry::new())
