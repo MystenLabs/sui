@@ -5,10 +5,9 @@ use std::sync::Arc;
 
 use sui_indexer_alt_framework::types::base_types::VersionDigest;
 
-use crate::{
-    db::{Db, map::DbMap},
-    store,
-};
+use crate::db::Db;
+use crate::db::map::DbMap;
+use crate::store;
 
 pub(crate) mod balances;
 pub(crate) mod object_by_owner;

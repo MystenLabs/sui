@@ -29,22 +29,29 @@
 //! The indexer and RPC agree on a `Schema` which describes the key types, value types and options
 //! for all column families to be set-up in the database.
 
-use std::{path::Path, sync::Arc};
+use std::path::Path;
+use std::sync::Arc;
 
-use config::{PipelineLayer, ServiceConfig};
-use db::config::DbConfig;
-use handlers::{balances::Balances, object_by_owner::ObjectByOwner, object_by_type::ObjectByType};
-use indexer::Indexer;
 use prometheus::Registry;
-use rpc::{RpcArgs, RpcService, state::State};
-use schema::Schema;
-use sui_indexer_alt_consistent_api::proto::{
-    self, rpc::consistent::v1alpha::consistent_service_server::ConsistentServiceServer,
-};
-use sui_indexer_alt_framework::{
-    IndexerArgs, ingestion::ClientArgs, pipeline::CommitterConfig,
-    pipeline::sequential::SequentialConfig, service::Service,
-};
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_server::ConsistentServiceServer;
+use sui_indexer_alt_consistent_api::proto::{self};
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
+use sui_indexer_alt_framework::service::Service;
+
+use crate::config::PipelineLayer;
+use crate::config::ServiceConfig;
+use crate::db::config::DbConfig;
+use crate::handlers::balances::Balances;
+use crate::handlers::object_by_owner::ObjectByOwner;
+use crate::handlers::object_by_type::ObjectByType;
+use crate::indexer::Indexer;
+use crate::rpc::RpcArgs;
+use crate::rpc::RpcService;
+use crate::rpc::state::State;
+use crate::schema::Schema;
 
 pub mod args;
 pub mod config;
