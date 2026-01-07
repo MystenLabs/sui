@@ -60,7 +60,7 @@ impl Default for P2pConfig {
 
 impl P2pConfig {
     pub fn excessive_message_size(&self) -> usize {
-        const EXCESSIVE_MESSAGE_SIZE: usize = 32 << 20;
+        const EXCESSIVE_MESSAGE_SIZE: usize = 8 << 20;
 
         self.excessive_message_size
             .unwrap_or(EXCESSIVE_MESSAGE_SIZE)
@@ -245,7 +245,7 @@ impl StateSyncConfig {
     }
 
     pub fn checkpoint_content_timeout(&self) -> Duration {
-        const DEFAULT_TIMEOUT: Duration = Duration::from_secs(60);
+        const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
         self.checkpoint_content_timeout_ms
             .map(Duration::from_millis)
@@ -292,7 +292,7 @@ pub enum AccessType {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct DiscoveryConfig {
-    /// Query peers for their latest checkpoint every interval period.
+    /// Query a subset of peers for their known peers every interval period.
     ///
     /// If unspecified, this will default to `5,000` milliseconds.
     #[serde(skip_serializing_if = "Option::is_none")]
