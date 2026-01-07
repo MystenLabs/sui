@@ -306,15 +306,15 @@ In addition to rate limits, queries are also validated against a number of rules
 
 Different queries are subject to their own retention policies. For example, live object set queries work only for recent checkpoints (measured in minutes or hours), while transaction pagination may be available only back to certain checkpoints (measured in weeks or months), depending on the filters applied. Data outside these ranges is pruned.
 
-### Data Source Retention
+### Data source retention
 
 GraphQL queries rely on different data sources with different retention ranges:
 
-| Data Source          | Examples                                                  | Typical Retention          |
+| Data source          | Examples                                                  | Typical retention          |
 | -------------------- | --------------------------------------------------------- | -------------------------- |
-| **Consistent Store** | `Query.objects`, `Address.balance`, objects by owner/type | ~1 hour                    |
-| **DB Store**         | `Query.transactions`, `Query.events`, `Query.checkpoints` | ~(30-90) days              |
-| **Archival Service** | Point lookups (tx by digest, object by ID+version)        | Indefinite (if configured) |
+| **Consistent store** | `Query.objects`, `Address.balance`, objects by owner or type | ~1 hour                    |
+| **Database store**         | `Query.transactions`, `Query.events`, `Query.checkpoints` | ~(30-90) days              |
+| **Archival service** | Point lookups (transaction by digest, object by ID and version)        | Indefinite (if configured) |
 
 :::tip Operators
 
@@ -322,7 +322,7 @@ Retention is configured by the stack operator. For production configuration exam
 
 :::
 
-### Querying Available Range
+### Querying available range
 
 Query the available checkpoint range using `serviceConfig.availableRange`:
 
@@ -330,9 +330,9 @@ Query the available checkpoint range using `serviceConfig.availableRange`:
 availableRange(type: String!, field: String, filters: [String!]): AvailableRange!
 ```
 
-- **`type`**: The GraphQL type name (e.g., `"Query"`, `"Address"`)
-- **`field`**: The field on that type (e.g., `"transactions"`, `"events"`)
-- **`filters`**: Filter field names from the filter input type (e.g., `["affectedAddress"]` for `TransactionFilter`, `["module"]` for `EventFilter`), or direct query parameter names (e.g., `["version"]`)
+- **`type`**: The GraphQL type name, such as `"Query"` or `"Address"`
+- **`field`**: The field on that type, such as `"transactions"` or `"events"`
+- **`filters`**: Filter field names from the filter input type, such as `["affectedAddress"]` for `TransactionFilter`, `["module"]` for `EventFilter`, or direct query parameter names like `["version"]`.
 
 Match your query parameters to filter names: if your query uses `filter: { affectedAddress: "0x..." }`, pass `filters: ["affectedAddress"]`.
 
@@ -414,13 +414,13 @@ Use `serviceConfig.availableRange` to check retention for each field separately.
 
 :::
 
-### Handling "Outside Available Range" Errors
+### Handling "Outside available range" errors
 
 If you encounter an error indicating data is outside the available range, it means your query is requesting data that has been pruned. To resolve this:
 
 1. **Check the available range first** using `serviceConfig.availableRange` before starting long pagination runs.
-2. **Use fresh cursors** - old cursors may reference checkpoints that have since been pruned.
-3. **Adjust your query bounds** - ensure `afterCheckpoint`/`beforeCheckpoint` filters fall within the available range.
+2. **Use fresh cursors**. Old cursors may reference checkpoints that have since been pruned.
+3. **Adjust your query bounds**. Ensure `afterCheckpoint`/`beforeCheckpoint` filters fall within the available range.
 
 ## Related links
 
