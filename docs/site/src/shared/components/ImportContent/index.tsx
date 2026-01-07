@@ -6,7 +6,7 @@ import React from "react";
 import CodeBlock from "@theme/CodeBlock";
 import utils from "./utils";
 import MarkdownIt from "markdown-it";
-import { importContentMap } from "../../../../.generated/ImportContentMap";
+import { importContentMap } from "@site/.generated/ImportContentMap";
 
 /// <reference types="webpack-env" />
 
