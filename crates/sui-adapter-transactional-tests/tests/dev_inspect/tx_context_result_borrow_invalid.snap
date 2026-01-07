@@ -99,7 +99,7 @@ Execution Error: ArityMismatch in command 1
 
 task 13, lines 95-98:
 //# programmable --dev-inspect
-// cannot manually supply the TxContext,  even when generic and inferred
+// cannot manually supply the TxContext, even when generic and inferred
 //> 0: test::m::mut_id();
 //> test::m::gen_imm_tx<sui::tx_context::TxContext>(Result(0));
 Error: Transaction Effects Status: ArityMismatch in command 1
@@ -107,7 +107,7 @@ Execution Error: ArityMismatch in command 1
 
 task 14, lines 100-103:
 //# programmable --dev-inspect
-// cannot manually supply the TxContext,  even when generic and inferred
+// cannot manually supply the TxContext, even when generic and inferred
 //> 0: test::m::imm_id();
 //> test::m::gen_imm_tx<sui::tx_context::TxContext>(Result(0));
 Error: Transaction Effects Status: ArityMismatch in command 1
