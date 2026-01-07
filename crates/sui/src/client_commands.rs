@@ -998,12 +998,8 @@ impl SuiClientCommands {
 
                 let response = if let SuiClientCommandResult::TransactionBlock(ref tx) = result {
                     tx
-                } else if let SuiClientCommandResult::DryRun(_) = result {
-                    return Ok(result);
                 } else {
-                    bail!(
-                        "Error: expected a transaction block or dry run response from upgrade command"
-                    );
+                    return Ok(result);
                 };
 
                 let publish_data = update_publication(
@@ -3664,10 +3660,8 @@ async fn publish_command(
 
     let response = if let SuiClientCommandResult::TransactionBlock(ref tx) = result {
         tx
-    } else if let SuiClientCommandResult::DryRun(_) = result {
-        return Ok(result);
     } else {
-        bail!("Error: expected a transaction block or dry run response from publish command");
+        return Ok(result);
     };
 
     let publish_data = update_publication(
