@@ -1,4 +1,7 @@
-// src/shared/plugins/sharedThemeAlias.js
+// Copyright (c) Mysten Labs, Inc.
+// Copyright (c) Walrus Foundation
+// SPDX-License-Identifier: Apache-2.0
+
 const path = require('path');
 const fs = require('fs');
 
