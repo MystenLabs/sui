@@ -23,11 +23,17 @@ pub fn cp_block_seed(cp_block_id: i64) -> u128 {
 #[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount, QueryableByName)]
 #[diesel(table_name = cp_bloom_blocks)]
 pub struct StoredCpBloomBlock {
+    /// Checkpoint block ID (cp_num / CP_BLOCK_SIZE).
     pub cp_block_id: i64,
+    /// Index of this bloom block within the 128-block filter (0-127).
     pub bloom_block_index: i16,
+    /// Lowest checkpoint number included in this block's bloom filter.
     pub cp_sequence_number_lo: i64,
+    /// Highest checkpoint number included in this block's bloom filter.
     pub cp_sequence_number_hi: i64,
+    /// Bloom filter bytes for this block.
     pub bloom_filter: Vec<u8>,
+    /// Approximate count of items (may overcount due to merges).
     pub num_items: Option<i64>,
 }
 
