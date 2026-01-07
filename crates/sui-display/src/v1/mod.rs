@@ -15,8 +15,8 @@ use sui_types::collection_types::Entry;
 use sui_types::collection_types::VecMap;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 
-use self::parser::Parser;
-use self::parser::Strand;
+use crate::v1::parser::Parser;
+use crate::v1::parser::Strand;
 
 pub(crate) mod lexer;
 pub(crate) mod parser;
