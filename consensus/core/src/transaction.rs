@@ -25,7 +25,7 @@ const MAX_PENDING_TRANSACTIONS: usize = 2_000;
 /// included to a block and the consensus is shutting down.
 pub(crate) struct TransactionsGuard {
     // Holds a list of transactions to be included in the block.
-    // A TransactionsGuard may be partially consumed by `TransactionConsumer`, in which case, this holds the remaining transactions.
+    // A TransactionsGuard is consumed as a whole by `TransactionConsumer`; if the batch does not fit in the current block, it is parked in `pending_transactions` and retried for the next block.
     transactions: Vec<Transaction>,
 
     // When the transactions are included in a block, this will be signalled with
