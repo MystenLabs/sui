@@ -424,6 +424,8 @@ async fn test_v1_deposit_during_v2_upgrade() {
         BridgeChainId::SuiCustom as u8,
     )
     .await;
+    // Get a fresh eth_signer to avoid nonce issues after upgrade
+    let (eth_signer, _) = bridge_test_cluster.get_eth_signer_and_address().unwrap();
     let eth_sui_bridge = EthSuiBridge::new(
         bridge_test_cluster.contracts().sui_bridge,
         eth_signer.clone(),
