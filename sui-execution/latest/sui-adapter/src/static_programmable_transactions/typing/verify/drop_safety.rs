@@ -168,7 +168,7 @@ mod refine {
                 ast.pure[owner_pure_idx as usize].ty == T::Type::Address,
                 "owner pure input should be an address"
             );
-            let Some(conversion_ty) = conversion_command.value.result_type.get(0) else {
+            let Some(conversion_ty) = conversion_command.value.result_type.first() else {
                 invariant_violation!("conversion should have a result type")
             };
             let Some(inner_ty) = coin_inner_type(conversion_ty) else {
