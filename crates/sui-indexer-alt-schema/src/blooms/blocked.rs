@@ -11,14 +11,14 @@ use super::hash;
 /// Size of each bloom block in bytes.
 pub const BLOOM_BLOCK_BYTES: usize = 2048;
 
-/// Number of bits per bloom block (BLOOM_BLOCK_BYTES * 8).
-pub const BLOOM_BLOCK_BITS: usize = 16384;
+/// Number of bits per bloom block.
+pub const BLOOM_BLOCK_BITS: usize = BLOOM_BLOCK_BYTES * 8;
 
 /// Number of blocks in the bloom filter (stored as separate database rows).
 pub const NUM_BLOOM_BLOCKS: usize = 128;
 
-/// Total bits in the bloom filter (128 × 16384 = 2M bits = 256KB).
-pub const TOTAL_BLOOM_BITS: usize = 2097152;
+/// Total bits in the bloom filter (256KB).
+pub const TOTAL_BLOOM_BITS: usize = NUM_BLOOM_BLOCKS * BLOOM_BLOCK_BITS;
 
 /// Number of hash functions (k) used per key.
 pub const NUM_HASHES: u32 = 5;
@@ -55,13 +55,12 @@ impl BlockedBloomFilter {
         }
     }
 
-    /// Get all non-zero blocks with their indices (for sparse storage).
-    pub fn to_sparse_blocks(&self) -> Vec<(usize, Vec<u8>)> {
+    /// Consume the filter and return non-zero blocks.
+    pub fn into_sparse_blocks(self) -> Vec<(usize, Vec<u8>)> {
         self.blocks
-            .iter()
+            .into_iter()
             .enumerate()
             .filter(|(_, block)| block.iter().any(|&b| b != 0))
-            .map(|(idx, block)| (idx, block.clone()))
             .collect()
     }
 }
@@ -102,6 +101,16 @@ impl BlockedBloomFilter {
         positions
             .iter()
             .all(|&pos| (block[pos / 8] & (1 << (pos % 8))) != 0)
+    }
+
+    /// Get all non-zero blocks with their indices (for sparse storage).
+    pub fn to_sparse_blocks(&self) -> Vec<(usize, Vec<u8>)> {
+        self.blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, block)| block.iter().any(|&b| b != 0))
+            .map(|(idx, block)| (idx, block.clone()))
+            .collect()
     }
 }
 
@@ -169,7 +178,7 @@ mod tests {
     }
 
     #[test]
-    fn test_no_oversaturation_with_realistic_load() {
+    fn test_no_oversaturation() {
         // Reproduce cp_block 9995 scenario: 1,292 items with seed 9995
         let seed: u128 = 9995;
         let num_items = 1292;
@@ -186,7 +195,6 @@ mod tests {
         let sparse_blocks = bloom.to_sparse_blocks();
 
         let mut total_saturated_bytes = 0;
-        let mut total_nonzero_bytes = 0;
         let mut max_saturated_bytes = 0;
 
         for (block_idx, block_data) in &sparse_blocks {
@@ -203,7 +211,6 @@ mod tests {
             }
 
             total_saturated_bytes += saturated_bytes;
-            total_nonzero_bytes += nonzero_bytes;
             max_saturated_bytes = max_saturated_bytes.max(saturated_bytes);
 
             // With ~10 items per block (1292/128), we expect ~7-15 bytes with at least one bit
@@ -220,7 +227,6 @@ mod tests {
         }
 
         let avg_saturated_bytes = total_saturated_bytes as f64 / sparse_blocks.len() as f64;
-        let avg_nonzero_bytes = total_nonzero_bytes as f64 / sparse_blocks.len() as f64;
 
         // Healthy thresholds for 1,292 items across 128 blocks (~10 items/block)
         assert!(

@@ -46,6 +46,10 @@ impl BloomFilter {
         self.bits.clone()
     }
 
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bits
+    }
+
     pub fn seed(&self) -> u128 {
         self.seed
     }
@@ -89,18 +93,6 @@ impl BloomFilter {
     }
 }
 
-/// Compute bit positions in the original (unfolded) filter for each hash function.
-/// Used for SQL queries on folded filters where the folded position is computed
-/// dynamically via `original_pos % (length(column) * 8)`.
-pub fn compute_original_bit_positions(
-    key: &[u8],
-    original_num_bits: usize,
-    num_hashes: u32,
-    seed: u128,
-) -> Vec<usize> {
-    hash::compute_positions(key, original_num_bits, num_hashes, seed)
-}
-
 #[cfg(test)]
 impl BloomFilter {
     /// Check if a key might be in the filter for testing, in production this is done using SQL.
@@ -122,10 +114,7 @@ impl BloomFilter {
 mod tests {
     use super::*;
 
-    /// Test helper: Check if a key might be in a folded bloom filter.
-    ///
-    /// This function performs the same check as the SQL query would:
-    /// compute positions using original size, then mod by folded size.
+    /// Check if a key might be in a folded bloom filter.
     pub fn folded_bloom_contains(
         folded_bytes: &[u8],
         key: &[u8],

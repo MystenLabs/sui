@@ -6,17 +6,21 @@ use sui_field_count::FieldCount;
 
 use crate::schema::cp_blooms;
 
-/// Number of bits in the checkpoint bloom filter (131,072 bits = 16KB before folding)
+/// Number of bits in the checkpoint bloom filter (16KB before folding).
 pub const CP_BLOOM_NUM_BITS: usize = 131_072;
-/// Number of hash functions for checkpoint bloom filter
+
+/// Number of hash functions for checkpoint bloom filter.
 pub const CP_BLOOM_NUM_HASHES: u32 = 6;
-/// Global seed for checkpointbloom filter hashing
+/// Global seed for checkpoint bloom filter hashing.
 pub const BLOOM_FILTER_SEED: u128 = 67;
 
 #[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount, QueryableByName)]
 #[diesel(table_name = cp_blooms)]
 pub struct StoredCpBlooms {
+    /// Checkpoint sequence number.
     pub cp_sequence_number: i64,
+    /// Folded bloom filter bytes.
     pub bloom_filter: Vec<u8>,
+    /// Number of unique items indexed in this checkpoint.
     pub num_items: Option<i64>,
 }
