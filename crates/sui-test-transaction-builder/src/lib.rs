@@ -700,6 +700,25 @@ pub async fn make_transfer_sui_transaction(
         .await
 }
 
+pub async fn make_transfer_sui_address_balance_transaction(
+    context: &WalletContext,
+    recipient: Option<SuiAddress>,
+    amount: u64,
+) -> Transaction {
+    let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
+    context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .transfer_sui_to_address_balance(
+                    FundSource::Coin(gas_object),
+                    vec![(amount, recipient.unwrap_or(sender))],
+                )
+                .build(),
+        )
+        .await
+}
+
 pub async fn make_staking_transaction(
     context: &WalletContext,
     validator_address: SuiAddress,

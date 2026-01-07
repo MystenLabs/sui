@@ -373,7 +373,10 @@ impl EffectsContents {
                 let effects = content.effects()?;
                 let dependencies = effects.dependencies();
                 page.paginate_indices(dependencies.len(), |i| {
-                    Ok(Transaction::with_id(self.scope.clone(), dependencies[i]))
+                    Ok(Transaction::with_digest(
+                        self.scope.clone(),
+                        dependencies[i],
+                    ))
                 })
             }
             .await,

@@ -25,7 +25,7 @@ use crate::{
     api::{
         scalars::{
             base64::Base64, cursor::JsonCursor, digest::Digest, fq_name_filter::FqNameFilter,
-            sui_address::SuiAddress,
+            id::Id, sui_address::SuiAddress,
         },
         types::{
             available_range::AvailableRangeKey,
@@ -68,6 +68,11 @@ pub(crate) type CTransaction = JsonCursor<u64>;
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
 impl Transaction {
+    /// The transaction's globally unique identifier, which can be passed to `Query.node` to refetch it.
+    pub(crate) async fn id(&self) -> Id {
+        Id::Transaction(self.digest)
+    }
+
     /// A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
     async fn digest(&self) -> String {
         Base58::encode(self.digest)
@@ -193,7 +198,7 @@ impl Transaction {
     /// Construct a transaction that is represented by just its identifier (its transaction
     /// digest). This does not check whether the transaction exists, so should not be used to
     /// "fetch" a transaction based on a digest provided as user input.
-    pub(crate) fn with_id(scope: Scope, digest: TransactionDigest) -> Self {
+    pub(crate) fn with_digest(scope: Scope, digest: TransactionDigest) -> Self {
         Self {
             digest,
             contents: TransactionContents::empty(scope),
@@ -271,7 +276,7 @@ impl Transaction {
         page.paginate_results(
             tx_digests(ctx, &tx_sequence_numbers).await?,
             |(s, _)| JsonCursor::new(*s),
-            |(_, d)| Ok(Self::with_id(scope.clone(), d)),
+            |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
     }
 }

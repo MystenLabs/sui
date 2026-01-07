@@ -63,8 +63,6 @@ use tokio::{task::JoinHandle, time::sleep};
 use tonic::IntoRequest;
 use tracing::{error, info};
 
-mod test_indexer_handle;
-
 const NUM_VALIDATOR: usize = 4;
 
 pub struct FullNodeHandle {
@@ -94,29 +92,19 @@ pub struct TestCluster {
     pub swarm: Swarm,
     pub wallet: WalletContext,
     pub fullnode_handle: FullNodeHandle,
-    indexer_handle: Option<test_indexer_handle::IndexerHandle>,
 }
 
 impl TestCluster {
     pub fn rpc_client(&self) -> &HttpClient {
-        self.indexer_handle
-            .as_ref()
-            .map(|h| &h.rpc_client)
-            .unwrap_or(&self.fullnode_handle.rpc_client)
+        &self.fullnode_handle.rpc_client
     }
 
     pub fn sui_client(&self) -> &SuiClient {
-        self.indexer_handle
-            .as_ref()
-            .map(|h| &h.sui_client)
-            .unwrap_or(&self.fullnode_handle.sui_client)
+        &self.fullnode_handle.sui_client
     }
 
     pub fn rpc_url(&self) -> &str {
-        self.indexer_handle
-            .as_ref()
-            .map(|h| h.rpc_url.as_str())
-            .unwrap_or(&self.fullnode_handle.rpc_url)
+        &self.fullnode_handle.rpc_url
     }
 
     pub fn quorum_driver_api(&self) -> &QuorumDriverApi {
@@ -1035,7 +1023,6 @@ pub struct TestClusterBuilder {
     submit_delay_step_override_millis: Option<u64>,
     validator_global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
 
-    indexer_backed_rpc: bool,
     rpc_config: Option<sui_config::RpcConfig>,
 
     chain_override: Option<Chain>,
@@ -1079,7 +1066,6 @@ impl TestClusterBuilder {
             validator_global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig::Global(
                 true,
             ),
-            indexer_backed_rpc: false,
             rpc_config: None,
             execution_time_observer_config: None,
             state_sync_config: None,
@@ -1310,11 +1296,6 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_indexer_backed_rpc(mut self) -> Self {
-        self.indexer_backed_rpc = true;
-        self
-    }
-
     pub fn with_rpc_config(mut self, config: sui_config::RpcConfig) -> Self {
         self.rpc_config = Some(config);
         self
@@ -1361,25 +1342,6 @@ impl TestClusterBuilder {
             }));
         }
 
-        let mut temp_data_ingestion_dir = None;
-        let mut data_ingestion_path = None;
-
-        if self.indexer_backed_rpc {
-            if self.data_ingestion_dir.is_none() {
-                temp_data_ingestion_dir = Some(mysten_common::tempdir().unwrap());
-                self.data_ingestion_dir = Some(
-                    temp_data_ingestion_dir
-                        .as_ref()
-                        .unwrap()
-                        .path()
-                        .to_path_buf(),
-                );
-                assert!(self.data_ingestion_dir.is_some());
-            }
-            assert!(self.data_ingestion_dir.is_some());
-            data_ingestion_path = Some(self.data_ingestion_dir.as_ref().unwrap().to_path_buf());
-        }
-
         let swarm = self.start_swarm().await.unwrap();
         let working_dir = swarm.dir();
 
@@ -1388,23 +1350,11 @@ impl TestClusterBuilder {
         let fullnode_handle =
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
 
-        let (rpc_url, indexer_handle) = if self.indexer_backed_rpc {
-            let handle = test_indexer_handle::IndexerHandle::new(
-                fullnode_handle.rpc_url.clone(),
-                temp_data_ingestion_dir,
-                data_ingestion_path.unwrap(),
-            )
-            .await;
-            (handle.rpc_url.clone(), Some(handle))
-        } else {
-            (fullnode_handle.rpc_url.clone(), None)
-        };
-
         let mut wallet_conf: SuiClientConfig =
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
         wallet_conf.envs.push(SuiEnv {
             alias: "localnet".to_string(),
-            rpc: rpc_url,
+            rpc: fullnode_handle.rpc_url.clone(),
             ws: None,
             basic_auth: None,
             chain_id: None,
@@ -1423,7 +1373,6 @@ impl TestClusterBuilder {
             swarm,
             wallet,
             fullnode_handle,
-            indexer_handle,
         }
     }
 

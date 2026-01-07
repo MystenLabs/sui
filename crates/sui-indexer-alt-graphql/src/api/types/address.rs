@@ -10,7 +10,7 @@ use sui_types::{base_types::SuiAddress as NativeSuiAddress, dynamic_field::Dynam
 
 use crate::{
     api::{
-        scalars::{owner_kind::OwnerKind, sui_address::SuiAddress, type_filter::TypeInput},
+        scalars::{id::Id, owner_kind::OwnerKind, sui_address::SuiAddress, type_filter::TypeInput},
         types::validator::Validator,
     },
     error::RpcError,
@@ -105,6 +105,11 @@ pub(crate) struct Address {
 
 #[Object]
 impl Address {
+    /// The address's globally unique identifier, which can be passed to `Query.node` to refetch it.
+    pub(crate) async fn id(&self) -> Id {
+        Id::Address(self.address)
+    }
+
     /// The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
     pub(crate) async fn address(&self) -> Result<SuiAddress, RpcError> {
         Ok(self.address.into())

@@ -10,9 +10,9 @@ use sui_rpc::proto::sui::rpc::v2 as proto;
 use crate::{
     api::{
         mutation::TransactionInputError,
-        scalars::{base64::Base64, json::Json},
+        scalars::{base64::Base64, id::Id, json::Json},
         types::{
-            epoch::CEpoch, simulation_result::SimulationResult,
+            epoch::CEpoch, node::Node, simulation_result::SimulationResult,
             transaction_effects::TransactionEffects,
         },
     },
@@ -31,8 +31,10 @@ use super::{
         address::Address,
         checkpoint::{CCheckpoint, Checkpoint, filter::CheckpointFilter},
         coin_metadata::CoinMetadata,
+        dynamic_field::DynamicField,
         epoch::Epoch,
         event::{CEvent, Event, filter::EventFilter},
+        move_object::MoveObject,
         move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
         move_type::{self, MoveType},
         name_service::name_to_address,
@@ -57,6 +59,66 @@ pub struct Query {
 
 #[Object]
 impl Query {
+    /// Fetch a `Node` by its globally unique `ID`. Returns `null` if the node cannot be found (e.g., the underlying data was pruned or never existed).
+    async fn node(&self, ctx: &Context<'_>, id: Id) -> Result<Option<Node>, RpcError> {
+        let scope = self.scope(ctx)?;
+        Ok(match id {
+            Id::Address(a) => Some(Node::Address(Box::new(Address::with_address(scope, a)))),
+
+            Id::Checkpoint(s) => Checkpoint::with_sequence_number(scope, Some(s))
+                .map(Box::new)
+                .map(Node::Checkpoint),
+
+            Id::DynamicFieldByAddress(a) => {
+                let object = Object::with_address(scope, a);
+                DynamicField::from_object(&object, ctx)
+                    .await?
+                    .map(Box::new)
+                    .map(Node::DynamicField)
+            }
+
+            Id::DynamicFieldByRef(a, v, d) => {
+                let object = Object::with_ref(&scope, a, v, d);
+                DynamicField::from_object(&object, ctx)
+                    .await?
+                    .map(Box::new)
+                    .map(Node::DynamicField)
+            }
+
+            Id::Epoch(e) => Some(Node::Epoch(Box::new(Epoch::with_id(scope, e)))),
+
+            Id::MoveObjectByAddress(a) => {
+                let object = Object::with_address(scope, a);
+                MoveObject::from_object(&object, ctx)
+                    .await?
+                    .map(Box::new)
+                    .map(Node::MoveObject)
+            }
+
+            Id::MoveObjectByRef(a, v, d) => {
+                let object = Object::with_ref(&scope, a, v, d);
+                MoveObject::from_object(&object, ctx)
+                    .await?
+                    .map(Box::new)
+                    .map(Node::MoveObject)
+            }
+
+            Id::MovePackage(a) => Some(Node::MovePackage(Box::new(MovePackage::with_address(
+                scope, a,
+            )))),
+
+            Id::ObjectByAddress(a) => Some(Node::Object(Box::new(Object::with_address(scope, a)))),
+
+            Id::ObjectByRef(a, v, d) => {
+                Some(Node::Object(Box::new(Object::with_ref(&scope, a, v, d))))
+            }
+
+            Id::Transaction(d) => Some(Node::Transaction(Box::new(Transaction::with_digest(
+                scope, d,
+            )))),
+        })
+    }
+
     /// Look-up an account by its SuiAddress.
     ///
     /// If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:

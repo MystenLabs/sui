@@ -21,6 +21,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::OnceCell;
 
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::id::Id;
 use crate::{
     api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
     api::types::safe_mode::{SafeMode, from_system_state},
@@ -69,6 +70,11 @@ pub(crate) struct Epoch {
 /// - validators in the committee.
 #[Object]
 impl Epoch {
+    /// The epoch's globally unique identifier, which can be passed to `Query.node` to refetch it.
+    pub(crate) async fn id(&self) -> Id {
+        Id::Epoch(self.epoch_id)
+    }
+
     /// The epoch's id as a sequence number that starts at 0 and is incremented by one at every epoch change.
     async fn epoch_id(&self) -> UInt53 {
         self.epoch_id.into()

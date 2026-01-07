@@ -40,6 +40,7 @@ use crate::{
         base64::Base64,
         big_int::BigInt,
         cursor::{BcsCursor, JsonCursor},
+        id::Id,
         owner_kind::OwnerKind,
         sui_address::SuiAddress,
         type_filter::{TypeFilter, TypeInput},
@@ -220,6 +221,16 @@ pub(crate) type CVersion = JsonCursor<u64>;
 /// Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
 #[Object]
 impl Object {
+    /// The object's globally unique identifier, which can be passed to `Query.node` to refetch it.
+    pub(crate) async fn id(&self) -> Id {
+        let a = self.super_.address;
+        if let Some((v, d)) = self.version_digest {
+            Id::ObjectByRef(a, v, d)
+        } else {
+            Id::ObjectByAddress(a)
+        }
+    }
+
     /// The Object's ID.
     pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
         self.super_.address(ctx).await
@@ -576,7 +587,7 @@ impl Object {
             Err(e) => return Some(Err(e)),
         };
 
-        Some(Ok(Transaction::with_id(
+        Some(Ok(Transaction::with_digest(
             self.super_.scope.without_root_version(),
             contents.previous_transaction,
         )))
