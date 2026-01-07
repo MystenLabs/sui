@@ -98,9 +98,9 @@ pub struct PrunerLayer {
 pub struct PipelineLayer {
     // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,
+    pub cp_bloom_blocks: Option<SequentialLayer>,
 
     // All concurrent pipelines
-    pub cp_bloom_blocks: Option<ConcurrentLayer>,
     pub cp_blooms: Option<ConcurrentLayer>,
     pub coin_balance_buckets: Option<ConcurrentLayer>,
     pub obj_info: Option<ConcurrentLayer>,
