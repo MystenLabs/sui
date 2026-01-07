@@ -10,15 +10,15 @@ use move_core_types::annotated_value::MoveTypeLayout;
 use sui_types::collection_types::Entry;
 use sui_types::collection_types::VecMap;
 
-use self::error::Error;
-use self::error::FormatError;
-use self::interpreter::Interpreter;
-use self::meter::Limits;
-use self::meter::Meter;
-use self::parser::Parser;
-use self::parser::Strand;
-use self::value::Slice;
-use self::value::Store;
+use crate::v2::error::Error;
+use crate::v2::error::FormatError;
+use crate::v2::interpreter::Interpreter;
+use crate::v2::meter::Limits;
+use crate::v2::meter::Meter;
+use crate::v2::parser::Parser;
+use crate::v2::parser::Strand;
+use crate::v2::value::Slice;
+use crate::v2::value::Store;
 
 pub mod error;
 pub(crate) mod interpreter;
@@ -174,21 +174,27 @@ impl<'s> Format<'s> {
 mod tests {
     use std::str::FromStr;
 
-    use super::*;
-
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use base64::Engine as _;
+    use base64::engine::general_purpose::STANDARD;
     use insta::assert_debug_snapshot;
-    use move_core_types::{
-        account_address::AccountAddress, annotated_value::MoveTypeLayout as T, u256::U256,
-    };
+    use move_core_types::account_address::AccountAddress;
+    use move_core_types::annotated_value::MoveTypeLayout as T;
+    use move_core_types::u256::U256;
     use serde::Serialize;
-    use sui_types::{
-        base_types::{move_ascii_str_layout, move_utf8_str_layout, url_layout},
-        id::{ID, UID},
-    };
+    use sui_types::base_types::move_ascii_str_layout;
+    use sui_types::base_types::move_utf8_str_layout;
+    use sui_types::base_types::url_layout;
+    use sui_types::id::ID;
+    use sui_types::id::UID;
 
-    use crate::v2::value::tests::{MockStore, enum_, struct_, vector_};
-    use crate::v2::{error::FormatError, value::tests::optional_};
+    use crate::v2::error::FormatError;
+    use crate::v2::value::tests::MockStore;
+    use crate::v2::value::tests::enum_;
+    use crate::v2::value::tests::optional_;
+    use crate::v2::value::tests::struct_;
+    use crate::v2::value::tests::vector_;
+
+    use super::*;
 
     const ONE_MB: usize = 1024 * 1024;
 
