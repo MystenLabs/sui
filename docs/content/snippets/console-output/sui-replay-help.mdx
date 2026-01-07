@@ -1,11 +1,28 @@
-
 ```sh
-[error] Command failed: sui replay --help
-Command failed: sui replay --help
-error: unrecognized subcommand 'replay'
+Arguments for replay (used for both CLI and config file)
 
-Usage: sui <COMMAND>
+Usage: sui replay [OPTIONS]
 
-For more information, try '--help'.
-
+Options:
+      --client.config <CONFIG>       Sets the file storing the state of our user accounts (an empty
+                                     one will be created if missing)
+      --client.env <ENV>             The Sui environment to use. This must be present in the current
+                                     config file
+  -y, --yes                          Create a new sui config without prompting if none exists
+  -d, --digest <DIGEST>              Transaction digest to replay
+      --digests-path <DIGESTS_PATH>  File containing a list of digests, one per line
+      --terminate-early              Terminate a batch replay early if an error occurs when
+                                     replaying one of the transactions
+      --trace                        Whether to trace the transaction execution. Generated traces
+                                     will be saved in the output directory (or
+                                     `<cur_dir>/.replay/<digest>` if none provided)
+  -o, --output-dir <OUTPUT_DIR>      The output directory for the replay artifacts. Defaults
+                                     `<cur_dir>/.replay/<digest>`
+  -e, --show-effects <SHOW_EFFECTS>  Show transaction effects [possible values: true, false]
+      --overwrite                    Whether existing artifacts that were generated from a previous
+                                     replay of the transaction should be overwritten or an error
+                                     raised if they already exist
+  -q, --quiet                        Display less output
+  -h, --help                         Print help
+  -V, --version                      Print version
 ```
