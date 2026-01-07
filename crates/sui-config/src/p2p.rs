@@ -193,6 +193,26 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to false.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_get_checkpoint_contents_v2: Option<bool>,
+
+    /// Maximum lookahead (in checkpoint sequence numbers) for storing unverified checkpoint
+    /// summaries received via PushCheckpointSummary.
+    ///
+    /// If unspecified, this will default to `1,000`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_checkpoint_lookahead: Option<u64>,
+
+    /// Maximum number of checkpoint headers to attempt to sync in a single sync task.
+    ///
+    /// If unspecified, this will default to `400`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_checkpoint_sync_batch_size: Option<u64>,
+
+    /// Maximum serialized size in bytes for a CertifiedCheckpointSummary received via
+    /// PushCheckpointSummary.
+    ///
+    /// If unspecified, this will default to `262,144` (256 KiB).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_checkpoint_summary_size: Option<usize>,
 }
 
 impl StateSyncConfig {
@@ -271,6 +291,27 @@ impl StateSyncConfig {
 
         self.use_get_checkpoint_contents_v2
             .unwrap_or(DEFAULT_USE_GET_CHECKPOINT_CONTENTS_V2)
+    }
+
+    pub fn max_checkpoint_lookahead(&self) -> u64 {
+        const DEFAULT_MAX_CHECKPOINT_LOOKAHEAD: u64 = 1_000;
+
+        self.max_checkpoint_lookahead
+            .unwrap_or(DEFAULT_MAX_CHECKPOINT_LOOKAHEAD)
+    }
+
+    pub fn max_checkpoint_sync_batch_size(&self) -> u64 {
+        const DEFAULT_MAX_CHECKPOINT_SYNC_BATCH_SIZE: u64 = 400;
+
+        self.max_checkpoint_sync_batch_size
+            .unwrap_or(DEFAULT_MAX_CHECKPOINT_SYNC_BATCH_SIZE)
+    }
+
+    pub fn max_checkpoint_summary_size(&self) -> usize {
+        const DEFAULT_MAX_CHECKPOINT_SUMMARY_SIZE: usize = 256 * 1024; // 256 KiB
+
+        self.max_checkpoint_summary_size
+            .unwrap_or(DEFAULT_MAX_CHECKPOINT_SUMMARY_SIZE)
     }
 }
 

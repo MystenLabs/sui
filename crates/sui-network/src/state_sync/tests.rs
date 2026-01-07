@@ -85,10 +85,8 @@ async fn server_push_checkpoint() {
         peer_heights
             .read()
             .unwrap()
-            .highest_known_checkpoint()
-            .unwrap()
-            .data(),
-        checkpoint.data(),
+            .highest_known_checkpoint_sequence_number(),
+        Some(*checkpoint.sequence_number()),
     );
     assert!(matches!(
         mailbox.try_recv().unwrap(),
@@ -187,11 +185,11 @@ async fn isolated_sync_job() {
         committee.make_empty_checkpoints(100, None);
 
     // Build and connect two nodes
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
-    let network_1 = build_network(|router| router.add_rpc_service(server));
+    let (builder, state_sync_router) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let network_1 = build_network(|router| router.merge(state_sync_router));
     let (mut event_loop_1, _handle_1) = builder.build(network_1.clone());
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
-    let network_2 = build_network(|router| router.add_rpc_service(server));
+    let (builder, state_sync_router) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let network_2 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_2, _handle_2) = builder.build(network_2.clone());
     network_1.connect(network_2.local_addr()).await.unwrap();
 
@@ -294,14 +292,14 @@ async fn test_state_sync_using_archive() -> anyhow::Result<()> {
     };
     // Build and connect two nodes where Node 1 will be given access to an archive store
     // Node 2 will prune older checkpoints, so Node 1 is forced to backfill from the archive
-    let (builder, server) = Builder::new()
+    let (builder, state_sync_router) = Builder::new()
         .store(SharedInMemoryStore::default())
         .archive_config(Some(archive_reader_config))
         .build();
-    let network_1 = build_network(|router| router.add_rpc_service(server));
+    let network_1 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_1, _handle_1) = builder.build(network_1.clone());
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
-    let network_2 = build_network(|router| router.add_rpc_service(server));
+    let (builder, state_sync_router) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let network_2 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_2, _handle_2) = builder.build(network_2.clone());
     network_1.connect(network_2.local_addr()).await.unwrap();
 
@@ -415,11 +413,11 @@ async fn sync_with_checkpoints_being_inserted() {
         committee.make_empty_checkpoints(4, None);
 
     // Build and connect two nodes
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
-    let network_1 = build_network(|router| router.add_rpc_service(server));
+    let (builder, state_sync_router) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let network_1 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_1, handle_1) = builder.build(network_1.clone());
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
-    let network_2 = build_network(|router| router.add_rpc_service(server));
+    let (builder, state_sync_router) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let network_2 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_2, handle_2) = builder.build(network_2.clone());
     network_1.connect(network_2.local_addr()).await.unwrap();
 
@@ -549,11 +547,11 @@ async fn sync_with_checkpoints_watermark() {
         .unwrap()
         .sequence_number();
     // Build and connect two nodes
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
-    let network_1 = build_network(|router| router.add_rpc_service(server));
+    let (builder, state_sync_router) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let network_1 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_1, handle_1) = builder.build(network_1.clone());
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
-    let network_2 = build_network(|router| router.add_rpc_service(server));
+    let (builder, state_sync_router) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let network_2 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_2, handle_2) = builder.build(network_2.clone());
 
     // Init the root committee in both nodes
@@ -715,8 +713,8 @@ async fn sync_with_checkpoints_watermark() {
     );
 
     // Add Peer 3
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
-    let network_3 = build_network(|router| router.add_rpc_service(server));
+    let (builder, state_sync_router) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let network_3 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_3, handle_3) = builder.build(network_3.clone());
 
     let mut subscriber_3 = handle_3.subscribe_to_synced_checkpoints();
@@ -828,8 +826,8 @@ async fn sync_with_checkpoints_watermark() {
         .set_lowest_available_checkpoint(a_very_high_checkpoint_seq);
 
     // Start Peer 4
-    let (builder, server) = Builder::new().store(SharedInMemoryStore::default()).build();
-    let network_4 = build_network(|router| router.add_rpc_service(server));
+    let (builder, state_sync_router) = Builder::new().store(SharedInMemoryStore::default()).build();
+    let network_4 = build_network(|router| router.merge(state_sync_router));
     let (event_loop_4, handle_4) = builder.build(network_4.clone());
 
     let mut subscriber_4 = handle_4.subscribe_to_synced_checkpoints();
