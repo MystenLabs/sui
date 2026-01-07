@@ -15098,7 +15098,6 @@ dependencies = [
  "prometheus",
  "reqwest",
  "rocksdb",
- "rustls-pemfile 2.1.2",
  "scoped-futures",
  "serde",
  "serde_json",
