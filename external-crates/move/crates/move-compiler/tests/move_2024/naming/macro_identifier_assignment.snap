@@ -20,7 +20,7 @@ error[E04007]: incompatible types
 error[E04032]: unable to expand macro function
   ┌─ tests/move_2024/naming/macro_identifier_assignment.move:3:9
   │
-3 │         $f = 0;
+3 │         $f = 0u64;
   │         ^^ Cannot assign to argument for parameter '$f'. Arguments must be used in value positions
   │
   = 'macro' parameters are substituted without being evaluated. There is no local variable to assign to
@@ -28,7 +28,7 @@ error[E04032]: unable to expand macro function
 error[E04032]: unable to expand macro function
   ┌─ tests/move_2024/naming/macro_identifier_assignment.move:4:9
   │
-4 │         $x = 0;
+4 │         $x = 0u64;
   │         ^^ Cannot assign to argument for parameter '$x'. Arguments must be used in value positions
   │
   = 'macro' parameters are substituted without being evaluated. There is no local variable to assign to

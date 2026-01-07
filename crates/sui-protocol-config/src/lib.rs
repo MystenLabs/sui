@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 105;
+const MAX_PROTOCOL_VERSION: u64 = 107;
 
 // Record history of protocol version allocations here:
 //
@@ -279,8 +279,12 @@ const MAX_PROTOCOL_VERSION: u64 = 105;
 // Version 104: Framework update: CoinRegistry follow up for Coin methods
 //              Enable all non-zero PCRs parsing for nitro attestation native function in Devnet and Testnet.
 // Version 105: Framework update: address aliases
-//              Enable address balances on devnet
 //              Enable multi-epoch transaction expiration.
+//              Enable always include required PCRs (0-4 & 8) parsing even if they are zeros for
+//              nitro attestation native function in Devnet and Testnet.
+// Version 106: Framework update: accumulator storage fund calculations
+//              Enable address balances on devnet
+// Version 107: Enable new digit based gas rounding.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -562,6 +566,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation_all_nonzero_pcrs_parsing: bool,
 
+    // Enable upgraded parsing of nitro attestation to always include required PCRs, even when all zeros.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_nitro_attestation_always_include_required_pcrs_parsing: bool,
+
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
     reject_mutable_random_on_entry_functions: bool,
@@ -675,6 +683,12 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     mysticeti_fastpath: bool,
 
+    // If true, disable pre-consensus locking for owned objects.
+    // All transactions go through consensus, and owned object conflict detection
+    // happens post-consensus via lock acquisition.
+    #[serde(skip_serializing_if = "is_false")]
+    disable_preconsensus_locking: bool,
+
     // Makes the event's sending module version-aware.
     #[serde(skip_serializing_if = "is_false")]
     relocate_event_module: bool,
@@ -768,6 +782,10 @@ struct FeatureFlags {
     // Enable accumulators
     #[serde(skip_serializing_if = "is_false")]
     enable_accumulators: bool,
+
+    // Enable coin reservation
+    #[serde(skip_serializing_if = "is_false")]
+    enable_coin_reservation_obj_refs: bool,
 
     // If true, create the root accumulator object in the change epoch transaction.
     // This must be enabled and shipped before `enable_accumulators` is set to true.
@@ -913,6 +931,10 @@ struct FeatureFlags {
     // If true, enable object funds withdraw.
     #[serde(skip_serializing_if = "is_false")]
     enable_object_funds_withdraw: bool,
+
+    // If true, uses a new rounding mechanism for gas calculations, replacing the step-based one
+    #[serde(skip_serializing_if = "is_false")]
+    gas_rounding_halve_digits: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1335,6 +1357,9 @@ pub struct ProtocolConfig {
 
     /// Unit gas price, Mist per internal gas unit.
     storage_gas_price: Option<u64>,
+
+    /// Per-object storage cost for accumulator objects, used during end-of-epoch accounting.
+    accumulator_object_storage_cost: Option<u64>,
 
     // === Core Protocol ===
     /// Max number of transactions per checkpoint.
@@ -2041,6 +2066,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_accumulators
     }
 
+    pub fn enable_coin_reservation_obj_refs(&self) -> bool {
+        self.feature_flags.enable_coin_reservation_obj_refs
+    }
+
     pub fn create_root_accumulator_object(&self) -> bool {
         self.feature_flags.create_root_accumulator_object
     }
@@ -2202,6 +2231,10 @@ impl ProtocolConfig {
         self.feature_flags.consensus_smart_ancestor_selection
     }
 
+    pub fn disable_preconsensus_locking(&self) -> bool {
+        self.feature_flags.disable_preconsensus_locking
+    }
+
     pub fn consensus_round_prober_probe_accepted_rounds(&self) -> bool {
         self.feature_flags
             .consensus_round_prober_probe_accepted_rounds
@@ -2256,6 +2289,11 @@ impl ProtocolConfig {
     pub fn enable_nitro_attestation_all_nonzero_pcrs_parsing(&self) -> bool {
         self.feature_flags
             .enable_nitro_attestation_all_nonzero_pcrs_parsing
+    }
+
+    pub fn enable_nitro_attestation_always_include_required_pcrs_parsing(&self) -> bool {
+        self.feature_flags
+            .enable_nitro_attestation_always_include_required_pcrs_parsing
     }
 
     pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
@@ -2444,6 +2482,10 @@ impl ProtocolConfig {
 
     pub fn enable_object_funds_withdraw(&self) -> bool {
         self.feature_flags.enable_object_funds_withdraw
+    }
+
+    pub fn gas_rounding_halve_digits(&self) -> bool {
+        self.feature_flags.gas_rounding_halve_digits
     }
 }
 
@@ -2667,6 +2709,7 @@ impl ProtocolConfig {
             storage_fund_reinvest_rate: Some(500),
             reward_slashing_rate: Some(5000),
             storage_gas_price: Some(1),
+            accumulator_object_storage_cost: None,
             max_transactions_per_checkpoint: Some(10_000),
             max_checkpoint_size_bytes: Some(30 * 1024 * 1024),
 
@@ -4335,13 +4378,27 @@ impl ProtocolConfig {
                         .include_cancelled_randomness_txns_in_prologue = true;
                 }
                 105 => {
+                    cfg.feature_flags.enable_multi_epoch_transaction_expiration = true;
+                    cfg.feature_flags.disable_preconsensus_locking = true;
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags
+                            .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
+                    }
+                }
+                106 => {
+                    // est. 100 bytes per object * 76 (storage_gas_price)
+                    cfg.accumulator_object_storage_cost = Some(7600);
+
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_accumulators = true;
                         cfg.feature_flags.enable_address_balance_gas_payments = true;
                         cfg.feature_flags.enable_authenticated_event_streams = true;
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
-                    cfg.feature_flags.enable_multi_epoch_transaction_expiration = true;
+                }
+                107 => {
+                    cfg.feature_flags.gas_rounding_halve_digits = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4620,6 +4677,10 @@ impl ProtocolConfig {
         self.feature_flags.mysticeti_fastpath = val;
     }
 
+    pub fn set_disable_preconsensus_locking_for_testing(&mut self, val: bool) {
+        self.feature_flags.disable_preconsensus_locking = val;
+    }
+
     pub fn set_accept_passkey_in_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.accept_passkey_in_multisig = val;
     }
@@ -4647,6 +4708,10 @@ impl ProtocolConfig {
     pub fn disable_accumulators_for_testing(&mut self) {
         self.feature_flags.enable_accumulators = false;
         self.feature_flags.enable_address_balance_gas_payments = false;
+    }
+
+    pub fn enable_coin_reservation_for_testing(&mut self) {
+        self.feature_flags.enable_coin_reservation_obj_refs = true;
     }
 
     pub fn create_root_accumulator_object_for_testing(&mut self) {

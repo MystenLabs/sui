@@ -200,3 +200,18 @@ module test::events_test {
     }
   }
 }
+
+//# run-graphql --cursors 1000 2000
+{ # Test cursors being out of bounds
+  outOfBounds: transactionEffects(digest: "@{digest_3}") {
+    events(after: "@{cursor_0}", before: "@{cursor_1}") {
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+      }
+      nodes {
+        sequenceNumber
+      }
+    }
+  }
+}

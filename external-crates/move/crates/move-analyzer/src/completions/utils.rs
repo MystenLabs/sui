@@ -1,8 +1,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, path::PathBuf};
-
 use crate::symbols::{
     Symbols,
     compilation::{CompiledPkgInfo, SymbolsComputationData},
@@ -15,22 +13,24 @@ use crate::symbols::{
     },
     mod_defs::{AutoImportInsertionInfo, AutoImportInsertionKind, ModuleDefs},
 };
+
 use lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Position,
     Range, TextEdit,
 };
 use move_compiler::{
     expansion::ast::{Address, ModuleIdent, ModuleIdent_, Visibility},
-    naming::ast::{Type, Type_},
+    naming::ast::{Type, TypeInner},
     parser::keywords::PRIMITIVE_TYPES,
     shared::Name,
 };
 use move_ir_types::location::sp;
 use move_symbol_pool::Symbol;
-use once_cell::sync::Lazy;
+
+use std::{collections::BTreeMap, path::PathBuf, sync::LazyLock};
 
 /// List of completion items of Move's primitive types.
-pub static PRIMITIVE_TYPE_COMPLETIONS: Lazy<Vec<CompletionItem>> = Lazy::new(|| {
+pub static PRIMITIVE_TYPE_COMPLETIONS: LazyLock<Vec<CompletionItem>> = LazyLock::new(|| {
     let mut primitive_types = PRIMITIVE_TYPES
         .iter()
         .map(|label| completion_item(label, CompletionItemKind::KEYWORD))
@@ -363,7 +363,7 @@ pub fn addr_to_ide_string(addr: &Address) -> String {
 }
 
 fn lambda_snippet(sp!(_, ty): &Type, snippet_idx: &mut i32) -> Option<String> {
-    if let Type_::Fun(vec, _) = ty {
+    if let TypeInner::Fun(vec, _) = ty.inner() {
         let arg_snippets = vec
             .iter()
             .map(|_| {

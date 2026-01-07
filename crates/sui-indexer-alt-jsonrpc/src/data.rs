@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::time::Duration;
 
-use anyhow::Context as _;
+use anyhow::{Context as _, ensure};
 use serde::de::DeserializeOwned;
 use sui_indexer_alt_reader::object_versions::LatestObjectVersionKey;
 use sui_types::base_types::ObjectID;
@@ -59,6 +59,11 @@ pub(crate) async fn load_live(
         .with_label_values(&["kv_object"])
         .observe(retries as f64);
 
+    // Data exists in PG, but not KV yet.
+    ensure!(
+        object.is_some(),
+        "Eventual consistency discrepancy, try again later"
+    );
     Ok(object)
 }
 

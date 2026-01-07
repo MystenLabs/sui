@@ -207,6 +207,7 @@ pub fn generate_bridge_node_config_and_write_to_file(
             bridge_client_key_path: None,
             bridge_client_gas_object: None,
             sui_bridge_module_last_processed_event_id_override: None,
+            sui_bridge_next_sequence_number_override: None,
         },
         eth: EthConfig {
             eth_rpc_url: "your_eth_rpc_url".to_string(),
@@ -294,7 +295,7 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
                     .with_events()
                     .with_object_changes()
                     .with_balance_changes(),
-                Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
+                Some(sui_types::transaction_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
             ).await
         }));
     }

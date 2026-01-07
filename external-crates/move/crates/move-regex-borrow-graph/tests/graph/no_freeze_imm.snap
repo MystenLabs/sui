@@ -1,0 +1,4 @@
+---
+source: crates/move-regex-borrow-graph/tests/borrow_graph_tests.rs
+---
+Line 2: Reference 0 used as mutable but is not mutable

@@ -37,7 +37,7 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::error::SuiErrorKind;
 use sui_types::execution_params::{
-    BalanceWithdrawStatus, ExecutionOrEarlyError, get_early_execution_error,
+    ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error,
 };
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
@@ -783,7 +783,7 @@ impl LocalExec {
             &checked_input_objects,
             &HashSet::new(),
             // TODO(address-balances): Support balance withdraw status for replay
-            &BalanceWithdrawStatus::MaybeSufficient,
+            &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -860,7 +860,7 @@ impl LocalExec {
             &checked_input_objects,
             &HashSet::new(),
             // TODO(address-balances): Support balance withdraw status for replay
-            &BalanceWithdrawStatus::MaybeSufficient,
+            &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
@@ -958,7 +958,7 @@ impl LocalExec {
         // traits and make them shared so that we don't have to fix one by one when we have major execution
         // layer changes.
         let input_objects = store.read_input_objects_for_transaction(&transaction);
-        let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
+        let executable = VerifiedExecutableTransaction::new_from_consensus(
             VerifiedTransaction::new_unchecked(transaction),
             executed_epoch,
         );
@@ -976,7 +976,7 @@ impl LocalExec {
             &input_objects,
             &HashSet::new(),
             // TODO(address-balances): Support balance withdraw status for replay
-            &BalanceWithdrawStatus::MaybeSufficient,
+            &FundsWithdrawStatus::MaybeSufficient,
         );
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),

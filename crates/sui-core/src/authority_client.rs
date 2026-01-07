@@ -12,27 +12,22 @@ use sui_network::{api::ValidatorClient, tonic};
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::CommitteeWithNetworkMetadata;
 use sui_types::crypto::NetworkPublicKey;
+use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::{
-    error::{SuiError, SuiResult},
-    transaction::*,
-};
 use tap::TapFallible;
 
 use crate::authority_client::tonic::IntoRequest;
 use sui_network::tonic::metadata::KeyAndValueRef;
 use sui_network::tonic::transport::Channel;
 use sui_types::messages_grpc::{
-    HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-    HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawValidatorHealthRequest,
-    RawWaitForEffectsRequest, SubmitTxRequest, SubmitTxResponse, SystemStateRequest,
-    TransactionInfoRequest, TransactionInfoResponse, ValidatorHealthRequest,
-    ValidatorHealthResponse, WaitForEffectsRequest, WaitForEffectsResponse,
+    ObjectInfoRequest, ObjectInfoResponse, RawValidatorHealthRequest, RawWaitForEffectsRequest,
+    SubmitTxRequest, SubmitTxResponse, SystemStateRequest, TransactionInfoRequest,
+    TransactionInfoResponse, ValidatorHealthRequest, ValidatorHealthResponse,
+    WaitForEffectsRequest, WaitForEffectsResponse,
 };
 
 #[async_trait]
@@ -53,34 +48,6 @@ pub trait AuthorityAPI {
     ) -> Result<WaitForEffectsResponse, SuiError>;
 
     // TODO(fastpath): Add a soft bundle path for mfp which will return the list of consensus positions
-
-    /// Initiate a new transaction to a Sui or Primary account.
-    async fn handle_transaction(
-        &self,
-        transaction: Transaction,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<HandleTransactionResponse, SuiError>;
-
-    /// Execute a certificate.
-    async fn handle_certificate_v2(
-        &self,
-        certificate: CertifiedTransaction,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<HandleCertificateResponseV2, SuiError>;
-
-    /// Execute a certificate.
-    async fn handle_certificate_v3(
-        &self,
-        request: HandleCertificateRequestV3,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<HandleCertificateResponseV3, SuiError>;
-
-    /// Execute a Soft Bundle with multiple certificates.
-    async fn handle_soft_bundle_certificates_v3(
-        &self,
-        request: HandleSoftBundleCertificatesRequestV3,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError>;
 
     /// Handle Object information requests for this account.
     async fn handle_object_info_request(
@@ -206,74 +173,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::<SuiError>::into)?
             .try_into()
-    }
-
-    /// Initiate a new transfer to a Sui or Primary account.
-    async fn handle_transaction(
-        &self,
-        transaction: Transaction,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<HandleTransactionResponse, SuiError> {
-        let mut request = transaction.into_request();
-        insert_metadata(&mut request, client_addr);
-
-        self.client()?
-            .transaction(request)
-            .await
-            .map(tonic::Response::into_inner)
-            .map_err(Into::into)
-    }
-
-    /// Execute a certificate.
-    async fn handle_certificate_v2(
-        &self,
-        certificate: CertifiedTransaction,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<HandleCertificateResponseV2, SuiError> {
-        let mut request = certificate.into_request();
-        insert_metadata(&mut request, client_addr);
-
-        let response = self
-            .client()?
-            .handle_certificate_v2(request)
-            .await
-            .map(tonic::Response::into_inner);
-
-        response.map_err(Into::into)
-    }
-
-    async fn handle_certificate_v3(
-        &self,
-        request: HandleCertificateRequestV3,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<HandleCertificateResponseV3, SuiError> {
-        let mut request = request.into_request();
-        insert_metadata(&mut request, client_addr);
-
-        let response = self
-            .client()?
-            .handle_certificate_v3(request)
-            .await
-            .map(tonic::Response::into_inner);
-
-        response.map_err(Into::into)
-    }
-
-    async fn handle_soft_bundle_certificates_v3(
-        &self,
-        request: HandleSoftBundleCertificatesRequestV3,
-        client_addr: Option<SocketAddr>,
-    ) -> Result<HandleSoftBundleCertificatesResponseV3, SuiError> {
-        let mut request = request.into_request();
-        insert_metadata(&mut request, client_addr);
-
-        let response = self
-            .client()?
-            .handle_soft_bundle_certificates_v3(request)
-            .await
-            .map(tonic::Response::into_inner);
-
-        response.map_err(Into::into)
     }
 
     async fn handle_object_info_request(

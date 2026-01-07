@@ -9,10 +9,10 @@ module a::m {
         x = if (cond) x else other;
         x;
 
-        x = { 0; x };
+        x = { 0u64; x };
         x;
 
-        x = { let y = 0; y; x };
+        x = { let y = 0u64; y; x };
         x;
 
         // TODO move most lints to 2024

@@ -17,3 +17,4 @@ exit_code: 1
 Error while loading dependency broken_dep_path: Failed to load dependency `{ local = "broken_dep_path" }`: Invalid directory at `broken_dep_path`
 
 ----- stderr -----
+[NOTE] Updating dependencies for `testnet` environment because "./Move.toml" has been changed since the last update.

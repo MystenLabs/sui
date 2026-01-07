@@ -6,15 +6,15 @@ info:
   lint: false
 ---
 error[E04007]: incompatible types
-  ┌─ tests/move_check/typing/break_with_value_invalid.move:3:25
+  ┌─ tests/move_check/typing/break_with_value_invalid.move:3:28
   │
 2 │     fun t0(): bool {
   │               ---- Expected: 'bool'
-3 │         loop { break 0 };
-  │                         ^
-  │                         │
-  │                         Invalid return expression
-  │                         Given: '()'
+3 │         loop { break 0u64 };
+  │                            ^
+  │                            │
+  │                            Invalid return expression
+  │                            Given: '()'
 
 error[E04007]: incompatible types
   ┌─ tests/move_check/typing/break_with_value_invalid.move:7:9
@@ -31,8 +31,8 @@ error[E04007]: incompatible types
    ┌─ tests/move_check/typing/break_with_value_invalid.move:11:9
    │  
 11 │ ╭         if (cond) {
-12 │ │             loop { break 0 }
-   │ │             ---------------- Found: integer. It is not compatible with the other type.
+12 │ │             loop { break 0u64 }
+   │ │                          ---- Found: 'u64'. It is not compatible with the other type.
 13 │ │         } else {
 14 │ │             loop { break false }
    │ │                          ----- Found: 'bool'. It is not compatible with the other type.
@@ -81,7 +81,7 @@ error[E04007]: incompatible types
 30 │ │                break true
    │ │                      ---- Given: 'bool'
 31 │ │             } else {
-32 │ │                 x = x + 1;
+32 │ │                 x = x + 1u64;
 33 │ │             }
 34 │ │         } 
    │ ╰─────────^ Invalid return expression
@@ -100,8 +100,8 @@ error[E04007]: incompatible types
 46 │                 break true
    │                       ---- Found: 'bool'. It is not compatible with the other type.
    ·
-50 │         } == 0) {
-   │           ^^ - Found: integer. It is not compatible with the other type.
+50 │         } == 0u64) {
+   │           ^^ ---- Found: 'u64'. It is not compatible with the other type.
    │           │   
    │           Incompatible arguments to '=='
 

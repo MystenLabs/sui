@@ -36,9 +36,6 @@ sui-protocol-config.workspace = true
 sui-types.workspace = true
 parking_lot.workspace = true
 
-[dev-dependencies]
-move-package.workspace = true
-
 [features]
 tracing = [
     "sui-types/tracing",

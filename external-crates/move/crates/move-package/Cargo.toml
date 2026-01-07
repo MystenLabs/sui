@@ -2,7 +2,7 @@
 name = "move-package"
 version = "0.1.0"
 authors = ["Diem Association <opensource@diem.com>"]
-description = "Package and build system for Move code"
+description = "DEPRECATED: Use move-package-alt instead. This crate will be removed soon."
 license = "Apache-2.0"
 publish = false
 edition = "2024"
@@ -21,7 +21,6 @@ tempfile.workspace = true
 sha2.workspace = true
 regex.workspace = true
 treeline.workspace = true
-once_cell.workspace = true
 named-lock.workspace = true
 itertools.workspace = true
 vfs.workspace = true

@@ -22,11 +22,12 @@ use move_vm_types::{
     loaded_data::runtime_types::Type,
     views::{SizeConfig, TypeView, ValueView},
 };
-use once_cell::sync::Lazy;
+
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     ops::{Add, Bound},
+    sync::LazyLock,
     u64,
 };
 
@@ -795,6 +796,6 @@ fn abstract_memory_size_with_traversal(v: impl ValueView) -> AbstractMemorySize 
     })
 }
 
-static ZERO_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(zero_cost_schedule);
+static ZERO_COST_SCHEDULE: LazyLock<CostTable> = LazyLock::new(zero_cost_schedule);
 
-pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(initial_cost_schedule);
+pub static INITIAL_COST_SCHEDULE: LazyLock<CostTable> = LazyLock::new(initial_cost_schedule);

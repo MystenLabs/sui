@@ -65,8 +65,8 @@ simple_visitor!(
 );
 
 fn is_random_or_random_generator(sp!(_, t): &N::Type) -> Option<&str> {
-    use N::Type_ as T;
-    match t {
+    use N::TypeInner as T;
+    match t.inner() {
         T::Ref(_, inner_t) => is_random_or_random_generator(inner_t),
         T::Apply(_, sp!(_, tname), _) => {
             if tname.is(&SUI_ADDR_VALUE, RANDOM_MOD_NAME, RANDOM_STRUCT_NAME) {

@@ -27,7 +27,7 @@ use tokio_util::sync::CancellationToken;
 use crate::drivers::HistogramWrapper;
 use crate::drivers::driver::Driver;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionResult};
 use crate::workloads::workload::ExpectedFailureType;
 use crate::workloads::{GroupID, WorkloadInfo};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -39,8 +39,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use sui_types::committee::Committee;
-use sui_types::quorum_driver_types::QuorumDriverError;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::messages_grpc::WaitForEffectsResponse;
 use sui_types::transaction::{Transaction, TransactionDataAPI};
+use sui_types::transaction_driver_types::TransactionSubmissionError;
 use sysinfo::System;
 use tokio::sync::Barrier;
 use tokio::task::{JoinHandle, JoinSet};
@@ -839,11 +841,11 @@ async fn run_bench_worker(
                     }
                     None => {
                         if err
-                            .downcast::<QuorumDriverError>()
+                            .downcast::<TransactionSubmissionError>()
                             .and_then(|err| {
                                 if matches!(
                                     err,
-                                    QuorumDriverError::NonRecoverableTransactionError { .. }
+                                    TransactionSubmissionError::NonRecoverableTransactionError { .. }
                                 ) {
                                     Err(err.into())
                                 } else {
@@ -981,19 +983,135 @@ async fn run_bench_worker(
                     let mut payload = free_pool.pop_front().unwrap();
                     num_in_flight += 1;
                     num_submitted += 1;
-                    let tx = payload.make_transaction();
-                    let start = Arc::new(Instant::now());
-                    let metrics = Arc::clone(&metrics);
-                    let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
-                    // TODO: clone committee for each request is not ideal.
-                    let committee = worker.proxy.clone_committee();
-                    let res = worker.proxy
-                        .execute_transaction_block(tx.clone())
-                    .then(|(client_type, res)| async move {
-                        metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
-                        handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
-                    }).count_in_flight(num_in_flight_metric);
-                    futures.push(Box::pin(res));
+
+                    // Check if this is a soft bundle payload
+                    if payload.is_soft_bundle() {
+                        let txs = payload.make_soft_bundle_transactions();
+                        let num_txs = txs.len();
+                        let start = Arc::new(Instant::now());
+                        let metrics_clone = Arc::clone(&metrics);
+                        let proxy = worker.proxy.clone_new();
+
+                        let res = async move {
+                            let bundle_result = proxy.execute_soft_bundle(txs).await;
+                            let latency = start.elapsed();
+
+                            match bundle_result {
+                                Ok(results) => {
+                                    // Convert to SoftBundleExecutionResults
+                                    let soft_bundle_results: Vec<_> = results
+                                        .into_iter()
+                                        .map(|(_digest, response)| match response {
+                                            WaitForEffectsResponse::Executed { details, .. } => {
+                                                let effects = details.map(|d| {
+                                                    // Use QuorumExecuted since the transaction was executed by consensus
+                                                    let epoch = d.effects.executed_epoch();
+                                                    ExecutionEffects::FinalizedTransactionEffects(
+                                                        sui_types::transaction_driver_types::FinalizedEffects {
+                                                            effects: d.effects,
+                                                            finality_info: sui_types::transaction_driver_types::EffectsFinalityInfo::QuorumExecuted(epoch),
+                                                        },
+                                                        d.events.unwrap_or_default(),
+                                                    )
+                                                });
+                                                // Success requires effects for the workload to continue
+                                                match effects {
+                                                    Some(effects) => SoftBundleTransactionResult::Success { effects: Box::new(effects) },
+                                                    None => SoftBundleTransactionResult::PermanentFailure {
+                                                        error: "Executed but no effects returned".to_string(),
+                                                    },
+                                                }
+                                            }
+                                            WaitForEffectsResponse::Rejected { error } => {
+                                                // Check if the error indicates an epoch change or other retriable condition.
+                                                // If error is None, the transaction was rejected without a specific reason -
+                                                // we treat it as retriable.
+                                                let is_retriable = error
+                                                    .as_ref()
+                                                    .map(|e| e.individual_error_indicates_epoch_change())
+                                                    .unwrap_or(true);
+                                                let error_str = error
+                                                    .map(|e| format!("{:?}", e))
+                                                    .unwrap_or_else(|| "Unknown rejection".to_string());
+                                                if is_retriable {
+                                                    SoftBundleTransactionResult::RetriableFailure { error: error_str }
+                                                } else {
+                                                    SoftBundleTransactionResult::PermanentFailure { error: error_str }
+                                                }
+                                            }
+                                            WaitForEffectsResponse::Expired { epoch, round } => {
+                                                SoftBundleTransactionResult::RetriableFailure {
+                                                    error: format!("Expired at epoch {}, round {:?}", epoch, round),
+                                                }
+                                            }
+                                        })
+                                        .collect();
+
+                                    // Compute summary statistics from results
+                                    let any_success = soft_bundle_results.iter().any(|r| r.is_success());
+                                    let any_retriable = soft_bundle_results.iter().any(|r| r.is_retriable());
+
+                                    // Let the payload handle the results
+                                    payload.handle_soft_bundle_results(&SoftBundleExecutionResults {
+                                        results: soft_bundle_results,
+                                    });
+
+                                    if any_success {
+                                        metrics_clone
+                                            .num_success
+                                            .with_label_values(&[&payload.to_string(), "soft_bundle"])
+                                            .inc();
+                                        NextOp::Response {
+                                            latency,
+                                            num_commands: num_txs as u16,
+                                            gas_used: 0, // Gas tracking for soft bundles is complex
+                                            payload,
+                                        }
+                                    } else if any_retriable {
+                                        // At least one transaction had a retriable error (e.g., epoch change).
+                                        // Return the payload so it can be retried with the same state.
+                                        debug!("Soft bundle had retriable error(s), returning payload for retry");
+                                        NextOp::Response {
+                                            latency,
+                                            num_commands: 0, // No commands succeeded
+                                            gas_used: 0,
+                                            payload,
+                                        }
+                                    } else {
+                                        // No transactions succeeded, and all failures were non-retriable.
+                                        metrics_clone
+                                            .num_error
+                                            .with_label_values(&[&payload.to_string(), "soft_bundle_all_failed", "soft_bundle"])
+                                            .inc();
+                                        NextOp::Failure
+                                    }
+                                }
+                                Err(err) => {
+                                    error!("Soft bundle execution failed: {:?}", err);
+                                    metrics_clone
+                                        .num_error
+                                        .with_label_values(&[&payload.to_string(), "soft_bundle_error", "soft_bundle"])
+                                        .inc();
+                                    NextOp::Failure
+                                }
+                            }
+                        };
+                        futures.push(Box::pin(res));
+                    } else {
+                        let tx = payload.make_transaction();
+                        let start = Arc::new(Instant::now());
+                        let metrics = Arc::clone(&metrics);
+                        let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
+                        // TODO: clone committee for each request is not ideal.
+                        let committee = worker.proxy.clone_committee();
+                        let res = worker.proxy
+                            .execute_transaction_block(tx.clone())
+                        .then(|(client_type, res)| async move {
+                            metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
+                            handle_execute_transaction_response(res, start, tx, payload, committee, client_type)
+                        }).count_in_flight(num_in_flight_metric);
+                        futures.push(Box::pin(res));
+                    }
                 }
             }
             Some(op) = futures.next() => {

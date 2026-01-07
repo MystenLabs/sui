@@ -63,52 +63,57 @@ impl MoveValue {
     /// A rendered JSON blob based on an on-chain template, substituted with data from this value.
     ///
     /// Returns `null` if the value's type does not have an associated `Display` template.
-    async fn display(&self, ctx: &Context<'_>) -> Result<Option<Display>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+    async fn display(&self, ctx: &Context<'_>) -> Option<Result<Display, RpcError>> {
+        async {
+            let limits: &Limits = ctx.data()?;
+            let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
-        let Some(TypeTag::Struct(type_)) = self.type_.to_type_tag() else {
-            return Ok(None);
-        };
-
-        let (layout, display) = join!(
-            self.type_.layout_impl(),
-            pg_loader.load_one(DisplayKey(*type_)),
-        );
-
-        let (Some(layout), Some(display)) = (layout?, display.context("Failed to fetch Display")?)
-        else {
-            return Ok(None);
-        };
-
-        let event: DisplayVersionUpdatedEvent = bcs::from_bytes(&display.display)
-            .context("Failed to deserialize DisplayVersionUpdatedEvent")?;
-
-        let mut output = IndexMap::new();
-        let mut errors = IndexMap::new();
-
-        for (field, value) in
-            sui_display::v1::Format::parse(limits.max_display_field_depth, &event.fields)
-                .map_err(resource_exhausted)?
-                .display(limits.max_display_output_size, &self.native, &layout)
-                .map_err(resource_exhausted)?
-        {
-            match value {
-                Ok(v) => {
-                    output.insert(Name::new(&field), Value::String(v));
-                }
-
-                Err(e) => {
-                    output.insert(Name::new(&field), Value::Null);
-                    errors.insert(Name::new(&field), Value::String(e.to_string()));
-                }
+            let Some(TypeTag::Struct(type_)) = self.type_.to_type_tag() else {
+                return Ok(None);
             };
-        }
 
-        Ok(Some(Display {
-            output: (!output.is_empty()).then(|| Json::from(Value::from(output))),
-            errors: (!errors.is_empty()).then(|| Json::from(Value::from(errors))),
-        }))
+            let (layout, display) = join!(
+                self.type_.layout_impl(),
+                pg_loader.load_one(DisplayKey(*type_)),
+            );
+
+            let (Some(layout), Some(display)) =
+                (layout?, display.context("Failed to fetch Display")?)
+            else {
+                return Ok(None);
+            };
+
+            let event: DisplayVersionUpdatedEvent = bcs::from_bytes(&display.display)
+                .context("Failed to deserialize DisplayVersionUpdatedEvent")?;
+
+            let mut output = IndexMap::new();
+            let mut errors = IndexMap::new();
+
+            for (field, value) in
+                sui_display::v1::Format::parse(limits.max_display_field_depth, &event.fields)
+                    .map_err(resource_exhausted)?
+                    .display(limits.max_display_output_size, &self.native, &layout)
+                    .map_err(resource_exhausted)?
+            {
+                match value {
+                    Ok(v) => {
+                        output.insert(Name::new(&field), Value::String(v));
+                    }
+
+                    Err(e) => {
+                        output.insert(Name::new(&field), Value::Null);
+                        errors.insert(Name::new(&field), Value::String(e.to_string()));
+                    }
+                };
+            }
+
+            Ok(Some(Display {
+                output: (!output.is_empty()).then(|| Json::from(Value::from(output))),
+                errors: (!errors.is_empty()).then(|| Json::from(Value::from(errors))),
+            }))
+        }
+        .await
+        .transpose()
     }
 
     /// Representation of a Move value in JSON, where:
@@ -122,21 +127,25 @@ impl MoveValue {
     /// - Structs are represented by JSON objects.
     /// - Enums are represented by JSON objects, with a field named `@variant` containing the variant name.
     /// - Empty optional values are represented by `null`.
-    async fn json(&self, ctx: &Context<'_>) -> Result<Option<Json>, RpcError> {
-        let limits: &Limits = ctx.data()?;
+    async fn json(&self, ctx: &Context<'_>) -> Option<Result<Json, RpcError>> {
+        async {
+            let limits: &Limits = ctx.data()?;
 
-        let Some(layout) = self.type_.layout_impl().await? else {
-            return Ok(None);
-        };
+            let Some(layout) = self.type_.layout_impl().await? else {
+                return Ok(None);
+            };
 
-        let value = JsonVisitor::new(limits)
-            .deserialize_value(&self.native, &layout)
-            .map_err(|e| match &e {
-                VisitorError::Visitor(_) | VisitorError::UnexpectedType => anyhow!(e).into(),
-                VisitorError::TooBig | VisitorError::TooDeep => resource_exhausted(e),
-            })?;
+            let value = JsonVisitor::new(limits)
+                .deserialize_value(&self.native, &layout)
+                .map_err(|e| match &e {
+                    VisitorError::Visitor(_) | VisitorError::UnexpectedType => anyhow!(e).into(),
+                    VisitorError::TooBig | VisitorError::TooDeep => resource_exhausted(e),
+                })?;
 
-        Ok(Some(Json::try_from(value)?))
+            Ok(Some(Json::try_from(value)?))
+        }
+        .await
+        .transpose()
     }
 
     /// The value's type.

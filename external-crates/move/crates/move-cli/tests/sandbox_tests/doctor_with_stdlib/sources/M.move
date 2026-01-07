@@ -3,6 +3,6 @@ module 0x42::M {
 
     #[allow(unused_function)]
     fun f() {
-        debug::print(&7);
+        debug::print(&7u64);
     }
 }

@@ -17,7 +17,7 @@ fun option_none_is_none() {
 
 #[test]
 fun option_some_is_some() {
-    let some = option::some(5);
+    let some = option::some(5u64);
     assert!(!some.is_none());
     assert!(some.is_some());
 }
@@ -25,8 +25,8 @@ fun option_some_is_some() {
 #[test]
 fun option_contains() {
     let none = option::none<u64>();
-    let some = option::some(5);
-    let some_other = option::some(6);
+    let some = option::some(5u64);
+    let some_other = option::some(6u64);
     assert!(some.contains(&5));
     assert!(some_other.contains(&6));
     assert!(!none.contains(&5));
@@ -36,8 +36,8 @@ fun option_contains() {
 #[test]
 fun option_borrow_some() {
     let some = option::some(5);
-    let some_other = option::some(6);
-    assert_eq!(*some.borrow(), 5);
+    let some_other = option::some(6u64);
+    assert_eq!(*some.borrow(), 5u64);
     assert_eq!(*some_other.borrow(), 6);
 }
 
@@ -51,7 +51,7 @@ fun borrow_mut_some() {
     let mut some = option::some(1);
     let ref = some.borrow_mut();
     *ref = 10;
-    assert_eq!(*some.borrow(), 10);
+    assert_eq!(*some.borrow(), 10u64);
 }
 
 #[test, expected_failure(abort_code = option::EOPTION_NOT_SET)]
@@ -62,7 +62,7 @@ fun borrow_mut_none() {
 #[test]
 fun borrow_with_default() {
     let none = option::none<u64>();
-    let some = option::some(5);
+    let some = option::some(5u64);
     assert_eq!(*some.borrow_with_default(&7), 5);
     assert_eq!(*none.borrow_with_default(&7), 7);
 }
@@ -70,14 +70,14 @@ fun borrow_with_default() {
 #[test]
 fun get_with_default() {
     let none = option::none<u64>();
-    let some = option::some(5);
+    let some = option::some(5u64);
     assert_eq!(option::get_with_default(&some, 7), 5);
     assert_eq!(option::get_with_default(&none, 7), 7);
 }
 
 #[test]
 fun extract_some() {
-    let mut opt = option::some(1);
+    let mut opt = option::some(1u64);
     assert_eq!(opt.extract(), 1);
     assert!(opt.is_none());
 }
@@ -89,14 +89,14 @@ fun extract_none() {
 
 #[test]
 fun swap_some() {
-    let mut some = option::some(5);
+    let mut some = option::some(5u64);
     assert_eq!(some.swap(1), 5);
     assert_eq!(*some.borrow(), 1);
 }
 
 #[test]
 fun swap_or_fill_some() {
-    let mut some = option::some(5);
+    let mut some = option::some(5u64);
     assert_eq!(some.swap_or_fill(1), option::some(5));
     assert_eq!(*some.borrow(), 1);
 }
@@ -104,7 +104,7 @@ fun swap_or_fill_some() {
 #[test]
 fun swap_or_fill_none() {
     let mut none = option::none();
-    assert_eq!(none.swap_or_fill(1), option::none());
+    assert_eq!(none.swap_or_fill(1u64), option::none());
     assert_eq!(*none.borrow(), 1);
 }
 
@@ -123,18 +123,18 @@ fun fill_none() {
 
 #[test, expected_failure(abort_code = option::EOPTION_IS_SET)]
 fun fill_some() {
-    option::some(3).fill(0);
+    option::some(3u64).fill(0);
 }
 
 #[test]
 fun destroy_with_default() {
     assert_eq!(option::none<u64>().destroy_with_default(4), 4);
-    assert_eq!(option::some(4).destroy_with_default(5), 4);
+    assert_eq!(option::some(4u64).destroy_with_default(5), 4);
 }
 
 #[test]
 fun destroy_some() {
-    assert_eq!(option::some(4).destroy_some(), 4);
+    assert_eq!(option::some(4u64).destroy_some(), 4);
 }
 
 #[test, expected_failure(abort_code = option::EOPTION_NOT_SET)]
@@ -173,7 +173,7 @@ public struct NoDrop {}
 #[test]
 fun do_destroy() {
     let mut counter = 0;
-    option::some(5).destroy!(|x| counter = x);
+    option::some(5u64).destroy!(|x| counter = x);
     option::some(10).do!(|x| counter = counter + x);
 
     assert_eq!(counter, 15);
@@ -184,16 +184,16 @@ fun do_destroy() {
     some.do!(|el| { let NoDrop {} = el; });
     none.do!(|el| { let NoDrop {} = el; });
 
-    option::some(5).do!(|x| x); // return value
-    option::some(5).do!(|_| {}); // no return value
+    option::some(5u64).do!(|x| x); // return value
+    option::some(5u64).do!(|_| {}); // no return value
 
-    option::some(5).destroy!(|x| x); // return value
-    option::some(5).destroy!(|_| {}); // no return value
+    option::some(5u64).destroy!(|x| x); // return value
+    option::some(5u64).destroy!(|_| {}); // no return value
 }
 
 #[test]
 fun do_ref_mut() {
-    let mut counter = 0;
+    let mut counter = 0u64;
     let mut opt = option::some(5);
     opt.do_mut!(|x| *x = 100);
     opt.do_ref!(|x| counter = *x);
@@ -202,14 +202,14 @@ fun do_ref_mut() {
 
     opt.do_ref!(|x| *x); // return value
     opt.do_ref!(|_| {}); // no return value
-    opt.do_mut!(|_| 5); // return value
+    opt.do_mut!(|_| 5u64); // return value
     opt.do_mut!(|_| {}); // no return value
 }
 
 #[test]
 fun map_map_ref() {
-    assert_eq!(option::some(5).map!(|x| vector[x]), option::some(vector[5]));
-    assert_eq!(option::some(5).map_ref!(|x| vector[*x]), option::some(vector[5]));
+    assert_eq!(option::some(5u64).map!(|x| vector[x]), option::some(vector[5]));
+    assert_eq!(option::some(5u64).map_ref!(|x| vector[*x]), option::some(vector[5]));
     assert_eq!(option::none<u8>().map!(|x| vector[x]), option::none());
     assert_eq!(option::none<u8>().map_ref!(|x| vector[*x]), option::none());
 }
@@ -245,12 +245,12 @@ fun or_no_drop() {
 fun and_no_drop() {
     let none = option::none<NoDrop>().and!(|e| {
         let NoDrop {} = e;
-        option::some(100)
+        option::some(100u64)
     });
 
     let some = option::some(NoDrop {}).and!(|e| {
         let NoDrop {} = e;
-        option::some(100)
+        option::some(100u64)
     });
 
     assert_eq!(some, option::some(100));
@@ -259,23 +259,23 @@ fun and_no_drop() {
 
 #[test]
 fun filter() {
-    assert!(option::some(5).filter!(|x| *x == 5) == option::some(5));
-    assert!(option::some(5).filter!(|x| *x == 6) == option::none());
+    assert!(option::some(5u64).filter!(|x| *x == 5) == option::some(5));
+    assert!(option::some(5u64).filter!(|x| *x == 6) == option::none());
 }
 
 #[test]
 fun is_some_and() {
-    assert!(option::some(5).is_some_and!(|x| *x == 5));
-    assert!(!option::some(5).is_some_and!(|x| *x == 6));
-    assert!(!option::none().is_some_and!(|x| *x == 5));
+    assert!(option::some(5u64).is_some_and!(|x| *x == 5));
+    assert!(!option::some(5u64).is_some_and!(|x| *x == 6));
+    assert!(!option::none().is_some_and!(|x| *x == 5u64));
 }
 
 #[test]
 fun destroy_or() {
-    assert_eq!(option::none().destroy_or!(10), 10);
-    assert_eq!(option::some(5).destroy_or!(10), 5);
+    assert_eq!(option::none().destroy_or!(10u64), 10);
+    assert_eq!(option::some(5u64).destroy_or!(10), 5);
 
-    let some = option::some(10);
+    let some = option::some(10u64);
     assert_eq!(some.destroy_or!(0), 10);
     assert!(some.is_some()); // value was copied!
 }
@@ -296,6 +296,6 @@ fun extract_or() {
     assert!(none.is_none());
 
     let mut some = option::some(5);
-    assert_eq!(some.extract_or!(10), 5);
+    assert_eq!(some.extract_or!(10), 5u64);
     assert!(some.is_none());
 }

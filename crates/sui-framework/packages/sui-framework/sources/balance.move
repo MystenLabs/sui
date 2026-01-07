@@ -54,7 +54,7 @@ public fun create_supply<T: drop>(_: T): Supply<T> {
 
 /// Increase supply by `value` and create a new `Balance<T>` with this value.
 public fun increase_supply<T>(self: &mut Supply<T>, value: u64): Balance<T> {
-    assert!(value < (18446744073709551615u64 - self.value), EOverflow);
+    assert!(value <= (std::u64::max_value!() - self.value), EOverflow);
     self.value = self.value + value;
     Balance { value }
 }
@@ -106,7 +106,7 @@ public fun send_funds<T>(balance: Balance<T>, recipient: address) {
 /// Redeem a `Withdrawal<Balance<T>>` to get the underlying `Balance<T>` from an address's funds
 /// accumulator.
 public fun redeem_funds<T>(withdrawal: sui::funds_accumulator::Withdrawal<Balance<T>>): Balance<T> {
-    withdrawal.redeem()
+    withdrawal.redeem(internal::permit())
 }
 
 /// Create a `Withdrawal<Balance<T>>` from an object to withdraw funds from it.

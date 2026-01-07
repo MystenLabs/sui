@@ -12,8 +12,8 @@ error[E04007]: incompatible types
    │ ╭──────────────^
  9 │ │             if (cond) return'a vector[];
    │ │                                -------- Found: 'vector<_>'. It is not compatible with the other type.
-10 │ │             0
-   │ │             - Found: integer. It is not compatible with the other type.
+10 │ │             0u64
+   │ │             ---- Found: 'u64'. It is not compatible with the other type.
 11 │ │         });
    │ ╰─────────^ Invalid named block
 
@@ -28,8 +28,8 @@ error[E04007]: incompatible types
    │  
 12 │           foo!('a: {
    │ ╭──────────────^
-13 │ │             if (cond) return'a 0;
-   │ │                       ---------- Found: integer. It is not compatible with the other type.
+13 │ │             if (cond) return'a 0u64;
+   │ │                                ---- Found: 'u64'. It is not compatible with the other type.
 14 │ │             vector[]
    │ │             -------- Found: 'vector<_>'. It is not compatible with the other type.
 15 │ │         });

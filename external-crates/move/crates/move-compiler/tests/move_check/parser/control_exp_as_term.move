@@ -4,9 +4,9 @@ module 0x42::M {
 
     #[allow(dead_code)]
     fun t(cond: bool) {
-        1 + if (cond) 0 else { 1 } + 2;
-        1 + loop {} + 2;
-        1 + return + 0;
+        1 + if (cond) 0 else { 1 } + 2u64;
+        1u64 + loop {} + 2;
+        1u64 + return + 0;
 
         foo(&if (cond) 0 else 1);
         foo(&loop {});

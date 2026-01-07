@@ -32,7 +32,7 @@ module M {
         let f1;
         let f2;
         Box { f1, f2 }  = Container::get(&v);
-        Container::put(&mut v, Box { f1: 0, f2: 0});
+        Container::put(&mut v, Box { f1: 0u64, f2: 0});
         f1
     }
 

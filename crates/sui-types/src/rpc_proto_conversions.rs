@@ -1183,7 +1183,7 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
                 ExecutionErrorKind::MoveRawValueTooBig
             }
             E::InvalidLinkage => ExecutionErrorKind::InvalidLinkage,
-            E::InsufficientBalanceForWithdraw => ExecutionErrorKind::InsufficientFundsForWithdraw,
+            E::InsufficientFundsForWithdraw => ExecutionErrorKind::InsufficientFundsForWithdraw,
             E::NonExclusiveWriteInputObjectModified { id } => {
                 message.set_object_id(id.to_canonical_string(true));
                 ExecutionErrorKind::NonExclusiveWriteInputObjectModified
@@ -2411,6 +2411,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             K::CoinRegistryCreate => message.with_kind(Kind::CoinRegistryCreate),
             K::DisplayRegistryCreate => message.with_kind(Kind::DisplayRegistryCreate),
             K::AddressAliasStateCreate => message.with_kind(Kind::AddressAliasStateCreate),
+            K::WriteAccumulatorStorageCost(_) => {
+                todo!("WriteAccumulatorStorageCost needs to be added to proto in sui-apis")
+            }
         }
     }
 }

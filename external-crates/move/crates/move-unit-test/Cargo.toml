@@ -17,7 +17,6 @@ codespan-reporting.workspace = true
 colored.workspace = true
 rayon.workspace = true
 regex.workspace = true
-once_cell.workspace = true
 itertools.workspace = true
 
 move-command-line-common.workspace = true

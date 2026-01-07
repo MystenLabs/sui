@@ -10,7 +10,7 @@ error[E04006]: invalid subtype
    │
 14 │     macro fun return_imm($f: || -> &u64) {
    │                                    ---- Given: '&u64'
-15 │         *$f() = 0;
+15 │         *$f() = 0u64;
    │          ^^^^
    │          │
    │          Invalid mutation. Expected a mutable reference
@@ -22,7 +22,7 @@ error[E04006]: invalid subtype
  3 │     macro fun pass_imm($f: |&u64|) {
    │                             ---- Given: '&u64'
    ·
-20 │         pass_imm!(|x| *x = 0);
+20 │         pass_imm!(|x| *x = 0u64);
    │                        ^
    │                        │
    │                        Invalid mutation. Expected a mutable reference
@@ -31,7 +31,7 @@ error[E04006]: invalid subtype
 error[E04006]: invalid subtype
    ┌─ tests/move_2024/typing/lambda_subtyping_usage_respects_annotations.move:21:30
    │
-21 │         pass_mut!(|x: &u64| *x = 0);
+21 │         pass_mut!(|x: &u64| *x = 0u64);
    │                       ----   ^
    │                       │      │
    │                       │      Invalid mutation. Expected a mutable reference

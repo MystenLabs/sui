@@ -30,7 +30,7 @@ pub struct Graph<Loc, Lbl: Ord> {
     fresh_id: usize,
     abstract_size: usize,
     nodes: BTreeMap<Ref, Node>,
-    graph: DiGraphMap<Ref, Edge<Loc, Lbl>>,
+    pub(crate) graph: DiGraphMap<Ref, Edge<Loc, Lbl>>,
 }
 
 //**************************************************************************************************
@@ -106,7 +106,10 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     }
 
     /// Returns the direct successors of the specified reference
-    fn successors(&self, r: Ref) -> Result<impl Iterator<Item = (&Edge<Loc, Lbl>, Ref)> + '_> {
+    pub(crate) fn successors(
+        &self,
+        r: Ref,
+    ) -> Result<impl Iterator<Item = (&Edge<Loc, Lbl>, Ref)> + '_> {
         ensure!(self.graph.contains_node(r), "missing ref {:?} in graph", r);
         Ok(self
             .graph
@@ -311,7 +314,13 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         Ok(())
     }
 
-    fn add_edge(&mut self, source: Ref, loc: Loc, regex: Regex<Lbl>, target: Ref) -> Result<()> {
+    pub(crate) fn add_edge(
+        &mut self,
+        source: Ref,
+        loc: Loc,
+        regex: Regex<Lbl>,
+        target: Ref,
+    ) -> Result<()> {
         if source == target {
             ensure!(
                 regex.is_epsilon(),
@@ -552,7 +561,7 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
         }
     }
 
-    fn check_self_epsilon_invariant(&self, r: Ref) {
+    pub fn check_self_epsilon_invariant(&self, r: Ref) {
         #[cfg(debug_assertions)]
         {
             let edge_opt = self.graph.edge_weight(r, r);

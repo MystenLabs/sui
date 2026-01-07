@@ -49,12 +49,12 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/while_condition_invalid.move:10:16
    │
-10 │         while (0) ();
-   │                ^
+10 │         while (0u64) ();
+   │                ^^^^
    │                │
    │                Invalid while condition
    │                Expected: 'bool'
-   │                Given: integer
+   │                Given: 'u64'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/while_condition_invalid.move:11:16
@@ -79,9 +79,9 @@ error[E04007]: incompatible types
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/while_condition_invalid.move:16:16
    │
-16 │         while ((0, false)) ()
-   │                ^^^^^^^^^^
+16 │         while ((0u64, false)) ()
+   │                ^^^^^^^^^^^^^
    │                │
    │                Invalid while condition
    │                Expected: 'bool'
-   │                Given: '({integer}, bool)'
+   │                Given: '(u64, bool)'

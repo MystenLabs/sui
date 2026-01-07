@@ -16,12 +16,10 @@ use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
-use itertools::izip;
 use move_core_types::resolver::ModuleResolver;
 use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
-use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
@@ -45,8 +43,6 @@ use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
-
-const NUM_SHARDS: usize = 4096;
 
 struct AuthorityStoreMetrics {
     sui_conservation_check_latency: IntGauge,
@@ -108,9 +104,6 @@ impl AuthorityStoreMetrics {
 /// authorities or non-authorities. Specifically, when storing transactions and effects,
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
 pub struct AuthorityStore {
-    /// Internal vector of locks to manage concurrent writes to the database
-    mutex_table: MutexTable<ObjectDigest>,
-
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
 
     pub(crate) root_state_notify_read:
@@ -228,7 +221,6 @@ impl AuthorityStore {
         registry: &Registry,
     ) -> SuiResult<Arc<Self>> {
         let store = Arc::new(Self {
-            mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
             root_state_notify_read: NotifyRead::<
                 EpochId,
@@ -284,7 +276,6 @@ impl AuthorityStore {
         registry: &Registry,
     ) -> SuiResult<Arc<Self>> {
         let store = Arc::new(Self {
-            mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
             root_state_notify_read: NotifyRead::<
                 EpochId,
@@ -497,12 +488,6 @@ impl AuthorityStore {
     /// Returns true if there are no objects in the database
     pub fn database_is_empty(&self) -> SuiResult<bool> {
         self.perpetual_tables.database_is_empty()
-    }
-
-    /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    fn acquire_locks(&self, input_objects: &[ObjectRef]) -> Vec<MutexGuard> {
-        self.mutex_table
-            .acquire_locks(input_objects.iter().map(|(_, _, digest)| *digest))
     }
 
     pub fn object_exists_by_key(
@@ -865,93 +850,6 @@ impl AuthorityStore {
             [(tx.digest(), tx.clone().into_unsigned().serializable_ref())],
         )?;
         batch.write()?;
-        Ok(())
-    }
-
-    pub fn acquire_transaction_locks(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        owned_input_objects: &[ObjectRef],
-        tx_digest: TransactionDigest,
-        signed_transaction: Option<VerifiedSignedTransaction>,
-    ) -> SuiResult {
-        let epoch = epoch_store.epoch();
-        // Other writers may be attempting to acquire locks on the same objects, so a mutex is
-        // required.
-        // TODO: replace with optimistic db_transactions (i.e. set lock to tx if none)
-        let _mutexes = self.acquire_locks(owned_input_objects);
-
-        trace!(?owned_input_objects, "acquire_locks");
-        let mut locks_to_write = Vec::new();
-
-        let live_object_markers = self
-            .perpetual_tables
-            .live_owned_object_markers
-            .multi_get(owned_input_objects)?;
-
-        let epoch_tables = epoch_store.tables()?;
-
-        let locks = epoch_tables.multi_get_locked_transactions(owned_input_objects)?;
-
-        assert_eq!(locks.len(), live_object_markers.len());
-
-        for (live_marker, lock, obj_ref) in izip!(
-            live_object_markers.into_iter(),
-            locks.into_iter(),
-            owned_input_objects
-        ) {
-            let Some(live_marker) = live_marker else {
-                let latest_lock = self.get_latest_live_version_for_object_id(obj_ref.0)?;
-                fp_bail!(
-                    UserInputError::ObjectVersionUnavailableForConsumption {
-                        provided_obj_ref: *obj_ref,
-                        current_version: latest_lock.1
-                    }
-                    .into()
-                );
-            };
-
-            let live_marker = live_marker.map(|l| l.migrate().into_inner());
-
-            if let Some(LockDetailsDeprecated {
-                epoch: previous_epoch,
-                ..
-            }) = &live_marker
-            {
-                // this must be from a prior epoch, because we no longer write LockDetails to
-                // owned_object_transaction_locks
-                assert!(
-                    previous_epoch < &epoch,
-                    "lock for {:?} should be from a prior epoch",
-                    obj_ref
-                );
-            }
-
-            if let Some(previous_tx_digest) = &lock {
-                if previous_tx_digest == &tx_digest {
-                    // no need to re-write lock
-                    continue;
-                } else {
-                    // TODO: add metrics here
-                    info!(prev_tx_digest = ?previous_tx_digest,
-                          cur_tx_digest = ?tx_digest,
-                          "Cannot acquire lock: conflicting transaction!");
-                    return Err(SuiErrorKind::ObjectLockConflict {
-                        obj_ref: *obj_ref,
-                        pending_transaction: *previous_tx_digest,
-                    }
-                    .into());
-                }
-            }
-
-            locks_to_write.push((*obj_ref, tx_digest));
-        }
-
-        if !locks_to_write.is_empty() {
-            trace!(?locks_to_write, "Writing locks");
-            epoch_tables.write_transaction_locks(signed_transaction, locks_to_write.into_iter())?;
-        }
-
         Ok(())
     }
 

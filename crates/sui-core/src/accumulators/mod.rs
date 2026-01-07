@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use itertools::Itertools;
+use move_core_types::ident_str;
 use move_core_types::u256::U256;
 use mysten_common::fatal;
 use sui_protocol_config::ProtocolConfig;
@@ -15,9 +16,10 @@ use sui_types::accumulator_root::{
 use sui_types::balance::{BALANCE_MODULE_NAME, BALANCE_STRUCT_NAME};
 use sui_types::base_types::SequenceNumber;
 
+use sui_types::accumulator_root::ACCUMULATOR_METADATA_MODULE;
 use sui_types::digests::Digest;
 use sui_types::effects::{
-    AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
+    AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1, IDOperation,
     TransactionEffects, TransactionEffectsAPI,
 };
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -31,9 +33,10 @@ use sui_types::{
 use crate::execution_cache::TransactionCacheRead;
 
 // provides balance read functionality for the scheduler
-pub mod balance_read;
+pub mod funds_read;
 // provides balance read functionality for RPC
 pub mod balances;
+pub mod coin_reservations;
 
 /// Merged value is the value stored inside accumulator objects.
 /// Each mergeable Move type will map to a single variant as its representation.
@@ -299,9 +302,9 @@ impl AccumulatorSettlementTxBuilder {
         self.updates.len()
     }
 
-    /// Returns a unified map of accumulator changes for all accounts.
-    /// The accumulator change for each account is merged from the merge and split operations.
-    pub fn collect_accumulator_changes(&self) -> BTreeMap<AccumulatorObjId, i128> {
+    /// Returns a unified map of funds changes for all accounts.
+    /// The funds change for each account is merged from the merge and split operations.
+    pub fn collect_funds_changes(&self) -> BTreeMap<AccumulatorObjId, i128> {
         self.updates
             .iter()
             .filter_map(|(object_id, update)| match (&update.merge, &update.split) {
@@ -452,6 +455,18 @@ pub fn build_accumulator_barrier_tx(
     settlement_effects: &[TransactionEffects],
 ) -> TransactionKind {
     let num_settlements = settlement_effects.len() as u64;
+
+    let (objects_created, objects_destroyed) = settlement_effects
+        .iter()
+        .flat_map(|effects| effects.object_changes())
+        .fold((0u64, 0u64), |(created, destroyed), change| {
+            match change.id_operation {
+                IDOperation::Created => (created + 1, destroyed),
+                IDOperation::Deleted => (created, destroyed + 1),
+                IDOperation::None => (created, destroyed),
+            }
+        });
+
     let mut builder = ProgrammableTransactionBuilder::new();
     let root = builder
         .input(CallArg::Object(ObjectArg::SharedObject {
@@ -469,6 +484,16 @@ pub fn build_accumulator_barrier_tx(
         num_settlements,
         0,
         0,
+    );
+
+    let objects_created_arg = builder.pure(objects_created).unwrap();
+    let objects_destroyed_arg = builder.pure(objects_destroyed).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        ACCUMULATOR_METADATA_MODULE.into(),
+        ident_str!("record_accumulator_object_changes").into(),
+        vec![],
+        vec![root, objects_created_arg, objects_destroyed_arg],
     );
 
     TransactionKind::ProgrammableSystemTransaction(builder.finish())

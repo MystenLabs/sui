@@ -1,6 +1,6 @@
 module a::test_panic {
     public fun test_panic() {
-        let var = 0;
+        let var = 0u64;
         var();
     }
 }

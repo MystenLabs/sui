@@ -6,9 +6,10 @@ use crate::{
     dependency::{Pinned, PinnedDependencyInfo},
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
+    logging::user_note,
     package::{
-        EnvironmentName, Package, lockfile::Lockfiles, package_lock::PackageSystemLock,
-        paths::PackagePath,
+        EnvironmentName, Package, lockfile::Lockfiles, package_loader::PackageConfig,
+        package_lock::PackageSystemLock, paths::PackagePath,
     },
     schema::{Environment, PackageID, PackageName},
 };
@@ -20,11 +21,10 @@ use std::{
 };
 
 use bimap::BiBTreeMap;
-use colored::Colorize;
 use petgraph::graph::{DiGraph, NodeIndex};
 use thiserror::Error;
 use tokio::sync::OnceCell;
-use tracing::{debug, info};
+use tracing::debug;
 
 use super::PackageGraph;
 
@@ -57,14 +57,16 @@ struct PackageCache<F: MoveFlavor> {
     cache: Mutex<BTreeMap<PathBuf, Arc<OnceCell<Option<Arc<Package<F>>>>>>>,
 }
 
-pub struct PackageGraphBuilder<F: MoveFlavor> {
+pub struct PackageGraphBuilder<'a, F: MoveFlavor> {
     cache: PackageCache<F>,
+    config: &'a PackageConfig,
 }
 
-impl<F: MoveFlavor> PackageGraphBuilder<F> {
-    pub fn new() -> Self {
+impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
+    pub fn new(config: &'a PackageConfig) -> Self {
         Self {
             cache: PackageCache::new(),
+            config,
         }
     }
 
@@ -115,12 +117,11 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         // First pass: create nodes for all packages
         for (pkg_id, pin) in pins.iter() {
             let dep = Pinned::from_lockfile(lockfile.file(), &pin.source)?;
-            let package = self.cache.fetch(&dep, env, mtx).await?;
+            let package = self.cache.fetch(&dep, env, mtx, self.config).await?;
             let package_manifest_digest = package.digest();
             if check_digests && package_manifest_digest != &pin.manifest_digest {
-                info!(
-                    "[{}] Updating dependencies for `{}` environment because {:?} has been changed since the last update.",
-                    "NOTE".yellow(),
+                user_note!(
+                    "Updating dependencies for `{}` environment because {:?} has been changed since the last update.",
                     env.name(),
                     package.path().path().join("Move.toml")
                 );
@@ -197,7 +198,7 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         let root = self
             .cache
-            .fetch(&Pinned::Root(path.clone()), env, mtx)
+            .fetch(&Pinned::Root(path.clone()), env, mtx, self.config)
             .await?;
 
         // TODO: should we add `root` to `visited`? we may have a problem if there is a cyclic
@@ -211,11 +212,11 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
 
         let inner: DiGraph<Arc<Package<F>>, PinnedDependencyInfo> =
             graph.lock().expect("unpoisoned").map(
-                |_, node| {
-                    node.clone()
-                        .expect("add_transitive_packages removes all `None`s before returning")
+                |_, node: &Option<Arc<Package<F>>>| {
+                    let n = node.clone();
+                    n.expect("add_transitive_packages removes all `None`s before returning")
                 },
-                |_, e| e.clone(),
+                |_, e: &PinnedDependencyInfo| e.clone(),
             );
 
         let package_ids = Self::create_ids(&inner);
@@ -307,10 +308,12 @@ impl<F: MoveFlavor> PackageGraphBuilder<F> {
         // add outgoing edges for dependencies
         // Note: this loop could be parallel if we want parallel fetching:
         for dep in pinned {
-            let fetched = self.cache.fetch(dep.as_ref(), env, mtx).await?;
-
             // We retain the defined environment name, but we assign a consistent chain id (environmentID).
             let new_env = Environment::new(dep.use_environment().clone(), env.id().clone());
+            let fetched = self
+                .cache
+                .fetch(dep.as_ref(), &new_env, mtx, self.config)
+                .await?;
 
             let future = self.add_transitive_manifest_deps(
                 fetched.clone(),
@@ -352,6 +355,7 @@ impl<F: MoveFlavor> PackageCache<F> {
         dep: &Pinned,
         env: &Environment,
         mtx: &PackageSystemLock,
+        config: &PackageConfig,
     ) -> PackageResult<Arc<Package<F>>> {
         let cell = self
             .cache
@@ -369,7 +373,7 @@ impl<F: MoveFlavor> PackageCache<F> {
         }
 
         // If not cached, load and cache
-        match Package::load(dep.clone(), env, mtx).await {
+        match Package::load(dep.clone(), env, mtx, config).await {
             Ok(package) => {
                 let node = Arc::new(package);
                 cell.get_or_init(async || Some(node.clone())).await;

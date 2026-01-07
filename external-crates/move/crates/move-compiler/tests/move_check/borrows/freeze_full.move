@@ -8,10 +8,10 @@ module 0x8675309::M {
     }
 
     fun t0() {
-        let x = &mut 0;
+        let x = &mut 0u64;
         freeze(x);
 
-        let x = id_mut(&mut 0);
+        let x = id_mut(&mut 0u64);
         freeze(x);
     }
 

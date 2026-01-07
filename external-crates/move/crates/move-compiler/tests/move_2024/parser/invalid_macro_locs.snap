@@ -134,24 +134,24 @@ error[E04001]: restricted visibility
    = Visibility inside of expanded macros is resolved in the scope of the caller.
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:46:13
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:46:16
    │
-46 │         0x42!::m::make_s<u64>(0u64)
-   │             ^
-   │             │
-   │             Unexpected '!'
-   │             Expected ';'
+46 │         0x42u64!::m::make_s<u64>(0u64)
+   │                ^
+   │                │
+   │                Unexpected '!'
+   │                Expected ';'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:46:13
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:46:16
    │
 45 │     fun test00(): 0x42::m::S<u64> {
    │                   --------------- Expected: '0x42::m::S<u64>'
-46 │         0x42!::m::make_s<u64>(0u64)
-   │             ^
-   │             │
-   │             Invalid return expression
-   │             Given: '()'
+46 │         0x42u64!::m::make_s<u64>(0u64)
+   │                ^
+   │                │
+   │                Invalid return expression
+   │                Given: '()'
 
 error[E04029]: invalid function call
    ┌─ tests/move_2024/parser/invalid_macro_locs.move:50:9
@@ -171,24 +171,24 @@ error[E01016]: invalid name
    │                Macro invocation given here
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:54:13
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:54:16
    │
-54 │         0x42!::m!::make_s<u64>(0u64)
-   │             ^
-   │             │
-   │             Unexpected '!'
-   │             Expected ';'
+54 │         0x42u64!::m!::make_s<u64>(0u64)
+   │                ^
+   │                │
+   │                Unexpected '!'
+   │                Expected ';'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:54:13
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:54:16
    │
 53 │     fun test02(): 0x42::m::S<u64> {
    │                   --------------- Expected: '0x42::m::S<u64>'
-54 │         0x42!::m!::make_s<u64>(0u64)
-   │             ^
-   │             │
-   │             Invalid return expression
-   │             Given: '()'
+54 │         0x42u64!::m!::make_s<u64>(0u64)
+   │                ^
+   │                │
+   │                Invalid return expression
+   │                Given: '()'
 
 error[E01016]: invalid name
    ┌─ tests/move_2024/parser/invalid_macro_locs.move:58:19
@@ -199,21 +199,21 @@ error[E01016]: invalid name
    │                Macro invocation given here
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:62:13
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:62:16
    │
-62 │         0x42!::m!::make_s!<u64>(0u64)
-   │             ^
-   │             │
-   │             Unexpected '!'
-   │             Expected ';'
+62 │         0x42u64!::m!::make_s!<u64>(0u64)
+   │                ^
+   │                │
+   │                Unexpected '!'
+   │                Expected ';'
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/parser/invalid_macro_locs.move:62:13
+   ┌─ tests/move_2024/parser/invalid_macro_locs.move:62:16
    │
 61 │     fun test04(): 0x42::m::S<u64> {
    │                   --------------- Expected: '0x42::m::S<u64>'
-62 │         0x42!::m!::make_s!<u64>(0u64)
-   │             ^
-   │             │
-   │             Invalid return expression
-   │             Given: '()'
+62 │         0x42u64!::m!::make_s!<u64>(0u64)
+   │                ^
+   │                │
+   │                Invalid return expression
+   │                Given: '()'

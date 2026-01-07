@@ -245,5 +245,23 @@ The cheat sheet highlights common Sui CLI commands.
 			</td>
 			<td class="w-1/3">Publish a Move package, and transfer the upgrade capability to sender</td>
 		</tr>
+		<tr>
+			<td class="w-2/3">`sui client ptb --move-call p::m::f "<type>" args --dry-run`</td>
+			<td class="w-1/3">Simulate a PTB execution without committing the transaction</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client ptb --move-call p::m::f "<type>" args --preview`</td>
+			<td class="w-1/3">Preview PTB commands instead of executing the transaction</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">`sui client ptb --move-call p::m::f "<type>" args --summary`</td>
+			<td class="w-1/3">Show a short summary for a PTB (digest, status, gas cost)</td>
+		</tr>
+		<tr>
+			<td class="w-2/3">
+				`sui client ptb \`<br/>&nbsp;&nbsp;`--move-call p::m::f "<type>" args \`<br/>&nbsp;&nbsp;`--serialize-unsigned-transaction`
+			</td>
+			<td class="w-1/3">Serialize the unsigned PTB as base64 instead of executing it</td>
+		</tr>
 	</tbody>
 </table>

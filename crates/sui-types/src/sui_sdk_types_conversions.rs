@@ -929,7 +929,7 @@ impl From<crate::execution_status::ExecutionFailureStatus> for ExecutionError {
             crate::execution_status::ExecutionFailureStatus::MoveVectorElemTooBig { value_size, max_scaled_size } => Self::MoveVectorElemTooBig { value_size, max_scaled_size },
             crate::execution_status::ExecutionFailureStatus::MoveRawValueTooBig { value_size, max_scaled_size } => Self::MoveRawValueTooBig { value_size, max_scaled_size },
             crate::execution_status::ExecutionFailureStatus::InvalidLinkage => Self::InvalidLinkage,
-            crate::execution_status::ExecutionFailureStatus::InsufficientBalanceForWithdraw => {
+            crate::execution_status::ExecutionFailureStatus::InsufficientFundsForWithdraw => {
                 Self::InsufficientFundsForWithdraw
             }
             crate::execution_status::ExecutionFailureStatus::NonExclusiveWriteInputObjectModified { id } => {
@@ -1610,6 +1610,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             }
             crate::transaction::EndOfEpochTransactionKind::AddressAliasStateCreate => {
                 Self::AddressAliasStateCreate
+            }
+            crate::transaction::EndOfEpochTransactionKind::WriteAccumulatorStorageCost(_) => {
+                todo!("WriteAccumulatorStorageCost needs to be added to sdk")
             }
         }
     }

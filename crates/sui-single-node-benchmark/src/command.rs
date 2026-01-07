@@ -33,12 +33,6 @@ pub struct Command {
     pub print_sample_tx: bool,
     #[arg(
         long,
-        default_value_t = false,
-        help = "If true, skip signing on the validators, instead, creating certificates directly using validator secrets"
-    )]
-    pub skip_signing: bool,
-    #[arg(
-        long,
         default_value = "baseline",
         ignore_case = true,
         help = "Which component to benchmark"
@@ -55,17 +49,14 @@ pub enum Component {
     Baseline,
     /// On top of Baseline, this schedules transactions through the transaction manager.
     WithTxManager,
-    /// This goes through the `handle_certificate` entry point on authority_server, which includes
-    /// certificate verification, transaction manager, as well as a noop consensus layer. The noop
-    /// consensus layer does absolutely nothing when receiving a transaction in consensus.
+    /// This executes transactions directly.
+    /// Includes a noop consensus layer that does nothing when receiving a transaction (including certification).
     ValidatorWithoutConsensus,
-    /// Similar to ValidatorWithNoopConsensus, but the consensus layer contains a fake consensus
-    /// protocol that basically sequences transactions in order. It then verify the transaction
-    /// and store the sequenced transactions into the store. It covers the consensus-independent
+    /// Similar to ValidatorWithoutConsensus, but the consensus layer contains a fake consensus
+    /// protocol that basically sequences transactions in order. It then verifies the transaction
+    /// and stores the sequenced transactions into the store. It covers the consensus-independent
     /// portion of the code in consensus handler.
     ValidatorWithFakeConsensus,
-    /// Benchmark only validator signing component: `handle_transaction`.
-    TxnSigning,
     /// Benchmark the checkpoint executor by constructing a full epoch of checkpoints, execute
     /// all transactions in them and measure time.
     CheckpointExecutor,

@@ -50,9 +50,6 @@ use crate::{
 // TODO: put max RPC response size in protocol config.
 const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
-// Maximum total bytes fetched in a single fetch_blocks() call, after combining the responses.
-const MAX_TOTAL_FETCHED_BYTES: usize = 128 * 1024 * 1024;
-
 const DEFAULT_GRPC_SERVER_TIMEOUT: Duration = Duration::from_secs(300);
 
 // Implements Tonic RPC client for Consensus.
@@ -154,6 +151,7 @@ impl NetworkClient for TonicClient {
             breadth_first,
         });
         request.set_timeout(timeout);
+
         let mut stream = client
             .fetch_blocks(request)
             .await
@@ -165,6 +163,14 @@ impl NetworkClient for TonicClient {
                 }
             })?
             .into_inner();
+
+        // Allow twice the max total size of transactions in the fetched blocks.
+        let max_allowed_bytes = block_refs.len()
+            * self
+                .context
+                .protocol_config
+                .consensus_max_transactions_in_block_bytes() as usize
+            * 2;
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;
         loop {
@@ -174,10 +180,10 @@ impl NetworkClient for TonicClient {
                         total_fetched_bytes += b.len();
                     }
                     blocks.extend(response.blocks);
-                    if total_fetched_bytes > MAX_TOTAL_FETCHED_BYTES {
+                    if total_fetched_bytes > max_allowed_bytes {
                         info!(
                             "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
-                            total_fetched_bytes, MAX_TOTAL_FETCHED_BYTES,
+                            total_fetched_bytes, max_allowed_bytes,
                         );
                         break;
                     }
@@ -239,6 +245,7 @@ impl NetworkClient for TonicClient {
                 .collect(),
         });
         request.set_timeout(timeout);
+
         let mut stream = client
             .fetch_latest_blocks(request)
             .await
@@ -250,6 +257,14 @@ impl NetworkClient for TonicClient {
                 }
             })?
             .into_inner();
+
+        // Allow twice the max total size of transactions in the fetched blocks.
+        let max_allowed_bytes = authorities.len()
+            * self
+                .context
+                .protocol_config
+                .consensus_max_transactions_in_block_bytes() as usize
+            * 2;
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;
         loop {
@@ -259,10 +274,10 @@ impl NetworkClient for TonicClient {
                         total_fetched_bytes += b.len();
                     }
                     blocks.extend(response.blocks);
-                    if total_fetched_bytes > MAX_TOTAL_FETCHED_BYTES {
+                    if total_fetched_bytes > max_allowed_bytes {
                         info!(
                             "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
-                            total_fetched_bytes, MAX_TOTAL_FETCHED_BYTES,
+                            total_fetched_bytes, max_allowed_bytes,
                         );
                         break;
                     }

@@ -10,7 +10,6 @@ publish = false
 edition = "2024"
 
 [dependencies]
-once_cell.workspace = true
 serde.workspace = true
 phf.workspace = true
 

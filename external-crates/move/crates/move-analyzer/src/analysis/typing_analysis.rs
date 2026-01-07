@@ -138,8 +138,10 @@ impl TypingAnalysisContext<'_> {
         let tname = tp.user_specified_name.value;
         let fhash = tp.user_specified_name.loc.file_hash();
         // enter self-definition for type param
-        let type_def_info =
-            DefInfo::Type(sp(tp.user_specified_name.loc, N::Type_::Param(tp.clone())));
+        let type_def_info = DefInfo::Type(sp(
+            tp.user_specified_name.loc,
+            N::TypeInner::Param(tp.clone()).into(),
+        ));
         let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, &type_def_info);
         self.use_defs.entry(fhash).or_default().insert(
             start.line,
@@ -415,9 +417,9 @@ impl TypingAnalysisContext<'_> {
         use_pos: &Loc,
     ) {
         let sp!(_, typ) = field_type;
-        match typ {
-            N::Type_::Ref(_, t) => self.add_struct_field_type_use_def(t, use_name, use_pos),
-            N::Type_::Apply(
+        match typ.inner() {
+            N::TypeInner::Ref(_, t) => self.add_struct_field_type_use_def(t, use_name, use_pos),
+            N::TypeInner::Apply(
                 _,
                 sp!(_, N::TypeName_::ModuleType(sp!(_, mod_ident), struct_name)),
                 _,
@@ -865,8 +867,22 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
         let loc = constant_name.loc();
         // enter self-definition for const name (unwrap safe - done when inserting def)
         let name_start = self.file_start_position(&loc);
-        let const_info = self.def_info.get(&loc).unwrap();
+        let const_info = self.def_info.get_mut(&loc).unwrap();
         let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, const_info);
+
+        let DefInfo::Const(_, _, _, value, _) = const_info else {
+            debug_assert!(false);
+            self.current_mod_ident_str = None;
+            return;
+        };
+        if let Some(const_string) = self
+            .compiler_analysis_info
+            .string_values
+            .get(&cdef.value.exp.loc)
+        {
+            *value = Some(const_string.clone());
+        }
+
         self.use_defs.entry(loc.file_hash()).or_default().insert(
             name_start.line,
             UseDef::new(
@@ -1191,8 +1207,8 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
             return true;
         }
         let loc = ty.loc;
-        match &ty.value {
-            N::Type_::Param(tparam) => {
+        match &ty.value.inner() {
+            N::TypeInner::Param(tparam) => {
                 let sp!(use_pos, use_name) = tparam.user_specified_name;
                 let Some(name_start) = self.file_start_position_opt(&loc) else {
                     debug_assert!(false); // a type param should not be missing
@@ -1224,7 +1240,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                     );
                 true
             }
-            N::Type_::Apply(_, sp!(_, type_name), tyargs) => {
+            N::TypeInner::Apply(_, sp!(_, type_name), tyargs) => {
                 if let N::TypeName_::ModuleType(mod_ident, struct_name) = type_name {
                     self.add_datatype_use_def(mod_ident, struct_name);
                 } // otherwise nothing to be done for other type names
@@ -1234,13 +1250,13 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                 true
             }
             // All of these cases just need to recur, which the visitor will handle for us.
-            N::Type_::Unit
-            | N::Type_::Ref(_, _)
-            | N::Type_::Fun(_, _)
-            | N::Type_::Var(_)
-            | N::Type_::Anything
-            | N::Type_::Void
-            | N::Type_::UnresolvedError => false,
+            N::TypeInner::Unit
+            | N::TypeInner::Ref(_, _)
+            | N::TypeInner::Fun(_, _)
+            | N::TypeInner::Var(_)
+            | N::TypeInner::Anything
+            | N::TypeInner::Void
+            | N::TypeInner::UnresolvedError => false,
         }
     }
 

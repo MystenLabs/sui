@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context;
+use fastcrypto::encoding::{Base64, Encoding};
 use prometheus::Registry;
 use reqwest::Client;
 use serde::Deserialize;
@@ -1065,5 +1066,110 @@ async fn test_simulate_transaction_balance_changes() {
                 "1000000"
             ),
         ]
+    );
+}
+
+/// Test that `doGasSelection: true` allows simulating a transaction without specifying gas_payment.
+/// The server auto-selects gas coins and estimates the budget.
+/// This E2E test verifies the simulation output can be signed, executed, and the transfer succeeds.
+#[tokio::test]
+async fn test_simulate_transaction_with_gas_selection() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    let sender = validator_cluster.get_address_0();
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Transaction WITHOUT gas_payment - server should auto-select gas with doGasSelection: true
+    let tx_json = json!({
+        "sender": sender.to_string(),
+        "kind": {
+            "programmable_transaction": {
+                "inputs": [
+                    { "literal": 1000000 },
+                    { "literal": recipient.to_string() }
+                ],
+                "commands": [
+                    {
+                        "split_coins": {
+                            "coin": { "kind": "GAS" },
+                            "amounts": [{ "kind": "INPUT", "input": 0 }]
+                        }
+                    },
+                    {
+                        "transfer_objects": {
+                            "objects": [{ "kind": "RESULT", "result": 0, "subresult": 0 }],
+                            "address": { "kind": "INPUT", "input": 1 }
+                        }
+                    }
+                ]
+            }
+        }
+    });
+
+    // Step 1: Simulate the transaction with gas selection
+    let simulate_result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txJson: JSON!) {
+                simulateTransaction(transaction: $txJson, doGasSelection: true) {
+                    effects {
+                        status
+                        transaction {
+                            transactionBcs
+                        }
+                    }
+                    error
+                }
+            }
+        "#,
+            json!({ "txJson": tx_json }),
+        )
+        .await
+        .expect("GraphQL simulation request failed");
+
+    assert_eq!(
+        simulate_result.pointer("/data/simulateTransaction/effects/status"),
+        Some(&json!("SUCCESS"))
+    );
+
+    // Step 2: Extract the transaction BCS, sign it, and execute
+    let tx_bcs_base64 = simulate_result
+        .pointer("/data/simulateTransaction/effects/transaction/transactionBcs")
+        .and_then(|v| v.as_str())
+        .expect("Simulation should return transactionBcs");
+
+    let tx_bytes = Base64::decode(tx_bcs_base64).unwrap();
+    let tx_data: sui_types::transaction::TransactionData = bcs::from_bytes(&tx_bytes).unwrap();
+
+    let signed_tx = validator_cluster.sign_transaction(&tx_data).await;
+    let (signed_tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    // Step 3: Execute and verify the transaction succeeds
+    let execute_result = graphql_cluster
+        .execute_graphql(
+            r#"
+            mutation($txData: Base64!, $sigs: [Base64!]!) {
+                executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
+                    effects { status }
+                    errors
+                }
+            }
+        "#,
+            json!({
+                "txData": signed_tx_bytes.encoded(),
+                "sigs": signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
+            }),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        execute_result.pointer("/data/executeTransaction/effects/status"),
+        Some(&json!("SUCCESS"))
+    );
+    assert_eq!(
+        execute_result.pointer("/data/executeTransaction/errors"),
+        Some(&serde_json::Value::Null)
     );
 }

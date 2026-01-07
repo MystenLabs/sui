@@ -88,8 +88,8 @@ warning[Lint W01009]: redundant reference/dereference
 warning[Lint W01009]: redundant reference/dereference
    ┌─ tests/linter/incorrect_redundant_ref_deref.move:86:21
    │
-86 │         let _ref = &*&0;  // Redundant borrow-dereference on literal
-   │                     ^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
+86 │         let _ref = &*&0u64;  // Redundant borrow-dereference on literal
+   │                     ^^^^^^ Redundant borrow-dereference detected. Remove this borrow-deref and use the expression directly.
    │
    = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

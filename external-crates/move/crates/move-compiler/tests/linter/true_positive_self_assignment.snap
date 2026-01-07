@@ -52,7 +52,7 @@ warning[Lint W02008]: assignment preserves the same value
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:18:10
    │
-18 │         (p, other, x) = (p, 0, x); // warn x2
+18 │         (p, other, x) = (p, 0u64, x); // warn x2
    │          ^               - Is the same as this location
    │          │                
    │          Unnecessary self-assignment. The assignment is redundant and will not change the value
@@ -63,9 +63,9 @@ warning[Lint W02008]: assignment preserves the same value
 warning[Lint W02008]: assignment preserves the same value
    ┌─ tests/linter/true_positive_self_assignment.move:18:20
    │
-18 │         (p, other, x) = (p, 0, x); // warn x2
-   │                    ^           - Is the same as this location
-   │                    │            
+18 │         (p, other, x) = (p, 0u64, x); // warn x2
+   │                    ^              - Is the same as this location
+   │                    │               
    │                    Unnecessary self-assignment. The assignment is redundant and will not change the value
    │                    This location
    │

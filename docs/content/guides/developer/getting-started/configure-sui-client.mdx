@@ -6,7 +6,7 @@ pagination_prev: null
 pagination_next: null
 ---
 
-The Sui client configuration specifies which network to connect to and which address to send transactions. 
+The Sui client configuration specifies which network to connect to and which address to send transactions.
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
@@ -22,7 +22,7 @@ If this command returns `sui not found`, then Sui is not installed and you must 
 </TabItem>
 </Tabs>
 
-## `sui client` 
+## `sui client`
 
 Run the Sui CLI with the command:
 
@@ -30,47 +30,28 @@ Run the Sui CLI with the command:
 $ sui client
 ```
 
-:::info 
+:::info
 
-If the Sui client is already configured, running this command returns the `sui client --help` output rather than interactive prompts. If this happens, skip to [learning about the `client.yaml`](#client-yaml) file.
+If a previous Sui installation stored a `client.yaml` file locally, you will receive the `sui client --help` output in the console. You can delete the existing `~/.sui/sui_config/client.yaml` file if you'd like to start fresh, or you can continue using the existing configuration.
 
 :::
 
-The first prompt confirms if you want to create the `client.yaml` file, select `Y`:
+The prompt asks if you want to create the `client.yaml` file, select `Y` or press enter. You can skip the prompt with `sui client -y`.
 
 ```
-Config file ["<PATH-TO-FILE>/client.yaml"] doesn't exist, do you want to connect to a Sui full node server [y/N]?
+No sui config found in `~/.sui/sui_config/client.yaml`, create one [Y/n]?
 ```
 
-The second prompt configures the network server URL to connect to:
+You will see the following output:
 
 ```
-Sui full node server URL (Defaults to Sui Testnet if not specified) :
+Generated new keypair ...
+  secret recovery phrase : [recovery phrase words are here]
+Created "~/.sui/sui_config/client.yaml"
+Set active environment to testnet
 ```
 
-If you specify nothing, the client uses Testnet by default. Using Testnet is recommended for developers new to Sui that do not have a project already developed. 
-
-The options are:
-
-- `https://fullnode.testnet.sui.io:443`: The RPC URL for Testnet.
-
-- `https://fullnode.devnet.sui.io:443`: The RPC URL for Devnet. Devnet is not recommended for new Sui developers, as it is better suited for more advanced use cases and the network wipes data weekly as part of its update process.
-
-- `https://fullnode.mainnet.sui.io:443`: The RPC URL for Mainnet network. Publishing applications to Mainnet costs real SUI tokens. 
-
-- `http://0.0.0.0:9000`: The RPC URL for a Localnet network, if configured. Learn how to [setup a local network](/guides/developer/sui-101/local-network.mdx).
-
-<ImportContent source="data-wipe.mdx" mode="snippet" />
-
-The final prompt is to select an encryption scheme. You must select a key scheme by pressing <kbd>0</kbd>, <kbd>1</kbd>, or <kbd>2</kbd>. After you select a scheme, the client generates a new Sui address.
-
-```
-Select key scheme to generate key pair (0 for ed25519, 1 for secp256k1, 2 for secp256r1):
-```
-
-<ImportContent source="crypto-schemes.mdx" mode="snippet" />
-
-:::caution 
+:::caution
 
 Store recovery phrases securely and do not share them with anyone, as they provide access to any objects and tokens that an address owns.
 
@@ -82,30 +63,13 @@ It will not be visible again once the CLI history disappears.
 
 ## `client.yaml`
 
-Your Sui client is now configured. By default, Sui stores this information in either the `~/.sui/sui_config/client.yaml` file (macOS/Linux) or `%USERPROFILE%\.sui\sui_config\client.yaml` file (Windows). You can store a `client.yaml` file in a different location, if preferred, and specify it's location with the `--client.config` flag. 
+Your Sui client is now configured. By default, Sui stores this information in either the `~/.sui/sui_config/client.yaml` file (macOS/Linux) or `%USERPROFILE%\.sui\sui_config\client.yaml` file (Windows). You can store a `client.yaml` file in a different location, if preferred, and specify its location with the `--client.config` flag.
+
+The `client.yaml` contains the configuration for connecting to different Sui networks (Testnet, Mainnet, Devnet, and Localnet), as well as your current active environment, which tells the CLI which network to use when you don't explicitly specify one.
+
+You can modify your configuration using the `sui client` subcommands. See the output of `sui client --help` for more information.
 
 Sui stores the key for the Sui address in a separate file, `~/.sui/sui_config/sui.keystore` (macOS/Linux) or `%USERPROFILE/.sui/sui_config/sui.keystore` (Windows). Learn more about Sui addresses in [Create a Sui Address](/guides/developer/getting-started/get-address.mdx).
-
-:::caution 
-
-If a previous Sui installation stored a `client.yaml` file locally, you will receive the `sui client --help` output in the console. You can delete the existing `~/.sui/sui_config/client.yaml` file if you'd like to start fresh, or you can continue using the existing configuration. 
-
-:::
-
-The `client.yaml` file contains the following configuration information:
-
-```yaml
-keystore:
-  File: /Users/your_user/.sui/sui_config/sui.keystore
-external_keys: ~
-envs:
-  - alias: testnet
-    rpc: "https://fullnode.testnet.sui.io:443"
-    ws: ~
-    basic_auth: ~
-active_env: testnet
-active_address: "0x7df01d3935b7ab3cd1da6828eed763ee2cc556670528a47baa6af8c251866e48"
-```
 
 <div className="next-steps-module">
   <div className="next-steps-header">
@@ -113,19 +77,19 @@ active_address: "0x7df01d3935b7ab3cd1da6828eed763ee2cc556670528a47baa6af8c251866
   </div>
   <div className="next-steps-grid">
     <Card className="plausible-event-name=client+address+button"
-      title="Learn More About Sui Addresses" 
+      title="Learn More About Sui Addresses"
       href="/guides/developer/getting-started/get-address"
     >
-      Now that you have created a Sui address, learn about address management, key pairs, and recovery phrase best practices. 
+      Now that you have created a Sui address, learn about address management, key pairs, and recovery phrase best practices.
     </Card>
     <Card className="plausible-event-name=client+faucet+button"
-      title="Get SUI from Faucet" 
+      title="Get SUI from Faucet"
       href="/guides/developer/getting-started/get-coins"
     >
       Obtain SUI from a faucet to deploy packages on Testnet.
     </Card>
         <Card className="plausible-event-name=client+hello+button"
-      title="Hello, World!" 
+      title="Hello, World!"
       href="/guides/developer/getting-started/hello-world"
     >
       Clone the "Hello, World!" project.
