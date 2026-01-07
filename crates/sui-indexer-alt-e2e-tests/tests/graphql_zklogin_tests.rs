@@ -3,25 +3,36 @@
 
 use std::time::Duration;
 
-use anyhow::{Context as _, bail};
-use fastcrypto::encoding::{Base64, Encoding};
+use anyhow::Context as _;
+use anyhow::bail;
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
 use insta::assert_debug_snapshot;
 use prometheus::Registry;
 use serde::Deserialize;
 use serde_json::json;
-use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
-use sui_indexer_alt_e2e_tests::{OffchainCluster, OffchainClusterConfig};
-use sui_indexer_alt_framework::ingestion::{ClientArgs, ingestion_client::IngestionClientArgs};
-use sui_indexer_alt_graphql::config::{RpcConfig as GraphQlConfig, ZkLoginConfig, ZkLoginEnv};
+use shared_crypto::intent::Intent;
+use shared_crypto::intent::IntentMessage;
+use shared_crypto::intent::PersonalMessage;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
+use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_graphql::config::ZkLoginConfig;
+use sui_indexer_alt_graphql::config::ZkLoginEnv;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::{
-    base_types::SuiAddress, crypto::Signature, signature::GenericSignature,
-    utils::load_test_vectors, zk_login_authenticator::ZkLoginAuthenticator,
-};
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::Signature;
+use sui_types::signature::GenericSignature;
+use sui_types::utils::load_test_vectors;
+use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use tempfile::TempDir;
-use test_cluster::{TestCluster, TestClusterBuilder};
+use test_cluster::TestCluster;
+use test_cluster::TestClusterBuilder;
 use tokio::time::interval;
+
+use sui_indexer_alt_e2e_tests::OffchainCluster;
+use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
 
 const QUERY: &str = r#"
 query ($bytes: Base64!, $signature: Base64!, $scope: ZkLoginIntentScope!, $author: SuiAddress!) {

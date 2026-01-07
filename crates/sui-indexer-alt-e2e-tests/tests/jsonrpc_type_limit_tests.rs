@@ -4,20 +4,27 @@
 use std::path::PathBuf;
 
 use anyhow::Context;
-use move_core_types::{ident_str, language_storage::StructTag};
+use move_core_types::ident_str;
+use move_core_types::language_storage::StructTag;
 use reqwest::Client;
-use serde_json::{Value, json};
+use serde_json::Value;
+use serde_json::json;
 use simulacrum::Simulacrum;
-use sui_indexer_alt::config::{IndexerConfig, PipelineLayer};
-use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig, find};
-use sui_indexer_alt_jsonrpc::config::{PackageResolverLayer, RpcConfig as JsonRpcConfig};
+use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt::config::PipelineLayer;
+use sui_indexer_alt_jsonrpc::config::PackageResolverLayer;
+use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
 use sui_move_build::BuildConfig;
-use sui_types::{
-    Identifier, TypeTag,
-    base_types::ObjectID,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{Transaction, TransactionData},
-};
+use sui_types::Identifier;
+use sui_types::TypeTag;
+use sui_types::base_types::ObjectID;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+
+use sui_indexer_alt_e2e_tests::FullCluster;
+use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
+use sui_indexer_alt_e2e_tests::find;
 
 /// 5 SUI gas budget
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
