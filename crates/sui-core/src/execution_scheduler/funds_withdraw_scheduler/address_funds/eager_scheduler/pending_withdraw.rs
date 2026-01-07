@@ -39,6 +39,10 @@ impl PendingWithdraw {
         self.accumulator_version
     }
 
+    pub fn tx_digest(&self) -> TransactionDigest {
+        self.tx_digest
+    }
+
     pub fn pending_amount(&self, account_id: &AccumulatorObjId) -> u128 {
         self.pending.lock().get(account_id).copied().unwrap() as u128
     }

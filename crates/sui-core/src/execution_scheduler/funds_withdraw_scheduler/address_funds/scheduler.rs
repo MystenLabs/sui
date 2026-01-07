@@ -198,7 +198,6 @@ impl FundsWithdrawScheduler {
                     withdraws: withdraws.clone(),
                     senders: intermediate_senders,
                 };
-                debug!("Scheduling withdraws on scheduler: {}", name);
                 scheduler.schedule_withdraws(reservations).await;
             }
 
@@ -278,8 +277,7 @@ impl FundsWithdrawScheduler {
                 "Settling funds changes: {:?}",
                 settlement.funds_changes,
             );
-            for (name, scheduler) in &self.innards {
-                debug!("Settling funds on scheduler: {}", name);
+            for scheduler in self.innards.values() {
                 scheduler.settle_funds(settlement.clone()).await;
             }
         }

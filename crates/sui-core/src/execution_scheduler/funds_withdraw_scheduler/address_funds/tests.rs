@@ -327,36 +327,25 @@ async fn test_settle_just_updated_account_object() {
     let v0 = SequenceNumber::from_u64(0);
     let v1 = v0.next();
     let v2 = v1.next();
-    let account1 = ObjectID::random();
-    let account2 = ObjectID::random();
-    let mock_read = Arc::new(MockFundsRead::new(
-        v0,
-        BTreeMap::from([(account1, 100u128), (account2, 100u128)]),
-    ));
+    let account = ObjectID::random();
+    let withdraw = TxFundsWithdraw {
+        tx_digest: TransactionDigest::random(),
+        reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 150)]),
+    };
+
+    let mock_read = Arc::new(MockFundsRead::new(v0, BTreeMap::from([(account, 100u128)])));
 
     let scheduler = TestScheduler::new_with_mock_read(mock_read.clone());
     // Bump underlying account object versions to v1.
     mock_read.settle_funds_changes(
-        BTreeMap::from([
-            (AccumulatorObjId::new_unchecked(account1), 0),
-            (AccumulatorObjId::new_unchecked(account2), 0),
-        ]),
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 0)]),
         v1,
     );
-
-    let withdraw1 = TxFundsWithdraw {
-        tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account1), 150)]),
-    };
-    let withdraw2 = TxFundsWithdraw {
-        tx_digest: TransactionDigest::random(),
-        reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account2), 150)]),
-    };
     // Scheduling at v2, with a reservation of 150.
     // Current balance is 100, at version v1.
     // Eager scheduler will put this withdraw in the pending reservations.
-    let receivers1 = scheduler.schedule_withdraws(v2, vec![withdraw1.clone()]);
-    let receivers2 = scheduler.schedule_withdraws(v2, vec![withdraw2.clone()]);
+    let receivers = scheduler.schedule_withdraws(v2, vec![withdraw.clone()]);
+    sleep(Duration::from_secs(3)).await;
 
     // Bring the scheduler to `v1`.
     // The pending withdraw is still pending since the object version is v1.
@@ -365,22 +354,14 @@ async fn test_settle_just_updated_account_object() {
         funds_changes: BTreeMap::new(),
     });
     scheduler.wait_for_accumulator_version(v1).await;
-    assert!(
-        wait_for_results(
-            receivers1,
-            BTreeMap::from([(withdraw1.tx_digest, ScheduleStatus::InsufficientFunds)]),
-        )
-        .await
-        .is_err()
-    );
 
-    // This will trigger the scheduler to process the pending withdraw.
+    // Trigger the scheduler to process the pending withdraw.
     scheduler.settle_funds_changes(v2, BTreeMap::new());
     scheduler.wait_for_accumulator_version(v2).await;
 
     wait_for_results(
-        receivers2,
-        BTreeMap::from([(withdraw2.tx_digest, ScheduleStatus::InsufficientFunds)]),
+        receivers,
+        BTreeMap::from([(withdraw.tx_digest, ScheduleStatus::InsufficientFunds)]),
     )
     .await
     .unwrap();

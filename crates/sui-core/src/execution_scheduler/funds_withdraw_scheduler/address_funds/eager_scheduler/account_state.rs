@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, VecDeque},
-    sync::Arc,
-};
+use std::{collections::VecDeque, sync::Arc};
 
 use sui_types::{accumulator_root::AccumulatorObjId, base_types::SequenceNumber};
 use tracing::debug;
@@ -17,13 +14,23 @@ pub(crate) struct AccountState {
     last_updated_balance: u128,
     /// The version where last_updated_balance was read from.
     last_updated_version: SequenceNumber,
-    /// The amount of funds that has been reserved for this account, for each accumulator version.
-    /// This is tracked so that we could add them back to the account funds when we settle the withdraws.
-    reserved_funds: BTreeMap<SequenceNumber, u128>,
+    reserved_funds: ReservedFunds,
     /// Withdraws that could not yet be scheduled due to insufficient funds, and
     /// hence have not reserved any funds yet. We track them so that we could schedule them
     /// anytime we may have sufficient funds.
     pending_reservations: VecDeque<Arc<PendingWithdraw>>,
+}
+
+#[derive(Default)]
+struct ReservedFunds {
+    /// The amount of funds that has been reserved for this account, for each accumulator version.
+    /// This is tracked so that we could add them back to the account funds when we settle the withdraws.
+    /// Since we always reserve in order of accumulator version, this vector is natually ordered, by
+    /// SequenceNumber.
+    reserved_funds: VecDeque<(SequenceNumber, u128)>,
+    /// Sum of all amounts in reserved_funds, saved as an optimization to avoid summing it
+    /// every time.
+    total_reserved_funds_amount: u128,
 }
 
 impl AccountState {
@@ -42,17 +49,24 @@ impl AccountState {
             account_id,
             last_updated_balance: init_balance,
             last_updated_version: init_version,
-            reserved_funds: BTreeMap::new(),
+            reserved_funds: ReservedFunds::default(),
             pending_reservations: VecDeque::new(),
         }
     }
 
     /// Register a new withdraw in this account.
     pub fn add_withdraw(&mut self, new_withdraw: Arc<PendingWithdraw>) {
+        // The accumulator_version of the new withdraw is the version it reads from.
+        // last_updated_version is the version where the account is known to be settled at in the accumulator.
+        // In the scheduler, we only schedule withdraws that have not been settled yet, so the new withdraw's version
+        // must be greater or equal to the last_updated_version.
+        // It can be equal if we are scheduling a withdraw from a version that was just settled.
         assert!(new_withdraw.accumulator_version() >= self.last_updated_version);
         self.pending_reservations.push_back(new_withdraw);
         let len = self.num_pending_reservations();
         if len > 1 {
+            // The withdraws are scheduled in order of accumulator version, so the previous withdraw's version
+            // must be less or equal to the current withdraw's version.
             assert!(
                 self.pending_reservations[len - 2].accumulator_version()
                     <= self.pending_reservations[len - 1].accumulator_version()
@@ -71,25 +85,25 @@ impl AccountState {
         let Some(pending_withdraw) = self.pending_reservations.pop_front() else {
             return false;
         };
-        assert!(pending_withdraw.accumulator_version() >= self.last_updated_version);
+        assert!(
+            pending_withdraw.accumulator_version() >= self.last_updated_version,
+            "pending_withdraw.accumulator_version() = {:?}, self.last_updated_version = {:?}",
+            pending_withdraw.accumulator_version(),
+            self.last_updated_version
+        );
         assert!(pending_withdraw.accumulator_version() >= last_settled_version);
         let to_reserve = pending_withdraw.pending_amount(&self.account_id);
-        let cur_reserved_amount: u128 = self
-            .reserved_funds
-            .range(self.last_updated_version..)
-            .map(|(_, v)| v)
-            .sum();
-        if cur_reserved_amount + to_reserve <= self.last_updated_balance {
+        if self.reserved_funds.total_reserved_funds_amount() + to_reserve
+            <= self.last_updated_balance
+        {
             debug!(
                 "Successfully reserved {:?} for account {:?} at version {:?}",
                 to_reserve,
                 self.account_id,
                 pending_withdraw.accumulator_version().value(),
             );
-            *self
-                .reserved_funds
-                .entry(pending_withdraw.accumulator_version())
-                .or_default() += to_reserve;
+            self.reserved_funds
+                .add_reserved_fund(pending_withdraw.accumulator_version(), to_reserve);
             pending_withdraw.remove_pending_account(&self.account_id);
             return true;
         }
@@ -97,33 +111,72 @@ impl AccountState {
             pending_withdraw.notify_insufficient_funds();
             return true;
         }
+        // Failed to reserve, put the pending withdraw back to the front of the queue.
         self.pending_reservations.push_front(pending_withdraw);
         false
     }
 
     pub fn settle_funds(&mut self, settled: i128, next_version: SequenceNumber) {
+        debug!(
+            "Settling funds for account {:?} with amount {:?} at version {:?}",
+            self.account_id,
+            settled,
+            next_version.value(),
+        );
         // If the next_version is less or equal to the last_updated_version,
         // it means the state tracked for this account is already up to date.
         // There is no need to update its balance.
         if next_version > self.last_updated_version {
-            debug!(
-                "Settling funds for account {:?} with amount {:?} at version {:?}",
-                self.account_id,
-                settled,
-                next_version.value(),
-            );
-            let new_balance = self.last_updated_balance as i128 + settled;
+            let new_balance = (self.last_updated_balance as i128)
+                .checked_add(settled)
+                .unwrap();
             assert!(new_balance >= 0);
             self.last_updated_balance = new_balance as u128;
             self.last_updated_version = next_version;
         }
-        self.reserved_funds
-            .retain(|version, _| *version >= next_version);
+        self.reserved_funds.settle_fund(next_version);
         while self.try_reserve_front(next_version) {}
     }
 
     pub fn is_empty(&self) -> bool {
-        self.pending_reservations.is_empty() && self.reserved_funds.is_empty()
+        self.pending_reservations.is_empty() && self.reserved_funds.reserved_funds.is_empty()
+    }
+}
+
+impl ReservedFunds {
+    fn total_reserved_funds_amount(&self) -> u128 {
+        self.total_reserved_funds_amount
+    }
+
+    fn add_reserved_fund(&mut self, accumulator_version: SequenceNumber, amount: u128) {
+        self.total_reserved_funds_amount += amount;
+
+        if let Some(entry) = self.reserved_funds.back_mut() {
+            if entry.0 == accumulator_version {
+                entry.1 = entry.1.checked_add(amount).unwrap();
+                return;
+            }
+            // Reservations are processed in order, so we must never see the version
+            // decrease.
+            assert!(entry.0 < accumulator_version);
+        }
+        self.reserved_funds.push_back((accumulator_version, amount));
+    }
+
+    fn settle_fund(&mut self, next_version: SequenceNumber) {
+        if let Some(entry) = self.reserved_funds.front().copied() {
+            if entry.0.next() == next_version {
+                self.reserved_funds.pop_front();
+                self.total_reserved_funds_amount = self
+                    .total_reserved_funds_amount
+                    .checked_sub(entry.1)
+                    .unwrap();
+            } else {
+                // If there exists reserved funds at even earlier versions, they must have
+                // already been settled in the past.
+                assert!(entry.0 >= next_version);
+            }
+        }
     }
 }
 
@@ -243,11 +296,8 @@ mod tests {
         assert!(result);
         assert!(state.pending_reservations.is_empty());
         assert_eq!(
-            *state
-                .reserved_funds
-                .get(&SequenceNumber::from_u64(5))
-                .unwrap(),
-            100u128
+            *state.reserved_funds.reserved_funds.front().unwrap(),
+            (SequenceNumber::from_u64(5), 100u128)
         );
 
         // The sender should have been notified with SufficientFunds
@@ -315,11 +365,8 @@ mod tests {
 
         // All reserved exactly 300
         assert_eq!(
-            *state
-                .reserved_funds
-                .get(&SequenceNumber::from_u64(5))
-                .unwrap(),
-            300u128
+            *state.reserved_funds.reserved_funds.front().unwrap(),
+            (SequenceNumber::from_u64(5), 300u128)
         );
         assert!(state.pending_reservations.is_empty());
 
@@ -422,37 +469,23 @@ mod tests {
 
     #[test]
     fn test_settle_funds_clears_old_reserved_funds() {
-        let account_id = make_account_id(1);
-        let mut state = AccountState::new(account_id, 1000, SequenceNumber::from_u64(5));
-
+        let mut reserved_funds = ReservedFunds::default();
         // Manually add some reserved funds at different versions
-        state
-            .reserved_funds
-            .insert(SequenceNumber::from_u64(5), 100);
-        state
-            .reserved_funds
-            .insert(SequenceNumber::from_u64(6), 200);
-        state
-            .reserved_funds
-            .insert(SequenceNumber::from_u64(7), 300);
+        reserved_funds.add_reserved_fund(SequenceNumber::from_u64(5), 100);
+        reserved_funds.add_reserved_fund(SequenceNumber::from_u64(6), 200);
+        reserved_funds.add_reserved_fund(SequenceNumber::from_u64(7), 300);
 
         // Settle at version 6 should remove version 5 reserved funds
-        state.settle_funds(0, SequenceNumber::from_u64(6));
+        reserved_funds.settle_fund(SequenceNumber::from_u64(6));
 
-        assert!(
-            !state
-                .reserved_funds
-                .contains_key(&SequenceNumber::from_u64(5))
+        assert_eq!(reserved_funds.reserved_funds.len(), 2);
+        assert_eq!(
+            reserved_funds.reserved_funds.front(),
+            Some(&(SequenceNumber::from_u64(6), 200))
         );
-        assert!(
-            state
-                .reserved_funds
-                .contains_key(&SequenceNumber::from_u64(6))
-        );
-        assert!(
-            state
-                .reserved_funds
-                .contains_key(&SequenceNumber::from_u64(7))
+        assert_eq!(
+            reserved_funds.reserved_funds.back(),
+            Some(&(SequenceNumber::from_u64(7), 300))
         );
     }
 
@@ -475,11 +508,8 @@ mod tests {
         // The pending reservation should have been automatically processed
         assert!(state.pending_reservations.is_empty());
         assert_eq!(
-            *state
-                .reserved_funds
-                .get(&SequenceNumber::from_u64(6))
-                .unwrap(),
-            200u128
+            *state.reserved_funds.reserved_funds.front().unwrap(),
+            (SequenceNumber::from_u64(6), 200)
         );
 
         let result = rx.await.unwrap();
@@ -509,7 +539,7 @@ mod tests {
 
         state
             .reserved_funds
-            .insert(SequenceNumber::from_u64(5), 100);
+            .add_reserved_fund(SequenceNumber::from_u64(5), 100);
 
         assert!(!state.is_empty());
     }
@@ -528,21 +558,15 @@ mod tests {
         // Reserve first at version 5
         assert!(state.try_reserve_front(SequenceNumber::from_u64(5)));
         assert_eq!(
-            *state
-                .reserved_funds
-                .get(&SequenceNumber::from_u64(5))
-                .unwrap(),
-            200u128
+            *state.reserved_funds.reserved_funds.front().unwrap(),
+            (SequenceNumber::from_u64(5), 200)
         );
 
         // Reserve second at version 6
         assert!(state.try_reserve_front(SequenceNumber::from_u64(5)));
         assert_eq!(
-            *state
-                .reserved_funds
-                .get(&SequenceNumber::from_u64(6))
-                .unwrap(),
-            150u128
+            *state.reserved_funds.reserved_funds.back().unwrap(),
+            (SequenceNumber::from_u64(6), 150)
         );
 
         // Total reserved is 350, which is within the 500 balance
