@@ -45,7 +45,7 @@ use super::error::Error;
     rename = "TransactionBlockResponseQuery",
     default
 )]
-pub(crate) struct SuiTransactionBlockResponseQuery {
+pub struct SuiTransactionBlockResponseQuery {
     /// If None, no filter will be applied.
     pub filter: Option<TransactionFilter>,
     /// Configures which fields to include in the response, by default only digest is included.
@@ -54,7 +54,7 @@ pub(crate) struct SuiTransactionBlockResponseQuery {
 
 #[serde_as]
 #[derive(Clone, Debug, JsonSchema, Serialize, Deserialize)]
-pub(crate) enum TransactionFilter {
+pub enum TransactionFilter {
     /// Query by checkpoint.
     Checkpoint(
         #[schemars(with = "BigInt<u64>")]

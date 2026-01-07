@@ -19,7 +19,7 @@ use crate::{config::RpcConfig, metrics::RpcMetrics};
 
 /// A bundle of different interfaces to data, for use by JSON-RPC method implementations.
 #[derive(Clone)]
-pub(crate) struct Context {
+pub struct Context {
     /// Direct access to the database, for running SQL queries.
     pg_reader: PgReader,
 
@@ -48,7 +48,7 @@ impl Context {
     /// `bigtable_instance` is set, KV lookups will be sent to it, otherwise they will be sent to
     /// the `database. If `database_url` is `None`, the interfaces will be set-up but will fail to
     /// accept any connections.
-    pub(crate) async fn new(
+    pub async fn new(
         database_url: Option<Url>,
         bigtable_instance: Option<String>,
         db_args: DbArgs,
@@ -91,34 +91,34 @@ impl Context {
     }
 
     /// For performing arbitrary SQL queries on the Postgres db.
-    pub(crate) fn pg_reader(&self) -> &PgReader {
+    pub fn pg_reader(&self) -> &PgReader {
         &self.pg_reader
     }
 
     /// For performing point look-ups on the Postgres db only.
-    pub(crate) fn pg_loader(&self) -> &Arc<DataLoader<PgReader>> {
+    pub fn pg_loader(&self) -> &Arc<DataLoader<PgReader>> {
         &self.pg_loader
     }
 
     /// For performing point look-ups on the kv store.
     /// Depends on the configuration of the indexer, the kv store may be backed by
     /// eitherBigtable or Postgres.
-    pub(crate) fn kv_loader(&self) -> &KvLoader {
+    pub fn kv_loader(&self) -> &KvLoader {
         &self.kv_loader
     }
 
     /// For querying type and function signature information.
-    pub(crate) fn package_resolver(&self) -> &Resolver<Arc<PackageCache>> {
+    pub fn package_resolver(&self) -> &Resolver<Arc<PackageCache>> {
         self.package_resolver.as_ref()
     }
 
     /// Access to the RPC metrics.
-    pub(crate) fn metrics(&self) -> &RpcMetrics {
+    pub fn metrics(&self) -> &RpcMetrics {
         self.metrics.as_ref()
     }
 
     /// Access to the RPC configuration.
-    pub(crate) fn config(&self) -> &RpcConfig {
+    pub fn config(&self) -> &RpcConfig {
         self.config.as_ref()
     }
 }
