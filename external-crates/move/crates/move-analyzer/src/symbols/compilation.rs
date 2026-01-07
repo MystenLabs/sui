@@ -380,7 +380,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
             Some(Some(d)) => {
                 let mut hasher = Sha256::new();
                 d.dep_hashes.iter().for_each(|h| {
-                    hasher.update(h.as_bytes());
+                    hasher.update(h.to_bytes());
                 });
                 let deps_hash = hasher_to_hash_string(hasher);
                 if manifest_hash.is_some()
@@ -833,7 +833,7 @@ fn compute_mapped_files<F: MoveFlavor>(
             let _ = vfs_file.read_to_string(&mut contents);
             let fhash = FileHash::new(&contents);
             if is_dep {
-                hasher.update(fhash.as_bytes());
+                hasher.update(fhash.to_bytes());
                 dep_hashes.push(fhash);
                 dep_pkg_paths.insert(rpkg.id().clone().into(), rpkg.path().path().to_path_buf());
             }
