@@ -65,14 +65,6 @@ impl BlockedBloomFilter {
     }
 }
 
-/// Compute the block index and bit positions for a single key.
-///
-/// Returns (block_index, [5 bit positions within that block]).
-/// Used for generating SQL bloom filter checks.
-pub fn compute_key_hash_positions(key: &[u8], seed: u128) -> (usize, Vec<usize>) {
-    hash::compute_blocked_positions(key, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BITS, NUM_HASHES, seed)
-}
-
 #[cfg(test)]
 impl BlockedBloomFilter {
     /// Get a specific 2048-byte block by index.
@@ -87,8 +79,7 @@ impl BlockedBloomFilter {
             .is_some_and(|b| b.iter().any(|&x| x != 0))
     }
 
-    /// Check if a key might be in the bloom filter (test-only).
-    /// In production this is done using SQL.
+    /// Check if a key might be in the bloom filter.
     pub fn contains(&self, key: &[u8]) -> bool {
         let (block_idx, positions) = hash::compute_blocked_positions(
             key,
@@ -103,7 +94,7 @@ impl BlockedBloomFilter {
             .all(|&pos| (block[pos / 8] & (1 << (pos % 8))) != 0)
     }
 
-    /// Get all non-zero blocks with their indices (for sparse storage).
+    /// Get all non-zero blocks with their indices.
     pub fn to_sparse_blocks(&self) -> Vec<(usize, Vec<u8>)> {
         self.blocks
             .iter()
@@ -306,19 +297,5 @@ mod tests {
             "Should affect only 1 block, got {}",
             non_zero_blocks.len()
         );
-    }
-
-    #[test]
-    fn test_compute_key_hash_positions() {
-        let key = b"test_key";
-        let seed = 42u128;
-
-        let (block_idx, positions) = compute_key_hash_positions(key, seed);
-
-        assert!(block_idx < NUM_BLOOM_BLOCKS);
-        assert_eq!(positions.len(), NUM_HASHES as usize);
-        for pos in positions {
-            assert!(pos < BLOOM_BLOCK_BITS);
-        }
     }
 }
