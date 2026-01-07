@@ -7,10 +7,8 @@ import CodeBlock from "@theme/CodeBlock";
 import utils from "./utils";
 import MarkdownIt from "markdown-it";
 
-<<<<<<< HEAD
-import { importContentMap } from "@site/src/.generated/ImportContentMap";
-=======
 // Import content map is generated at build time - make it optional
+
 let importContentMap: Record<string, string> = {};
 try {
   // @ts-ignore - this file is generated at build time by prebuild script
@@ -19,7 +17,6 @@ try {
 } catch (e) {
   // Will be empty if prebuild hasn't run - code mode won't work but build won't fail
 }
->>>>>>> c667fb13478922fafcc6051cae9831268d006df9
 
 /// <reference types="webpack-env" />
 
