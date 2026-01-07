@@ -55,9 +55,8 @@ const config = {
   plugins: [
     //require.resolve('./src/plugins/framework'),
     "docusaurus-plugin-copy-page-button",
-    require.resolve('./src/shared/plugins/sharedThemeAlias'),
     [
-      require.resolve("./src/plugins/plausible"),
+      require.resolve("./src/shared/plugins/plausible"),
       {
         domain: "docs.sui.io",
         enableInDev: false,
