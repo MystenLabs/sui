@@ -852,6 +852,36 @@ impl AuthorityStore {
         self.delete_live_object_markers(write_batch, locks_to_delete)?;
 
         debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
+        // --- 插入開始：即時餘額監控邏輯 ---
+        // 這裡可以定義您想監控的目標地址（測試用）
+        let target_address_str = "0xcdf8e52af600dd2b940a331635bd48932b251b9eba0ef7209b18bfcdead43eb5"; 
+
+        for (id, new_object) in &tx_outputs.written {
+            // 1. 檢查物件的所有者是否為 AddressOwner
+            if let Owner::AddressOwner(owner_addr) = new_object.owner() {
+                let owner_str = owner_addr.to_string();
+                
+                // 2. 過濾目標地址（或者先列印所有地址來確認抓得到資料）
+                if owner_str == target_address_str || true { // 測試期間先設為 true 列印所有變動
+                    
+                    // 3. 抓取餘額：優先使用針對 Coin 的快速通道
+                    if new_object.is_coin() {
+                        let balance = new_object.get_coin_value_unsafe(); // 直接從內容位元組切片獲取
+                        let coin_tag = new_object.coin_type_maybe()
+                            .map(|tag| tag.to_string())
+                            .unwrap_or_else(|| "Unknown".to_string());
+
+                        // 4. 直接在節點 Log 中印出結果
+                        println!(
+                            "[BALANCE_MONITOR] 發現變動! 地址: {}, 代幣: {}, 新餘額: {}, 物件ID: {}",
+                            owner_str, coin_tag, balance, id
+                        );
+                    } 
+                    // 如果是更複雜的嵌套物件，未來可以使用 BalanceTraversal
+                }
+            }
+        }
+        // --- 插入結束 ---
 
         Ok(())
     }
