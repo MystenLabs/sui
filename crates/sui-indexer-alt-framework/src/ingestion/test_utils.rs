@@ -3,14 +3,16 @@
 
 use rand::SeedableRng;
 use rand::prelude::StdRng;
-use sui_storage::blob::{Blob, BlobEncoding};
+use sui_storage::blob::Blob;
+use sui_storage::blob::BlobEncoding;
 
 use crate::types::crypto::KeypairTraits;
 use crate::types::full_checkpoint_content::CheckpointData;
 use crate::types::gas::GasCostSummary;
-use crate::types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
-};
+use crate::types::messages_checkpoint::CertifiedCheckpointSummary;
+use crate::types::messages_checkpoint::CheckpointContents;
+use crate::types::messages_checkpoint::CheckpointSummary;
+use crate::types::messages_checkpoint::SignedCheckpointSummary;
 use crate::types::supported_protocol_versions::ProtocolConfig;
 use crate::types::utils::make_committee_key;
 

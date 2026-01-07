@@ -5,19 +5,21 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use backoff::ExponentialBackoff;
-use sui_futures::{
-    service::Service,
-    stream::{Break, TrySpawnStreamExt},
-};
+use sui_futures::service::Service;
+use sui_futures::stream::Break;
+use sui_futures::stream::TrySpawnStreamExt;
 use sui_types::full_checkpoint_content::Checkpoint;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error, info};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
 
-use crate::metrics::{CheckpointLagMetricReporter, IndexerMetrics};
-
-use super::IndexedCheckpoint;
 use async_trait::async_trait;
+
+use crate::metrics::CheckpointLagMetricReporter;
+use crate::metrics::IndexerMetrics;
+use crate::pipeline::IndexedCheckpoint;
 
 /// If the processor needs to retry processing a checkpoint, it will wait this long initially.
 const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
@@ -170,17 +172,17 @@ pub(super) fn processor<P: Processor>(
 
 #[cfg(test)]
 mod tests {
-    use crate::metrics::IndexerMetrics;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicU32;
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+
     use anyhow::ensure;
-    use std::{
-        sync::{
-            Arc,
-            atomic::{AtomicU32, Ordering},
-        },
-        time::Duration,
-    };
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
-    use tokio::{sync::mpsc, time::timeout};
+    use tokio::sync::mpsc;
+    use tokio::time::timeout;
+
+    use crate::metrics::IndexerMetrics;
 
     use super::*;
 
