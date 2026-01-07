@@ -470,6 +470,10 @@ fn move_call_arguments(
     args: Vec<SplatLocation>,
 ) -> Result<Vec<T::Argument>, ExecutionError> {
     let params = move_call_parameters(env, function);
+    assert_invariant!(
+        params.len() == function.signature.parameters.len(),
+        "Generated parameter types does not match the function signature"
+    );
     // check arity
     let num_tx_contexts = params
         .iter()
@@ -494,39 +498,41 @@ fn move_call_arguments(
         ));
     }
     // construct arguments, injecting tx context args as needed
-    let mut res = Vec::with_capacity(params.len());
     let mut args = args.into_iter().enumerate().rev();
-    let params = params.into_iter().enumerate().rev();
-    for (param_idx, (expected_ty, tx_context_kind)) in params {
-        let targ = match tx_context_kind {
-            TxContextKind::None => {
-                let Some((arg_idx, location)) = args.next() else {
-                    invariant_violation!("arguments are empty but arity was already checked");
-                };
-                argument(env, context, arg_idx, location, expected_ty.clone())?
-            }
-            TxContextKind::Mutable | TxContextKind::Immutable => {
-                let is_mut = match tx_context_kind {
-                    TxContextKind::Mutable => true,
-                    TxContextKind::Immutable => false,
-                    TxContextKind::None => unreachable!(),
-                };
-                // TODO this might overlap or be  out of bounds of the original PTB arguments...
-                // what do we do here?
-                let idx = param_idx as u16;
-                let arg__ = T::Argument__::Borrow(is_mut, T::Location::TxContext);
-                let ty = Type::Reference(is_mut, Rc::new(env.tx_context_type()?));
-                sp(idx, (arg__, ty))
-            }
-        };
-        res.push(targ);
-    }
+    let mut res = params
+        .into_iter()
+        .enumerate()
+        .rev()
+        .map(|(param_idx, (expected_ty, tx_context_kind))| {
+            Ok(match tx_context_kind {
+                TxContextKind::None => {
+                    let Some((arg_idx, location)) = args.next() else {
+                        invariant_violation!("arguments are empty but arity was already checked");
+                    };
+                    argument(env, context, arg_idx, location, expected_ty.clone())?
+                }
+                TxContextKind::Mutable | TxContextKind::Immutable => {
+                    let is_mut = match tx_context_kind {
+                        TxContextKind::Mutable => true,
+                        TxContextKind::Immutable => false,
+                        TxContextKind::None => unreachable!(),
+                    };
+                    // TODO this might overlap or be  out of bounds of the original PTB arguments...
+                    // what do we do here?
+                    let idx = param_idx as u16;
+                    let arg__ = T::Argument__::Borrow(is_mut, T::Location::TxContext);
+                    let ty = Type::Reference(is_mut, Rc::new(env.tx_context_type()?));
+                    sp(idx, (arg__, ty))
+                }
+            })
+        })
+        .collect::<Result<Vec<_>, ExecutionError>>()?;
+    res.reverse();
 
     assert_invariant!(
         args.next().is_none(),
         "some arguments went unused but arity was already checked"
     );
-    res.reverse();
     Ok(res)
 }
 
