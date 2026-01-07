@@ -69,7 +69,7 @@
       { "source": "/build/move", "destination": "/guides/developer/sui-101", "permanent": true },
       { "source": "/build/move/time", "destination": "/guides/developer/sui-101/access-time", "permanent": true },
       { "source": "/build/move/sui-move-library", "destination": "/concepts/sui-move-concepts", "permanent": true },
-      { "source": "/build/programming-with-objects/ch6-collections", "destination": "/guides/developer/objects/dynamic-fields/tables-bags", "permanent": true },
+      { "source": "/build/programming-with-objects/ch6-collections", "destination": "/guides/developer/objects/tables-tabs", "permanent": true },
       { "source": "/build/programming-with-objects/ch1-object-basics", "destination": "/guides/developer/objects/object-model", "permanent": true },
       { "source": "/build/programming-with-objects/ch4-object-wrapping", "destination": "/guides/developer/objects/object-ownership/wrapped", "permanent": true },
       { "source": "/build/programming-with-objects/ch2-using-objects", "destination": "/guides/developer/objects/object-ownership", "permanent": true },
