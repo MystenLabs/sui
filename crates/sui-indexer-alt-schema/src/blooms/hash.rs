@@ -29,7 +29,7 @@ pub fn compute_positions(key: &[u8], num_bits: usize, num_hashes: u32, seed: u12
 }
 
 /// Compute block index and bit positions within that block.
-pub(super) fn compute_blocked_positions(
+pub fn compute_blocked_positions(
     key: &[u8],
     num_blocks: usize,
     bits_per_block: usize,
