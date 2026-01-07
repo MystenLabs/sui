@@ -192,11 +192,14 @@ mod tests {
     use diesel::QueryDsl;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::Indexer;
-    use sui_indexer_alt_schema::blooms::blocked::compute_key_hash_positions;
+    use sui_indexer_alt_schema::blooms::{
+        BLOOM_BLOCK_BITS, NUM_BLOOM_BLOCKS, NUM_HASHES, hash::compute_blocked_positions,
+    };
 
-    /// Helper to check if a key is present in a bloom filter block.
+    /// Check if a key is present in a bloom filter block (test helper).
     fn block_contains_key(block_data: &[u8], key: &[u8], seed: u128) -> bool {
-        let (_, positions) = compute_key_hash_positions(key, seed);
+        let (_, positions) =
+            compute_blocked_positions(key, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BITS, NUM_HASHES, seed);
         positions
             .iter()
             .all(|&pos| (block_data[pos / 8] & (1 << (pos % 8))) != 0)
@@ -271,7 +274,8 @@ mod tests {
         // This is important because merge only happens when there's a conflict on
         // (cp_block_id, bloom_block_index).
         let key1 = b"key_0".to_vec();
-        let (target_block_idx, _) = compute_key_hash_positions(&key1, seed);
+        let (target_block_idx, _) =
+            compute_blocked_positions(&key1, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BITS, NUM_HASHES, seed);
 
         // key_93 hashes to the same bloom_block_index as key_0 with seed 0
         let key2 = b"key_93".to_vec();
@@ -372,7 +376,13 @@ mod tests {
 
         // Verify original key is still present
         let blocks = get_bloom_blocks(&mut conn, 0).await;
-        let (original_block_idx, _) = compute_key_hash_positions(b"original_key", seed);
+        let (original_block_idx, _) = compute_blocked_positions(
+            b"original_key",
+            NUM_BLOOM_BLOCKS,
+            BLOOM_BLOCK_BITS,
+            NUM_HASHES,
+            seed,
+        );
         let block = blocks
             .iter()
             .find(|b| b.bloom_block_index == original_block_idx as i16)

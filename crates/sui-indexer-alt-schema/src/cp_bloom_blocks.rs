@@ -36,11 +36,3 @@ pub struct StoredCpBloomBlock {
     /// Approximate count of items (may overcount due to merges).
     pub num_items: Option<i64>,
 }
-
-/// Temporary struct to hold checkpoint items before building bloom filter.
-/// This is what the processor returns - the framework batches these before commit().
-#[derive(Clone, Debug, FieldCount)]
-pub struct CheckpointItems {
-    pub cp_sequence_number: i64,
-    pub items: Vec<Vec<u8>>,
-}
