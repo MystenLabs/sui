@@ -2,26 +2,38 @@
 
 This is highly experimental tooling intended for development and testing purposes only. It is not recommended for production use and is provided as-is without guarantees.
 
-Expect breaking changes until this is officially released and stabilized.
+Expect breaking changes until this is officially released and stable.
 
 # Sui Forking Tool
 
-A development tool that enables testing and developing against a local Sui network initialized with state from mainnet, testnet, or devnet at a specific checkpoint.
+A development tool that enables testing and developing against a local Sui network initialized with state from mainnet, testnet, or devnet at a specific checkpoint. Currently, only forking from the latest checkpoint is supported.
 
 ## Overview
 
-`sui-forking` allows developers to start a local network in lock-step mode and execute transactions against initial state derived from the actual Sui network. This enables you to:
+`sui-forking` allows developers to start a local network in lock-step mode and execute transactions against initial state derived from the live Sui network. This enables you to:
 
 - Depend on existing on-chain packages and data
 - Test contracts that interact with real deployed packages
 - Develop locally while maintaining consistency with production state
-- Run integration tests against forked network state
+- Run integration tests against forked network state and using packages deployed on the real live network
 
 **Important Note**
 Unlike a standard local Sui network with validators, the forking tool runs in lock-step mode where each transaction is executed sequentially and creates a checkpoint.
 That means that you have full control over the advancement of checkpoints, time, and epochs to simulate different scenarios.
 
-Moreover, currently only forking from the last known checkpoint is supported. You cannot specify an arbitrary checkpoint number to fork from.
+Currently only forking from the last known checkpoint is supported. You cannot specify an arbitrary checkpoint number to fork from.
+
+## Limitations
+- Only forking from the latest checkpoint is supported, not arbitrary checkpoints.
+- Requires a Postgres DB for storing local network state; it needs to connect to a `sui-indexer-alt` DB.
+- Once the network is stopped, all changes are lost. Persistent state saving is not implemented yet. 
+- Staking and related operations are not supported.
+- Single validator, single authority network.
+- Object fetching overhead: First access to objects requires network download.
+- Random object is not supported yet.
+- If it forks at checkpoint X, you cannot depend on objects created after checkpoint X. You'll need to restart the network at that checkpoint or a later one.
+- Sequential execution: Transactions are executed one at a time, no parallelism.
+- Does not support local network forking.
 
 ## Usage
 
@@ -45,16 +57,15 @@ sui-forking start --network testnet
 ```
 
 This command:
-- Starts a local "server" on port 8123 (default) - this is used to interact with the internal network, e.g., advance-checkpoints, request gas, advance-clock, advance-epoch, etc.
+- Starts a local "server" on port 3001 (default) - this is used to interact with the forked network, e.g., advance-checkpoints, request gas, advance-clock, advance-epoch, etc. You can do so via the CLI commands with the `sui-forking` binary or via the REST API (see below).
 - Starts a local Sui network on port 3000 (default) - this is the (now deprecated) JSON RPC endpoint for interacting with the local network
 - Allows you to execute transactions against this local state and fetches objects on-demand from the real network
 
 #### Options
 
-- `--checkpoint <number>`: The checkpoint to fork from (required)
-- `--network <network>`: Network to fork from: `mainnet`, `testnet`, or `devnet` (required). Local network is not currently supported.
-- `--port <port>`: Port for the local network (default: 8123)
-
+- `--checkpoint <number>`: The checkpoint to fork from (required)  - note that this is WIP
+- `--network <network>`: Network to fork from: `mainnet`, `testnet` (mainnet default if none provided). Local network is not currently supported.
+- `--port <port>`: Port for the local network (default: 3001)
 
 ## Available Commands
 
@@ -130,18 +141,15 @@ sui client gas
 sui client ptb --move-call 0x65d106ccd0feddc4183dcaa92decafd3376ee9b34315aae938dc838f6d654f18::ascii::is_ascii '"hello"' --gas-budget 5000000
 ```
 
-## Limitations
-
-- Only forking from the latest checkpoint is supported, not arbitrary checkpoints.
-- Sequential execution: Transactions are executed one at a time, no parallelism.
-- Staking and related operations are not supported.
-- One validator, single authority network.
-- Object fetching overhead: First access to objects requires network download
-- If it forks at checkpoint X, you cannot depend on objects created after checkpoint X. You'll need to restart the network at that checkpoint or a later one.
-- Currently, it does not save state. You will lose all changes when you stop the local network.
-- It requires Postgres DB for storing the local network state; a `sui-indexer-alt` DB is needed.
-- Random object is not supported yet.
-
+## Server REST API
+The local forked network server exposes a REST API for interaction. The server listens on port 3001 by default.
+### Endpoints
+- `POST /advance-checkpoint`: Advance the checkpoint by 1
+- `POST /advance-clock [seconds]`: Advance the clock by seconds (default: 1s if omitted).
+- `POST /advance-epoch`: Advance the epoch by 1
+- `POST /faucet`: Request SUI tokens
+  - Body: `{ "address": "<address>", "amount": <amount> }`
+- `GET /status`: Get current checkpoint, epoch, and transaction count
 
 ## Related Tools
 
