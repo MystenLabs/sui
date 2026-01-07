@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 use sui_macros::sim_test;
+use sui_protocol_config::ProtocolConfig;
 use sui_rpc::Client;
 use sui_rpc::proto::sui::rpc::v2::Balance;
 use sui_rpc::proto::sui::rpc::v2::{ExecutedTransaction, GasCostSummary};
@@ -77,6 +78,12 @@ async fn test_balance_changes_on_transfer() {
 
 #[sim_test]
 async fn test_address_balance() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
+        cfg.enable_accumulators_for_testing();
+        cfg
+    });
+
     let test_cluster = TestClusterBuilder::new().build().await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
@@ -118,6 +125,12 @@ async fn test_address_balance() {
 
 #[sim_test]
 async fn test_address_balance_account_with_only_address_balance() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
+        cfg.enable_accumulators_for_testing();
+        cfg
+    });
+
     let test_cluster = TestClusterBuilder::new().build().await;
     let mut grpc_client = get_grpc_client(&test_cluster).await;
 
