@@ -7,7 +7,6 @@ This repo is a work in progress and will continue to be updated, as some sites h
 ## Shared components
 
 The shared components for all sites are:
-
 ```
 shared/
 ├── components/
@@ -67,16 +66,18 @@ shared/
 
 Despite the sites using the same plugins and components for:
 
-1. Visitor metrics (Plusible)
+1. Visitor metrics (Plausible)
 2. Cookbook AI
 3. Algolia Search
 4. Push Feedback
 
-Each of these has a custom configuration for their own API keys. These components are thus managed individually. 
+Each of these has a custom configuration for their own API keys. These components are
+thus managed individually.
 
-Additionally, all `src/theme` components are unique to each site to prevent conflicts between the styling of each individual site and the Docusaurus theme swizzling process.
+Additionally, all `src/theme` components are unique to each site to prevent conflicts
+between the styling of each individual site and the Docusaurus theme swizzling process.
 
-## Sui-specific components 
+## Sui-specific components
 
 Components unique to the Sui documentation are as follows:
 
@@ -104,6 +105,4 @@ Components unique to the Sui documentation are as follows:
 - utils/grpc-download.js
 - utils/massagegraphql.js
 
-
-## Walrus-specific components 
-
+## Walrus-specific components

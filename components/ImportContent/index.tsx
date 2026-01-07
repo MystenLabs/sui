@@ -6,17 +6,27 @@ import React from "react";
 import CodeBlock from "@theme/CodeBlock";
 import utils from "./utils";
 import MarkdownIt from "markdown-it";
-import { importContentMap } from "../../../.generated/ImportContentMap";
+
+// Import content map is generated at build time - make it optional
+let importContentMap: Record<string, string> = {};
+try {
+  // @ts-ignore - this file is generated at build time by prebuild script
+  importContentMap =
+    require("@site/src/.generated/ImportContentMap").importContentMap;
+} catch (e) {
+  // Will be empty if prebuild hasn't run - code mode won't work but build won't fail
+}
 
 /// <reference types="webpack-env" />
 
 /** ------------------ SNIPPET MODE (scoped to /snippets) ------------------ */
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const snippetReq: __WebpackModuleApi.RequireContext = require.context(
-  "@docs/snippets",
-  true,
-  /\.mdx?$/,
-);
+let snippetReq: __WebpackModuleApi.RequireContext | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  snippetReq = require.context("@docs/snippets", true, /\.mdx?$/);
+} catch (e) {
+  // Snippets directory may not exist in all repos
+}
 
 type AnyMod = any;
 type ResolvedComp = React.ComponentType<any> | null;
@@ -30,21 +40,23 @@ function resolveMdxComponent(mod: AnyMod): ResolvedComp {
 }
 
 const SNIPPET_MAP: Record<string, React.ComponentType<any>> = {};
-snippetReq.keys().forEach((k: string) => {
-  const Comp = resolveMdxComponent(snippetReq<AnyMod>(k));
-  if (!Comp) return;
-  const key = k.replace(/^\.\//, ""); // "sub/x.mdx"
-  SNIPPET_MAP[key] = Comp;
-  SNIPPET_MAP[key.replace(/\.mdx?$/, "")] = Comp; // also without extension
-});
+if (snippetReq) {
+  snippetReq.keys().forEach((k: string) => {
+    const Comp = resolveMdxComponent(snippetReq!(k));
+    if (!Comp) return;
+    const key = k.replace(/^\.\//, ""); // "sub/x.mdx"
+    SNIPPET_MAP[key] = Comp;
+    SNIPPET_MAP[key.replace(/\.mdx?$/, "")] = Comp; // also without extension
+  });
+}
 
 type Props = {
-  /** For mode="snippet": path under /snippets. For mode="code": repo-relative path like "packages/foo/src/x.ts". */
+  /** For mode="snippet": path under /snippets. For mode="code": repo-relative path. */
   source: string;
   mode: "snippet" | "code";
-  language?: string; // for CodeBlock (code mode)
-  tag?: string; // ID using the docs:: comment format
-  fun?: string; // target functions
+  language?: string;
+  tag?: string;
+  fun?: string;
   variable?: string;
   struct?: string;
   impl?: string;
@@ -54,16 +66,16 @@ type Props = {
   module?: string;
   component?: string;
   dep?: string;
-  test?: string; // target test blocks
+  test?: string;
   highlight?: string;
-  noComments?: boolean; // if included, remove ALL code comments
-  noTests?: boolean; // if included, don't include tests
+  noComments?: boolean;
+  noTests?: boolean;
   noTitle?: boolean;
   style?: string;
   org?: string;
   repo?: string;
   ref?: string;
-  signatureOnly?: boolean; // if included, only display function signature
+  signatureOnly?: boolean;
 };
 
 export default function ImportContent({
@@ -80,7 +92,7 @@ export default function ImportContent({
   type,
   impl,
   trait,
-  enumeration, // enum is reserved word
+  enumeration,
   module,
   dep,
   component,
@@ -111,7 +123,8 @@ export default function ImportContent({
       try {
         const branch = ref || "main";
         const path = String(source || "").replace(/^\.\/?/, "");
-        const url = `https://raw.githubusercontent.com/${org}/${repo}/${branch}/${path}`;
+        const url =
+          `https://raw.githubusercontent.com/${org}/${repo}/${branch}/${path}`;
         const headers: Record<string, string> = {};
 
         const res = await fetch(url, { headers });
@@ -149,13 +162,11 @@ export default function ImportContent({
   }
 
   // mode === "code"
-  // Expect paths like "packages/…", "apps/…", "docs/…"
   const cleaned = source.replace(/^\/+/, "").replace(/^\.\//, "");
 
   const match = cleaned.match(/\.([^.]+)$/);
   const ext = match ? match[1] : undefined;
 
-  // If language is not explicitly set, use extension
   if (!language) {
     switch (ext) {
       case "lock":
@@ -183,12 +194,14 @@ export default function ImportContent({
         language = ext || "text";
     }
   }
+
   if (isGitHub && ghLoading) {
     return <div className="import-content loading">Loading…</div>;
   }
   if (isGitHub && ghErr) {
     return <pre className="import-content error">{ghErr}</pre>;
   }
+
   let content: string;
   if (isGitHub) {
     content = ghText;
@@ -210,7 +223,6 @@ export default function ImportContent({
       /^\/\/\s*Copyright.*Mysten Labs.*\n\/\/\s*SPDX-License.*?\n?$/gim,
       "",
     )
-
     .replace(
       /\[dependencies\]\nsui\s?=\s?{\s?local\s?=.*sui-framework.*\n/i,
       "[dependencies]",
@@ -264,21 +276,18 @@ export default function ImportContent({
     out = utils.returnTests(out, test);
   }
 
-  out = out.replace(/^\s*\/\/\s*docs::\/?.*\r?$\n?/gm, ""); // remove all docs:: style comments
+  out = out.replace(/^\s*\/\/\s*docs::\/?.*\r?$\n?/gm, "");
 
   if (noTests) {
     out = utils.returnNotests(out);
   }
 
   if (noComments) {
-    // get rid of all comments
     out = out.replace(/^ *\/\/.*\n/gm, "");
   }
 
-  // Remove top blank line if exists
   out = out.replace(/^\s*\n/, "");
 
-  // Safely compute highlight metastring
   const title = org ? `github.com/${org}/${repo}/${cleaned}` : cleaned;
   const rawHighlight = typeof highlight === "string" ? highlight : "";
   const computedHL = rawHighlight
@@ -297,7 +306,6 @@ export default function ImportContent({
     if (!noTitle) meta = `title="${title}"`;
   }
 
-  // just render markdown if style = "markdown" or "md"
   if (/^m(?:d|arkdown)$/i.test(style)) {
     const html = md.render(out);
     return (
