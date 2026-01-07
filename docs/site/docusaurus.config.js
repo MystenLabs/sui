@@ -96,7 +96,7 @@ const config = {
                     {
                       loader: path.resolve(
                         __dirname,
-                        "./src/plugins/inject-code/stepLoader.js",
+                        "./src/shared/plugins/inject-code/stepLoader.js",
                       ),
                     },
                   ],
@@ -130,7 +130,7 @@ const config = {
         },
       },
     ],
-    //require.resolve("./src/plugins/tabs-md-client/index.mjs"),
+    //require.resolve("./src/shared/plugins/tabs-md-client/index.mjs"),
     async function myPlugin(context, options) {
       return {
         name: "docusaurus-tailwindcss",
@@ -142,7 +142,7 @@ const config = {
         },
       };
     },
-    path.resolve(__dirname, `./src/plugins/descriptions`),
+    path.resolve(__dirname, `./src/shared/plugins/descriptions`),
     path.resolve(__dirname, `./src/plugins/framework`),
     path.resolve(__dirname, `./src/plugins/askcookbook`),
     path.resolve(__dirname, `./src/plugins/protocol`),
