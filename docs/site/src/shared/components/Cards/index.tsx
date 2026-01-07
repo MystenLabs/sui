@@ -68,13 +68,22 @@ interface CardsProps {
 }
 
 export function Cards({ children, type, ...props }: CardsProps) {
-  let twClassList =
-    "grid-card gap-8 grid xl:grid-rows-${Math.ceil(children.length/3)} lg:grid-rows-${Math.ceil(children.length/2)} xl:grid-cols-3 lg:grid-cols-2 justify-start pb-8";
+  const baseClasses = [
+    "grid-card",
+    "gap-8",
+    "grid",
+    "xl:grid-cols-3",
+    "lg:grid-cols-2",
+    "justify-start",
+    "pb-8",
+  ].join(" ");
+
+  const typeClass = type === "steps"
+    ? styles["step-card-container"]
+    : styles["card-container"];
+
   return (
-    <div
-      className={`${twClassList} ${type === "steps" ? `${styles["step-card-container"]}` : `${styles["card-container"]}`}`}
-      {...props}
-    >
+    <div className={`${baseClasses} ${typeClass}`} {...props}>
       {children}
     </div>
   );

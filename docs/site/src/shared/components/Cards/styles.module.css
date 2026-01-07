@@ -65,9 +65,9 @@
   top: 2.5rem;
   bottom: 2.5rem;
   width: 2px;
-  background: linear-gradient(180deg, 
-    #298DFF 0%, 
-    #E0E2E6 50%, 
+  background: linear-gradient(180deg,
+    #298DFF 0%,
+    #E0E2E6 50%,
     #343940 100%
   );
   opacity: 0.2;
@@ -80,8 +80,8 @@
   padding: 1.25rem 1.5rem 1.25rem 4.5rem !important;
   border: 1px solid #E0E2E6 !important;
   border-radius: 0.625rem !important;
-  background: linear-gradient(135deg, 
-    #ffffff 0%, 
+  background: linear-gradient(135deg,
+    #ffffff 0%,
     #F4F5F7 100%
   ) !important;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
@@ -119,8 +119,8 @@
   top: 0;
   width: 3px;
   height: 100%;
-  background: linear-gradient(180deg, 
-    #298DFF 0%, 
+  background: linear-gradient(180deg,
+    #298DFF 0%,
     #5CA9FF 50%,
     rgba(41, 141, 255, 0) 100%
   );
@@ -131,11 +131,11 @@
 
 .step-card-container > div[class*='card_']:hover {
   border-color: #8FCBFF !important;
-  background: linear-gradient(135deg, 
-    #ffffff 0%, 
+  background: linear-gradient(135deg,
+    #ffffff 0%,
     #F4F5F7 100%
   ) !important;
-  box-shadow: 
+  box-shadow:
     0 4px 16px rgba(41, 141, 255, 0.12),
     0 0 0 1px #8FCBFF !important;
   transform: translateX(4px) !important;
@@ -169,19 +169,19 @@
 
 [data-theme='dark'] .step-card-container > div[class*='card_'] {
   border-color: #343940 !important;
-  background: linear-gradient(135deg, 
-    #222529 0%, 
+  background: linear-gradient(135deg,
+    #222529 0%,
     #131518 100%
   ) !important;
 }
 
 [data-theme='dark'] .step-card-container > div[class*='card_']:hover {
   border-color: #5CA9FF !important;
-  background: linear-gradient(135deg, 
-    #222529 0%, 
+  background: linear-gradient(135deg,
+    #222529 0%,
     #131518 100%
   ) !important;
-  box-shadow: 
+  box-shadow:
     0 4px 16px rgba(41, 141, 255, 0.2),
     0 0 0 1px #5CA9FF !important;
 }
@@ -195,14 +195,14 @@
   .step-card-container > div[class*='card_'] {
     padding: 1rem 1rem 1rem 3.5rem !important;
   }
-  
+
   .step-card-container > div[class*='card_']::before {
     left: 1rem;
     width: 1.5rem;
     height: 1.5rem;
     font-size: 0.75rem;
   }
-  
+
   .step-card-container::before {
     left: 0.875rem;
   }
@@ -223,8 +223,8 @@
   padding: 1.25rem 1.5rem !important;
   border: 1px solid #E0E2E6 !important;
   border-radius: 0.625rem !important;
-  background: linear-gradient(135deg, 
-    #ffffff 0%, 
+  background: linear-gradient(135deg,
+    #ffffff 0%,
     #F4F5F7 100%
   ) !important;
   backdrop-filter: blur(10px);
@@ -243,7 +243,7 @@
   width: 3px;
   height: 100%;
   background: linear-gradient(180deg,
-    #298DFF 0%, 
+    #298DFF 0%,
     #5CA9FF 50%,
     rgba(41, 141, 255, 0) 100%);
   opacity: 0;
@@ -254,11 +254,11 @@
 .card-container > div[class*='card_']:hover,
 .card-container > a[class*='card_']:hover {
   border-color: #8FCBFF !important;
-  background: linear-gradient(135deg, 
-    #ffffff 0%, 
+  background: linear-gradient(135deg,
+    #ffffff 0%,
     #F4F5F7 100%
   ) !important;
-  box-shadow: 
+  box-shadow:
     0 4px 12px rgba(41, 141, 255, 0.12),
     0 2px 4px rgba(0, 0, 0, 0.04) !important;
   transform: translateY(-2px) !important;
@@ -285,8 +285,8 @@
 [data-theme='dark'] .card-container > div[class*='card_'],
 [data-theme='dark'] .card-container > a[class*='card_'] {
   border-color: #343940 !important;
-  background: linear-gradient(135deg, 
-    #222529 0%, 
+  background: linear-gradient(135deg,
+    #222529 0%,
     #131518 100%
   ) !important;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
@@ -295,11 +295,11 @@
 [data-theme='dark'] .card-container > div[class*='card_']:hover,
 [data-theme='dark'] .card-container > a[class*='card_']:hover {
   border-color: #5CA9FF !important;
-  background: linear-gradient(135deg, 
-    #222529 0%, 
+  background: linear-gradient(135deg,
+    #222529 0%,
     #131518 100%
   ) !important;
-  box-shadow: 
+  box-shadow:
     0 4px 12px rgba(41, 141, 255, 0.2),
     0 2px 4px rgba(0, 0, 0, 0.15) !important;
 }
@@ -319,7 +319,7 @@
   .card-container {
     grid-template-columns: 1fr;
   }
-  
+
   .card-container > div[class*='card_'],
   .card-container > a[class*='card_'] {
     padding: 1rem 1.25rem !important;

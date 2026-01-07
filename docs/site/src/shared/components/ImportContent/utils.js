@@ -269,7 +269,8 @@ exports.returnFunctions = (source, functions, language, sig) => {
       // optional: entry
       // fun <name> ... {
       const headerRe = new RegExp(
-        String.raw`^(\s*)(?:public(?:\s*\(\s*(?:friend|package)\s*\))?\s+)?(?:entry\s+)?fun\s+${escapeRegex(fn)}\b[\s\S]*?\{`,
+        String.raw`^(\s*)(?:public(?:\s*\(\s*(?:friend|package)\s*\))?\s+)?` +
+        String.raw`(?:entry\s+)?fun\s+${escapeRegex(fn)}\b[\s\S]*?\{`,
         "m",
       );
       const m = headerRe.exec(source);
@@ -297,27 +298,33 @@ exports.returnFunctions = (source, functions, language, sig) => {
       const heads = [
         // A) function declaration
         new RegExp(
-          String.raw`^(\s*)(?:export\s+(?:default\s+)?)?(?:async\s+)?function\s+${escapeRegex(fn)}\b[^{]*\{`,
+          String.raw`^(\s*)(?:export\s+(?:default\s+)?)?(?:async\s+)?` +
+          String.raw`function\s+${escapeRegex(fn)}\b[^{]*\{`,
           "m",
         ),
         // B) const/let/var name = function (...) { ... }
         new RegExp(
-          String.raw`^(\s*)(?:export\s+)?(?:const|let|var)\s+${escapeRegex(fn)}\s*=\s*(?:async\s*)?function\b[^{]*\{`,
+          String.raw`^(\s*)(?:export\s+)?(?:const|let|var)\s+${escapeRegex(fn)}` +
+          String.raw`\s*=\s*(?:async\s*)?function\b[^{]*\{`,
           "m",
         ),
         // B2) const/let/var name = (..)=> ... => { ... }  (allow any number of curried arrows)
         new RegExp(
-          String.raw`^(\s*)(?:export\s+)?(?:const|let|var)\s+${escapeRegex(fn)}\s*=\s*(?:async\s*)?(?:[^{}]*?=>\s*)*[^{}]*?\{`,
+          String.raw`^(\s*)(?:export\s+)?(?:const|let|var)\s+${escapeRegex(fn)}` +
+          String.raw`\s*=\s*(?:async\s*)?(?:[^{}]*?=>\s*)*[^{}]*?\{`,
           "m",
         ),
         // C) class method
         new RegExp(
-          String.raw`^(\s*)(?:(?:public|private|protected)\s+)?(?:static\s+)?(?:async\s+)?${escapeRegex(fn)}\s*\([\s\S]*?\)\s*\{`,
+          String.raw`^(\s*)(?:(?:public|private|protected)\s+)?(?:static\s+)?` +
+          String.raw`(?:async\s+)?${escapeRegex(fn)}\s*\([\s\S]*?\)\s*\{`,
           "m",
         ),
         // D) class field arrow, allowing curried arrows before body
         new RegExp(
-          String.raw`^(\s*)(?:(?:public|private|protected)\s+)?(?:readonly\s+)?(?:static\s+)?${escapeRegex(fn)}\s*=\s*(?:async\s*)?(?:[^{}]*?=>\s*)*[^{}]*?\{`,
+          String.raw`^(\s*)(?:(?:public|private|protected)\s+)?(?:readonly\s+)?` +
+          String.raw`(?:static\s+)?${escapeRegex(fn)}\s*=\s*(?:async\s*)?` +
+          String.raw`(?:[^{}]*?=>\s*)*[^{}]*?\{`,
           "m",
         ),
       ];
@@ -345,7 +352,10 @@ exports.returnFunctions = (source, functions, language, sig) => {
       funContent.push(removeLeadingSpaces(out, pre));
       continue;
     } else if (language === "rust") {
-      funStr = `^(\\s*)(?:pub\\s+)?(?:async\\s+)?(?:const\\s+)?(?:unsafe\\s+)?(?:extern\\s+(?:\"[^\"]+\"\\s*)?)?fn\\s+${escapeRegex(fn)}\\s*(?:<[^>]*>)?\\s*\\([^)]*\\)\\s*(?:->\\s*[^;{]+)?\\s*(?:;|\\{[\\s\\S]*?^\\1\\})`;
+      funStr =
+        `^(\\s*)(?:pub\\s+)?(?:async\\s+)?(?:const\\s+)?(?:unsafe\\s+)?` +
+        `(?:extern\\s+(?:"[^"]+\"\\s*)?)?fn\\s+${escapeRegex(fn)}\\s*` +
+        `(?:<[^>]*>)?\\s*\\([^)]*\\)\\s*(?:->\\s*[^;{]+)?\\s*(?:;|\\{[\\s\\S]*?^\\1\\})`;
     }
 
     if (funStr) {
@@ -375,7 +385,8 @@ exports.returnTag = (source, tag) => {
   // Intentionally forcing the closing docs tag.
   if (!tag) return source;
   const docTagRe = new RegExp(
-    `\\/\\/\\s?docs::#${escapeRegex(tag)}\\b[^\\n]*\\n([\\s\\S]*)\\/\\/\\s*docs::\\/\\s?#${escapeRegex(tag)}\\b(?<closers>[)};]*)`,
+    `\\/\\/\\s?docs::#${escapeRegex(tag)}\\b[^\\n]*\\n([\\s\\S]*)` +
+    `\\/\\/\\s*docs::\\/\\s?#${escapeRegex(tag)}\\b(?<closers>[)};]*)`,
     "m",
   );
   const matchTaggedContent = docTagRe.exec(source);
@@ -388,7 +399,8 @@ exports.returnTag = (source, tag) => {
   let taggedContent = matchTaggedContent[1];
 
   const pauseTagRe = new RegExp(
-    `^[\\t ]*\\/\\/[\\t ]*docs::#${escapeRegex(tag)}-pause[\\t ]*$[\\s\\S]*?^[\\t ]*\\/\\/[\\t ]*docs::#${escapeRegex(tag)}-resume[\\t ]*\\n?`,
+    `^[\\t ]*\\/\\/[\\t ]*docs::#${escapeRegex(tag)}-pause[\\t ]*$` +
+    `[\\s\\S]*?^[\\t ]*\\/\\/[\\t ]*docs::#${escapeRegex(tag)}-resume[\\t ]*\\n?`,
     "gm",
   );
 
@@ -433,7 +445,8 @@ exports.returnVariables = (source, variables, language) => {
   let out = [];
   if (language === "ts") {
     const varTsFunction = `^( *)?.*?(let|const) \\b${escapeRegex(variables)}\\b.*=>`;
-    const varTsVariable = `^( *)?.*?(let|const) \\b${escapeRegex(variables)}\\b (?!.*=>)=.*;`;
+    const varTsVariable =
+      `^( *)?.*?(let|const) \\b${escapeRegex(variables)}\\b (?!.*=>)=.*;`;
     const reFun = new RegExp(varTsFunction, "m");
     const reVar = new RegExp(varTsVariable, "m");
     const mFun = reFun.exec(source);
@@ -455,17 +468,20 @@ exports.returnVariables = (source, variables, language) => {
       out.push(removeLeadingSpaces(mVar[0], pre));
     } else {
       source =
-        "Variable not found. If code is formatted correctly, consider using code comments instead.";
+        "Variable not found. If code is formatted correctly, " +
+        "consider using code comments instead.";
     }
   } else {
     for (let v of names) {
       v = v.trim();
       const shortRe = new RegExp(
-        `^(\\s*)?(#\\[test_only\\])?(let|const) \\(?.*?\\b${escapeRegex(v)}\\b.*?\\)?\\s?=.*;`,
+        `^(\\s*)?(#\\[test_only\\])?(let|const) \\(?.*?\\b${escapeRegex(v)}` +
+        `\\b.*?\\)?\\s?=.*;`,
         "m",
       );
       const longRe = new RegExp(
-        `^(\\s*)?(#\\[test_only\\])?(let|const) \\(?.*?\\b${escapeRegex(v)}\\b.*?\\)?\\s?= \\{[^}]*\\};\\s*$`,
+        `^(\\s*)?(#\\[test_only\\])?(let|const) \\(?.*?\\b${escapeRegex(v)}` +
+        `\\b.*?\\)?\\s?= \\{[^}]*\\};\\s*$`,
         "m",
       );
       const mShort = shortRe.exec(source);
@@ -475,7 +491,10 @@ exports.returnVariables = (source, variables, language) => {
         let pre = capturePrepend(m, source);
         out.push(removeLeadingSpaces(m[0], pre));
       } else {
-        return "Variable not found. If code is formatted correctly, consider using code comments instead.";
+        return (
+          "Variable not found. If code is formatted correctly, " +
+          "consider using code comments instead."
+        );
       }
     }
   }
@@ -493,7 +512,8 @@ exports.returnStructs = (source, structList, language) => {
 
   for (const name of names) {
     const shortStructRE = new RegExp(
-      String.raw`^\s*(?:pub(?:lic)?(?:\s*\(\s*[^)]+\s*\))?\s+)?struct\s+${escapeRegex(name)}\s*;[ \t]*(?:\r?\n|$)`,
+      String.raw`^\s*(?:pub(?:lic)?(?:\s*\(\s*[^)]+\s*\))?\s+)?struct\s+` +
+      String.raw`${escapeRegex(name)}\s*;[ \t]*(?:\r?\n|$)`,
     );
 
     const m = shortStructRE.exec(src);
@@ -501,12 +521,16 @@ exports.returnStructs = (source, structList, language) => {
       pre = "";
     if (!m) {
       const structBegRE = new RegExp(
-        String.raw`^\s*(?:pub(?:lic)?(?:\s*\(\s*[^)]+\s*\))?\s+)?struct\s+${escapeRegex(name)}\b[\s\S]*?\{`,
+        String.raw`^\s*(?:pub(?:lic)?(?:\s*\(\s*[^)]+\s*\))?\s+)?struct\s+` +
+        String.raw`${escapeRegex(name)}\b[\s\S]*?\{`,
         "m",
       );
       const ml = structBegRE.exec(src);
       if (!ml) {
-        return "Struct not found. If code is formatted correctly, consider using code comments instead.";
+        return (
+          "Struct not found. If code is formatted correctly, " +
+          "consider using code comments instead."
+        );
       } else {
         const startIdx = ml.index;
         const sub = src.slice(startIdx);
@@ -514,12 +538,18 @@ exports.returnStructs = (source, structList, language) => {
         // headerRe included the first `{`, so find its position in `sub`
         const bracePos = sub.indexOf("{");
         if (bracePos === -1) {
-          return "Struct not found. If code is formatted correctly, consider using code comments instead.";
+          return (
+            "Struct not found. If code is formatted correctly, " +
+            "consider using code comments instead."
+          );
         }
 
         const block = captureBalanced(sub.slice(bracePos));
         if (!block) {
-          return "Struct not found. If code is formatted correctly, consider using code comments instead.";
+          return (
+            "Struct not found. If code is formatted correctly, " +
+            "consider using code comments instead."
+          );
         }
 
         full = sub.slice(0, bracePos) + block; // header through matching `}`
@@ -571,17 +601,26 @@ exports.returnTraits = (source, trait) => {
     );
     const m = headerRe.exec(source);
     if (!m) {
-      return "Trait not found. If code is formatted correctly, consider using code comments instead.";
+      return (
+        "Trait not found. If code is formatted correctly, " +
+        "consider using code comments instead."
+      );
     }
     const startIdx = m.index;
     const sub = source.slice(startIdx);
     const braceStart = sub.indexOf("{");
     if (braceStart === -1) {
-      return "Trait not found. If code is formatted correctly, consider using code comments instead.";
+      return (
+        "Trait not found. If code is formatted correctly, " +
+        "consider using code comments instead."
+      );
     }
     const block = captureBalanced(sub.slice(braceStart));
     if (!block) {
-      return "Trait not found. If code is formatted correctly, consider using code comments instead.";
+      return (
+        "Trait not found. If code is formatted correctly, " +
+        "consider using code comments instead."
+      );
     }
     const full = sub.slice(0, braceStart) + block; // header .. matched closing }
     const pre = capturePrepend(m, source);
@@ -599,30 +638,42 @@ exports.returnImplementations = (source, impl) => {
       String.raw`^(\s*)(?:\uFEFF)?\s*impl(?:\s*<[\s\S]*?>)?\s+` +
         String.raw`(?:` +
         // A) impl <Trait> for <Type> { ... } where the searched name is the TRAIT
-        String.raw`(?:(?:[\w:]+::)*${escapeRegex(imp)}(?:\s*<[\s\S]*?>)?\s+for\s+(?<type>[\s\S]*?)(?:\s+where\s+[\s\S]*?)?)` +
+        String.raw`(?:(?:[\w:]+::)*${escapeRegex(imp)}(?:\s*<[\s\S]*?>)?\s+` +
+        String.raw`for\s+(?<type>[\s\S]*?)(?:\s+where\s+[\s\S]*?)?)` +
         String.raw`|` +
         // B) impl <Trait> for <Type> { ... } where the searched name is the TYPE
-        String.raw`(?:(?<trait>[\s\S]*?)\s+for\s+(?:[\w:]+::)*${escapeRegex(imp)}(?:\s*<[\s\S]*?>)?(?:\s+where\s+[\s\S]*?)?)` +
+        String.raw`(?:(?<trait>[\s\S]*?)\s+for\s+(?:[\w:]+::)*${escapeRegex(imp)}` +
+        String.raw`(?:\s*<[\s\S]*?>)?(?:\s+where\s+[\s\S]*?)?)` +
         String.raw`|` +
         // C) impl <Type> { ... }  (inherent impl) where the searched name is the TYPE
-        String.raw`(?:(?:[\w:]+::)*${escapeRegex(imp)}(?:\s*<[\s\S]*?>)?(?:\s+where\s+[\s\S]*?)?)` +
+        String.raw`(?:(?:[\w:]+::)*${escapeRegex(imp)}(?:\s*<[\s\S]*?>)?` +
+        String.raw`(?:\s+where\s+[\s\S]*?)?)` +
         String.raw`)\s*\{`,
       "ms",
     );
 
     const m = implRE.exec(source);
     if (!m) {
-      return "Implementation block match not found. If code is formatted correctly, consider using code comments instead.";
+      return (
+        "Implementation block match not found. If code is formatted correctly, " +
+        "consider using code comments instead."
+      );
     }
     const startIdx = m.index;
     const sub = source.slice(startIdx);
     const braceStart = sub.indexOf("{");
     if (braceStart === -1) {
-      return "Implementation block not found. If code is formatted correctly, consider using code comments instead.";
+      return (
+        "Implementation block not found. If code is formatted correctly, " +
+        "consider using code comments instead."
+      );
     }
     const block = captureBalanced(sub.slice(braceStart));
     if (!block) {
-      return "Implementation block not found. If code is formatted correctly, consider using code comments instead.";
+      return (
+        "Implementation block not found. If code is formatted correctly, " +
+        "consider using code comments instead."
+      );
     }
     const full = sub.slice(0, braceStart) + block; // header .. matched closing }
     const pre = capturePrepend(m, source);
@@ -641,7 +692,9 @@ exports.returnEnums = (source, enumVal) => {
   for (const e of enums) {
     // Match optional keywords: export / declare / const (TS) OR pub (Rust)
     const re = new RegExp(
-      `^(\\s*)(?:export\\s+)?(?:declare\\s+)?(?:const\\s+)?(?:pub(?:lic)?(?:\$begin:math:text$package\\$end:math:text$)?\\s+)?enum\\s+${escapeRegex(e)}\\b(?:\\s*<[^>]*>)?(?:\\s+has\\s+[^{]+)?\\s*\\{`,
+      `^(\\s*)(?:export\\s+)?(?:declare\\s+)?(?:const\\s+)?` +
+      `(?:pub(?:lic)?(?:\\(package\\))?\\s+)?` +
+      `enum\\s+${escapeRegex(e)}\\b(?:\\s*<[^>]*>)?(?:\\s+has\\s+[^{]+)?\\s*\\{`,
       "m",
     );
     const m = re.exec(source);
@@ -681,7 +734,10 @@ exports.returnModules = (source, module) => {
     const preMod = capturePrepend(modMatch, source);
     return removeLeadingSpaces(modLines.join("\n"), preMod);
   } else {
-    return "Module not found. If code is formatted correctly, consider using code comments instead.";
+    return (
+      "Module not found. If code is formatted correctly, " +
+      "consider using code comments instead."
+    );
   }
 };
 
@@ -781,7 +837,9 @@ exports.returnDeps = (source, dep) => {
     if (item) {
       const itemName = escapeRegex(item);
       // Either ...::Item [as Alias]?   OR   ...::{ ... Item ... }
-      body = String.raw`(?:\s*::\s*${itemName}\b(?:\s+as\s+${seg})?|\s*::\s*\{[\s\S]*?\b${itemName}\b[\s\S]*?\})`;
+      body =
+        String.raw`(?:\s*::\s*${itemName}\b(?:\s+as\s+${seg})?|` +
+        String.raw`\s*::\s*\{[\s\S]*?\b${itemName}\b[\s\S]*?\})`;
     } else {
       // No specific item: accept either a further nested path or a brace group
       body = String.raw`(?:\s*::\s*(?:${seg}(?:\s*::\s*${seg})*)|\s*::\s*\{[\s\S]*?\})?`;
@@ -796,7 +854,10 @@ exports.returnDeps = (source, dep) => {
       const pre = capturePrepend(m, source);
       out.push(removeLeadingSpaces(m[0], pre));
     } else {
-      return "Use statement not found. If code is formatted correctly, consider using code comments instead.";
+      return (
+        "Use statement not found. If code is formatted correctly, " +
+        "consider using code comments instead."
+      );
     }
   }
 
@@ -819,7 +880,8 @@ exports.returnTests = (source, testName) => {
     // Regex to match test blocks with the specified name
     // Supports: test('name', ...), test("name", ...), it('name', ...), it("name", ...)
     const testRegex = new RegExp(
-      `(?:test|it)\\s*\\(\\s*['"\`]([^'"\`]*${escapeRegex(name)}[^'"\`]*)['"\`]\\s*,\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>\\s*\\{`,
+      `(?:test|it)\\s*\\(\\s*['"\`]([^'"\`]*${escapeRegex(name)}[^'"\`]*)` +
+      `['"\`]\\s*,\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>\\s*\\{`,
       "g",
     );
 
