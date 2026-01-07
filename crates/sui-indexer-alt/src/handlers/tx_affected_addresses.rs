@@ -4,7 +4,9 @@
 use std::ops::Range;
 use std::sync::Arc;
 
+use crate::handlers::cp_sequence_numbers::tx_interval;
 use anyhow::Result;
+use async_trait::async_trait;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
@@ -16,10 +18,9 @@ use sui_indexer_alt_framework::{
 use sui_indexer_alt_schema::{
     schema::tx_affected_addresses, transactions::StoredTxAffectedAddress,
 };
+use sui_types::balance::Balance;
+use sui_types::effects::{AccumulatorValue, TransactionEffectsAPI};
 use sui_types::transaction::TransactionDataAPI;
-
-use crate::handlers::cp_sequence_numbers::tx_interval;
-use async_trait::async_trait;
 
 pub(crate) struct TxAffectedAddresses;
 
@@ -50,7 +51,24 @@ impl Processor for TxAffectedAddresses {
                 },
             );
 
-            let affected_addresses: Vec<StoredTxAffectedAddress> = recipients
+            let accumulator_addresses =
+                tx.effects
+                    .accumulator_events()
+                    .into_iter()
+                    .filter_map(|event| {
+                        let ty = &event.write.address.ty;
+                        if Balance::is_balance_type(ty)
+                            && matches!(&event.write.value, AccumulatorValue::Integer(_))
+                        {
+                            // Other types and variants are not used for balance changes
+                            Some(event.write.address.address)
+                        } else {
+                            None
+                        }
+                    });
+
+            let affected_addresses: Vec<StoredTxAffectedAddress> = accumulator_addresses
+                .chain(recipients)
                 .chain(vec![sender, payer])
                 .unique()
                 .map(|a| StoredTxAffectedAddress {
