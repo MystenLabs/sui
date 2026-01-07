@@ -36,6 +36,5 @@ pub struct StoredCpBloomBlock {
 #[derive(Clone, Debug, FieldCount)]
 pub struct CheckpointItems {
     pub cp_sequence_number: i64,
-    pub cp_block_id: i64,
     pub items: Vec<Vec<u8>>,
 }
