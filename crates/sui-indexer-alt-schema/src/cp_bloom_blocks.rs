@@ -36,3 +36,12 @@ pub struct StoredCpBloomBlock {
     /// Approximate count of items (may overcount due to merges).
     pub num_items: Option<i64>,
 }
+
+/// Items from a single checkpoint to be indexed into a bloom filter.
+#[derive(Debug, Clone)]
+pub struct CheckpointItems {
+    /// The checkpoint sequence number.
+    pub cp_sequence_number: i64,
+    /// The items (keys) to be indexed.
+    pub items: Vec<Vec<u8>>,
+}
