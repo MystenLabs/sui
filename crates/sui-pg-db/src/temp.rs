@@ -1,18 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Debug;
+use std::fs::OpenOptions;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Child;
+use std::process::Command;
+use std::process::ExitStatus;
+use std::time::Duration;
+use std::time::Instant;
+
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
-use std::fmt::Debug;
-use std::fs::OpenOptions;
-use std::process::ExitStatus;
-use std::{
-    path::{Path, PathBuf},
-    process::{Child, Command},
-    time::{Duration, Instant},
-};
-use tracing::{event_enabled, info, trace};
+use tracing::event_enabled;
+use tracing::info;
+use tracing::trace;
 use url::Url;
 
 /// A temporary, local postgres database
