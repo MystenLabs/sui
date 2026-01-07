@@ -935,6 +935,10 @@ struct FeatureFlags {
     // If true, uses a new rounding mechanism for gas calculations, replacing the step-based one
     #[serde(skip_serializing_if = "is_false")]
     gas_rounding_halve_digits: bool,
+
+    // If true, convert withdrawal compatibility PTB arguments to coins at the start of the PTB.
+    #[serde(skip_serializing_if = "is_false")]
+    convert_withdrawal_compatibility_ptb_arguments: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2486,6 +2490,11 @@ impl ProtocolConfig {
 
     pub fn gas_rounding_halve_digits(&self) -> bool {
         self.feature_flags.gas_rounding_halve_digits
+    }
+
+    pub fn convert_withdrawal_compatibility_ptb_arguments(&self) -> bool {
+        self.feature_flags
+            .convert_withdrawal_compatibility_ptb_arguments
     }
 }
 
