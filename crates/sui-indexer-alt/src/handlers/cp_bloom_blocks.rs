@@ -92,7 +92,7 @@ impl Handler for CpBloomBlocks {
 
         let insert_start = Instant::now();
 
-        // Upsert: on conflict, OR the bloom filters together and expand the checkpoint range
+        // Upsert: merge bloom filters with OR, expand checkpoint range.
         let count = diesel::insert_into(cp_bloom_blocks::table)
             .values(&all_bloom_rows)
             .on_conflict((cp_bloom_blocks::cp_block_id, cp_bloom_blocks::bloom_block_index))
@@ -158,7 +158,7 @@ impl CpBloomBlocks {
 
         let sparse_start = Instant::now();
         let blocks: Vec<_> = bloom
-            .to_sparse_blocks()
+            .into_sparse_blocks()
             .into_iter()
             .map(|(idx, data)| StoredCpBloomBlock {
                 cp_block_id,

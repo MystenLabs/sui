@@ -5,31 +5,17 @@
 //!
 //! a single SipHash-1-3 call produces one 64-bit hash, which is split
 //! into h1 and h2 components. Subsequent positions use
-//! enhanced double hashing with rotation: `h1 = h1 + h2; rotate_left(5)`.
+//! double hashing with rotation: `h1 = h1 + h2; rotate_left(5)`.
 //!
 //! Reference: <https://github.com/tomtomwombat/fastbloom>
 
 use siphasher::sip::SipHasher13;
 use std::hash::Hasher;
 
-/// Magic constant for deriving h2 from upper bits of hash.
-/// Chosen such that 0xffff_ffff_ffff_ffff / 0x517c_c1b7_2722_0a95 ≈ π
-const H2_MULTIPLIER: u64 = 0x517c_c1b7_2722_0a95;
-
-/// Compute base hashes from a single SipHash call.
+/// Constant for deriving h2 from upper bits of hash.
 ///
-/// Returns (h1, h2) derived from one hash:
-/// - h1: full 64-bit hash value
-/// - h2: upper 32 bits multiplied by magic constant for independence
-pub fn compute_hashes(key: &[u8], seed: u128) -> (u64, u64) {
-    let mut hasher = SipHasher13::new_with_keys(seed as u64, (seed >> 64) as u64);
-    hasher.write(key);
-    let hash = hasher.finish();
-
-    let h1 = hash;
-    let h2 = hash.wrapping_shr(32).wrapping_mul(H2_MULTIPLIER);
-    (h1, h2)
-}
+/// Chosen as 2^64 / π for a large number with mixed bits for good distribution.
+const H2_MULTIPLIER: u64 = 0x517c_c1b7_2722_0a95;
 
 /// Compute bit positions for a key in a bloom filter.
 pub fn compute_positions(key: &[u8], num_bits: usize, num_hashes: u32, seed: u128) -> Vec<usize> {
@@ -42,19 +28,8 @@ pub fn compute_positions(key: &[u8], num_bits: usize, num_hashes: u32, seed: u12
     positions
 }
 
-/// Compute block index for blocked bloom filters.
-pub fn compute_block_index(key: &[u8], num_blocks: usize, seed: u128) -> usize {
-    let mut hasher = SipHasher13::new_with_keys(seed as u64, (seed >> 64) as u64);
-    hasher.write(key);
-    (hasher.finish() as usize) % num_blocks
-}
-
 /// Compute block index and bit positions within that block.
-///
-/// For blocked bloom filters:
-/// 1. Block index is computed with base seed
-/// 2. Bit positions are computed with seed+1 using fastbloom approach
-pub fn compute_blocked_positions(
+pub(super) fn compute_blocked_positions(
     key: &[u8],
     num_blocks: usize,
     bits_per_block: usize,
@@ -64,7 +39,7 @@ pub fn compute_blocked_positions(
     // Block selection with base seed
     let block_idx = compute_block_index(key, num_blocks, seed);
 
-    // Position generation with seed+1 using fastbloom approach
+    // Position generation with seed+1
     let seed2 = seed.wrapping_add(1);
     let (mut h1, h2) = compute_hashes(key, seed2);
 
@@ -75,6 +50,28 @@ pub fn compute_blocked_positions(
     }
 
     (block_idx, positions)
+}
+
+/// Compute block index for blocked bloom filters.
+pub(super) fn compute_block_index(key: &[u8], num_blocks: usize, seed: u128) -> usize {
+    let mut hasher = SipHasher13::new_with_keys(seed as u64, (seed >> 64) as u64);
+    hasher.write(key);
+    (hasher.finish() as usize) % num_blocks
+}
+
+/// Compute base hashes from a single SipHash call.
+///
+/// Returns (h1, h2) derived from one hash:
+/// - h1: full 64-bit hash value
+/// - h2: upper 32 bits multiplied by H2_MULTIPLIER for good distribution across 64 bits.
+fn compute_hashes(key: &[u8], seed: u128) -> (u64, u64) {
+    let mut hasher = SipHasher13::new_with_keys(seed as u64, (seed >> 64) as u64);
+    hasher.write(key);
+    let hash = hasher.finish();
+
+    let h1 = hash;
+    let h2 = hash.wrapping_shr(32).wrapping_mul(H2_MULTIPLIER);
+    (h1, h2)
 }
 
 #[cfg(test)]
