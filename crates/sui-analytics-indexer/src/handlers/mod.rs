@@ -12,7 +12,10 @@ use crate::metrics::Metrics;
 pub mod handler;
 pub mod tables;
 
-pub use handler::{AnalyticsHandler, Batch, CheckpointRows, Row};
+pub use handler::AnalyticsHandler;
+pub use handler::Batch;
+pub use handler::CheckpointRows;
+pub use handler::Row;
 
 /// Record file size metrics for a pipeline.
 pub fn record_file_metrics(metrics: &Metrics, pipeline_name: &str, size: usize) {

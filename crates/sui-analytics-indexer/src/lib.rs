@@ -19,11 +19,19 @@ pub mod tables;
 mod writers;
 
 // Re-exports for public API
-pub use config::{BatchSizeConfig, FileFormat, IndexerConfig, OutputStoreConfig, PipelineConfig};
-pub use handlers::{AnalyticsHandler, Batch, Row};
+pub use config::BatchSizeConfig;
+pub use config::FileFormat;
+pub use config::IndexerConfig;
+pub use config::OutputStoreConfig;
+pub use config::PipelineConfig;
+pub use handlers::AnalyticsHandler;
+pub use handlers::Batch;
+pub use handlers::Row;
 pub use indexer::build_analytics_indexer;
 pub use pipeline::Pipeline;
 pub use progress_monitoring::MaxCheckpointReader;
-pub use schema::{ColumnValue, RowSchema};
+pub use schema::ColumnValue;
+pub use schema::RowSchema;
 pub use store::AnalyticsStore;
-pub use store::{FileRangeEntry, FileRangeIndex};
+pub use store::FileRangeEntry;
+pub use store::FileRangeIndex;
