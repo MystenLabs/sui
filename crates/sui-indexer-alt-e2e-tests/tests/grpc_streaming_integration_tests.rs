@@ -7,20 +7,21 @@ use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use prometheus::Registry;
 use sui_field_count::FieldCount;
-use sui_indexer_alt_framework::{
-    Indexer, IndexerArgs,
-    ingestion::{
-        ClientArgs, IngestionConfig, ingestion_client::IngestionClientArgs,
-        streaming_client::StreamingClientArgs,
-    },
-    pipeline::{
-        Processor,
-        concurrent::{self, BatchStatus, ConcurrentConfig},
-    },
-};
-use sui_pg_db::{Db, DbArgs};
+use sui_indexer_alt_framework::Indexer;
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::IngestionConfig;
+use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
+use sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs;
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::concurrent::BatchStatus;
+use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_framework::pipeline::concurrent::{self};
+use sui_pg_db::Db;
+use sui_pg_db::DbArgs;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::{full_checkpoint_content::Checkpoint, transaction::TransactionDataAPI};
+use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::transaction::TransactionDataAPI;
 use tempfile::tempdir;
 use test_cluster::TestClusterBuilder;
 

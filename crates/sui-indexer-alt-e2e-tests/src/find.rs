@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, bail};
-use sui_types::{
-    base_types::{ObjectRef, SuiAddress},
-    effects::{TransactionEffects, TransactionEffectsAPI},
-    execution_status::ExecutionStatus,
-    object::Owner,
-};
+use anyhow::Context;
+use anyhow::bail;
+use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SuiAddress;
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::execution_status::ExecutionStatus;
+use sui_types::object::Owner;
 
 /// Returns the reference for the first address-owned object created in the effects, or an error if
 /// there is none.
