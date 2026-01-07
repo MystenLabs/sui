@@ -1,5 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
 
 const GITHUB = "https://github.com";
 const GITHUB_BLOB = "blob/main";
