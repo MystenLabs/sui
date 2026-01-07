@@ -26,7 +26,7 @@ impl FileHash {
         Self(symbol!("00000000000000000000000000000000"))
     }
 
-    pub fn as_bytes(&self) -> [u8; 32] {
+    pub fn to_bytes(&self) -> [u8; 32] {
         let bytes_conversion = hex::decode(self.0.as_str()).expect("Invalid hex in FileHash");
         let std::result::Result::Ok(bytes): Result<[u8; 32], _> = bytes_conversion.try_into()
         else {
@@ -39,13 +39,13 @@ impl FileHash {
 
 impl std::fmt::Display for FileHash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        hex::encode(self.as_bytes()).fmt(f)
+        hex::encode(self.to_bytes()).fmt(f)
     }
 }
 
 impl std::fmt::Debug for FileHash {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        hex::encode(self.as_bytes()).fmt(f)
+        hex::encode(self.to_bytes()).fmt(f)
     }
 }
 
