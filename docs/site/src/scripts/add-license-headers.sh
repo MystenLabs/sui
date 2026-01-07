@@ -1,5 +1,5 @@
-#!/bin/bash
-# scripts/add-license-headers.sh
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 SHARED_DIR="../shared"
 LICENSE_FILE="./license-header.txt"  # Each repo has its own license header file
