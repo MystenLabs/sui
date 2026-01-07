@@ -1,3 +1,6 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 #!/bin/bash
 # scripts/update-subtrees.sh
 # Updates all git subtrees in the repository
