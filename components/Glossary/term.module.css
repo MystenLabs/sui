@@ -1,0 +1,69 @@
+/*
+  Copyright (c) Walrus Foundation
+  SPDX-License-Identifier: Apache-2.0
+*/
+
+/* Copyright (c) Walrus Foundation */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+.term {
+    position: relative;
+    cursor: help;
+    border-bottom: 1px dotted var(--ifm-color-primary);
+}
+
+/* Tooltip bubble */
+.term .tooltip {
+    position: absolute;
+    left: 50%;
+    bottom: 125%;
+    transform: translateX(-50%);
+    min-width: 220px;
+    max-width: 360px;
+    padding: 0.5rem 0.75rem;
+    background: var(--ifm-background-surface-color);
+    color: var(--ifm-font-color-base);
+    border: 1px solid var(--ifm-color-emphasis-300);
+    border-radius: 0.5rem;
+    box-shadow: var(--ifm-global-shadow-lw);
+    opacity: 0;
+    visibility: hidden;
+    transition:
+        opacity 0.12s ease,
+        visibility 0.12s ease,
+        transform 0.12s ease;
+    z-index: 30;
+    pointer-events: none;
+}
+
+/* Arrow */
+.term .tooltip::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: var(--ifm-background-surface-color) transparent transparent transparent;
+}
+
+/* Show on hover/focus */
+.term:hover .tooltip,
+.term:focus-within .tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-2px);
+}
+
+.tooltipTitle {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+}
+
+.tooltipBody {
+    display: block;
+    font-size: 0.875rem;
+    line-height: 1.3;
+}

@@ -1,0 +1,323 @@
+:root {
+  --sui-cards-border-color: transparent;
+  --sui-cards-background: #F4F5F7;
+  --sui-cards-header: #298DFF;
+  --sui-cards-copy: #6C7584;
+  --sui-cards-background-hover: #E0E2E6;
+}
+
+[data-theme='dark'] {
+    --sui-cards-border-color: #343940;
+    --sui-cards-background: #222529;
+    --sui-cards-background-hover: #343940;
+    --sui-cards-header: #5CA9FF;
+    --sui-cards-copy: #89919F;
+}
+
+.card {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    row-gap: .75rem;
+    border-radius: 20px;
+    padding: 1.25rem;
+    padding-bottom: 1.5rem;
+    background: var(--sui-cards-background);
+    cursor: pointer;
+    transition: background .25s ease-in-out;
+    border: solid 1px var(--sui-cards-border-color);
+}
+.card:hover {
+    background: var(--sui-cards-background-hover);
+}
+
+.card__header__copy {
+    margin: 0;
+    font-size: 1.125rem;
+    line-height: 1.25rem;
+    color: var(--sui-cards-header);
+}
+
+.card__copy {
+    font-size: .8125rem;
+    line-height: 1.3125rem;
+    color: var(--sui-cards-copy);
+}
+
+/* Step Cards for Docusaurus */
+.step-card-container {
+  counter-reset: step;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  position: relative;
+  margin: 2rem 0;
+}
+
+.step-card-container::before {
+  content: '';
+  position: absolute;
+  left: 1.125rem;
+  top: 2.5rem;
+  bottom: 2.5rem;
+  width: 2px;
+  background: linear-gradient(180deg, 
+    #298DFF 0%, 
+    #E0E2E6 50%, 
+    #343940 100%
+  );
+  opacity: 0.2;
+  z-index: 0;
+}
+
+/* Target the actual Docusaurus card class */
+.step-card-container > div[class*='card_'] {
+  position: relative;
+  padding: 1.25rem 1.5rem 1.25rem 4.5rem !important;
+  border: 1px solid #E0E2E6 !important;
+  border-radius: 0.625rem !important;
+  background: linear-gradient(135deg, 
+    #ffffff 0%, 
+    #F4F5F7 100%
+  ) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  overflow: visible !important;
+  z-index: 1;
+  cursor: pointer;
+}
+
+.step-card-container > div[class*='card_']::before {
+  content: counter(step);
+  counter-increment: step;
+  position: absolute;
+  left: 1.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.75rem;
+  height: 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #298DFF;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.813rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(41, 141, 255, 0.3);
+  z-index: 2;
+  transition: all 0.3s ease;
+}
+
+.step-card-container > div[class*='card_']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, 
+    #298DFF 0%, 
+    #5CA9FF 50%,
+    rgba(41, 141, 255, 0) 100%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 0.625rem 0 0 0.625rem;
+}
+
+.step-card-container > div[class*='card_']:hover {
+  border-color: #8FCBFF !important;
+  background: linear-gradient(135deg, 
+    #ffffff 0%, 
+    #F4F5F7 100%
+  ) !important;
+  box-shadow: 
+    0 4px 16px rgba(41, 141, 255, 0.12),
+    0 0 0 1px #8FCBFF !important;
+  transform: translateX(4px) !important;
+}
+
+.step-card-container > div[class*='card_']:hover::before {
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 6px 20px rgba(41, 141, 255, 0.4);
+}
+
+.step-card-container > div[class*='card_']:hover::after {
+  opacity: 1;
+}
+
+/* Remove the default card title numbering if present */
+.step-card-container div[class*='card__header'] {
+  margin-bottom: 0.5rem;
+}
+
+/* Adjust card description spacing */
+.step-card-container div[class*='card__copy'] {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #4B515B;
+}
+
+/* Dark mode */
+[data-theme='dark'] .step-card-container::before {
+  opacity: 0.15;
+}
+
+[data-theme='dark'] .step-card-container > div[class*='card_'] {
+  border-color: #343940 !important;
+  background: linear-gradient(135deg, 
+    #222529 0%, 
+    #131518 100%
+  ) !important;
+}
+
+[data-theme='dark'] .step-card-container > div[class*='card_']:hover {
+  border-color: #5CA9FF !important;
+  background: linear-gradient(135deg, 
+    #222529 0%, 
+    #131518 100%
+  ) !important;
+  box-shadow: 
+    0 4px 16px rgba(41, 141, 255, 0.2),
+    0 0 0 1px #5CA9FF !important;
+}
+
+[data-theme='dark'] .step-card-container div[class*='card__copy'] {
+  color: #E0E2E6;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .step-card-container > div[class*='card_'] {
+    padding: 1rem 1rem 1rem 3.5rem !important;
+  }
+  
+  .step-card-container > div[class*='card_']::before {
+    left: 1rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 0.75rem;
+  }
+  
+  .step-card-container::before {
+    left: 0.875rem;
+  }
+}
+
+/* Normal Cards for Docusaurus */
+.card-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+/* Target actual Docusaurus card elements */
+.card-container > div[class*='card_'],
+.card-container > a[class*='card_'] {
+  position: relative;
+  padding: 1.25rem 1.5rem !important;
+  border: 1px solid #E0E2E6 !important;
+  border-radius: 0.625rem !important;
+  background: linear-gradient(135deg, 
+    #ffffff 0%, 
+    #F4F5F7 100%
+  ) !important;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  text-decoration: none !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04) !important;
+  height: 100%;
+}
+
+.card-container > div[class*='card_']::before,
+.card-container > a[class*='card_']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg,
+    #298DFF 0%, 
+    #5CA9FF 50%,
+    rgba(41, 141, 255, 0) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 0.625rem 0 0 0.625rem;
+}
+
+.card-container > div[class*='card_']:hover,
+.card-container > a[class*='card_']:hover {
+  border-color: #8FCBFF !important;
+  background: linear-gradient(135deg, 
+    #ffffff 0%, 
+    #F4F5F7 100%
+  ) !important;
+  box-shadow: 
+    0 4px 12px rgba(41, 141, 255, 0.12),
+    0 2px 4px rgba(0, 0, 0, 0.04) !important;
+  transform: translateY(-2px) !important;
+}
+
+.card-container > div[class*='card_']:hover::before,
+.card-container > a[class*='card_']:hover::before {
+  opacity: 1;
+}
+
+/* Card content styling */
+.card-container div[class*='card__header'] {
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.card-container div[class*='card__copy'] {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: #4B515B;
+}
+
+/* Dark mode */
+[data-theme='dark'] .card-container > div[class*='card_'],
+[data-theme='dark'] .card-container > a[class*='card_'] {
+  border-color: #343940 !important;
+  background: linear-gradient(135deg, 
+    #222529 0%, 
+    #131518 100%
+  ) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+[data-theme='dark'] .card-container > div[class*='card_']:hover,
+[data-theme='dark'] .card-container > a[class*='card_']:hover {
+  border-color: #5CA9FF !important;
+  background: linear-gradient(135deg, 
+    #222529 0%, 
+    #131518 100%
+  ) !important;
+  box-shadow: 
+    0 4px 12px rgba(41, 141, 255, 0.2),
+    0 2px 4px rgba(0, 0, 0, 0.15) !important;
+}
+
+[data-theme='dark'] .card-container div[class*='card__copy'] {
+  color: #E0E2E6;
+}
+
+/* Responsive */
+@media (max-width: 996px) {
+  .card-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .card-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .card-container > div[class*='card_'],
+  .card-container > a[class*='card_'] {
+    padding: 1rem 1.25rem !important;
+  }
+}
