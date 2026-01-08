@@ -39,7 +39,7 @@ impl ObjectStoreGetExt for LocalStorage {
         let path_to_filesystem = path_to_filesystem(self.root.clone(), location)?;
         let handle = tokio::task::spawn_blocking(move || {
             let mut f = File::open(path_to_filesystem)
-                .map_err(|e| anyhow!("Failed to open file with error: {}", e.to_string()))?;
+                .map_err(|e| anyhow!("Failed to open file with error: {}", e))?;
             let mut buf = vec![];
             f.read_to_end(&mut buf)
                 .context(anyhow!("Failed to read file"))?;
