@@ -137,8 +137,6 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
     let mut subscriptions_orders = HashSet::new(); // [Ticket #2]
     let mut subscribe_all = false;
 
-    println!("[DEBUG] 新的 WebSocket 客戶端已連入！");
-
     loop {
         tokio::select! {
             res = rx.recv() => {
@@ -175,7 +173,6 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
 
                              // --- [Ticket #2] 訂單探針邏輯 ---
                              if subscriptions_orders.contains(&event.sender) {
-                                 println!("目標 {} 的事件: {} (成功: {})", event.sender, event.type_, is_success);
                                  
                                  let probe = StreamMessage::ProbeEvent {
                                      event_type: event.type_.to_string(),
@@ -219,6 +216,34 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                              };
                              let _ = send_json(&mut socket, &msg).await;
                         }
+
+                        // 5. balance change
+                        for (id, new_object) in &outputs.written {
+                            if let Some(owner_addr) = new_object.owner().get_owner_address().ok() {
+                                
+                                if subscriptions_accounts.contains(&owner_addr) || subscribe_all {
+                                    
+                                    if new_object.is_coin() {
+                                        let balance = new_object.get_coin_value_unsafe();
+                                        let coin_tag = new_object.coin_type_maybe()
+                                            .map(|tag| tag.to_string())
+                                            .unwrap_or_else(|| "Unknown".to_string());
+
+                                        println!(
+                                            "[BALANCE_MONITOR] 發現變動! 交易發送者: {}, 地址: {}, 代幣: {}, 新餘額: {}, 物件ID: {}",
+                                            sender, owner_addr, coin_tag, balance, id
+                                        );
+
+                                        let msg = StreamMessage::BalanceChange {
+                                            account: owner_addr,
+                                            coin_type: coin_tag,
+                                            new_balance: balance,
+                                        };
+                                        let _ = send_json(&mut socket, &msg).await;
+                                    }
+                                }
+                            }
+                        }
                     }
                     Err(_) => break,
                 }
@@ -229,7 +254,6 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                     Some(Ok(msg)) => {
                         if let Message::Text(text) = msg {
                             if let Ok(req) = serde_json::from_str::<SubscriptionRequest>(&text) {
-                                println!("✅ [DEBUG] 收到訂閱: {:?}", req);
                                 let ack = StreamMessage::SubscriptionSuccess {
                                     details: format!("成功訂閱 {:?}", req),
                                 };
