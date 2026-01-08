@@ -50,6 +50,7 @@ module.exports = grammar({
     [$.module_access],
     [$.break_expression],
     [$.abort_expression],
+    [$.spec_block, $._reserved_identifier],
   ],
 
   rules: {
@@ -1015,7 +1016,7 @@ module.exports = grammar({
     _type_parameter_identifier: $ => alias($.identifier, $.type_parameter_identifier),
     identifier: $ => /(`)?[a-zA-Z_][0-9a-zA-Z_]*(`)?/,
     macro_identifier: $ => /[a-zA-Z_][0-9a-zA-Z_]*!/,
-    _reserved_identifier: $ => choice($._forall, $._exists),
+    _reserved_identifier: $ => choice($._forall, $._exists, 'spec'),
 
     _forall: $ => 'forall',
     _exists: $ => 'exists',
