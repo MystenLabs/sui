@@ -233,6 +233,20 @@ Use `withdrawWithCap` to withdraw funds from a balance manager using a `withdraw
 
 </details>
 
+<details>
+<summary>revokeTradeCap</summary>
+
+Use `revokeTradeCap` to revoke a `TradeCap`. This also revokes the associated `DepositCap` and `WithdrawCap`. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+- `tradeCapId`: String representing the ID of the TradeCap to revoke.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="revokeTradeCap" signatureOnly/>
+
+</details>
+
 ## Referral functions
 
 <details>
