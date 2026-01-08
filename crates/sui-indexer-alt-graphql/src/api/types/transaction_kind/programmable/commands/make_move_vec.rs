@@ -3,9 +3,8 @@
 
 use async_graphql::*;
 
-use crate::api::types::{
-    move_type::MoveType, transaction_kind::programmable::commands::TransactionArgument,
-};
+use crate::api::types::move_type::MoveType;
+use crate::api::types::transaction_kind::programmable::commands::TransactionArgument;
 
 /// Create a vector (can be empty).
 #[derive(SimpleObject, Clone)]

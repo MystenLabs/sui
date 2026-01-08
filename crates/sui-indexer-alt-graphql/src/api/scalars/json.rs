@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{Description, InputValueResult, Scalar, ScalarType, Value};
+use async_graphql::Description;
+use async_graphql::InputValueResult;
+use async_graphql::Scalar;
+use async_graphql::ScalarType;
+use async_graphql::Value;
 
 use crate::error::RpcError;
 

@@ -1,18 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, SimpleObject, dataloader::DataLoader};
-use diesel::{ExpressionMethods, QueryDsl as _};
-use sui_indexer_alt_reader::{epochs::CheckpointBoundedEpochStartKey, pg_reader::PgReader};
-use sui_indexer_alt_schema::{
-    epochs::{StoredFeatureFlag, StoredProtocolConfig},
-    schema::{kv_feature_flags, kv_protocol_configs},
-};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::SimpleObject;
+use async_graphql::dataloader::DataLoader;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl as _;
+use sui_indexer_alt_reader::epochs::CheckpointBoundedEpochStartKey;
+use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_indexer_alt_schema::epochs::StoredFeatureFlag;
+use sui_indexer_alt_schema::epochs::StoredProtocolConfig;
+use sui_indexer_alt_schema::schema::kv_feature_flags;
+use sui_indexer_alt_schema::schema::kv_protocol_configs;
 
-use crate::{api::scalars::uint53::UInt53, error::RpcError, scope::Scope};
+use crate::api::scalars::uint53::UInt53;
+use crate::error::RpcError;
+use crate::scope::Scope;
 
 pub(crate) struct ProtocolConfigs {
     protocol_version: u64,

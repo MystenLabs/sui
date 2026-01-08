@@ -1,37 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{
-    Context, Enum, Interface, Object,
-    connection::{Connection, Edge},
-};
+use async_graphql::Context;
+use async_graphql::Enum;
+use async_graphql::Interface;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use async_graphql::connection::Edge;
 use futures::future::try_join_all;
-use sui_types::{base_types::SuiAddress as NativeSuiAddress, dynamic_field::DynamicFieldType};
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::dynamic_field::DynamicFieldType;
 
-use crate::{
-    api::{
-        scalars::{id::Id, owner_kind::OwnerKind, sui_address::SuiAddress, type_filter::TypeInput},
-        types::validator::Validator,
-    },
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
-
-use super::{
-    balance::{self, Balance},
-    coin_metadata::CoinMetadata,
-    dynamic_field::{DynamicField, DynamicFieldName},
-    move_object::MoveObject,
-    move_package::MovePackage,
-    name_service::address_to_name,
-    object::{self, Object, ObjectKey},
-    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
-    transaction::{
-        CTransaction, Transaction,
-        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
-    },
-};
+use crate::api::scalars::id::Id;
+use crate::api::scalars::owner_kind::OwnerKind;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::types::balance::Balance;
+use crate::api::types::balance::{self as balance};
+use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::dynamic_field::DynamicField;
+use crate::api::types::dynamic_field::DynamicFieldName;
+use crate::api::types::move_object::MoveObject;
+use crate::api::types::move_package::MovePackage;
+use crate::api::types::name_service::address_to_name;
+use crate::api::types::object::Object;
+use crate::api::types::object::ObjectKey;
+use crate::api::types::object::{self as object};
+use crate::api::types::object_filter::ObjectFilter;
+use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
+use crate::api::types::validator::Validator;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
 
 /// The possible relationship types for a transaction: sent or affected.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]

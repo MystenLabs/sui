@@ -4,36 +4,38 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, connection::Connection};
-use diesel::{prelude::QueryableByName, sql_types::BigInt};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use diesel::prelude::QueryableByName;
+use diesel::sql_types::BigInt;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_sql_macro::query;
-use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress, digests::TransactionDigest,
-    event::Event as NativeEvent,
-};
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::digests::TransactionDigest;
+use sui_types::event::Event as NativeEvent;
 
-use crate::{
-    api::{
-        scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
-        types::{
-            event::filter::EventFilter,
-            lookups::{CheckpointBounds, TxBoundsCursor},
-        },
-    },
-    error::RpcError,
-    pagination::Page,
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
-use super::{
-    address::Address, available_range::AvailableRangeKey, move_module::MoveModule,
-    move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
-    transaction::Transaction,
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::date_time::DateTime;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address::Address;
+use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::event::filter::EventFilter;
+use crate::api::types::lookups::CheckpointBounds;
+use crate::api::types::lookups::TxBoundsCursor;
+use crate::api::types::move_module::MoveModule;
+use crate::api::types::move_package::MovePackage;
+use crate::api::types::move_type::MoveType;
+use crate::api::types::move_value::MoveValue;
+use crate::api::types::transaction::Transaction;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
 mod lookups;

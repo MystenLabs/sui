@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::*;
+use async_graphql::SimpleObject;
 
-use super::TransactionArgument;
+use crate::api::types::transaction_kind::programmable::commands::TransactionArgument;
 
 /// Transfers `inputs` to `address`. All inputs must have the `store` ability (allows public transfer) and must not be previously immutable or shared.
 #[derive(SimpleObject, Clone)]

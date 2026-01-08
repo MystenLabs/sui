@@ -1,14 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt;
+use std::str::FromStr;
+
 use async_graphql::*;
 use move_core_types::language_storage::StructTag;
-use std::{fmt, str::FromStr};
-use sui_types::{
-    TypeTag, parse_sui_address, parse_sui_module_id, parse_sui_struct_tag, parse_sui_type_tag,
-};
+use sui_types::TypeTag;
+use sui_types::parse_sui_address;
+use sui_types::parse_sui_module_id;
+use sui_types::parse_sui_struct_tag;
+use sui_types::parse_sui_type_tag;
 
-use crate::api::scalars::{impl_string_input, sui_address::SuiAddress};
+use crate::api::scalars::impl_string_input;
+use crate::api::scalars::sui_address::SuiAddress;
 
 /// A GraphQL scalar for accepting a type as input (exact type with all type parameters).
 #[derive(Clone, Debug, Eq, PartialEq)]

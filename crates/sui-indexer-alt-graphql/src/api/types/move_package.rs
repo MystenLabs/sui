@@ -4,56 +4,64 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{
-    Context, InputObject, Object,
-    connection::{Connection, CursorType, Edge},
-    dataloader::DataLoader,
-};
-use diesel::{ExpressionMethods, QueryDsl, sql_types::Bool};
-use serde::{Deserialize, Serialize};
-use sui_indexer_alt_reader::{
-    packages::{
-        CheckpointBoundedOriginalPackageKey, PackageOriginalIdKey, VersionedOriginalPackageKey,
-    },
-    pg_reader::PgReader,
-};
-use sui_indexer_alt_schema::{packages::StoredPackage, schema::kv_packages};
+use async_graphql::Context;
+use async_graphql::InputObject;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
+use async_graphql::dataloader::DataLoader;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
+use diesel::sql_types::Bool;
+use serde::Deserialize;
+use serde::Serialize;
+use sui_indexer_alt_reader::packages::CheckpointBoundedOriginalPackageKey;
+use sui_indexer_alt_reader::packages::PackageOriginalIdKey;
+use sui_indexer_alt_reader::packages::VersionedOriginalPackageKey;
+use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_indexer_alt_schema::packages::StoredPackage;
+use sui_indexer_alt_schema::schema::kv_packages;
 use sui_package_resolver::Package as ParsedMovePackage;
 use sui_pg_db::sql;
 use sui_sql_macro::query;
-use sui_types::{
-    base_types::{ObjectID, SuiAddress as NativeSuiAddress},
-    move_package::MovePackage as NativeMovePackage,
-    object::Object as NativeObject,
-};
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::move_package::MovePackage as NativeMovePackage;
+use sui_types::object::Object as NativeObject;
 use tokio::sync::OnceCell;
 
-use crate::{
-    api::scalars::{
-        base64::Base64,
-        big_int::BigInt,
-        cursor::{BcsCursor, JsonCursor},
-        id::Id,
-        sui_address::SuiAddress,
-        type_filter::TypeInput,
-        uint53::UInt53,
-    },
-    error::{RpcError, bad_user_input, upcast},
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
-
-use super::{
-    balance::{self, Balance},
-    linkage::Linkage,
-    move_module::MoveModule,
-    move_object::MoveObject,
-    object::{self, CLive, CVersion, Object, VersionFilter},
-    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
-    owner::Owner,
-    transaction::{CTransaction, Transaction, filter::TransactionFilter},
-    type_origin::TypeOrigin,
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::cursor::BcsCursor;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::balance::Balance;
+use crate::api::types::balance::{self as balance};
+use crate::api::types::linkage::Linkage;
+use crate::api::types::move_module::MoveModule;
+use crate::api::types::move_object::MoveObject;
+use crate::api::types::object::CLive;
+use crate::api::types::object::CVersion;
+use crate::api::types::object::Object;
+use crate::api::types::object::VersionFilter;
+use crate::api::types::object::{self as object};
+use crate::api::types::object_filter::ObjectFilter;
+use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
+use crate::api::types::owner::Owner;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::type_origin::TypeOrigin;
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::upcast;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
 
 #[derive(Clone)]
 pub(crate) struct MovePackage {

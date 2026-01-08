@@ -4,51 +4,60 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, connection::Connection, dataloader::DataLoader};
-use fastcrypto::encoding::{Base58, Encoding};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use async_graphql::dataloader::DataLoader;
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
 use futures::future::OptionFuture;
-use futures::{join, try_join};
+use futures::join;
+use futures::try_join;
 use sui_indexer_alt_reader::cp_sequence_numbers::CpSequenceNumberKey;
-use sui_indexer_alt_reader::{
-    epochs::{CheckpointBoundedEpochStartKey, EpochEndKey, EpochStartKey},
-    pg_reader::PgReader,
-};
+use sui_indexer_alt_reader::epochs::CheckpointBoundedEpochStartKey;
+use sui_indexer_alt_reader::epochs::EpochEndKey;
+use sui_indexer_alt_reader::epochs::EpochStartKey;
+use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;
-use sui_indexer_alt_schema::epochs::{StoredEpochEnd, StoredEpochStart};
+use sui_indexer_alt_schema::epochs::StoredEpochEnd;
+use sui_indexer_alt_schema::epochs::StoredEpochStart;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::OnceCell;
 
+use crate::api::scalars::big_int::BigInt;
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::id::Id;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::checkpoint::CCheckpoint;
+use crate::api::types::checkpoint::Checkpoint;
+use crate::api::types::checkpoint::filter::CheckpointFilter;
+use crate::api::types::move_package::CSysPackage;
+use crate::api::types::move_package::MovePackage;
+use crate::api::types::object::Object;
+use crate::api::types::protocol_configs::ProtocolConfigs;
+use crate::api::types::safe_mode::SafeMode;
+use crate::api::types::safe_mode::from_system_state;
+use crate::api::types::stake_subsidy::StakeSubsidy;
+use crate::api::types::stake_subsidy::from_stake_subsidy_v1;
+use crate::api::types::storage_fund::StorageFund;
+use crate::api::types::system_parameters::SystemParameters;
+use crate::api::types::system_parameters::from_system_parameters_v1;
+use crate::api::types::system_parameters::from_system_parameters_v2;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
+use crate::api::types::validator_set::ValidatorSet;
+use crate::error::RpcError;
+use crate::error::upcast;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
-use crate::{
-    api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
-    api::types::safe_mode::{SafeMode, from_system_state},
-    api::types::stake_subsidy::{StakeSubsidy, from_stake_subsidy_v1},
-    api::types::storage_fund::StorageFund,
-    api::types::system_parameters::{
-        SystemParameters, from_system_parameters_v1, from_system_parameters_v2,
-    },
-    api::types::validator_set::ValidatorSet,
-    error::RpcError,
-    error::upcast,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
-
-use super::{
-    checkpoint::{CCheckpoint, Checkpoint, filter::CheckpointFilter},
-    move_package::{CSysPackage, MovePackage},
-    object::Object,
-    protocol_configs::ProtocolConfigs,
-    transaction::{
-        CTransaction, Transaction,
-        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
-    },
-};
 
 pub(crate) type CEpoch = JsonCursor<usize>;
 
