@@ -999,7 +999,7 @@ impl SuiClientCommands {
                 let response = if let SuiClientCommandResult::TransactionBlock(ref tx) = result {
                     tx
                 } else {
-                    bail!("Failed to get the transaction response from the upgrade result.");
+                    return Ok(result);
                 };
 
                 let publish_data = update_publication(
@@ -3661,7 +3661,7 @@ async fn publish_command(
     let response = if let SuiClientCommandResult::TransactionBlock(ref tx) = result {
         tx
     } else {
-        bail!("Error")
+        return Ok(result);
     };
 
     let publish_data = update_publication(
