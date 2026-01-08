@@ -1,12 +1,7 @@
-/*
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-*/
-
 import React, { useEffect, useState } from "react";
 import { useHistory } from "@docusaurus/router";
 import { usePluginData } from "@docusaurus/useGlobalData";
-import styles from "./styles.module.css";
+import styles from "../../../css/cards.module.css";
 
 interface CardProps {
   title: string;

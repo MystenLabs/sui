@@ -1,7 +1,4 @@
-/*
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-*/
+
 import React from "react";
 import CodeBlock from "@theme/CodeBlock";
 import { MDXProvider } from "@mdx-js/react";
@@ -9,7 +6,7 @@ import MDXComponents from "@theme/MDXComponents";
 import utils from "./utils";
 import MarkdownIt from "markdown-it";
 
-import { importContentMap } from "../../.generated/ImportContentMap";
+import { importContentMap } from "../../../.generated/ImportContentMap";
 
 /// <reference types="webpack-env" />
 
