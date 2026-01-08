@@ -33,6 +33,13 @@ pub struct Balance {
     #[schemars(with = "HashMap<BigInt<u64>, BigInt<u128>>")]
     #[serde_as(as = "HashMap<BigInt<u64>, BigInt<u128>>")]
     pub locked_balance: HashMap<EpochId, u128>,
+
+    /// The portion of `total_balance` that resides in the address balance
+    /// rather than in the coin objects. `total_balance` is the total amount
+    /// of funds owned by the address. That is, do not add these two fields together.
+    #[schemars(with = "BigInt<u128>")]
+    #[serde_as(as = "BigInt<u128>")]
+    pub funds_in_address_balance: u128,
 }
 
 impl Balance {
@@ -42,6 +49,7 @@ impl Balance {
             coin_object_count: 0,
             total_balance: 0,
             locked_balance: HashMap::new(),
+            funds_in_address_balance: 0,
         }
     }
 }
