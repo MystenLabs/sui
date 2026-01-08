@@ -16386,6 +16386,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-config",
+ "mysten-common",
  "schemars 0.8.21",
  "serde",
  "serde-env",
