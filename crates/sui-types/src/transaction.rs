@@ -1093,12 +1093,6 @@ impl ProgrammableMoveCall {
         }
         Ok(())
     }
-
-    fn is_input_arg_used(&self, arg: u16) -> bool {
-        self.arguments
-            .iter()
-            .any(|a| matches!(a, Argument::Input(inp) if *inp == arg))
-    }
 }
 
 impl Command {
@@ -1225,20 +1219,23 @@ impl Command {
     }
 
     fn is_input_arg_used(&self, input_arg: u16) -> bool {
+        self.is_argument_used(Argument::Input(input_arg))
+    }
+
+    pub fn is_gas_coin_used(&self) -> bool {
+        self.is_argument_used(Argument::GasCoin)
+    }
+
+    pub fn is_argument_used(&self, argument: Argument) -> bool {
         match self {
-            Command::MoveCall(c) => c.is_input_arg_used(input_arg),
+            Command::MoveCall(c) => c.arguments.iter().any(|a| a == &argument),
             Command::TransferObjects(args, arg)
             | Command::MergeCoins(arg, args)
-            | Command::SplitCoins(arg, args) => args
-                .iter()
-                .chain(once(arg))
-                .any(|a| matches!(a, Argument::Input(inp) if *inp == input_arg)),
-            Command::MakeMoveVec(_, args) => args
-                .iter()
-                .any(|a| matches!(a, Argument::Input(inp) if *inp == input_arg)),
-            Command::Upgrade(_, _, _, arg) => {
-                matches!(arg, Argument::Input(inp) if *inp == input_arg)
+            | Command::SplitCoins(arg, args) => {
+                args.iter().chain(once(arg)).any(|a| a == &argument)
             }
+            Command::MakeMoveVec(_, args) => args.iter().any(|a| a == &argument),
+            Command::Upgrade(_, _, _, arg) => arg == &argument,
             Command::Publish(_, _) => false,
         }
     }
