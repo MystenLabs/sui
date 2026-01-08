@@ -164,8 +164,12 @@ pub(crate) fn build_tls_config(
     tls_verify_cert: bool,
     tls_ca_cert_path: Option<PathBuf>,
 ) -> anyhow::Result<ClientConfig> {
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = ClientConfig::builder_with_provider(provider)
+        .with_protocol_versions(rustls::DEFAULT_VERSIONS)?;
+
     if !tls_verify_cert {
-        return Ok(ClientConfig::builder()
+        return Ok(config
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(SkipServerCertCheck))
             .with_no_client_auth());
@@ -204,7 +208,7 @@ pub(crate) fn build_tls_config(
         }
     }
 
-    Ok(ClientConfig::builder()
+    Ok(config
         .with_root_certificates(root_certs)
         .with_no_client_auth())
 }

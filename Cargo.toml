@@ -296,13 +296,13 @@ async-recursion = "1.0.4"
 async-stream = "0.3.6"
 async-trait = "0.1.61"
 atomic_float = "0.1"
-aws-config = { version = "1.5.16", features = ["behavior-version-latest"] }
-aws-runtime = "1.5.5"
-aws-sdk-dynamodb = "1.65.0"
-aws-sdk-ec2 = "1.110.0"
-aws-sdk-kms = "1.60.0"
-aws-smithy-http = "0.60.12"
-aws-smithy-runtime-api = "1.7.3"
+aws-config = { version = "1.8", features = ["behavior-version-latest"] }
+aws-runtime = "1.5"
+aws-sdk-dynamodb = "1.101"
+aws-sdk-ec2 = "1.199"
+aws-sdk-kms = "1.97"
+aws-smithy-http = "0.62"
+aws-smithy-runtime-api = "1.9"
 axum = { version = "0.8", default-features = false, features = [
   "macros",
   "tokio",
