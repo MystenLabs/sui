@@ -5,17 +5,15 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
+use anyhow::anyhow;
 use prometheus::Registry;
-use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    AvailableRangeRequest, AvailableRangeResponse, Balance, BatchGetBalancesRequest,
-    CHECKPOINT_METADATA, End, ListObjectsByTypeRequest, ListOwnedObjectsRequest, Object, Owner,
-    consistent_service_client::ConsistentServiceClient, owner::OwnerKind,
-};
-use sui_types::{
-    TypeTag,
-    base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber},
-};
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_client::ConsistentServiceClient;
+use sui_types::TypeTag;
+use sui_types::base_types::ObjectDigest;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SequenceNumber;
 use tonic::transport::Channel;
 use tracing::instrument;
 use url::Url;
@@ -111,12 +109,15 @@ impl ConsistentReader {
 
     /// Get the consistent store's watermarks, as of the given `checkpoint`.
     #[instrument(skip(self), level = "debug")]
-    pub async fn available_range(&self, checkpoint: u64) -> Result<AvailableRangeResponse, Error> {
+    pub async fn available_range(
+        &self,
+        checkpoint: u64,
+    ) -> Result<proto::AvailableRangeResponse, Error> {
         self.request(
             "available_range",
             Some(checkpoint),
             |mut client, request| async move { client.available_range(request).await },
-            AvailableRangeRequest {},
+            proto::AvailableRangeRequest {},
         )
         .await
     }
@@ -134,7 +135,7 @@ impl ConsistentReader {
                 "batch_get_balances",
                 Some(checkpoint),
                 |mut client, request| async move { client.batch_get_balances(request).await },
-                BatchGetBalancesRequest {
+                proto::BatchGetBalancesRequest {
                     requests: coin_types
                         .into_iter()
                         .map(|coin_type| proto::GetBalanceRequest {
@@ -201,9 +202,9 @@ impl ConsistentReader {
                     after_token: after_token.map(Into::into),
                     before_token: before_token.map(Into::into),
                     end: if is_from_front {
-                        Some(End::Front.into())
+                        Some(proto::End::Front.into())
                     } else {
-                        Some(End::Back.into())
+                        Some(proto::End::Back.into())
                     },
                 },
             )
@@ -241,15 +242,15 @@ impl ConsistentReader {
                 "list_objects_by_type",
                 Some(checkpoint),
                 |mut client, request| async move { client.list_objects_by_type(request).await },
-                ListObjectsByTypeRequest {
+                proto::ListObjectsByTypeRequest {
                     object_type: Some(object_type),
                     page_size,
                     after_token: after_token.map(Into::into),
                     before_token: before_token.map(Into::into),
                     end: if is_from_front {
-                        Some(End::Front.into())
+                        Some(proto::End::Front.into())
                     } else {
-                        Some(End::Back.into())
+                        Some(proto::End::Back.into())
                     },
                 },
             )
@@ -277,7 +278,7 @@ impl ConsistentReader {
     pub async fn list_owned_objects(
         &self,
         checkpoint: u64,
-        kind: OwnerKind,
+        kind: proto::owner::OwnerKind,
         address: Option<String>,
         object_type: Option<String>,
         page_size: Option<u32>,
@@ -290,8 +291,8 @@ impl ConsistentReader {
                 "list_owned_objects",
                 Some(checkpoint),
                 |mut client, request| async move { client.list_owned_objects(request).await },
-                ListOwnedObjectsRequest {
-                    owner: Some(Owner {
+                proto::ListOwnedObjectsRequest {
+                    owner: Some(proto::Owner {
                         kind: Some(kind.into()),
                         address,
                     }),
@@ -300,9 +301,9 @@ impl ConsistentReader {
                     after_token: after_token.map(Into::into),
                     before_token: before_token.map(Into::into),
                     end: if is_from_front {
-                        Some(End::Front.into())
+                        Some(proto::End::Front.into())
                     } else {
-                        Some(End::Back.into())
+                        Some(proto::End::Back.into())
                     },
                 },
             )
@@ -358,7 +359,7 @@ impl ConsistentReader {
 
         if let Some(checkpoint) = checkpoint {
             request.metadata_mut().insert(
-                CHECKPOINT_METADATA,
+                proto::CHECKPOINT_METADATA,
                 checkpoint
                     .to_string()
                     .parse()
@@ -387,10 +388,10 @@ impl ConsistentReader {
     }
 }
 
-impl TryFrom<Balance> for Edge<(TypeTag, u64)> {
+impl TryFrom<proto::Balance> for Edge<(TypeTag, u64)> {
     type Error = Error;
 
-    fn try_from(proto: Balance) -> Result<Self, Error> {
+    fn try_from(proto: proto::Balance) -> Result<Self, Error> {
         let coin_type: TypeTag = proto
             .coin_type
             .context("coin type missing")?
@@ -408,10 +409,10 @@ impl TryFrom<Balance> for Edge<(TypeTag, u64)> {
     }
 }
 
-impl TryFrom<Object> for Edge<ObjectRef> {
+impl TryFrom<proto::Object> for Edge<ObjectRef> {
     type Error = Error;
 
-    fn try_from(proto: Object) -> Result<Self, Error> {
+    fn try_from(proto: proto::Object) -> Result<Self, Error> {
         let object_id: ObjectID = proto
             .object_id
             .context("object ID missing")?

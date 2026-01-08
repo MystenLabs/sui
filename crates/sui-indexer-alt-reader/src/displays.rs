@@ -5,11 +5,14 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use async_graphql::dataloader::Loader;
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
 use move_core_types::language_storage::StructTag;
-use sui_indexer_alt_schema::{displays::StoredDisplay, schema::sum_displays};
+use sui_indexer_alt_schema::displays::StoredDisplay;
+use sui_indexer_alt_schema::schema::sum_displays;
 
-use crate::{error::Error, pg_reader::PgReader};
+use crate::error::Error;
+use crate::pg_reader::PgReader;
 
 /// Key for fetching a Display object by the type it corresponds to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -1,19 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use async_graphql::dataloader::Loader;
-use diesel::{
-    ExpressionMethods, QueryDsl,
-    sql_types::{Array, BigInt},
-};
-use sui_indexer_alt_schema::{
-    epochs::{StoredEpochEnd, StoredEpochStart},
-    schema::{kv_epoch_ends, kv_epoch_starts},
-};
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
+use diesel::sql_types::Array;
+use diesel::sql_types::BigInt;
+use sui_indexer_alt_schema::epochs::StoredEpochEnd;
+use sui_indexer_alt_schema::epochs::StoredEpochStart;
+use sui_indexer_alt_schema::schema::kv_epoch_ends;
+use sui_indexer_alt_schema::schema::kv_epoch_starts;
 
-use crate::{error::Error, pg_reader::PgReader};
+use crate::error::Error;
+use crate::pg_reader::PgReader;
 
 /// Key for fetching information about the start of an epoch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
