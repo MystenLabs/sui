@@ -4,7 +4,8 @@
 use std::str::FromStr;
 
 use async_graphql::*;
-use fastcrypto::encoding::{Base64 as NativeBase64, Encoding as _};
+use fastcrypto::encoding::Base64 as NativeBase64;
+use fastcrypto::encoding::Encoding as _;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Base64(pub(crate) Vec<u8>);

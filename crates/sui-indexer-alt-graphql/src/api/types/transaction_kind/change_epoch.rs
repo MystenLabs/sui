@@ -2,22 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, connection::Connection};
-use move_binary_format::{CompiledModule, errors::PartialVMResult};
-use sui_types::{
-    digests::TransactionDigest, object::Object as NativeObject,
-    transaction::ChangeEpoch as NativeChangeEpoch,
-};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use move_binary_format::CompiledModule;
+use move_binary_format::errors::PartialVMResult;
+use sui_types::digests::TransactionDigest;
+use sui_types::object::Object as NativeObject;
+use sui_types::transaction::ChangeEpoch as NativeChangeEpoch;
 
-use crate::{
-    api::{
-        scalars::{cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
-        types::{epoch::Epoch, move_package::MovePackage, protocol_configs::ProtocolConfigs},
-    },
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::date_time::DateTime;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::epoch::Epoch;
+use crate::api::types::move_package::MovePackage;
+use crate::api::types::protocol_configs::ProtocolConfigs;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
 
 #[derive(Clone)]
 pub(crate) struct ChangeEpochTransaction {

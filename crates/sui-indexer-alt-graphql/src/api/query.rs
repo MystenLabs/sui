@@ -1,54 +1,70 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context as _, anyhow};
-use async_graphql::{Context, Object, Result, connection::Connection};
+use anyhow::Context as _;
+use anyhow::anyhow;
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::Result;
+use async_graphql::connection::Connection;
 use futures::future::try_join_all;
-use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
+use sui_indexer_alt_reader::fullnode_client::Error::GrpcExecutionError;
+use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 
-use crate::{
-    api::{
-        mutation::TransactionInputError,
-        scalars::{base64::Base64, id::Id, json::Json},
-        types::{
-            epoch::CEpoch, node::Node, simulation_result::SimulationResult,
-            transaction_effects::TransactionEffects,
-        },
-    },
-    error::{RpcError, bad_user_input, upcast},
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-    task::chain_identifier::ChainIdentifier,
-};
-
-use super::{
-    scalars::{
-        digest::Digest, domain::Domain, sui_address::SuiAddress, type_filter::TypeInput,
-        uint53::UInt53,
-    },
-    types::{
-        address::Address,
-        checkpoint::{CCheckpoint, Checkpoint, filter::CheckpointFilter},
-        coin_metadata::CoinMetadata,
-        dynamic_field::DynamicField,
-        epoch::Epoch,
-        event::{CEvent, Event, filter::EventFilter},
-        move_object::MoveObject,
-        move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
-        move_type::{self, MoveType},
-        name_service::name_to_address,
-        object::{self, Object, ObjectKey, VersionFilter},
-        object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
-        protocol_configs::ProtocolConfigs,
-        service_config::ServiceConfig,
-        transaction::{
-            CTransaction, Transaction,
-            filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
-        },
-        zklogin::{self, ZkLoginIntentScope, ZkLoginVerifyResult},
-    },
-};
+use crate::api::mutation::TransactionInputError;
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::digest::Digest;
+use crate::api::scalars::domain::Domain;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::json::Json;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address::Address;
+use crate::api::types::checkpoint::CCheckpoint;
+use crate::api::types::checkpoint::Checkpoint;
+use crate::api::types::checkpoint::filter::CheckpointFilter;
+use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::dynamic_field::DynamicField;
+use crate::api::types::epoch::CEpoch;
+use crate::api::types::epoch::Epoch;
+use crate::api::types::event::CEvent;
+use crate::api::types::event::Event;
+use crate::api::types::event::filter::EventFilter;
+use crate::api::types::move_object::MoveObject;
+use crate::api::types::move_package::MovePackage;
+use crate::api::types::move_package::PackageCheckpointFilter;
+use crate::api::types::move_package::PackageKey;
+use crate::api::types::move_package::{self as move_package};
+use crate::api::types::move_type::MoveType;
+use crate::api::types::move_type::{self as move_type};
+use crate::api::types::name_service::name_to_address;
+use crate::api::types::node::Node;
+use crate::api::types::object::Object;
+use crate::api::types::object::ObjectKey;
+use crate::api::types::object::VersionFilter;
+use crate::api::types::object::{self as object};
+use crate::api::types::object_filter::ObjectFilter;
+use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
+use crate::api::types::protocol_configs::ProtocolConfigs;
+use crate::api::types::service_config::ServiceConfig;
+use crate::api::types::simulation_result::SimulationResult;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
+use crate::api::types::transaction_effects::TransactionEffects;
+use crate::api::types::zklogin::ZkLoginIntentScope;
+use crate::api::types::zklogin::ZkLoginVerifyResult;
+use crate::api::types::zklogin::{self as zklogin};
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::upcast;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
+use crate::task::chain_identifier::ChainIdentifier;
 
 #[derive(Default)]
 pub struct Query {

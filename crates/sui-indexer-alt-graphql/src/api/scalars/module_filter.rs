@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::*;
-use std::{fmt, str::FromStr};
-use sui_types::{parse_sui_address, parse_sui_module_id};
+use std::fmt;
+use std::str::FromStr;
 
-use crate::api::scalars::{impl_string_input, sui_address::SuiAddress};
+use async_graphql::*;
+use sui_types::parse_sui_address;
+use sui_types::parse_sui_module_id;
+
+use crate::api::scalars::impl_string_input;
+use crate::api::scalars::sui_address::SuiAddress;
 
 /// GraphQL scalar containing a filter on modules. The filter can be one of:
 ///

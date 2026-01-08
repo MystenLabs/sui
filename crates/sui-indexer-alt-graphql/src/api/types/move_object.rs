@@ -4,31 +4,42 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Interface, Object, connection::Connection};
+use async_graphql::Context;
+use async_graphql::Interface;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
 use futures::future::try_join_all;
-use sui_types::{dynamic_field::DynamicFieldType, object::MoveObject as NativeMoveObject};
+use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::object::MoveObject as NativeMoveObject;
 use tokio::sync::OnceCell;
 
-use crate::{
-    api::scalars::{
-        base64::Base64, big_int::BigInt, id::Id, sui_address::SuiAddress, type_filter::TypeInput,
-        uint53::UInt53,
-    },
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-};
-
-use super::{
-    balance::{self, Balance},
-    coin_metadata::CoinMetadata,
-    dynamic_field::{DynamicField, DynamicFieldName},
-    move_type::MoveType,
-    move_value::MoveValue,
-    object::{self, CLive, CVersion, Object, VersionFilter},
-    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
-    owner::Owner,
-    transaction::{CTransaction, Transaction, filter::TransactionFilter},
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::balance::Balance;
+use crate::api::types::balance::{self as balance};
+use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::dynamic_field::DynamicField;
+use crate::api::types::dynamic_field::DynamicFieldName;
+use crate::api::types::move_type::MoveType;
+use crate::api::types::move_value::MoveValue;
+use crate::api::types::object::CLive;
+use crate::api::types::object::CVersion;
+use crate::api::types::object::Object;
+use crate::api::types::object::VersionFilter;
+use crate::api::types::object::{self as object};
+use crate::api::types::object_filter::ObjectFilter;
+use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
+use crate::api::types::owner::Owner;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
 
 #[derive(Clone)]
 pub(crate) struct MoveObject {

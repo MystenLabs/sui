@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Context, Object, connection::Connection};
-use sui_types::{
-    authenticator_state::ActiveJwk as NativeActiveJwk,
-    transaction::AuthenticatorStateUpdate as NativeAuthenticatorStateUpdate,
-};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use sui_types::authenticator_state::ActiveJwk as NativeActiveJwk;
+use sui_types::transaction::AuthenticatorStateUpdate as NativeAuthenticatorStateUpdate;
 
-use crate::{
-    api::scalars::{cursor::JsonCursor, uint53::UInt53},
-    api::types::epoch::Epoch,
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::epoch::Epoch;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
 
 /// System transaction for updating the on-chain state used by zkLogin.
 #[derive(Clone)]

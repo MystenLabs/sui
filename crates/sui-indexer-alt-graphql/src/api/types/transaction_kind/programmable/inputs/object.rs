@@ -1,19 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::*;
+use async_graphql::SimpleObject;
 
-use crate::{
-    api::{
-        scalars::{sui_address::SuiAddress, uint53::UInt53},
-        types::object::Object,
-    },
-    scope::Scope,
-};
-use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
-    digests::ObjectDigest,
-};
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
+use sui_types::digests::ObjectDigest;
+
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::object::Object;
+use crate::scope::Scope;
 
 /// A Move object, either immutable, or owned mutable.
 #[derive(SimpleObject)]

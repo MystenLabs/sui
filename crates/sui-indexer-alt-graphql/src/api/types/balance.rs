@@ -1,21 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{
-    Context, SimpleObject,
-    connection::{Connection, CursorType, Edge},
-};
-use sui_indexer_alt_reader::consistent_reader::{self, ConsistentReader};
-use sui_types::{TypeTag, base_types::SuiAddress};
+use async_graphql::Context;
+use async_graphql::SimpleObject;
+use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
+use sui_indexer_alt_reader::consistent_reader::{self};
+use sui_types::TypeTag;
+use sui_types::base_types::SuiAddress;
 
-use crate::{
-    api::scalars::{big_int::BigInt, cursor},
-    error::{RpcError, bad_user_input, feature_unavailable},
-    pagination::Page,
-    scope::Scope,
-};
-
-use super::move_type::MoveType;
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::cursor;
+use crate::api::types::move_type::MoveType;
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::feature_unavailable;
+use crate::pagination::Page;
+use crate::scope::Scope;
 
 /// The total balance for a particular coin type.
 #[derive(SimpleObject)]

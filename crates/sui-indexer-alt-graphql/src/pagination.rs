@@ -3,11 +3,11 @@
 
 use std::collections::BTreeMap;
 
-use async_graphql::{
-    OutputType,
-    connection::{Connection, CursorType, Edge},
-    registry::MetaField,
-};
+use async_graphql::OutputType;
+use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
+use async_graphql::registry::MetaField;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 

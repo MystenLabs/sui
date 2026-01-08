@@ -1,57 +1,70 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{any::Any, net::SocketAddr, sync::Arc};
+use std::any::Any;
+use std::net::SocketAddr;
+use std::sync::Arc;
 
-use anyhow::{self, Context};
-use api::types::{
-    address::IAddressable, move_datatype::IMoveDatatype, move_object::IMoveObject, object::IObject,
-};
-use async_graphql::{
-    EmptySubscription, ObjectType, Schema, SchemaBuilder, SubscriptionType,
-    extensions::ExtensionFactory, http::GraphiQLSource,
-};
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::{
-    Extension, Router,
-    extract::{ConnectInfo, MatchedPath},
-    http::Method,
-    response::Html,
-    routing::{MethodRouter, get, post},
-};
+use anyhow::Context as _;
+use api::types::address::IAddressable;
+use api::types::move_datatype::IMoveDatatype;
+use api::types::move_object::IMoveObject;
+use api::types::object::IObject;
+use async_graphql::EmptySubscription;
+use async_graphql::ObjectType;
+use async_graphql::Schema;
+use async_graphql::SchemaBuilder;
+use async_graphql::SubscriptionType;
+use async_graphql::extensions::ExtensionFactory;
+use async_graphql::http::GraphiQLSource;
+use async_graphql_axum::GraphQLRequest;
+use async_graphql_axum::GraphQLResponse;
+use axum::Extension;
+use axum::Router;
+use axum::extract::ConnectInfo;
+use axum::extract::MatchedPath;
+use axum::http::Method;
+use axum::response::Html;
+use axum::routing::MethodRouter;
+use axum::routing::get;
+use axum::routing::post;
 use axum_extra::TypedHeader;
 use config::RpcConfig;
-use extensions::{
-    query_limits::{QueryLimitsChecker, show_usage::ShowUsage},
-    timeout::Timeout,
-};
+use extensions::query_limits::QueryLimitsChecker;
+use extensions::query_limits::show_usage::ShowUsage;
+use extensions::timeout::Timeout;
 use headers::ContentLength;
 use health::DbProbe;
 use prometheus::Registry;
 use sui_futures::service::Service;
+use sui_indexer_alt_reader::bigtable_reader::BigtableReader;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
+use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
+use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
+use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
+use sui_indexer_alt_reader::package_resolver::DbPackageStore;
+use sui_indexer_alt_reader::package_resolver::PackageCache;
+use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
-use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
-use sui_indexer_alt_reader::{
-    bigtable_reader::BigtableReader,
-    consistent_reader::{ConsistentReader, ConsistentReaderArgs},
-    fullnode_client::{FullnodeArgs, FullnodeClient},
-    kv_loader::KvLoader,
-    ledger_grpc_reader::LedgerGrpcReader,
-    package_resolver::{DbPackageStore, PackageCache},
-    pg_reader::PgReader,
-};
-use task::{
-    chain_identifier,
-    watermark::{WatermarkTask, WatermarksLock},
-};
-use tokio::{net::TcpListener, sync::oneshot};
-use tower_http::{catch_panic, cors};
+use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
+use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
+use task::chain_identifier;
+use task::watermark::WatermarkTask;
+use task::watermark::WatermarksLock;
+use tokio::net::TcpListener;
+use tokio::sync::oneshot;
+use tower_http::catch_panic;
+use tower_http::cors;
 use tracing::info;
 use url::Url;
 
-use crate::api::{mutation::Mutation, query::Query};
+use crate::api::mutation::Mutation;
+use crate::api::query::Query;
 use crate::error::PanicHandler;
-use crate::extensions::logging::{Logging, Session};
+use crate::extensions::logging::Logging;
+use crate::extensions::logging::Session;
 use crate::metrics::RpcMetrics;
 use crate::middleware::version::Version;
 
@@ -408,20 +421,29 @@ async fn graphiql(path: MatchedPath) -> Html<String> {
 
 #[cfg(test)]
 mod tests {
-    use async_graphql::{EmptyMutation, EmptySubscription, Object, SDLExportOptions, Schema};
-    use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+    use std::fs;
+    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
+    use std::path::PathBuf;
+
+    use async_graphql::EmptyMutation;
+    use async_graphql::EmptySubscription;
+    use async_graphql::Object;
+    use async_graphql::SDLExportOptions;
+    use async_graphql::Schema;
+    use async_graphql_axum::GraphQLRequest;
+    use async_graphql_axum::GraphQLResponse;
     use axum::routing::post;
     use insta::assert_snapshot;
     use reqwest::Client;
-    use serde_json::{Value, json};
-    use std::fs;
-    use std::net::{IpAddr, Ipv4Addr};
-    use std::path::PathBuf;
+    use serde_json::Value;
+    use serde_json::json;
     use sui_pg_db::temp::get_available_port;
 
-    use super::*;
     use crate::error::code;
     use crate::extensions::logging::Session;
+
+    use super::*;
 
     /// Check that the exported schema is up-to-date.
     #[test]

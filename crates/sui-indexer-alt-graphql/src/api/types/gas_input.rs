@@ -1,17 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{connection::Connection, *};
-use sui_types::{base_types::SuiAddress, transaction::GasData};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use sui_types::base_types::SuiAddress;
+use sui_types::transaction::GasData;
 
-use crate::{
-    api::scalars::{big_int::BigInt, cursor::JsonCursor},
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
-
-use super::{address::Address, object::Object};
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::types::address::Address;
+use crate::api::types::object::Object;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
 
 #[derive(Clone)]
 pub(crate) struct GasInput {
