@@ -2,7 +2,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt, path::PathBuf};
+use std::{
+    fmt,
+    hash::{DefaultHasher, Hash, Hasher},
+    path::PathBuf,
+};
 
 use path_clean::PathClean;
 use tracing::debug;
@@ -15,7 +19,7 @@ use crate::{
     package::paths::PackagePath,
     schema::{
         EnvironmentID, EnvironmentName, LocalDepInfo, LockfileDependencyInfo, LockfileGitDepInfo,
-        ManifestGitDependency, ModeName, OnChainDepInfo, PackageName, RootDepInfo,
+        ManifestGitDependency, ModeName, OnChainDepInfo, PackageName, RenderToml, RootDepInfo,
     },
 };
 
@@ -235,6 +239,15 @@ impl Pinned {
             Pinned::OnChain(_on_chain) => "on-chain = true".to_string(),
             Pinned::Root(_) => "local = \".\"".to_string(),
         }
+    }
+
+    /// Returns the default hash for Self.
+    pub fn unique_hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        let lockfile_pin: LockfileDependencyInfo = self.clone().into();
+
+        lockfile_pin.render_as_toml().as_bytes().hash(&mut hasher);
+        hasher.finish()
     }
 }
 
