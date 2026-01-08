@@ -9,7 +9,9 @@ use async_trait::async_trait;
 use diesel::upsert::excluded;
 use diesel::{ExpressionMethods, define_sql_function, sql_types::Binary};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_schema::cp_bloom_blocks::{CP_BLOCK_SIZE, cp_block_id};
+use sui_indexer_alt_schema::cp_bloom_blocks::{
+    BLOOM_BLOCK_BITS, CP_BLOCK_SIZE, NUM_BLOOM_BLOCKS, NUM_HASHES, cp_block_id,
+};
 use tracing::debug;
 
 use crate::handlers::cp_blooms::extract_filter_keys;
@@ -18,7 +20,7 @@ use sui_indexer_alt_framework::{
     postgres::{Connection, Db},
 };
 use sui_indexer_alt_schema::{
-    blooms::BlockedBloomFilter,
+    blooms::blocked::BlockedBloomFilter,
     cp_bloom_blocks::{CheckpointItems, StoredCpBloomBlock, cp_block_seed},
     schema::cp_bloom_blocks,
 };
@@ -30,7 +32,7 @@ define_sql_function! {
     fn bytea_or(a: Binary, b: Binary) -> Binary;
 }
 
-/// Indexes blocked bloom filters that span multiple checkpoints for efficient range queries.
+/// Blocked bloom filters that span multiple checkpoints for efficient range queries.
 ///
 /// Checkpoints are assigned to 1000-checkpoint blocks:
 /// - `cp_block_id(cp_num) = cp_num / 1000`
@@ -150,7 +152,8 @@ impl CpBloomBlocks {
         }
 
         let seed = cp_block_seed(cp_block_id);
-        let mut bloom = BlockedBloomFilter::new(seed);
+        let mut bloom =
+            BlockedBloomFilter::new(seed, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BITS, NUM_HASHES);
         for item in &all_items {
             bloom.insert(item);
         }
@@ -188,18 +191,17 @@ impl CpBloomBlocks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::MIGRATIONS;
+
     use diesel::QueryDsl;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::Indexer;
-    use sui_indexer_alt_schema::blooms::{
-        BLOOM_BLOCK_BITS, NUM_BLOOM_BLOCKS, NUM_HASHES, hash::compute_blocked_positions,
-    };
 
-    /// Check if a key is present in a bloom filter block (test helper).
+    use crate::MIGRATIONS;
+
+    /// Check if a key is present in a bloom filter block.
     fn block_contains_key(block_data: &[u8], key: &[u8], seed: u128) -> bool {
         let (_, positions) =
-            compute_blocked_positions(key, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BITS, NUM_HASHES, seed);
+            BlockedBloomFilter::hash(key, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BITS);
         positions
             .iter()
             .all(|&pos| (block_data[pos / 8] & (1 << (pos % 8))) != 0)
@@ -275,10 +277,10 @@ mod tests {
         // (cp_block_id, bloom_block_index).
         let key1 = b"key_0".to_vec();
         let (target_block_idx, _) =
-            compute_blocked_positions(&key1, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BITS, NUM_HASHES, seed);
+            BlockedBloomFilter::hash(&key1, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BITS);
 
-        // key_93 hashes to the same bloom_block_index as key_0 with seed 0
-        let key2 = b"key_93".to_vec();
+        // key_104 hashes to the same bloom_block_index as key_0 with seed 0
+        let key2 = b"key_104".to_vec();
 
         // First batch: checkpoints 0-1 with key1
         let items1 = vec![
@@ -376,12 +378,12 @@ mod tests {
 
         // Verify original key is still present
         let blocks = get_bloom_blocks(&mut conn, 0).await;
-        let (original_block_idx, _) = compute_blocked_positions(
+        let (original_block_idx, _) = BlockedBloomFilter::hash(
             b"original_key",
-            NUM_BLOOM_BLOCKS,
-            BLOOM_BLOCK_BITS,
-            NUM_HASHES,
             seed,
+            NUM_BLOOM_BLOCKS,
+            NUM_HASHES,
+            BLOOM_BLOCK_BITS,
         );
         let block = blocks
             .iter()

@@ -2,16 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Bloom Filter implementation with optional folding.
-use super::hash;
-
-/// Minimum size after folding: 8192 bits = 1024 bytes
-///
-/// This prevents over-folding which causes correlated bits (from common items like
-/// popular packages) to concentrate and create hot spots with high false positive rates.
-pub const MIN_FOLD_BITS: usize = 8192;
-
-/// Stop folding when bit density exceeds this threshold.
-pub const MAX_FOLD_DENSITY: f64 = 0.40;
+use crate::blooms::hash::DoubleHasher;
+use crate::blooms::hash::set_bit;
 
 /// A standard bloom filter with bits spread across the entire filter.
 #[derive(Debug, Clone)]
@@ -31,15 +23,18 @@ impl BloomFilter {
         }
     }
 
-    pub fn num_bits(&self) -> usize {
-        self.bits.len() * 8
+    pub fn insert(&mut self, key: &[u8]) {
+        let num_bits = self.num_bits();
+        for pos in Self::hash(key, self.seed, num_bits, self.num_hashes) {
+            set_bit(&mut self.bits, pos);
+        }
     }
 
-    pub fn insert(&mut self, key: &[u8]) {
-        let positions = hash::compute_positions(key, self.num_bits(), self.num_hashes, self.seed);
-        for bit_pos in positions {
-            self.bits[bit_pos / 8] |= 1 << (bit_pos % 8);
-        }
+    pub fn hash(key: &[u8], seed: u128, num_bits: usize, num_hashes: u32) -> Vec<usize> {
+        DoubleHasher::with_value(key, seed)
+            .take(num_hashes as usize)
+            .map(|h| (h as usize) % num_bits)
+            .collect()
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -50,34 +45,34 @@ impl BloomFilter {
         &self.bits
     }
 
-    pub fn seed(&self) -> u128 {
-        self.seed
+    pub fn num_bits(&self) -> usize {
+        self.bits.len() * 8
     }
 
-    pub fn num_hashes(&self) -> u32 {
-        self.num_hashes
+    pub fn popcount(&self) -> usize {
+        self.bits.iter().map(|b| b.count_ones() as usize).sum()
     }
 
     /// Repeatedly halves the filter by ORing the upper half into the lower half
     /// until density exceeds MAX_FOLD_DENSITY or size reaches MIN_FOLD_BITS.
     ///
-    /// To query the folded filter, use `compute_original_bit_positions()` with the original filter size,
-    /// then apply `pos % folded_bits` to get positions in the folded filter.
-    pub fn fold(self) -> Vec<u8> {
+    /// To get the folded positions from the original bit positions,
+    /// folded_idx = `idx % folded_num_bits` where idx is the original bit position.
+    pub fn fold(self, min_fold_bits: usize, max_fold_density: f64) -> Vec<u8> {
         let mut bits = self.bits;
 
         loop {
             let current_bits = bits.len() * 8;
 
             // Stop if we've reached minimum size
-            if current_bits <= MIN_FOLD_BITS {
+            if current_bits <= min_fold_bits {
                 break;
             }
 
             // Stop if density exceeds threshold
             let popcount: usize = bits.iter().map(|b| b.count_ones() as usize).sum();
             let density = popcount as f64 / current_bits as f64;
-            if density > MAX_FOLD_DENSITY {
+            if density > max_fold_density {
                 break;
             }
 
@@ -94,25 +89,27 @@ impl BloomFilter {
 }
 
 #[cfg(test)]
-impl BloomFilter {
-    /// Check if a key might be in the filter for testing, in production this is done using SQL.
-    pub fn contains(&self, key: &[u8]) -> bool {
-        let positions = hash::compute_positions(key, self.num_bits(), self.num_hashes, self.seed);
-        positions
-            .iter()
-            .all(|&pos| self.bits[pos / 8] & (1 << (pos % 8)) != 0)
-    }
-
-    /// Calculate the current bit density.
-    pub fn density(&self) -> f64 {
-        let popcount: usize = self.bits.iter().map(|b| b.count_ones() as usize).sum();
-        popcount as f64 / self.num_bits() as f64
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blooms::hash;
+    use crate::cp_blooms::MAX_FOLD_DENSITY;
+    use crate::cp_blooms::MIN_FOLD_BITS;
+
+    impl BloomFilter {
+        /// Check if a key might be in the filter for testing, in production this is done using SQL.
+        pub fn contains(&self, key: &[u8]) -> bool {
+            let num_bits = self.num_bits();
+            DoubleHasher::with_value(key, self.seed)
+                .take(self.num_hashes as usize)
+                .map(|h| (h as usize) % num_bits)
+                .all(|pos| hash::check_bit(&self.bits, pos))
+        }
+
+        /// Calculate the current bit density.
+        pub fn density(&self) -> f64 {
+            self.popcount() as f64 / self.num_bits() as f64
+        }
+    }
 
     /// Check if a key might be in a folded bloom filter.
     pub fn folded_bloom_contains(
@@ -123,10 +120,11 @@ mod tests {
         seed: u128,
     ) -> bool {
         let folded_bits = folded_bytes.len() * 8;
-        let positions = hash::compute_positions(key, original_num_bits, num_hashes, seed);
-        positions.iter().all(|&pos| {
+        let mut hasher = DoubleHasher::with_value(key, seed);
+        (0..num_hashes).all(|_| {
+            let pos = (hasher.next_hash() as usize) % original_num_bits;
             let folded_pos = pos % folded_bits;
-            folded_bytes[folded_pos / 8] & (1 << (folded_pos % 8)) != 0
+            hash::check_bit(folded_bytes, folded_pos)
         })
     }
 
@@ -156,15 +154,15 @@ mod tests {
     fn test_fold_preserves_membership() {
         let mut bloom = BloomFilter::new(8192, 5, 67);
         let original_num_bits = bloom.num_bits();
-        let num_hashes = bloom.num_hashes();
-        let seed = bloom.seed();
+        let num_hashes = bloom.num_hashes;
+        let seed = bloom.seed;
 
         let keys: Vec<Vec<u8>> = (0..50).map(|i| format!("key{}", i).into_bytes()).collect();
         for key in &keys {
             bloom.insert(key);
         }
 
-        let folded_bytes = bloom.fold();
+        let folded_bytes = bloom.fold(MIN_FOLD_BITS, MAX_FOLD_DENSITY);
 
         // All original keys must still be found (no false negatives)
         for key in &keys {
@@ -179,13 +177,13 @@ mod tests {
     fn test_fold_minimum_size() {
         let mut bloom = BloomFilter::new(16384, 5, 67);
         let original_num_bits = bloom.num_bits();
-        let num_hashes = bloom.num_hashes();
-        let seed = bloom.seed();
+        let num_hashes = bloom.num_hashes;
+        let seed = bloom.seed;
 
         // Insert just one key - should fold down to minimum
         bloom.insert(b"single");
 
-        let folded_bytes = bloom.fold();
+        let folded_bytes = bloom.fold(MIN_FOLD_BITS, MAX_FOLD_DENSITY);
 
         // Should fold down to MIN_FOLD_BITS (8192 bits = 1024 bytes)
         assert!(
@@ -213,13 +211,13 @@ mod tests {
     fn test_fold_roundtrip() {
         let mut bloom = BloomFilter::new(8192, 5, 67);
         let original_num_bits = bloom.num_bits();
-        let num_hashes = bloom.num_hashes();
-        let seed = bloom.seed();
+        let num_hashes = bloom.num_hashes;
+        let seed = bloom.seed;
 
         bloom.insert(b"key1");
         bloom.insert(b"key2");
 
-        let folded_bytes = bloom.fold();
+        let folded_bytes = bloom.fold(MIN_FOLD_BITS, MAX_FOLD_DENSITY);
 
         // Verify keys can be found in the folded bytes
         assert!(folded_bloom_contains(
