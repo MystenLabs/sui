@@ -9,10 +9,18 @@ The DeepBook Margin Indexer extends the DeepBookV3 Indexer with endpoints for ma
 
 ## Public endpoint
 
-The margin endpoints are available through the same public indexer as DeepBookV3:
+The margin endpoints are available through the same public indexer as DeepBookV3.
+
+### Mainnet
 
 ```http
 https://deepbook-indexer.mainnet.mystenlabs.com/
+```
+
+### Testnet
+
+```http
+https://deepbook-indexer.testnet.mystenlabs.com/
 ```
 
 ## Common query parameters
@@ -33,6 +41,20 @@ All margin endpoints support the following common query parameters:
 
 Returns events for when margin managers are created.
 
+#### Response
+
+```json
+[
+    {
+        "margin_manager_id": "0x1234...",
+        "owner": "0xabcd...",
+        "balance_manager_id": "0x5678...",
+        "deepbook_pool_id": "0x9abc...",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
+
 ### Get loan borrowed events
 
 ```http
@@ -40,6 +62,20 @@ Returns events for when margin managers are created.
 ```
 
 Returns events for when assets are borrowed from margin pools.
+
+#### Response
+
+```json
+[
+    {
+        "margin_manager_id": "0x1234...",
+        "margin_pool_id": "0x5678...",
+        "borrow_amount": "1000000000",
+        "borrow_shares": "1000000000",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
 
 ### Get loan repaid events
 
@@ -49,6 +85,20 @@ Returns events for when assets are borrowed from margin pools.
 
 Returns events for when borrowed assets are repaid.
 
+#### Response
+
+```json
+[
+    {
+        "margin_manager_id": "0x1234...",
+        "margin_pool_id": "0x5678...",
+        "repay_amount": "1000000000",
+        "repay_shares": "1000000000",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
+
 ### Get liquidation events
 
 ```http
@@ -56,6 +106,24 @@ Returns events for when borrowed assets are repaid.
 ```
 
 Returns events for when margin managers are liquidated.
+
+#### Response
+
+```json
+[
+    {
+        "margin_manager_id": "0x1234...",
+        "margin_pool_id": "0x5678...",
+        "liquidator": "0xabcd...",
+        "repay_amount": "1000000000",
+        "collateral_amount": "500000000",
+        "liquidator_reward": "50000000",
+        "pool_reward": "10000000",
+        "bad_debt": "0",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
 
 ### Get margin managers info
 
@@ -70,14 +138,14 @@ Returns an aggregate view of all margin managers with their associated pool and 
 ```json
 [
     {
-        "margin_manager_id": "string",
-        "deepbook_pool_id": "string" | null,
-        "base_asset_id": "string" | null,
-        "base_asset_symbol": "string" | null,
-        "quote_asset_id": "string" | null,
-        "quote_asset_symbol": "string" | null,
-        "base_margin_pool_id": "string" | null,
-        "quote_margin_pool_id": "string" | null
+        "margin_manager_id": "0x1234...",
+        "deepbook_pool_id": "0x5678...",
+        "base_asset_id": "0xabcd...",
+        "base_asset_symbol": "SUI",
+        "quote_asset_id": "0xefgh...",
+        "quote_asset_symbol": "USDC",
+        "base_margin_pool_id": "0x1111...",
+        "quote_margin_pool_id": "0x2222..."
     }
 ]
 ```
@@ -93,6 +161,23 @@ Returns the current state of margin managers. This endpoint is useful for monito
 - `max_risk_ratio`: Filter to return only margin managers with risk ratio below this threshold (useful for finding liquidation opportunities)
 - `deepbook_pool_id`: Filter by specific DeepBook pool
 
+#### Response
+
+```json
+[
+    {
+        "margin_manager_id": "0x1234...",
+        "deepbook_pool_id": "0x5678...",
+        "owner": "0xabcd...",
+        "base_assets": "1000000000",
+        "quote_assets": "5000000000",
+        "base_debt": "500000000",
+        "quote_debt": "2000000000",
+        "risk_ratio": 1.5
+    }
+]
+```
+
 ## Margin pool endpoints
 
 ### Get asset supplied events
@@ -103,6 +188,22 @@ Returns the current state of margin managers. This endpoint is useful for monito
 
 Returns events for when assets are supplied to margin pools.
 
+#### Response
+
+```json
+[
+    {
+        "margin_pool_id": "0x1234...",
+        "supplier": "0xabcd...",
+        "supplier_cap_id": "0x5678...",
+        "supply_amount": "1000000000",
+        "supply_shares": "1000000000",
+        "referral_id": "0x9abc...",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
+
 ### Get asset withdrawn events
 
 ```http
@@ -110,6 +211,21 @@ Returns events for when assets are supplied to margin pools.
 ```
 
 Returns events for when assets are withdrawn from margin pools.
+
+#### Response
+
+```json
+[
+    {
+        "margin_pool_id": "0x1234...",
+        "supplier": "0xabcd...",
+        "supplier_cap_id": "0x5678...",
+        "withdraw_amount": "1000000000",
+        "withdraw_shares": "1000000000",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
 
 ### Get margin pool creation events
 
@@ -119,6 +235,18 @@ Returns events for when assets are withdrawn from margin pools.
 
 Returns events for when margin pools are created.
 
+#### Response
+
+```json
+[
+    {
+        "margin_pool_id": "0x1234...",
+        "asset_type": "0x2::sui::SUI",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
+
 ### Get DeepBook pool updated events
 
 ```http
@@ -126,6 +254,19 @@ Returns events for when margin pools are created.
 ```
 
 Returns events for when DeepBook pools are enabled or disabled for a margin pool.
+
+#### Response
+
+```json
+[
+    {
+        "margin_pool_id": "0x1234...",
+        "deepbook_pool_id": "0x5678...",
+        "allowed": true,
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
 
 ### Get interest params updated events
 
@@ -135,6 +276,21 @@ Returns events for when DeepBook pools are enabled or disabled for a margin pool
 
 Returns events for when interest rate parameters are updated.
 
+#### Response
+
+```json
+[
+    {
+        "margin_pool_id": "0x1234...",
+        "base_rate": "100000",
+        "multiplier": "200000",
+        "jump_multiplier": "500000",
+        "optimal_utilization": "800000000",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
+
 ### Get margin pool config updated events
 
 ```http
@@ -142,6 +298,21 @@ Returns events for when interest rate parameters are updated.
 ```
 
 Returns events for when margin pool configuration is updated.
+
+#### Response
+
+```json
+[
+    {
+        "margin_pool_id": "0x1234...",
+        "supply_cap": "10000000000000",
+        "max_utilization_rate": "950000000",
+        "protocol_spread": "50000000",
+        "min_borrow": "1000000",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
 
 ### Get supplier cap minted events
 
@@ -151,6 +322,18 @@ Returns events for when margin pool configuration is updated.
 
 Returns events for when supplier capabilities are minted.
 
+#### Response
+
+```json
+[
+    {
+        "supplier_cap_id": "0x1234...",
+        "owner": "0xabcd...",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
+
 ### Get supply referral minted events
 
 ```http
@@ -158,6 +341,20 @@ Returns events for when supplier capabilities are minted.
 ```
 
 Returns events for when supply referrals are minted.
+
+#### Response
+
+```json
+[
+    {
+        "referral_id": "0x1234...",
+        "margin_pool_id": "0x5678...",
+        "owner": "0xabcd...",
+        "referral_rate": "100000000",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
 
 ### Get protocol fees increased events
 
@@ -167,6 +364,18 @@ Returns events for when supply referrals are minted.
 
 Returns events for when protocol fees are increased.
 
+#### Response
+
+```json
+[
+    {
+        "margin_pool_id": "0x1234...",
+        "amount": "1000000",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
+
 ### Get referral fees claimed events
 
 ```http
@@ -174,6 +383,20 @@ Returns events for when protocol fees are increased.
 ```
 
 Returns events for when referral fees are claimed.
+
+#### Response
+
+```json
+[
+    {
+        "referral_id": "0x1234...",
+        "margin_pool_id": "0x5678...",
+        "owner": "0xabcd...",
+        "amount": "1000000",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
 
 ## Admin and registry endpoints
 
@@ -185,6 +408,18 @@ Returns events for when referral fees are claimed.
 
 Returns events for when maintainer capabilities are updated.
 
+#### Response
+
+```json
+[
+    {
+        "maintainer_cap_id": "0x1234...",
+        "owner": "0xabcd...",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
+
 ### Get maintainer fees withdrawn events
 
 ```http
@@ -192,6 +427,19 @@ Returns events for when maintainer capabilities are updated.
 ```
 
 Returns events for when maintainer fees are withdrawn.
+
+#### Response
+
+```json
+[
+    {
+        "margin_pool_id": "0x1234...",
+        "amount": "1000000",
+        "recipient": "0xabcd...",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
 
 ### Get protocol fees withdrawn events
 
@@ -201,6 +449,19 @@ Returns events for when maintainer fees are withdrawn.
 
 Returns events for when protocol fees are withdrawn.
 
+#### Response
+
+```json
+[
+    {
+        "margin_pool_id": "0x1234...",
+        "amount": "1000000",
+        "recipient": "0xabcd...",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
+
 ### Get pause cap updated events
 
 ```http
@@ -208,6 +469,18 @@ Returns events for when protocol fees are withdrawn.
 ```
 
 Returns events for when pause capabilities are updated.
+
+#### Response
+
+```json
+[
+    {
+        "pause_cap_id": "0x1234...",
+        "owner": "0xabcd...",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
 
 ### Get DeepBook pool registered events
 
@@ -217,6 +490,19 @@ Returns events for when pause capabilities are updated.
 
 Returns events for when DeepBook pools are registered in the margin registry.
 
+#### Response
+
+```json
+[
+    {
+        "pool_id": "0x1234...",
+        "base_type": "0x2::sui::SUI",
+        "quote_type": "0xdba3...::usdc::USDC",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
+
 ### Get DeepBook pool registry updated events
 
 ```http
@@ -225,6 +511,18 @@ Returns events for when DeepBook pools are registered in the margin registry.
 
 Returns events for when DeepBook pool registry entries are updated.
 
+#### Response
+
+```json
+[
+    {
+        "pool_id": "0x1234...",
+        "margin_enabled": true,
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
+
 ### Get DeepBook pool config updated events
 
 ```http
@@ -232,6 +530,21 @@ Returns events for when DeepBook pool registry entries are updated.
 ```
 
 Returns events for when DeepBook pool configurations are updated.
+
+#### Response
+
+```json
+[
+    {
+        "pool_id": "0x1234...",
+        "initial_margin_ratio": "100000000",
+        "maintenance_margin_ratio": "50000000",
+        "liquidation_reward": "50000000",
+        "max_leverage": "10",
+        "checkpoint_timestamp_ms": 1738000000000
+    }
+]
+```
 
 ## Related links
 
