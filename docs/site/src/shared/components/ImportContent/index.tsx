@@ -9,7 +9,7 @@ import MDXComponents from "@theme/MDXComponents";
 import utils from "./utils";
 import MarkdownIt from "markdown-it";
 
-import { importContentMap } from "../../../.generated/ImportContentMap";
+import { importContentMap } from "../../.generated/ImportContentMap";
 
 /// <reference types="webpack-env" />
 
