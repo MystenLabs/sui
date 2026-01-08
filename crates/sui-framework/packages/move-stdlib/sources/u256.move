@@ -66,6 +66,30 @@ public fun to_string(x: u256): String {
     std::macros::num_to_string!(x)
 }
 
+/// Try to add `x` and `y`.
+/// Returns `None` if the addition would overflow.
+public fun checked_add(x: u256, y: u256): Option<u256> {
+    std::macros::num_checked_add!(x, y, max_value!())
+}
+
+/// Try to subtract `y` from `x`.
+/// Returns `None` if `y > x`.
+public fun checked_sub(x: u256, y: u256): Option<u256> {
+    std::macros::num_checked_sub!(x, y)
+}
+
+/// Try to multiply `x` and `y`.
+/// Returns `None` if the multiplication would overflow.
+public fun checked_mul(x: u256, y: u256): Option<u256> {
+    std::macros::num_checked_mul!(x, y, max_value!())
+}
+
+/// Try to divide `x` by `y`.
+/// Returns `None` if `y` is zero.
+public fun checked_div(x: u256, y: u256): Option<u256> {
+    std::macros::num_checked_div!(x, y)
+}
+
 /// Maximum value for a `u256`
 public macro fun max_value(): u256 {
     0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF
