@@ -264,19 +264,42 @@ impl CommitFinalizer {
     }
 
     // Tries directly finalizing transactions in the commit.
+    // Direct commit means every transaction in the commit can be considered to have a quorum of post-commit certificates,
+    // unless the transaction has reject votes that do not reach quorum, or the block containing the transaction is outside
+    // of GC bound.
     fn try_direct_finalize_commit(&mut self, index: usize) {
+        let metrics = &self.context.metrics.node_metrics;
         let num_commits = self.pending_commits.len();
         let commit_state = self
             .pending_commits
             .get_mut(index)
             .unwrap_or_else(|| panic!("Commit {} does not exist. len = {}", index, num_commits,));
-        // Direct commit means every transaction in the commit can be considered to have a quorum of post-commit certificates,
-        // unless the transaction has reject votes that do not reach quorum either.
-        assert!(!commit_state.pending_blocks.is_empty());
+        let gc_round = self
+            .dag_state
+            .read()
+            .calculate_gc_round(commit_state.commit.leader.round);
 
-        let metrics = &self.context.metrics.node_metrics;
+        // Each commit can only try direct finalization once.
+        assert!(!commit_state.pending_blocks.is_empty());
         let pending_blocks = std::mem::take(&mut commit_state.pending_blocks);
+
         for (block_ref, num_transactions) in pending_blocks {
+            if self
+                .context
+                .protocol_config
+                .consensus_skip_gced_blocks_in_direct_finalization()
+                && block_ref.round <= gc_round && num_transactions > 0
+            {
+                // The block is outside of GC bound.
+                let transactions =
+                    (0..(num_transactions as TransactionIndex)).collect::<BTreeSet<_>>();
+                commit_state
+                    .pending_transactions
+                    .entry(block_ref)
+                    .or_default()
+                    .extend(transactions);
+                continue;
+            }
             let reject_votes = self.transaction_certifier.get_reject_votes(&block_ref)
                 .unwrap_or_else(|| panic!("No vote info found for {block_ref}. It is either incorrectly gc'ed or failed to be recovered after crash."));
             metrics
@@ -433,8 +456,11 @@ impl CommitFinalizer {
                 .collect();
             let mut rejected_transactions = vec![];
             for &transaction_index in pending_transactions {
-                // Pending transactions should always have reject votes.
-                let reject_stake = reject_votes.get(&transaction_index).copied().unwrap();
+                // Pending transactions do not have reject votes when the block is outside of GC bound from the commit leader's round.
+                let reject_stake = reject_votes
+                    .get(&transaction_index)
+                    .copied()
+                    .unwrap_or_default();
                 if reject_stake < self.context.committee.quorum_threshold() {
                     // The transaction cannot be rejected yet.
                     continue;
@@ -648,7 +674,7 @@ impl CommitFinalizer {
                 // Note: if the current block casts reject votes on transactions in the pending block,
                 // it can be assumed that accept votes are also casted to other transactions in the pending block.
                 // But we choose to skip counting the accept votes in this edge case for simplicity.
-                if context.protocol_config.consensus_skip_gced_accept_votes() && votes_gced {
+                if votes_gced {
                     let hostname = &context.committee.authority(curr_block_ref.author).hostname;
                     context
                         .metrics
@@ -917,9 +943,6 @@ mod tests {
         context
             .protocol_config
             .set_consensus_gc_depth_for_testing(5);
-        context
-            .protocol_config
-            .set_consensus_skip_gced_accept_votes_for_testing(true);
         let context = Arc::new(context);
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
