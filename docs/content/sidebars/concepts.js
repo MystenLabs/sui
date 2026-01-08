@@ -68,29 +68,7 @@ const concepts = [
 			id: 'concepts/sui-move-concepts',
 		},
 		items: [
-			{
-				type: 'category',
-				label: 'Packages',
-				link: {
-					type: 'doc',
-					id: 'concepts/sui-move-concepts/packages',
-				},
-				items: [
-					'concepts/sui-move-concepts/packages/upgrade',
-					'concepts/sui-move-concepts/packages/custom-policies',
-					'concepts/sui-move-concepts/packages/automated-address-management',
-				],
-			},
-			{
-				type: 'category',
-				label: 'Dynamic Fields',
-				link: {
-					type: 'doc',
-					id: 'concepts/dynamic-fields',
-				},
-				items: ['concepts/dynamic-fields/tables-bags'],
-			},
-			'concepts/sui-move-concepts/derived-objects',
+			'concepts/sui-move-concepts/packages',
 			'concepts/sui-move-concepts/conventions',
 		],
 	},

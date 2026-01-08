@@ -16,9 +16,9 @@ A Sui package consists of:
 - `Move.toml` manifest file that declares dependencies and other information about the package.
 - `Move.lock` file that the Sui Move toolchain automatically generates to lock the versions of the dependencies and track the different published and upgraded versions of the package that exist on the different networks.
 
-For this reason, the `Move.lock` file should always be part of the package (don't add it to the `.gitignore` file). Use the [automated address management](/concepts/sui-move-concepts/packages/automated-address-management.mdx) instead of the old `published-at` field in the manifest file.
+For this reason, the `Move.lock` file should always be part of the package (don't add it to the `.gitignore` file). Use the [automated address management](/guides/developer/packages/automated-address-management.mdx) instead of the old `published-at` field in the manifest file.
 
-Optionally, you can add a `tests` directory to contain the tests for the package and an `examples` directory to provide use cases for the package. Neither directory is uploaded on chain when you publish the package.
+Optionally, you can add a `tests` directory to contain the tests for the package and an `examples` directory to provide use cases for the package. Neither directory is uploaded on-chain when you publish the package.
 
 ```
 sources/
@@ -38,7 +38,7 @@ In your package manifest, the package name should be in PascalCase: `name = "MyP
 
 ### Modules
 
-Modules are the main building blocks of your Move code. They are used to organize and encapsulate related functionality. Design your modules around one object or data structure. A variant structure should have its own module to avoid complexity and bugs.
+Modules are the main building blocks of your Move code. They are used to organize and encapsulate related functionality. Design your modules around 1 object or data structure. A variant structure should have its own module to avoid complexity and bugs.
 
 Module declarations don't need to use brackets anymore and the compiler provides default `use` statements for widely used modules, so you don't need to declare all of them.
 
@@ -192,7 +192,7 @@ The following section covers common patterns and best practices specific to Move
 
 ### Shared objects
 
-Library modules that share objects should provide two functions: one to instantiate and return the object, and another one to share it. It allows the caller to pass it to other functions and run custom functionality before sharing it.
+Library modules that share objects should provide 2 functions: 1 to instantiate and return the object, and another 1 to share it. It allows the caller to pass it to other functions and run custom functionality before sharing it.
 
 ```move
 module conventions::shop;
@@ -319,9 +319,9 @@ public fun wrong_withdraw(state: &mut State, ctx: &mut TxContext): Coin<SUI> {
 }
 ```
 
-### Data storage in owned vs shared objects
+### Data storage in owned and shared objects
 
-If your dApp data has a one to one relationship, it's best to use owned objects.
+If your dApp data has a 1 to 1 relationship, it's best to use owned objects.
 
 ```move
 module conventions::vesting_wallet;
