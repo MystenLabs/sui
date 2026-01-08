@@ -4,59 +4,111 @@
 */
 import React from "react";
 import CodeBlock from "@theme/CodeBlock";
+import { MDXProvider } from "@mdx-js/react";
+import MDXComponents from "@theme/MDXComponents";
 import utils from "./utils";
 import MarkdownIt from "markdown-it";
 
-// Import content map is generated at build time - make it optional
-let importContentMap: Record<string, string> = {};
-try {
-  // @ts-ignore - this file is generated at build time by prebuild script
-  importContentMap =
-    require("@site/src/.generated/ImportContentMap").importContentMap;
-} catch (e) {
-  // Will be empty if prebuild hasn't run - code mode won't work but build won't fail
-}
+import { importContentMap } from "../../.generated/ImportContentMap";
 
 /// <reference types="webpack-env" />
 
 /** ------------------ SNIPPET MODE (scoped to /snippets) ------------------ */
-let snippetReq: __WebpackModuleApi.RequireContext | null = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  snippetReq = require.context("@docs/snippets", true, /\.mdx?$/);
-} catch (e) {
-  // Snippets directory may not exist in all repos
-}
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const snippetReq: __WebpackModuleApi.RequireContext = require.context(
+  "@docs/snippets",
+  true,
+  /\.mdx?$/,
+);
 
 type AnyMod = any;
 type ResolvedComp = React.ComponentType<any> | null;
 
+/**
+ * Resolves an MDX module to a React component.
+ * Handles various export patterns from MDX v3 / Docusaurus 3.x.
+ */
 function resolveMdxComponent(mod: AnyMod): ResolvedComp {
-  const cand = mod?.default ?? mod;
-  const maybe = cand?.default ?? cand;
-  return typeof maybe === "function"
-    ? (maybe as React.ComponentType<any>)
-    : null;
+  if (!mod) return null;
+
+  // MDX v3 / Docusaurus 3.x typically exports as mod.default
+  const candidate = mod.default ?? mod;
+
+  // Sometimes there's a double-default wrapper
+  const component = candidate?.default ?? candidate;
+
+  // Verify it's actually a function (React component)
+  if (typeof component === "function") {
+    return component as React.ComponentType<any>;
+  }
+
+  // Check if it's a valid React element type (could be a forwardRef or memo)
+  if (
+    component &&
+    typeof component === "object" &&
+    (component.$$typeof === Symbol.for("react.forward_ref") ||
+      component.$$typeof === Symbol.for("react.memo"))
+  ) {
+    return component as React.ComponentType<any>;
+  }
+
+  return null;
+}
+
+/**
+ * Validates that a value is a renderable React component.
+ */
+function isValidComponent(comp: unknown): comp is React.ComponentType<any> {
+  if (!comp) return false;
+
+  // Function components
+  if (typeof comp === "function") return true;
+
+  // forwardRef, memo, lazy components
+  if (
+    typeof comp === "object" &&
+    comp !== null &&
+    "$$typeof" in comp &&
+    typeof (comp as any).$$typeof === "symbol"
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 const SNIPPET_MAP: Record<string, React.ComponentType<any>> = {};
-if (snippetReq) {
-  snippetReq.keys().forEach((k: string) => {
-    const Comp = resolveMdxComponent(snippetReq!(k));
-    if (!Comp) return;
+
+// Build the snippet map at module load time
+snippetReq.keys().forEach((k: string) => {
+  try {
+    const raw = snippetReq<AnyMod>(k);
+    const Comp = resolveMdxComponent(raw);
+
+    if (!isValidComponent(Comp)) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(`[ImportContent] Skipping invalid snippet: ${k}`);
+      }
+      return;
+    }
+
     const key = k.replace(/^\.\//, ""); // "sub/x.mdx"
     SNIPPET_MAP[key] = Comp;
     SNIPPET_MAP[key.replace(/\.mdx?$/, "")] = Comp; // also without extension
-  });
-}
+  } catch (err) {
+    if (process.env.NODE_ENV === "development") {
+      console.error(`[ImportContent] Error loading snippet ${k}:`, err);
+    }
+  }
+});
 
 type Props = {
-  /** For mode="snippet": path under /snippets. For mode="code": repo-relative path. */
+  /** For mode="snippet": path under /snippets. For mode="code": repo-relative path like "packages/foo/src/x.ts". */
   source: string;
   mode: "snippet" | "code";
-  language?: string;
-  tag?: string;
-  fun?: string;
+  language?: string; // for CodeBlock (code mode)
+  tag?: string; // ID using the docs:: comment format
+  fun?: string; // target functions
   variable?: string;
   struct?: string;
   impl?: string;
@@ -66,16 +118,16 @@ type Props = {
   module?: string;
   component?: string;
   dep?: string;
-  test?: string;
+  test?: string; // target test blocks
   highlight?: string;
-  noComments?: boolean;
-  noTests?: boolean;
+  noComments?: boolean; // if included, remove ALL code comments
+  noTests?: boolean; // if included, don't include tests
   noTitle?: boolean;
   style?: string;
   org?: string;
   repo?: string;
   ref?: string;
-  signatureOnly?: boolean;
+  signatureOnly?: boolean; // if included, only display function signature
 };
 
 export default function ImportContent({
@@ -92,7 +144,7 @@ export default function ImportContent({
   type,
   impl,
   trait,
-  enumeration,
+  enumeration, // enum is reserved word
   module,
   dep,
   component,
@@ -123,8 +175,7 @@ export default function ImportContent({
       try {
         const branch = ref || "main";
         const path = String(source || "").replace(/^\.\/?/, "");
-        const url =
-          `https://raw.githubusercontent.com/${org}/${repo}/${branch}/${path}`;
+        const url = `https://raw.githubusercontent.com/${org}/${repo}/${branch}/${path}`;
         const headers: Record<string, string> = {};
 
         const res = await fetch(url, { headers });
@@ -143,6 +194,7 @@ export default function ImportContent({
     };
   }, [isGitHub, org, repo, ref, source]);
 
+  // Handle snippet mode
   if (mode === "snippet") {
     const normalized = source.replace(/^\.\//, "");
     const Comp =
@@ -151,60 +203,90 @@ export default function ImportContent({
       SNIPPET_MAP[`${normalized}.mdx`] ||
       SNIPPET_MAP[`${normalized}.md`];
 
-    if (!Comp) {
+    // Validate component before rendering
+    if (!isValidComponent(Comp)) {
       return (
         <div className="alert alert--warning" role="alert">
           Missing or invalid snippet: <code>{source}</code>
+          {process.env.NODE_ENV === "development" && (
+            <div style={{ fontSize: "0.8em", marginTop: "0.5em" }}>
+              <details>
+                <summary>Debug info</summary>
+                <pre>
+                  {JSON.stringify(
+                    {
+                      normalized,
+                      availableKeys: Object.keys(SNIPPET_MAP).slice(0, 20),
+                      compType: typeof Comp,
+                    },
+                    null,
+                    2,
+                  )}
+                </pre>
+              </details>
+            </div>
+          )}
         </div>
       );
     }
-    return <Comp />;
+
+    // Wrap with MDXProvider so that components (Tabs, TabItem, etc.)
+    // imported inside the snippet MDX files resolve correctly
+    return (
+      <MDXProvider components={MDXComponents}>
+        <Comp />
+      </MDXProvider>
+    );
   }
 
   // mode === "code"
+  // Expect paths like "packages/…", "apps/…", "docs/…"
   const cleaned = source.replace(/^\/+/, "").replace(/^\.\//, "");
 
   const match = cleaned.match(/\.([^.]+)$/);
   const ext = match ? match[1] : undefined;
 
-  if (!language) {
+  // If language is not explicitly set, use extension
+  let resolvedLanguage = language;
+  if (!resolvedLanguage) {
     switch (ext) {
       case "lock":
-        language = "toml";
+        resolvedLanguage = "toml";
         break;
       case "sh":
-        language = "shell";
+        resolvedLanguage = "shell";
         break;
       case "mdx":
-        language = "markdown";
+        resolvedLanguage = "markdown";
         break;
       case "tsx":
-        language = "ts";
+        resolvedLanguage = "ts";
         break;
       case "rs":
-        language = "rust";
+        resolvedLanguage = "rust";
         break;
       case "move":
-        language = "move";
+        resolvedLanguage = "move";
         break;
       case "prisma":
-        language = "ts";
+        resolvedLanguage = "ts";
         break;
       default:
-        language = ext || "text";
+        resolvedLanguage = ext || "text";
     }
   }
 
   if (isGitHub && ghLoading) {
     return <div className="import-content loading">Loading…</div>;
   }
+
   if (isGitHub && ghErr) {
     return <pre className="import-content error">{ghErr}</pre>;
   }
 
   let content: string;
   if (isGitHub) {
-    content = ghText;
+    content = ghText as string;
   } else {
     content = importContentMap[cleaned];
   }
@@ -241,15 +323,15 @@ export default function ImportContent({
   }
 
   if (fun) {
-    out = utils.returnFunctions(out, fun, language, signatureOnly);
+    out = utils.returnFunctions(out, fun, resolvedLanguage, signatureOnly);
   }
 
   if (variable) {
-    out = utils.returnVariables(out, variable, language);
+    out = utils.returnVariables(out, variable, resolvedLanguage);
   }
 
   if (struct) {
-    out = utils.returnStructs(out, struct, language);
+    out = utils.returnStructs(out, struct, resolvedLanguage);
   }
 
   if (type) {
@@ -276,18 +358,21 @@ export default function ImportContent({
     out = utils.returnTests(out, test);
   }
 
-  out = out.replace(/^\s*\/\/\s*docs::\/?.*\r?$\n?/gm, "");
+  out = out.replace(/^\s*\/\/\s*docs::\/?.*\r?$\n?/gm, ""); // remove all docs:: style comments
 
   if (noTests) {
     out = utils.returnNotests(out);
   }
 
   if (noComments) {
+    // get rid of all comments
     out = out.replace(/^ *\/\/.*\n/gm, "");
   }
 
+  // Remove top blank line if exists
   out = out.replace(/^\s*\n/, "");
 
+  // Safely compute highlight metastring
   const title = org ? `github.com/${org}/${repo}/${cleaned}` : cleaned;
   const rawHighlight = typeof highlight === "string" ? highlight : "";
   const computedHL = rawHighlight
@@ -306,7 +391,8 @@ export default function ImportContent({
     if (!noTitle) meta = `title="${title}"`;
   }
 
-  if (/^m(?:d|arkdown)$/i.test(style)) {
+  // just render markdown if style = "markdown" or "md"
+  if (/^m(?:d|arkdown)$/i.test(style || "")) {
     const html = md.render(out);
     return (
       <div
@@ -317,7 +403,7 @@ export default function ImportContent({
   }
 
   return (
-    <CodeBlock language={language} metastring={meta}>
+    <CodeBlock language={resolvedLanguage} metastring={meta}>
       {out}
     </CodeBlock>
   );

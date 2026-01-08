@@ -7,8 +7,8 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './styles.module.css';
 
-export default function SidebarIframe({ 
-  url, 
+export default function SidebarIframe({
+  url,
   label = "External Link",
   icon = "🔗",
   openInNewTab = false  // Add this prop
@@ -37,7 +37,7 @@ export default function SidebarIframe({
   // If openInNewTab is true, render as a link
   if (openInNewTab) {
     return (
-      <a 
+      <a
         href={url}
         target="_blank"
         rel="noopener noreferrer"
@@ -54,7 +54,7 @@ export default function SidebarIframe({
   // Otherwise render as modal button
   return (
     <>
-      <button 
+      <button
         className={styles.sidebarButton}
         onClick={() => setIsOpen(true)}
       >
@@ -68,7 +68,7 @@ export default function SidebarIframe({
           <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <h3>{label}</h3>
-              <button 
+              <button
                 className={styles.closeButton}
                 onClick={() => setIsOpen(false)}
                 aria-label="Close"

@@ -26,7 +26,7 @@ function convertMdToMdx(dirPath) {
 
   files.forEach(file => {
     const filePath = path.join(dirPath, file);
-    
+
     if (shouldExcludeDir(filePath)) {
       return;
     }
@@ -38,7 +38,7 @@ function convertMdToMdx(dirPath) {
     } else if (file.endsWith('.md') && !file.endsWith('.mdx')) {
       const mdxPath = filePath.replace(/\.md$/, '.mdx');
       const content = fs.readFileSync(filePath, 'utf8');
-      
+
       let mdxContent = content;
       if (!content.startsWith('---')) {
         const title = file.replace('.md', '').replace(/-/g, ' ');
@@ -48,7 +48,7 @@ sidebar_position: 1
 
 ${content}`;
       }
-      
+
       fs.writeFileSync(mdxPath, mdxContent, 'utf8');
       console.log(`Converted: ${filePath} -> ${mdxPath}`);
     }
@@ -79,7 +79,7 @@ function removeNetworkPrefix(tag) {
 function parseVersion(tag) {
   const match = tag.match(/v?(\d+)\.(\d+)\.(\d+)/i);
   if (!match) return null;
-  
+
   return {
     major: parseInt(match[1]),
     minor: parseInt(match[2]),
@@ -113,18 +113,18 @@ function extractFirstHeading(content) {
 function processLocalContent(content) {
   content = content.replace(/^---+\s*$/gm, '');
   content = content.replace(/\n{3,}/g, '\n\n');
-  
+
   const lines = content.split('\n');
   const processedLines = [];
   let firstHeadingFound = false;
-  
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
-    
+
     if (headingMatch) {
       const text = headingMatch[2].trim();
-      
+
       if (!firstHeadingFound) {
         // Skip the first heading - we'll use it as the summary
         firstHeadingFound = true;
@@ -138,41 +138,41 @@ function processLocalContent(content) {
       processedLines.push(line);
     }
   }
-  
+
   return processedLines.join('\n').trim();
 }
 
 function sanitizeForMDX(content) {
-  content = content.replace(/(?<!\[#\d+\]\()https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)(?!\))/g, 
+  content = content.replace(/(?<!\[#\d+\]\()https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)(?!\))/g,
     '[#$3](https://github.com/$1/$2/pull/$3)');
-  
+
   content = content.replace(/<([^>\s]+@[^>]+)>/g, '&lt;$1&gt;');
   content = content.replace(/<(\w+)@([\w.-]+)>/g, '&lt;$1@$2&gt;');
-  
+
   const codeBlocks = [];
   content = content.replace(/(```[\s\S]*?```|`[^`]+`)/g, (match) => {
     codeBlocks.push(match);
     return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
   });
-  
+
   content = content.replace(/(\s|^)<(\s)/g, '$1&lt;$2');
   content = content.replace(/(\s)>(\s|$)/g, '$1&gt;$2');
-  
+
   codeBlocks.forEach((block, index) => {
     content = content.replace(`__CODE_BLOCK_${index}__`, block);
   });
-  
+
   return content;
 }
 
 function convertGitHubHeadingsToH3(content) {
   return content.replace(/^(#{1,6})\s+(.*)$/gm, (match, hashes, text) => {
     const trimmedText = text.trim();
-    
+
     if (trimmedText.toLowerCase() === 'protocol') {
       return '';
     }
-    
+
     if (trimmedText.toLowerCase().includes('full log')) {
       return `##### ${trimmedText}`;
     } else {
@@ -227,7 +227,7 @@ async function consolidateReleaseNotes() {
 
   if (fs.existsSync(releaseNotesDir)) {
     const items = fs.readdirSync(releaseNotesDir);
-    
+
     const versionDirs = items.filter(item => {
       const itemPath = path.join(releaseNotesDir, item);
       return fs.statSync(itemPath).isDirectory() && item.match(/^\d+_\d+$/);
@@ -237,24 +237,24 @@ async function consolidateReleaseNotes() {
       const versionDirPath = path.join(releaseNotesDir, versionDir);
       const files = fs.readdirSync(versionDirPath)
         .filter(file => file.endsWith('.md') && file.toLowerCase() !== 'readme.md');
-      
+
       if (!localNotesByVersion.has(versionDir)) {
         localNotesByVersion.set(versionDir, []);
       }
-      
+
       files.forEach(file => {
         const filePath = path.join(versionDirPath, file);
         let content = fs.readFileSync(filePath, 'utf8');
-        
+
         // Remove frontmatter if it exists
         content = content.replace(/^---\n[\s\S]*?\n---\n/, '');
-        
+
         // Extract first heading before processing
         const firstHeading = extractFirstHeading(content);
-        
+
         // Process content (this will remove the first heading)
         const processedContent = processLocalContent(content);
-        
+
         localNotesByVersion.get(versionDir).push({
           fileName: file.replace('.md', ''),
           title: firstHeading || file.replace('.md', '').replace(/_/g, ' '),
@@ -271,10 +271,10 @@ async function consolidateReleaseNotes() {
   try {
     console.log('Fetching GitHub releases...');
     const githubReleases = await fetchGitHubReleases();
-    
+
     // Group releases by version number
     const releasesByVersion = new Map();
-    
+
     githubReleases.forEach(release => {
       if (release.draft) {
         return;
@@ -283,13 +283,13 @@ async function consolidateReleaseNotes() {
       const tag = release.tag_name || release.name;
       const network = extractNetwork(tag);
       const version = parseVersion(tag);
-      
+
       if (!version || (network !== 'mainnet' && network !== 'testnet')) {
         return;
       }
-      
+
       const versionKey = getVersionKey(version);
-      
+
       if (!releasesByVersion.has(versionKey)) {
         releasesByVersion.set(versionKey, {
           mainnet: null,
@@ -297,32 +297,32 @@ async function consolidateReleaseNotes() {
           version: version
         });
       }
-      
+
       releasesByVersion.get(versionKey)[network] = {
         tag: tag,
         content: release.body || 'No release notes provided.',
         date: release.published_at
       };
     });
-    
+
     // Convert to array and sort by version (newest first)
     const sortedReleases = Array.from(releasesByVersion.entries())
       .sort((a, b) => compareVersions(b[1].version, a[1].version));
-    
+
     // Determine which is the latest version overall
     const latestVersion = sortedReleases.length > 0 ? sortedReleases[0][0] : null;
-    
+
     // Build release notes
     const allReleaseNotes = [];
-    
+
     sortedReleases.forEach(([versionKey, data]) => {
       const isLatest = versionKey === latestVersion;
-      
+
       // For latest version, prefer testnet if available, otherwise mainnet
       // For older versions, always use mainnet
       let networkToUse;
       let releaseToUse;
-      
+
       if (isLatest) {
         // Latest version - prefer testnet
         if (data.testnet) {
@@ -343,12 +343,12 @@ async function consolidateReleaseNotes() {
           return; // Skip if no mainnet release
         }
       }
-      
+
       // Get local notes
       const versionForLocal = extractVersionFromTag(releaseToUse.tag);
       const localNotes = versionForLocal ? localNotesByVersion.get(versionForLocal) : null;
       let localNotesData = [];
-      
+
       if (localNotes && localNotes.length > 0) {
         localNotesData = localNotes.map(note => ({
           title: note.title,
@@ -356,7 +356,7 @@ async function consolidateReleaseNotes() {
         }));
         localNotesByVersion.delete(versionForLocal);
       }
-      
+
       // Process content
       let processedGitHubContent = sanitizeForMDX(releaseToUse.content);
       processedGitHubContent = convertGitHubHeadingsToH3(processedGitHubContent);
@@ -393,11 +393,11 @@ title: 'Release Notes'
 ## ${note.displayTag}
 
 `;
-      
+
       // Add network badge
       const networkBadge = note.network === 'testnet' ? '🔶 Testnet' : '✅ Mainnet';
       consolidatedContent += `**${networkBadge}** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/${note.tag})*\n\n`;
-      
+
       // Add local content in collapsible details if it exists
       if (note.localNotes.length > 0) {
         note.localNotes.forEach(localNote => {
@@ -411,7 +411,7 @@ ${localNote.content}
 `;
         });
       }
-      
+
       consolidatedContent += note.githubContent + '\n\n';
       consolidatedContent += '---\n\n';
     });

@@ -11,8 +11,8 @@
   margin: 0.25rem 0;
   border: 1px solid #E0E2E6;
   border-radius: 0.625rem;
-  background: linear-gradient(135deg, 
-    #ffffff 0%, 
+  background: linear-gradient(135deg,
+    #ffffff 0%,
     #F4F5F7 100%
   );
   color: #343940;
@@ -26,12 +26,12 @@
 }
 
 .sidebarButton:hover {
-  background: linear-gradient(135deg, 
-    #ffffff 0%, 
+  background: linear-gradient(135deg,
+    #ffffff 0%,
     #F4F5F7 100%
   );
   border-color: #298DFF;
-  box-shadow: 
+  box-shadow:
     0 4px 12px rgba(41, 141, 255, 0.15),
     0 0 0 1px #8FCBFF;
 }
@@ -155,8 +155,8 @@
 
 /* Dark mode */
 [data-theme='dark'] .sidebarButton {
-  background: linear-gradient(135deg, 
-    #222529 0%, 
+  background: linear-gradient(135deg,
+    #222529 0%,
     #131518 100%
   );
   border-color: #343940;
@@ -165,12 +165,12 @@
 }
 
 [data-theme='dark'] .sidebarButton:hover {
-  background: linear-gradient(135deg, 
-    #222529 0%, 
+  background: linear-gradient(135deg,
+    #222529 0%,
     #131518 100%
   );
   border-color: #298DFF;
-  box-shadow: 
+  box-shadow:
     0 4px 12px rgba(41, 141, 255, 0.25),
     0 0 0 1px #5CA9FF;
 }
@@ -207,11 +207,11 @@
     max-width: 95vw;
     max-height: 95vh;
   }
-  
+
   .modalHeader {
     padding: 0.75rem 1rem;
   }
-  
+
   .iframeContainer {
     padding: 0.5rem;
   }

@@ -5,7 +5,7 @@
 
 // This plugin does error checking to
 // prevent any URLs from blank anchors #
-// as these break the build 
+// as these break the build
 
 import { visit } from "unist-util-visit";
 
