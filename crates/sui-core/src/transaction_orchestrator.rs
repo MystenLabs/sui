@@ -1108,10 +1108,11 @@ where
         &self,
         transaction: TransactionData,
         checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
     ) -> Result<SimulateTransactionResult, SuiError> {
         self.inner
             .validator_state
-            .simulate_transaction(transaction, checks)
+            .simulate_transaction(transaction, checks, allow_mock_gas_coin)
     }
 }
 
