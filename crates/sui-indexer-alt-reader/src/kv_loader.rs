@@ -1,38 +1,40 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::Context;
 use async_graphql::dataloader::DataLoader;
 use sui_indexer_alt_schema::transactions::StoredTransaction;
-use sui_kvstore::{
-    TransactionData as KVTransactionData, TransactionEventsData as KVTransactionEventsData,
-};
+use sui_kvstore::TransactionData as KVTransactionData;
+use sui_kvstore::TransactionEventsData as KVTransactionEventsData;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
-use sui_types::{
-    base_types::ObjectID,
-    crypto::AuthorityQuorumSignInfo,
-    digests::{TransactionDigest, TransactionEffectsDigest},
-    effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    event::Event,
-    message_envelope::Message,
-    messages_checkpoint::{CheckpointContents, CheckpointSummary},
-    object::Object,
-    signature::GenericSignature,
-    transaction::TransactionData,
-};
+use sui_types::base_types::ObjectID;
+use sui_types::crypto::AuthorityQuorumSignInfo;
+use sui_types::digests::TransactionDigest;
+use sui_types::digests::TransactionEffectsDigest;
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::effects::TransactionEvents;
+use sui_types::event::Event;
+use sui_types::message_envelope::Message;
+use sui_types::messages_checkpoint::CheckpointContents;
+use sui_types::messages_checkpoint::CheckpointSummary;
+use sui_types::object::Object;
+use sui_types::signature::GenericSignature;
+use sui_types::transaction::TransactionData;
 
-use crate::{
-    bigtable_reader::BigtableReader,
-    checkpoints::CheckpointKey,
-    error::Error,
-    events::{StoredTransactionEvents, TransactionEventsKey},
-    ledger_grpc_reader::{CheckpointedTransaction, LedgerGrpcReader},
-    objects::VersionedObjectKey,
-    pg_reader::PgReader,
-    transactions::TransactionKey,
-};
+use crate::bigtable_reader::BigtableReader;
+use crate::checkpoints::CheckpointKey;
+use crate::error::Error;
+use crate::events::StoredTransactionEvents;
+use crate::events::TransactionEventsKey;
+use crate::ledger_grpc_reader::CheckpointedTransaction;
+use crate::ledger_grpc_reader::LedgerGrpcReader;
+use crate::objects::VersionedObjectKey;
+use crate::pg_reader::PgReader;
+use crate::transactions::TransactionKey;
 
 /// A loader for point lookups in kv stores backed by either Bigtable, Postgres, or KV gRPC.
 /// Supported lookups:

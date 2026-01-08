@@ -10,7 +10,8 @@ use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_types::signature::GenericSignature;
-use sui_types::transaction::{Transaction, TransactionData};
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
 use tonic::transport::Channel;
 use tracing::instrument;
 
