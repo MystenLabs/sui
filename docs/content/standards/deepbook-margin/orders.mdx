@@ -20,7 +20,8 @@ The `pool_proxy` module provides wrapper functions for trading with margin manag
 
 Following are the different public functions for managing orders with margin managers.
 
-### Place orders
+<details>
+<summary>Place orders</summary>
 
 Place limit and market orders through a margin manager. Orders can only be placed if margin trading is enabled for the pool.
 
@@ -32,7 +33,10 @@ Place limit and market orders through a margin manager. Orders can only be place
 	fun="place_limit_order,place_market_order"
 />
 
-### Place reduce-only orders
+</details>
+
+<details>
+<summary>Place reduce-only orders</summary>
 
 Place reduce-only orders that can only decrease your debt position. These orders are useful when margin trading is disabled and you need to close existing positions.
 
@@ -44,7 +48,10 @@ Place reduce-only orders that can only decrease your debt position. These orders
 	fun="place_reduce_only_limit_order,place_reduce_only_market_order"
 />
 
-### Modify order
+</details>
+
+<details>
+<summary>Modify order</summary>
 
 Modify an existing order by changing its quantity.
 
@@ -56,7 +63,10 @@ Modify an existing order by changing its quantity.
 	fun="modify_order"
 />
 
-### Cancel orders
+</details>
+
+<details>
+<summary>Cancel orders</summary>
 
 Cancel one, multiple, or all orders for the margin manager.
 
@@ -68,7 +78,10 @@ Cancel one, multiple, or all orders for the margin manager.
 	fun="cancel_order,cancel_orders,cancel_all_orders"
 />
 
-### Withdraw settled amounts
+</details>
+
+<details>
+<summary>Withdraw settled amounts</summary>
 
 Withdraw settled amounts from completed trades back to the margin manager's balance manager.
 
@@ -80,7 +93,10 @@ Withdraw settled amounts from completed trades back to the margin manager's bala
 	fun="withdraw_settled_amounts"
 />
 
-### Staking
+</details>
+
+<details>
+<summary>Staking</summary>
 
 Stake and unstake DEEP tokens through the margin manager. Note that margin managers for pools with DEEP as base or quote asset cannot stake.
 
@@ -92,7 +108,10 @@ Stake and unstake DEEP tokens through the margin manager. Note that margin manag
 	fun="stake,unstake"
 />
 
-### Governance
+</details>
+
+<details>
+<summary>Governance</summary>
 
 Submit proposals and vote on governance decisions through the margin manager.
 
@@ -104,7 +123,10 @@ Submit proposals and vote on governance decisions through the margin manager.
 	fun="submit_proposal,vote"
 />
 
-### Claim rebates
+</details>
+
+<details>
+<summary>Claim rebates</summary>
 
 Claim trading rebates earned through the margin manager.
 
@@ -115,6 +137,8 @@ Claim trading rebates earned through the margin manager.
 	repo="deepbookv3"
 	fun="claim_rebates"
 />
+
+</details>
 
 ## Related links
 

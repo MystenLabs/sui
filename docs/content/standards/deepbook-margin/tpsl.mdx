@@ -33,7 +33,8 @@ Conditional orders are stored in sorted vectors for efficient execution:
 
 Use these functions to create conditions and pending orders for conditional orders.
 
-#### Create a condition
+<details>
+<summary>Create a condition</summary>
 
 Create a new condition that specifies when the order should trigger.
 
@@ -46,7 +47,10 @@ Create a new condition that specifies when the order should trigger.
 	noComments
 />
 
-#### Create a pending limit order
+</details>
+
+<details>
+<summary>Create a pending limit order</summary>
 
 Create a pending limit order that will be placed when the condition is met. Order type must be `no_restriction` or `immediate_or_cancel`.
 
@@ -59,7 +63,10 @@ Create a pending limit order that will be placed when the condition is met. Orde
 	noComments
 />
 
-#### Create a pending market order
+</details>
+
+<details>
+<summary>Create a pending market order</summary>
 
 Create a pending market order that will be placed when the condition is met.
 
@@ -72,11 +79,14 @@ Create a pending market order that will be placed when the condition is met.
 	noComments
 />
 
+</details>
+
 ### Manage conditional orders
 
 These functions are exposed on the `MarginManager` to manage conditional orders.
 
-#### Add conditional order
+<details>
+<summary>Add conditional order</summary>
 
 Add a conditional order to the margin manager. The order will be placed when the condition is met. Validates that the trigger condition is valid relative to the current price.
 
@@ -88,7 +98,10 @@ Add a conditional order to the margin manager. The order will be placed when the
 	fun="add_conditional_order"
 />
 
-#### Cancel conditional order
+</details>
+
+<details>
+<summary>Cancel conditional order</summary>
 
 Cancel a specific conditional order by ID.
 
@@ -100,7 +113,10 @@ Cancel a specific conditional order by ID.
 	fun="cancel_conditional_order"
 />
 
-#### Cancel all conditional orders
+</details>
+
+<details>
+<summary>Cancel all conditional orders</summary>
 
 Cancel all conditional orders for the margin manager.
 
@@ -112,7 +128,10 @@ Cancel all conditional orders for the margin manager.
 	fun="cancel_all_conditional_orders"
 />
 
-#### Execute conditional orders
+</details>
+
+<details>
+<summary>Execute conditional orders</summary>
 
 Execute conditional orders that have been triggered. This is a permissionless function that can be called by anyone (typically keepers or bots).
 
@@ -124,7 +143,10 @@ Execute conditional orders that have been triggered. This is a permissionless fu
 	fun="execute_conditional_orders"
 />
 
-### Read endpoints
+</details>
+
+<details>
+<summary>Read endpoints</summary>
 
 <ImportContent
 	source="packages/deepbook_margin/sources/tpsl.move"
@@ -134,9 +156,12 @@ Execute conditional orders that have been triggered. This is a permissionless fu
 	fun="trigger_below_orders,trigger_above_orders,num_conditional_orders,get_conditional_order,conditional_order_id,condition,pending_order,trigger_below_price,trigger_price,client_order_id,order_type,self_matching_option,price,quantity,is_bid,pay_with_deep,expire_timestamp,is_limit_order"
 />
 
+</details>
+
 ## Events
 
-### `ConditionalOrderAdded`
+<details>
+<summary>ConditionalOrderAdded</summary>
 
 Emitted when a conditional order is added to a margin manager.
 
@@ -148,7 +173,10 @@ Emitted when a conditional order is added to a margin manager.
 	struct="ConditionalOrderAdded"
 />
 
-### `ConditionalOrderCancelled`
+</details>
+
+<details>
+<summary>ConditionalOrderCancelled</summary>
 
 Emitted when a conditional order is cancelled.
 
@@ -160,7 +188,10 @@ Emitted when a conditional order is cancelled.
 	struct="ConditionalOrderCancelled"
 />
 
-### `ConditionalOrderExecuted`
+</details>
+
+<details>
+<summary>ConditionalOrderExecuted</summary>
 
 Emitted when a conditional order is executed.
 
@@ -172,7 +203,10 @@ Emitted when a conditional order is executed.
 	struct="ConditionalOrderExecuted"
 />
 
-### `ConditionalOrderInsufficientFunds`
+</details>
+
+<details>
+<summary>ConditionalOrderInsufficientFunds</summary>
 
 Emitted when a conditional order cannot be executed due to insufficient funds.
 
@@ -183,6 +217,8 @@ Emitted when a conditional order cannot be executed due to insufficient funds.
 	repo="deepbookv3"
 	struct="ConditionalOrderInsufficientFunds"
 />
+
+</details>
 
 ## Related links
 

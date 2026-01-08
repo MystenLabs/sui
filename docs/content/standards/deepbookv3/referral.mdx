@@ -28,7 +28,8 @@ The DeepBook referral system allows users to earn fees by referring traders to t
 
 The following are the referral-related functions that DeepBook exposes.
 
-### Mint a referral
+<details>
+<summary>Mint a referral</summary>
 
 Mint a new `DeepBookPoolReferral` object for a specific pool with a specified multiplier. The multiplier determines the portion of trading fees allocated to the referrer. The multiplier must be a multiple of 0.1 (e.g., 0.1, 0.2, 0.3, ...) and cannot exceed 2.0. Returns the ID of the created referral.
 
@@ -41,7 +42,10 @@ Mint a new `DeepBookPoolReferral` object for a specific pool with a specified mu
 	noComments
 />
 
-### Update referral multiplier
+</details>
+
+<details>
+<summary>Update referral multiplier</summary>
 
 Update the multiplier for an existing pool referral. Only the referral owner can update the multiplier. The new multiplier must be a multiple of 0.1 and cannot exceed 2.0.
 
@@ -54,7 +58,10 @@ Update the multiplier for an existing pool referral. Only the referral owner can
 	noComments
 />
 
-### Claim referral rewards
+</details>
+
+<details>
+<summary>Claim referral rewards</summary>
 
 Claim accumulated referral fees for a pool referral. Only the referral owner can claim rewards. Returns three `Coin` objects representing the accumulated fees in base asset, quote asset, and DEEP tokens.
 
@@ -67,7 +74,10 @@ Claim accumulated referral fees for a pool referral. Only the referral owner can
 	noComments
 />
 
-### Get referral balances
+</details>
+
+<details>
+<summary>Get referral balances</summary>
 
 View the current accumulated balances for a pool referral without claiming them. Returns the amounts in base, quote, and DEEP tokens.
 
@@ -80,7 +90,10 @@ View the current accumulated balances for a pool referral without claiming them.
 	noComments
 />
 
-### Get referral multiplier
+</details>
+
+<details>
+<summary>Get referral multiplier</summary>
 
 Get the current multiplier for a pool referral.
 
@@ -93,11 +106,14 @@ Get the current multiplier for a pool referral.
 	noComments
 />
 
-## `BalanceManager` referral functions
+</details>
+
+## BalanceManager referral functions
 
 These functions are available on the `BalanceManager` to associate or disassociate a referral.
 
-### Set referral
+<details>
+<summary>Set referral</summary>
 
 Associate a `BalanceManager` with a pool-specific referral. Requires a `TradeCap` to authorize the operation. Once set, all trades executed by this balance manager in the referral's pool will generate referral fees according to the referral's multiplier. Any previously set referral for the same pool is replaced.
 
@@ -110,7 +126,10 @@ Associate a `BalanceManager` with a pool-specific referral. Requires a `TradeCap
 	noComments
 />
 
-### Unset referral
+</details>
+
+<details>
+<summary>Unset referral</summary>
 
 Remove the referral association from a `BalanceManager` for a specific pool. Requires a `TradeCap` to authorize the operation. After unsetting, trades in that pool will no longer generate referral fees.
 
@@ -123,7 +142,10 @@ Remove the referral association from a `BalanceManager` for a specific pool. Req
 	noComments
 />
 
-### Get referral ID
+</details>
+
+<details>
+<summary>Get referral ID</summary>
 
 Retrieve the referral ID currently associated with a `BalanceManager` for a specific pool, if any. Returns `Option<ID>` which is `none` if no referral is set for that pool.
 
@@ -136,7 +158,10 @@ Retrieve the referral ID currently associated with a `BalanceManager` for a spec
 	noComments
 />
 
-### Get referral owner
+</details>
+
+<details>
+<summary>Get referral owner</summary>
 
 Get the owner address of a pool referral object.
 
@@ -149,7 +174,10 @@ Get the owner address of a pool referral object.
 	noComments
 />
 
-### Get referral pool ID
+</details>
+
+<details>
+<summary>Get referral pool ID</summary>
 
 Get the pool ID associated with a pool referral object.
 
@@ -162,9 +190,12 @@ Get the pool ID associated with a pool referral object.
 	noComments
 />
 
+</details>
+
 ## Events
 
-### `DeepBookReferralCreatedEvent`
+<details>
+<summary>DeepBookReferralCreatedEvent</summary>
 
 Emitted when a new referral is minted.
 
@@ -176,7 +207,10 @@ Emitted when a new referral is minted.
 	struct="DeepBookReferralCreatedEvent"
 />
 
-### `DeepBookReferralSetEvent`
+</details>
+
+<details>
+<summary>DeepBookReferralSetEvent</summary>
 
 Emitted when a referral is set or unset on a balance manager.
 
@@ -188,7 +222,10 @@ Emitted when a referral is set or unset on a balance manager.
 	struct="DeepBookReferralSetEvent"
 />
 
-### `ReferralClaimed`
+</details>
+
+<details>
+<summary>ReferralClaimed</summary>
 
 Emitted when a referral owner claims their accumulated fees.
 
@@ -200,7 +237,10 @@ Emitted when a referral owner claims their accumulated fees.
 	struct="ReferralClaimed"
 />
 
-### `ReferralFeeEvent`
+</details>
+
+<details>
+<summary>ReferralFeeEvent</summary>
 
 Emitted when referral fees are allocated during trade execution.
 
@@ -211,6 +251,8 @@ Emitted when referral fees are allocated during trade execution.
 	repo="deepbookv3"
 	struct="ReferralFeeEvent"
 />
+
+</details>
 
 ## Related links
 
