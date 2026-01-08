@@ -164,6 +164,30 @@ Get the pool ID associated with a pool referral object.
 
 ## Events
 
+### `DeepBookReferralCreatedEvent`
+
+Emitted when a new referral is minted.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="DeepBookReferralCreatedEvent"
+/>
+
+### `DeepBookReferralSetEvent`
+
+Emitted when a referral is set or unset on a balance manager.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="DeepBookReferralSetEvent"
+/>
+
 ### `ReferralClaimed`
 
 Emitted when a referral owner claims their accumulated fees.
