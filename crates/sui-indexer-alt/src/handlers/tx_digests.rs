@@ -5,17 +5,18 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use anyhow::Result;
-use diesel::{ExpressionMethods, QueryDsl};
+use async_trait::async_trait;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    pipeline::Processor,
-    postgres::{Connection, handler::Handler},
-    types::full_checkpoint_content::Checkpoint,
-};
-use sui_indexer_alt_schema::{schema::tx_digests, transactions::StoredTxDigest};
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::handler::Handler;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_schema::schema::tx_digests;
+use sui_indexer_alt_schema::transactions::StoredTxDigest;
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
-use async_trait::async_trait;
 
 pub(crate) struct TxDigests;
 
@@ -77,14 +78,14 @@ impl Handler for TxDigests {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use diesel_async::RunQueryDsl;
-    use sui_indexer_alt_framework::{
-        Indexer, types::test_checkpoint_data_builder::TestCheckpointBuilder,
-    };
+    use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_framework::types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use sui_indexer_alt_schema::MIGRATIONS;
 
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
+
+    use super::*;
 
     async fn get_all_tx_digests(conn: &mut Connection<'_>) -> Result<Vec<i64>> {
         Ok(tx_digests::table
