@@ -130,6 +130,128 @@ Withdraw accumulated maintainer and protocol fees from the margin pool.
 	fun="id,deepbook_pool_allowed,total_supply,supply_shares,total_borrow,borrow_shares,last_update_timestamp,supply_cap,protocol_fees,max_utilization_rate,protocol_spread,min_borrow,interest_rate,user_supply_shares,user_supply_amount"
 />
 
+## Events
+
+### `MarginPoolCreated`
+
+Emitted when a new margin pool is created.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="MarginPoolCreated"
+/>
+
+### `DeepbookPoolUpdated`
+
+Emitted when a DeepBook pool is enabled or disabled for lending.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="DeepbookPoolUpdated"
+/>
+
+### `InterestParamsUpdated`
+
+Emitted when interest rate parameters are updated.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="InterestParamsUpdated"
+/>
+
+### `MarginPoolConfigUpdated`
+
+Emitted when margin pool configuration is updated.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="MarginPoolConfigUpdated"
+/>
+
+### `SupplierCapMinted`
+
+Emitted when a new supplier cap is minted.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="SupplierCapMinted"
+/>
+
+### `AssetSupplied`
+
+Emitted when assets are supplied to a margin pool.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="AssetSupplied"
+/>
+
+### `AssetWithdrawn`
+
+Emitted when assets are withdrawn from a margin pool.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="AssetWithdrawn"
+/>
+
+### `SupplyReferralMinted`
+
+Emitted when a supply referral is minted.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="SupplyReferralMinted"
+/>
+
+### `MaintainerFeesWithdrawn`
+
+Emitted when maintainer fees are withdrawn.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="MaintainerFeesWithdrawn"
+/>
+
+### `ProtocolFeesWithdrawn`
+
+Emitted when protocol fees are withdrawn.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="ProtocolFeesWithdrawn"
+/>
+
 ## Related links
 
 <RelatedLink

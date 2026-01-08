@@ -143,6 +143,80 @@ Returns the risk ratio of the margin manager, which represents the ratio of asse
 	fun="balance_manager,calculate_assets,calculate_debts,owner,deepbook_pool,margin_pool_id,borrowed_shares,borrowed_base_shares,borrowed_quote_shares,has_base_debt"
 />
 
+## Events
+
+### `MarginManagerCreatedEvent`
+
+Emitted when a new margin manager is created.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="MarginManagerCreatedEvent"
+/>
+
+### `DepositCollateralEvent`
+
+Emitted when collateral is deposited into a margin manager.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="DepositCollateralEvent"
+/>
+
+### `WithdrawCollateralEvent`
+
+Emitted when collateral is withdrawn from a margin manager.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="WithdrawCollateralEvent"
+/>
+
+### `LoanBorrowedEvent`
+
+Emitted when assets are borrowed from a margin pool.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="LoanBorrowedEvent"
+/>
+
+### `LoanRepaidEvent`
+
+Emitted when borrowed assets are repaid.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="LoanRepaidEvent"
+/>
+
+### `LiquidationEvent`
+
+Emitted when a margin manager is liquidated.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="LiquidationEvent"
+/>
+
 ## Related links
 
 <RelatedLink

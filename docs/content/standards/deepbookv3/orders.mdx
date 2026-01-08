@@ -95,48 +95,6 @@ The `Fill` struct represents the results of a match between two orders. Use this
 	struct="Fill"
 />
 
-### Events
-
-DeepBookV3 emits `OrderFilled` when a maker order is filled.
-
-<ImportContent
-	source="packages/deepbook/sources/book/order_info.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	struct="OrderFilled"
-/>
-
-DeepBookV3 emits `OrderCanceled` when a maker order is canceled.
-
-<ImportContent
-	source="packages/deepbook/sources/book/order.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	struct="OrderCanceled"
-/>
-
-DeepBookV3 emits `OrderModified` on modification of a maker order.
-
-<ImportContent
-	source="packages/deepbook/sources/book/order.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	struct="OrderModified"
-/>
-
-DeepBookV3 emits `OrderPlaced` when it injects a maker order into the order book.
-
-<ImportContent
-	source="packages/deepbook/sources/book/order_info.move"
-	mode="code"
-	org="MystenLabs"
-	repo="deepbookv3"
-	struct="OrderPlaced"
-/>
-
 ### Place limit order
 
 Place a limit order. Quantity is in base asset terms. For current version `pay_with_deep` must be true, so the
@@ -246,6 +204,56 @@ Withdraw settled amounts to the `balance_manager` without requiring a `TradeProo
 	repo="deepbookv3"
 	fun="withdraw_settled_amounts_permissionless"
 	noComments
+/>
+
+## Events
+
+### `OrderFilled`
+
+Emitted when a maker order is filled.
+
+<ImportContent
+	source="packages/deepbook/sources/book/order_info.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="OrderFilled"
+/>
+
+### `OrderCanceled`
+
+Emitted when a maker order is canceled.
+
+<ImportContent
+	source="packages/deepbook/sources/book/order.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="OrderCanceled"
+/>
+
+### `OrderModified`
+
+Emitted when a maker order is modified.
+
+<ImportContent
+	source="packages/deepbook/sources/book/order.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="OrderModified"
+/>
+
+### `OrderPlaced`
+
+Emitted when a maker order is placed into the order book.
+
+<ImportContent
+	source="packages/deepbook/sources/book/order_info.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="OrderPlaced"
 />
 
 ## Related links
