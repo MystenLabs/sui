@@ -39,20 +39,6 @@ Use `createBalanceManagerWithOwner` to create a new balance manager with a custo
 
 <ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="createBalanceManagerWithOwner" signatureOnly/>
 
-### `createBalanceManagerWithOwnerAndCaps`
-
-Use `createBalanceManagerWithOwnerAndCaps` to create a new balance manager with a custom owner and all three capabilities (deposit, withdraw, trade) in one call. Returns an object with `manager`, `depositCap`, `withdrawCap`, and `tradeCap`. The call returns a function that takes a `Transaction` object.
-
-:::caution
-The DeepBookV3 SDK uses `depositCap`, `withdrawCap`, and `tradeCap`, while Move code using DeepBookV3  uses `DepositCap`, `WithdrawCap`, and `TradeCap`. 
-:::
-
-**Parameters**
-
-- `ownerAddress`: String representing the address of the owner.
-
-<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="createBalanceManagerWithOwnerAndCaps" signatureOnly/>
-
 ### `shareBalanceManager`
 
 Use `shareBalanceManager` to share a balance manager that was created but not yet shared. The call returns a function that takes a `Transaction` object.
@@ -204,40 +190,52 @@ Use `withdrawWithCap` to withdraw funds from a balance manager using a `withdraw
 
 ## Referral functions
 
-### `setReferral`
+### `setBalanceManagerReferral`
 
-Use `setReferral` to set a referral for the balance manager. Requires a `tradeCap` for permission checking. The call returns a function that takes a `Transaction` object.
-
-**Parameters**
-
-- `managerKey`: String that identifies the balance manager.
-- `referral`: String representing the referral ID.
-- `tradeCap`: `TransactionArgument` representing the trade cap for permission.
-
-<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="setReferral" signatureOnly/>
-
-### `unsetReferral`
-
-Use `unsetReferral` to remove a referral from the balance manager. Requires a `tradeCap` for permission checking. The call returns a function that takes a `Transaction` object.
+Use `setBalanceManagerReferral` to set a pool-specific referral for the balance manager. Requires a `tradeCap` for permission checking. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
 - `managerKey`: String that identifies the balance manager.
+- `referral`: String representing the referral ID (DeepBookPoolReferral).
 - `tradeCap`: `TransactionArgument` representing the trade cap for permission.
 
-<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="unsetReferral" signatureOnly/>
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="setBalanceManagerReferral" signatureOnly/>
+
+### `unsetBalanceManagerReferral`
+
+Use `unsetBalanceManagerReferral` to remove a referral from the balance manager for a specific pool. Requires a `tradeCap` for permission checking. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+- `poolKey`: String that identifies the pool to unset the referral for.
+- `tradeCap`: `TransactionArgument` representing the trade cap for permission.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="unsetBalanceManagerReferral" signatureOnly/>
+
+### `getBalanceManagerReferralId`
+
+Use `getBalanceManagerReferralId` to get the referral ID associated with a balance manager for a specific pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `managerKey`: String that identifies the balance manager.
+- `poolKey`: String that identifies the pool.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="getBalanceManagerReferralId" signatureOnly/>
 
 ## Registry functions
 
-### `registerManager`
+### `registerBalanceManager`
 
-Use `registerManager` to register a balance manager with the registry. The call returns a function that takes a `Transaction` object.
+Use `registerBalanceManager` to register a balance manager with the registry. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
 - `managerKey`: String that identifies the balance manager.
 
-<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="registerManager" signatureOnly/>
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="registerBalanceManager" signatureOnly/>
 
 ## Read-only functions
 
@@ -261,15 +259,25 @@ Use `id` to get the ID of a balance manager. The call returns a function that ta
 
 <ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="id" signatureOnly/>
 
-### `referralOwner`
+### `balanceManagerReferralOwner`
 
-Use `referralOwner` to get the owner address of a referral. The call returns a function that takes a `Transaction` object.
+Use `balanceManagerReferralOwner` to get the owner address of a pool referral (DeepBookPoolReferral). The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
-- `referral_id`: String representing the ID of the referral.
+- `referralId`: String representing the ID of the referral.
 
-<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="referralOwner" signatureOnly/>
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="balanceManagerReferralOwner" signatureOnly/>
+
+### `balanceManagerReferralPoolId`
+
+Use `balanceManagerReferralPoolId` to get the pool ID associated with a pool referral (DeepBookPoolReferral). The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `referralId`: String representing the ID of the referral.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/balanceManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="balanceManagerReferralPoolId" signatureOnly/>
 
 ## Examples
 
@@ -284,22 +292,18 @@ createBalanceManager = (tx: Transaction) => {
 };
 ```
 
-### Create a balance manager with custom owner and all capabilities
+### Create a balance manager with custom owner
 
 ```tsx
-// Example: Create a balance manager with custom owner and get all capabilities
-createManagerWithCaps = (tx: Transaction) => {
+// Example: Create a balance manager with custom owner and share it
+createManagerWithOwner = (tx: Transaction) => {
 	const ownerAddress = '0x123...';
 
-	const { manager, depositCap, withdrawCap, tradeCap } = tx.add(
-		this.balanceManager.createBalanceManagerWithOwnerAndCaps(ownerAddress),
-	);
+	// Create the manager with custom owner
+	const manager = tx.add(this.balanceManager.createBalanceManagerWithOwner(ownerAddress));
 
 	// Share the manager
 	tx.add(this.balanceManager.shareBalanceManager(manager));
-
-	// Transfer capabilities to the owner
-	tx.transferObjects([depositCap, withdrawCap, tradeCap], ownerAddress);
 };
 ```
 
@@ -401,23 +405,24 @@ placeOrderWithProof = (tx: Transaction) => {
 ### Set and manage referrals
 
 ```tsx
-// Example: Set a referral for a balance manager
+// Example: Set a pool-specific referral for a balance manager
 setManagerReferral = (tx: Transaction) => {
 	const managerKey = 'MANAGER_1';
-	const referralId = '0xdef...';
+	const referralId = '0xdef...'; // DeepBookPoolReferral ID
 
 	// Get or create the TradeCap
 	const tradeCap = tx.object('0x...'); // Assuming tradeCap is already minted
 
-	tx.add(this.balanceManager.setReferral(managerKey, referralId, tradeCap));
+	tx.add(this.balanceManager.setBalanceManagerReferral(managerKey, referralId, tradeCap));
 };
 
-// Example: Unset a referral
+// Example: Unset a referral for a specific pool
 unsetManagerReferral = (tx: Transaction) => {
 	const managerKey = 'MANAGER_1';
+	const poolKey = 'SUI_DBUSDC';
 	const tradeCap = tx.object('0x...');
 
-	tx.add(this.balanceManager.unsetReferral(managerKey, tradeCap));
+	tx.add(this.balanceManager.unsetBalanceManagerReferral(managerKey, poolKey, tradeCap));
 };
 ```
 
@@ -428,17 +433,16 @@ unsetManagerReferral = (tx: Transaction) => {
 completeSetup = async (tx: Transaction) => {
 	const ownerAddress = '0x123...';
 
-	// Step 1: Create manager with all capabilities
-	const { manager, depositCap, withdrawCap, tradeCap } = tx.add(
-		this.balanceManager.createBalanceManagerWithOwnerAndCaps(ownerAddress),
-	);
+	// Step 1: Create manager with custom owner
+	const manager = tx.add(this.balanceManager.createBalanceManagerWithOwner(ownerAddress));
 
 	// Step 2: Share the manager
 	tx.add(this.balanceManager.shareBalanceManager(manager));
 
-	// Step 3: Register with registry
-	// Note: Need to wait for manager to be created and get its key
-	// This would typically be done in a subsequent transaction
+	// Step 3: Mint capabilities
+	const tradeCap = tx.add(this.balanceManager.mintTradeCap('MANAGER_1'));
+	const depositCap = tx.add(this.balanceManager.mintDepositCap('MANAGER_1'));
+	const withdrawCap = tx.add(this.balanceManager.mintWithdrawalCap('MANAGER_1'));
 
 	// Step 4: Transfer capabilities to owner
 	tx.transferObjects([depositCap, withdrawCap, tradeCap], ownerAddress);

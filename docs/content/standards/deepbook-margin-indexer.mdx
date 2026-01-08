@@ -46,11 +46,17 @@ Returns events for when margin managers are created.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_manager_id": "0x1234...",
-        "owner": "0xabcd...",
         "balance_manager_id": "0x5678...",
         "deepbook_pool_id": "0x9abc...",
-        "checkpoint_timestamp_ms": 1738000000000
+        "owner": "0xabcd...",
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -68,11 +74,17 @@ Returns events for when assets are borrowed from margin pools.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_manager_id": "0x1234...",
         "margin_pool_id": "0x5678...",
-        "borrow_amount": "1000000000",
-        "borrow_shares": "1000000000",
-        "checkpoint_timestamp_ms": 1738000000000
+        "loan_amount": 1000000000,
+        "loan_shares": 1000000000,
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -90,11 +102,17 @@ Returns events for when borrowed assets are repaid.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_manager_id": "0x1234...",
         "margin_pool_id": "0x5678...",
-        "repay_amount": "1000000000",
-        "repay_shares": "1000000000",
-        "checkpoint_timestamp_ms": 1738000000000
+        "repay_amount": 1000000000,
+        "repay_shares": 1000000000,
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -112,15 +130,27 @@ Returns events for when margin managers are liquidated.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_manager_id": "0x1234...",
         "margin_pool_id": "0x5678...",
-        "liquidator": "0xabcd...",
-        "repay_amount": "1000000000",
-        "collateral_amount": "500000000",
-        "liquidator_reward": "50000000",
-        "pool_reward": "10000000",
-        "bad_debt": "0",
-        "checkpoint_timestamp_ms": 1738000000000
+        "liquidation_amount": 1000000000,
+        "pool_reward": 10000000,
+        "pool_default": 0,
+        "risk_ratio": 800000000,
+        "onchain_timestamp": 1738000000000,
+        "remaining_base_asset": "500000000",
+        "remaining_quote_asset": "2000000000",
+        "remaining_base_debt": "0",
+        "remaining_quote_debt": "0",
+        "base_pyth_price": 100000000,
+        "base_pyth_decimals": 8,
+        "quote_pyth_price": 100000000,
+        "quote_pyth_decimals": 8
     }
 ]
 ```
@@ -166,14 +196,29 @@ Returns the current state of margin managers. This endpoint is useful for monito
 ```json
 [
     {
+        "id": 1,
         "margin_manager_id": "0x1234...",
         "deepbook_pool_id": "0x5678...",
-        "owner": "0xabcd...",
-        "base_assets": "1000000000",
-        "quote_assets": "5000000000",
+        "base_margin_pool_id": "0x1111...",
+        "quote_margin_pool_id": "0x2222...",
+        "base_asset_id": "0xabcd...",
+        "base_asset_symbol": "SUI",
+        "quote_asset_id": "0xefgh...",
+        "quote_asset_symbol": "USDC",
+        "risk_ratio": "1.5",
+        "base_asset": "1000000000",
+        "quote_asset": "5000000000",
         "base_debt": "500000000",
         "quote_debt": "2000000000",
-        "risk_ratio": 1.5
+        "base_pyth_price": 100000000,
+        "base_pyth_decimals": 8,
+        "quote_pyth_price": 100000000,
+        "quote_pyth_decimals": 8,
+        "created_at": "2025-01-01 00:00:00",
+        "updated_at": "2025-01-01 12:00:00",
+        "current_price": "2.5",
+        "lowest_trigger_above_price": null,
+        "highest_trigger_below_price": null
     }
 ]
 ```
@@ -193,13 +238,18 @@ Returns events for when assets are supplied to margin pools.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_pool_id": "0x1234...",
+        "asset_type": "0x2::sui::SUI",
         "supplier": "0xabcd...",
-        "supplier_cap_id": "0x5678...",
-        "supply_amount": "1000000000",
-        "supply_shares": "1000000000",
-        "referral_id": "0x9abc...",
-        "checkpoint_timestamp_ms": 1738000000000
+        "amount": 1000000000,
+        "shares": 1000000000,
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -217,12 +267,18 @@ Returns events for when assets are withdrawn from margin pools.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_pool_id": "0x1234...",
+        "asset_type": "0x2::sui::SUI",
         "supplier": "0xabcd...",
-        "supplier_cap_id": "0x5678...",
-        "withdraw_amount": "1000000000",
-        "withdraw_shares": "1000000000",
-        "checkpoint_timestamp_ms": 1738000000000
+        "amount": 1000000000,
+        "shares": 1000000000,
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -240,9 +296,30 @@ Returns events for when margin pools are created.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_pool_id": "0x1234...",
+        "maintainer_cap_id": "0x5678...",
         "asset_type": "0x2::sui::SUI",
-        "checkpoint_timestamp_ms": 1738000000000
+        "config_json": {
+            "margin_pool_config": {
+                "supply_cap": 10000000000000,
+                "max_utilization_rate": 950000000,
+                "protocol_spread": 50000000,
+                "min_borrow": 1000000
+            },
+            "interest_config": {
+                "base_rate": 100000,
+                "base_slope": 200000,
+                "optimal_utilization": 800000000,
+                "excess_slope": 500000
+            }
+        },
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -260,10 +337,17 @@ Returns events for when DeepBook pools are enabled or disabled for a margin pool
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_pool_id": "0x1234...",
         "deepbook_pool_id": "0x5678...",
-        "allowed": true,
-        "checkpoint_timestamp_ms": 1738000000000
+        "pool_cap_id": "0x9abc...",
+        "enabled": true,
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -281,12 +365,21 @@ Returns events for when interest rate parameters are updated.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_pool_id": "0x1234...",
-        "base_rate": "100000",
-        "multiplier": "200000",
-        "jump_multiplier": "500000",
-        "optimal_utilization": "800000000",
-        "checkpoint_timestamp_ms": 1738000000000
+        "pool_cap_id": "0x5678...",
+        "config_json": {
+            "base_rate": 100000,
+            "base_slope": 200000,
+            "optimal_utilization": 800000000,
+            "excess_slope": 500000
+        },
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -304,12 +397,21 @@ Returns events for when margin pool configuration is updated.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_pool_id": "0x1234...",
-        "supply_cap": "10000000000000",
-        "max_utilization_rate": "950000000",
-        "protocol_spread": "50000000",
-        "min_borrow": "1000000",
-        "checkpoint_timestamp_ms": 1738000000000
+        "pool_cap_id": "0x5678...",
+        "config_json": {
+            "supply_cap": 10000000000000,
+            "max_utilization_rate": 950000000,
+            "protocol_spread": 50000000,
+            "min_borrow": 1000000
+        },
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -327,9 +429,14 @@ Returns events for when supplier capabilities are minted.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "supplier_cap_id": "0x1234...",
-        "owner": "0xabcd...",
-        "checkpoint_timestamp_ms": 1738000000000
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -347,11 +454,16 @@ Returns events for when supply referrals are minted.
 ```json
 [
     {
-        "referral_id": "0x1234...",
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_pool_id": "0x5678...",
+        "supply_referral_id": "0x1234...",
         "owner": "0xabcd...",
-        "referral_rate": "100000000",
-        "checkpoint_timestamp_ms": 1738000000000
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -369,9 +481,18 @@ Returns events for when protocol fees are increased.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_pool_id": "0x1234...",
-        "amount": "1000000",
-        "checkpoint_timestamp_ms": 1738000000000
+        "total_shares": 1000000000,
+        "referral_fees": 100000,
+        "maintainer_fees": 200000,
+        "protocol_fees": 300000,
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -389,11 +510,16 @@ Returns events for when referral fees are claimed.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "referral_id": "0x1234...",
-        "margin_pool_id": "0x5678...",
         "owner": "0xabcd...",
-        "amount": "1000000",
-        "checkpoint_timestamp_ms": 1738000000000
+        "fees": 1000000,
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -413,9 +539,15 @@ Returns events for when maintainer capabilities are updated.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "maintainer_cap_id": "0x1234...",
-        "owner": "0xabcd...",
-        "checkpoint_timestamp_ms": 1738000000000
+        "allowed": true,
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -433,10 +565,16 @@ Returns events for when maintainer fees are withdrawn.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_pool_id": "0x1234...",
-        "amount": "1000000",
-        "recipient": "0xabcd...",
-        "checkpoint_timestamp_ms": 1738000000000
+        "margin_pool_cap_id": "0x5678...",
+        "maintainer_fees": 1000000,
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -454,10 +592,15 @@ Returns events for when protocol fees are withdrawn.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "margin_pool_id": "0x1234...",
-        "amount": "1000000",
-        "recipient": "0xabcd...",
-        "checkpoint_timestamp_ms": 1738000000000
+        "protocol_fees": 1000000,
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -475,9 +618,15 @@ Returns events for when pause capabilities are updated.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "pause_cap_id": "0x1234...",
-        "owner": "0xabcd...",
-        "checkpoint_timestamp_ms": 1738000000000
+        "allowed": true,
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -495,10 +644,27 @@ Returns events for when DeepBook pools are registered in the margin registry.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "pool_id": "0x1234...",
-        "base_type": "0x2::sui::SUI",
-        "quote_type": "0xdba3...::usdc::USDC",
-        "checkpoint_timestamp_ms": 1738000000000
+        "config_json": {
+            "base_margin_pool_id": "0x5678...",
+            "quote_margin_pool_id": "0x9abc...",
+            "risk_ratios": {
+                "min_withdraw_risk_ratio": 1200000000,
+                "min_borrow_risk_ratio": 1100000000,
+                "liquidation_risk_ratio": 1000000000,
+                "target_liquidation_risk_ratio": 1050000000
+            },
+            "user_liquidation_reward": 50000000,
+            "pool_liquidation_reward": 10000000,
+            "enabled": true
+        },
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -516,9 +682,15 @@ Returns events for when DeepBook pool registry entries are updated.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "pool_id": "0x1234...",
-        "margin_enabled": true,
-        "checkpoint_timestamp_ms": 1738000000000
+        "enabled": true,
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
@@ -536,12 +708,27 @@ Returns events for when DeepBook pool configurations are updated.
 ```json
 [
     {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
         "pool_id": "0x1234...",
-        "initial_margin_ratio": "100000000",
-        "maintenance_margin_ratio": "50000000",
-        "liquidation_reward": "50000000",
-        "max_leverage": "10",
-        "checkpoint_timestamp_ms": 1738000000000
+        "config_json": {
+            "base_margin_pool_id": "0x5678...",
+            "quote_margin_pool_id": "0x9abc...",
+            "risk_ratios": {
+                "min_withdraw_risk_ratio": 1200000000,
+                "min_borrow_risk_ratio": 1100000000,
+                "liquidation_risk_ratio": 1000000000,
+                "target_liquidation_risk_ratio": 1050000000
+            },
+            "user_liquidation_reward": 50000000,
+            "pool_liquidation_reward": 10000000,
+            "enabled": true
+        },
+        "onchain_timestamp": 1738000000000
     }
 ]
 ```
