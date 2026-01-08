@@ -295,3 +295,123 @@ public(package) macro fun test_dos<$T>($max: $T, $cases: vector<$T>) {
         test_dos_case!(case_succ);
     });
 }
+
+public(package) macro fun test_checked_add<$T>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    // basic cases
+    assert_eq!((0: $T).checked_add(0), option::some(0));
+    assert_eq!((0: $T).checked_add(1), option::some(1));
+    assert_eq!((1: $T).checked_add(0), option::some(1));
+    assert_eq!((0: $T).checked_add(max), option::some(max));
+    assert_eq!(max.checked_add(0), option::some(max));
+    // overflow cases
+    assert_eq!(max.checked_add(1), option::none());
+    assert_eq!((1: $T).checked_add(max), option::none());
+    assert_eq!(max.checked_add(max), option::none());
+    // case iteration
+    cases!(max, cases, |case_pred, case, case_succ| {
+        assert_eq!(case.checked_add(0), option::some(case));
+        assert_eq!((0: $T).checked_add(case), option::some(case));
+        if (case <= max - 1) {
+            assert_eq!(case.checked_add(1), option::some(case + 1));
+        } else {
+            assert_eq!(case.checked_add(1), option::none());
+        };
+        if (case <= max - case) {
+            assert_eq!(case.checked_add(case), option::some(case + case));
+        } else {
+            assert_eq!(case.checked_add(case), option::none());
+        };
+        if (case_pred <= max - case_succ) {
+            assert_eq!(case_pred.checked_add(case_succ), option::some(case_pred + case_succ));
+        } else {
+            assert_eq!(case_pred.checked_add(case_succ), option::none());
+        };
+    });
+}
+
+public(package) macro fun test_checked_sub<$T>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    // basic cases
+    assert_eq!((0: $T).checked_sub(0), option::some(0));
+    assert_eq!((1: $T).checked_sub(0), option::some(1));
+    assert_eq!((1: $T).checked_sub(1), option::some(0));
+    assert_eq!(max.checked_sub(0), option::some(max));
+    assert_eq!(max.checked_sub(max), option::some(0));
+    // underflow cases
+    assert_eq!((0: $T).checked_sub(1), option::none());
+    assert_eq!((0: $T).checked_sub(max), option::none());
+    assert_eq!((1: $T).checked_sub(2), option::none());
+    assert_eq!((1: $T).checked_sub(max), option::none());
+    // case iteration
+    cases!(max, cases, |case_pred, case, case_succ| {
+        assert_eq!(case.checked_sub(0), option::some(case));
+        assert_eq!(case.checked_sub(case), option::some(0));
+        assert_eq!(case_succ.checked_sub(case), option::some(case_succ - case));
+        assert_eq!(case_succ.checked_sub(case_pred), option::some(case_succ - case_pred));
+        assert_eq!(case.checked_sub(case_pred), option::some(case - case_pred));
+        assert_eq!(case_pred.checked_sub(case_succ), option::none());
+    });
+}
+
+public(package) macro fun test_checked_mul<$T>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    // basic cases
+    assert_eq!((0: $T).checked_mul(0), option::some(0));
+    assert_eq!((0: $T).checked_mul(1), option::some(0));
+    assert_eq!((1: $T).checked_mul(0), option::some(0));
+    assert_eq!((1: $T).checked_mul(1), option::some(1));
+    assert_eq!((0: $T).checked_mul(max), option::some(0));
+    assert_eq!(max.checked_mul(0), option::some(0));
+    assert_eq!(max.checked_mul(1), option::some(max));
+    assert_eq!((1: $T).checked_mul(max), option::some(max));
+    // overflow cases
+    assert_eq!(max.checked_mul(2), option::none());
+    assert_eq!((2: $T).checked_mul(max), option::none());
+    assert_eq!(max.checked_mul(max), option::none());
+    // case iteration
+    cases!(max, cases, |_case_pred, case, _case_succ| {
+        assert_eq!(case.checked_mul(0), option::some(0));
+        assert_eq!((0: $T).checked_mul(case), option::some(0));
+        assert_eq!(case.checked_mul(1), option::some(case));
+        assert_eq!((1: $T).checked_mul(case), option::some(case));
+        if (case != 0 && case <= max / 2) {
+            assert_eq!(case.checked_mul(2), option::some(case * 2));
+        } else if (case != 0) {
+            assert_eq!(case.checked_mul(2), option::none());
+        };
+        if (case != 0 && case <= max / case) {
+            assert_eq!(case.checked_mul(case), option::some(case * case));
+        } else if (case != 0) {
+            assert_eq!(case.checked_mul(case), option::none());
+        };
+    });
+}
+
+public(package) macro fun test_checked_div<$T>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    // basic cases
+    assert_eq!((0: $T).checked_div(1), option::some(0));
+    assert_eq!((1: $T).checked_div(1), option::some(1));
+    assert_eq!(max.checked_div(1), option::some(max));
+    assert_eq!(max.checked_div(max), option::some(1));
+    // division by zero cases
+    assert_eq!((0: $T).checked_div(0), option::none());
+    assert_eq!((1: $T).checked_div(0), option::none());
+    assert_eq!(max.checked_div(0), option::none());
+    // case iteration
+    cases!(max, cases, |case_pred, case, case_succ| {
+        if (case != 0) {
+            assert_eq!(case.checked_div(case), option::some(1));
+            assert_eq!((0: $T).checked_div(case), option::some(0));
+            assert_eq!(case_succ.checked_div(case), option::some(case_succ / case));
+        };
+        assert_eq!(case.checked_div(0), option::none());
+        assert_eq!(case_pred.checked_div(0), option::none());
+        assert_eq!(case_succ.checked_div(0), option::none());
+    });
+}
