@@ -1194,6 +1194,7 @@ async fn test_simulate_transaction_effects_json() {
                     effects {
                         status
                         effectsJson
+                        balanceChangesJson
                     }
                     error
                 }
@@ -1229,6 +1230,7 @@ async fn test_simulate_transaction_effects_json() {
         // Sort arrays that may have non-deterministic order
         ".effects.effectsJson.changedObjects" => insta::sorted_redaction(),
         ".effects.effectsJson.dependencies" => insta::sorted_redaction(),
+        ".effects.balanceChangesJson" => insta::sorted_redaction(),
     });
 }
 
