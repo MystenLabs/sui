@@ -1,15 +1,10 @@
-/*
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-*/
 import React from "react";
 import CodeBlock from "@theme/CodeBlock";
-import { MDXProvider } from "@mdx-js/react";
-import MDXComponents from "@theme/MDXComponents";
 import utils from "./utils";
 import MarkdownIt from "markdown-it";
-
-import { importContentMap } from "../../.generated/ImportContentMap";
+import { importContentMap } from "../../../.generated/ImportContentMap";
 
 /// <reference types="webpack-env" />
 
@@ -24,82 +19,21 @@ const snippetReq: __WebpackModuleApi.RequireContext = require.context(
 type AnyMod = any;
 type ResolvedComp = React.ComponentType<any> | null;
 
-/**
- * Resolves an MDX module to a React component.
- * Handles various export patterns from MDX v3 / Docusaurus 3.x.
- */
 function resolveMdxComponent(mod: AnyMod): ResolvedComp {
-  if (!mod) return null;
-
-  // MDX v3 / Docusaurus 3.x typically exports as mod.default
-  const candidate = mod.default ?? mod;
-
-  // Sometimes there's a double-default wrapper
-  const component = candidate?.default ?? candidate;
-
-  // Verify it's actually a function (React component)
-  if (typeof component === "function") {
-    return component as React.ComponentType<any>;
-  }
-
-  // Check if it's a valid React element type (could be a forwardRef or memo)
-  if (
-    component &&
-    typeof component === "object" &&
-    (component.$$typeof === Symbol.for("react.forward_ref") ||
-      component.$$typeof === Symbol.for("react.memo"))
-  ) {
-    return component as React.ComponentType<any>;
-  }
-
-  return null;
-}
-
-/**
- * Validates that a value is a renderable React component.
- */
-function isValidComponent(comp: unknown): comp is React.ComponentType<any> {
-  if (!comp) return false;
-
-  // Function components
-  if (typeof comp === "function") return true;
-
-  // forwardRef, memo, lazy components
-  if (
-    typeof comp === "object" &&
-    comp !== null &&
-    "$$typeof" in comp &&
-    typeof (comp as any).$$typeof === "symbol"
-  ) {
-    return true;
-  }
-
-  return false;
+  const cand = mod?.default ?? mod;
+  const maybe = cand?.default ?? cand;
+  return typeof maybe === "function"
+    ? (maybe as React.ComponentType<any>)
+    : null;
 }
 
 const SNIPPET_MAP: Record<string, React.ComponentType<any>> = {};
-
-// Build the snippet map at module load time
 snippetReq.keys().forEach((k: string) => {
-  try {
-    const raw = snippetReq<AnyMod>(k);
-    const Comp = resolveMdxComponent(raw);
-
-    if (!isValidComponent(Comp)) {
-      if (process.env.NODE_ENV === "development") {
-        console.warn(`[ImportContent] Skipping invalid snippet: ${k}`);
-      }
-      return;
-    }
-
-    const key = k.replace(/^\.\//, ""); // "sub/x.mdx"
-    SNIPPET_MAP[key] = Comp;
-    SNIPPET_MAP[key.replace(/\.mdx?$/, "")] = Comp; // also without extension
-  } catch (err) {
-    if (process.env.NODE_ENV === "development") {
-      console.error(`[ImportContent] Error loading snippet ${k}:`, err);
-    }
-  }
+  const Comp = resolveMdxComponent(snippetReq<AnyMod>(k));
+  if (!Comp) return;
+  const key = k.replace(/^\.\//, ""); // "sub/x.mdx"
+  SNIPPET_MAP[key] = Comp;
+  SNIPPET_MAP[key.replace(/\.mdx?$/, "")] = Comp; // also without extension
 });
 
 type Props = {
@@ -194,7 +128,6 @@ export default function ImportContent({
     };
   }, [isGitHub, org, repo, ref, source]);
 
-  // Handle snippet mode
   if (mode === "snippet") {
     const normalized = source.replace(/^\.\//, "");
     const Comp =
@@ -203,40 +136,14 @@ export default function ImportContent({
       SNIPPET_MAP[`${normalized}.mdx`] ||
       SNIPPET_MAP[`${normalized}.md`];
 
-    // Validate component before rendering
-    if (!isValidComponent(Comp)) {
+    if (!Comp) {
       return (
         <div className="alert alert--warning" role="alert">
           Missing or invalid snippet: <code>{source}</code>
-          {process.env.NODE_ENV === "development" && (
-            <div style={{ fontSize: "0.8em", marginTop: "0.5em" }}>
-              <details>
-                <summary>Debug info</summary>
-                <pre>
-                  {JSON.stringify(
-                    {
-                      normalized,
-                      availableKeys: Object.keys(SNIPPET_MAP).slice(0, 20),
-                      compType: typeof Comp,
-                    },
-                    null,
-                    2,
-                  )}
-                </pre>
-              </details>
-            </div>
-          )}
         </div>
       );
     }
-
-    // Wrap with MDXProvider so that components (Tabs, TabItem, etc.)
-    // imported inside the snippet MDX files resolve correctly
-    return (
-      <MDXProvider components={MDXComponents}>
-        <Comp />
-      </MDXProvider>
-    );
+    return <Comp />;
   }
 
   // mode === "code"
@@ -247,46 +154,42 @@ export default function ImportContent({
   const ext = match ? match[1] : undefined;
 
   // If language is not explicitly set, use extension
-  let resolvedLanguage = language;
-  if (!resolvedLanguage) {
+  if (!language) {
     switch (ext) {
       case "lock":
-        resolvedLanguage = "toml";
+        language = "toml";
         break;
       case "sh":
-        resolvedLanguage = "shell";
+        language = "shell";
         break;
       case "mdx":
-        resolvedLanguage = "markdown";
+        language = "markdown";
         break;
       case "tsx":
-        resolvedLanguage = "ts";
+        language = "ts";
         break;
       case "rs":
-        resolvedLanguage = "rust";
+        language = "rust";
         break;
       case "move":
-        resolvedLanguage = "move";
+        language = "move";
         break;
       case "prisma":
-        resolvedLanguage = "ts";
+        language = "ts";
         break;
       default:
-        resolvedLanguage = ext || "text";
+        language = ext || "text";
     }
   }
-
   if (isGitHub && ghLoading) {
     return <div className="import-content loading">Loading…</div>;
   }
-
   if (isGitHub && ghErr) {
     return <pre className="import-content error">{ghErr}</pre>;
   }
-
   let content: string;
   if (isGitHub) {
-    content = ghText as string;
+    content = ghText;
   } else {
     content = importContentMap[cleaned];
   }
@@ -305,6 +208,7 @@ export default function ImportContent({
       /^\/\/\s*Copyright.*Mysten Labs.*\n\/\/\s*SPDX-License.*?\n?$/gim,
       "",
     )
+
     .replace(
       /\[dependencies\]\nsui\s?=\s?{\s?local\s?=.*sui-framework.*\n/i,
       "[dependencies]",
@@ -323,15 +227,15 @@ export default function ImportContent({
   }
 
   if (fun) {
-    out = utils.returnFunctions(out, fun, resolvedLanguage, signatureOnly);
+    out = utils.returnFunctions(out, fun, language, signatureOnly);
   }
 
   if (variable) {
-    out = utils.returnVariables(out, variable, resolvedLanguage);
+    out = utils.returnVariables(out, variable, language);
   }
 
   if (struct) {
-    out = utils.returnStructs(out, struct, resolvedLanguage);
+    out = utils.returnStructs(out, struct, language);
   }
 
   if (type) {
@@ -392,7 +296,7 @@ export default function ImportContent({
   }
 
   // just render markdown if style = "markdown" or "md"
-  if (/^m(?:d|arkdown)$/i.test(style || "")) {
+  if (/^m(?:d|arkdown)$/i.test(style)) {
     const html = md.render(out);
     return (
       <div
@@ -403,7 +307,7 @@ export default function ImportContent({
   }
 
   return (
-    <CodeBlock language={resolvedLanguage} metastring={meta}>
+    <CodeBlock language={language} metastring={meta}>
       {out}
     </CodeBlock>
   );
