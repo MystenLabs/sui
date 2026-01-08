@@ -285,6 +285,7 @@ const MAX_PROTOCOL_VERSION: u64 = 107;
 // Version 106: Framework update: accumulator storage fund calculations
 //              Enable address balances on devnet
 // Version 107: Enable new digit based gas rounding.
+//              Support TxContext in all parameter positions.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -935,6 +936,10 @@ struct FeatureFlags {
     // If true, uses a new rounding mechanism for gas calculations, replacing the step-based one
     #[serde(skip_serializing_if = "is_false")]
     gas_rounding_halve_digits: bool,
+
+    // If true, enable tx contexts in all argument positions
+    #[serde(skip_serializing_if = "is_false")]
+    flexible_tx_context_positions: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2486,6 +2491,10 @@ impl ProtocolConfig {
 
     pub fn gas_rounding_halve_digits(&self) -> bool {
         self.feature_flags.gas_rounding_halve_digits
+    }
+
+    pub fn flexible_tx_context_positions(&self) -> bool {
+        self.feature_flags.flexible_tx_context_positions
     }
 }
 
@@ -4399,6 +4408,7 @@ impl ProtocolConfig {
                 }
                 107 => {
                     cfg.feature_flags.gas_rounding_halve_digits = true;
+                    cfg.feature_flags.flexible_tx_context_positions = true;
                 }
                 // Use this template when making changes:
                 //

@@ -1367,6 +1367,7 @@
                 "enable_vdf": false,
                 "end_of_epoch_transaction_supported": false,
                 "enforce_checkpoint_timestamp_monotonicity": false,
+                "flexible_tx_context_positions": false,
                 "fresh_vm_on_framework_upgrade": false,
                 "gas_rounding_halve_digits": false,
                 "generate_df_type_layouts": false,
