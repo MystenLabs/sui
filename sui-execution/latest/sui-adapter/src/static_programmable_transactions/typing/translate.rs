@@ -498,11 +498,10 @@ fn move_call_arguments(
         ));
     }
     // construct arguments, injecting tx context args as needed
-    let mut args = args.into_iter().enumerate().rev();
-    let mut res = params
+    let mut args = args.into_iter().enumerate();
+    let res = params
         .into_iter()
         .enumerate()
-        .rev()
         .map(|(param_idx, (expected_ty, tx_context_kind))| {
             Ok(match tx_context_kind {
                 TxContextKind::None => {
@@ -527,7 +526,6 @@ fn move_call_arguments(
             })
         })
         .collect::<Result<Vec<_>, ExecutionError>>()?;
-    res.reverse();
 
     assert_invariant!(
         args.next().is_none(),
