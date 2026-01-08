@@ -6,10 +6,6 @@ expression: "result.pointer(\"/data/simulateTransaction\")"
   "effects": {
     "status": "SUCCESS",
     "effectsJson": {
-      "bcs": {
-        "name": "TransactionEffects",
-        "value": "[bcs]"
-      },
       "digest": "[digest]",
       "version": 2,
       "status": {

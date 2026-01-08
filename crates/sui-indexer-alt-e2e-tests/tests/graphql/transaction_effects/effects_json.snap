@@ -24,10 +24,6 @@ Response: {
   "data": {
     "transactionEffects": {
       "effectsJson": {
-        "bcs": {
-          "name": "TransactionEffects",
-          "value": "AQAAAAAAAAAAAEBCDwAAAAAAwCYeAAAAAAAAAAAAAAAAAAAAAAAAAAAAILeCHHBZ4BfwzOTpTxyKrhB7GcPtteOQXRRpWY1jVetxAQAAAAAAASB+9E4n+MzvSj0xDI6uAXaoRPntgrZ09l4lkVwPkdbrSwIAAAAAAAAAAig02F2/79zWbwSBEjG6gYiTeT6DqJXVNAL9meEy42ViAQEAAAAAAAAAIAxTyQqgv33v1e2KKeTKCujrlS8ekEWqYA2s3/WsyFOJAPzMmkIbuxPBpmoaqY8K11Ap7elIV3ecaRW0T5QGi5IeASDZ9n7IP9+V4aipvN97AaQexpFPTkYWe2jjqHtmjoLnWAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHgCm0qxxuZk+eh1zvTx1vn6MHdp+CFW8EWwZJMb2PMBc7gABIC0RbocLCAPwcCkP/Dw+9QlIyUATmXg75RXdv0TmouX3AKewMnA4eKp0wxJpNXif0dTX4RHVkRsJJH1pYwYcMStaAQAA"
-        },
         "digest": "EKWv29g5fLtPU5XbNsMrNKgACPVEky7LFrZ28zMT3AFq",
         "version": 2,
         "status": {
@@ -108,10 +104,6 @@ Response: {
       "digest": "DMLgRAbBJVbzaRzxMTf8v4nVWvGkVT4pvASPGDaEsq5A",
       "effects": {
         "effectsJson": {
-          "bcs": {
-            "name": "TransactionEffects",
-            "value": "AQAAAAAAAAAAAEBCDwAAAAAAwCYeAAAAAAAAAAAAAAAAAAAAAAAAAAAAILeCHHBZ4BfwzOTpTxyKrhB7GcPtteOQXRRpWY1jVetxAQAAAAAAASB+9E4n+MzvSj0xDI6uAXaoRPntgrZ09l4lkVwPkdbrSwIAAAAAAAAAAig02F2/79zWbwSBEjG6gYiTeT6DqJXVNAL9meEy42ViAQEAAAAAAAAAIAxTyQqgv33v1e2KKeTKCujrlS8ekEWqYA2s3/WsyFOJAPzMmkIbuxPBpmoaqY8K11Ap7elIV3ecaRW0T5QGi5IeASDZ9n7IP9+V4aipvN97AaQexpFPTkYWe2jjqHtmjoLnWAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHgCm0qxxuZk+eh1zvTx1vn6MHdp+CFW8EWwZJMb2PMBc7gABIC0RbocLCAPwcCkP/Dw+9QlIyUATmXg75RXdv0TmouX3AKewMnA4eKp0wxJpNXif0dTX4RHVkRsJJH1pYwYcMStaAQAA"
-          },
           "digest": "EKWv29g5fLtPU5XbNsMrNKgACPVEky7LFrZ28zMT3AFq",
           "version": 2,
           "status": {

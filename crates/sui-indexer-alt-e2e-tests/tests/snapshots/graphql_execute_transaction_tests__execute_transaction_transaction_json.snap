@@ -7,10 +7,6 @@ expression: "result.pointer(\"/data/executeTransaction\")"
     "status": "SUCCESS",
     "transaction": {
       "transactionJson": {
-        "bcs": {
-          "name": "TransactionData",
-          "value": "[bcs]"
-        },
         "digest": "[digest]",
         "version": 1,
         "kind": {

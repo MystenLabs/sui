@@ -24,10 +24,6 @@ Response: {
   "data": {
     "transaction": {
       "transactionJson": {
-        "bcs": {
-          "name": "TransactionData",
-          "value": "AAACAAjoAwAAAAAAAAAgp7AycDh4qnTDEmk1eJ/R1NfhEdWRGwkkfWljBhwxK1oCAgABAQAAAQECAAABAQD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHgEoNNhdv+/c1m8EgRIxuoGIk3k+g6iV1TQC/ZnhMuNlYgEAAAAAAAAAIAxTyQqgv33v1e2KKeTKCujrlS8ekEWqYA2s3/WsyFOJ/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh7oAwAAAAAAAADyBSoBAAAAAA=="
-        },
         "digest": "DMLgRAbBJVbzaRzxMTf8v4nVWvGkVT4pvASPGDaEsq5A",
         "version": 1,
         "kind": {
@@ -102,10 +98,6 @@ Response: {
     "transactionEffects": {
       "transaction": {
         "transactionJson": {
-          "bcs": {
-            "name": "TransactionData",
-            "value": "AAACAAjoAwAAAAAAAAAgp7AycDh4qnTDEmk1eJ/R1NfhEdWRGwkkfWljBhwxK1oCAgABAQAAAQECAAABAQD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHgEoNNhdv+/c1m8EgRIxuoGIk3k+g6iV1TQC/ZnhMuNlYgEAAAAAAAAAIAxTyQqgv33v1e2KKeTKCujrlS8ekEWqYA2s3/WsyFOJ/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh7oAwAAAAAAAADyBSoBAAAAAA=="
-          },
           "digest": "DMLgRAbBJVbzaRzxMTf8v4nVWvGkVT4pvASPGDaEsq5A",
           "version": 1,
           "kind": {

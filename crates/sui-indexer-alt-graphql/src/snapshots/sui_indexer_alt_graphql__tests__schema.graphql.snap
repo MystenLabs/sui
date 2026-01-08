@@ -3817,7 +3817,7 @@ type Transaction implements Node {
 	"""
 	transactionBcs: Base64
 	"""
-	The transaction as a JSON blob, matching the gRPC proto format.
+	The transaction as a JSON blob, matching the gRPC proto format (excluding BCS).
 	"""
 	transactionJson: JSON
 }
@@ -3887,7 +3887,7 @@ type TransactionEffects {
 	"""
 	effectsDigest: String
 	"""
-	The effects as a JSON blob, matching the gRPC proto format.
+	The effects as a JSON blob, matching the gRPC proto format (excluding BCS).
 	"""
 	effectsJson: JSON
 	"""
