@@ -2,14 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_default_config::DefaultConfig;
-use sui_indexer_alt_framework::{
-    ingestion::IngestionConfig,
-    pipeline::{
-        CommitterConfig,
-        concurrent::{ConcurrentConfig, PrunerConfig},
-        sequential::SequentialConfig,
-    },
-};
+use sui_indexer_alt_framework::ingestion::IngestionConfig;
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_framework::pipeline::concurrent::PrunerConfig;
+use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 
 /// Trait for merging configuration structs together.
 pub trait Merge: Sized {

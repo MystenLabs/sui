@@ -1,20 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use anyhow::anyhow;
 use async_trait::async_trait;
-use diesel::{ExpressionMethods, upsert::excluded};
+use diesel::ExpressionMethods;
+use diesel::upsert::excluded;
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
-use sui_indexer_alt_framework::{
-    FieldCount,
-    pipeline::{Processor, sequential::Handler},
-    postgres::{Connection, Db},
-    types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::Checkpoint},
-};
-use sui_indexer_alt_schema::{displays::StoredDisplay, schema::sum_displays};
+use sui_indexer_alt_framework::FieldCount;
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::sequential::Handler;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::Db;
+use sui_indexer_alt_framework::types::display::DisplayVersionUpdatedEvent;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_schema::displays::StoredDisplay;
+use sui_indexer_alt_schema::schema::sum_displays;
 
 const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredDisplay::FIELD_COUNT;
 
