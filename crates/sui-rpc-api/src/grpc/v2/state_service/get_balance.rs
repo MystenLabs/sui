@@ -58,29 +58,6 @@ pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<G
     Ok(GetBalanceResponse::default().with_balance(balance))
 }
 
-fn lookup_address_balance(
-    service: &RpcService,
-    owner: SuiAddress,
-    coin_type: move_core_types::language_storage::StructTag,
-) -> Option<u64> {
-    use sui_types::MoveTypeTagTraitGeneric;
-    use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
-    use sui_types::accumulator_root::AccumulatorKey;
-    use sui_types::dynamic_field::DynamicFieldKey;
-
-    let balance_type = sui_types::balance::Balance::type_tag(coin_type.into());
-
-    let key = AccumulatorKey { owner };
-    let key_type_tag = AccumulatorKey::get_type_tag(&[balance_type]);
-
-    DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
-        .into_unbounded_id()
-        .unwrap()
-        .load_object(service.reader.inner())
-        .and_then(|o| o.load_value::<u128>().ok())
-        .map(|balance| balance as u64)
-}
-
 pub(super) fn render_balance(
     service: &RpcService,
     owner: SuiAddress,
@@ -109,7 +86,7 @@ pub(super) fn render_balance(
     //
     // - If the Address balance is less than it was at the checkpoint corrisponding to our index
     // read, then we can possibly over-inflate the balance stored in `Coin<T>`s.
-    if let Some(address_balance) = lookup_address_balance(service, owner, coin_type) {
+    if let Some(address_balance) = service.reader.lookup_address_balance(owner, coin_type) {
         balance.set_address_balance(address_balance);
 
         match address_balance.cmp(&balance_info.balance) {
