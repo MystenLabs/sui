@@ -604,4 +604,20 @@ mod tests {
         assert_eq!(original_id, OriginalID::from(1));
         assert_eq!(chain_id, DEFAULT_ENV_ID);
     }
+
+    #[test(tokio::test)]
+    async fn test_dummy_addr_determinism() {
+        let scenario = TestPackageGraph::new(["root", "a", "b"])
+            .add_deps([("root", "a"), ("root", "b")])
+            .build();
+
+        let first_load = scenario.root_package("root").await;
+        let first_load_addresses = first_load.package_info().named_addresses().unwrap();
+
+        drop(first_load);
+        let second_load = scenario.root_package("root").await;
+        let second_load_addresses = second_load.package_info().named_addresses().unwrap();
+
+        assert_eq!(first_load_addresses, second_load_addresses);
+    }
 }
