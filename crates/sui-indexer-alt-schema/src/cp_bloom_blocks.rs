@@ -9,6 +9,21 @@ use crate::schema::cp_bloom_blocks;
 /// Number of checkpoints per checkpoint block.
 pub const CP_BLOCK_SIZE: u64 = 1000;
 
+/// Size of each bloom block in bytes.
+pub const BLOOM_BLOCK_BYTES: usize = 2048;
+
+/// Number of bits per bloom block.
+pub const BLOOM_BLOCK_BITS: usize = BLOOM_BLOCK_BYTES * 8;
+
+/// Number of blocks in the bloom filter (stored as separate database rows).
+pub const NUM_BLOOM_BLOCKS: usize = 128;
+
+/// Total bits in the bloom filter (256KB).
+pub const TOTAL_BLOOM_BITS: usize = NUM_BLOOM_BLOCKS * BLOOM_BLOCK_BITS;
+
+/// Number of hash functions (k) used per key.
+pub const NUM_HASHES: u32 = 5;
+
 /// Compute the checkpoint block ID for a given checkpoint number.
 pub fn cp_block_id(cp_num: u64) -> i64 {
     (cp_num / CP_BLOCK_SIZE) as i64

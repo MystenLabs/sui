@@ -1,28 +1,31 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
+use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    pipeline::Processor,
-    postgres::{Connection, handler::Handler},
-    types::{
-        SUI_CLOCK_ADDRESS, SUI_SYSTEM_ADDRESS,
-        base_types::SuiAddress,
-        effects::TransactionEffectsAPI,
-        full_checkpoint_content::{Checkpoint, ExecutedTransaction},
-        object::Owner,
-        transaction::TransactionDataAPI,
-    },
-};
-use sui_indexer_alt_schema::{
-    blooms::BloomFilter,
-    cp_blooms::{BLOOM_FILTER_SEED, CP_BLOOM_NUM_BITS, CP_BLOOM_NUM_HASHES, StoredCpBlooms},
-    schema::cp_blooms,
-};
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::handler::Handler;
+use sui_indexer_alt_framework::types::SUI_CLOCK_ADDRESS;
+use sui_indexer_alt_framework::types::SUI_SYSTEM_ADDRESS;
+use sui_indexer_alt_framework::types::base_types::SuiAddress;
+use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_framework::types::full_checkpoint_content::ExecutedTransaction;
+use sui_indexer_alt_framework::types::object::Owner;
+use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
+use sui_indexer_alt_schema::blooms::bloom::BloomFilter;
+use sui_indexer_alt_schema::cp_blooms::BLOOM_FILTER_SEED;
+use sui_indexer_alt_schema::cp_blooms::CP_BLOOM_NUM_BITS;
+use sui_indexer_alt_schema::cp_blooms::CP_BLOOM_NUM_HASHES;
+use sui_indexer_alt_schema::cp_blooms::MAX_FOLD_DENSITY;
+use sui_indexer_alt_schema::cp_blooms::MIN_FOLD_BITS;
+use sui_indexer_alt_schema::cp_blooms::StoredCpBlooms;
+use sui_indexer_alt_schema::schema::cp_blooms;
 
 /// Indexes bloom filters per checkpoint for transaction scanning.
 pub(crate) struct CpBlooms;
@@ -52,7 +55,7 @@ impl Processor for CpBlooms {
 
         Ok(vec![StoredCpBlooms {
             cp_sequence_number: cp_num as i64,
-            bloom_filter: bloom.fold(),
+            bloom_filter: bloom.fold(MIN_FOLD_BITS, MAX_FOLD_DENSITY),
             num_items: Some(items.len() as i64),
         }])
     }
@@ -128,16 +131,17 @@ pub(crate) fn extract_filter_keys(tx: &ExecutedTransaction) -> HashSet<Vec<u8>> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::MIGRATIONS;
+
     use diesel::QueryDsl;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::Indexer;
     use sui_indexer_alt_schema::blooms::hash;
-    use sui_types::{
-        base_types::{ObjectID, SuiAddress},
-        test_checkpoint_data_builder::TestCheckpointBuilder,
-        transaction::TransactionDataAPI,
-    };
+    use sui_types::base_types::ObjectID;
+    use sui_types::base_types::SuiAddress;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+    use sui_types::transaction::TransactionDataAPI;
+
+    use crate::MIGRATIONS;
 
     async fn get_all_bloom_filters(conn: &mut Connection<'_>) -> Vec<StoredCpBlooms> {
         cp_blooms::table
@@ -150,13 +154,9 @@ mod tests {
     /// Check if a key might be in a folded bloom filter.
     fn folded_bloom_contains(folded_bytes: &[u8], key: &[u8]) -> bool {
         let folded_bits = folded_bytes.len() * 8;
-        let positions = hash::compute_positions(
-            key,
-            CP_BLOOM_NUM_BITS,
-            CP_BLOOM_NUM_HASHES,
-            BLOOM_FILTER_SEED,
-        );
-        positions.iter().all(|&pos| {
+        let mut hasher = hash::DoubleHasher::with_value(key, BLOOM_FILTER_SEED);
+        (0..CP_BLOOM_NUM_HASHES).all(|_| {
+            let pos = (hasher.next_hash() as usize) % CP_BLOOM_NUM_BITS;
             let folded_pos = pos % folded_bits;
             folded_bytes[folded_pos / 8] & (1 << (folded_pos % 8)) != 0
         })
