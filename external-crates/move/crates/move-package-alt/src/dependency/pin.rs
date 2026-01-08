@@ -2,13 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    fmt,
-    hash::{DefaultHasher, Hash, Hasher},
-    path::PathBuf,
-};
+use std::{fmt, path::PathBuf};
 
 use path_clean::PathClean;
+use sha2::{Digest, Sha256};
 use tracing::debug;
 
 use crate::{
@@ -243,11 +240,13 @@ impl Pinned {
 
     /// Returns the default hash for Self.
     pub fn unique_hash(&self) -> u64 {
-        let mut hasher = DefaultHasher::new();
         let lockfile_pin: LockfileDependencyInfo = self.clone().into();
-
-        lockfile_pin.render_as_toml().as_bytes().hash(&mut hasher);
-        hasher.finish()
+        let digest = Sha256::digest(lockfile_pin.render_as_toml().as_bytes());
+        // Take the first 8 bytes of the 32-byte SHA256 digest and convert to u64
+        let digest_bytes = digest.as_slice();
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&digest_bytes[..8]);
+        u64::from_be_bytes(bytes)
     }
 }
 
