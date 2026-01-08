@@ -1,0 +1,64 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# init --accounts A B --addresses test=0x0
+
+//# publish --sender A
+module 0x0.m {
+    import 0x2.clock;
+
+    entry entry_clock_mut(c: &mut clock.Clock) {
+        label l0:
+        abort 0;
+    }
+
+    entry entry_clock_owned(c: clock.Clock) {
+        label l0:
+        abort 0;
+    }
+
+    public public_clock_mut(c: &mut clock.Clock) {
+        label l0:
+        abort 0;
+    }
+
+    public public_clock_owned(c: clock.Clock) {
+        label l0:
+        abort 0;
+    }
+
+}
+
+//# set-address test object(1,0)
+
+//# programmable --sender A --inputs immshared(6)
+// attempting to take imm clock as mut
+//> test::m::entry_clock_mut(Input(0))
+
+//# programmable --sender A --inputs immshared(6)
+// attempting to take imm clock as owned
+//> test::m::entry_clock_owned(Input(0))
+
+//# programmable --sender A --inputs immshared(6)
+// attempting to take imm clock as mut
+//> test::m::public_clock_mut(Input(0))
+
+//# programmable --sender A --inputs immshared(6)
+// attempting to take imm clock as owned
+//> test::m::public_clock_owned(Input(0))
+
+//# programmable --sender A --inputs mutshared(6)
+// attempting to take imm clock as mut
+//> test::m::entry_clock_mut(Input(0))
+
+//# programmable --sender A --inputs mutshared(6)
+// attempting to take imm clock as owned
+//> test::m::entry_clock_owned(Input(0))
+
+//# programmable --sender A --inputs mutshared(6)
+// attempting to take imm clock as mut
+//> test::m::public_clock_mut(Input(0))
+
+//# programmable --sender A --inputs mutshared(6)
+// attempting to take imm clock as owned
+//> test::m::public_clock_owned(Input(0))

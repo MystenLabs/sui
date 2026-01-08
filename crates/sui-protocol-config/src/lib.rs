@@ -286,6 +286,7 @@ const MAX_PROTOCOL_VERSION: u64 = 107;
 //              Enable address balances on devnet
 // Version 107: Enable new digit based gas rounding.
 //              Support TxContext in all parameter positions.
+//              Disable entry point signature check.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -940,6 +941,10 @@ struct FeatureFlags {
     // If true, enable tx contexts in all argument positions
     #[serde(skip_serializing_if = "is_false")]
     flexible_tx_context_positions: bool,
+
+    // If true, disable entry point signature check.
+    #[serde(skip_serializing_if = "is_false")]
+    disable_entry_point_signature_check: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2495,6 +2500,10 @@ impl ProtocolConfig {
 
     pub fn flexible_tx_context_positions(&self) -> bool {
         self.feature_flags.flexible_tx_context_positions
+    }
+
+    pub fn disable_entry_point_signature_check(&self) -> bool {
+        self.feature_flags.disable_entry_point_signature_check
     }
 }
 
@@ -4409,6 +4418,7 @@ impl ProtocolConfig {
                 107 => {
                     cfg.feature_flags.gas_rounding_halve_digits = true;
                     cfg.feature_flags.flexible_tx_context_positions = true;
+                    cfg.feature_flags.disable_entry_point_signature_check = true;
                 }
                 // Use this template when making changes:
                 //
@@ -4505,6 +4515,7 @@ impl ProtocolConfig {
             sanity_check_with_regex_reference_safety: sanity_check_with_regex_reference_safety
                 .map(|limit| limit as u128),
             deprecate_global_storage_ops,
+            disable_entry_point_signature_check: self.disable_entry_point_signature_check(),
         }
     }
 
