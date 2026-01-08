@@ -130,7 +130,11 @@ impl<F: MoveFlavor> PackageGraph<F> {
         overrides: BTreeMap<EphemeralDependencyInfo, Publication<F>>,
     ) {
         for (_, index) in &self.package_ids {
-            let dep = self.inner[*index].dep_for_self().clone().into();
+            let dep = self.inner[*index]
+                .dep_for_self()
+                .clone()
+                .try_into()
+                .expect("package has a valid path");
             if let Some(publish) = overrides.get(&dep) {
                 self.inner[*index] = Arc::new(self.inner[*index].override_publish(publish.clone()));
             }
