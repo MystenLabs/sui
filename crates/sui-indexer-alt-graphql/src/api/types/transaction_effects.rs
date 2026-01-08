@@ -267,6 +267,23 @@ impl EffectsContents {
         )
     }
 
+    /// The balance changes as a JSON array, matching the gRPC proto format.
+    ///
+    /// Only available for transactions from execution context (simulate/execute).
+    async fn balance_changes_json(&self) -> Option<Result<Json, RpcError>> {
+        let content = self.contents.as_ref()?;
+        let grpc_balance_changes = content.balance_changes()?;
+
+        Some(
+            async {
+                let json_value = serde_json::to_value(&grpc_balance_changes)
+                    .context("Failed to serialize balance changes to JSON")?;
+                json_value.try_into()
+            }
+            .await,
+        )
+    }
+
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
     async fn effects_bcs(&self) -> Option<Result<Base64, RpcError>> {
         let content = self.contents.as_ref()?;

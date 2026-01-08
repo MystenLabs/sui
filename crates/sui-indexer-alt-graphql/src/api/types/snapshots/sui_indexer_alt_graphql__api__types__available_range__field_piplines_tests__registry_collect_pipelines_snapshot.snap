@@ -1604,6 +1604,9 @@ TransactionEffects.events
 TransactionEffects.balanceChanges
   => {"tx_balance_changes", "tx_digests"}
 
+TransactionEffects.balanceChangesJson
+  => {}
+
 TransactionEffects.effectsBcs
   => {}
 
