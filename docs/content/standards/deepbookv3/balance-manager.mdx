@@ -162,14 +162,14 @@ Only holders of a `WithdrawCap` for the `BalanceManager` can call this function 
 
 ### Set and unset referral
 
-The owner of a `TradeCap` can set or unset a referral for the balance manager. Setting a referral allows the balance manager to be associated with a specific `DeepBookReferral`, which can track and earn referral fees.
+The owner of a `TradeCap` can set or unset a pool-specific referral for the balance manager. Setting a referral allows the balance manager to be associated with a `DeepBookPoolReferral` for that pool, which can track and earn referral fees. Each balance manager can have different referrals for different pools.
 
 <ImportContent
 	source="packages/deepbook/sources/balance_manager.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="set_referral,unset_referral"
+	fun="set_balance_manager_referral,unset_balance_manager_referral"
 />
 
 ### Register balance manager
@@ -181,7 +181,7 @@ Register a balance manager with the registry. This adds the balance manager to t
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="register_manager"
+	fun="register_balance_manager"
 />
 
 ### Read endpoints
@@ -191,7 +191,33 @@ Register a balance manager with the registry. This adds the balance manager to t
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="validate_proof,balance,owner,id,get_referral_id,referral_owner"
+	fun="validate_proof,balance,owner,id,get_balance_manager_referral_id,balance_manager_referral_owner,balance_manager_referral_pool_id"
+/>
+
+## Events
+
+### `BalanceManagerEvent`
+
+Emitted when a new balance manager is created.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="BalanceManagerEvent"
+/>
+
+### `BalanceEvent`
+
+Emitted when a deposit or withdrawal occurs.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="BalanceEvent"
 />
 
 ## Related links

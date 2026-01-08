@@ -51,14 +51,14 @@ The `new_with_initializer()` function creates a `MarginManager` and returns it a
 
 ### Set or unset referral
 
-The owner of a `MarginManager` can set or unset a referral for trading fee benefits.
+The owner of a `MarginManager` can set or unset a pool-specific referral for trading fee benefits. The referral must be a `DeepBookPoolReferral` minted for the pool associated with the margin manager. Each margin manager can have different referrals for different pools.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/margin_manager.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="set_referral,unset_referral"
+	fun="set_margin_manager_referral,unset_margin_manager_referral"
 />
 
 ### Deposit funds
