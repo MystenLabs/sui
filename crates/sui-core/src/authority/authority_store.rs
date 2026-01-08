@@ -852,40 +852,6 @@ impl AuthorityStore {
         self.delete_live_object_markers(write_batch, locks_to_delete)?;
 
         debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
-        // --- 插入開始：即時餘額監控邏輯 ---
-        // 這裡可以定義您想監控的目標地址（測試用）
-        let target_address_str = "0xcdf8e52af600dd2b940a331635bd48932b251b9eba0ef7209b18bfcdead43eb5"; 
-        // 取得這筆交易的發送者
-        let tx_sender = tx_outputs.transaction.sender_address().to_string();
-        let is_sender_target = tx_sender == target_address_str;
-
-            for (id, new_object) in &tx_outputs.written {
-                let owner = new_object.owner();
-                let owner_str = match owner {
-                    Owner::AddressOwner(addr) => addr.to_string(),
-                    _ => "Non-Address".to_string(),
-                };
-
-                // 只要「發送者是目標」或是「物件所有者是目標」，就進入分析
-                if is_sender_target || owner_str == target_address_str {
-                    
-                    if new_object.is_coin() {
-                        let balance = new_object.get_coin_value_unsafe();
-                        let coin_tag = new_object.coin_type_maybe()
-                            .map(|tag| tag.to_string())
-                            .unwrap_or_else(|| "Unknown".to_string());
-
-                        // 增加一個標籤，看這筆變動是轉入還是轉出
-                        let direction = if owner_str == target_address_str { "接收/更新" } else { "合約中間態" };
-
-                        println!(
-                            "[BALANCE_MONITOR] 發現變動! 交易發送者: {}, 方向: {}, 代幣: {}, 新餘額: {}, 物件ID: {}",
-                            tx_sender, direction, coin_tag, balance, id
-                        );
-                    }
-                }
-            }
-        // --- 插入結束 ---
 
         Ok(())
     }

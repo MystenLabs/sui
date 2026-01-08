@@ -46,6 +46,11 @@ pub enum StreamMessage {
         account: SuiAddress,
         coin_type: String,
         new_balance: u64,
+        object_id: ObjectID,
+    },
+    ObjectDeleted {
+        account: SuiAddress,
+        object_id: ObjectID,
     },
     Event {
         package_id: ObjectID,
@@ -55,7 +60,6 @@ pub enum StreamMessage {
         contents: Vec<u8>,
         digest: String,
     },
-    // [Ticket #2] 新增訂單相關訊息與探針
     OrderPlaced {
         order_id: String,
         sender: SuiAddress,
@@ -66,6 +70,7 @@ pub enum StreamMessage {
         event_type: String,
         sender: SuiAddress,
         contents: Vec<u8>,
+        digest: String,
     },
     SubscriptionSuccess {
         details: String,
@@ -171,13 +176,13 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                                  let _ = send_json(&mut socket, &msg).await;
                              }
 
-                             // --- [Ticket #2] 訂單探針邏輯 ---
                              if subscriptions_orders.contains(&event.sender) {
                                  
                                  let probe = StreamMessage::ProbeEvent {
                                      event_type: event.type_.to_string(),
                                      sender: event.sender,
                                      contents: event.contents.clone(),
+                                     digest: digest.clone(),
                                  };
                                  let _ = send_json(&mut socket, &probe).await;
 
@@ -229,19 +234,27 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                                             .map(|tag| tag.to_string())
                                             .unwrap_or_else(|| "Unknown".to_string());
 
-                                        println!(
-                                            "[BALANCE_MONITOR] 發現變動! 交易發送者: {}, 地址: {}, 代幣: {}, 新餘額: {}, 物件ID: {}",
-                                            sender, owner_addr, coin_tag, balance, id
-                                        );
-
                                         let msg = StreamMessage::BalanceChange {
                                             account: owner_addr,
                                             coin_type: coin_tag,
                                             new_balance: balance,
+                                            object_id: *id,
                                         };
                                         let _ = send_json(&mut socket, &msg).await;
                                     }
                                 }
+                            }
+                        }
+
+                        // 6. Object Deletions
+                        for obj_key in &outputs.deleted {
+                            let id = obj_key.0;
+                            if subscriptions_accounts.contains(&sender) || subscribe_all {
+                                let msg = StreamMessage::ObjectDeleted {
+                                    account: sender,
+                                    object_id: id,
+                                };
+                                let _ = send_json(&mut socket, &msg).await;
                             }
                         }
                     }
@@ -255,7 +268,7 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                         if let Message::Text(text) = msg {
                             if let Ok(req) = serde_json::from_str::<SubscriptionRequest>(&text) {
                                 let ack = StreamMessage::SubscriptionSuccess {
-                                    details: format!("成功訂閱 {:?}", req),
+                                    details: format!("Subscription Success {:?}", req),
                                 };
                                 let _ = send_json(&mut socket, &ack).await;
 
@@ -280,17 +293,4 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
 async fn send_json<T: Serialize>(socket: &mut WebSocket, msg: &T) -> Result<(), ()> {
     let text = serde_json::to_string(msg).map_err(|_| ())?;
     socket.send(Message::Text(text.into())).await.map_err(|_| ())
-}
-
-#[cfg(test)]
-mod smoke_tests {
-    use super::*;
-    use std::time::Duration;
-    #[tokio::test]
-    async fn test_broadcaster_startup() {
-        let (_tx, rx) = mpsc::channel(100);
-        CustomBroadcaster::spawn(rx, 9003);
-        println!("測試版已啟動於 9003...");
-        loop { tokio::time::sleep(Duration::from_secs(10)).await; }
-    }
 }
