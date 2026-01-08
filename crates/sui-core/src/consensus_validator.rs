@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -316,7 +316,7 @@ impl SuiTxValidator {
             .map(|obj_ref| (obj_ref.0, *obj_ref))
             .collect();
 
-        // First check: all claimed objects must be among the input objects
+        // First check: all claimed object IDs must be among the input object IDs
         for claimed_id in claimed_ids {
             if !input_refs_by_id.contains_key(claimed_id) {
                 return Err(SuiErrorKind::ImmutableObjectClaimNotFoundInInput {
@@ -334,24 +334,27 @@ impl SuiTxValidator {
             .get_object_cache_reader()
             .get_objects(&input_ids);
 
-        let mut actual_immutable_ids: Vec<ObjectID> = Vec::new();
+        let claimed_immutable_ids = claimed_ids.iter().cloned().collect::<BTreeSet<_>>();
+        let mut found_immutable_ids = BTreeSet::new();
 
         for (obj_opt, object_id) in objects.into_iter().zip(input_ids.iter()) {
             let input_ref = input_refs_by_id.get(object_id).unwrap();
             match obj_opt {
                 Some(o) => {
-                    // Owned (mutable) objects are already validated by validate_owned_object_versions().
-                    // We only need to validate version/digest for immutable objects here.
-                    if o.is_immutable() {
-                        let actual_ref = o.compute_object_reference();
-                        if actual_ref != *input_ref {
-                            return Err(SuiErrorKind::InvalidImmutableObjectClaim {
-                                claimed_object_id: *object_id,
-                                found_object_ref: actual_ref,
-                            }
-                            .into());
+                    // The object read here might drift from the one read earlier in validate_owned_object_versions(),
+                    // so re-check if input reference still matches actual object.
+                    let actual_ref = o.compute_object_reference();
+                    if actual_ref != *input_ref {
+                        return Err(SuiErrorKind::UserInputError {
+                            error: UserInputError::ObjectVersionUnavailableForConsumption {
+                                provided_obj_ref: *input_ref,
+                                current_version: actual_ref.1,
+                            },
                         }
-                        actual_immutable_ids.push(*object_id);
+                        .into());
+                    }
+                    if o.is_immutable() {
+                        found_immutable_ids.insert(*object_id);
                     }
                 }
                 None => {
@@ -369,25 +372,25 @@ impl SuiTxValidator {
         }
 
         // Compare claimed_ids with actual immutable objects - must match exactly
-        for claimed_id in claimed_ids {
-            if !actual_immutable_ids.contains(claimed_id) {
-                // Claimed as immutable but object is NOT immutable
-                let input_ref = input_refs_by_id.get(claimed_id).unwrap();
-                return Err(SuiErrorKind::InvalidImmutableObjectClaim {
-                    claimed_object_id: *claimed_id,
-                    found_object_ref: *input_ref,
-                }
-                .into());
+        if let Some(claimed_id) = claimed_immutable_ids
+            .difference(&found_immutable_ids)
+            .next()
+        {
+            let input_ref = input_refs_by_id.get(claimed_id).unwrap();
+            return Err(SuiErrorKind::InvalidImmutableObjectClaim {
+                claimed_object_id: *claimed_id,
+                found_object_ref: *input_ref,
             }
+            .into());
         }
-        for actual_id in &actual_immutable_ids {
-            if !claimed_ids.contains(actual_id) {
-                // Object IS immutable but was NOT claimed
-                return Err(SuiErrorKind::ImmutableObjectNotClaimed {
-                    object_id: *actual_id,
-                }
-                .into());
+        if let Some(found_id) = found_immutable_ids
+            .difference(&claimed_immutable_ids)
+            .next()
+        {
+            return Err(SuiErrorKind::ImmutableObjectNotClaimed {
+                object_id: *found_id,
             }
+            .into());
         }
 
         Ok(())
@@ -967,10 +970,10 @@ mod tests {
             assert!(
                 matches!(
                     err.as_inner(),
-                    SuiErrorKind::InvalidImmutableObjectClaim { claimed_object_id, .. }
-                    if *claimed_object_id == immutable_id1
+                    SuiErrorKind::UserInputError { error: UserInputError::ObjectVersionUnavailableForConsumption { provided_obj_ref, current_version: _ } }
+                    if provided_obj_ref.0 == immutable_id1
                 ),
-                "Expected InvalidImmutableObjectClaim error, got: {:?}",
+                "Expected ObjectVersionUnavailableForConsumption error, got: {:?}",
                 err.as_inner()
             );
         }
