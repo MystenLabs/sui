@@ -12,6 +12,8 @@ DeepBookV3 Indexer simplifies data retrieval by offering endpoints that enable:
 -	**Viewing pool information:** Retrieve detailed metadata about all available trading pools, including base and quote assets, tick sizes, and lot sizes.
 -	**Historical volume analysis:** Fetch volume metrics for specific pools or balance managers over custom time ranges, with support for interval-based breakdowns.
 -	**User-specific volume tracking:** Provide insights into individual trader activities by querying their balance manager-specific volumes.
+-	**OHLCV candlestick data:** Access candlestick chart data for technical analysis with configurable intervals.
+-	**DeepBook Margin data:** Query margin trading events including loans, liquidations, and margin pool operations.
 
 You can either use a publicly available indexer or spin up your own service. The choice you make depends on a few factors.
 
@@ -48,15 +50,22 @@ Following are the decimal places (scalars) used to determine the base unit for e
 
 | Asset | Scalar |
 | --- | --- |
+| ALKIMI | 9 |
 | AUSD | 6 |
-| Bridged Eth (bETH) | 8 |
-| Deepbook Token (DEEP) | 6 |
+| Bridged Eth (BETH) | 8 |
+| DEEP | 6 |
+| DRF | 6 |
+| IKA | 9 |
+| LayerZero WBTC (LZWBTC) | 8 |
 | Native USDC | 6 |
+| NS | 6 |
+| SEND | 6 |
 | SUI | 9 |
-| SuiNS Token (NS) | 6 |
 | TYPUS | 9 |
-| Wrapped USDC (wUSDC) | 6 |
-| Wrapped USDT (wUSDT) | 6 |
+| WAL | 9 |
+| Wormhole USDC (WUSDC) | 6 |
+| Wormhole USDT (WUSDT) | 6 |
+| xBTC | 8 |
 
 To convert the returned volume to the standard asset unit, divide the value by 10^SCALAR. For example:
 
@@ -472,32 +481,39 @@ produces a response similar to
 /trades/:pool_name?limit=<INTEGER>&start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&maker_balance_manager_id=<ID>&taker_balance_manager_id=<ID>
 ```
 
-Returns the most recent trade in the pool. 
+Returns the most recent trades in the pool.
 
 #### Response
 
 ```json
 [
     {
+        "event_digest": "string",
+        "digest": "string",
         "trade_id": "string",
-        "base_volume": integer,
-        "quote_volume": integer,
-        "price": integer,
-        "type": "string",
-        "timestamp": integer,
         "maker_order_id": "string",
         "taker_order_id": "string",
         "maker_balance_manager_id": "string",
-        "taker_balance_manager_id": "string"
+        "taker_balance_manager_id": "string",
+        "price": float,
+        "base_volume": float,
+        "quote_volume": float,
+        "timestamp": integer,
+        "type": "string",
+        "taker_is_bid": boolean,
+        "taker_fee": float,
+        "maker_fee": float,
+        "taker_fee_is_deep": boolean,
+        "maker_fee_is_deep": boolean
     }
 ]
 ```
 
-The `timestamp` value is in Unix milliseconds.
+The `timestamp` value is in Unix milliseconds. The `type` value is either `"buy"` or `"sell"` based on the taker's direction.
 
 #### Example
 
-A successful request to 
+A successful request to
 
 ```http
 trades/SUI_USDC?limit=2&start_time=1738093405&end_time=1738096485&maker_balance_manager_id=0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d&taker_balance_manager_id=0x47dcbbc8561fe3d52198336855f0983878152a12524749e054357ac2e3573d58
@@ -508,16 +524,23 @@ produces a response similar to
 ```json
 [
     {
+        "event_digest": "abc123...",
+        "digest": "def456...",
         "trade_id": "136321457151457660152049680",
-        "base_volume": 405,
-        "quote_volume": 1499,
-        "price": 3695,
-        "type": "sell",
-        "timestamp": 1738096392913,
         "maker_order_id": "68160737799100866923792791",
         "taker_order_id": "170141183460537392451039660509112362617",
         "maker_balance_manager_id": "0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d",
-        "taker_balance_manager_id": "0x47dcbbc8561fe3d52198336855f0983878152a12524749e054357ac2e3573d58"
+        "taker_balance_manager_id": "0x47dcbbc8561fe3d52198336855f0983878152a12524749e054357ac2e3573d58",
+        "price": 3.695,
+        "base_volume": 405.0,
+        "quote_volume": 1499.0,
+        "timestamp": 1738096392913,
+        "type": "sell",
+        "taker_is_bid": false,
+        "taker_fee": 0.001,
+        "maker_fee": 0.0005,
+        "taker_fee_is_deep": true,
+        "maker_fee_is_deep": true
     },
 	...
 ]
@@ -709,6 +732,172 @@ produces a response similar to
     "can_withdraw": "true"
   },
 	...
+}
+```
+
+### Get orders by balance manager
+
+```http
+/orders/:pool_name/:balance_manager_id?limit=<INTEGER>&status=<STATUS>
+```
+
+Returns orders for a specific balance manager in a pool. The `status` parameter can filter by order status (e.g., `Placed`, `Canceled`, `Filled`). Multiple statuses can be provided as comma-separated values.
+
+#### Response
+
+```json
+[
+    {
+        "order_id": "string",
+        "balance_manager_id": "string",
+        "type": "string",
+        "current_status": "string",
+        "price": float,
+        "placed_at": integer,
+        "last_updated_at": integer,
+        "original_quantity": float,
+        "filled_quantity": float,
+        "remaining_quantity": float
+    }
+]
+```
+
+### Get trade count
+
+```http
+/trade_count?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>
+```
+
+Returns the total number of trades across all pools within the specified time range.
+
+#### Response
+
+```json
+integer
+```
+
+### Get OHLCV candlestick data
+
+```http
+/ohclv/:pool_name?interval=<INTERVAL>&start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&limit=<INTEGER>
+```
+
+Returns OHLCV (Open, High, Low, Close, Volume) candlestick data for a pool. Valid intervals are: `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d`, `1w`.
+
+#### Response
+
+```json
+{
+    "candles": [
+        [timestamp, open, high, low, close, volume],
+        ...
+    ]
+}
+```
+
+#### Example
+
+A successful request to
+
+```http
+/ohclv/SUI_USDC?interval=1h&limit=10
+```
+
+produces a response similar to
+
+```json
+{
+    "candles": [
+        [1738000000, 3.5, 3.6, 3.4, 3.55, 1000000],
+        [1738003600, 3.55, 3.7, 3.5, 3.65, 1500000],
+        ...
+    ]
+}
+```
+
+### Get net deposits
+
+```http
+/get_net_deposits/:asset_ids/:timestamp
+```
+
+Returns the net deposits (deposits minus withdrawals) for specified assets up to a given timestamp. Asset IDs should be comma-separated.
+
+#### Response
+
+```json
+{
+    "asset_id_1": integer,
+    "asset_id_2": integer,
+    ...
+}
+```
+
+### Get DEEP supply
+
+```http
+/deep_supply
+```
+
+Returns the total supply of DEEP tokens.
+
+#### Response
+
+```json
+{
+    "total_supply": "string"
+}
+```
+
+### Get deposited assets
+
+```http
+/deposited_assets/:balance_manager_ids
+```
+
+Returns the list of assets that have been deposited into the specified balance managers. Balance manager IDs should be comma-separated.
+
+#### Response
+
+```json
+[
+    {
+        "balance_manager_id": "string",
+        "assets": ["string", ...]
+    }
+]
+```
+
+### Get indexer status
+
+```http
+/status?max_checkpoint_lag=<INTEGER>&max_time_lag_seconds=<INTEGER>
+```
+
+Returns the health status of the indexer, including checkpoint lag information for each pipeline. The optional parameters set thresholds for determining healthy status (defaults: `max_checkpoint_lag=100`, `max_time_lag_seconds=60`).
+
+#### Response
+
+```json
+{
+    "status": "OK" | "UNHEALTHY",
+    "latest_onchain_checkpoint": integer,
+    "current_time_ms": integer,
+    "earliest_checkpoint": integer,
+    "max_lag_pipeline": "string",
+    "max_checkpoint_lag": integer,
+    "max_time_lag_seconds": integer,
+    "pipelines": [
+        {
+            "pipeline": "string",
+            "indexed_checkpoint": integer,
+            "indexed_epoch": integer,
+            "indexed_timestamp_ms": integer,
+            "checkpoint_lag": integer,
+            "time_lag_seconds": integer,
+            "latest_onchain_checkpoint": integer
+        }
+    ]
 }
 ```
 

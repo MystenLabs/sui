@@ -1,0 +1,242 @@
+---
+title: DeepBook Margin Indexer
+sidebar_label: Indexer
+description: DeepBook Margin Indexer provides access to margin trading events including loans, liquidations, and margin pool operations.
+keywords: [DeepBook Margin Indexer, margin manager, margin pool, liquidation, loan, borrow, repay, supply, withdraw]
+---
+
+The DeepBook Margin Indexer extends the DeepBookV3 Indexer with endpoints for margin trading data. These endpoints provide access to margin manager events, margin pool operations, and liquidation monitoring.
+
+## Public endpoint
+
+The margin endpoints are available through the same public indexer as DeepBookV3:
+
+```http
+https://deepbook-indexer.mainnet.mystenlabs.com/
+```
+
+## Common query parameters
+
+All margin endpoints support the following common query parameters:
+
+- `start_time`: Start of time range in Unix timestamp seconds (defaults to 24 hours ago)
+- `end_time`: End of time range in Unix timestamp seconds (defaults to current time)
+- `limit`: Maximum number of results to return (defaults to 1)
+
+## Margin manager endpoints
+
+### Get margin manager creation events
+
+```http
+/margin_manager_created?margin_manager_id=<ID>
+```
+
+Returns events for when margin managers are created.
+
+### Get loan borrowed events
+
+```http
+/loan_borrowed?margin_manager_id=<ID>&margin_pool_id=<ID>
+```
+
+Returns events for when assets are borrowed from margin pools.
+
+### Get loan repaid events
+
+```http
+/loan_repaid?margin_manager_id=<ID>&margin_pool_id=<ID>
+```
+
+Returns events for when borrowed assets are repaid.
+
+### Get liquidation events
+
+```http
+/liquidation?margin_manager_id=<ID>&margin_pool_id=<ID>
+```
+
+Returns events for when margin managers are liquidated.
+
+### Get margin managers info
+
+```http
+/margin_managers_info
+```
+
+Returns an aggregate view of all margin managers with their associated pool and asset information.
+
+#### Response
+
+```json
+[
+    {
+        "margin_manager_id": "string",
+        "deepbook_pool_id": "string" | null,
+        "base_asset_id": "string" | null,
+        "base_asset_symbol": "string" | null,
+        "quote_asset_id": "string" | null,
+        "quote_asset_symbol": "string" | null,
+        "base_margin_pool_id": "string" | null,
+        "quote_margin_pool_id": "string" | null
+    }
+]
+```
+
+### Get margin manager states
+
+```http
+/margin_manager_states?max_risk_ratio=<FLOAT>&deepbook_pool_id=<ID>
+```
+
+Returns the current state of margin managers. This endpoint is useful for monitoring positions that may be at risk of liquidation.
+
+- `max_risk_ratio`: Filter to return only margin managers with risk ratio below this threshold (useful for finding liquidation opportunities)
+- `deepbook_pool_id`: Filter by specific DeepBook pool
+
+## Margin pool endpoints
+
+### Get asset supplied events
+
+```http
+/asset_supplied?margin_pool_id=<ID>&supplier=<ADDRESS>
+```
+
+Returns events for when assets are supplied to margin pools.
+
+### Get asset withdrawn events
+
+```http
+/asset_withdrawn?margin_pool_id=<ID>&supplier=<ADDRESS>
+```
+
+Returns events for when assets are withdrawn from margin pools.
+
+### Get margin pool creation events
+
+```http
+/margin_pool_created?margin_pool_id=<ID>
+```
+
+Returns events for when margin pools are created.
+
+### Get DeepBook pool updated events
+
+```http
+/deepbook_pool_updated?margin_pool_id=<ID>&deepbook_pool_id=<ID>
+```
+
+Returns events for when DeepBook pools are enabled or disabled for a margin pool.
+
+### Get interest params updated events
+
+```http
+/interest_params_updated?margin_pool_id=<ID>
+```
+
+Returns events for when interest rate parameters are updated.
+
+### Get margin pool config updated events
+
+```http
+/margin_pool_config_updated?margin_pool_id=<ID>
+```
+
+Returns events for when margin pool configuration is updated.
+
+### Get supplier cap minted events
+
+```http
+/supplier_cap_minted?supplier_cap_id=<ID>
+```
+
+Returns events for when supplier capabilities are minted.
+
+### Get supply referral minted events
+
+```http
+/supply_referral_minted?margin_pool_id=<ID>&owner=<ADDRESS>
+```
+
+Returns events for when supply referrals are minted.
+
+### Get protocol fees increased events
+
+```http
+/protocol_fees_increased?margin_pool_id=<ID>
+```
+
+Returns events for when protocol fees are increased.
+
+### Get referral fees claimed events
+
+```http
+/referral_fees_claimed?referral_id=<ID>&owner=<ADDRESS>
+```
+
+Returns events for when referral fees are claimed.
+
+## Admin and registry endpoints
+
+### Get maintainer cap updated events
+
+```http
+/maintainer_cap_updated?maintainer_cap_id=<ID>
+```
+
+Returns events for when maintainer capabilities are updated.
+
+### Get maintainer fees withdrawn events
+
+```http
+/maintainer_fees_withdrawn?margin_pool_id=<ID>
+```
+
+Returns events for when maintainer fees are withdrawn.
+
+### Get protocol fees withdrawn events
+
+```http
+/protocol_fees_withdrawn?margin_pool_id=<ID>
+```
+
+Returns events for when protocol fees are withdrawn.
+
+### Get pause cap updated events
+
+```http
+/pause_cap_updated?pause_cap_id=<ID>
+```
+
+Returns events for when pause capabilities are updated.
+
+### Get DeepBook pool registered events
+
+```http
+/deepbook_pool_registered?pool_id=<ID>
+```
+
+Returns events for when DeepBook pools are registered in the margin registry.
+
+### Get DeepBook pool registry updated events
+
+```http
+/deepbook_pool_updated_registry?pool_id=<ID>
+```
+
+Returns events for when DeepBook pool registry entries are updated.
+
+### Get DeepBook pool config updated events
+
+```http
+/deepbook_pool_config_updated?pool_id=<ID>
+```
+
+Returns events for when DeepBook pool configurations are updated.
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3"
+	label="DeepBookV3 repository"
+	desc="The DeepBookV3 repository on GitHub."
+/>

@@ -73,6 +73,7 @@ const standards = [
 			'standards/deepbook-margin/margin-pool',
 			'standards/deepbook-margin/orders',
 			'standards/deepbook-margin/tpsl',
+			'standards/deepbook-margin-indexer',
 			{
 				type: 'category',
 				label: 'SDK',
