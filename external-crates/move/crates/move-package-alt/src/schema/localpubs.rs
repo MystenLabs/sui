@@ -31,7 +31,7 @@ pub struct LocalPub<F: MoveFlavor> {
     pub source: LockfileDependencyInfo,
 
     #[serde(flatten)]
-    pub addresses: PublishAddresses,
+    pub addresses: Option<PublishAddresses>,
 
     pub version: u64,
 

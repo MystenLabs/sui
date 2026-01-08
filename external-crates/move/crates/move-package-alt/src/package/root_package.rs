@@ -267,6 +267,28 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(())
     }
 
+    /// Create a new ephemeral pubfile in `file_path` that contains all of the dependencies for the
+    /// current package, with empty addresses for unpublished packages.
+    pub fn generate_ephemeral_pubfile(&self, file_path: impl AsRef<Path>) -> PackageResult<()> {
+        let result = ParsedEphemeralPubs::<F> {
+            build_env: self.environment.name().to_string(),
+            chain_id: self.environment.id().to_string(),
+            published: vec![],
+        };
+
+        for package in self.packages() {
+            let pub = LocalPub::<F> {
+                source: package.package().dep_for_self().clone().into(),
+                addresses: todo!(),
+                version: todo!(),
+                metadata: ,
+            }
+        }
+
+
+        todo!()
+    }
+
     /// Record metadata for a publication for the root package in either its `Published.toml` or
     /// its ephemeral pubfile (depending on how it was loaded)
     pub fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
@@ -282,7 +304,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
             let new_pub = LocalPub {
                 source: root_dep,
-                addresses: publish_data.addresses,
+                addresses: Some(publish_data.addresses),
                 version: publish_data.version,
                 metadata: publish_data.metadata,
             };
