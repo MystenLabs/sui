@@ -684,7 +684,7 @@ async fn test_execute_transaction_effects_json() {
         .expect("GraphQL request failed");
 
     // Use redactions to mask dynamic values that change between runs
-    insta::assert_json_snapshot!(result.pointer("/data/executeTransaction"), {
+    insta::assert_json_snapshot!("execute_transaction_effects_json", result.pointer("/data/executeTransaction"), {
         // Object IDs and addresses
         ".**.objectId" => "[object_id]",
         ".**.address" => "[address]",
@@ -742,7 +742,7 @@ async fn test_execute_transaction_transaction_json() {
         .expect("GraphQL request failed");
 
     // Use redactions to mask dynamic values that change between runs
-    insta::assert_json_snapshot!(result.pointer("/data/executeTransaction"), {
+    insta::assert_json_snapshot!("execute_transaction_transaction_json", result.pointer("/data/executeTransaction"), {
         // Addresses and owners
         ".**.sender" => "[sender]",
         ".**.owner" => "[owner]",

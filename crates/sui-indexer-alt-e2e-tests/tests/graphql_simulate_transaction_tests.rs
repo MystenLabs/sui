@@ -1216,7 +1216,7 @@ async fn test_simulate_transaction_effects_json() {
 
     // Use redactions to mask dynamic values that change between runs
     // The `.**.field` syntax matches the field at any nesting level
-    insta::assert_json_snapshot!(result.pointer("/data/simulateTransaction"), {
+    insta::assert_json_snapshot!("simulate_transaction_effects_json", result.pointer("/data/simulateTransaction"), {
         // Object IDs and addresses
         ".**.objectId" => "[object_id]",
         ".**.address" => "[address]",
@@ -1275,7 +1275,7 @@ async fn test_simulate_transaction_transaction_json() {
         .expect("GraphQL request failed");
 
     // Use redactions to mask dynamic values that change between runs
-    insta::assert_json_snapshot!(result.pointer("/data/simulateTransaction"), {
+    insta::assert_json_snapshot!("simulate_transaction_transaction_json", result.pointer("/data/simulateTransaction"), {
         // Addresses and owners
         ".**.sender" => "[sender]",
         ".**.owner" => "[owner]",
