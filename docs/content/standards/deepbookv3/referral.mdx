@@ -30,7 +30,7 @@ The following are the referral-related functions that DeepBook exposes.
 
 ### Mint a referral
 
-Mint a new `DeepBookPoolReferral` object for a specific pool with a specified multiplier. The multiplier determines the additional trading fees allocated to the referrer. The multiplier must be a multiple of the base referral multiplier and cannot exceed the maximum allowed multiplier. Returns the ID of the created referral.
+Mint a new `DeepBookPoolReferral` object for a specific pool with a specified multiplier. The multiplier determines the portion of trading fees allocated to the referrer. The multiplier must be a multiple of 0.1 (e.g., 0.1, 0.2, 0.3, ...) and cannot exceed 2.0. Returns the ID of the created referral.
 
 <ImportContent
 	source="packages/deepbook/sources/pool.move"
@@ -43,7 +43,7 @@ Mint a new `DeepBookPoolReferral` object for a specific pool with a specified mu
 
 ### Update referral multiplier
 
-Update the multiplier for an existing pool referral. Only the referral owner can update the multiplier. The new multiplier must meet the same requirements as when minting a referral.
+Update the multiplier for an existing pool referral. Only the referral owner can update the multiplier. The new multiplier must be a multiple of 0.1 and cannot exceed 2.0.
 
 <ImportContent
 	source="packages/deepbook/sources/pool.move"

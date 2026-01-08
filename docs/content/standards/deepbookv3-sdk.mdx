@@ -372,13 +372,20 @@ The SDK provides functions for managing pool-specific referrals. Referrals allow
 
 These functions are available on the `deepbook` contract for managing referrals at the pool level.
 
+:::info Multiplier constraints
+
+The referral multiplier must be a multiple of 0.1 (e.g., 0.1, 0.2, 0.3, ...) and cannot exceed 2.0.
+
+:::
+
 ```tsx
 // Mint a new referral for a specific pool
 // multiplier determines the portion of fees allocated to the referrer
+// Valid values: 0.1, 0.2, 0.3, ... up to 2.0
 dbClient.deepbook.mintReferral('SUI_DBUSDC', 0.1)(tx);
 
 // Update the multiplier for an existing referral
-dbClient.deepbook.updatePoolReferralMultiplier('SUI_DBUSDC', referralId, 0.15)(tx);
+dbClient.deepbook.updatePoolReferralMultiplier('SUI_DBUSDC', referralId, 0.2)(tx);
 
 // Claim accumulated referral rewards (returns base, quote, and DEEP coins)
 const { baseRewards, quoteRewards, deepRewards } = tx.add(
