@@ -28,6 +28,7 @@ pub trait TransactionExecutor: Send + Sync {
         &self,
         transaction: TransactionData,
         checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
     ) -> Result<SimulateTransactionResult, SuiError>;
 }
 
