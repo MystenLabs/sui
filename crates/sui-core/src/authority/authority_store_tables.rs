@@ -220,7 +220,7 @@ impl AuthorityPerpetualTables {
         use crate::authority::authority_store_pruner::apply_relocation_filter;
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
-            Bytes, Decision, IndexWalPosition, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
+            Bytes, Decision, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
             default_cells_per_mutex, default_mutex_count, default_value_cache_size,
         };
         let mutexes = default_mutex_count() * 2;
@@ -229,11 +229,11 @@ impl AuthorityPerpetualTables {
         let pruner_watermark = pruner_watermark.unwrap_or(Arc::new(AtomicU64::new(0)));
 
         let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
-        let objects_compactor = |index: &mut BTreeMap<Bytes, IndexWalPosition>| {
+        let objects_compactor = |iter: &mut dyn DoubleEndedIterator<Item = &Bytes>| {
             let mut retain = HashSet::new();
             let mut previous: Option<&[u8]> = None;
             const OID_SIZE: usize = 16;
-            for (key, _) in index.iter().rev() {
+            for key in iter.rev() {
                 if let Some(prev) = previous {
                     if prev == &key[..OID_SIZE] {
                         continue;
@@ -242,7 +242,7 @@ impl AuthorityPerpetualTables {
                 previous = Some(&key[..OID_SIZE]);
                 retain.insert(key.clone());
             }
-            index.retain(|k, _| retain.contains(k));
+            retain
         };
         let mut digest_prefix = vec![0; 8];
         digest_prefix[7] = 32;
