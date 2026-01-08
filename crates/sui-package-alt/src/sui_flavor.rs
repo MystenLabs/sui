@@ -9,9 +9,7 @@ use std::{
 use indexmap::IndexMap;
 use move_compiler::editions::Edition;
 use move_package_alt::{
-    dependency::{self, CombinedDependency, PinnedDependencyInfo},
-    errors::{FileHandle, PackageResult},
-    flavor::MoveFlavor,
+    MoveFlavor,
     git::GitCache,
     schema::{
         EnvironmentID, EnvironmentName, GitSha, LockfileDependencyInfo, LockfileGitDepInfo,
@@ -19,6 +17,7 @@ use move_package_alt::{
         ReplacementDependency, SystemDepName,
     },
 };
+
 use serde::{Deserialize, Serialize};
 use sui_package_management::system_package_versions::{
     SYSTEM_GIT_REPO, SystemPackagesVersion, latest_system_packages, system_packages_for_protocol,

@@ -11,10 +11,7 @@ use move_command_line_common::{
 use move_compiler::command_line::COLOR_MODE_ENV_VAR;
 use move_coverage::coverage_map::{CoverageMap, ExecCoverageMapWithModules};
 
-use move_package_alt::{
-    flavor::{Vanilla, vanilla},
-    package::{RootPackage, layout::SourcePackageLayout, package_loader::PackageLoader},
-};
+use move_package_alt::{PackageLoader, RootPackage, SourcePackageLayout, Vanilla, flavor::vanilla};
 use move_package_alt_compilation::{
     layout::CompiledPackageLayout, on_disk_package::OnDiskCompiledPackage,
 };

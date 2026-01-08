@@ -3,8 +3,7 @@
 
 use move_command_line_common::testing::insta_assert;
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
-use move_package_alt::flavor::Vanilla;
-use move_package_alt::package::RootPackage;
+use move_package_alt::{RootPackage, Vanilla};
 use move_package_alt_compilation::build_config::BuildConfig;
 use move_package_alt_compilation::model_builder;
 use std::path::Path;

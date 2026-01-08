@@ -11,7 +11,7 @@ use move_coverage::{
 use move_disassembler::disassembler::Disassembler;
 use move_package_alt_compilation::{build_config::BuildConfig, find_env};
 
-use move_package_alt::{flavor::MoveFlavor, schema::Environment};
+use move_package_alt::{MoveFlavor, schema::Environment};
 use move_trace_format::format::MoveTraceReader;
 use std::{
     fs::File,

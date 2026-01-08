@@ -27,9 +27,8 @@ use move_core_types::{
     language_storage::{ModuleId, StructTag},
 };
 use move_package_alt::{
+    MoveFlavor, RootPackage,
     compatibility::{legacy_parser::LegacyPackageMetadata, parse_legacy_package_info},
-    flavor::MoveFlavor,
-    package::RootPackage,
     schema::Environment,
 };
 use move_package_alt_compilation::compiled_package::CompiledPackage as MoveCompiledPackage;

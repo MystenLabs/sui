@@ -7,8 +7,7 @@ use std::path::{Path, PathBuf};
 use clap::Parser;
 
 use move_package_alt::{
-    flavor::MoveFlavor,
-    package::RootPackage,
+    MoveFlavor, RootPackage,
     schema::{Environment, EnvironmentName},
 };
 use move_package_alt_compilation::build_config::BuildConfig;

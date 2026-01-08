@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
 
-use move_package_alt::flavor::vanilla::{Vanilla, default_environment};
 use move_package_alt::package::layout::SourcePackageLayout;
+use move_package_alt::{Vanilla, flavor::vanilla::default_environment};
 use move_package_alt_compilation::{build_config::BuildConfig, compile_package};
 
 fn create_test_package(dir: &Path) -> std::io::Result<()> {

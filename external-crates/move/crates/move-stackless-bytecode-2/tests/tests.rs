@@ -8,7 +8,7 @@ use move_symbol_pool::Symbol;
 
 use tempfile::TempDir;
 
-use move_package_alt::{flavor::Vanilla, package::RootPackage};
+use move_package_alt::{RootPackage, Vanilla};
 use move_package_alt_compilation::{build_config::BuildConfig, model_builder};
 
 use std::{collections::BTreeSet, io::BufRead, path::Path};

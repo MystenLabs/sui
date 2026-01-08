@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use crate::{DEFAULT_BUILD_DIR, sandbox::utils::OnDiskStateView};
-use move_package_alt::flavor::MoveFlavor;
+use move_package_alt::MoveFlavor;
 use move_package_alt_compilation::{
     build_config::BuildConfig, compiled_package::CompiledPackage, find_env,
 };

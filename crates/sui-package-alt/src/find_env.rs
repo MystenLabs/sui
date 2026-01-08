@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, path::Path};
 use anyhow::bail;
 use indexmap::IndexMap;
 use move_package_alt::{
-    package::RootPackage,
+    RootPackage,
     schema::{Environment, EnvironmentID, EnvironmentName},
 };
 use sui_sdk::{SuiClient, wallet_context::WalletContext};

@@ -3,7 +3,6 @@
 
 use expect_test::expect;
 use move_core_types::account_address::AccountAddress;
-use move_package_alt::package::package_loader::PackageLoader;
 use std::collections::HashMap;
 use std::{fs, io, path::Path};
 use std::{path::PathBuf, str};
@@ -21,8 +20,10 @@ use test_cluster::TestClusterBuilder;
 
 use crate::toolchain::CURRENT_COMPILER_VERSION;
 use crate::{BytecodeSourceVerifier, ValidationMode};
-use move_package_alt::package::RootPackage;
-use move_package_alt::schema::{Environment, OriginalID, PublishAddresses, PublishedID};
+use move_package_alt::{
+    PackageLoader, RootPackage,
+    schema::{Environment, OriginalID, PublishAddresses, PublishedID},
+};
 use sui_package_alt::{BuildParams, PublishedMetadata, SuiFlavor};
 use sui_types::digests::get_testnet_chain_identifier;
 use sui_types::supported_protocol_versions::Chain;

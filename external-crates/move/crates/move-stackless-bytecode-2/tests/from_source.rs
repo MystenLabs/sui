@@ -9,7 +9,7 @@ use move_symbol_pool::Symbol;
 
 use tempfile::TempDir;
 
-use move_package_alt::{flavor::Vanilla, package::RootPackage};
+use move_package_alt::{RootPackage, Vanilla};
 use std::{collections::BTreeSet, io::BufRead, path::Path};
 
 fn run_test(file_path: &Path) -> datatest_stable::Result<()> {

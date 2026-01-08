@@ -5,7 +5,7 @@ use crate::build_config::BuildConfig;
 use anyhow::Result;
 use move_command_line_common::files::find_move_filenames;
 use move_compiler::shared::files::FileName;
-use move_package_alt::package::{layout::SourcePackageLayout, paths::PackagePath};
+use move_package_alt::{SourcePackageLayout, paths::PackagePath};
 use std::path::{Path, PathBuf};
 
 // Find all the source files for a package at the given path

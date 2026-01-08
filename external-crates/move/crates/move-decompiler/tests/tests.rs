@@ -4,7 +4,7 @@
 use move_decompiler::{generate_from_model, testing::structuring_unit_test};
 
 use move_command_line_common::insta_assert;
-use move_package_alt::{flavor::Vanilla, package::RootPackage};
+use move_package_alt::{RootPackage, Vanilla};
 use move_package_alt_compilation::{build_config::BuildConfig, model_builder};
 use move_symbol_pool::Symbol;
 
