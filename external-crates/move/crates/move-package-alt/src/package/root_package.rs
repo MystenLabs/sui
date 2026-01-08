@@ -13,7 +13,7 @@ use crate::graph::PackageInfo;
 use crate::package::package_loader::{LoadType, PackageConfig, PackageLoader};
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{
-    Environment, LocalPub, LockfileDependencyInfo, ModeName, PackageID, ParsedEphemeralPubs,
+    Environment, EphemeralDependencyInfo, LocalPub, ModeName, PackageID, ParsedEphemeralPubs,
     ParsedPublishedFile, Publication, RenderToml,
 };
 use crate::{
@@ -367,7 +367,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
 fn localpubs_to_publications<F: MoveFlavor>(
     pubfile: &ParsedEphemeralPubs<F>,
-) -> PackageResult<BTreeMap<LockfileDependencyInfo, Publication<F>>> {
+) -> PackageResult<BTreeMap<EphemeralDependencyInfo, Publication<F>>> {
     let mut result = BTreeMap::new();
     for local_pub in &pubfile.published {
         let new = Publication::<F> {
@@ -949,11 +949,12 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ root = true }}
+            source = {{ local = "{path}" }}
             original-id = "0x2"
             published-at = "0x3"
             version = 0
             "###,
+            path = scenario.path_for("root").display(),
         )
         .unwrap();
 
@@ -998,11 +999,12 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ local = "../dep" }}
+            source = {{ local = "{path}" }}
             original-id = "0x2"
             published-at = "0x3"
             version = 0
             "###,
+            path = scenario.path_for("dep").display()
         )
         .unwrap();
 
@@ -1048,13 +1050,13 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ root = true }}
+            source = {{ local = "/foo/bar" }}
             version = 1
             published-at = "0x1"
             original-id = "0x2"
 
             [[published]]
-            source = {{ root = true }}
+            source = {{ local = "/foo/bar" }}
             version = 2
             published-at = "0x1"
             original-id = "0x2"
@@ -1074,7 +1076,7 @@ pkg_b = { local = "../pkg_b" }"#,
         .await
         .unwrap_err();
 
-        assert_snapshot!(err.to_string(), @"Multiple entries with `source = { root = true }` exist in the publication file");
+        assert_snapshot!(err.to_string(), @"Multiple entries with `source = { local = \"/foo/bar\" }` exist in the publication file");
     }
 
     /// Ephemerally loading a dep that is published but not in the ephemeral file produces the
@@ -1138,11 +1140,12 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ local = "../dep" }}
+            source = {{ local = "{path}" }}
             original-id = "0x2"
             published-at = "0x3"
             version = 0
             "###,
+            path = scenario.path_for("dep").display(),
         )
         .unwrap();
 
@@ -1397,6 +1400,10 @@ pkg_b = { local = "../pkg_b" }"#,
         let postpublish_pubfile =
             std::fs::read_to_string(scenario.path_for("root/Published.toml")).unwrap();
         let ephemeral_data = std::fs::read_to_string(ephemeral.path()).unwrap();
+        let ephemeral_data = ephemeral_data.replace(
+            scenario.path_for("root").to_string_lossy().as_ref(),
+            "<ROOT>",
+        );
 
         assert_eq!(prepublish_pubfile, postpublish_pubfile);
         assert_snapshot!(ephemeral_data, @r###"
@@ -1408,7 +1415,7 @@ pkg_b = { local = "../pkg_b" }"#,
         chain-id = "localnet"
 
         [[published]]
-        source = { root = true }
+        source = { local = "<ROOT>" }
         published-at = "0x0000000000000000000000000000000000000000000000000000000000000002"
         original-id = "0x0000000000000000000000000000000000000000000000000000000000000001"
         version = 0
