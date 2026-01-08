@@ -107,6 +107,37 @@ Use `updateMarginPoolConfig` to update the configuration settings for a margin p
 
 <ImportContent source="packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="updateMarginPoolConfig" org="MystenLabs" repo="ts-sdks" signatureOnly />
 
+### `withdrawMaintainerFees`
+
+Use `withdrawMaintainerFees` to withdraw accumulated maintainer fees from a margin pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `coinKey`: String that identifies the margin pool asset.
+- `marginPoolCap`: String representing the margin pool capability ID.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="withdrawMaintainerFees" org="MystenLabs" repo="ts-sdks" signatureOnly />
+
+### `withdrawProtocolFees`
+
+Use `withdrawProtocolFees` to withdraw accumulated protocol fees from a margin pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `coinKey`: String that identifies the margin pool asset.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="withdrawProtocolFees" org="MystenLabs" repo="ts-sdks" signatureOnly />
+
+### `adminWithdrawDefaultReferralFees`
+
+Use `adminWithdrawDefaultReferralFees` to withdraw default referral fees from a margin pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `coinKey`: String that identifies the margin pool asset.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginMaintainer.ts" mode="code" fun="adminWithdrawDefaultReferralFees" org="MystenLabs" repo="ts-sdks" signatureOnly />
+
 ## Examples
 
 The following examples demonstrate common maintainer operations.

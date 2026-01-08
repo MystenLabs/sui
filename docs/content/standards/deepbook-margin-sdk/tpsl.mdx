@@ -132,6 +132,18 @@ Query a specific conditional order by ID.
 
 <ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="conditionalOrder" signatureOnly />
 
+### `triggerBelowOrders`, `triggerAboveOrders`
+
+Query the lists of conditional orders sorted by trigger price.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="triggerBelowOrders,triggerAboveOrders" signatureOnly />
+
+### `numConditionalOrders`
+
+Query the total number of conditional orders for a margin manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="numConditionalOrders" signatureOnly />
+
 ### `lowestTriggerAbovePrice`, `highestTriggerBelowPrice`
 
 Query trigger prices for conditional orders.

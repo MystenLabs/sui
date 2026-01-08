@@ -137,6 +137,12 @@ Use `unsetMarginManagerReferral` to remove the referral association from a margi
 
 The following functions query margin manager state without modifying it.
 
+### `riskRatio`
+
+Query the risk ratio of the margin manager, which represents the ratio of assets to debt. Higher ratios indicate healthier positions.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginManager.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="riskRatio" signatureOnly />
+
 ### `owner`, `deepbookPool`, `marginPoolId`
 
 Query basic margin manager information.
