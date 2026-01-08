@@ -33,7 +33,8 @@ All margin endpoints support the following common query parameters:
 
 ## Margin manager endpoints
 
-### Get margin manager creation events
+<details>
+<summary>Get margin manager creation events</summary>
 
 ```http
 /margin_manager_created?margin_manager_id=<ID>
@@ -61,7 +62,10 @@ Returns events for when margin managers are created.
 ]
 ```
 
-### Get loan borrowed events
+</details>
+
+<details>
+<summary>Get loan borrowed events</summary>
 
 ```http
 /loan_borrowed?margin_manager_id=<ID>&margin_pool_id=<ID>
@@ -89,7 +93,10 @@ Returns events for when assets are borrowed from margin pools.
 ]
 ```
 
-### Get loan repaid events
+</details>
+
+<details>
+<summary>Get loan repaid events</summary>
 
 ```http
 /loan_repaid?margin_manager_id=<ID>&margin_pool_id=<ID>
@@ -117,7 +124,10 @@ Returns events for when borrowed assets are repaid.
 ]
 ```
 
-### Get liquidation events
+</details>
+
+<details>
+<summary>Get liquidation events</summary>
 
 ```http
 /liquidation?margin_manager_id=<ID>&margin_pool_id=<ID>
@@ -155,7 +165,10 @@ Returns events for when margin managers are liquidated.
 ]
 ```
 
-### Get margin managers info
+</details>
+
+<details>
+<summary>Get margin managers info</summary>
 
 ```http
 /margin_managers_info
@@ -180,7 +193,10 @@ Returns an aggregate view of all margin managers with their associated pool and 
 ]
 ```
 
-### Get margin manager states
+</details>
+
+<details>
+<summary>Get margin manager states</summary>
 
 ```http
 /margin_manager_states?max_risk_ratio=<FLOAT>&deepbook_pool_id=<ID>
@@ -223,9 +239,12 @@ Returns the current state of margin managers. This endpoint is useful for monito
 ]
 ```
 
+</details>
+
 ## Margin pool endpoints
 
-### Get asset supplied events
+<details>
+<summary>Get asset supplied events</summary>
 
 ```http
 /asset_supplied?margin_pool_id=<ID>&supplier=<ADDRESS>
@@ -254,7 +273,10 @@ Returns events for when assets are supplied to margin pools.
 ]
 ```
 
-### Get asset withdrawn events
+</details>
+
+<details>
+<summary>Get asset withdrawn events</summary>
 
 ```http
 /asset_withdrawn?margin_pool_id=<ID>&supplier=<ADDRESS>
@@ -283,7 +305,10 @@ Returns events for when assets are withdrawn from margin pools.
 ]
 ```
 
-### Get margin pool creation events
+</details>
+
+<details>
+<summary>Get margin pool creation events</summary>
 
 ```http
 /margin_pool_created?margin_pool_id=<ID>
@@ -324,7 +349,10 @@ Returns events for when margin pools are created.
 ]
 ```
 
-### Get DeepBook pool updated events
+</details>
+
+<details>
+<summary>Get DeepBook pool updated events</summary>
 
 ```http
 /deepbook_pool_updated?margin_pool_id=<ID>&deepbook_pool_id=<ID>
@@ -352,7 +380,10 @@ Returns events for when DeepBook pools are enabled or disabled for a margin pool
 ]
 ```
 
-### Get interest params updated events
+</details>
+
+<details>
+<summary>Get interest params updated events</summary>
 
 ```http
 /interest_params_updated?margin_pool_id=<ID>
@@ -384,7 +415,10 @@ Returns events for when interest rate parameters are updated.
 ]
 ```
 
-### Get margin pool config updated events
+</details>
+
+<details>
+<summary>Get margin pool config updated events</summary>
 
 ```http
 /margin_pool_config_updated?margin_pool_id=<ID>
@@ -416,7 +450,10 @@ Returns events for when margin pool configuration is updated.
 ]
 ```
 
-### Get supplier cap minted events
+</details>
+
+<details>
+<summary>Get supplier cap minted events</summary>
 
 ```http
 /supplier_cap_minted?supplier_cap_id=<ID>
@@ -441,7 +478,10 @@ Returns events for when supplier capabilities are minted.
 ]
 ```
 
-### Get supply referral minted events
+</details>
+
+<details>
+<summary>Get supply referral minted events</summary>
 
 ```http
 /supply_referral_minted?margin_pool_id=<ID>&owner=<ADDRESS>
@@ -468,7 +508,10 @@ Returns events for when supply referrals are minted.
 ]
 ```
 
-### Get protocol fees increased events
+</details>
+
+<details>
+<summary>Get protocol fees increased events</summary>
 
 ```http
 /protocol_fees_increased?margin_pool_id=<ID>
@@ -497,7 +540,10 @@ Returns events for when protocol fees are increased.
 ]
 ```
 
-### Get referral fees claimed events
+</details>
+
+<details>
+<summary>Get referral fees claimed events</summary>
 
 ```http
 /referral_fees_claimed?referral_id=<ID>&owner=<ADDRESS>
@@ -524,9 +570,12 @@ Returns events for when referral fees are claimed.
 ]
 ```
 
+</details>
+
 ## Admin and registry endpoints
 
-### Get maintainer cap updated events
+<details>
+<summary>Get maintainer cap updated events</summary>
 
 ```http
 /maintainer_cap_updated?maintainer_cap_id=<ID>
@@ -552,7 +601,10 @@ Returns events for when maintainer capabilities are updated.
 ]
 ```
 
-### Get maintainer fees withdrawn events
+</details>
+
+<details>
+<summary>Get maintainer fees withdrawn events</summary>
 
 ```http
 /maintainer_fees_withdrawn?margin_pool_id=<ID>
@@ -579,7 +631,10 @@ Returns events for when maintainer fees are withdrawn.
 ]
 ```
 
-### Get protocol fees withdrawn events
+</details>
+
+<details>
+<summary>Get protocol fees withdrawn events</summary>
 
 ```http
 /protocol_fees_withdrawn?margin_pool_id=<ID>
@@ -605,7 +660,10 @@ Returns events for when protocol fees are withdrawn.
 ]
 ```
 
-### Get pause cap updated events
+</details>
+
+<details>
+<summary>Get pause cap updated events</summary>
 
 ```http
 /pause_cap_updated?pause_cap_id=<ID>
@@ -631,7 +689,10 @@ Returns events for when pause capabilities are updated.
 ]
 ```
 
-### Get DeepBook pool registered events
+</details>
+
+<details>
+<summary>Get DeepBook pool registered events</summary>
 
 ```http
 /deepbook_pool_registered?pool_id=<ID>
@@ -669,7 +730,10 @@ Returns events for when DeepBook pools are registered in the margin registry.
 ]
 ```
 
-### Get DeepBook pool registry updated events
+</details>
+
+<details>
+<summary>Get DeepBook pool registry updated events</summary>
 
 ```http
 /deepbook_pool_updated_registry?pool_id=<ID>
@@ -695,7 +759,10 @@ Returns events for when DeepBook pool registry entries are updated.
 ]
 ```
 
-### Get DeepBook pool config updated events
+</details>
+
+<details>
+<summary>Get DeepBook pool config updated events</summary>
 
 ```http
 /deepbook_pool_config_updated?pool_id=<ID>
@@ -732,6 +799,8 @@ Returns events for when DeepBook pool configurations are updated.
     }
 ]
 ```
+
+</details>
 
 ## Related links
 

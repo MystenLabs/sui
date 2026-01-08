@@ -85,7 +85,8 @@ Use these conversions to interpret the volumes correctly across all pools and as
 
 You can perform the following tasks using the endpoints that the indexer API for DeepBookV3 provides.
 
-### Get all pool information
+<details>
+<summary>Get all pool information</summary>
 
 ```
 /get_pools
@@ -177,7 +178,10 @@ produces a response similar to
 ]
 ```
 
-### Get historical volume for pool in a specific time range
+</details>
+
+<details>
+<summary>Get historical volume for pool in a specific time range</summary>
 
 ```http
 /historical_volume/:pool_names?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
@@ -216,7 +220,10 @@ produces a response similar to
 }
 ```
 
-### Get historical volume for all pools
+</details>
+
+<details>
+<summary>Get historical volume for all pools</summary>
 
 ```http
 /all_historical_volume?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
@@ -259,7 +266,10 @@ produces a response similar to
 }
 ```
 
-### Get historical volume by balance manager
+</details>
+
+<details>
+<summary>Get historical volume by balance manager</summary>
 
 ```http
 /historical_volume_by_balance_manager_id/:pool_names/:balance_manager_id?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
@@ -301,7 +311,10 @@ produces a response similar to
 }
 ```
 
-### Get historical volume by balance manager within a specific time range and intervals
+</details>
+
+<details>
+<summary>Get historical volume by balance manager within a specific time range and intervals</summary>
 
 ```http
 /historical_volume_by_balance_manager_id_with_interval/:pool_names/:balance_manager_id?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&interval=<UNIX_TIMESTAMP_SECONDS>&volume_in_base=<BOOLEAN>
@@ -352,7 +365,10 @@ produces a response similar to
 }
 ```
 
-### Get summary 
+</details>
+
+<details>
+<summary>Get summary</summary>
 
 ```http
 /summary
@@ -433,7 +449,10 @@ produces a response similar to
 ]
 ```
 
-### Get ticker information
+</details>
+
+<details>
+<summary>Get ticker information</summary>
 
 ```http
 /ticker
@@ -483,7 +502,10 @@ produces a response similar to
 }
 ```
 
-### Get trades
+</details>
+
+<details>
+<summary>Get trades</summary>
 
 ```http
 /trades/:pool_name?limit=<INTEGER>&start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&maker_balance_manager_id=<ID>&taker_balance_manager_id=<ID>
@@ -554,7 +576,10 @@ produces a response similar to
 ]
 ```
 
-### Get order updates
+</details>
+
+<details>
+<summary>Get order updates</summary>
 
 ```http
 /order_updates/:pool_name?limit=<INTEGER>&start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&status=<"Placed" or "Canceled">&balance_manager_id=<ID>
@@ -609,7 +634,10 @@ produces a response similar to
 ]
 ```
 
-### Get order book information
+</details>
+
+<details>
+<summary>Get order book information</summary>
 
 ```http
 /orderbook/:pool_name?level={1|2}&depth={integer}
@@ -688,7 +716,10 @@ produces a response similar to
 }
 ```
 
-### Get asset information
+</details>
+
+<details>
+<summary>Get asset information</summary>
 
 ```http
 /assets
@@ -743,7 +774,10 @@ produces a response similar to
 }
 ```
 
-### Get orders by balance manager
+</details>
+
+<details>
+<summary>Get orders by balance manager</summary>
 
 ```http
 /orders/:pool_name/:balance_manager_id?limit=<INTEGER>&status=<STATUS>
@@ -770,7 +804,10 @@ Returns orders for a specific balance manager in a pool. The `status` parameter 
 ]
 ```
 
-### Get trade count
+</details>
+
+<details>
+<summary>Get trade count</summary>
 
 ```http
 /trade_count?start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>
@@ -784,7 +821,10 @@ Returns the total number of trades across all pools within the specified time ra
 integer
 ```
 
-### Get OHLCV candlestick data
+</details>
+
+<details>
+<summary>Get OHLCV candlestick data</summary>
 
 ```http
 /ohclv/:pool_name?interval=<INTERVAL>&start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&limit=<INTEGER>
@@ -823,7 +863,10 @@ produces a response similar to
 }
 ```
 
-### Get net deposits
+</details>
+
+<details>
+<summary>Get net deposits</summary>
 
 ```http
 /get_net_deposits/:asset_ids/:timestamp
@@ -841,7 +884,10 @@ Returns the net deposits (deposits minus withdrawals) for specified assets up to
 }
 ```
 
-### Get DEEP supply
+</details>
+
+<details>
+<summary>Get DEEP supply</summary>
 
 ```http
 /deep_supply
@@ -857,7 +903,10 @@ Returns the total supply of DEEP tokens.
 }
 ```
 
-### Get deposited assets
+</details>
+
+<details>
+<summary>Get deposited assets</summary>
 
 ```http
 /deposited_assets/:balance_manager_ids
@@ -876,7 +925,10 @@ Returns the list of assets that have been deposited into the specified balance m
 ]
 ```
 
-### Get indexer status
+</details>
+
+<details>
+<summary>Get indexer status</summary>
 
 ```http
 /status?max_checkpoint_lag=<INTEGER>&max_time_lag_seconds=<INTEGER>
@@ -908,6 +960,8 @@ Returns the health status of the indexer, including checkpoint lag information f
     ]
 }
 ```
+
+</details>
 
 ## Related links
 
