@@ -270,16 +270,21 @@ impl EffectsContents {
         Some(content.raw_effects().map(Base64).map_err(RpcError::from))
     }
 
-    /// The effects as a JSON blob, matching the gRPC proto format.
-    async fn effects_json(&self) -> Result<Option<Json>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    /// The effects as a JSON blob, matching the gRPC proto format (excluding BCS).
+    async fn effects_json(&self) -> Option<Result<Json, RpcError>> {
+        let content = self.contents.as_ref()?;
 
-        let proto_effects = content.proto_effects()?;
-        let json_value =
-            serde_json::to_value(&proto_effects).context("Failed to serialize effects to JSON")?;
-        Ok(Some(json_value.try_into()?))
+        Some(
+            async {
+                let mut proto_effects = content.proto_effects()?;
+                // Clear the bcs field as effectsJson is intended to provide a full structured output
+                proto_effects.bcs = None;
+                let json_value = serde_json::to_value(&proto_effects)
+                    .context("Failed to serialize effects to JSON")?;
+                json_value.try_into()
+            }
+            .await,
+        )
     }
 
     /// A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.

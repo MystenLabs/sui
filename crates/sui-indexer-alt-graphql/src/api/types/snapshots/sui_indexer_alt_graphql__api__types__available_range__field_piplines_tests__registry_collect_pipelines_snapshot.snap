@@ -1517,6 +1517,9 @@ Transaction.sender
 Transaction.transactionBcs
   => {}
 
+Transaction.transactionJson
+  => {}
+
 Transaction.signatures
   => {}
 
@@ -1551,6 +1554,9 @@ TransactionEffects.balanceChanges
   => {"tx_balance_changes", "tx_digests"}
 
 TransactionEffects.effectsBcs
+  => {}
+
+TransactionEffects.effectsJson
   => {}
 
 TransactionEffects.effectsDigest
