@@ -11,6 +11,7 @@ pub mod type_arg_fuzzer;
 use executor::Executor;
 use proptest::collection::vec;
 use proptest::test_runner::TestRunner;
+use rand::Rng;
 use std::fmt::Debug;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
