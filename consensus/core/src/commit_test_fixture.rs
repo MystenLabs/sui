@@ -42,20 +42,8 @@ pub(crate) struct CommitTestFixture {
 }
 
 impl CommitTestFixture {
-    /// Creates a new CommitTestFixture with more options.
-    pub(crate) fn with_options(
-        num_authorities: usize,
-        authority_index: u32,
-        gc_depth: Option<u32>,
-    ) -> Self {
-        let (mut context, _keys) = Context::new_for_test(num_authorities);
-        if let Some(gc_depth) = gc_depth {
-            context
-                .protocol_config
-                .set_consensus_gc_depth_for_testing(gc_depth);
-        }
-        let context =
-            Arc::new(context.with_authority_index(AuthorityIndex::new_for_test(authority_index)));
+    /// Creates a new CommitTestFixture from a context.
+    pub(crate) fn new(context: Arc<Context>) -> Self {
         let leader_schedule = Arc::new(LeaderSchedule::new(
             context.clone(),
             LeaderSwapTable::default(),
@@ -98,6 +86,33 @@ impl CommitTestFixture {
             transaction_certifier,
             commit_finalizer,
         }
+    }
+
+    /// Creates a new CommitTestFixture with more options.
+    pub(crate) fn with_options(
+        num_authorities: usize,
+        authority_index: u32,
+        gc_depth: Option<u32>,
+    ) -> Self {
+        Self::new(Self::context_with_options(
+            num_authorities,
+            authority_index,
+            gc_depth,
+        ))
+    }
+
+    pub(crate) fn context_with_options(
+        num_authorities: usize,
+        authority_index: u32,
+        gc_depth: Option<u32>,
+    ) -> Arc<Context> {
+        let (mut context, _keys) = Context::new_for_test(num_authorities);
+        if let Some(gc_depth) = gc_depth {
+            context
+                .protocol_config
+                .set_consensus_gc_depth_for_testing(gc_depth);
+        }
+        Arc::new(context.with_authority_index(AuthorityIndex::new_for_test(authority_index)))
     }
 
     // Adds the blocks to the transaction certifier and then tries to accept them via BlockManager.

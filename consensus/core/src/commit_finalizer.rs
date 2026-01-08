@@ -1277,15 +1277,9 @@ mod tests {
 
         // Create round 1 blocks with 10 transactions each.
         let mut dag_builder = DagBuilder::new(fixture.context.clone());
-        dag_builder
-            .layer(1)
-            .num_transactions(10)
-            .build()
-            .persist_layers(fixture.dag_state.clone());
+        dag_builder.layer(1).num_transactions(10).build();
         let round_1_blocks = dag_builder.all_blocks();
-        fixture
-            .transaction_certifier
-            .add_voted_blocks(round_1_blocks.iter().map(|b| (b.clone(), vec![])).collect());
+        fixture.add_blocks(round_1_blocks.clone());
 
         // Select B1(3) to be rejected due to GC.
         let block_rejected = round_1_blocks[3].clone();
