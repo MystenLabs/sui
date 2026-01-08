@@ -2431,6 +2431,8 @@ pub trait TransactionDataAPI {
 
     fn expiration(&self) -> &TransactionExpiration;
 
+    fn expiration_mut(&mut self) -> &mut TransactionExpiration;
+
     fn move_calls(&self) -> Vec<(usize, &ObjectID, &str, &str)>;
 
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>>;
@@ -2554,6 +2556,10 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn expiration(&self) -> &TransactionExpiration {
         &self.expiration
+    }
+
+    fn expiration_mut(&mut self) -> &mut TransactionExpiration {
+        &mut self.expiration
     }
 
     fn move_calls(&self) -> Vec<(usize, &ObjectID, &str, &str)> {
