@@ -28,6 +28,7 @@ use crate::api::scalars::base64::Base64;
 use crate::api::scalars::cursor::JsonCursor;
 use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::digest::Digest;
+use crate::api::scalars::json::Json;
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::balance_change::BalanceChange;
 use crate::api::types::checkpoint::Checkpoint;
@@ -270,6 +271,23 @@ impl EffectsContents {
     async fn effects_bcs(&self) -> Option<Result<Base64, RpcError>> {
         let content = self.contents.as_ref()?;
         Some(content.raw_effects().map(Base64).map_err(RpcError::from))
+    }
+
+    /// The effects as a JSON blob, matching the gRPC proto format (excluding BCS).
+    async fn effects_json(&self) -> Option<Result<Json, RpcError>> {
+        let content = self.contents.as_ref()?;
+
+        Some(
+            async {
+                let mut proto_effects = content.proto_effects()?;
+                // Clear the bcs field as effectsJson is intended to provide a full structured output
+                proto_effects.bcs = None;
+                let json_value = serde_json::to_value(&proto_effects)
+                    .context("Failed to serialize effects to JSON")?;
+                json_value.try_into()
+            }
+            .await,
+        )
     }
 
     /// A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
