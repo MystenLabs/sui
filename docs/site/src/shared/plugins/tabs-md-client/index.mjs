@@ -2,9 +2,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 */
-// 
+//
 // This code exports the tabs-md.client.js code
-// as a plugin that Docusaurus can use 
+// as a plugin that Docusaurus can use
 
 export default function tabsMdClient() {
   return {
