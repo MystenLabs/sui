@@ -68,9 +68,10 @@ const standards = [
 		},
 		items: [
 			'standards/deepbook-margin/design',
+			'standards/deepbook-margin/orders',
+			'standards/deepbook-margin/tpsl',
 			'standards/deepbook-margin/margin-manager',
 			'standards/deepbook-margin/margin-pool',
-			'standards/deepbook-margin/orders',
 			{
 				type: 'category',
 				label: 'SDK',
@@ -80,6 +81,7 @@ const standards = [
 				},
 				items: [
 					'standards/deepbook-margin-sdk/orders',
+					'standards/deepbook-margin-sdk/tpsl',
 					'standards/deepbook-margin-sdk/margin-manager',
 					'standards/deepbook-margin-sdk/margin-pool',
 					'standards/deepbook-margin-sdk/maintainer',
