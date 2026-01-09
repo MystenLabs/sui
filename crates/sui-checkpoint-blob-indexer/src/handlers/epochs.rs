@@ -5,10 +5,13 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use bytes::Bytes;
+use object_store::Error as ObjectStoreError;
+use object_store::PutMode;
+use object_store::PutPayload;
 use object_store::path::Path as ObjectPath;
-use object_store::{Error as ObjectStoreError, PutMode, PutPayload};
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::concurrent::BatchStatus;
 use sui_indexer_alt_framework::pipeline::concurrent::Handler;
-use sui_indexer_alt_framework::pipeline::{Processor, concurrent::BatchStatus};
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_object_store::ObjectStore;
 use sui_types::full_checkpoint_content::Checkpoint;

@@ -16,7 +16,7 @@ task 2, line 31:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 33-68:
+task 3, lines 33-69:
 //# run-graphql
 Response: {
   "data": {
@@ -24,6 +24,7 @@ Response: {
       "module": {
         "a": {
           "name": "A",
+          "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::A",
           "abilities": [
             "COPY",
             "DROP",
@@ -37,6 +38,7 @@ Response: {
         },
         "e": {
           "name": "E",
+          "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E",
           "abilities": [
             "STORE"
           ],
@@ -48,6 +50,7 @@ Response: {
         },
         "s": {
           "name": "S",
+          "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S",
           "abilities": [
             "COPY",
             "DROP"
@@ -60,6 +63,7 @@ Response: {
         },
         "t": {
           "name": "T",
+          "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T",
           "abilities": [],
           "typeParameters": [
             {
@@ -76,6 +80,7 @@ Response: {
         },
         "v": {
           "name": "V",
+          "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::V",
           "abilities": [],
           "typeParameters": [
             {
@@ -103,6 +108,7 @@ Response: {
           "nodes": [
             {
               "name": "A",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::A",
               "abilities": [
                 "COPY",
                 "DROP",
@@ -116,6 +122,7 @@ Response: {
             },
             {
               "name": "E",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E",
               "abilities": [
                 "STORE"
               ],
@@ -127,6 +134,7 @@ Response: {
             },
             {
               "name": "S",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S",
               "abilities": [
                 "COPY",
                 "DROP"
@@ -139,6 +147,7 @@ Response: {
             },
             {
               "name": "T",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T",
               "abilities": [],
               "typeParameters": [
                 {
@@ -155,6 +164,7 @@ Response: {
             },
             {
               "name": "V",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::V",
               "abilities": [],
               "typeParameters": [
                 {
@@ -176,7 +186,7 @@ Response: {
   }
 }
 
-task 4, lines 70-99:
+task 4, lines 71-101:
 //# run-graphql --cursors "A" "V"
 Response: {
   "data": {
@@ -189,19 +199,24 @@ Response: {
           },
           "nodes": [
             {
-              "name": "A"
+              "name": "A",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::A"
             },
             {
-              "name": "E"
+              "name": "E",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E"
             },
             {
-              "name": "S"
+              "name": "S",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
             },
             {
-              "name": "T"
+              "name": "T",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T"
             },
             {
-              "name": "V"
+              "name": "V",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::V"
             }
           ]
         },
@@ -212,13 +227,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "A"
+              "name": "A",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::A"
             },
             {
-              "name": "E"
+              "name": "E",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E"
             },
             {
-              "name": "S"
+              "name": "S",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
             }
           ]
         },
@@ -229,13 +247,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "S"
+              "name": "S",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
             },
             {
-              "name": "T"
+              "name": "T",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T"
             },
             {
-              "name": "V"
+              "name": "V",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::V"
             }
           ]
         },
@@ -246,13 +267,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "A"
+              "name": "A",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::A"
             },
             {
-              "name": "E"
+              "name": "E",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E"
             },
             {
-              "name": "S"
+              "name": "S",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
             }
           ]
         },
@@ -263,13 +287,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "S"
+              "name": "S",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
             },
             {
-              "name": "T"
+              "name": "T",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T"
             },
             {
-              "name": "V"
+              "name": "V",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::V"
             }
           ]
         },
@@ -280,13 +307,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "E"
+              "name": "E",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E"
             },
             {
-              "name": "S"
+              "name": "S",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
             },
             {
-              "name": "T"
+              "name": "T",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T"
             }
           ]
         },
@@ -297,13 +327,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "E"
+              "name": "E",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E"
             },
             {
-              "name": "S"
+              "name": "S",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
             },
             {
-              "name": "T"
+              "name": "T",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T"
             }
           ]
         },
@@ -314,13 +347,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "E"
+              "name": "E",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E"
             },
             {
-              "name": "S"
+              "name": "S",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
             },
             {
-              "name": "T"
+              "name": "T",
+              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T"
             }
           ]
         }

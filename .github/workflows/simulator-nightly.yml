@@ -109,7 +109,22 @@ jobs:
       - name: Run simtest
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} ./scripts/simtest/simtest-run.sh"
-  
+
+      - name: Collect failing tests
+        id: failures
+        if: failure()
+        run: |
+          LOG_DIR=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -td ~/simtest_logs/*/ | head -1")
+          FAILED_TESTS=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "sed 's/\x1b\[[0-9;]*m//g' ${LOG_DIR}* 2>/dev/null | grep -E '^\s*(FAIL|TIMEOUT)\s+\[' | sed -E 's/^\s*(FAIL|TIMEOUT)\s+\[[^]]+\]\s+//' | sort -u | head -20")
+          echo "failed_tests<<EOF" >> $GITHUB_OUTPUT
+          echo "$FAILED_TESTS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "log_dir=$LOG_DIR" >> $GITHUB_OUTPUT
+
+    outputs:
+      failed_tests: ${{ steps.failures.outputs.failed_tests }}
+      log_dir: ${{ steps.failures.outputs.log_dir }}
+
   notify:
     name: Notify
     needs: [simtest]
@@ -180,4 +195,10 @@ jobs:
           :sui::error-cross: *${{ github.workflow }}* ${{ needs.simtest.outputs.protocol_message }}workflow status: `${{ env.WORKFLOW_CONCLUSION }}`
           Sui commit: <https://github.com/MystenLabs/sui/commit/${{ env.SUI_SHA }}|${{ env.SUI_SHA }}>
           Run: <${{ env.GH_JOB_LINK }}|${{ github.run_id }}>
-          <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug failures: `tsh ssh ubuntu@simtest-01` and look in the `/home/ubuntu/simtest_logs/{date}` folder for test results
+
+          *Failed tests:*
+          ```
+          ${{ needs.simtest.outputs.failed_tests }}
+          ```
+
+          <@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please debug: `tsh ssh ubuntu@simtest-01` and look in `${{ needs.simtest.outputs.log_dir }}`

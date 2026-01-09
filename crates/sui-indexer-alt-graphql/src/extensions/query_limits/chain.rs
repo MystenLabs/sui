@@ -3,7 +3,8 @@
 
 use std::rc::Rc;
 
-use async_graphql::{Name, PathSegment};
+use async_graphql::Name;
+use async_graphql::PathSegment;
 
 /// Chains represent a tree of [PathSegment]s, where each link in the chain knows its parent. They
 /// are used to recover the path of (nested) fields at which an error occurred.

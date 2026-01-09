@@ -3,6 +3,8 @@
         "module": "Node16",
         "target": "ES2022",
         "outDir": "out",
+        "declaration": true,
+        "declarationMap": true,
         "lib": [
             "ES2022"
         ],
@@ -13,6 +15,7 @@
         "strict": true /* enable all strict type-checking options */
     },
     "exclude": [
-        "node_modules"
+        "node_modules",
+        "out"
     ]
 }

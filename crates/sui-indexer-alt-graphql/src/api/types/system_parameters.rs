@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{api::scalars::big_int::BigInt, api::scalars::uint53::UInt53};
 use async_graphql::SimpleObject;
 use sui_types::sui_system_state::sui_system_state_inner_v1::SystemParametersV1;
 use sui_types::sui_system_state::sui_system_state_inner_v2::SystemParametersV2;
+
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::uint53::UInt53;
 
 /// Details of the system that are decided during genesis.
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]

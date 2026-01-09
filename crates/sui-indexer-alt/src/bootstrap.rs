@@ -3,23 +3,26 @@
 
 use std::time::Duration;
 
-use crate::Indexer;
-use anyhow::{Context, Result, bail};
-use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
+use diesel::OptionalExtension;
+use diesel::QueryDsl;
+use diesel::SelectableHelper;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::postgres::Db;
-use sui_indexer_alt_framework::types::{
-    full_checkpoint_content::Checkpoint,
-    sui_system_state::{SuiSystemStateTrait, get_sui_system_state},
-    transaction::TransactionKind,
-};
-use sui_indexer_alt_schema::{
-    checkpoints::StoredGenesis,
-    epochs::StoredEpochStart,
-    schema::{kv_epoch_starts, kv_genesis},
-};
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_framework::types::sui_system_state::SuiSystemStateTrait;
+use sui_indexer_alt_framework::types::sui_system_state::get_sui_system_state;
+use sui_indexer_alt_framework::types::transaction::TransactionKind;
+use sui_indexer_alt_schema::checkpoints::StoredGenesis;
+use sui_indexer_alt_schema::epochs::StoredEpochStart;
+use sui_indexer_alt_schema::schema::kv_epoch_starts;
+use sui_indexer_alt_schema::schema::kv_genesis;
 use sui_types::transaction::TransactionDataAPI;
 use tracing::info;
+
+use crate::Indexer;
 
 pub struct BootstrapGenesis {
     pub stored_genesis: StoredGenesis,

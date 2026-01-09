@@ -2,25 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::Object;
-use fastcrypto::encoding::{Base58, Encoding};
-use sui_types::{
-    digests::{AdditionalConsensusStateDigest, ConsensusCommitDigest},
-    messages_consensus::{
-        ConsensusCommitPrologue as NativeConsensusCommitPrologueV1,
-        ConsensusCommitPrologueV2 as NativeConsensusCommitPrologueV2,
-        ConsensusCommitPrologueV3 as NativeConsensusCommitPrologueV3,
-        ConsensusCommitPrologueV4 as NativeConsensusCommitPrologueV4,
-    },
-};
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
+use sui_types::digests::AdditionalConsensusStateDigest;
+use sui_types::digests::ConsensusCommitDigest;
+use sui_types::messages_consensus::ConsensusCommitPrologue as NativeConsensusCommitPrologueV1;
+use sui_types::messages_consensus::ConsensusCommitPrologueV2 as NativeConsensusCommitPrologueV2;
+use sui_types::messages_consensus::ConsensusCommitPrologueV3 as NativeConsensusCommitPrologueV3;
+use sui_types::messages_consensus::ConsensusCommitPrologueV4 as NativeConsensusCommitPrologueV4;
 
-use crate::{
-    api::{
-        scalars::{date_time::DateTime, uint53::UInt53},
-        types::epoch::Epoch,
-    },
-    error::RpcError,
-    scope::Scope,
-};
+use crate::api::scalars::date_time::DateTime;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::epoch::Epoch;
+use crate::error::RpcError;
+use crate::scope::Scope;
 
 #[derive(Clone)]
 pub(crate) struct ConsensusCommitPrologueTransaction {
@@ -53,8 +48,8 @@ impl ConsensusCommitPrologueTransaction {
     /// Unix timestamp from consensus.
     ///
     /// Present in V1, V2, V3, V4.
-    async fn commit_timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        Ok(Some(DateTime::from_ms(self.commit_timestamp_ms as i64)?))
+    async fn commit_timestamp(&self) -> Option<Result<DateTime, RpcError>> {
+        Some(DateTime::from_ms(self.commit_timestamp_ms as i64))
     }
 
     /// Digest of consensus output, encoded as a Base58 string.

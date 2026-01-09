@@ -1,0 +1,57 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+task 1, lines 8-27:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4833600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 29-30:
+//# programmable --inputs 0 0
+//> test::m::mut_0(Input(0), Input(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 32-33:
+//# programmable --inputs 0 0
+//> test::m::mut_1(Input(0), Input(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 35-36:
+//# programmable --inputs 0 0
+//> test::m::mut_2(Input(0), Input(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 38-39:
+//# programmable --inputs 0 0
+//> test::m::imm_0(Input(0), Input(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, lines 41-42:
+//# programmable --inputs 0 0
+//> test::m::imm_1(Input(0), Input(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 44-45:
+//# programmable --inputs 0 0
+//> test::m::imm_2(Input(0), Input(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, lines 47-53:
+//# programmable --inputs 0 0
+//> test::m::mut_0(Input(0), Input(1));
+//> test::m::mut_1(Input(0), Input(1));
+//> test::m::mut_2(Input(0), Input(1));
+//> test::m::imm_0(Input(0), Input(1));
+//> test::m::imm_1(Input(0), Input(1));
+//> test::m::imm_2(Input(0), Input(1));
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880

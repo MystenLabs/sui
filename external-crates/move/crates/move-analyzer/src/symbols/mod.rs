@@ -56,7 +56,7 @@ use crate::{
         DefMap, find_datatype, parsing_analysis::parsing_mod_def_to_map_key, run_parsing_analysis,
         run_typing_analysis,
     },
-    compiler_info::CompilerAutocompleteInfo,
+    compiler_info::{CompilerAnalysisInfo, CompilerAutocompleteInfo},
     symbols::{
         compilation::{
             CachedPackages, CachedPkgInfo, CompiledPkgInfo, CompiledProgram, ParsedDefinitions,
@@ -319,6 +319,7 @@ pub fn compute_symbols_pre_process(
         &mut computation_data.def_info,
         &compiled_pkg_info.edition,
         cursor_context.as_mut(),
+        &compiled_pkg_info.compiler_analysis_info,
     );
 
     if let Some(cached_deps) = compiled_pkg_info.cached_deps.clone()
@@ -368,12 +369,12 @@ pub fn compute_symbols_typed_program(
     CompiledProgram,
 ) {
     // run typing analysis for the main user program
-    let compiler_analysis_info = compiled_pkg_info.compiler_analysis_info.as_ref().unwrap();
+    let compiler_analysis_info = compiled_pkg_info.compiler_analysis_info;
     let mapped_files = &compiled_pkg_info.mapped_files;
     let mut computation_data = run_typing_analysis(
         computation_data,
         mapped_files,
-        compiler_analysis_info,
+        &compiler_analysis_info,
         &compiled_pkg_info.program.typed_modules,
     );
     let mut file_use_defs = BTreeMap::new();
@@ -638,6 +639,7 @@ fn pre_process_typed_modules(
     def_info: &mut DefMap,
     edition: &Option<Edition>,
     mut cursor_context: Option<&mut CursorContext>,
+    compiler_analysis_info: &CompilerAnalysisInfo,
 ) {
     for (pos, module_ident, module_def) in typed_modules {
         // If the cursor is in this module, mark that down.
@@ -658,6 +660,7 @@ fn pre_process_typed_modules(
             references,
             def_info,
             edition,
+            compiler_analysis_info,
         );
         mod_outer_defs.insert(mod_ident_str.clone(), defs);
 
@@ -778,6 +781,7 @@ fn get_mod_outer_defs(
     references: &mut References,
     def_info: &mut DefMap,
     edition: &Option<Edition>,
+    compiler_analysis_info: &CompilerAnalysisInfo,
 ) -> (ModuleDefs, UseDefMap) {
     let mut structs = BTreeMap::new();
     let mut enums = BTreeMap::new();
@@ -915,7 +919,7 @@ fn get_mod_outer_defs(
                 mod_ident.value,
                 *name,
                 c.signature.clone(),
-                const_val_to_ide_string(&c.value),
+                const_val_to_ide_string(&c.value, compiler_analysis_info),
                 doc_string,
             ),
         );

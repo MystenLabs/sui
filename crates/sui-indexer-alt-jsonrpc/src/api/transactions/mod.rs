@@ -2,20 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future;
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use sui_json_rpc_types::{Page, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
+use jsonrpsee::core::RpcResult;
+use jsonrpsee::proc_macros::rpc;
+use sui_json_rpc_types::Page;
+use sui_json_rpc_types::SuiTransactionBlockResponse;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::digests::TransactionDigest;
 
-use self::{error::Error, filter::SuiTransactionBlockResponseQuery};
-
-use crate::{
-    context::Context,
-    error::{InternalContext, RpcError, rpc_bail},
-};
-
-use super::rpc_module::RpcModule;
+use crate::api::rpc_module::RpcModule;
+use crate::api::transactions::error::Error;
+use crate::api::transactions::filter::SuiTransactionBlockResponseQuery;
+use crate::context::Context;
+use crate::error::InternalContext;
+use crate::error::RpcError;
+use crate::error::rpc_bail;
 
 mod error;
 mod filter;

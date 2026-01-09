@@ -2,11 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
-use syn::{
-    Attribute, Data, DataStruct, DeriveInput, Fields, FieldsNamed, Meta, MetaList, MetaNameValue,
-    NestedMeta, parse_macro_input,
-};
+
+use quote::format_ident;
+use quote::quote;
+use syn::Attribute;
+use syn::Data;
+use syn::DataStruct;
+use syn::DeriveInput;
+use syn::Fields;
+use syn::FieldsNamed;
+use syn::Meta;
+use syn::MetaList;
+use syn::MetaNameValue;
+use syn::NestedMeta;
+use syn::parse_macro_input;
 
 /// Attribute macro to be applied to config-based structs. It ensures that the struct derives serde
 /// traits, and `Debug`, that all fields are renamed with "kebab case", and adds a `#[serde(default

@@ -80,7 +80,9 @@ task 11, lines 66-71:
 //# run-graphql
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "objects": null
+    }
   },
   "errors": [
     {
@@ -107,7 +109,9 @@ task 12, lines 73-80:
 Response: {
   "data": {
     "object": {
-      "objectAt": null
+      "objectAt": {
+        "objects": null
+      }
     }
   },
   "errors": [
@@ -135,7 +139,9 @@ task 13, lines 82-87:
 //# run-graphql
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "balances": null
+    }
   },
   "errors": [
     {
@@ -161,7 +167,9 @@ task 14, lines 89-94:
 //# run-graphql
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "balance": null
+    }
   },
   "errors": [
     {
@@ -187,7 +195,9 @@ task 15, lines 96-101:
 //# run-graphql
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "multiGetBalances": null
+    }
   },
   "errors": [
     {
@@ -213,7 +223,9 @@ task 16, lines 103-108:
 //# run-graphql
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "objects": null
+    }
   },
   "errors": [
     {
@@ -239,7 +251,9 @@ task 17, lines 110-115:
 //# run-graphql
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "balances": null
+    }
   },
   "errors": [
     {
@@ -265,7 +279,9 @@ task 18, lines 117-122:
 //# run-graphql
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "balance": null
+    }
   },
   "errors": [
     {
@@ -291,7 +307,9 @@ task 19, lines 124-129:
 //# run-graphql
 Response: {
   "data": {
-    "object": null
+    "object": {
+      "multiGetBalances": null
+    }
   },
   "errors": [
     {
@@ -319,7 +337,9 @@ Response: {
   "data": {
     "transactionEffects": {
       "gasEffects": {
-        "gasObject": null
+        "gasObject": {
+          "objects": null
+        }
       }
     }
   },
@@ -351,7 +371,9 @@ Response: {
   "data": {
     "transactionEffects": {
       "gasEffects": {
-        "gasObject": null
+        "gasObject": {
+          "balances": null
+        }
       }
     }
   },
@@ -383,7 +405,9 @@ Response: {
   "data": {
     "transactionEffects": {
       "gasEffects": {
-        "gasObject": null
+        "gasObject": {
+          "balance": null
+        }
       }
     }
   },
@@ -415,7 +439,9 @@ Response: {
   "data": {
     "transactionEffects": {
       "gasEffects": {
-        "gasObject": null
+        "gasObject": {
+          "multiGetBalances": null
+        }
       }
     }
   },
@@ -446,7 +472,31 @@ task 24, lines 175-184:
 Response: {
   "data": {
     "object": {
-      "objectVersionsBefore": null
+      "objectVersionsBefore": {
+        "nodes": [
+          {
+            "objects": null
+          },
+          {
+            "objects": null
+          },
+          {
+            "objects": null
+          },
+          {
+            "objects": null
+          },
+          {
+            "objects": null
+          },
+          {
+            "objects": null
+          },
+          {
+            "objects": null
+          }
+        ]
+      }
     }
   },
   "errors": [
@@ -462,7 +512,122 @@ Response: {
         "object",
         "objectVersionsBefore",
         "nodes",
-        0
+        0,
+        "objects"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        1,
+        "objects"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        2,
+        "objects"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        3,
+        "objects"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        4,
+        "objects"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        5,
+        "objects"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        6,
+        "objects"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"
@@ -476,7 +641,31 @@ task 25, lines 186-195:
 Response: {
   "data": {
     "object": {
-      "objectVersionsBefore": null
+      "objectVersionsBefore": {
+        "nodes": [
+          {
+            "balances": null
+          },
+          {
+            "balances": null
+          },
+          {
+            "balances": null
+          },
+          {
+            "balances": null
+          },
+          {
+            "balances": null
+          },
+          {
+            "balances": null
+          },
+          {
+            "balances": null
+          }
+        ]
+      }
     }
   },
   "errors": [
@@ -492,7 +681,122 @@ Response: {
         "object",
         "objectVersionsBefore",
         "nodes",
-        0
+        0,
+        "balances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        1,
+        "balances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        2,
+        "balances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        3,
+        "balances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        4,
+        "balances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        5,
+        "balances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        6,
+        "balances"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"
@@ -506,7 +810,31 @@ task 26, lines 197-206:
 Response: {
   "data": {
     "object": {
-      "objectVersionsBefore": null
+      "objectVersionsBefore": {
+        "nodes": [
+          {
+            "balance": null
+          },
+          {
+            "balance": null
+          },
+          {
+            "balance": null
+          },
+          {
+            "balance": null
+          },
+          {
+            "balance": null
+          },
+          {
+            "balance": null
+          },
+          {
+            "balance": null
+          }
+        ]
+      }
     }
   },
   "errors": [
@@ -522,7 +850,122 @@ Response: {
         "object",
         "objectVersionsBefore",
         "nodes",
-        0
+        0,
+        "balance"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        1,
+        "balance"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        2,
+        "balance"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        3,
+        "balance"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        4,
+        "balance"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        5,
+        "balance"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        6,
+        "balance"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"
@@ -536,7 +979,31 @@ task 27, lines 208-217:
 Response: {
   "data": {
     "object": {
-      "objectVersionsBefore": null
+      "objectVersionsBefore": {
+        "nodes": [
+          {
+            "multiGetBalances": null
+          },
+          {
+            "multiGetBalances": null
+          },
+          {
+            "multiGetBalances": null
+          },
+          {
+            "multiGetBalances": null
+          },
+          {
+            "multiGetBalances": null
+          },
+          {
+            "multiGetBalances": null
+          },
+          {
+            "multiGetBalances": null
+          }
+        ]
+      }
     }
   },
   "errors": [
@@ -552,7 +1019,122 @@ Response: {
         "object",
         "objectVersionsBefore",
         "nodes",
-        0
+        0,
+        "multiGetBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        1,
+        "multiGetBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        2,
+        "multiGetBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        3,
+        "multiGetBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        4,
+        "multiGetBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        5,
+        "multiGetBalances"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    },
+    {
+      "message": "Cannot query balances for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to query its balances.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 9
+        }
+      ],
+      "path": [
+        "object",
+        "objectVersionsBefore",
+        "nodes",
+        6,
+        "multiGetBalances"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"
@@ -565,7 +1147,9 @@ task 28, lines 219-224:
 //# run-graphql
 Response: {
   "data": {
-    "package": null
+    "package": {
+      "objects": null
+    }
   },
   "errors": [
     {
@@ -592,7 +1176,9 @@ task 29, lines 226-233:
 Response: {
   "data": {
     "package": {
-      "packageAt": null
+      "packageAt": {
+        "objects": null
+      }
     }
   },
   "errors": [
@@ -620,7 +1206,9 @@ task 30, lines 235-240:
 //# run-graphql
 Response: {
   "data": {
-    "package": null
+    "package": {
+      "balances": null
+    }
   },
   "errors": [
     {
@@ -646,7 +1234,9 @@ task 31, lines 242-247:
 //# run-graphql
 Response: {
   "data": {
-    "package": null
+    "package": {
+      "balance": null
+    }
   },
   "errors": [
     {
@@ -672,7 +1262,9 @@ task 32, lines 249-254:
 //# run-graphql
 Response: {
   "data": {
-    "package": null
+    "package": {
+      "multiGetBalances": null
+    }
   },
   "errors": [
     {
@@ -705,7 +1297,9 @@ Response: {
             "nodes": [
               {
                 "outputState": {
-                  "asMovePackage": null
+                  "asMovePackage": {
+                    "objects": null
+                  }
                 }
               },
               {
@@ -762,7 +1356,9 @@ Response: {
             "nodes": [
               {
                 "outputState": {
-                  "asMovePackage": null
+                  "asMovePackage": {
+                    "balances": null
+                  }
                 }
               },
               {
@@ -819,7 +1415,9 @@ Response: {
             "nodes": [
               {
                 "outputState": {
-                  "asMovePackage": null
+                  "asMovePackage": {
+                    "balance": null
+                  }
                 }
               },
               {
@@ -876,7 +1474,9 @@ Response: {
             "nodes": [
               {
                 "outputState": {
-                  "asMovePackage": null
+                  "asMovePackage": {
+                    "multiGetBalances": null
+                  }
                 }
               },
               {
@@ -927,7 +1527,13 @@ task 37, lines 332-341:
 Response: {
   "data": {
     "package": {
-      "packageVersionsBefore": null
+      "packageVersionsBefore": {
+        "nodes": [
+          {
+            "objects": null
+          }
+        ]
+      }
     }
   },
   "errors": [
@@ -943,7 +1549,8 @@ Response: {
         "package",
         "packageVersionsBefore",
         "nodes",
-        0
+        0,
+        "objects"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"
@@ -957,7 +1564,13 @@ task 38, lines 343-352:
 Response: {
   "data": {
     "package": {
-      "packageVersionsBefore": null
+      "packageVersionsBefore": {
+        "nodes": [
+          {
+            "balances": null
+          }
+        ]
+      }
     }
   },
   "errors": [
@@ -973,7 +1586,8 @@ Response: {
         "package",
         "packageVersionsBefore",
         "nodes",
-        0
+        0,
+        "balances"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"
@@ -987,7 +1601,13 @@ task 39, lines 354-363:
 Response: {
   "data": {
     "package": {
-      "packageVersionsBefore": null
+      "packageVersionsBefore": {
+        "nodes": [
+          {
+            "balance": null
+          }
+        ]
+      }
     }
   },
   "errors": [
@@ -1003,7 +1623,8 @@ Response: {
         "package",
         "packageVersionsBefore",
         "nodes",
-        0
+        0,
+        "balance"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"
@@ -1017,7 +1638,13 @@ task 40, lines 365-374:
 Response: {
   "data": {
     "package": {
-      "packageVersionsBefore": null
+      "packageVersionsBefore": {
+        "nodes": [
+          {
+            "multiGetBalances": null
+          }
+        ]
+      }
     }
   },
   "errors": [
@@ -1033,7 +1660,8 @@ Response: {
         "package",
         "packageVersionsBefore",
         "nodes",
-        0
+        0,
+        "multiGetBalances"
       ],
       "extensions": {
         "code": "BAD_USER_INPUT"

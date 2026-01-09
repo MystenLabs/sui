@@ -1,23 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context as _;
-use async_graphql::{Context, Enum, Object, SimpleObject, Union, dataloader::DataLoader};
 use std::sync::Arc;
-use sui_indexer_alt_reader::{epochs::EpochStartKey, pg_reader::PgReader};
-use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
-    digests::ObjectDigest,
-    effects::UnchangedConsensusKind as NativeUnchangedConsensusKind,
-};
 
-use crate::{
-    api::scalars::{sui_address::SuiAddress, uint53::UInt53},
-    error::RpcError,
-    scope::Scope,
-};
+use anyhow::Context as _;
+use async_graphql::Context;
+use async_graphql::Enum;
+use async_graphql::Object;
+use async_graphql::SimpleObject;
+use async_graphql::Union;
+use async_graphql::dataloader::DataLoader;
+use sui_indexer_alt_reader::epochs::EpochStartKey;
+use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
+use sui_types::digests::ObjectDigest;
+use sui_types::effects::UnchangedConsensusKind as NativeUnchangedConsensusKind;
 
-use super::object::Object;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::object::Object;
+use crate::error::RpcError;
+use crate::scope::Scope;
 
 /// Reason why a transaction that attempted to access a consensus-managed object was cancelled.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -90,18 +94,22 @@ pub(crate) struct PerEpochConfig {
 #[Object]
 impl PerEpochConfig {
     /// The per-epoch configuration object as of when the transaction was executed.
-    async fn object(&self, ctx: &Context<'_>) -> Result<Option<Object>, RpcError> {
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
-        let Some(epoch_start) = pg_loader
-            .load_one(EpochStartKey(self.epoch))
-            .await
-            .context("Failed to fetch epoch start information")?
-        else {
-            return Ok(None);
-        };
+    async fn object(&self, ctx: &Context<'_>) -> Option<Result<Object, RpcError>> {
+        async {
+            let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+            let Some(epoch_start) = pg_loader
+                .load_one(EpochStartKey(self.epoch))
+                .await
+                .context("Failed to fetch epoch start information")?
+            else {
+                return Ok(None);
+            };
 
-        let cp: UInt53 = (epoch_start.cp_lo as u64).into();
-        Object::checkpoint_bounded(ctx, self.scope.clone(), self.object_id.into(), cp).await
+            let cp: UInt53 = (epoch_start.cp_lo as u64).into();
+            Object::checkpoint_bounded(ctx, self.scope.clone(), self.object_id.into(), cp).await
+        }
+        .await
+        .transpose()
     }
 }
 

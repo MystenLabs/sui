@@ -68,29 +68,7 @@ const concepts = [
 			id: 'concepts/sui-move-concepts',
 		},
 		items: [
-			{
-				type: 'category',
-				label: 'Packages',
-				link: {
-					type: 'doc',
-					id: 'concepts/sui-move-concepts/packages',
-				},
-				items: [
-					'concepts/sui-move-concepts/packages/upgrade',
-					'concepts/sui-move-concepts/packages/custom-policies',
-					'concepts/sui-move-concepts/packages/automated-address-management',
-				],
-			},
-			{
-				type: 'category',
-				label: 'Dynamic Fields',
-				link: {
-					type: 'doc',
-					id: 'concepts/dynamic-fields',
-				},
-				items: ['concepts/dynamic-fields/tables-bags'],
-			},
-			'concepts/sui-move-concepts/derived-objects',
+			'concepts/sui-move-concepts/packages',
 			'concepts/sui-move-concepts/conventions',
 		],
 	},
@@ -129,18 +107,7 @@ const concepts = [
 		items: [
 			'concepts/cryptography/zklogin',
 			'concepts/cryptography/passkeys',
-			{
-				type: 'category',
-				label: 'Nautilus',
-				link: {
-					type: 'doc',
-					id: 'concepts/cryptography/nautilus',
-				},
-				items: [
-					'concepts/cryptography/nautilus/nautilus-design',
-					'concepts/cryptography/nautilus/using-nautilus',
-				],
-			},
+			'concepts/cryptography/nautilus/nautilus-design',
 			'concepts/cryptography/system/checkpoint-verification',
 			/*{
 				type: 'category',
@@ -152,7 +119,6 @@ const concepts = [
 				items: [
 					'concepts/cryptography/system/validator-signatures',
 					'concepts/cryptography/system/intents-for-validation',
-					'concepts/cryptography/system/checkpoint-verification',
 				],
 			},*/
 		],

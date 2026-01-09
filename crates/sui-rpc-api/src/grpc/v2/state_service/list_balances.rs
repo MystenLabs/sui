@@ -7,11 +7,9 @@ use crate::RpcError;
 use crate::RpcService;
 use bytes::Bytes;
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
-use sui_rpc::proto::sui::rpc::v2::Balance;
 use sui_rpc::proto::sui::rpc::v2::ListBalancesRequest;
 use sui_rpc::proto::sui::rpc::v2::ListBalancesResponse;
 use sui_sdk_types::Address;
-use sui_types::storage::BalanceInfo;
 use tap::Pipe;
 
 #[tracing::instrument(skip(service))]
@@ -79,8 +77,14 @@ pub fn list_balances(
         None
     };
 
+    let owner = sui_types::base_types::SuiAddress::from(owner);
     let mut response = ListBalancesResponse::default();
-    response.balances = balances.into_iter().map(balance_info_to_proto).collect();
+    response.balances = balances
+        .into_iter()
+        .map(|(coin_type, balance_info)| {
+            super::get_balance::render_balance(service, owner, coin_type, balance_info)
+        })
+        .collect();
     response.next_page_token = next_page_token;
     Ok(response)
 }
@@ -96,15 +100,6 @@ fn decode_page_token(page_token: &[u8]) -> Result<PageToken> {
 
 fn encode_page_token(page_token: PageToken) -> Bytes {
     bcs::to_bytes(&page_token).unwrap().into()
-}
-
-fn balance_info_to_proto(
-    (coin_type, info): (move_core_types::language_storage::StructTag, BalanceInfo),
-) -> Balance {
-    let mut balance = Balance::default();
-    balance.coin_type = Some(coin_type.to_canonical_string(true));
-    balance.balance = Some(info.balance);
-    balance
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

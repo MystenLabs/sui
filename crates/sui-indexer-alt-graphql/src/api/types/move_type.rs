@@ -4,17 +4,22 @@
 use std::fmt;
 
 use anyhow::anyhow;
-use async_graphql::{Enum, Object, scalar};
-use move_binary_format::file_format::{Ability, AbilitySet};
+use async_graphql::Enum;
+use async_graphql::Object;
+use async_graphql::scalar;
+use move_binary_format::file_format::Ability;
+use move_binary_format::file_format::AbilitySet;
 use move_core_types::annotated_value as A;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use sui_package_resolver::error::Error as ResolverError;
-use sui_types::{TypeTag, type_input::TypeInput};
+use sui_types::TypeTag;
+use sui_types::type_input::TypeInput;
 
-use crate::{
-    error::{RpcError, bad_user_input, resource_exhausted},
-    scope::Scope,
-};
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::resource_exhausted;
+use crate::scope::Scope;
 
 /// Abilities are keywords in Sui Move that define how types behave at the compiler level.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -121,17 +126,21 @@ impl MoveType {
 
     /// Structured representation of the "shape" of values that match this type. May return no
     /// layout if the type is invalid.
-    async fn layout(&self) -> Result<Option<MoveTypeLayout>, RpcError> {
-        let Some(layout) = self.layout_impl().await? else {
-            return Ok(None);
-        };
+    async fn layout(&self) -> Option<Result<MoveTypeLayout, RpcError>> {
+        async {
+            let Some(layout) = self.layout_impl().await? else {
+                return Ok(None);
+            };
 
-        Ok(Some(MoveTypeLayout::try_from(layout)?))
+            Ok(Some(MoveTypeLayout::try_from(layout)?))
+        }
+        .await
+        .transpose()
     }
 
     /// The abilities this concrete type has. Returns no abilities if the type is invalid.
-    async fn abilities(&self) -> Result<Option<Vec<MoveAbility>>, RpcError> {
-        Ok(self.abilities_impl().await?.map(abilities))
+    async fn abilities(&self) -> Option<Result<Vec<MoveAbility>, RpcError>> {
+        Some(Ok(abilities(self.abilities_impl().await.ok()??)))
     }
 }
 

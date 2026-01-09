@@ -1,35 +1,34 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::Path,
-    sync::Arc,
-};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::path::Path;
+use std::sync::Arc;
 
-use anyhow::{Context as _, ensure};
+use anyhow::Context as _;
+use anyhow::ensure;
 use prometheus::Registry;
+use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::service::Service;
-use sui_indexer_alt_framework::{pipeline::Processor, types::object::Object};
+use sui_indexer_alt_framework::types::object::Object;
 use tokio::sync::mpsc;
-use tracing::{info, warn};
+use tracing::info;
+use tracing::warn;
 
-use crate::{
-    db::{Db, config::DbConfig},
-    handlers::balances::Balances,
-    handlers::object_by_owner::ObjectByOwner,
-    handlers::object_by_type::ObjectByType,
-    store::Schema,
-};
-
-use self::{
-    broadcaster::broadcaster,
-    formal_snapshot::{FormalSnapshot, FormalSnapshotArgs},
-    format::LiveObjects,
-    metrics::RestorerMetrics,
-    storage::StorageConnectionArgs,
-    worker::worker,
-};
+use crate::db::Db;
+use crate::db::config::DbConfig;
+use crate::handlers::balances::Balances;
+use crate::handlers::object_by_owner::ObjectByOwner;
+use crate::handlers::object_by_type::ObjectByType;
+use crate::restore::broadcaster::broadcaster;
+use crate::restore::formal_snapshot::FormalSnapshot;
+use crate::restore::formal_snapshot::FormalSnapshotArgs;
+use crate::restore::format::LiveObjects;
+use crate::restore::metrics::RestorerMetrics;
+use crate::restore::storage::StorageConnectionArgs;
+use crate::restore::worker::worker;
+use crate::store::Schema;
 
 mod broadcaster;
 pub mod formal_snapshot;

@@ -26,7 +26,7 @@ task 4, line 30:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 5, lines 32-60:
+task 5, lines 32-61:
 //# run-graphql
 Response: {
   "data": {
@@ -35,12 +35,14 @@ Response: {
         "package": {
           "m": {
             "name": "M",
+            "fullyQualifiedName": "0x1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc::M",
             "fileFormatVersion": 6,
             "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFNA2ZvbxaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBioAAAAAAAAAAgA=",
             "disassembly": "// Move bytecode v6\nmodule 1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc.M {\n\npublic foo(): u64 {\nB0:\n\t0: LdU64(42)\n\t1: Ret\n}\n\n}\n"
           },
           "n": {
             "name": "N",
+            "fullyQualifiedName": "0x1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc::N",
             "fileFormatVersion": 6,
             "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFOA2JhchaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBisAAAAAAAAAAgA=",
             "disassembly": "// Move bytecode v6\nmodule 1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc.N {\n\npublic bar(): u64 {\nB0:\n\t0: LdU64(43)\n\t1: Ret\n}\n\n}\n"
@@ -54,18 +56,21 @@ Response: {
         "package": {
           "m": {
             "name": "M",
+            "fullyQualifiedName": "0x02b46f517b695db5fdabf2721b492c0d1ea38270ab6ffc3ce3c7e37b0c0f3c0d::M",
             "fileFormatVersion": 6,
             "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFNA2ZvbxaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBioAAAAAAAAAAgA=",
             "disassembly": "// Move bytecode v6\nmodule 1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc.M {\n\npublic foo(): u64 {\nB0:\n\t0: LdU64(42)\n\t1: Ret\n}\n\n}\n"
           },
           "n": {
             "name": "N",
+            "fullyQualifiedName": "0x02b46f517b695db5fdabf2721b492c0d1ea38270ab6ffc3ce3c7e37b0c0f3c0d::N",
             "fileFormatVersion": 6,
             "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFOA2JhchaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBisAAAAAAAAAAgA=",
             "disassembly": "// Move bytecode v6\nmodule 1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc.N {\n\npublic bar(): u64 {\nB0:\n\t0: LdU64(43)\n\t1: Ret\n}\n\n}\n"
           },
           "o": {
             "name": "O",
+            "fullyQualifiedName": "0x02b46f517b695db5fdabf2721b492c0d1ea38270ab6ffc3ce3c7e37b0c0f3c0d::O",
             "fileFormatVersion": 6,
             "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFPA2JhehaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBiwAAAAAAAAAAgA=",
             "disassembly": "// Move bytecode v6\nmodule 1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc.O {\n\npublic baz(): u64 {\nB0:\n\t0: LdU64(44)\n\t1: Ret\n}\n\n}\n"

@@ -2,19 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use jsonrpsee::core::RpcResult;
+use jsonrpsee::proc_macros::rpc;
 use sui_json_rpc_types::Checkpoint;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::sui_serde::BigInt;
 
-use crate::{
-    context::Context,
-    error::{InternalContext, RpcError, invalid_params},
-};
-
-use super::rpc_module::RpcModule;
+use crate::api::rpc_module::RpcModule;
+use crate::context::Context;
+use crate::error::InternalContext;
+use crate::error::RpcError;
+use crate::error::invalid_params;
 
 #[open_rpc(namespace = "sui", tag = "Checkpoints API")]
 #[rpc(server, namespace = "sui")]

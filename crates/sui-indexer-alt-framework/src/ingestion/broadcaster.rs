@@ -1,26 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, marker::Unpin, sync::Arc, time::Duration};
+use std::collections::HashMap;
+use std::marker::Unpin;
+use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::{Context, anyhow};
-use futures::{Stream, future::try_join_all, stream};
-use sui_futures::{
-    service::Service,
-    stream::{Break, TrySpawnStreamExt},
-    task::TaskGuard,
-};
-use tokio::sync::{mpsc, watch};
+use anyhow::Context;
+use anyhow::anyhow;
+use futures::Stream;
+use futures::future::try_join_all;
+use futures::stream;
+use sui_futures::service::Service;
+use sui_futures::stream::Break;
+use sui_futures::stream::TrySpawnStreamExt;
+use sui_futures::task::TaskGuard;
+use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tokio_stream::StreamExt;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
-use crate::{
-    ingestion::{error::Error, streaming_client::CheckpointStreamingClient},
-    metrics::IngestionMetrics,
-    types::full_checkpoint_content::Checkpoint,
-};
-
-use super::{IngestionConfig, ingestion_client::IngestionClient};
+use crate::ingestion::IngestionConfig;
+use crate::ingestion::error::Error;
+use crate::ingestion::ingestion_client::IngestionClient;
+use crate::ingestion::streaming_client::CheckpointStreamingClient;
+use crate::metrics::IngestionMetrics;
+use crate::types::full_checkpoint_content::Checkpoint;
 
 /// Broadcaster task that manages checkpoint flow and spawns broadcast tasks for ranges
 /// via either streaming or ingesting, or both.
@@ -417,17 +424,20 @@ mod tests {
     use std::fmt::Debug;
     use std::sync::Arc;
     use std::time::Duration;
-    use tokio::time::{error::Elapsed, timeout};
+    use tokio::time::error::Elapsed;
+    use tokio::time::timeout;
 
     use super::*;
+    use crate::ingestion::IngestionConfig;
     use crate::ingestion::ingestion_client::FetchData;
     use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
-    use crate::ingestion::{IngestionConfig, test_utils::test_checkpoint_data};
+    use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_ingestion_metrics;
 
     /// Create a mock IngestionClient for tests
     fn mock_client(metrics: Arc<IngestionMetrics>) -> IngestionClient {
-        use crate::ingestion::ingestion_client::{FetchError, IngestionClientTrait};
+        use crate::ingestion::ingestion_client::FetchError;
+        use crate::ingestion::ingestion_client::IngestionClientTrait;
         use async_trait::async_trait;
 
         struct MockClient;

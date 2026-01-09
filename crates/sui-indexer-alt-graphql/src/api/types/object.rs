@@ -3,65 +3,77 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context as _, anyhow};
-use async_graphql::{
-    Context, InputObject, Interface, Object,
-    connection::{Connection, CursorType, Edge},
-    dataloader::DataLoader,
-};
-use diesel::{ExpressionMethods, QueryDsl, sql_types::Bool};
-use fastcrypto::encoding::{Base58, Encoding};
+use anyhow::Context as _;
+use anyhow::anyhow;
+use async_graphql::Context;
+use async_graphql::InputObject;
+use async_graphql::Interface;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
+use async_graphql::dataloader::DataLoader;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
+use diesel::sql_types::Bool;
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
 use move_core_types::language_storage::StructTag;
-use sui_indexer_alt_reader::{
-    consistent_reader::{self, ConsistentReader},
-    kv_loader::KvLoader,
-    object_versions::{
-        CheckpointBoundedObjectVersionKey, VersionBoundedObjectVersionKey,
-        VersionedObjectVersionKey,
-    },
-    pg_reader::PgReader,
-};
-use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
+use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
+use sui_indexer_alt_reader::consistent_reader::{self};
+use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::object_versions::CheckpointBoundedObjectVersionKey;
+use sui_indexer_alt_reader::object_versions::VersionBoundedObjectVersionKey;
+use sui_indexer_alt_reader::object_versions::VersionedObjectVersionKey;
+use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_indexer_alt_schema::objects::StoredObjVersion;
+use sui_indexer_alt_schema::schema::obj_versions;
 use sui_pg_db::sql;
-use sui_types::{
-    base_types::{
-        SequenceNumber, SuiAddress as NativeSuiAddress, TransactionDigest, VersionDigest,
-    },
-    digests::ObjectDigest,
-    dynamic_field::DynamicFieldType,
-    object::Object as NativeObject,
-    transaction::GenesisObject,
-};
-use tokio::{join, sync::OnceCell};
+use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::base_types::TransactionDigest;
+use sui_types::base_types::VersionDigest;
+use sui_types::digests::ObjectDigest;
+use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::object::Object as NativeObject;
+use sui_types::transaction::GenesisObject;
+use tokio::join;
+use tokio::sync::OnceCell;
 
-use crate::{
-    api::scalars::{
-        base64::Base64,
-        big_int::BigInt,
-        cursor::{BcsCursor, JsonCursor},
-        owner_kind::OwnerKind,
-        sui_address::SuiAddress,
-        type_filter::{TypeFilter, TypeInput},
-        uint53::UInt53,
-    },
-    error::{RpcError, bad_user_input, feature_unavailable, upcast},
-    intersect,
-    pagination::{Page, PageLimits, PaginationConfig},
-    scope::Scope,
-};
-
-use super::{
-    address::Address,
-    balance::{self, Balance},
-    coin_metadata::CoinMetadata,
-    dynamic_field::{DynamicField, DynamicFieldName},
-    move_object::MoveObject,
-    move_package::MovePackage,
-    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
-    owner::Owner,
-    transaction::{CTransaction, Transaction, filter::TransactionFilter},
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::cursor::BcsCursor;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::owner_kind::OwnerKind;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeFilter;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address::Address;
+use crate::api::types::balance::Balance;
+use crate::api::types::balance::{self as balance};
+use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::dynamic_field::DynamicField;
+use crate::api::types::dynamic_field::DynamicFieldName;
+use crate::api::types::move_object::MoveObject;
+use crate::api::types::move_package::MovePackage;
+use crate::api::types::object_filter::ObjectFilter;
+use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
+use crate::api::types::owner::Owner;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::feature_unavailable;
+use crate::error::upcast;
+use crate::intersect;
+use crate::pagination::Page;
+use crate::pagination::PageLimits;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
 
 /// Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
 #[allow(clippy::duplicated_attributes)]
@@ -220,6 +232,16 @@ pub(crate) type CVersion = JsonCursor<u64>;
 /// Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
 #[Object]
 impl Object {
+    /// The object's globally unique identifier, which can be passed to `Query.node` to refetch it.
+    pub(crate) async fn id(&self) -> Id {
+        let a = self.super_.address;
+        if let Some((v, d)) = self.version_digest {
+            Id::ObjectByRef(a, v, d)
+        } else {
+            Id::ObjectByAddress(a)
+        }
+    }
+
     /// The Object's ID.
     pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
         self.super_.address(ctx).await
@@ -259,13 +281,13 @@ impl Object {
     pub(crate) async fn as_move_object(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<MoveObject>, RpcError> {
-        MoveObject::from_object(self, ctx).await
+    ) -> Option<Result<MoveObject, RpcError>> {
+        MoveObject::from_object(self, ctx).await.transpose()
     }
 
     /// Attempts to convert the object into a MovePackage.
-    async fn as_move_package(&self, ctx: &Context<'_>) -> Result<Option<MovePackage>, RpcError> {
-        MovePackage::from_object(self, ctx).await
+    async fn as_move_package(&self, ctx: &Context<'_>) -> Option<Result<MovePackage, RpcError>> {
+        MovePackage::from_object(self, ctx).await.transpose()
     }
 
     /// Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
@@ -275,8 +297,8 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         coin_type: TypeInput,
-    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        self.super_.balance(ctx, coin_type).await
+    ) -> Option<Result<Balance, RpcError<balance::Error>>> {
+        self.super_.balance(ctx, coin_type).await.ok()?
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -287,16 +309,19 @@ impl Object {
         after: Option<balance::Cursor>,
         last: Option<u64>,
         before: Option<balance::Cursor>,
-    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        self.super_.balances(ctx, first, after, last, before).await
+    ) -> Option<Result<Connection<String, Balance>, RpcError<balance::Error>>> {
+        self.super_
+            .balances(ctx, first, after, last, before)
+            .await
+            .ok()?
     }
 
     /// The domain explicitly configured as the default SuiNS name for this address.
     pub(crate) async fn default_suins_name(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError> {
-        self.super_.default_suins_name(ctx).await
+    ) -> Option<Result<String, RpcError>> {
+        self.super_.default_suins_name(ctx).await.ok()?
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
@@ -411,8 +436,8 @@ impl Object {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
-        self.super_.multi_get_balances(ctx, keys).await
+    ) -> Option<Result<Vec<Balance>, RpcError<balance::Error>>> {
+        self.super_.multi_get_balances(ctx, keys).await.ok()?
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
@@ -543,10 +568,11 @@ impl Object {
         last: Option<u64>,
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<Error>> {
+    ) -> Option<Result<Connection<String, MoveObject>, RpcError<Error>>> {
         self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// The object's owner kind.
@@ -572,7 +598,7 @@ impl Object {
             Err(e) => return Some(Err(e)),
         };
 
-        Some(Ok(Transaction::with_id(
+        Some(Ok(Transaction::with_digest(
             self.super_.scope.without_root_version(),
             contents.previous_transaction,
         )))

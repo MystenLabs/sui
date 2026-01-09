@@ -48,7 +48,6 @@ const guides = [
       'guides/developer/sui-101/using-events',
       'guides/developer/sui-101/local-network',
       'guides/developer/sui-101/connect',
-      'guides/developer/sui-101/move-package-management',
       'guides/developer/sui-101/access-time',
       'guides/developer/sui-101/sign-and-send-txn',
       'guides/developer/sui-101/sponsor-txn',
@@ -102,9 +101,29 @@ const guides = [
           'guides/developer/objects/transfers/transfer-to-object',
         ],
       },
+      'guides/developer/objects/derived-objects',
+      {
+				type: 'category',
+				label: 'Dynamic Fields',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/objects/dynamic-fields',
+				},
+				items: ['guides/developer/objects/tables-bags'],
+			},
       'guides/developer/objects/versioning',
     ],
-  },
+    },
+    {
+        type: 'category',
+        label: 'Packages',
+  				items: [
+          'guides/developer/packages/move-package-management',
+					'guides/developer/packages/upgrade',
+					'guides/developer/packages/custom-policies',
+					'guides/developer/packages/automated-address-management',
+				],
+			},
   {
     type: 'category',
     label: 'Currencies and Tokens',
@@ -160,6 +179,18 @@ const guides = [
           'guides/developer/cryptography/zklogin-integration/zklogin-example',
         ],
       },
+    ],
+  },
+    {
+    type: 'category',
+    label: 'Nautilus',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/nautilus/index',
+    },
+    items: [
+      'guides/developer/nautilus/using-nautilus',
+      'guides/developer/nautilus/customize-nautilus',
     ],
   },
   {

@@ -30,9 +30,13 @@ use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
     views::{SizeConfig, TypeView, ValueView},
 };
-use once_cell::sync::Lazy;
+
 use serde::{Deserialize, Serialize};
-use std::ops::{Add, Mul};
+use std::{
+    ops::{Add, Mul},
+    sync::LazyLock,
+};
+
 pub enum GasUnit {}
 
 pub type Gas = GasQuantity<GasUnit>;
@@ -105,7 +109,7 @@ impl GasCost {
     }
 }
 
-static ZERO_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(zero_cost_schedule);
+static ZERO_COST_SCHEDULE: LazyLock<CostTable> = LazyLock::new(zero_cost_schedule);
 
 /// The Move VM implementation of state for gas metering.
 ///
@@ -864,7 +868,7 @@ pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
     ]
 }
 
-pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(|| {
+pub static INITIAL_COST_SCHEDULE: LazyLock<CostTable> = LazyLock::new(|| {
     let mut instrs = bytecode_instruction_costs();
     // Note that the DiemVM is expecting the table sorted by instruction order.
     instrs.sort_by_key(|cost| instruction_key(&cost.0));

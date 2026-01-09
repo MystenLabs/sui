@@ -821,6 +821,7 @@ public(package) fun advance_epoch(
     storage_fund_reinvest_rate: u64,
     reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
     epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
+    accumulator_storage_fund_amount: u64, // Storage fund amount for accumulator objects
     ctx: &mut TxContext,
 ): Balance<SUI> {
     let prev_epoch_start_timestamp = self.epoch_start_timestamp_ms;
@@ -851,7 +852,7 @@ public(package) fun advance_epoch(
     self.safe_mode_non_refundable_storage_fee = 0;
 
     let total_validators_stake = self.validators.total_stake();
-    let storage_fund_balance = self.storage_fund.total_balance();
+    let storage_fund_balance = self.storage_fund.total_balance() + accumulator_storage_fund_amount;
     let total_stake = storage_fund_balance + total_validators_stake;
 
     let storage_charge = storage_reward.value();
@@ -1153,6 +1154,14 @@ public(package) fun validators(self: &SuiSystemStateInnerV2): &ValidatorSet {
 
 public(package) fun validators_mut(self: &mut SuiSystemStateInnerV2): &mut ValidatorSet {
     &mut self.validators
+}
+
+public(package) fun extra_fields(self: &SuiSystemStateInnerV2): &Bag {
+    &self.extra_fields
+}
+
+public(package) fun extra_fields_mut(self: &mut SuiSystemStateInnerV2): &mut Bag {
+    &mut self.extra_fields
 }
 
 #[test_only]

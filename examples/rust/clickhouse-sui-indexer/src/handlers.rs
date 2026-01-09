@@ -2,17 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use async_trait::async_trait;
 use clickhouse::Row;
 use serde::Serialize;
 use std::sync::Arc;
 
 use sui_indexer_alt_framework::{
-    pipeline::{concurrent::Handler, Processor},
     FieldCount,
+    pipeline::{
+        Processor,
+        concurrent::{BatchStatus, Handler},
+    },
+    store::Store,
+    types::full_checkpoint_content::Checkpoint,
 };
-use sui_indexer_alt_framework_store_traits::Store;
-use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::store::ClickHouseStore;
 
@@ -29,11 +31,12 @@ pub struct StoredTxDigest {
 #[derive(Clone, Default)]
 pub struct TxDigests;
 
+#[async_trait::async_trait]
 impl Processor for TxDigests {
     const NAME: &'static str = "tx_digests";
     type Value = StoredTxDigest;
 
-    fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
+    async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
         let Checkpoint {
             transactions,
             summary,
@@ -53,12 +56,23 @@ impl Processor for TxDigests {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl Handler for TxDigests {
     type Store = ClickHouseStore;
+    type Batch = Vec<Self::Value>;
+
+    fn batch(
+        &self,
+        batch: &mut Self::Batch,
+        values: &mut std::vec::IntoIter<Self::Value>,
+    ) -> BatchStatus {
+        batch.extend(values);
+        BatchStatus::Pending
+    }
 
     async fn commit<'a>(
-        values: &[Self::Value],
+        &self,
+        values: &Self::Batch,
         conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> Result<usize> {
         let row_count = values.len();

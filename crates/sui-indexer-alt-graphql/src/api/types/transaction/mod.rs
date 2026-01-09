@@ -1,53 +1,53 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{ops::Deref, sync::Arc};
+use std::ops::Deref;
+use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, connection::Connection, dataloader::DataLoader};
-use diesel::{QueryableByName, sql_types::BigInt};
-use fastcrypto::encoding::{Base58, Encoding};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use async_graphql::dataloader::DataLoader;
+use diesel::QueryableByName;
+use diesel::sql_types::BigInt;
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
-use sui_indexer_alt_reader::{
-    kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
-    pg_reader::PgReader,
-    tx_digests::TxDigestKey,
-};
+use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
+use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
-use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress,
-    digests::TransactionDigest,
-    transaction::{TransactionDataAPI, TransactionExpiration},
-};
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::digests::TransactionDigest;
+use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::TransactionExpiration;
 
-use crate::{
-    api::{
-        scalars::{
-            base64::Base64, cursor::JsonCursor, digest::Digest, fq_name_filter::FqNameFilter,
-            sui_address::SuiAddress,
-        },
-        types::{
-            available_range::AvailableRangeKey,
-            lookups::{CheckpointBounds, TxBoundsCursor},
-            transaction::filter::TransactionKindInput,
-        },
-    },
-    error::RpcError,
-    pagination::Page,
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
-use super::{
-    address::Address,
-    epoch::Epoch,
-    gas_input::GasInput,
-    transaction::filter::TransactionFilter,
-    transaction_effects::{EffectsContents, TransactionEffects},
-    transaction_kind::TransactionKind,
-    user_signature::UserSignature,
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::digest::Digest;
+use crate::api::scalars::fq_name_filter::FqNameFilter;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::json::Json;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::types::address::Address;
+use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::epoch::Epoch;
+use crate::api::types::gas_input::GasInput;
+use crate::api::types::lookups::CheckpointBounds;
+use crate::api::types::lookups::TxBoundsCursor;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction::filter::TransactionKindInput;
+use crate::api::types::transaction_effects::EffectsContents;
+use crate::api::types::transaction_effects::TransactionEffects;
+use crate::api::types::transaction_kind::TransactionKind;
+use crate::api::types::user_signature::UserSignature;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
 
@@ -68,6 +68,11 @@ pub(crate) type CTransaction = JsonCursor<u64>;
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
 impl Transaction {
+    /// The transaction's globally unique identifier, which can be passed to `Query.node` to refetch it.
+    pub(crate) async fn id(&self) -> Id {
+        Id::Transaction(self.digest)
+    }
+
     /// A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
     async fn digest(&self) -> String {
         Base58::encode(self.digest)
@@ -79,17 +84,21 @@ impl Transaction {
     }
 
     /// The type of this transaction as well as the commands and/or parameters comprising the transaction of this kind.
-    async fn kind(&self, ctx: &Context<'_>) -> Result<Option<TransactionKind>, RpcError> {
-        let contents = self.contents.fetch(ctx, self.digest).await?;
-        let Some(content) = &contents.contents else {
-            return Ok(None);
-        };
+    async fn kind(&self, ctx: &Context<'_>) -> Option<Result<TransactionKind, RpcError>> {
+        async {
+            let contents = self.contents.fetch(ctx, self.digest).await?;
+            let Some(content) = &contents.contents else {
+                return Ok(None);
+            };
 
-        let transaction_data = content.data()?;
-        Ok(TransactionKind::from(
-            transaction_data.kind().clone(),
-            contents.scope.clone(),
-        ))
+            let transaction_data = content.data()?;
+            Ok(TransactionKind::from(
+                transaction_data.kind().clone(),
+                contents.scope.clone(),
+            ))
+        }
+        .await
+        .transpose()
     }
 
     #[graphql(flatten)]
@@ -101,58 +110,92 @@ impl Transaction {
 #[Object]
 impl TransactionContents {
     /// This field is set by senders of a transaction block. It is an epoch reference that sets a deadline after which validators will no longer consider the transaction valid. By default, there is no deadline for when a transaction must execute.
-    async fn expiration(&self) -> Result<Option<Epoch>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn expiration(&self) -> Option<Result<Epoch, RpcError>> {
+        async {
+            let Some(content) = &self.contents else {
+                return Ok(None);
+            };
 
-        let transaction_data = content.data()?;
-        match transaction_data.expiration() {
-            TransactionExpiration::None => Ok(None),
-            TransactionExpiration::Epoch(epoch_id) => {
-                Ok(Some(Epoch::with_id(self.scope.clone(), *epoch_id)))
-            }
-            TransactionExpiration::ValidDuring { max_epoch, .. } => {
-                if let Some(epoch_id) = max_epoch {
+            let transaction_data = content.data()?;
+            match transaction_data.expiration() {
+                TransactionExpiration::None => Ok(None),
+                TransactionExpiration::Epoch(epoch_id) => {
                     Ok(Some(Epoch::with_id(self.scope.clone(), *epoch_id)))
-                } else {
-                    Ok(None)
+                }
+                TransactionExpiration::ValidDuring { max_epoch, .. } => {
+                    if let Some(epoch_id) = max_epoch {
+                        Ok(Some(Epoch::with_id(self.scope.clone(), *epoch_id)))
+                    } else {
+                        Ok(None)
+                    }
                 }
             }
         }
+        .await
+        .transpose()
     }
 
     /// The gas input field provides information on what objects were used as gas as well as the owner of the gas object(s) and information on the gas price and budget.
-    async fn gas_input(&self) -> Result<Option<GasInput>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn gas_input(&self) -> Option<Result<GasInput, RpcError>> {
+        async {
+            let Some(content) = &self.contents else {
+                return Ok(None);
+            };
 
-        let transaction_data = content.data()?;
-        Ok(Some(GasInput::from_gas_data(
-            self.scope.clone(),
-            transaction_data.gas_data().clone(),
-        )))
+            let transaction_data = content.data()?;
+            Ok(Some(GasInput::from_gas_data(
+                self.scope.clone(),
+                transaction_data.gas_data().clone(),
+            )))
+        }
+        .await
+        .transpose()
     }
 
     /// The address corresponding to the public key that signed this transaction. System transactions do not have senders.
-    async fn sender(&self) -> Result<Option<Address>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn sender(&self) -> Option<Result<Address, RpcError>> {
+        async {
+            let Some(content) = &self.contents else {
+                return Ok(None);
+            };
 
-        let sender = content.data()?.sender();
-        Ok((sender != NativeSuiAddress::ZERO)
-            .then(|| Address::with_address(self.scope.clone(), sender)))
+            let sender = content.data()?.sender();
+            Ok((sender != NativeSuiAddress::ZERO)
+                .then(|| Address::with_address(self.scope.clone(), sender)))
+        }
+        .await
+        .transpose()
     }
 
     /// The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
-    async fn transaction_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let Some(content) = &self.contents else {
-            return Ok(None);
-        };
+    async fn transaction_bcs(&self) -> Option<Result<Base64, RpcError>> {
+        async {
+            let Some(content) = &self.contents else {
+                return Ok(None);
+            };
 
-        Ok(Some(Base64(content.raw_transaction()?)))
+            Ok(Some(Base64(content.raw_transaction()?)))
+        }
+        .await
+        .transpose()
+    }
+
+    /// The transaction as a JSON blob, matching the gRPC proto format (excluding BCS).
+    async fn transaction_json(&self) -> Option<Result<Json, RpcError>> {
+        async {
+            let Some(content) = &self.contents else {
+                return Ok(None);
+            };
+
+            let mut proto_transaction = content.proto_transaction()?;
+            // Clear the bcs field as transactionJson is intended to provide a full structured output
+            proto_transaction.bcs = None;
+            let json_value = serde_json::to_value(&proto_transaction)
+                .context("Failed to serialize transaction to JSON")?;
+            Ok(Some(json_value.try_into()?))
+        }
+        .await
+        .transpose()
     }
 
     /// User signatures for this transaction.
@@ -173,7 +216,7 @@ impl Transaction {
     /// Construct a transaction that is represented by just its identifier (its transaction
     /// digest). This does not check whether the transaction exists, so should not be used to
     /// "fetch" a transaction based on a digest provided as user input.
-    pub(crate) fn with_id(scope: Scope, digest: TransactionDigest) -> Self {
+    pub(crate) fn with_digest(scope: Scope, digest: TransactionDigest) -> Self {
         Self {
             digest,
             contents: TransactionContents::empty(scope),
@@ -251,7 +294,7 @@ impl Transaction {
         page.paginate_results(
             tx_digests(ctx, &tx_sequence_numbers).await?,
             |(s, _)| JsonCursor::new(*s),
-            |(_, d)| Ok(Self::with_id(scope.clone(), d)),
+            |(_, d)| Ok(Self::with_digest(scope.clone(), d)),
         )
     }
 }

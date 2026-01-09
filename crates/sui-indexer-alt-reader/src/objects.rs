@@ -5,17 +5,22 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use async_graphql::dataloader::Loader;
-use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
+use diesel::BoolExpressionMethods;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
 use prost_types::FieldMask;
-use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
+use sui_indexer_alt_schema::objects::StoredObject;
+use sui_indexer_alt_schema::schema::kv_objects;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
-use sui_types::{base_types::ObjectID, object::Object, storage::ObjectKey};
+use sui_types::base_types::ObjectID;
+use sui_types::object::Object;
+use sui_types::storage::ObjectKey;
 
-use crate::{
-    bigtable_reader::BigtableReader, error::Error, ledger_grpc_reader::LedgerGrpcReader,
-    pg_reader::PgReader,
-};
+use crate::bigtable_reader::BigtableReader;
+use crate::error::Error;
+use crate::ledger_grpc_reader::LedgerGrpcReader;
+use crate::pg_reader::PgReader;
 
 /// Key for fetching the contents a particular version of an object.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
