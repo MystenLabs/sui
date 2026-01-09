@@ -131,7 +131,7 @@ mod tests {
             build-config = { edition = "2024", flavor = "vanilla" }
 
             [[published]]
-            source = { root = true }
+            source = { local = "." }
             published-at = "0x000000000000000000000000000000000000000000000000000000000000cccc"
             original-id = "0x000000000000000000000000000000000000000000000000000000000000cc00"
             version = 2

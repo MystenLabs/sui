@@ -133,6 +133,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
         debug!("getting ephemeral files");
         let (env, ephemeral_pubs) = Self::get_env_and_ephemeral_file(&mut config).await?;
+        debug!("ephemeral_pubs: {ephemeral_pubs:#?}");
 
         debug!("loading unfiltered graph");
         let unfiltered_graph = if config.force_repin {
