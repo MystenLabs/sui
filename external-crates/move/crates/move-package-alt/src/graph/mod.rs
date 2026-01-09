@@ -21,7 +21,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use crate::package::package_loader::PackageConfig;
 use crate::package::package_lock::PackageSystemLock;
-use crate::schema::{LockfileDependencyInfo, ModeName, Publication};
+use crate::schema::{EphemeralDependencyInfo, ModeName, Publication};
 use crate::{
     dependency::PinnedDependencyInfo,
     errors::PackageResult,
@@ -127,7 +127,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// corresponding dependency. Warns if the package ID is unrecognized.
     pub fn add_publish_overrides(
         &mut self,
-        overrides: BTreeMap<LockfileDependencyInfo, Publication<F>>,
+        overrides: BTreeMap<EphemeralDependencyInfo, Publication<F>>,
     ) {
         for (_, index) in &self.package_ids {
             let dep = self.inner[*index].dep_for_self().clone().into();

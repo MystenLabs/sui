@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 pub mod legacy;
 pub mod legacy_lockfile;
 pub mod legacy_parser;

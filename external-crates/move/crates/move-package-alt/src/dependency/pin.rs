@@ -15,8 +15,9 @@ use crate::{
     git::{GitCache, GitError, GitTree},
     package::paths::PackagePath,
     schema::{
-        EnvironmentID, EnvironmentName, LocalDepInfo, LockfileDependencyInfo, LockfileGitDepInfo,
-        ManifestGitDependency, ModeName, OnChainDepInfo, PackageName, RenderToml, RootDepInfo,
+        EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
+        LockfileDependencyInfo, LockfileGitDepInfo, ManifestGitDependency, ModeName,
+        OnChainDepInfo, PackageName, RenderToml, RootDepInfo,
     },
 };
 
@@ -174,7 +175,7 @@ impl Pinned {
     }
 
     /// Return the absolute path to the directory that this package would be fetched into, without
-    /// actually fetching it
+    /// actually fetching it. This is guaranteed to be a valid path
     pub fn unfetched_path(&self) -> PathBuf {
         match &self {
             Pinned::Git(dep) => dep.inner.path_to_tree(),
@@ -319,6 +320,24 @@ impl From<Pinned> for LockfileDependencyInfo {
             }),
             Pinned::OnChain(on_chain) => Self::OnChain(on_chain),
             Pinned::Root(_) => Self::Root(RootDepInfo { root: true }),
+        }
+    }
+}
+
+impl From<Pinned> for EphemeralDependencyInfo {
+    fn from(value: Pinned) -> Self {
+        // for EphemeralDependencyInfo, local dependencies (including the root) are stored as
+        // absolute paths; otherwise they are stored the same way as lockfile dependencies
+
+        let local = value
+            .unfetched_path()
+            .canonicalize()
+            .expect("Filesystem path for pinned package is valid");
+
+        match value.into() {
+            LockfileDependencyInfo::OnChain(onchain) => Self::OnChain(onchain),
+            LockfileDependencyInfo::Git(git) => Self::Git(git),
+            _ => Self::Local(LocalDepInfo { local }),
         }
     }
 }
