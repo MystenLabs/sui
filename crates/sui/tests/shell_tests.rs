@@ -87,7 +87,10 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
 
     // Redact the sandbox directory path so we can retain snapshots more easily.
     // We canonicalize also to make sure we catch absolute paths too.
-    result = result.replace(sandbox.canonicalize().unwrap().to_string_lossy().as_ref(), "<SANDBOX_DIR>");
+    result = result.replace(
+        sandbox.canonicalize().unwrap().to_string_lossy().as_ref(),
+        "<SANDBOX_DIR>",
+    );
     result = result.replace(sandbox.to_string_lossy().as_ref(), "<SANDBOX_DIR>");
 
     // Convert windows path outputs on the snapshot to regular linux ones.
