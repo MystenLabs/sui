@@ -114,9 +114,6 @@ fn input<Mode: ExecutionMode>(
                 withdraw_from,
             } = f;
             let amount = match reservation {
-                P::Reservation::EntireBalance => {
-                    invariant_violation!("Entire balance reservation amount is not yet supported")
-                }
                 P::Reservation::MaxAmountU64(u) => U256::from(u),
                 // TODO when types other than u64 are supported, we must check that this is a
                 // valid amount for the type

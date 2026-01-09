@@ -413,8 +413,6 @@ fn select_gas(
                     }
 
                     match w.reservation {
-                        // Skip EntireBalance since its not supported
-                        Reservation::EntireBalance => None,
                         Reservation::MaxAmountU64(value) => Some(value),
                     }
                 })

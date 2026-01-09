@@ -1946,10 +1946,6 @@ mod checked {
                         && abilities.has_drop()
                 });
                 let limit = match reservation {
-                    sui_types::transaction::Reservation::EntireBalance => {
-                        // TODO(address-balances): support entire balance withdrawal
-                        todo!("Entire balance withdrawal not yet supported")
-                    }
                     sui_types::transaction::Reservation::MaxAmountU64(u) => U256::from(u),
                 };
                 InputValue::withdrawal(loaded_ty, owner, limit)

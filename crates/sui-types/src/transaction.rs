@@ -145,9 +145,6 @@ pub enum ObjectArg {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Reservation {
-    // Reserve the entire balance.
-    // This is not yet supported.
-    EntireBalance,
     // Reserve a specific amount of the balance.
     MaxAmountU64(u64),
 }
@@ -2630,7 +2627,6 @@ impl TransactionDataAPI for TransactionDataV1 {
                     assert!(*amount > 0, "verified in validity check");
                     *amount
                 }
-                Reservation::EntireBalance => unreachable!("verified in validity check"),
             };
 
             let account_address = withdraw.owner_for_withdrawal(self);
@@ -2667,7 +2663,6 @@ impl TransactionDataAPI for TransactionDataV1 {
                     assert!(*amount > 0, "verified in validity check");
                     *amount
                 }
-                Reservation::EntireBalance => unreachable!("verified in validity check"),
             };
 
             let withdrawal_owner = withdraw.owner_for_withdrawal(self);
@@ -2847,12 +2842,6 @@ impl TransactionDataAPI for TransactionDataV1 {
                             }
                             .into()
                         );
-                    }
-                    Reservation::EntireBalance => {
-                        return Err(UserInputError::InvalidWithdrawReservation {
-                            error: "Reserving the entire balance is not supported".to_string(),
-                        }
-                        .into());
                     }
                 };
             }
