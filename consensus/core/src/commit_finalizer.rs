@@ -288,7 +288,8 @@ impl CommitFinalizer {
                 .context
                 .protocol_config
                 .consensus_skip_gced_blocks_in_direct_finalization()
-                && block_ref.round <= gc_round && num_transactions > 0
+                && block_ref.round <= gc_round
+                && num_transactions > 0
             {
                 // The block is outside of GC bound.
                 let transactions =
@@ -1307,6 +1308,115 @@ mod tests {
         assert!(fixture.commit_finalizer.is_empty());
     }
 
+    // Test direct finalization when some blocks are below GC bound.
+    #[tokio::test]
+    async fn test_direct_finalize_with_gc() {
+        let mut fixture = create_commit_finalizer_fixture();
+        assert_eq!(fixture.context.protocol_config.consensus_gc_depth(), 5);
+
+        // Create round 1 blocks with 10 transactions each.
+        let mut dag_builder = DagBuilder::new(fixture.context.clone());
+        dag_builder
+            .layer(1)
+            .num_transactions(10)
+            .build()
+            .persist_layers(fixture.dag_state.clone());
+        let round_1_blocks = dag_builder.all_blocks();
+        fixture
+            .transaction_certifier
+            .add_voted_blocks(round_1_blocks.iter().map(|b| (b.clone(), vec![])).collect());
+
+        // Select B1(3) to be rejected due to GC.
+        let block_rejected = round_1_blocks[3].clone();
+
+        // Create round 2-5 blocks without creating or linking to an authority 4 block.
+        // The goal is to GC B1(3).
+        let mut last_round_blocks: Vec<VerifiedBlock> = round_1_blocks
+            .iter()
+            .enumerate()
+            .filter_map(|(i, b)| {
+                if i != block_rejected.author().value() {
+                    Some(b.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        for r in 2..=5 {
+            let ancestors: Vec<BlockRef> =
+                last_round_blocks.iter().map(|b| b.reference()).collect();
+            last_round_blocks = [0, 1, 2]
+                .map(|i| create_block(r, i, ancestors.clone(), 0, vec![]))
+                .to_vec();
+            fixture.add_blocks(last_round_blocks.clone());
+        }
+
+        // Create round 6-9 blocks without authority 3 blocks.
+        // And add a leader from authority 0 of each round. Only authority 0 blocks can link to B1(3).
+        let mut leaders = vec![];
+        for r in 6..=9 {
+            let ancestors: Vec<BlockRef> =
+                last_round_blocks.iter().map(|b| b.reference()).collect();
+            last_round_blocks = [0, 1, 2]
+                .map(|i| {
+                    let mut ancestors = ancestors.clone();
+                    if i == 0 {
+                        // Link to the GC'ed block B2(2).
+                        ancestors.push(block_rejected.reference());
+                    }
+                    create_block(r, i, ancestors, 0, vec![])
+                })
+                .to_vec();
+            leaders.push(last_round_blocks[0].clone());
+            fixture.add_blocks(last_round_blocks.clone());
+        }
+
+        // Create CommittedSubDag from leaders.
+        assert_eq!(leaders.len(), 4);
+        let committed_sub_dags = fixture.linearizer.handle_commit(leaders);
+        assert_eq!(committed_sub_dags.len(), 4);
+
+        // Ensure B1(3) is included in commit 0.
+        assert!(committed_sub_dags[0].blocks.contains(&block_rejected));
+
+        // Buffering the initial 3 commits should not finalize.
+        for commit in committed_sub_dags.iter().take(3) {
+            assert!(commit.decided_with_local_blocks);
+            let finalized_commits = fixture
+                .commit_finalizer
+                .process_commit(commit.clone())
+                .await;
+            assert_eq!(finalized_commits.len(), 0);
+        }
+
+        // Buffering the 4th commit should finalize all commits.
+        let finalized_commits = fixture
+            .commit_finalizer
+            .process_commit(committed_sub_dags[3].clone())
+            .await;
+        assert_eq!(finalized_commits.len(), 4);
+
+        // Check rejected transactions.
+        // B1(3) txn 1 gets rejected, even though there are has 3 blocks links to B1(3) without rejecting txn 1.
+        // This is because there are only 2 accept votes for this transaction, which is less than the quorum threshold.
+        let rejected_transactions = finalized_commits[0].rejected_transactions_by_block.clone();
+        assert_eq!(rejected_transactions.len(), 1);
+        assert_eq!(
+            rejected_transactions
+                .get(&block_rejected.reference())
+                .unwrap(),
+            &vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        );
+
+        // Other commits should have no rejected transactions.
+        for commit in finalized_commits.iter().skip(1) {
+            assert!(commit.rejected_transactions_by_block.is_empty());
+        }
+
+        // CommitFinalizer should be empty.
+        assert!(fixture.commit_finalizer.is_empty());
+    }
+
     // Test indirect finalization when transaction is rejected due to GC.
     #[tokio::test]
     async fn test_indirect_reject_with_gc() {
@@ -1370,15 +1480,16 @@ mod tests {
         // Create round 7-10 blocks and add a leader from authority 0 of each round.
         let mut leaders = vec![];
         for r in 7..=10 {
-            let mut ancestors: Vec<BlockRef> =
+            let ancestors: Vec<BlockRef> =
                 last_round_blocks.iter().map(|b| b.reference()).collect();
             last_round_blocks = (0..4)
                 .map(|i| {
+                    let mut ancestors = ancestors.clone();
                     if r == 7 && i == 2 {
                         // Link to the GC'ed block B2(2).
                         ancestors.push(round_2_blocks[2].reference());
                     }
-                    create_block(r, i, ancestors.clone(), 0, vec![])
+                    create_block(r, i, ancestors, 0, vec![])
                 })
                 .collect();
             leaders.push(last_round_blocks[0].clone());
