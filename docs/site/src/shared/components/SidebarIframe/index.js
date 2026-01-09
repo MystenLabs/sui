@@ -1,11 +1,12 @@
-/*
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-*/
+
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+<<<<<<< HEAD
 import styles from '../../../css/sidebar.module.css';
+=======
+import styles from "../../../css/sidebar.module.css";
+>>>>>>> 788008035759ce620bddda9fc9f1edc445ebd30c
 
 export default function SidebarIframe({
   url,

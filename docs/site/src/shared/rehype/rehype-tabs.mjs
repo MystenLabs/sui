@@ -1,7 +1,4 @@
-/*
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-*/
+
 //
 // Rehype plugin: transforms <tabs>/<tabitem> (from MD or MDX) into the
 // same DOM that Docusaurus Tabs renders—plus small, scoped classes
