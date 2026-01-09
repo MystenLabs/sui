@@ -187,7 +187,7 @@ mod tests {
     };
     use tokio::sync::oneshot;
 
-    use crate::execution_scheduler::funds_withdraw_scheduler::TxFundsWithdraw;
+    use crate::execution_scheduler::funds_withdraw_scheduler::{ScheduleStatus, TxFundsWithdraw};
 
     fn make_account_id(byte: u8) -> AccumulatorObjId {
         AccumulatorObjId::new_unchecked(ObjectID::from_single_byte(byte))
@@ -197,10 +197,7 @@ mod tests {
         account_id: AccumulatorObjId,
         amount: u64,
         version: SequenceNumber,
-    ) -> (
-        Arc<PendingWithdraw>,
-        oneshot::Receiver<super::super::super::ScheduleResult>,
-    ) {
+    ) -> (Arc<PendingWithdraw>, oneshot::Receiver<ScheduleStatus>) {
         let (tx, rx) = oneshot::channel();
         let withdraw = TxFundsWithdraw {
             tx_digest: TransactionDigest::random(),
@@ -247,10 +244,7 @@ mod tests {
 
         // The sender should have been notified with SufficientFunds
         let schedule_result = rx.await.unwrap();
-        assert_eq!(
-            schedule_result.status,
-            super::super::super::ScheduleStatus::SufficientFunds
-        );
+        assert_eq!(schedule_result, ScheduleStatus::SufficientFunds);
     }
 
     #[test]
@@ -280,10 +274,7 @@ mod tests {
         assert!(state.pending_reservations.is_empty());
 
         let schedule_result = rx.await.unwrap();
-        assert_eq!(
-            schedule_result.status,
-            super::super::super::ScheduleStatus::InsufficientFunds
-        );
+        assert_eq!(schedule_result, ScheduleStatus::InsufficientFunds);
     }
 
     #[tokio::test]
@@ -308,18 +299,9 @@ mod tests {
         assert!(state.pending_reservations.is_empty());
 
         // All should be SufficientFunds
-        assert_eq!(
-            rx1.await.unwrap().status,
-            super::super::super::ScheduleStatus::SufficientFunds
-        );
-        assert_eq!(
-            rx2.await.unwrap().status,
-            super::super::super::ScheduleStatus::SufficientFunds
-        );
-        assert_eq!(
-            rx3.await.unwrap().status,
-            super::super::super::ScheduleStatus::SufficientFunds
-        );
+        assert_eq!(rx1.await.unwrap(), ScheduleStatus::SufficientFunds);
+        assert_eq!(rx2.await.unwrap(), ScheduleStatus::SufficientFunds);
+        assert_eq!(rx3.await.unwrap(), ScheduleStatus::SufficientFunds);
     }
 
     #[tokio::test]
@@ -332,17 +314,11 @@ mod tests {
 
         // First one succeeds
         assert!(state.try_reserve_new_withdraw(p1, SequenceNumber::from_u64(5)));
-        assert_eq!(
-            rx1.await.unwrap().status,
-            super::super::super::ScheduleStatus::SufficientFunds
-        );
+        assert_eq!(rx1.await.unwrap(), ScheduleStatus::SufficientFunds);
 
         // Second one fails (100 reserved + 100 needed = 200 > 150)
         assert!(state.try_reserve_new_withdraw(p2, SequenceNumber::from_u64(5)));
-        assert_eq!(
-            rx2.await.unwrap().status,
-            super::super::super::ScheduleStatus::InsufficientFunds
-        );
+        assert_eq!(rx2.await.unwrap(), ScheduleStatus::InsufficientFunds);
     }
 
     #[test]
@@ -445,10 +421,7 @@ mod tests {
         );
 
         let result = rx.await.unwrap();
-        assert_eq!(
-            result.status,
-            super::super::super::ScheduleStatus::SufficientFunds
-        );
+        assert_eq!(result, ScheduleStatus::SufficientFunds);
     }
 
     #[test]
@@ -498,10 +471,7 @@ mod tests {
 
         // Reserve first (200) - should succeed
         assert!(state.try_reserve_new_withdraw(p1, SequenceNumber::from_u64(5)));
-        assert_eq!(
-            rx1.await.unwrap().status,
-            super::super::super::ScheduleStatus::SufficientFunds
-        );
+        assert_eq!(rx1.await.unwrap(), ScheduleStatus::SufficientFunds);
 
         // Try to reserve second (150) - but 200 + 150 = 350 > 300
         // Version 6 != last_settled_version (5), so it should return false
