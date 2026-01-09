@@ -82,19 +82,19 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
         String::from_utf8_lossy(&output.stdout), // for windows ...
         String::from_utf8_lossy(&output.stderr), // for windows ...
     );
-    // redact the temporary directory path
-    let mut result = result.replace(temp_config_dir.path().to_string_lossy().as_ref(), "<ROOT>");
 
-    // Redact the sandbox directory path so we can retain snapshots more easily.
-    // We canonicalize also to make sure we catch absolute paths too.
-    result = result.replace(
-        sandbox.canonicalize().unwrap().to_string_lossy().as_ref(),
-        "<SANDBOX_DIR>",
-    );
-    result = result.replace(sandbox.to_string_lossy().as_ref(), "<SANDBOX_DIR>");
-
-    // Convert windows path outputs on the snapshot to regular linux ones.
-    result = result.replace(r"\\", "/");
+    let result = result
+        // redact the temporary directory path
+        .replace(temp_config_dir.path().to_string_lossy().as_ref(), "<ROOT>")
+        // Redact the sandbox directory path so we can retain snapshots easily.
+        // We canonicalize also to make sure we catch absolute paths too.
+        .replace(
+            sandbox.canonicalize().unwrap().to_string_lossy().as_ref(),
+            "<SANDBOX_DIR>",
+        )
+        .replace(sandbox.to_string_lossy().as_ref(), "<SANDBOX_DIR>")
+        // Convert windows path outputs on the snapshot to regular linux ones.
+        .replace(r"\\", "/");
 
     insta_assert! {
         input_path: path,
