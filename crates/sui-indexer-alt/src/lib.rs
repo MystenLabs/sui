@@ -180,7 +180,9 @@ pub async fn setup_indexer(
 
     // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);
-    add_sequential!(CpBloomBlocks, cp_bloom_blocks);
+
+    // Unpruned concurrent pipelines
+    add_concurrent!(CpBloomBlocks, cp_bloom_blocks);
 
     // Concurrent pipelines with retention
     add_concurrent!(CoinBalanceBuckets, coin_balance_buckets);
