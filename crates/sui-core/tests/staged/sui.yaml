@@ -1463,7 +1463,7 @@ WithdrawalTypeArg:
     0:
       Balance:
         NEWTYPE:
-          TYPENAME: TypeInput
+          TYPENAME: TypeTag
 WriteAccumulatorStorageCost:
   STRUCT:
     - storage_cost: U64
