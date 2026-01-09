@@ -17,24 +17,24 @@ const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
 pub struct Build {
     /// Include the contents of packages in dependencies that haven't been published (only relevant
     /// when dumping bytecode as base64)
-    #[clap(short = 'u', long, global = true)]
+    #[clap(long, global = true)]
     pub with_unpublished_dependencies: bool,
     /// Dump the compiled bytecode as base64-encoded strings in a JSON object, together with the
     /// digest and list of dependencies.
-    #[clap(short = 'd', long, global = true)]
+    #[clap(long, global = true)]
     pub dump_bytecode_as_base64: bool,
     /// By default, the CLI will drop any unused dependencies from the output and makes calls to
     /// the RPC. This flag disables that behavior and avoids any RPC calls, keeping all
     /// dependencies in the output (the dependency list). This is useful for offline compilation.
     /// Only to be used with `--dump-bytecode-as-base64`.
-    #[clap(short = 't', long, global = true, requires = "dump_bytecode_as_base64")]
+    #[clap(long, global = true, requires = "dump_bytecode_as_base64")]
     pub no_tree_shaking: bool,
     /// If true, generate struct layout schemas for
     /// all struct types passed into `entry` functions declared by modules in this package
     /// These layout schemas can be consumed by clients (e.g.,
     /// the TypeScript SDK) to enable serialization/deserialization of transaction arguments
     /// and events.
-    #[clap(short = 's', long, global = true)]
+    #[clap(long, global = true)]
     pub generate_struct_layouts: bool,
 }
 
