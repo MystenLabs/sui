@@ -600,7 +600,11 @@ pub struct DevInspectResults {
     /// Events that likely would be generated if the transaction is actually run.
     pub events: SuiTransactionEvents,
     /// Execution results (including return values) from executing the transaction commands
-    pub results: Result<Vec<SuiExecutionResult>, String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub results: Option<Vec<SuiExecutionResult>>,
+    /// Execution error from executing the transaction commands
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -628,31 +632,37 @@ impl DevInspectResults {
         resolver: &impl GetModule,
     ) -> Result<Self, anyhow::Error> {
         let tx_digest = *effects.transaction_digest();
-        let results = match return_values {
-            Err(e) => Err(format!("{}", e)),
-            Ok(srvs) => Ok(srvs
-                .into_iter()
-                .map(|srv| {
-                    let (mutable_reference_outputs, return_values) = srv;
-                    let mutable_reference_outputs = mutable_reference_outputs
-                        .into_iter()
-                        .map(|(a, bytes, tag)| (a.into(), bytes, SuiTypeTag::from(tag)))
-                        .collect();
-                    let return_values = return_values
-                        .into_iter()
-                        .map(|(bytes, tag)| (bytes, SuiTypeTag::from(tag)))
-                        .collect();
-                    SuiExecutionResult {
-                        mutable_reference_outputs,
-                        return_values,
-                    }
-                })
-                .collect()),
+        let mut error = None;
+        let mut results = None;
+        match return_values {
+            Err(e) => error = Some(e.to_string()),
+            Ok(srvs) => {
+                results = Some(
+                    srvs.into_iter()
+                        .map(|srv| {
+                            let (mutable_reference_outputs, return_values) = srv;
+                            let mutable_reference_outputs = mutable_reference_outputs
+                                .into_iter()
+                                .map(|(a, bytes, tag)| (a.into(), bytes, SuiTypeTag::from(tag)))
+                                .collect();
+                            let return_values = return_values
+                                .into_iter()
+                                .map(|(bytes, tag)| (bytes, SuiTypeTag::from(tag)))
+                                .collect();
+                            SuiExecutionResult {
+                                mutable_reference_outputs,
+                                return_values,
+                            }
+                        })
+                        .collect(),
+                )
+            }
         };
         Ok(Self {
             effects: effects.try_into()?,
             events: SuiTransactionEvents::try_from(events, tx_digest, None, resolver)?,
             results,
+            error,
         })
     }
 }

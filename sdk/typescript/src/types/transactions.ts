@@ -232,15 +232,11 @@ const ExecutionResultType = object({
   returnValues: optional(array(ReturnValueType)),
 });
 
-const DevInspectResultsType = union([
-  object({ Ok: array(ExecutionResultType) }),
-  object({ Err: string() }),
-]);
-
 export const DevInspectResults = object({
   effects: TransactionEffects,
   events: TransactionEvents,
-  results: DevInspectResultsType,
+  results: optional(array(ExecutionResultType)),
+  error: optional(string()),
 });
 export type DevInspectResults = Infer<typeof DevInspectResults>;
 

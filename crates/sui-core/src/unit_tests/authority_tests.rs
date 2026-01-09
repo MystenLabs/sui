@@ -592,12 +592,12 @@ async fn test_dev_inspect_dynamic_field() {
         }))],
     };
     let kind = TransactionKind::programmable(pt);
-    let DevInspectResults { results, .. } = fullnode
+    let DevInspectResults { error, .. } = fullnode
         .dev_inspect_transaction(sender, kind, Some(1))
         .await
         .unwrap();
     // produces an error
-    let err = results.unwrap_err();
+    let err = error.unwrap();
     assert!(
         err.contains("kind: CircularObjectOwnership"),
         "unexpected error: {}",
