@@ -10,14 +10,12 @@ use sui_types::{
 use tokio::sync::oneshot::Sender;
 use tracing::debug;
 
-use crate::execution_scheduler::funds_withdraw_scheduler::{
-    ScheduleStatus, TxFundsWithdraw, address_funds::ScheduleResult,
-};
+use crate::execution_scheduler::funds_withdraw_scheduler::{ScheduleStatus, TxFundsWithdraw};
 
 pub(crate) struct PendingWithdraw {
     accumulator_version: SequenceNumber,
     tx_digest: TransactionDigest,
-    sender: Mutex<Option<Sender<ScheduleResult>>>,
+    sender: Mutex<Option<Sender<ScheduleStatus>>>,
     pending: Mutex<BTreeMap<AccumulatorObjId, u64>>,
 }
 
@@ -25,7 +23,7 @@ impl PendingWithdraw {
     pub fn new(
         accumulator_version: SequenceNumber,
         withdraw: TxFundsWithdraw,
-        sender: Sender<ScheduleResult>,
+        sender: Sender<ScheduleStatus>,
     ) -> Arc<Self> {
         Arc::new(Self {
             accumulator_version,
@@ -39,8 +37,17 @@ impl PendingWithdraw {
         self.accumulator_version
     }
 
+    pub fn tx_digest(&self) -> TransactionDigest {
+        self.tx_digest
+    }
+
     pub fn pending_amount(&self, account_id: &AccumulatorObjId) -> u128 {
         self.pending.lock().get(account_id).copied().unwrap() as u128
+    }
+
+    pub fn is_scheduled(&self) -> bool {
+        // Sender is already taken and dropped, this means we have already notified the scheduling result.
+        self.sender.lock().is_none()
     }
 
     pub fn remove_pending_account(&self, account_id: &AccumulatorObjId) {
@@ -48,10 +55,7 @@ impl PendingWithdraw {
         pending.remove(account_id).unwrap();
         if pending.is_empty() {
             let sender = self.sender.lock().take().unwrap();
-            let _ = sender.send(ScheduleResult {
-                tx_digest: self.tx_digest,
-                status: ScheduleStatus::SufficientFunds,
-            });
+            let _ = sender.send(ScheduleStatus::SufficientFunds);
         }
     }
 
@@ -62,10 +66,7 @@ impl PendingWithdraw {
         // is already taken.
         if let Some(sender) = sender_guard.take() {
             debug!("Insufficient funds for withdraw");
-            let _ = sender.send(ScheduleResult {
-                tx_digest: self.tx_digest,
-                status: ScheduleStatus::InsufficientFunds,
-            });
+            let _ = sender.send(ScheduleStatus::InsufficientFunds);
         }
     }
 }

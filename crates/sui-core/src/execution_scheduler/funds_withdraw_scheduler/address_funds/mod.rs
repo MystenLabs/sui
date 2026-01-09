@@ -1,17 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use sui_types::{
     accumulator_root::AccumulatorObjId, base_types::SequenceNumber, digests::TransactionDigest,
 };
+use tokio::sync::oneshot;
 
 mod eager_scheduler;
 mod naive_scheduler;
 pub(crate) mod scheduler;
+
 #[cfg(test)]
-mod tests;
+mod naive_scheduler_tests;
+
+#[cfg(test)]
+mod common_tests;
 
 #[cfg(test)]
 mod e2e_tests;
@@ -35,10 +40,18 @@ pub(crate) enum ScheduleStatus {
 }
 
 /// The result of scheduling the withdraw reservations for a transaction.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct ScheduleResult {
-    pub tx_digest: TransactionDigest,
-    pub status: ScheduleStatus,
+pub(crate) enum ScheduleResult {
+    ScheduleResult(ScheduleStatus),
+    Pending(oneshot::Receiver<ScheduleStatus>),
+}
+
+impl ScheduleResult {
+    pub fn unwrap_status(&self) -> ScheduleStatus {
+        match self {
+            Self::ScheduleResult(status) => *status,
+            Self::Pending(_) => panic!("Expected a schedule result"),
+        }
+    }
 }
 
 /// Details regarding a funds settlement, generated when a settlement transaction has been executed
@@ -58,4 +71,33 @@ pub struct FundsSettlement {
 pub(crate) struct TxFundsWithdraw {
     pub tx_digest: TransactionDigest,
     pub reservations: BTreeMap<AccumulatorObjId, u64>,
+}
+
+/// Represents a batch of withdraw reservations for a given accumulator version,
+/// scheduled together from consensus.
+#[derive(Clone, Debug)]
+pub(crate) struct WithdrawReservations {
+    pub accumulator_version: SequenceNumber,
+    pub withdraws: Vec<TxFundsWithdraw>,
+}
+
+impl WithdrawReservations {
+    pub fn notify_skip_schedule(&self) -> BTreeMap<TransactionDigest, ScheduleResult> {
+        self.withdraws
+            .iter()
+            .map(|withdraw| {
+                (
+                    withdraw.tx_digest,
+                    ScheduleResult::ScheduleResult(ScheduleStatus::SkipSchedule),
+                )
+            })
+            .collect()
+    }
+
+    pub fn all_accounts(&self) -> BTreeSet<AccumulatorObjId> {
+        self.withdraws
+            .iter()
+            .flat_map(|withdraw| withdraw.reservations.keys().cloned())
+            .collect()
+    }
 }
