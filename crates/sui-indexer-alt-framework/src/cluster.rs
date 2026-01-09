@@ -34,7 +34,7 @@ pub struct Args {
 
     /// Where to get checkpoint data from.
     #[clap(flatten)]
-    pub client_args: Option<ClientArgs>,
+    pub client_args: ClientArgs,
 
     /// How to expose metrics.
     #[clap(flatten)]
@@ -107,7 +107,7 @@ impl IndexerClusterBuilder {
     /// Set client arguments (where to get checkpoint data from).
     /// This overwrites any previously set client args.
     pub fn with_client_args(mut self, args: ClientArgs) -> Self {
-        self.args.client_args = Some(args);
+        self.args.client_args = args;
         self
     }
 
@@ -152,7 +152,7 @@ impl IndexerClusterBuilder {
 
         let registry = Registry::new();
         let metrics = MetricsService::new(self.args.metrics_args, registry);
-        let client_args = self.args.client_args.context("client_args is required")?;
+        let client_args = self.args.client_args;
 
         let indexer = Indexer::new_from_pg(
             database_url,
@@ -325,13 +325,13 @@ mod tests {
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), get_available_port());
 
         let args = Args {
-            client_args: Some(ClientArgs {
+            client_args: ClientArgs {
                 ingestion: IngestionClientArgs {
                     local_ingestion_path: Some(checkpoint_dir.path().to_owned()),
                     ..Default::default()
                 },
                 ..Default::default()
-            }),
+            },
             indexer_args: IndexerArgs {
                 first_checkpoint: Some(0),
                 last_checkpoint: Some(9),
@@ -418,13 +418,13 @@ mod tests {
                     first_checkpoint: Some(100),
                     ..Default::default()
                 },
-                client_args: Some(ClientArgs {
+                client_args: ClientArgs {
                     ingestion: IngestionClientArgs {
                         local_ingestion_path: Some("/bundled".into()),
                         ..Default::default()
                     },
                     ..Default::default()
-                }),
+                },
                 metrics_args: MetricsArgs {
                     metrics_address: "127.0.0.1:8080".parse().unwrap(),
                 },
@@ -449,9 +449,9 @@ mod tests {
             builder
                 .args
                 .client_args
-                .unwrap()
                 .ingestion
                 .local_ingestion_path
+                .as_ref()
                 .unwrap()
                 .to_string_lossy(),
             "/individual"
@@ -484,13 +484,13 @@ mod tests {
                     first_checkpoint: Some(100),
                     ..Default::default()
                 },
-                client_args: Some(ClientArgs {
+                client_args: ClientArgs {
                     ingestion: IngestionClientArgs {
                         local_ingestion_path: Some("/bundled".into()),
                         ..Default::default()
                     },
                     ..Default::default()
-                }),
+                },
                 metrics_args: MetricsArgs {
                     metrics_address: "127.0.0.1:8080".parse().unwrap(),
                 },
@@ -501,9 +501,9 @@ mod tests {
             builder
                 .args
                 .client_args
-                .unwrap()
                 .ingestion
                 .local_ingestion_path
+                .as_ref()
                 .unwrap()
                 .to_string_lossy(),
             "/bundled"
