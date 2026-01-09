@@ -499,7 +499,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     }
 
     /// Converts a VM runtime Type to an adapter Type.
-    pub fn adapter_type_from_vm_type(
+    fn adapter_type_from_vm_type(
         &self,
         vm_type: &vm_runtime_type::Type,
     ) -> Result<Type, ExecutionError> {
