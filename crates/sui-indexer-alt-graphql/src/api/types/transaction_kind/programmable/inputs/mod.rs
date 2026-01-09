@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod balance_withdraw;
+pub mod object;
+pub mod pure;
+
 use async_graphql::Union;
 
 use sui_types::transaction::CallArg;
@@ -9,13 +13,11 @@ use sui_types::transaction::ObjectArg;
 use crate::api::scalars::base64::Base64;
 use crate::scope::Scope;
 
+pub use balance_withdraw::BalanceWithdraw;
 pub use object::OwnedOrImmutable;
 pub use object::Receiving;
 pub use object::SharedInput;
 pub use pure::Pure;
-
-pub mod object;
-pub mod pure;
 
 /// Input argument to a Programmable Transaction Block (PTB) command.
 #[derive(Union)]
@@ -24,7 +26,7 @@ pub enum TransactionInput {
     OwnedOrImmutable(OwnedOrImmutable),
     SharedInput(SharedInput),
     Receiving(Receiving),
-    // TODO: Add BalanceWithdraw variant
+    BalanceWithdraw(BalanceWithdraw),
 }
 
 impl TransactionInput {
@@ -53,12 +55,9 @@ impl TransactionInput {
                     Receiving::from_object_ref(object_id, version, digest, scope),
                 ),
             },
-            // TODO: Handle FundsWithdrawal
-            CallArg::FundsWithdrawal(_) => Self::Pure(Pure {
-                bytes: Some(Base64::from(
-                    b"TODO: FundsWithdrawal not supported".to_vec(),
-                )),
-            }),
+            CallArg::FundsWithdrawal(withdrawal) => {
+                Self::BalanceWithdraw(BalanceWithdraw::from_native(withdrawal, scope))
+            }
         }
     }
 }

@@ -116,6 +116,15 @@ BalanceChange.coinType
 BalanceChange.amount
   => {}
 
+BalanceWithdraw.reservation
+  => {}
+
+BalanceWithdraw.typeArg
+  => {}
+
+BalanceWithdraw.withdrawFrom
+  => {}
+
 BridgeCommitteeInitTransaction.bridgeObjectVersion
   => {}
 
@@ -452,6 +461,9 @@ DynamicField.value
 EndOfEpochTransaction.transactions
   => {}
 
+EntireBalance._
+  => {}
+
 Epoch.id
   => {}
 
@@ -744,6 +756,9 @@ MakeMoveVecCommand.type
   => {}
 
 MakeMoveVecCommand.elements
+  => {}
+
+MaxAmountU64.amount
   => {}
 
 MergeCoinsCommand.coin
