@@ -25,6 +25,7 @@ add_env_to_toml() {
   echo "[environments]" >> $1/Move.toml
   echo "localnet = \"$chain_id\"" >> $1/Move.toml
 }
+
 echo "=== Should fail to publish because dependencies are not published. ==="
 
 add_env_to_toml a
