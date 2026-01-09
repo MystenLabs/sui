@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use async_graphql::Context;
 use diesel::QueryableByName;
 use diesel::sql_types::BigInt;
-use diesel::sql_types::Integer;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_schema::blooms::blocked::BlockedBloomFilter;
 use sui_indexer_alt_schema::cp_bloom_blocks::BLOOM_BLOCK_BITS;
@@ -146,29 +145,36 @@ fn expand_ranges(ranges: &[CpBlockRange], cp_lo: u64, cp_hi: u64, ascending: boo
     candidates
 }
 
-fn condition_fragment(conditions: &[BloomCondition]) -> Query<'_> {
-    conditions
+fn condition_fragment(conditions: &[BloomCondition]) -> Query<'static> {
+    let values = conditions
         .iter()
         .map(|c| {
-            let byte_positions: Vec<i32> = c.byte_positions.iter().map(|p| *p as i32).collect();
-            let bit_masks: Vec<i32> = c.bit_masks.iter().map(|m| *m as i32).collect();
-
-            query!(
-                "({BigInt}, {SmallInt}, {Array<Integer>}, {Array<Integer>})",
+            format!(
+                "({}::BIGINT, {}::SMALLINT, ARRAY[{}]::INT[], ARRAY[{}]::INT[])",
                 c.cp_block_id,
                 c.bloom_block_idx,
-                byte_positions,
-                bit_masks
+                c.byte_positions
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<_>>()
+                    .join(","),
+                c.bit_masks
+                    .iter()
+                    .map(|m| m.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",")
             )
         })
-        .reduce(|a, b| a + query!(", ") + b)
-        .unwrap_or_else(|| query!(""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    query!("{}", Query::new(values))
 }
 
-fn required_counts_fragment(required_counts: &HashMap<i64, usize>) -> Query<'_> {
-    required_counts
+fn required_counts_fragment(required_counts: &HashMap<i64, usize>) -> Query<'static> {
+    let values = required_counts
         .iter()
-        .map(|(cp_id, count)| query!("({BigInt}, {BigInt})", *cp_id, *count as i64))
-        .reduce(|a, b| a + query!(", ") + b)
-        .unwrap_or_else(|| query!(""))
+        .map(|(cp_id, count)| format!("({}::BIGINT, {}::BIGINT)", cp_id, count))
+        .collect::<Vec<_>>()
+        .join(", ");
+    query!("{}", Query::new(values))
 }
