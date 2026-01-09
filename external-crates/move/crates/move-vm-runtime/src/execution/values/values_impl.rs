@@ -372,17 +372,6 @@ impl<T: Debug> MemBox<T> {
         self.0.borrow_mut()
     }
 
-    pub fn take(self) -> PartialVMResult<T> {
-        match std::rc::Rc::try_unwrap(self.0) {
-            Ok(refcell) => Ok(refcell.into_inner()),
-            Err(val) => Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    format!("Tried to take value {:?} with dangling references", val),
-                ),
-            ),
-        }
-    }
-
     pub fn replace(&mut self, t: T) -> T {
         self.0.replace(t)
     }
@@ -403,6 +392,10 @@ impl<T: Debug> MemBox<T> {
 impl MemBox<Value> {
     pub fn as_ref_value(&self) -> Value {
         Value::Reference(Reference::Value(self.ptr_clone()))
+    }
+
+    pub fn take(mut self) -> Value {
+        self.replace(Value::Invalid)
     }
 
     // Returns the underlying pointer
@@ -591,11 +584,7 @@ impl Value {
             Value::Vec(values) => {
                 let constants = values
                     .into_iter()
-                    .map(|v| {
-                        v.take()
-                            .expect("Could not take a value during constant creation")
-                            .into_constant_value(arena)
-                    })
+                    .map(|v| v.take().into_constant_value(arena))
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 let constants = alloc_vec!(constants);
                 Ok(ConstantValue::Container(ConstantContainer::Vec(constants)))
@@ -614,11 +603,7 @@ impl Value {
                 let constants = values
                     .0
                     .into_iter()
-                    .map(|v| {
-                        v.take()
-                            .expect("Could not take a value during constant creation")
-                            .into_constant_value(arena)
-                    })
+                    .map(|v| v.take().into_constant_value(arena))
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 let constants = alloc_vec!(constants);
                 Ok(ConstantValue::Container(ConstantContainer::Struct(
@@ -629,11 +614,7 @@ impl Value {
                 let (tag, values) = *variant.0;
                 let constants = values
                     .into_iter()
-                    .map(|v| {
-                        v.take()
-                            .expect("Could not take a value during constant creation")
-                            .into_constant_value(arena)
-                    })
+                    .map(|v| v.take().into_constant_value(arena))
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 let constants = alloc_vec!(constants);
                 Ok(ConstantValue::Container(ConstantContainer::Variant(
@@ -1455,10 +1436,10 @@ impl_vec_vm_value_cast!(
 impl VMValueCast<Vec<Value>> for Value {
     fn cast(self) -> PartialVMResult<Vec<Value>> {
         match self {
-            Value::Vec(entries) => entries
+            Value::Vec(entries) => Ok(entries
                 .into_iter()
                 .map(|entry| entry.take())
-                .collect::<PartialVMResult<Vec<_>>>(),
+                .collect::<Vec<_>>()),
             v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                 .with_message(format!("cannot cast {:?} to Vec<Value>", v))),
         }
@@ -1756,13 +1737,12 @@ impl Struct {
         Struct(values)
     }
 
-    pub fn unpack(self) -> PartialVMResult<impl Iterator<Item = Value>> {
-        Ok(self
-            .0
+    pub fn unpack(self) -> impl Iterator<Item = Value> {
+        self.0
             .into_iter()
             .map(|value| value.take())
-            .collect::<PartialVMResult<Vec<_>>>()?
-            .into_iter())
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 
     /// Returns an iterator over the fields
@@ -1811,13 +1791,9 @@ impl Variant {
         self.0.as_ref().1.iter()
     }
 
-    pub fn unpack(self) -> PartialVMResult<impl Iterator<Item = Value>> {
+    pub fn unpack(self) -> impl Iterator<Item = Value> {
         let (_tag, fields) = *self.0;
-        Ok(fields
-            .into_iter()
-            .map(|value| value.take())
-            .collect::<PartialVMResult<Vec<_>>>()?
-            .into_iter())
+        fields.into_iter().map(|value| value.take())
     }
 
     pub fn check_tag(&self, expected_tag: VariantTag) -> PartialVMResult<()> {
@@ -2038,7 +2014,7 @@ impl VectorRef {
             V::PrimVec(PV::VecU256(xs)) => pop_vec_item!(xs, x, Value::U256(Box::new(x))),
             V::PrimVec(PV::VecBool(xs)) => pop_vec_item!(xs, x, Value::Bool(x)),
             V::PrimVec(PV::VecAddress(xs)) => pop_vec_item!(xs, x, Value::Address(Box::new(x))),
-            V::Vec(items) => pop_vec_item!(items, value, value.take()?),
+            V::Vec(items) => pop_vec_item!(items, value, value.take()),
         }
     }
 
@@ -2172,10 +2148,7 @@ impl Vector {
             V::PrimVec(PV::VecU256(xs)) => take_and_map!(xs, |x| Value::U256(Box::new(x))),
             V::PrimVec(PV::VecBool(xs)) => take_and_map!(xs, Value::Bool),
             V::PrimVec(PV::VecAddress(xs)) => take_and_map!(xs, |x| Value::Address(Box::new(x))),
-            V::Vec(items) => items
-                .into_iter()
-                .map(|v| v.take())
-                .collect::<PartialVMResult<Vec<_>>>()?,
+            V::Vec(items) => items.into_iter().map(|v| v.take()).collect(),
             value => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2246,7 +2219,7 @@ impl GlobalValueImpl {
                 container
             }
         };
-        value_box.take()
+        Ok(value_box.take())
     }
 
     fn move_to(&mut self, val: Value) -> Result<(), (PartialVMError, Value)> {
@@ -2282,9 +2255,7 @@ impl GlobalValueImpl {
         match self {
             Self::Empty => None,
             Self::Filled(container) => {
-                let struct_ @ Value::Struct(_) =
-                    container.take().expect("Could not take global value ")
-                else {
+                let struct_ @ Value::Struct(_) = container.take() else {
                     unreachable!()
                 };
                 Some(struct_)
@@ -2629,7 +2600,15 @@ impl Value {
     }
 
     pub fn typed_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
-        Some(bcs::to_bytes(&AnnotatedValue { layout, val: self }).expect("BCS failed"))
+        let res = bcs::to_bytes(&AnnotatedValue { layout, val: self });
+        debug_assert!(
+            res.is_ok(),
+            "BCS failed to serialize value {:?} with layout {:?}. Error: {:?}",
+            self,
+            layout,
+            res.err().unwrap()
+        );
+        res.ok()
     }
 
     pub fn serialize(&self) -> Option<Vec<u8>> {
