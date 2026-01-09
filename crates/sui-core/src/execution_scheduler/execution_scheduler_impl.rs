@@ -12,8 +12,8 @@ use crate::{
         ExecutingGuard, PendingCertificateStats,
         funds_withdraw_scheduler::{
             FundsSettlement, ObjectFundsWithdrawSchedulerTrait, ObjectFundsWithdrawStatus,
-            ScheduleStatus, TxFundsWithdraw, naive_scheduler::NaiveObjectFundsWithdrawScheduler,
-            scheduler::FundsWithdrawScheduler,
+            ScheduleStatus, TxFundsWithdraw, WithdrawReservations,
+            naive_scheduler::NaiveObjectFundsWithdrawScheduler, scheduler::FundsWithdrawScheduler,
         },
     },
 };
@@ -374,7 +374,10 @@ impl ExecutionScheduler {
                 .as_ref()
                 .expect("Funds withdraw scheduler must be enabled if there are withdraws");
             for (version, tx_withdraws) in withdraws {
-                receivers.extend(withdraw_scheduler.schedule_withdraws(version, tx_withdraws));
+                receivers.extend(withdraw_scheduler.schedule_withdraws(WithdrawReservations {
+                    accumulator_version: version,
+                    withdraws: tx_withdraws,
+                }));
             }
             // guard will be dropped here
         }
@@ -387,10 +390,9 @@ impl ExecutionScheduler {
             }
             while let Some(result) = receivers.next().await {
                 match result {
-                    Ok(result) => match result.status {
+                    Ok((tx_digest, status)) => match status {
                         ScheduleStatus::InsufficientFunds => {
                             assert_reachable!("tx cancelled, insufficient funds");
-                            let tx_digest = result.tx_digest;
                             debug!(
                                 ?tx_digest,
                                 "Funds withdraw scheduling result: Insufficient funds"
@@ -408,7 +410,6 @@ impl ExecutionScheduler {
                         }
                         ScheduleStatus::SkipSchedule => {
                             assert_reachable!("tx withdrawal scheduling skipped");
-                            let tx_digest = result.tx_digest;
                             debug!(?tx_digest, "Skip scheduling funds withdraw");
                         }
                     },

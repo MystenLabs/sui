@@ -7,22 +7,29 @@ use std::{
 };
 
 use parking_lot::Mutex;
-use sui_types::{accumulator_root::AccumulatorObjId, base_types::SequenceNumber};
+use sui_types::{
+    accumulator_root::AccumulatorObjId, base_types::SequenceNumber, digests::TransactionDigest,
+};
+use tokio::sync::oneshot;
 use tracing::debug;
 
 use crate::{
     accumulators::funds_read::AccountFundsRead,
     execution_scheduler::funds_withdraw_scheduler::{
-        FundsSettlement,
-        address_funds::eager_scheduler::{
-            account_state::AccountState, pending_withdraw::PendingWithdraw,
+        FundsSettlement, WithdrawReservations,
+        address_funds::{
+            ScheduleResult,
+            eager_scheduler::{account_state::AccountState, pending_withdraw::PendingWithdraw},
         },
-        scheduler::{FundsWithdrawSchedulerTrait, WithdrawReservations},
+        scheduler::FundsWithdrawSchedulerTrait,
     },
 };
 
 mod account_state;
 mod pending_withdraw;
+
+#[cfg(test)]
+mod eager_scheduler_tests;
 
 pub(crate) struct EagerFundsWithdrawScheduler {
     funds_read: Arc<dyn AccountFundsRead>,
@@ -62,15 +69,18 @@ impl EagerFundsWithdrawScheduler {
 
 #[async_trait::async_trait]
 impl FundsWithdrawSchedulerTrait for EagerFundsWithdrawScheduler {
-    async fn schedule_withdraws(&self, withdraws: WithdrawReservations) {
+    fn schedule_withdraws(
+        &self,
+        reservations: WithdrawReservations,
+    ) -> BTreeMap<TransactionDigest, ScheduleResult> {
         let mut inner_state = self.inner_state.lock();
-        if withdraws.accumulator_version < inner_state.accumulator_version {
+        let cur_accumulator_version = inner_state.accumulator_version;
+        if reservations.accumulator_version < cur_accumulator_version {
             // This accumulator version is already settled.
             // There is no need to schedule the withdraws.
-            withdraws.notify_skip_schedule();
-            return;
+            return reservations.notify_skip_schedule();
         }
-        let all_accounts = withdraws.all_accounts();
+        let all_accounts = reservations.all_accounts();
         let untracked_accounts = all_accounts
             .iter()
             .filter(|account_id| !inner_state.tracked_accounts.contains_key(account_id));
@@ -78,17 +88,17 @@ impl FundsWithdrawSchedulerTrait for EagerFundsWithdrawScheduler {
         for account_id in untracked_accounts {
             // TODO: We can warm up the cache prior to holding the lock.
             let (balance, version) = self.funds_read.get_latest_account_amount(account_id);
-            if version > withdraws.accumulator_version {
-                withdraws.notify_skip_schedule();
-                return;
+            if version > reservations.accumulator_version {
+                return reservations.notify_skip_schedule();
             }
             init_balances.insert(account_id, (balance, version));
         }
-        let cur_accumulator_version = inner_state.accumulator_version;
-        for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
+        let mut results = BTreeMap::new();
+        for withdraw in reservations.withdraws {
+            let (sender, mut receiver) = oneshot::channel();
             let accounts = withdraw.reservations.keys().cloned().collect::<Vec<_>>();
             let pending_withdraw =
-                PendingWithdraw::new(withdraws.accumulator_version, withdraw, sender);
+                PendingWithdraw::new(reservations.accumulator_version, withdraw, sender);
             for account_id in accounts {
                 let entry = inner_state
                     .tracked_accounts
@@ -99,14 +109,27 @@ impl FundsWithdrawSchedulerTrait for EagerFundsWithdrawScheduler {
                     });
                 entry.try_reserve_new_withdraw(pending_withdraw.clone(), cur_accumulator_version);
             }
+            if pending_withdraw.is_scheduled() {
+                let result = receiver.try_recv().unwrap();
+                results.insert(
+                    pending_withdraw.tx_digest(),
+                    ScheduleResult::ScheduleResult(result),
+                );
+            } else {
+                results.insert(
+                    pending_withdraw.tx_digest(),
+                    ScheduleResult::Pending(receiver),
+                );
+            }
         }
         let old = inner_state
             .pending_settlements
-            .insert(withdraws.accumulator_version, all_accounts);
+            .insert(reservations.accumulator_version, all_accounts);
         assert!(old.is_none());
+        results
     }
 
-    async fn settle_funds(&self, settlement: FundsSettlement) {
+    fn settle_funds(&self, settlement: FundsSettlement) {
         let next_accumulator_version = settlement.next_accumulator_version;
         let mut inner_state = self.inner_state.lock();
         if next_accumulator_version <= inner_state.accumulator_version {
