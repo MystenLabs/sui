@@ -1,15 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use anyhow::Context as _;
 use async_graphql::dataloader::Loader;
-use diesel::sql_types::{Array, BigInt, Bytea};
+use diesel::sql_types::Array;
+use diesel::sql_types::BigInt;
+use diesel::sql_types::Bytea;
 use sui_indexer_alt_schema::objects::StoredObjVersion;
 use sui_types::base_types::ObjectID;
 
-use crate::{error::Error, pg_reader::PgReader};
+use crate::error::Error;
+use crate::pg_reader::PgReader;
 
 /// Key for fetching the latest version of an object. If the object has been deleted or wrapped,
 /// the latest version will return the version it was deleted/wrapped at.
@@ -312,8 +316,11 @@ mod tests {
     use async_graphql::dataloader::Loader;
     use diesel_async::RunQueryDsl as _;
     use prometheus::Registry;
-    use sui_indexer_alt_schema::{MIGRATIONS, schema::obj_versions};
-    use sui_pg_db::{Db, DbArgs, temp::TempDb};
+    use sui_indexer_alt_schema::MIGRATIONS;
+    use sui_indexer_alt_schema::schema::obj_versions;
+    use sui_pg_db::Db;
+    use sui_pg_db::DbArgs;
+    use sui_pg_db::temp::TempDb;
     use sui_types::digests::ObjectDigest;
 
     use super::*;

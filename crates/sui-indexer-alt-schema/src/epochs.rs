@@ -4,7 +4,10 @@
 use diesel::prelude::*;
 use sui_field_count::FieldCount;
 
-use crate::schema::{kv_epoch_ends, kv_epoch_starts, kv_feature_flags, kv_protocol_configs};
+use crate::schema::kv_epoch_ends;
+use crate::schema::kv_epoch_starts;
+use crate::schema::kv_feature_flags;
+use crate::schema::kv_protocol_configs;
 
 #[derive(Insertable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = kv_epoch_ends)]

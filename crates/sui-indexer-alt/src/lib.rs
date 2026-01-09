@@ -1,34 +1,48 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub use crate::bootstrap::BootstrapGenesis;
 use anyhow::Context;
-use bootstrap::bootstrap;
-use config::{IndexerConfig, PipelineLayer};
-use handlers::{
-    coin_balance_buckets::CoinBalanceBuckets, cp_sequence_numbers::CpSequenceNumbers,
-    ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
-    kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
-    kv_objects::KvObjects, kv_packages::KvPackages, kv_protocol_configs::KvProtocolConfigs,
-    kv_transactions::KvTransactions, obj_info::ObjInfo, obj_versions::ObjVersions,
-    sum_displays::SumDisplays, tx_affected_addresses::TxAffectedAddresses,
-    tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
-    tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
-};
 use prometheus::Registry;
-use sui_indexer_alt_framework::{
-    Indexer, IndexerArgs,
-    ingestion::{ClientArgs, IngestionConfig},
-    pipeline::{
-        CommitterConfig,
-        concurrent::{ConcurrentConfig, PrunerConfig},
-        sequential::SequentialConfig,
-    },
-    postgres::{Db, DbArgs},
-};
+use sui_indexer_alt_framework::Indexer;
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::IngestionConfig;
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_framework::pipeline::concurrent::PrunerConfig;
+use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
+use sui_indexer_alt_framework::postgres::Db;
+use sui_indexer_alt_framework::postgres::DbArgs;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_indexer_alt_schema::MIGRATIONS;
 use url::Url;
+
+use crate::bootstrap::bootstrap;
+use crate::config::IndexerConfig;
+use crate::config::PipelineLayer;
+use crate::handlers::coin_balance_buckets::CoinBalanceBuckets;
+use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
+use crate::handlers::ev_emit_mod::EvEmitMod;
+use crate::handlers::ev_struct_inst::EvStructInst;
+use crate::handlers::kv_checkpoints::KvCheckpoints;
+use crate::handlers::kv_epoch_ends::KvEpochEnds;
+use crate::handlers::kv_epoch_starts::KvEpochStarts;
+use crate::handlers::kv_feature_flags::KvFeatureFlags;
+use crate::handlers::kv_objects::KvObjects;
+use crate::handlers::kv_packages::KvPackages;
+use crate::handlers::kv_protocol_configs::KvProtocolConfigs;
+use crate::handlers::kv_transactions::KvTransactions;
+use crate::handlers::obj_info::ObjInfo;
+use crate::handlers::obj_versions::ObjVersions;
+use crate::handlers::sum_displays::SumDisplays;
+use crate::handlers::tx_affected_addresses::TxAffectedAddresses;
+use crate::handlers::tx_affected_objects::TxAffectedObjects;
+use crate::handlers::tx_balance_changes::TxBalanceChanges;
+use crate::handlers::tx_calls::TxCalls;
+use crate::handlers::tx_digests::TxDigests;
+use crate::handlers::tx_kinds::TxKinds;
+
+pub use crate::bootstrap::BootstrapGenesis;
 
 pub mod args;
 #[cfg(feature = "benchmark")]

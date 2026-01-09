@@ -4,19 +4,22 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
+use chrono::Utc;
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::prelude::*;
 use diesel::sql_types::BigInt;
-use diesel_async::{AsyncConnection, RunQueryDsl};
+use diesel_async::AsyncConnection;
+use diesel_async::RunQueryDsl;
 use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_framework_store_traits as store;
 use sui_sql_macro::sql;
 
+use crate::Connection;
+use crate::Db;
 use crate::model::StoredWatermark;
 use crate::schema::watermarks;
-use crate::{Connection, Db};
 
 pub use sui_indexer_alt_framework_store_traits::Store;
 

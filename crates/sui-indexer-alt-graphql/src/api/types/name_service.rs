@@ -6,15 +6,19 @@ use std::sync::Arc;
 use anyhow::Context as _;
 use async_graphql::Context;
 use futures::future::OptionFuture;
-use sui_name_service::{Domain as NativeDomain, NameRecord, NameServiceConfig};
-use sui_types::{base_types::SuiAddress, dynamic_field::Field};
+use sui_name_service::Domain as NativeDomain;
+use sui_name_service::NameRecord;
+use sui_name_service::NameServiceConfig;
+use sui_types::base_types::SuiAddress;
+use sui_types::dynamic_field::Field;
 use tokio::join;
 
-use crate::{
-    api::scalars::domain::Domain, error::RpcError, scope::Scope, task::watermark::Watermarks,
-};
-
-use super::{address::Address, object::Object};
+use crate::api::scalars::domain::Domain;
+use crate::api::types::address::Address;
+use crate::api::types::object::Object;
+use crate::error::RpcError;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 /// Attempt to translate the given SuiNS `domain` to its address, as long as the mapping exists,
 /// and it hasn't expired as of the service's high watermark timestamp.

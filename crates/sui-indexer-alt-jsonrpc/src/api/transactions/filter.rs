@@ -1,43 +1,52 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
+use std::time::Duration;
 
 use anyhow::Context as _;
-use diesel::{
-    AppearsOnTable, Column, Expression, ExpressionMethods, QueryDsl, QuerySource,
-    expression::{
-        MixedAggregates, ValidGrouping,
-        is_aggregate::{Never, No},
-    },
-    pg::Pg,
-    query_builder::{BoxedSelectStatement, FromClause, QueryFragment},
-    sql_types::BigInt as SqlBigInt,
-};
+use diesel::AppearsOnTable;
+use diesel::Column;
+use diesel::Expression;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
+use diesel::QuerySource;
+use diesel::expression::MixedAggregates;
+use diesel::expression::ValidGrouping;
+use diesel::expression::is_aggregate::Never;
+use diesel::expression::is_aggregate::No;
+use diesel::pg::Pg;
+use diesel::query_builder::BoxedSelectStatement;
+use diesel::query_builder::FromClause;
+use diesel::query_builder::QueryFragment;
+use diesel::sql_types::BigInt as SqlBigInt;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use serde_with::serde_as;
 use sui_indexer_alt_reader::tx_digests::TxDigestKey;
-use sui_indexer_alt_schema::schema::{
-    tx_affected_addresses, tx_affected_objects, tx_calls, tx_digests,
-};
+use sui_indexer_alt_schema::schema::tx_affected_addresses;
+use sui_indexer_alt_schema::schema::tx_affected_objects;
+use sui_indexer_alt_schema::schema::tx_calls;
+use sui_indexer_alt_schema::schema::tx_digests;
 use sui_indexer_alt_schema::transactions::StoredTxDigest;
-use sui_json_rpc_types::{Page as PageResponse, SuiTransactionBlockResponseOptions};
+use sui_json_rpc_types::Page as PageResponse;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_sql_macro::sql;
-use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    digests::TransactionDigest,
-    messages_checkpoint::CheckpointSequenceNumber,
-    sui_serde::{BigInt, Readable},
-};
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress;
+use sui_types::digests::TransactionDigest;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::sui_serde::BigInt;
+use sui_types::sui_serde::Readable;
 
-use crate::{
-    context::Context,
-    error::{RpcError, invalid_params},
-    paginate::{Cursor as _, JsonCursor, Page},
-};
-
-use super::error::Error;
+use crate::api::transactions::error::Error;
+use crate::context::Context;
+use crate::error::RpcError;
+use crate::error::invalid_params;
+use crate::paginate::Cursor as _;
+use crate::paginate::JsonCursor;
+use crate::paginate::Page;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 #[serde(

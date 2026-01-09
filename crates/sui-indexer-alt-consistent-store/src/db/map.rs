@@ -1,12 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{borrow::Borrow, marker::PhantomData, ops::RangeBounds, sync::Arc};
+use std::borrow::Borrow;
+use std::marker::PhantomData;
+use std::ops::RangeBounds;
+use std::sync::Arc;
 
-use bincode::{Decode, Encode};
-use serde::{Serialize, de::DeserializeOwned};
+use bincode::Decode;
+use bincode::Encode;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
-use super::{Db, error::Error, iter, key};
+use crate::db::Db;
+use crate::db::error::Error;
+use crate::db::iter;
+use crate::db::key;
 
 /// A structured representation of a single RocksDB column family, providing snapshot-based reads
 /// and a transactional write API.
@@ -166,7 +174,8 @@ where
 mod tests {
     use super::*;
 
-    use crate::db::{Db, tests::wm};
+    use crate::db::Db;
+    use crate::db::tests::wm;
 
     #[test]
     fn test_no_such_column_family() {

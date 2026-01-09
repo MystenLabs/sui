@@ -1,22 +1,29 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 pub mod legacy;
 pub mod legacy_lockfile;
 pub mod legacy_parser;
 
-use std::collections::{BTreeMap, HashSet};
-use std::fs;
-use std::path::{Path, PathBuf};
+use crate::{
+    compatibility::legacy_parser::{LegacyPackageMetadata, parse_package_info},
+    package::layout::SourcePackageLayout,
+    package::paths::PackagePath,
+    schema::PackageName,
+};
+
+use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 
 use anyhow::{Context, Result, bail};
-use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
-use once_cell::sync::Lazy;
 use regex::Regex;
-use tracing::debug;
-
-use crate::compatibility::legacy_parser::{LegacyPackageMetadata, parse_package_info};
-use crate::package::layout::SourcePackageLayout;
-use crate::package::paths::PackagePath;
-use crate::schema::PackageName;
+use std::{
+    collections::{BTreeMap, HashSet},
+    fs,
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
 use toml::value::Value as TV;
+use tracing::debug;
 
 pub type LegacyVersion = (u64, u64, u64);
 pub type LegacySubstitution = BTreeMap<String, LegacySubstOrRename>;
@@ -38,7 +45,8 @@ const MODULE_REGEX: &str = r"\bmodule\s+([a-zA-Z_][\w]*)::([a-zA-Z_][\w]*)";
 // Compile regex once at program startup
 #[cfg(not(msim))]
 fn get_module_regex() -> &'static Regex {
-    static MODULE_REGEX_COMPILED: Lazy<Regex> = Lazy::new(|| Regex::new(MODULE_REGEX).unwrap());
+    static MODULE_REGEX_COMPILED: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(MODULE_REGEX).unwrap());
     &MODULE_REGEX_COMPILED
 }
 
@@ -46,7 +54,7 @@ fn get_module_regex() -> &'static Regex {
 #[cfg(msim)]
 fn get_module_regex() -> Regex {
     thread_local! {
-        static MODULE_REGEX_COMPILED: Lazy<Regex> = Lazy::new(|| Regex::new(MODULE_REGEX).unwrap());
+        static MODULE_REGEX_COMPILED: LazyLock<Regex> = LazyLock::new(|| Regex::new(MODULE_REGEX).unwrap());
     }
 
     MODULE_REGEX_COMPILED.with(|val| (*val).clone())

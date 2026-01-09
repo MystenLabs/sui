@@ -4,5 +4,7 @@
 mod checkpoint_blob;
 mod epochs;
 
-pub use checkpoint_blob::{CheckpointBlob, CheckpointBlobPipeline};
-pub use epochs::{EpochCheckpoint, EpochsPipeline};
+pub use checkpoint_blob::CheckpointBlob;
+pub use checkpoint_blob::CheckpointBlobPipeline;
+pub use epochs::EpochCheckpoint;
+pub use epochs::EpochsPipeline;

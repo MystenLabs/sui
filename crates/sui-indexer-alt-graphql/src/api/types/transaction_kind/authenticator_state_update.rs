@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Context, Object, connection::Connection};
-use sui_types::{
-    authenticator_state::ActiveJwk as NativeActiveJwk,
-    transaction::AuthenticatorStateUpdate as NativeAuthenticatorStateUpdate,
-};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use sui_types::authenticator_state::ActiveJwk as NativeActiveJwk;
+use sui_types::transaction::AuthenticatorStateUpdate as NativeAuthenticatorStateUpdate;
 
-use crate::{
-    api::scalars::{cursor::JsonCursor, uint53::UInt53},
-    api::types::epoch::Epoch,
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::epoch::Epoch;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
 
 /// System transaction for updating the on-chain state used by zkLogin.
 #[derive(Clone)]
@@ -88,19 +88,24 @@ impl AuthenticatorStateUpdateTransaction {
         after: Option<CActiveJwk>,
         last: Option<u64>,
         before: Option<CActiveJwk>,
-    ) -> Result<Option<Connection<String, ActiveJwk>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("AuthenticatorStateUpdateTransaction", "newActiveJwks");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, ActiveJwk>, RpcError>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits =
+                    pagination.limits("AuthenticatorStateUpdateTransaction", "newActiveJwks");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        page.paginate_indices(self.native.new_active_jwks.len(), |i| {
-            let active_jwk = ActiveJwk {
-                native: self.native.new_active_jwks[i].clone(),
-                scope: self.scope.clone(),
-            };
-            Ok(active_jwk)
-        })
-        .map(Some)
+                page.paginate_indices(self.native.new_active_jwks.len(), |i| {
+                    let active_jwk = ActiveJwk {
+                        native: self.native.new_active_jwks[i].clone(),
+                        scope: self.scope.clone(),
+                    };
+                    Ok(active_jwk)
+                })
+            }
+            .await,
+        )
     }
 
     /// The initial version of the authenticator object that it was shared at.

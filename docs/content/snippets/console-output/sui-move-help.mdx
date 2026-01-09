@@ -1,24 +1,22 @@
-
 ```sh
 Tool to build and test Move applications
 
 Usage: sui move [OPTIONS] <COMMAND>
 
 Commands:
-  build
-  coverage        Inspect test coverage for this package. A previous test run with the
-                      `--coverage` flag must have previously been run
-  disassemble
-  manage-package  Record addresses (Object IDs) for where this package is published on chain
-                      (this command sets variables in Move.lock)
-  migrate         Migrate to Move 2024 for the package at `path`. If no path is provided
-                      defaults to current directory
-  new             Create a new Move package with name `name` at `path`. If `path` is not
-                      provided the package will be created in the directory `name`
-  test            Run Move unit tests in this package
-  summary         Generate a serialized summary of a Move package (e.g., functions, structs,
-                      annotations, etc.)
-  help            Print this message or the help of the given subcommand(s)
+  build        
+  coverage     Inspect test coverage for this package. A previous test run with the `--coverage`
+                   flag must have previously been run
+  disassemble  
+  migrate      Migrate to Move 2024 for the package at `path`. If no path is provided defaults
+                   to current directory
+  new          Create a new Move package with name `name` at `path`. If `path` is not provided
+                   the package will be created in the directory `name`
+  test         Run Move unit tests in this package
+  summary      Generate a serialized summary of a Move package (e.g., functions, structs,
+                   annotations, etc.)
+  update-deps  Re-pin the dependencies of this package
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
   -p, --path <PACKAGE_PATH>
@@ -28,13 +26,10 @@ Options:
           missing)
       --client.env <ENV>
           The Sui environment to use. This must be present in the current config file
-  -d, --dev
-          Compile in 'dev' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used if
-          this flag is set. This flag is useful for development of packages that expose named
-          addresses that are not set to a specific value
+  -y, --yes
+          Create a new sui config without prompting if none exists
       --test
-          Compile in 'test' mode. The 'dev-addresses' and 'dev-dependencies' fields will be used
-          along with any code in the 'tests' directory
+          Compile in 'test' mode and include the code in the 'tests' directory
       --doc
           Generate documentation for packages
       --disassemble
@@ -44,19 +39,16 @@ Options:
           Installation directory for compiled artifacts. Defaults to current directory
       --force
           Force recompilation of all packages
-      --fetch-deps-only
-          Only fetch dependency repos to MOVE_HOME
-      --skip-fetch-latest-git-deps
-          Skip fetching latest git dependencies
+      --allow-dirty
+          Allow building, even if some cached git dependencies in `~/.move` are modified
       --default-move-flavor <DEFAULT_FLAVOR>
           Default flavor for move compilation, if not specified in the package's config
       --default-move-edition <DEFAULT_EDITION>
           Default edition for move compilation, if not specified in the package's config
-      --dependencies-are-root
-          If set, dependency packages are treated as root packages. Notably, this will remove
-          warning suppression in dependency packages
       --silence-warnings
           If set, ignore any compiler warnings
+  -q, --quiet
+          Display less output
       --warnings-are-errors
           If set, warnings become errors
       --json-errors
@@ -68,6 +60,8 @@ Options:
       --mode <MODE>
           Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]`
           annotations during compilation
+  -e, --environment <ENVIRONMENT>
+          Environment to use for building packages
   -h, --help
           Print help
   -V, --version

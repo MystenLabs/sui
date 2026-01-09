@@ -193,6 +193,26 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to false.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_get_checkpoint_contents_v2: Option<bool>,
+
+    /// Maximum lookahead (in checkpoint sequence numbers) for storing unverified checkpoint
+    /// summaries received via PushCheckpointSummary.
+    ///
+    /// If unspecified, this will default to `1,000`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_checkpoint_lookahead: Option<u64>,
+
+    /// Maximum number of checkpoint headers to attempt to sync in a single sync task.
+    ///
+    /// If unspecified, this will default to `400`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_checkpoint_sync_batch_size: Option<u64>,
+
+    /// Maximum serialized size in bytes for a CertifiedCheckpointSummary received via
+    /// PushCheckpointSummary.
+    ///
+    /// If unspecified, this will default to `262,144` (256 KiB).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_checkpoint_summary_size: Option<usize>,
 }
 
 impl StateSyncConfig {
@@ -272,6 +292,55 @@ impl StateSyncConfig {
         self.use_get_checkpoint_contents_v2
             .unwrap_or(DEFAULT_USE_GET_CHECKPOINT_CONTENTS_V2)
     }
+
+    pub fn max_checkpoint_lookahead(&self) -> u64 {
+        const DEFAULT_MAX_CHECKPOINT_LOOKAHEAD: u64 = 1_000;
+
+        self.max_checkpoint_lookahead
+            .unwrap_or(DEFAULT_MAX_CHECKPOINT_LOOKAHEAD)
+    }
+
+    pub fn max_checkpoint_sync_batch_size(&self) -> u64 {
+        const DEFAULT_MAX_CHECKPOINT_SYNC_BATCH_SIZE: u64 = 400;
+
+        self.max_checkpoint_sync_batch_size
+            .unwrap_or(DEFAULT_MAX_CHECKPOINT_SYNC_BATCH_SIZE)
+    }
+
+    pub fn max_checkpoint_summary_size(&self) -> usize {
+        const DEFAULT_MAX_CHECKPOINT_SUMMARY_SIZE: usize = 256 * 1024; // 256 KiB
+
+        self.max_checkpoint_summary_size
+            .unwrap_or(DEFAULT_MAX_CHECKPOINT_SUMMARY_SIZE)
+    }
+
+    /// Returns a StateSyncConfig with randomized settings for testing.
+    pub fn randomized_for_testing() -> Self {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let config = Self {
+            mailbox_capacity: Some(rng.gen_range(16..=2048)),
+            synced_checkpoint_broadcast_channel_capacity: Some(rng.gen_range(16..=2048)),
+            checkpoint_header_download_concurrency: Some(rng.gen_range(10..=500)),
+            checkpoint_content_download_concurrency: Some(rng.gen_range(10..=500)),
+            max_checkpoint_lookahead: Some(rng.gen_range(100..=2000)),
+            // Tests sync up to 100 checkpoints, so minimum must be >= 100
+            max_checkpoint_sync_batch_size: Some(rng.gen_range(100..=500)),
+            max_checkpoint_summary_size: Some(rng.gen_range(64 * 1024..=512 * 1024)),
+            ..Default::default()
+        };
+        tracing::info!(
+            mailbox_capacity = config.mailbox_capacity.unwrap(),
+            broadcast_capacity = config.synced_checkpoint_broadcast_channel_capacity.unwrap(),
+            header_concurrency = config.checkpoint_header_download_concurrency.unwrap(),
+            content_concurrency = config.checkpoint_content_download_concurrency.unwrap(),
+            lookahead = config.max_checkpoint_lookahead.unwrap(),
+            batch_size = config.max_checkpoint_sync_batch_size.unwrap(),
+            summary_size = config.max_checkpoint_summary_size.unwrap(),
+            "StateSyncConfig::randomized_for_testing"
+        );
+        config
+    }
 }
 
 /// Access Type of a node.
@@ -323,7 +392,7 @@ pub struct DiscoveryConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub access_type: Option<AccessType>,
 
-    /// Like `seed_peers` in `P2pConfig`, allowlisted peers will awlays be allowed to establish
+    /// Like `seed_peers` in `P2pConfig`, allowlisted peers will always be allowed to establish
     /// connection with this node regardless of the concurrency limit.
     /// Unlike `seed_peers`, a node does not reach out to `allowlisted_peers` preferentially.
     /// It is also used to determine if a peer is accessible when its AccessType is Private.

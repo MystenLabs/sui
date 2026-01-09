@@ -26,7 +26,7 @@ public fun public_party_transfer<T: key + store>(obj: T, party: sui::party::Part
 
 - Use the [`sui::transfer::public_party_transfer`](/references/framework/sui_sui/transfer#sui_transfer_public_party_transfer) function if the object has the `store` capability.
 
-A party object's ownership can change over its lifetime, either by adding it as a [dynamic object field](/concepts/dynamic-fields.mdx), transferring it to a different address or ownership type, or making it [immutable](/guides/developer/objects/object-ownership/immutable.mdx). However, after you create an object and set its ownership, it cannot be [shared](/guides/developer/objects/object-ownership/shared.mdx).
+A party object's ownership can change over its lifetime, either by adding it as a [dynamic object field](/guides/developer/objects/dynamic-fields.mdx), transferring it to a different address or ownership type, or making it [immutable](/guides/developer/objects/object-ownership/immutable.mdx). However, after you create an object and set its ownership, it cannot be [shared](/guides/developer/objects/object-ownership/shared.mdx).
 
 <ImportContent source="examples/move/basics/sources/object_basics.move" mode="code" fun="create_party" noComments />
 

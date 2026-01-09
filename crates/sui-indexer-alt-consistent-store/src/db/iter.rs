@@ -6,7 +6,8 @@ use std::marker::PhantomData;
 use bincode::Decode;
 use serde::de::DeserializeOwned;
 
-use super::{error::Error, key};
+use crate::db::error::Error;
+use crate::db::key;
 
 /// An iterator that scans through elements in increasing key order.
 pub(crate) struct FwdIter<'d, K, V> {

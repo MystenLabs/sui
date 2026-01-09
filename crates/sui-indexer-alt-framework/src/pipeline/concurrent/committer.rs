@@ -1,24 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 
 use backoff::ExponentialBackoff;
-use sui_futures::{
-    service::Service,
-    stream::{Break, TrySpawnStreamExt},
-};
+use sui_futures::service::Service;
+use sui_futures::stream::Break;
+use sui_futures::stream::TrySpawnStreamExt;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, error, info, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use crate::{
-    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
-    pipeline::{CommitterConfig, WatermarkPart},
-    store::Store,
-};
-
-use super::{BatchedRows, Handler};
+use crate::metrics::CheckpointLagMetricReporter;
+use crate::metrics::IndexerMetrics;
+use crate::pipeline::CommitterConfig;
+use crate::pipeline::WatermarkPart;
+use crate::pipeline::concurrent::BatchedRows;
+use crate::pipeline::concurrent::Handler;
+use crate::store::Store;
 
 /// If the committer needs to retry a commit, it will wait this long initially.
 const INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
@@ -214,26 +217,25 @@ pub(super) fn committer<H: Handler + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{
-        Arc, Mutex,
-        atomic::{AtomicUsize, Ordering},
-    };
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
 
     use anyhow::ensure;
     use async_trait::async_trait;
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::sync::mpsc;
 
-    use crate::{
-        FieldCount,
-        metrics::IndexerMetrics,
-        mocks::store::*,
-        pipeline::{
-            Processor, WatermarkPart,
-            concurrent::{BatchStatus, BatchedRows, Handler},
-        },
-        store::CommitterWatermark,
-    };
+    use crate::FieldCount;
+    use crate::metrics::IndexerMetrics;
+    use crate::mocks::store::*;
+    use crate::pipeline::Processor;
+    use crate::pipeline::WatermarkPart;
+    use crate::pipeline::concurrent::BatchStatus;
+    use crate::pipeline::concurrent::BatchedRows;
+    use crate::pipeline::concurrent::Handler;
+    use crate::store::CommitterWatermark;
 
     use super::*;
 

@@ -4,39 +4,39 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, connection::Connection};
-
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
-use sui_types::{
-    crypto::AuthorityStrongQuorumSignInfo,
-    message_envelope::Message,
-    messages_checkpoint::{
-        CheckpointCommitment, CheckpointContents as NativeCheckpointContents, CheckpointSummary,
-    },
-};
+use sui_types::crypto::AuthorityStrongQuorumSignInfo;
+use sui_types::message_envelope::Message;
+use sui_types::messages_checkpoint::CheckpointCommitment;
+use sui_types::messages_checkpoint::CheckpointContents as NativeCheckpointContents;
+use sui_types::messages_checkpoint::CheckpointSummary;
 
-use crate::{
-    api::{
-        query::Query,
-        scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
-        types::available_range::AvailableRangeKey,
-    },
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
-use super::{
-    checkpoint::filter::{CheckpointFilter, checkpoint_bounds, cp_by_epoch, cp_unfiltered},
-    epoch::Epoch,
-    gas::GasCostSummary,
-    transaction::{
-        CTransaction, Transaction,
-        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
-    },
-    validator_aggregated_signature::ValidatorAggregatedSignature,
-};
+use crate::api::query::Query;
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::date_time::DateTime;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::checkpoint::filter::CheckpointFilter;
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
+use crate::api::types::checkpoint::filter::cp_by_epoch;
+use crate::api::types::checkpoint::filter::cp_unfiltered;
+use crate::api::types::epoch::Epoch;
+use crate::api::types::gas::GasCostSummary;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
+use crate::api::types::validator_aggregated_signature::ValidatorAggregatedSignature;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
 
@@ -62,20 +62,29 @@ pub(crate) type CCheckpoint = JsonCursor<u64>;
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
 impl Checkpoint {
+    /// The checkpoint's globally unique identifier, which can be passed to `Query.node` to refetch it.
+    pub(crate) async fn id(&self) -> Id {
+        Id::Checkpoint(self.sequence_number)
+    }
+
     /// The checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
     async fn sequence_number(&self) -> UInt53 {
         self.sequence_number.into()
     }
 
     /// Query the RPC as if this checkpoint were the latest checkpoint.
-    async fn query(&self) -> Result<Option<Query>, RpcError> {
-        let scope = Some(
-            self.scope
-                .with_checkpoint_viewed_at(self.sequence_number)
-                .context("Checkpoint in the future")?,
-        );
+    async fn query(&self) -> Option<Result<Query, RpcError>> {
+        async {
+            let scope = Some(
+                self.scope
+                    .with_checkpoint_viewed_at(self.sequence_number)
+                    .context("Checkpoint in the future")?,
+            );
 
-        Ok(Some(Query { scope }))
+            Ok(Some(Query { scope }))
+        }
+        .await
+        .transpose()
     }
 
     #[graphql(flatten)]
@@ -88,34 +97,28 @@ impl Checkpoint {
 impl CheckpointContents {
     /// A commitment by the committee at each checkpoint on the artifacts of the checkpoint.
     /// e.g., object checkpoint states
-    async fn artifacts_digest(&self) -> Result<Option<String>, RpcError> {
-        let Some((summary, _, _)) = &self.contents else {
-            return Ok(None);
-        };
+    async fn artifacts_digest(&self) -> Option<Result<String, RpcError>> {
+        let (summary, _, _) = self.contents.as_ref()?;
 
         for commitment in &summary.checkpoint_commitments {
             if let CheckpointCommitment::CheckpointArtifactsDigest(digest) = commitment {
-                return Ok(Some(digest.base58_encode()));
+                return Some(Ok(digest.base58_encode()));
             }
         }
 
-        Ok(None)
+        None
     }
 
     /// A 32-byte hash that uniquely identifies the checkpoint, encoded in Base58. This is a hash of the checkpoint's summary.
-    async fn digest(&self) -> Result<Option<String>, RpcError> {
-        let Some((summary, _, _)) = &self.contents else {
-            return Ok(None);
-        };
-        Ok(Some(summary.digest().base58_encode()))
+    async fn digest(&self) -> Option<Result<String, RpcError>> {
+        let (summary, _, _) = self.contents.as_ref()?;
+        Some(Ok(summary.digest().base58_encode()))
     }
 
     /// A 32-byte hash that uniquely identifies the checkpoint's content, encoded in Base58.
-    async fn content_digest(&self) -> Result<Option<String>, RpcError> {
-        let Some((summary, _, _)) = &self.contents else {
-            return Ok(None);
-        };
-        Ok(Some(summary.content_digest.base58_encode()))
+    async fn content_digest(&self) -> Option<Result<String, RpcError>> {
+        let (summary, _, _) = self.contents.as_ref()?;
+        Some(Ok(summary.content_digest.base58_encode()))
     }
 
     /// The epoch that this checkpoint is part of.
@@ -131,14 +134,9 @@ impl CheckpointContents {
     }
 
     /// The digest of the previous checkpoint's summary.
-    async fn previous_checkpoint_digest(&self) -> Result<Option<String>, RpcError> {
-        let Some((summary, _, _)) = &self.contents else {
-            return Ok(None);
-        };
-        Ok(summary
-            .previous_digest
-            .as_ref()
-            .map(|digest| digest.base58_encode()))
+    async fn previous_checkpoint_digest(&self) -> Option<Result<String, RpcError>> {
+        let (summary, _, _) = self.contents.as_ref()?;
+        Some(Ok(summary.previous_digest.as_ref()?.base58_encode()))
     }
 
     /// The computation cost, storage cost, storage rebate, and non-refundable storage fee accumulated during this epoch, up to and including this checkpoint. These values increase monotonically across checkpoints in the same epoch, and reset on epoch boundaries.
@@ -150,40 +148,50 @@ impl CheckpointContents {
     }
 
     /// The Base64 serialized BCS bytes of this checkpoint's summary.
-    async fn summary_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let Some((summary, _, _)) = &self.contents else {
-            return Ok(None);
-        };
-        Ok(Some(Base64::from(
-            bcs::to_bytes(summary).context("Failed to serialize checkpoint summary")?,
-        )))
+    async fn summary_bcs(&self) -> Option<Result<Base64, RpcError>> {
+        async {
+            let Some((summary, _, _)) = &self.contents else {
+                return Ok(None);
+            };
+            Ok(Some(Base64::from(
+                bcs::to_bytes(summary).context("Failed to serialize checkpoint summary")?,
+            )))
+        }
+        .await
+        .transpose()
     }
 
     /// The Base64 serialized BCS bytes of this checkpoint's contents.
-    async fn content_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let Some((_, content, _)) = &self.contents else {
-            return Ok(None);
-        };
-        Ok(Some(Base64::from(
-            bcs::to_bytes(content).context("Failed to serialize checkpoint content")?,
-        )))
+    async fn content_bcs(&self) -> Option<Result<Base64, RpcError>> {
+        async {
+            let Some((_, content, _)) = &self.contents else {
+                return Ok(None);
+            };
+            Ok(Some(Base64::from(
+                bcs::to_bytes(content).context("Failed to serialize checkpoint content")?,
+            )))
+        }
+        .await
+        .transpose()
     }
 
     /// The timestamp at which the checkpoint is agreed to have happened according to consensus. Transactions that access time in this checkpoint will observe this timestamp.
-    async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        let Some((summary, _, _)) = &self.contents else {
-            return Ok(None);
-        };
+    async fn timestamp(&self) -> Option<Result<DateTime, RpcError>> {
+        async {
+            let Some((summary, _, _)) = &self.contents else {
+                return Ok(None);
+            };
 
-        Ok(Some(DateTime::from_ms(summary.timestamp_ms as i64)?))
+            Ok(Some(DateTime::from_ms(summary.timestamp_ms as i64)?))
+        }
+        .await
+        .transpose()
     }
 
     /// The aggregation of signatures from a quorum of validators for the checkpoint proposal.
-    async fn validator_signatures(&self) -> Result<Option<ValidatorAggregatedSignature>, RpcError> {
-        let Some((_, _, authority_info)) = &self.contents else {
-            return Ok(None);
-        };
-        Ok(Some(ValidatorAggregatedSignature::with_authority_info(
+    async fn validator_signatures(&self) -> Option<Result<ValidatorAggregatedSignature, RpcError>> {
+        let (_, _, authority_info) = self.contents.as_ref()?;
+        Some(Ok(ValidatorAggregatedSignature::with_authority_info(
             self.scope.clone(),
             authority_info.clone(),
         )))
@@ -198,24 +206,28 @@ impl CheckpointContents {
         last: Option<u64>,
         before: Option<CTransaction>,
         #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
-        let Some((summary, _, _)) = &self.contents else {
-            return Ok(None);
-        };
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Checkpoint", "transactions");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Transaction>, RpcError>> {
+        async {
+            let Some((summary, _, _)) = &self.contents else {
+                return Ok(None);
+            };
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("Checkpoint", "transactions");
+            let page = Page::from_params(limits, first, after, last, before)?;
 
-        let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
-            at_checkpoint: Some(UInt53::from(summary.sequence_number)),
-            ..Default::default()
-        }) else {
-            return Ok(Some(Connection::new(false, false)));
-        };
+            let Some(filter) = filter.unwrap_or_default().intersect(TransactionFilter {
+                at_checkpoint: Some(UInt53::from(summary.sequence_number)),
+                ..Default::default()
+            }) else {
+                return Ok(Some(Connection::new(false, false)));
+            };
 
-        Ok(Some(
-            Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
-        ))
+            Ok(Some(
+                Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
+            ))
+        }
+        .await
+        .transpose()
     }
 }
 

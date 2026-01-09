@@ -105,7 +105,6 @@ impl BuildConfig {
         let install_dir = mysten_common::tempdir().unwrap().keep();
         let config = MoveBuildConfig {
             default_flavor: Some(move_compiler::editions::Flavor::Sui),
-            lock_file: Some(install_dir.join("Move.lock")),
             install_dir: Some(install_dir),
             silence_warnings: true,
             lint_flag: move_package_alt_compilation::lint_flag::LintFlag::LEVEL_NONE,
@@ -186,12 +185,11 @@ impl BuildConfig {
     }
 
     pub async fn build_async(self, path: &Path) -> anyhow::Result<CompiledPackage> {
-        let mut root_pkg = RootPackage::<SuiFlavor>::load(
-            path.to_path_buf(),
-            self.environment.clone(),
-            self.config.mode_set(),
-        )
-        .await?;
+        let mut root_pkg = self
+            .config
+            .package_loader(path, &self.environment)
+            .load()
+            .await?;
 
         self.internal_build(&mut root_pkg)
     }
@@ -207,11 +205,10 @@ impl BuildConfig {
     /// If we are building the Sui framework, we skip the check that the addresses should be 0
     pub fn build(self, path: &Path) -> anyhow::Result<CompiledPackage> {
         // we need to block here to compile the package, which requires to fetch dependencies
-        let mut root_pkg = RootPackage::<SuiFlavor>::load_sync(
-            path.to_path_buf(),
-            self.environment.clone(),
-            self.config.mode_set(),
-        )?;
+        let mut root_pkg = self
+            .config
+            .package_loader(path, &self.environment)
+            .load_sync()?;
 
         self.internal_build(&mut root_pkg)
     }

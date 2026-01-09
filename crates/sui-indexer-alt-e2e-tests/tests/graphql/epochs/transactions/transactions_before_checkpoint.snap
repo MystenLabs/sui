@@ -11,7 +11,7 @@ task 1, lines 6-14:
 Response: {
   "data": {
     "epoch0BeforeCp0NotTx": {
-      "totalTransactions": null,
+      "totalTransactions": 1,
       "transactions": {
         "edges": []
       }

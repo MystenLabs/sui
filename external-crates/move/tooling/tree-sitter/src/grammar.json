@@ -6948,6 +6948,10 @@
         {
           "type": "SYMBOL",
           "name": "_exists"
+        },
+        {
+          "type": "STRING",
+          "value": "spec"
         }
       ]
     },
@@ -7080,6 +7084,10 @@
     ],
     [
       "abort_expression"
+    ],
+    [
+      "spec_block",
+      "_reserved_identifier"
     ]
   ],
   "precedences": [],

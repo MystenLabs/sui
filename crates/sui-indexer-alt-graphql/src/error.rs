@@ -1,10 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{convert::Infallible, sync::Arc, time::Duration};
+use std::convert::Infallible;
+use std::sync::Arc;
+use std::time::Duration;
 
+use anyhow::anyhow;
+use async_graphql::ErrorExtensionValues;
+use async_graphql::ErrorExtensions;
+use async_graphql::Response;
+use async_graphql::Value;
+use axum::Json;
+use axum::response::IntoResponse;
+use tower_http::catch_panic::ResponseForPanic;
+
+use crate::metrics::RpcMetrics;
 use crate::pagination;
-use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, Value};
 
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
@@ -225,10 +236,45 @@ pub(crate) fn error_codes(response: &Response) -> Vec<&str> {
         .collect()
 }
 
+/// Handler for panics that occur during request processing. Converts panics into GraphQL error
+/// responses with a 500 status code.
+#[derive(Clone)]
+pub(crate) struct PanicHandler {
+    metrics: Arc<RpcMetrics>,
+}
+
+impl PanicHandler {
+    pub fn new(metrics: Arc<RpcMetrics>) -> Self {
+        Self { metrics }
+    }
+}
+
+impl ResponseForPanic for PanicHandler {
+    type ResponseBody = axum::body::Body;
+
+    fn response_for_panic(
+        &mut self,
+        err: Box<dyn std::any::Any + Send + 'static>,
+    ) -> axum::http::Response<Self::ResponseBody> {
+        self.metrics.queries_panicked.inc();
+
+        let err: RpcError = if let Some(s) = err.downcast_ref::<String>() {
+            anyhow!(s.clone()).context("Request panicked")
+        } else if let Some(s) = err.downcast_ref::<&str>() {
+            anyhow!(s.to_string()).context("Request panicked")
+        } else {
+            anyhow!("Request panicked")
+        }
+        .into();
+
+        let mut res = Json(Response::from_errors(vec![err.into()])).into_response();
+        *res.status_mut() = axum::http::StatusCode::INTERNAL_SERVER_ERROR;
+        res
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use anyhow::anyhow;
-
     use super::*;
 
     #[derive(thiserror::Error, Debug)]

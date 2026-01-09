@@ -1,20 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::dataloader::Loader;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 
-use anyhow::{Context, anyhow};
-use diesel::{ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper};
+use anyhow::Context;
+use anyhow::anyhow;
+use async_graphql::dataloader::Loader;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
+use diesel::Queryable;
+use diesel::Selectable;
+use diesel::SelectableHelper;
 use prost_types::FieldMask;
-use std::collections::{BTreeSet, HashMap};
 use sui_indexer_alt_schema::schema::kv_transactions;
 use sui_kvstore::TransactionEventsData;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::proto_to_timestamp_ms;
 use sui_rpc::proto::sui::rpc::v2 as proto;
-use sui_rpc::{field::FieldMaskUtil, proto::proto_to_timestamp_ms};
-use sui_types::{digests::TransactionDigest, effects::TransactionEvents};
+use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEvents;
 
+use crate::bigtable_reader::BigtableReader;
+use crate::error::Error;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
-use crate::{bigtable_reader::BigtableReader, error::Error, pg_reader::PgReader};
+use crate::pg_reader::PgReader;
 
 /// Key for fetching transaction events contents (Events, TimestampMs) by digest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

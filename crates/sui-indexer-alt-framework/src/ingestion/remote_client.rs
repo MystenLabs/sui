@@ -1,15 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use reqwest::{Client, StatusCode};
 use std::time::Duration;
-use tracing::{debug, error};
+
+use reqwest::Client;
+use reqwest::StatusCode;
+use tracing::debug;
+use tracing::error;
 use url::Url;
 
 use crate::ingestion::Result as IngestionResult;
-use crate::ingestion::ingestion_client::{
-    FetchData, FetchError, FetchResult, IngestionClientTrait,
-};
+use crate::ingestion::ingestion_client::FetchData;
+use crate::ingestion::ingestion_client::FetchError;
+use crate::ingestion::ingestion_client::FetchResult;
+use crate::ingestion::ingestion_client::IngestionClientTrait;
 
 /// Default timeout for remote checkpoint fetches.
 /// This prevents requests from hanging indefinitely due to network issues,
@@ -149,14 +153,16 @@ pub(crate) mod tests {
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_ingestion_metrics;
     use axum::http::StatusCode;
-    use std::sync::{
-        Mutex,
-        atomic::{AtomicUsize, Ordering},
-    };
-    use wiremock::{
-        Mock, MockServer, Request, Respond, ResponseTemplate,
-        matchers::{method, path_regex},
-    };
+    use std::sync::Mutex;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::Request;
+    use wiremock::Respond;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path_regex;
 
     pub(crate) async fn respond_with(server: &MockServer, response: impl Respond + 'static) {
         Mock::given(method("GET"))

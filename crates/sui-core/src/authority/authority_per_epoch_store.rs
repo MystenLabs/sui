@@ -537,8 +537,9 @@ pub struct AuthorityEpochTables {
     #[rename = "running_root_accumulators"]
     pub running_root_state_hash: DBMap<CheckpointSequenceNumber, GlobalStateHash>,
 
-    /// Record of the capabilities advertised by each authority.
+    #[cfg(tidehunter)] // tidehunter does not support table deletion yet
     authority_capabilities: DBMap<AuthorityName, AuthorityCapabilitiesV1>,
+    /// Record of the capabilities advertised by each authority.
     authority_capabilities_v2: DBMap<AuthorityName, AuthorityCapabilitiesV2>,
 
     /// Contains a single key, which overrides the value of
@@ -560,8 +561,6 @@ pub struct AuthorityEpochTables {
 
     /// Transactions that are being deferred until some future time
     deferred_transactions_v2: DBMap<DeferralKey, Vec<TrustedExecutableTransaction>>,
-    deferred_transactions_with_aliases_v2:
-        DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
 
     // Tables for recording state for RandomnessManager.
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
@@ -592,6 +591,8 @@ pub struct AuthorityEpochTables {
     /// Execution time observations for congestion control.
     pub(crate) execution_time_observations:
         DBMap<(u64, AuthorityIndex), Vec<(ExecutionTimeObservationKey, Duration)>>,
+    deferred_transactions_with_aliases_v2:
+        DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -1133,7 +1134,7 @@ impl AuthorityPerEpochStore {
 
         let jwk_aggregator = Mutex::new(jwk_aggregator);
 
-        let consensus_output_cache = ConsensusOutputCache::new(&epoch_start_configuration, &tables);
+        let consensus_output_cache = ConsensusOutputCache::new(&tables);
 
         let execution_time_observations = tables
             .execution_time_observations
@@ -2036,6 +2037,77 @@ impl AuthorityPerEpochStore {
         Ok(self.tables()?.transaction_cert_signatures.get(tx_digest)?)
     }
 
+    /// Gets owned object locks, checking quarantine first then falling back to DB.
+    /// Used for post-consensus conflict detection when preconsensus locking is disabled.
+    /// After crash recovery, quarantine is empty so we naturally fall back to DB.
+    pub fn get_owned_object_locks(
+        &self,
+        obj_refs: &[ObjectRef],
+    ) -> SuiResult<Vec<Option<LockDetails>>> {
+        let tables = self.tables()?;
+        self.consensus_quarantine
+            .read()
+            .get_owned_object_locks(&tables, obj_refs)
+    }
+
+    /// Attempts to acquire owned object locks for a transaction post-consensus.
+    /// This is used when preconsensus locking is disabled.
+    ///
+    /// Checks whether the object versions are already locked by searching:
+    /// 1. The current commit
+    /// 2. Quarantine and cache (earlier consensus commits in this epoch)
+    /// 3. DB (cache miss)
+    ///
+    /// Returns the new locks to add on success, or error if a conflict exists.
+    pub fn try_acquire_owned_object_locks_post_consensus(
+        &self,
+        owned_object_refs: &[ObjectRef],
+        tx_digest: TransactionDigest,
+        current_commit_locks: &HashMap<ObjectRef, TransactionDigest>,
+    ) -> SuiResult<Vec<(ObjectRef, LockDetails)>> {
+        if owned_object_refs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Check for intra-commit conflicts (transactions processed earlier in the same commit).
+        for obj_ref in owned_object_refs {
+            if let Some(locked_tx_digest) = current_commit_locks.get(obj_ref)
+                && *locked_tx_digest != tx_digest
+            {
+                return Err(SuiErrorKind::ObjectLockConflict {
+                    obj_ref: *obj_ref,
+                    pending_transaction: *locked_tx_digest,
+                }
+                .into());
+            }
+        }
+
+        // Check quarantine and epoch store for existing locks.
+        let existing_locks = self
+            .get_owned_object_locks(owned_object_refs)
+            .unwrap_or_default();
+
+        // Check for conflicts with existing locks (from earlier commits or crash recovery)
+        for (lock, obj_ref) in existing_locks.iter().zip(owned_object_refs) {
+            if let Some(locked_tx_digest) = lock
+                && *locked_tx_digest != tx_digest
+            {
+                return Err(SuiErrorKind::ObjectLockConflict {
+                    obj_ref: *obj_ref,
+                    pending_transaction: *locked_tx_digest,
+                }
+                .into());
+            }
+        }
+
+        // No conflicts, so the consumed owned object versions are valid (from preconsensus validation)
+        // and available (from the checks above). Return the new locks to add.
+        Ok(owned_object_refs
+            .iter()
+            .map(|obj_ref| (*obj_ref, tx_digest))
+            .collect())
+    }
+
     /// Resolves InputObjectKinds into InputKeys. `assigned_versions` is used to map shared inputs
     /// to specific object versions.
     pub(crate) fn get_input_object_keys(
@@ -2152,7 +2224,7 @@ impl AuthorityPerEpochStore {
         Ok(result)
     }
 
-    /// Called when transaction outputs are committed to disk
+    /// Called when transaction outputs are committed to disk.
     #[instrument(level = "trace", skip_all)]
     pub fn handle_finalized_checkpoint(
         &self,
@@ -2418,7 +2490,7 @@ impl AuthorityPerEpochStore {
             let mut keys = Vec::new();
             let mut txns = Vec::new();
 
-            let deferred_transactions = self.consensus_output_cache.deferred_transactions_v2.lock();
+            let deferred_transactions = self.consensus_output_cache.deferred_transactions.lock();
 
             for (key, transactions) in deferred_transactions.range(min..max) {
                 debug!(
@@ -2454,7 +2526,7 @@ impl AuthorityPerEpochStore {
         &self,
     ) -> Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)> {
         self.consensus_output_cache
-            .deferred_transactions_v2
+            .deferred_transactions
             .lock()
             .iter()
             .map(|(key, txs)| (*key, txs.clone()))
@@ -2602,9 +2674,9 @@ impl AuthorityPerEpochStore {
             .contains(tx_digest)
     }
 
-    pub fn deferred_transactions_empty_v2(&self) -> bool {
+    pub fn deferred_transactions_empty(&self) -> bool {
         self.consensus_output_cache
-            .deferred_transactions_v2
+            .deferred_transactions
             .lock()
             .is_empty()
     }
@@ -2867,28 +2939,6 @@ impl AuthorityPerEpochStore {
     }
 
     /// Record most recently advertised capabilities of all authorities
-    pub fn record_capabilities(&self, capabilities: &AuthorityCapabilitiesV1) -> SuiResult {
-        info!("received capabilities {:?}", capabilities);
-        let authority = &capabilities.authority;
-        let tables = self.tables()?;
-
-        // Read-compare-write pattern assumes we are only called from the consensus handler task.
-        if let Some(cap) = tables.authority_capabilities.get(authority)?
-            && cap.generation >= capabilities.generation
-        {
-            debug!(
-                "ignoring new capabilities {:?} in favor of previous capabilities {:?}",
-                capabilities, cap
-            );
-            return Ok(());
-        }
-        tables
-            .authority_capabilities
-            .insert(authority, capabilities)?;
-        Ok(())
-    }
-
-    /// Record most recently advertised capabilities of all authorities
     pub fn record_capabilities_v2(&self, capabilities: &AuthorityCapabilitiesV2) -> SuiResult {
         info!("received capabilities v2 {:?}", capabilities);
         let authority = &capabilities.authority;
@@ -2908,16 +2958,6 @@ impl AuthorityPerEpochStore {
             .authority_capabilities_v2
             .insert(authority, capabilities)?;
         Ok(())
-    }
-
-    pub fn get_capabilities_v1(&self) -> SuiResult<Vec<AuthorityCapabilitiesV1>> {
-        assert!(!self.protocol_config.authority_capabilities_v2());
-        Ok(self
-            .tables()?
-            .authority_capabilities
-            .safe_iter()
-            .map(|item| item.map(|(_, v)| v))
-            .collect::<Result<Vec<_>, _>>()?)
     }
 
     pub fn get_capabilities_v2(&self) -> SuiResult<Vec<AuthorityCapabilitiesV2>> {

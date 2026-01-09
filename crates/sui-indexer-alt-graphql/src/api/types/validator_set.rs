@@ -1,24 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
-use async_graphql::{Context, Object, connection::Connection, indexmap::IndexMap};
-use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress,
-    collection_types::{Entry, VecMap, VecSet},
-    sui_system_state::sui_system_state_inner_v1::ValidatorSetV1,
-};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use async_graphql::indexmap::IndexMap;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::collection_types::Entry;
+use sui_types::collection_types::VecMap;
+use sui_types::collection_types::VecSet;
+use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorSetV1;
 
-use crate::{
-    api::{
-        scalars::{big_int::BigInt, cursor::JsonCursor, sui_address::SuiAddress},
-        types::validator::Validator,
-    },
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::types::validator::Validator;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
 
 pub(crate) type CValidator = JsonCursor<usize>;
 
@@ -46,18 +49,22 @@ impl ValidatorSet {
         after: Option<CValidator>,
         last: Option<u64>,
         before: Option<CValidator>,
-    ) -> Result<Option<Connection<String, Validator>>, RpcError> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("ValidatorSet", "activeValidators");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, Validator>, RpcError>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("ValidatorSet", "activeValidators");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        page.paginate_indices(self.contents.native.active_validators.len(), |idx| {
-            Ok(Validator {
-                contents: Arc::clone(&self.contents),
-                idx,
-            })
-        })
-        .map(Some)
+                page.paginate_indices(self.contents.native.active_validators.len(), |idx| {
+                    Ok(Validator {
+                        contents: Arc::clone(&self.contents),
+                        idx,
+                    })
+                })
+            }
+            .await,
+        )
     }
 
     /// Object ID of the `Table` storing the inactive staking pools.

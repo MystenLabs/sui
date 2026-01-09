@@ -1,26 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context as _, bail, ensure};
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use anyhow::Context as _;
+use anyhow::bail;
+use anyhow::ensure;
 use bytes::Bytes;
-use object_store::{
-    aws::AmazonS3Builder, azure::MicrosoftAzureBuilder, gcp::GoogleCloudStorageBuilder,
-    local::LocalFileSystem,
-};
-use std::{path::PathBuf, sync::Arc};
-use sui_indexer_alt_framework::{
-    ingestion::remote_client::RemoteIngestionClient, types::full_checkpoint_content::CheckpointData,
-};
+use object_store::aws::AmazonS3Builder;
+use object_store::azure::MicrosoftAzureBuilder;
+use object_store::gcp::GoogleCloudStorageBuilder;
+use object_store::local::LocalFileSystem;
+use sui_indexer_alt_framework::ingestion::remote_client::RemoteIngestionClient;
+use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointData;
 use sui_storage::blob::Blob;
 use tracing::info;
 use url::Url;
 
-use crate::{db::Watermark, restore::storage::HttpStorage};
-
-use super::{
-    format::{FileMetadata, FileType, RootManifest},
-    storage::{Storage, StorageConnectionArgs},
-};
+use crate::db::Watermark;
+use crate::restore::format::FileMetadata;
+use crate::restore::format::FileType;
+use crate::restore::format::RootManifest;
+use crate::restore::storage::HttpStorage;
+use crate::restore::storage::Storage;
+use crate::restore::storage::StorageConnectionArgs;
 
 #[derive(clap::Args, Clone, Debug)]
 #[group(required = true)]

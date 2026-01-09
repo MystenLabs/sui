@@ -15,7 +15,7 @@ If you have worked with Ethereum Virtual Machine (EVM) before, the biggest diffe
 | Dynamic dispatch | Allowed | Not allowed |
 | Asset/Token accessibility | Bound to smart contract. | Anyone can access shared objects. Owned objects can only be accessed by object owner. |
 | Access control | Identity/role-based access control through `Ownable` and `AccessControl` contract. | Mostly [capability based access control](https://move-book.com/programmability/capability.html) through owned objects. Identity/role-based access control is possible. |
-| Contract upgrades | Proxy contract forwards user transactions. | New contracts must be [layout-compatible](/concepts/sui-move-concepts/packages/upgrade#upgrade-requirements) with the old one. Need to consider versioning shared objects. |
+| Contract upgrades | Proxy contract forwards user transactions. | New contracts must be [layout-compatible](/guides/developer/packages/upgrade#upgrade-requirements) with the old one. Need to consider versioning shared objects. |
 | Development environment | Hardhat, Foundry | [Move VSCode extension](https://marketplace.visualstudio.com/items?itemName=mysten.move). |
 | Mutate contract state | Sending transactions through compile time ABI interface. | Sending transaction through runtime [programmable transaction block](/concepts/transactions/prog-txn-blocks.mdx) (PTB) construction. |
 

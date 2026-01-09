@@ -4,36 +4,38 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, connection::Connection};
-use diesel::{prelude::QueryableByName, sql_types::BigInt};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use diesel::prelude::QueryableByName;
+use diesel::sql_types::BigInt;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_sql_macro::query;
-use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress, digests::TransactionDigest,
-    event::Event as NativeEvent,
-};
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::digests::TransactionDigest;
+use sui_types::event::Event as NativeEvent;
 
-use crate::{
-    api::{
-        scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
-        types::{
-            event::filter::EventFilter,
-            lookups::{CheckpointBounds, TxBoundsCursor},
-        },
-    },
-    error::RpcError,
-    pagination::Page,
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
-use super::{
-    address::Address, available_range::AvailableRangeKey, move_module::MoveModule,
-    move_package::MovePackage, move_type::MoveType, move_value::MoveValue,
-    transaction::Transaction,
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::date_time::DateTime;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address::Address;
+use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::event::filter::EventFilter;
+use crate::api::types::lookups::CheckpointBounds;
+use crate::api::types::lookups::TxBoundsCursor;
+use crate::api::types::move_module::MoveModule;
+use crate::api::types::move_package::MovePackage;
+use crate::api::types::move_type::MoveType;
+use crate::api::types::move_value::MoveValue;
+use crate::api::types::transaction::Transaction;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
 mod lookups;
@@ -70,9 +72,13 @@ impl Event {
 
     /// The Base64 encoded BCS serialized bytes of the entire Event structure from sui-types.
     /// This includes: package_id, transaction_module, sender, type, and contents (which itself contains the BCS-serialized Move struct data).
-    async fn event_bcs(&self) -> Result<Option<Base64>, RpcError> {
-        let bcs_bytes = bcs::to_bytes(&self.native).context("Failed to serialize event")?;
-        Ok(Some(Base64(bcs_bytes)))
+    async fn event_bcs(&self) -> Option<Result<Base64, RpcError>> {
+        Some(
+            bcs::to_bytes(&self.native)
+                .context("Failed to serialize event")
+                .map(Base64)
+                .map_err(RpcError::from),
+        )
     }
 
     /// Address of the sender of the transaction that emitted this event.
@@ -96,15 +102,13 @@ impl Event {
     /// All events from the same transaction share the same timestamp.
     ///
     /// `null` for simulated/executed transactions as they are not included in a checkpoint.
-    async fn timestamp(&self) -> Result<Option<DateTime>, RpcError> {
-        self.timestamp_ms
-            .map(|ms| DateTime::from_ms(ms as i64))
-            .transpose()
+    async fn timestamp(&self) -> Option<Result<DateTime, RpcError>> {
+        Some(DateTime::from_ms(self.timestamp_ms? as i64))
     }
 
     /// The transaction that emitted this event. This information is only available for events from indexed transactions, and not from transactions that have just been executed or dry-run.
     async fn transaction(&self) -> Option<Transaction> {
-        Some(Transaction::with_id(
+        Some(Transaction::with_digest(
             self.scope.clone(),
             self.transaction_digest,
         ))

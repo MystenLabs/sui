@@ -31,7 +31,8 @@ pub(crate) mod limits {
 
     #[derive(cynic::QueryFragment, Debug)]
     pub(crate) struct ServiceConfig {
-        pub(crate) max_page_size: i32,
+        #[arguments(type: "Query", field: "packages")]
+        pub(crate) max_page_size: Option<i32>,
     }
 }
 
@@ -48,7 +49,7 @@ pub(crate) mod packages {
         Query::build(Vars {
             first,
             after,
-            filter: Some(MovePackageCheckpointFilter {
+            filter: Some(PackageCheckpointFilter {
                 after_checkpoint,
                 before_checkpoint,
             }),
@@ -59,11 +60,11 @@ pub(crate) mod packages {
     pub(crate) struct Vars {
         pub(crate) first: i32,
         pub(crate) after: Option<String>,
-        pub(crate) filter: Option<MovePackageCheckpointFilter>,
+        pub(crate) filter: Option<PackageCheckpointFilter>,
     }
 
     #[derive(cynic::InputObject, Debug)]
-    pub(crate) struct MovePackageCheckpointFilter {
+    pub(crate) struct PackageCheckpointFilter {
         pub(crate) after_checkpoint: Option<UInt53>,
         pub(crate) before_checkpoint: Option<UInt53>,
     }
@@ -77,7 +78,7 @@ pub(crate) mod packages {
             after: $after,
             filter: $filter,
         )]
-        pub(crate) packages: MovePackageConnection,
+        pub(crate) packages: Option<MovePackageConnection>,
     }
 
     #[derive(cynic::QueryFragment, Debug)]
@@ -100,6 +101,6 @@ pub(crate) mod packages {
     #[derive(cynic::QueryFragment, Debug)]
     pub(crate) struct MovePackage {
         pub(crate) address: SuiAddress,
-        pub(crate) bcs: Option<Base64>,
+        pub(crate) object_bcs: Option<Base64>,
     }
 }

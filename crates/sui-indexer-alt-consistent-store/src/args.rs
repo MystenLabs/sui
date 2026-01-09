@@ -4,13 +4,16 @@
 use std::path::PathBuf;
 
 use clap::ArgAction;
-use sui_indexer_alt_framework::{IndexerArgs, ingestion::ClientArgs};
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_metrics::MetricsArgs;
 
-use crate::restore::{
-    RestoreArgs, formal_snapshot::FormalSnapshotArgs, storage::StorageConnectionArgs,
-};
-pub use crate::rpc::{RpcArgs, TlsArgs};
+use crate::restore::RestoreArgs;
+use crate::restore::formal_snapshot::FormalSnapshotArgs;
+use crate::restore::storage::StorageConnectionArgs;
+
+pub use crate::rpc::RpcArgs;
+pub use crate::rpc::TlsArgs;
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {

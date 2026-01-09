@@ -3,7 +3,9 @@
 
 use diesel::QueryDsl;
 use diesel::associations::HasTable;
-use diesel_async::RunQueryDsl;
+use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
+use diesel_async::{AsyncConnection, AsyncPgConnection, RunQueryDsl};
+use diesel_migrations::MigrationHarness;
 use prometheus::Registry;
 use std::time::Duration;
 use sui_bridge::e2e_tests::test_utils::{
@@ -17,7 +19,6 @@ use sui_bridge_indexer::storage::PgBridgePersistent;
 use sui_bridge_schema::models::{GovernanceAction, TokenTransfer, TokenTransferStatus};
 use sui_bridge_schema::{MIGRATIONS, schema};
 use sui_data_ingestion_core::DataIngestionMetrics;
-use sui_indexer::database::Connection;
 use sui_indexer_builder::indexer_builder::IndexerProgressStore;
 use sui_pg_db::temp::TempDb;
 
@@ -150,8 +151,15 @@ async fn setup_bridge_env(with_eth_env: bool) -> (IndexerConfig, BridgeTestClust
     let db = TempDb::new().unwrap();
 
     // Run database migration
-    let conn = Connection::dedicated(db.database().url()).await.unwrap();
-    conn.run_pending_migrations(MIGRATIONS).await.unwrap();
+    let conn = AsyncPgConnection::establish(db.database().url().as_str())
+        .await
+        .unwrap();
+    let mut wrapper: AsyncConnectionWrapper<AsyncPgConnection> = conn.into();
+    tokio::task::spawn_blocking(move || {
+        wrapper.run_pending_migrations(MIGRATIONS).unwrap();
+    })
+    .await
+    .unwrap();
 
     let config = IndexerConfig {
         remote_store_url: format!("{}/rest", bridge_test_cluster.sui_rpc_url()),

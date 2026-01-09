@@ -6,7 +6,7 @@ processed 8 tasks
 init:
 A: object(0,0)
 
-task 1, lines 6-32:
+task 1, lines 6-33:
 //# run-graphql
 Response: {
   "data": {
@@ -14,23 +14,23 @@ Response: {
   }
 }
 
-task 2, lines 34-40:
+task 2, lines 35-41:
 //# publish --upgradeable --sender A
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5487200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, lines 42-59:
+task 3, lines 43-60:
 //# upgrade --package P0 --upgrade-capability 2,1 --sender A
 created: object(3,0)
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6878000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 4, line 61:
+task 4, line 62:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 5, lines 63-94:
+task 5, lines 64-96:
 //# run-graphql
 Response: {
   "data": {
@@ -43,6 +43,7 @@ Response: {
               "nodes": [
                 {
                   "name": "Status",
+                  "fullyQualifiedName": "0xc373b53eb10591c1b237d79bb5dcd0dd915f474cb2e10ea57b15fbc0a4eb1741::M::Status",
                   "abilities": [
                     "COPY",
                     "DROP"
@@ -82,6 +83,7 @@ Response: {
               "nodes": [
                 {
                   "name": "Complex",
+                  "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Complex",
                   "abilities": [
                     "STORE"
                   ],
@@ -145,6 +147,7 @@ Response: {
                 },
                 {
                   "name": "Result",
+                  "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Result",
                   "abilities": [
                     "DROP"
                   ],
@@ -199,6 +202,7 @@ Response: {
                 },
                 {
                   "name": "Status",
+                  "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Status",
                   "abilities": [
                     "COPY",
                     "DROP"
@@ -236,7 +240,7 @@ Response: {
   }
 }
 
-task 6, lines 96-123:
+task 6, lines 98-126:
 //# run-graphql --cursors "Complex" "Status"
 Response: {
   "data": {
@@ -249,13 +253,16 @@ Response: {
           },
           "nodes": [
             {
-              "name": "Complex"
+              "name": "Complex",
+              "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Complex"
             },
             {
-              "name": "Result"
+              "name": "Result",
+              "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Result"
             },
             {
-              "name": "Status"
+              "name": "Status",
+              "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Status"
             }
           ]
         },
@@ -266,10 +273,12 @@ Response: {
           },
           "nodes": [
             {
-              "name": "Complex"
+              "name": "Complex",
+              "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Complex"
             },
             {
-              "name": "Result"
+              "name": "Result",
+              "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Result"
             }
           ]
         },
@@ -280,10 +289,12 @@ Response: {
           },
           "nodes": [
             {
-              "name": "Result"
+              "name": "Result",
+              "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Result"
             },
             {
-              "name": "Status"
+              "name": "Status",
+              "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Status"
             }
           ]
         },
@@ -294,7 +305,8 @@ Response: {
           },
           "nodes": [
             {
-              "name": "Complex"
+              "name": "Complex",
+              "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Complex"
             }
           ]
         },
@@ -305,7 +317,8 @@ Response: {
           },
           "nodes": [
             {
-              "name": "Status"
+              "name": "Status",
+              "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Status"
             }
           ]
         },
@@ -316,7 +329,8 @@ Response: {
           },
           "nodes": [
             {
-              "name": "Result"
+              "name": "Result",
+              "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Result"
             }
           ]
         },
@@ -327,7 +341,8 @@ Response: {
           },
           "nodes": [
             {
-              "name": "Result"
+              "name": "Result",
+              "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Result"
             }
           ]
         },
@@ -338,7 +353,8 @@ Response: {
           },
           "nodes": [
             {
-              "name": "Result"
+              "name": "Result",
+              "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Result"
             }
           ]
         }
@@ -347,7 +363,7 @@ Response: {
   }
 }
 
-task 7, lines 125-168:
+task 7, lines 128-171:
 //# run-graphql
 Response: {
   "data": {
@@ -355,9 +371,7 @@ Response: {
       "module": {
         "status": {
           "name": "Status",
-          "module": {
-            "name": "M"
-          },
+          "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Status",
           "abilities": [
             "COPY",
             "DROP"
@@ -388,9 +402,7 @@ Response: {
         },
         "result": {
           "name": "Result",
-          "module": {
-            "name": "M"
-          },
+          "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Result",
           "abilities": [
             "DROP"
           ],
@@ -445,9 +457,7 @@ Response: {
         },
         "complex": {
           "name": "Complex",
-          "module": {
-            "name": "M"
-          },
+          "fullyQualifiedName": "0x4fc654589489f6491534dbbc72672db4dff9c142c1eec0403aa6703f9c43c4bc::M::Complex",
           "abilities": [
             "STORE"
           ],

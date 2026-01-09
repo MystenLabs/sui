@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::*;
+use async_graphql::SimpleObject;
 
-use super::TransactionArgument;
+use crate::api::types::transaction_kind::programmable::commands::TransactionArgument;
 
 /// Splits off coins with denominations in `amounts` from `coin`, returning multiple results (as many as there are amounts.)
 #[derive(SimpleObject, Clone)]

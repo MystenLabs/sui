@@ -1,41 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::anyhow;
 use diesel::ConnectionError;
-use diesel::migration::{Migration, MigrationSource, MigrationVersion};
+use diesel::migration::Migration;
+use diesel::migration::MigrationSource;
+use diesel::migration::MigrationVersion;
 use diesel::pg::Pg;
+use diesel_async::AsyncPgConnection;
+use diesel_async::RunQueryDsl;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::ManagerConfig;
-use diesel_async::{
-    AsyncPgConnection, RunQueryDsl,
-    pooled_connection::{
-        AsyncDieselConnectionManager,
-        bb8::{Pool, PooledConnection},
-    },
-};
+use diesel_async::pooled_connection::bb8::Pool;
+use diesel_async::pooled_connection::bb8::PooledConnection;
+use diesel_migrations::EmbeddedMigrations;
+use diesel_migrations::embed_migrations;
 use futures::FutureExt;
 use tracing::info;
 use url::Url;
 
-use tls::{build_tls_config, establish_tls_connection};
+use crate::tls::build_tls_config;
+use crate::tls::establish_tls_connection;
 
 mod model;
-mod tls;
-
-pub use sui_field_count::FieldCount;
-pub use sui_sql_macro::sql;
-
 pub mod query;
 pub mod schema;
 pub mod store;
 pub mod temp;
+mod tls;
 
-use diesel_migrations::{EmbeddedMigrations, embed_migrations};
+pub use sui_field_count::FieldCount;
+pub use sui_sql_macro::sql;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 

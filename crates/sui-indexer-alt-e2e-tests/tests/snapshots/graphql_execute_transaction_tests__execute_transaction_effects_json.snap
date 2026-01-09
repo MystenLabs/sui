@@ -1,0 +1,81 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_execute_transaction_tests.rs
+expression: "result.pointer(\"/data/executeTransaction\")"
+---
+{
+  "effects": {
+    "status": "SUCCESS",
+    "effectsJson": {
+      "digest": "[digest]",
+      "version": 2,
+      "status": {
+        "success": true
+      },
+      "epoch": "0",
+      "gasUsed": {
+        "computationCost": "1000000",
+        "storageCost": "1976000",
+        "storageRebate": "0",
+        "nonRefundableStorageFee": "0"
+      },
+      "transactionDigest": "[digest]",
+      "gasObject": {
+        "objectId": "[object_id]",
+        "inputState": "INPUT_OBJECT_STATE_EXISTS",
+        "inputVersion": "1",
+        "inputDigest": "[digest]",
+        "inputOwner": {
+          "kind": "ADDRESS",
+          "address": "[address]"
+        },
+        "outputState": "OUTPUT_OBJECT_STATE_OBJECT_WRITE",
+        "outputVersion": "2",
+        "outputDigest": "[digest]",
+        "outputOwner": {
+          "kind": "ADDRESS",
+          "address": "[address]"
+        },
+        "idOperation": "NONE"
+      },
+      "dependencies": [
+        "[digest]"
+      ],
+      "lamportVersion": "2",
+      "changedObjects": [
+        {
+          "objectId": "[object_id]",
+          "inputState": "INPUT_OBJECT_STATE_DOES_NOT_EXIST",
+          "outputState": "OUTPUT_OBJECT_STATE_OBJECT_WRITE",
+          "outputVersion": "2",
+          "outputDigest": "[digest]",
+          "outputOwner": {
+            "kind": "ADDRESS",
+            "address": "[address]"
+          },
+          "idOperation": "CREATED",
+          "objectType": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+        },
+        {
+          "objectId": "[object_id]",
+          "inputState": "INPUT_OBJECT_STATE_EXISTS",
+          "inputVersion": "1",
+          "inputDigest": "[digest]",
+          "inputOwner": {
+            "kind": "ADDRESS",
+            "address": "[address]"
+          },
+          "outputState": "OUTPUT_OBJECT_STATE_OBJECT_WRITE",
+          "outputVersion": "2",
+          "outputDigest": "[digest]",
+          "outputOwner": {
+            "kind": "ADDRESS",
+            "address": "[address]"
+          },
+          "idOperation": "NONE",
+          "objectType": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+        }
+      ]
+    }
+  },
+  "errors": null
+}

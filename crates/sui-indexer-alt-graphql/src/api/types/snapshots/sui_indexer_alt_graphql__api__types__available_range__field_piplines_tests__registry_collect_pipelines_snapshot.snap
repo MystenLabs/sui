@@ -26,6 +26,9 @@ ActiveJwk.alg
 ActiveJwk.epoch
   => {}
 
+Address.id
+  => {}
+
 Address.address
   => {}
 
@@ -141,6 +144,9 @@ ChangeEpochTransaction.epochStartTimestamp
   => {}
 
 ChangeEpochTransaction.systemPackages
+  => {}
+
+Checkpoint.id
   => {}
 
 Checkpoint.sequenceNumber
@@ -362,6 +368,9 @@ Display.errors
 DisplayRegistryCreateTransaction._
   => {}
 
+DynamicField.id
+  => {}
+
 DynamicField.address
   => {}
 
@@ -441,6 +450,9 @@ DynamicField.value
   => {}
 
 EndOfEpochTransaction.transactions
+  => {}
+
+Epoch.id
   => {}
 
 Epoch.epochId
@@ -650,6 +662,9 @@ IMoveDatatype.module
 IMoveDatatype.name
   => {}
 
+IMoveDatatype.fullyQualifiedName
+  => {}
+
 IMoveDatatype.abilities
   => {"obj_versions"}
 
@@ -749,6 +764,9 @@ MoveDatatype.module
 MoveDatatype.name
   => {}
 
+MoveDatatype.fullyQualifiedName
+  => {}
+
 MoveDatatype.abilities
   => {"obj_versions"}
 
@@ -771,6 +789,9 @@ MoveEnum.module
   => {}
 
 MoveEnum.name
+  => {}
+
+MoveEnum.fullyQualifiedName
   => {}
 
 MoveEnum.abilities
@@ -798,6 +819,9 @@ MoveFunction.module
   => {}
 
 MoveFunction.name
+  => {}
+
+MoveFunction.fullyQualifiedName
   => {}
 
 MoveFunction.isEntry
@@ -848,6 +872,9 @@ MoveModule.fileFormatVersion
 MoveModule.friends
   => {}
 
+MoveModule.fullyQualifiedName
+  => {}
+
 MoveModule.function
   => {}
 
@@ -858,6 +885,9 @@ MoveModule.struct
   => {}
 
 MoveModule.structs
+  => {}
+
+MoveObject.id
   => {}
 
 MoveObject.address
@@ -937,6 +967,9 @@ MoveObject.storageRebate
 
 MoveObject.receivedTransactions
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
+
+MovePackage.id
+  => {}
 
 MovePackage.address
   => {}
@@ -1019,6 +1052,9 @@ MoveStruct.module
 MoveStruct.name
   => {}
 
+MoveStruct.fullyQualifiedName
+  => {}
+
 MoveStruct.abilities
   => {"obj_versions"}
 
@@ -1059,6 +1095,12 @@ MutateConsensusStreamEnded.sequenceNumber
   => {}
 
 Mutation.executeTransaction
+  => {}
+
+Node.id
+  => {}
+
+Object.id
   => {}
 
 Object.address
@@ -1215,6 +1257,9 @@ PublishCommand.dependencies
   => {}
 
 Pure.bytes
+  => {}
+
+Query.node
   => {}
 
 Query.address
@@ -1496,6 +1541,9 @@ SystemParameters.validatorVeryLowStakeThreshold
 SystemParameters.validatorLowStakeGracePeriod
   => {}
 
+Transaction.id
+  => {}
+
 Transaction.digest
   => {}
 
@@ -1515,6 +1563,9 @@ Transaction.sender
   => {}
 
 Transaction.transactionBcs
+  => {}
+
+Transaction.transactionJson
   => {}
 
 Transaction.signatures
@@ -1551,6 +1602,9 @@ TransactionEffects.balanceChanges
   => {"tx_balance_changes", "tx_digests"}
 
 TransactionEffects.effectsBcs
+  => {}
+
+TransactionEffects.effectsJson
   => {}
 
 TransactionEffects.effectsDigest
@@ -1761,6 +1815,9 @@ ValidatorSet.validatorCandidatesId
   => {}
 
 ValidatorSet.validatorCandidatesSize
+  => {}
+
+WriteAccumulatorStorageCostTransaction._
   => {}
 
 ZkLoginVerifyResult.success

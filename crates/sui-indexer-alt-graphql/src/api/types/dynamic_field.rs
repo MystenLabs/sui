@@ -2,44 +2,50 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{
-    Context, InputObject, Object, Union,
-    connection::{Connection, Edge},
-};
+use async_graphql::Context;
+use async_graphql::InputObject;
+use async_graphql::Object;
+use async_graphql::Union;
+use async_graphql::connection::Connection;
+use async_graphql::connection::Edge;
 use move_core_types::language_storage::StructTag;
-use sui_types::{
-    SUI_FRAMEWORK_ADDRESS, TypeTag,
-    dynamic_field::{
-        DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME, DynamicFieldInfo,
-        DynamicFieldType, derive_dynamic_field_id, visitor as DFV,
-    },
-};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::TypeTag;
+use sui_types::dynamic_field::DYNAMIC_FIELD_FIELD_STRUCT_NAME;
+use sui_types::dynamic_field::DYNAMIC_FIELD_MODULE_NAME;
+use sui_types::dynamic_field::DynamicFieldInfo;
+use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::dynamic_field::derive_dynamic_field_id;
+use sui_types::dynamic_field::visitor as DFV;
 use tokio::sync::OnceCell;
 
-use crate::{
-    api::scalars::{
-        base64::Base64,
-        big_int::BigInt,
-        owner_kind::OwnerKind,
-        sui_address::SuiAddress,
-        type_filter::{TypeFilter, TypeInput},
-        uint53::UInt53,
-    },
-    error::RpcError,
-    pagination::Page,
-    scope::Scope,
-};
-
-use super::{
-    balance::{self, Balance},
-    move_object::MoveObject,
-    move_type::MoveType,
-    move_value::MoveValue,
-    object::{self, CLive, CVersion, Object, VersionFilter},
-    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
-    owner::Owner,
-    transaction::{CTransaction, Transaction, filter::TransactionFilter},
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::owner_kind::OwnerKind;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeFilter;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::balance::Balance;
+use crate::api::types::balance::{self as balance};
+use crate::api::types::move_object::MoveObject;
+use crate::api::types::move_type::MoveType;
+use crate::api::types::move_value::MoveValue;
+use crate::api::types::object::CLive;
+use crate::api::types::object::CVersion;
+use crate::api::types::object::Object;
+use crate::api::types::object::VersionFilter;
+use crate::api::types::object::{self as object};
+use crate::api::types::object_filter::ObjectFilter;
+use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
+use crate::api::types::owner::Owner;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::scope::Scope;
 
 pub(crate) struct DynamicField {
     pub(crate) super_: MoveObject,
@@ -97,6 +103,16 @@ pub(crate) enum DynamicFieldValue {
 /// - Dynamic object fields can only store objects (values that have the `key` ability, and an `id: UID` as its first field) that have `store`, but they will still be directly accessible off-chain via their ID after being attached as a field.
 #[Object]
 impl DynamicField {
+    /// The dynamic field's globally unique identifier, which can be passed to `Query.node` to refetch it.
+    pub(crate) async fn id(&self) -> Id {
+        let a = self.super_.super_.super_.address;
+        if let Some((v, d)) = self.super_.super_.version_digest {
+            Id::DynamicFieldByRef(a, v, d)
+        } else {
+            Id::DynamicFieldByAddress(a)
+        }
+    }
+
     /// The DynamicField's ID.
     pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
         self.super_.address(ctx).await
@@ -119,8 +135,8 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         coin_type: TypeInput,
-    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        self.super_.balance(ctx, coin_type).await
+    ) -> Option<Result<Balance, RpcError<balance::Error>>> {
+        self.super_.balance(ctx, coin_type).await.ok()?
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -131,8 +147,11 @@ impl DynamicField {
         after: Option<balance::Cursor>,
         last: Option<u64>,
         before: Option<balance::Cursor>,
-    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        self.super_.balances(ctx, first, after, last, before).await
+    ) -> Option<Result<Connection<String, Balance>, RpcError<balance::Error>>> {
+        self.super_
+            .balances(ctx, first, after, last, before)
+            .await
+            .ok()?
     }
 
     /// The structured representation of the object's contents.
@@ -144,8 +163,8 @@ impl DynamicField {
     pub(crate) async fn default_suins_name(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError> {
-        self.super_.default_suins_name(ctx).await
+    ) -> Option<Result<String, RpcError>> {
+        self.super_.default_suins_name(ctx).await.ok()?
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
@@ -233,20 +252,24 @@ impl DynamicField {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
-        self.super_.multi_get_balances(ctx, keys).await
+    ) -> Option<Result<Vec<Balance>, RpcError<balance::Error>>> {
+        self.super_.multi_get_balances(ctx, keys).await.ok()?
     }
 
     /// The dynamic field's name, as a Move value.
-    async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
-        let Some(native) = self.native(ctx).await? else {
-            return Ok(None);
-        };
+    async fn name(&self, ctx: &Context<'_>) -> Option<Result<MoveValue, RpcError>> {
+        async {
+            let Some(native) = self.native(ctx).await? else {
+                return Ok(None);
+            };
 
-        Ok(Some(MoveValue::new(
-            MoveType::from_native(native.name_type.clone(), native.scope.clone()),
-            native.name_bytes.clone(),
-        )))
+            Ok(Some(MoveValue::new(
+                MoveType::from_native(native.name_type.clone(), native.scope.clone()),
+                native.name_bytes.clone(),
+            )))
+        }
+        .await
+        .transpose()
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
@@ -309,10 +332,11 @@ impl DynamicField {
         last: Option<u64>,
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
+    ) -> Option<Result<Connection<String, MoveObject>, RpcError<object::Error>>> {
         self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// The object's owner kind.
@@ -353,34 +377,38 @@ impl DynamicField {
     }
 
     /// The dynamic field's value, as a Move value for dynamic fields and as a MoveObject for dynamic object fields.
-    async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>, RpcError> {
-        let Some(native) = self.native(ctx).await? else {
-            return Ok(None);
-        };
+    async fn value(&self, ctx: &Context<'_>) -> Option<Result<DynamicFieldValue, RpcError>> {
+        async {
+            let Some(native) = self.native(ctx).await? else {
+                return Ok(None);
+            };
 
-        if native.kind == DynamicFieldType::DynamicField {
-            return Ok(Some(DynamicFieldValue::MoveValue(MoveValue::new(
-                MoveType::from_native(native.value_type.clone(), native.scope.clone()),
-                native.value_bytes.clone(),
-            ))));
+            if native.kind == DynamicFieldType::DynamicField {
+                return Ok(Some(DynamicFieldValue::MoveValue(MoveValue::new(
+                    MoveType::from_native(native.value_type.clone(), native.scope.clone()),
+                    native.value_bytes.clone(),
+                ))));
+            }
+
+            let address: SuiAddress = bcs::from_bytes(&native.value_bytes)
+                .context("Failed to deserialize dynamic object field ID")?;
+
+            let object = if let Some(version) = native.scope.root_version() {
+                Object::version_bounded(ctx, native.scope.clone(), address, version.into()).await?
+            } else {
+                Object::latest(ctx, native.scope.clone(), address).await?
+            };
+
+            let Some(object) = object else {
+                return Ok(None);
+            };
+
+            Ok(Some(DynamicFieldValue::MoveObject(MoveObject::from_super(
+                object,
+            ))))
         }
-
-        let address: SuiAddress = bcs::from_bytes(&native.value_bytes)
-            .context("Failed to deserialize dynamic object field ID")?;
-
-        let object = if let Some(version) = native.scope.root_version() {
-            Object::version_bounded(ctx, native.scope.clone(), address, version.into()).await?
-        } else {
-            Object::latest(ctx, native.scope.clone(), address).await?
-        };
-
-        let Some(object) = object else {
-            return Ok(None);
-        };
-
-        Ok(Some(DynamicFieldValue::MoveObject(MoveObject::from_super(
-            object,
-        ))))
+        .await
+        .transpose()
     }
 }
 
@@ -392,6 +420,18 @@ impl DynamicField {
             super_,
             native: OnceCell::new(),
         }
+    }
+
+    /// Create a dynamic field from an `Object`, after checking whether it is a dynamic field.
+    pub(crate) async fn from_object(
+        object: &Object,
+        ctx: &Context<'_>,
+    ) -> Result<Option<Self>, RpcError> {
+        let Some(move_object) = MoveObject::from_object(object, ctx).await? else {
+            return Ok(None);
+        };
+
+        Self::from_move_object(&move_object, ctx).await
     }
 
     /// Create a dynamic field from a `MoveObject`, after checking whether it is a dynamic field.

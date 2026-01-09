@@ -7,32 +7,40 @@ use anyhow::Context as _;
 use diesel::prelude::*;
 use diesel::sql_types::Bool;
 use futures::future;
-use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
-use move_core_types::language_storage::{StructTag, TypeTag};
-use serde::{Deserialize, Serialize};
+use jsonrpsee::core::RpcResult;
+use jsonrpsee::http_client::HttpClient;
+use jsonrpsee::proc_macros::rpc;
+use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_reader::coin_metadata::CoinMetadataKey;
 use sui_indexer_alt_schema::objects::StoredCoinOwnerKind;
 use sui_indexer_alt_schema::schema::coin_balance_buckets;
-use sui_json_rpc_types::{Balance, Coin, Page as PageResponse, SuiCoinMetadata};
+use sui_json_rpc_types::Balance;
+use sui_json_rpc_types::Coin;
+use sui_json_rpc_types::Page as PageResponse;
+use sui_json_rpc_types::SuiCoinMetadata;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_sql_macro::sql;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress;
 use sui_types::coin::CoinMetadata;
 use sui_types::coin_registry::Currency;
+use sui_types::gas_coin::GAS;
 use sui_types::object::Object;
-use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    gas_coin::GAS,
-};
 
-use crate::{
-    context::Context,
-    data::load_live,
-    error::{InternalContext, RpcError, client_error_to_error_object, invalid_params},
-    paginate::{BcsCursor, Cursor as _, Page},
-};
-
-use super::rpc_module::RpcModule;
+use crate::api::rpc_module::RpcModule;
+use crate::context::Context;
+use crate::data::load_live;
+use crate::error::InternalContext;
+use crate::error::RpcError;
+use crate::error::client_error_to_error_object;
+use crate::error::invalid_params;
+use crate::paginate::BcsCursor;
+use crate::paginate::Cursor as _;
+use crate::paginate::Page;
 
 #[open_rpc(namespace = "suix", tag = "Coin API")]
 #[rpc(server, namespace = "suix")]

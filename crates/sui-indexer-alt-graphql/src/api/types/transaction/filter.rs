@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{CustomValidator, Enum, InputObject, InputValueError};
+use async_graphql::CustomValidator;
+use async_graphql::Enum;
+use async_graphql::InputObject;
+use async_graphql::InputValueError;
 
-use crate::{
-    api::{
-        scalars::{fq_name_filter::FqNameFilter, sui_address::SuiAddress, uint53::UInt53},
-        types::lookups::CheckpointBounds,
-    },
-    intersect,
-};
+use crate::api::scalars::fq_name_filter::FqNameFilter;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::lookups::CheckpointBounds;
+use crate::intersect;
 
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct TransactionFilter {

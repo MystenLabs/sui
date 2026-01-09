@@ -3,11 +3,15 @@
 
 use std::str::FromStr;
 
-use bincode::{Encode, enc::Encoder, error::EncodeError, serde::BorrowCompat};
+use bincode::Encode;
+use bincode::enc::Encoder;
+use bincode::error::EncodeError;
+use bincode::serde::BorrowCompat;
 use move_core_types::language_storage::StructTag;
-use sui_indexer_alt_framework::types::{
-    base_types::SuiAddress, parse_sui_address, parse_sui_module_id, parse_sui_struct_tag,
-};
+use sui_indexer_alt_framework::types::base_types::SuiAddress;
+use sui_indexer_alt_framework::types::parse_sui_address;
+use sui_indexer_alt_framework::types::parse_sui_module_id;
+use sui_indexer_alt_framework::types::parse_sui_struct_tag;
 
 /// Structured form of a type filter that could be just a package, a module, an uninstantiated
 /// type, or a fully qualified type with generics.

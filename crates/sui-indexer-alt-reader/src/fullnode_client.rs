@@ -10,7 +10,8 @@ use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_types::signature::GenericSignature;
-use sui_types::transaction::{Transaction, TransactionData};
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
 use tonic::transport::Channel;
 use tracing::instrument;
 
@@ -96,8 +97,8 @@ impl FullnodeClient {
         })
         .with_signatures(signatures)
         .with_read_mask(FieldMask::from_paths([
-            "effects.bcs",
-            "effects.lamport_version",
+            "effects",
+            "transaction",
             "events.bcs",
             "balance_changes",
             "objects.objects.bcs",
@@ -133,8 +134,8 @@ impl FullnodeClient {
 
         let request = proto::SimulateTransactionRequest::new(transaction)
             .with_read_mask(FieldMask::from_paths([
-                "transaction.effects.bcs",
-                "transaction.effects.lamport_version",
+                "transaction.effects",
+                "transaction.transaction",
                 "transaction.events.bcs",
                 "transaction.balance_changes",
                 "transaction.objects.objects.bcs",

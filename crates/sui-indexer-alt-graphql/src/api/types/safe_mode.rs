@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::api::types::gas::GasCostSummary;
 use async_graphql::Object;
-use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
+use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::SuiSystemStateTrait;
+
+use crate::api::types::gas::GasCostSummary;
 
 /// Information about whether epoch changes are using safe mode.
 pub(crate) struct SafeMode {

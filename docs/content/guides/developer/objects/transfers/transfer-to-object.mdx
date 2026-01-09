@@ -10,7 +10,7 @@ All functionality around [address-owned](/guides/developer/objects/object-owners
 
 When you transfer an object to another object, you're establishing a form of parent-child authentication relationship. Objects that you have transferred to another object can be received by the owner of the parent object. The module that defines the type of the parent object also defines the access control for receiving a child object.
 
-These restrictions for accessing sent child objects are enforced dynamically by providing mutable access to the parent object's `UID` during the execution of the transaction. Because of this, you can transfer objects to and receive them from [address-owned](/guides/developer/objects/object-ownership/address-owned.mdx) objects, [dynamic field](/concepts/dynamic-fields.mdx) objects, [wrapped](/guides/developer/objects/object-ownership/wrapped.mdx) objects, and [shared](/guides/developer/objects/object-ownership/shared.mdx) objects.
+These restrictions for accessing sent child objects are enforced dynamically by providing mutable access to the parent object's `UID` during the execution of the transaction. Because of this, you can transfer objects to and receive them from [address-owned](/guides/developer/objects/object-ownership/address-owned.mdx) objects, [dynamic field](/guides/developer/objects/dynamic-fields.mdx) objects, [wrapped](/guides/developer/objects/object-ownership/wrapped.mdx) objects, and [shared](/guides/developer/objects/object-ownership/shared.mdx) objects.
 
 :::info
 
@@ -166,7 +166,7 @@ public fun receive_object<T: key + store>(
 
 This example defines a basic account-type model where an `Account` object holds its coin balances in different dynamic fields. This `Account` is also transferable to a different address or object.
 
-Importantly, the address that coins are to be sent with this `Account` object remains the same regardless of whether the `Account` object is transferred, [wrapped](/guides/developer/objects/object-ownership/wrapped.mdx), or moved into a [dynamic field](/concepts/dynamic-fields.mdx). In particular, there is a stable ID for a given `Account` object across the object's lifecycle, regardless of any ownership changes.
+Importantly, the address that coins are to be sent with this `Account` object remains the same regardless of whether the `Account` object is transferred, [wrapped](/guides/developer/objects/object-ownership/wrapped.mdx), or moved into a [dynamic field](/guides/developer/objects/dynamic-fields.mdx). In particular, there is a stable ID for a given `Account` object across the object's lifecycle, regardless of any ownership changes.
 
 ```move
 module examples::account;
