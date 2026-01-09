@@ -1,0 +1,26 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Test an ephemeral upgrade workflow. We have
+# B --> A
+# C --> B
+# C --> A
+
+echo "=== expect to fail when upgrading a because it is not even published yet ==="
+sui client --client.config $CONFIG \
+  test-upgrade --build-env testnet --pubfile-path Pub.local.toml a
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+=== expect to fail when upgrading a because it is not even published yet ===
+Cannot determine the publication information. Please pass the upgrade cap with `-c <UPGRADE_CAP>`.
+
+----- stderr -----
+[Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.
