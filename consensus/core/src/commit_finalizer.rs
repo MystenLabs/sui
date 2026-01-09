@@ -265,19 +265,24 @@ impl CommitFinalizer {
 
     // Tries directly finalizing transactions in the commit.
     // Direct commit means every transaction in the commit can be considered to have a quorum of post-commit certificates,
-    // unless the transaction has reject votes that do not reach quorum, or the block containing the transaction is outside
-    // of GC bound.
+    // unless (1) the transaction has reject votes that do not reach quorum, or
+    // (2) the block containing the transaction is outside the GC bound of the commit's leader.
+    // In the 2nd case, when the blocks voting and certifying this commit's leader were proposed, there is a chance
+    // that some of these voting and certifying blocks do not include votes for the transactions below the leader's GC bound.
+    // So conservatively, these transactions are not directly finalized. The logic here matches the GC logic in
+    // try_indirect_finalize_pending_transactions_in_block().
     fn try_direct_finalize_commit(&mut self, index: usize) {
         let metrics = &self.context.metrics.node_metrics;
         let num_commits = self.pending_commits.len();
         let commit_state = self
             .pending_commits
             .get_mut(index)
-            .unwrap_or_else(|| panic!("Commit {} does not exist. len = {}", index, num_commits,));
-        let gc_round = self
+            .unwrap_or_else(|| panic!("Commit {} does not exist. len = {}", index, num_commits));
+        // Estimate conservatively the GC round of the blocks voting and certifying this commit's leader.
+        let vote_gc_round = self
             .dag_state
             .read()
-            .calculate_gc_round(commit_state.commit.leader.round);
+            .calculate_gc_round(commit_state.commit.leader.round + INDIRECT_REJECT_DEPTH);
 
         // Each commit can only try direct finalization once.
         assert!(!commit_state.pending_blocks.is_empty());
@@ -288,7 +293,7 @@ impl CommitFinalizer {
                 .context
                 .protocol_config
                 .consensus_skip_gced_blocks_in_direct_finalization()
-                && block_ref.round <= gc_round
+                && block_ref.round <= vote_gc_round
                 && num_transactions > 0
             {
                 // The block is outside of GC bound.
@@ -299,6 +304,17 @@ impl CommitFinalizer {
                     .entry(block_ref)
                     .or_default()
                     .extend(transactions);
+                let hostname = &self.context.committee.authority(block_ref.author).hostname;
+                metrics
+                    .finalizer_skipped_voting_blocks
+                    .with_label_values(&[hostname, "direct"])
+                    .inc();
+                tracing::debug!(
+                    "Block {} is potentially outside of GC bound from its leader {} in commit {}. Skipping direct finalization.",
+                    block_ref,
+                    commit_state.commit.leader,
+                    commit_state.commit.commit_ref
+                );
                 continue;
             }
             let reject_votes = self.transaction_certifier.get_reject_votes(&block_ref)
@@ -671,18 +687,26 @@ impl CommitFinalizer {
                 // See append_origin_descendants_from_last_commit() for more details.
                 ignored.extend(curr_block_state.origin_descendants.iter());
                 // Skip counting votes from current block if the votes on pending block could have been
-                // casted by an earlier block from the same origin.
+                // casted by an earlier block from the same origin, or the votes might not be proposed due to GC.
                 // Note: if the current block casts reject votes on transactions in the pending block,
                 // it can be assumed that accept votes are also casted to other transactions in the pending block.
                 // But we choose to skip counting the accept votes in this edge case for simplicity.
                 if votes_gced {
-                    let hostname = &context.committee.authority(curr_block_ref.author).hostname;
+                    let hostname = &context
+                        .committee
+                        .authority(pending_block_ref.author)
+                        .hostname;
                     context
                         .metrics
                         .node_metrics
                         .finalizer_skipped_voting_blocks
-                        .with_label_values(&[hostname])
+                        .with_label_values(&[hostname, "indirect"])
                         .inc();
+                    tracing::debug!(
+                        "Block {} is potentially outside of GC bound from current block {}. Skipping indirect finalization.",
+                        pending_block_ref,
+                        curr_block_ref,
+                    );
                     continue;
                 }
                 // Get reject votes from current block to the pending block.
@@ -1308,7 +1332,7 @@ mod tests {
         assert!(fixture.commit_finalizer.is_empty());
     }
 
-    // Test direct finalization when some blocks are below GC bound.
+    // Test direct finalization when a block is at or below GC round from the block's own leader.
     #[tokio::test]
     async fn test_direct_finalize_with_gc() {
         let mut fixture = create_commit_finalizer_fixture();

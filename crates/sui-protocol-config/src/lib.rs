@@ -4451,7 +4451,7 @@ impl ProtocolConfig {
         // Simtest specific overrides.
         if cfg!(msim) || in_antithesis() {
             // Trigger GC more often.
-            cfg.consensus_gc_depth = Some(5);
+            cfg.consensus_gc_depth = Some(6);
 
             // Trigger checkpoint splitting more often.
             // cfg.max_transactions_per_checkpoint = Some(10);
