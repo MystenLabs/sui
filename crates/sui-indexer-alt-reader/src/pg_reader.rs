@@ -111,24 +111,28 @@ impl Connection<'_> {
         ST: 'static,
     {
         let query = query.limit(1);
-        let query_debug = diesel::debug_query(&query).to_string();
-        debug!("{query_debug}");
 
         self.metrics.requests_received.inc();
         let _guard = self.metrics.latency.start_timer();
 
-        let res = query.get_result(&mut self.conn).await;
-        if res.as_ref().is_err_and(is_timeout) {
-            warn!(query = query_debug, "Query timed out");
+        let pid = self.conn.pid;
+        let query_debug = diesel::debug_query(&query).to_string();
+        match query.get_result(&mut self.conn).await {
+            Ok(results) => {
+                self.metrics.requests_succeeded.inc();
+                debug!(pid, "{query_debug}");
+                Ok(results)
+            }
+            Err(err) => {
+                self.metrics.requests_failed.inc();
+                if is_timeout(&err) {
+                    warn!(pid, "Timed out: {query_debug}");
+                } else {
+                    warn!(pid, "Failed with '{err:?}': {query_debug}");
+                };
+                Err(err).with_context(|| format!("First error from DB request pid={pid}"))
+            }
         }
-
-        if res.is_ok() {
-            self.metrics.requests_succeeded.inc();
-        } else {
-            self.metrics.requests_failed.inc();
-        }
-
-        Ok(res?)
     }
 
     pub async fn results<'q, Q, ST, U>(&mut self, query: Q) -> anyhow::Result<Vec<U>>
@@ -139,24 +143,27 @@ impl Connection<'_> {
         Pg: QueryMetadata<Q::SqlType>,
         ST: 'static,
     {
-        let query_debug = diesel::debug_query(&query).to_string();
-        debug!("{query_debug}");
-
         self.metrics.requests_received.inc();
         let _guard = self.metrics.latency.start_timer();
 
-        let res = query.get_results(&mut self.conn).await;
-        if res.as_ref().is_err_and(is_timeout) {
-            warn!(query = query_debug, "Query timed out");
+        let pid = self.conn.pid;
+        let query_debug = diesel::debug_query(&query).to_string();
+        match query.get_results(&mut self.conn).await {
+            Ok(results) => {
+                self.metrics.requests_succeeded.inc();
+                debug!(pid, "{query_debug}");
+                Ok(results)
+            }
+            Err(err) => {
+                self.metrics.requests_failed.inc();
+                if is_timeout(&err) {
+                    warn!(pid, "Timed out: {query_debug}");
+                } else {
+                    warn!(pid, "Failed with '{err:?}': {query_debug}");
+                };
+                Err(err).with_context(|| format!("Results error from DB request pid={pid}"))
+            }
         }
-
-        if res.is_ok() {
-            self.metrics.requests_succeeded.inc();
-        } else {
-            self.metrics.requests_failed.inc();
-        }
-
-        Ok(res?)
     }
 }
 
