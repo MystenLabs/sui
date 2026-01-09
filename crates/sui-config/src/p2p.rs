@@ -332,6 +332,12 @@ pub struct DiscoveryConfig {
     /// to this peer, nor advertise this peer's info to other peers in the network.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub allowlisted_peers: Vec<AllowlistedPeer>,
+
+    /// Size of the Discovery loop's mailbox.
+    ///
+    /// If unspecified, this will default to `1,024`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mailbox_capacity: Option<usize>,
 }
 
 impl DiscoveryConfig {
@@ -357,6 +363,12 @@ impl DiscoveryConfig {
     pub fn access_type(&self) -> AccessType {
         // defaults None to Public
         self.access_type.unwrap_or(AccessType::Public)
+    }
+
+    pub fn mailbox_capacity(&self) -> usize {
+        const MAILBOX_CAPACITY: usize = 1_024;
+
+        self.mailbox_capacity.unwrap_or(MAILBOX_CAPACITY)
     }
 }
 
