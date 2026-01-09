@@ -84,7 +84,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// Create a copy of `self` with only the nodes from `linkage` and with the edges updated to
     /// point to the nodes from the linkage
     fn copy_linked(&self, linkage: &LinkageTable<F>) -> Self {
-        debug!("copying based on linkage {linkage:?}");
+        debug!("copying based on linkage {linkage:#?}");
         let mut result = Self {
             root_index: NodeIndex::from(0),
             package_ids: BiBTreeMap::new(),
