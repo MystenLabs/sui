@@ -4,6 +4,7 @@
 const concepts = [
 	'concepts',
 	'concepts/sui-for-ethereum',
+	'concepts/sui-for-solana'
 	{
 		type: 'category',
 		label: 'Architecture',
