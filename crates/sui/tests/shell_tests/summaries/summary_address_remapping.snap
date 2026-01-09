@@ -19,8 +19,8 @@ exit_code: 0
 ----- stdout -----
 INCLUDING DEPENDENCY MoveStdlib
 INCLUDING DEPENDENCY Sui
-INCLUDING DEPENDENCY other_child
 INCLUDING DEPENDENCY child_pkg
+INCLUDING DEPENDENCY other_child
 BUILDING overlapping_summaries
 
 Summary generation successful. Summaries stored in 'package_summaries'
