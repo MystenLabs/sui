@@ -99,7 +99,8 @@ fn test_exponential_backoff_default() {
         (Duration::from_millis(50), Duration::from_millis(100)),
         (Duration::from_millis(60), Duration::from_millis(170)),
     ];
-    for ((lower, upper), delay) in bounds.into_iter().zip(backoff.next()) {
+    for (lower, upper) in bounds {
+        let delay = backoff.next().unwrap();
         assert!(delay >= lower && delay <= upper);
     }
 }
