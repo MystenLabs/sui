@@ -33,6 +33,7 @@ use crate::api::types::move_type::MoveType;
 use crate::api::types::move_value::MoveValue;
 use crate::api::types::transaction::Transaction;
 use crate::error::RpcError;
+use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
@@ -134,6 +135,7 @@ impl Event {
         page: Page<CEvent>,
         filter: EventFilter,
     ) -> Result<Connection<String, Event>, RpcError> {
+        query_limits::rich::debit(ctx)?;
         let pg_reader: &PgReader = ctx.data()?;
 
         let watermarks: &Arc<Watermarks> = ctx.data()?;

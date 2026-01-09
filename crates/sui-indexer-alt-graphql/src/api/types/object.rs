@@ -69,6 +69,7 @@ use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::feature_unavailable;
 use crate::error::upcast;
+use crate::extensions::query_limits;
 use crate::intersect;
 use crate::pagination::Page;
 use crate::pagination::PageLimits;
@@ -914,6 +915,7 @@ impl Object {
             return Ok(Connection::new(false, false));
         };
 
+        query_limits::rich::debit(ctx)?;
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut query = v::obj_versions
@@ -1000,6 +1002,7 @@ impl Object {
             return Ok(Connection::new(false, false));
         };
 
+        query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
 
         // Figure out which checkpoint to pin results to, based on the pagination cursors and

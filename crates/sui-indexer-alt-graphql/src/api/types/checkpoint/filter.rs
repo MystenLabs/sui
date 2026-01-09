@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::convert::Infallible;
 use std::ops::RangeInclusive;
 
 use anyhow::Context as _;
@@ -14,6 +15,7 @@ use sui_sql_macro::query;
 
 use crate::api::scalars::uint53::UInt53;
 use crate::api::types::checkpoint::CCheckpoint;
+use crate::extensions::query_limits;
 use crate::intersect;
 use crate::pagination::Page;
 
@@ -164,6 +166,7 @@ pub(super) async fn cp_by_epoch(
     cp_bounds: &RangeInclusive<u64>,
     epoch: u64,
 ) -> Result<Vec<u64>, RpcError> {
+    query_limits::rich::debit::<Infallible>(ctx)?;
     let pg_reader: &PgReader = ctx.data()?;
 
     let query = query!(

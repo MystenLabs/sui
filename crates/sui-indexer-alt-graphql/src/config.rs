@@ -148,6 +148,10 @@ pub struct Limits {
 
     /// Maximum output size of a disassembled Move module, in bytes.
     pub max_disassembled_module_size: usize,
+
+    /// Maximum number of "rich" queries that can be performed in a single request. Rich queries are
+    /// queries that require dedicated requests to the backing store.
+    pub max_rich_queries: usize,
 }
 
 #[DefaultConfig]
@@ -174,6 +178,7 @@ pub struct LimitsLayer {
     pub max_display_field_depth: Option<usize>,
     pub max_display_output_size: Option<usize>,
     pub max_disassembled_module_size: Option<usize>,
+    pub max_rich_queries: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -354,6 +359,7 @@ impl LimitsLayer {
             max_disassembled_module_size: self
                 .max_disassembled_module_size
                 .unwrap_or(base.max_disassembled_module_size),
+            max_rich_queries: self.max_rich_queries.unwrap_or(base.max_rich_queries),
         }
     }
 }
@@ -421,6 +427,7 @@ impl From<Limits> for LimitsLayer {
             max_display_field_depth: Some(value.max_display_field_depth),
             max_display_output_size: Some(value.max_display_output_size),
             max_disassembled_module_size: Some(value.max_disassembled_module_size),
+            max_rich_queries: Some(value.max_rich_queries),
         }
     }
 }
@@ -508,6 +515,7 @@ impl Default for Limits {
             max_display_field_depth: 10,
             max_display_output_size: 1024 * 1024,
             max_disassembled_module_size: 1024 * 1024,
+            max_rich_queries: 21,
         }
     }
 }

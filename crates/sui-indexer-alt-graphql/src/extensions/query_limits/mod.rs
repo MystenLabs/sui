@@ -31,6 +31,7 @@ mod error;
 mod input;
 mod output;
 mod payload;
+pub(crate) mod rich;
 pub(crate) mod show_usage;
 mod visitor;
 

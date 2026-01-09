@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 43 tasks
+processed 46 tasks
 
 init:
 A: object(0,0)
@@ -1670,7 +1670,7 @@ Response: {
   ]
 }
 
-task 41, lines 376-444:
+task 41, lines 376-394:
 //# run-graphql
 Response: {
   "data": {
@@ -1753,7 +1753,14 @@ Response: {
       "empty": {
         "totalBalance": "0"
       }
-    },
+    }
+  }
+}
+
+task 42, lines 396-416:
+//# run-graphql
+Response: {
+  "data": {
     "cp2": {
       "query": {
         "object": {
@@ -1865,7 +1872,14 @@ Response: {
       "empty": {
         "totalBalance": "0"
       }
-    },
+    }
+  }
+}
+
+task 43, lines 418-439:
+//# run-graphql
+Response: {
+  "data": {
     "latest": {
       "objects": {
         "nodes": [
@@ -2021,7 +2035,14 @@ Response: {
           }
         ]
       }
-    },
+    }
+  }
+}
+
+task 44, lines 441-469:
+//# run-graphql
+Response: {
+  "data": {
     "objectAtReset": {
       "objectAt": {
         "objects": {
@@ -2173,7 +2194,7 @@ Response: {
   }
 }
 
-task 42, lines 446-470:
+task 45, lines 471-495:
 //# run-graphql
 Response: {
   "data": {

@@ -208,6 +208,12 @@ impl ServiceConfig {
         Ok(Some(limits.max_disassembled_module_size))
     }
 
+    /// Maximum number of paginated fields that can return results in a single request. Queries on paginated fields that exceed this limit will return an error.
+    async fn max_rich_queries(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_rich_queries))
+    }
+
     /// Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.
     async fn available_range(
         &self,

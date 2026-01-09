@@ -17,6 +17,7 @@ use crate::api::types::move_type::MoveType;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::feature_unavailable;
+use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
 
@@ -63,10 +64,12 @@ impl Balance {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
+
         let Some(checkpoint) = scope.checkpoint_viewed_at() else {
             return Ok(None);
         };
 
+        query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
         let (coin_type, total_balance) = consistent_reader
             .get_balance(
@@ -94,10 +97,12 @@ impl Balance {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
+
         let Some(checkpoint) = scope.checkpoint_viewed_at() else {
             return Ok(None);
         };
 
+        query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
         let balances = consistent_reader
             .batch_get_balances(
@@ -133,10 +138,12 @@ impl Balance {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
+
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
             return Ok(Connection::new(false, false));
         };
 
+        query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
 
         // Figure out which checkpoint to pin results to, based on the pagination cursors and

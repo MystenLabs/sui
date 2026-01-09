@@ -59,6 +59,7 @@ use crate::api::types::type_origin::TypeOrigin;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
 use crate::error::upcast;
+use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
@@ -745,8 +746,9 @@ impl MovePackage {
             return Ok(Connection::new(false, false));
         };
 
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        query_limits::rich::debit(ctx)?;
         let pg_reader: &PgReader = ctx.data()?;
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
         let Some(original_id) = pg_loader
             .load_one(PackageOriginalIdKey(address.into()))
@@ -835,6 +837,7 @@ impl MovePackage {
             return Ok(Connection::new(false, false));
         };
 
+        query_limits::rich::debit(ctx)?;
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut query = p::kv_packages
@@ -915,6 +918,7 @@ impl MovePackage {
         page: Page<CSysPackage>,
         checkpoint: u64,
     ) -> Result<Connection<String, MovePackage>, RpcError> {
+        query_limits::rich::debit(ctx)?;
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut pagination = query!("");

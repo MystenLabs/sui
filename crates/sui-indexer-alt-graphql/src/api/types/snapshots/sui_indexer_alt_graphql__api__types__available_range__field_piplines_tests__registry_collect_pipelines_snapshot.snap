@@ -1463,6 +1463,9 @@ ServiceConfig.maxDisplayOutputSize
 ServiceConfig.maxDisassembledModuleSize
   => {}
 
+ServiceConfig.maxRichQueries
+  => {}
+
 ServiceConfig.availableRange
   => {}
 

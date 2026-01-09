@@ -45,6 +45,7 @@ use crate::api::types::transaction_effects::TransactionEffects;
 use crate::api::types::transaction_kind::TransactionKind;
 use crate::api::types::user_signature::UserSignature;
 use crate::error::RpcError;
+use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
 use crate::task::watermark::Watermarks;
@@ -510,6 +511,7 @@ async fn tx_sequence_numbers(
     mut query: Query<'_>,
     page: &Page<CTransaction>,
 ) -> Result<Vec<u64>, RpcError> {
+    query_limits::rich::debit(ctx)?;
     let pg_reader: &PgReader = ctx.data()?;
 
     query += query!(
@@ -564,6 +566,7 @@ async fn tx_unfiltered(
     mut query: Query<'_>,
     page: &Page<CTransaction>,
 ) -> Result<Vec<u64>, RpcError> {
+    query_limits::rich::debit(ctx)?;
     let pg_reader: &PgReader = ctx.data()?;
 
     query += query!(
