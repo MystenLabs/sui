@@ -26,7 +26,8 @@ pub trait EpochStartSystemStateTrait {
     fn get_sui_committee(&self) -> Committee;
     fn get_sui_committee_with_network_metadata(&self) -> CommitteeWithNetworkMetadata;
     fn get_consensus_committee(&self) -> ConsensusCommittee;
-    fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<(PeerId, Multiaddr)>;
+    fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName)
+    -> Vec<(PeerId, Multiaddr)>;
     fn get_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
     fn get_authority_names_to_hostnames(&self) -> HashMap<AuthorityName, String>;
 }
@@ -217,7 +218,10 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
         ConsensusCommittee::new(self.epoch as consensus_config::Epoch, authorities)
     }
 
-    fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<(PeerId, Multiaddr)> {
+    fn get_validator_as_p2p_peers(
+        &self,
+        excluding_self: AuthorityName,
+    ) -> Vec<(PeerId, Multiaddr)> {
         self.active_validators
             .iter()
             .filter(|validator| validator.authority_name() != excluding_self)
