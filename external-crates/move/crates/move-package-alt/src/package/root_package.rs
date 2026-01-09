@@ -103,7 +103,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 
     /// The metadata for the root package in [PackageInfo] form
-    pub fn package_info(&self) -> PackageInfo<F> {
+    pub fn package_info(&self) -> PackageInfo<'_, F> {
         self.filtered_graph.root_package_info()
     }
 
@@ -222,7 +222,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Return the list of all packages in the root package's package graph (including itself and all
     /// transitive dependencies). This includes the non-duplicate addresses only.
-    pub fn packages(&self) -> Vec<PackageInfo<F>> {
+    pub fn packages(&self) -> Vec<PackageInfo<'_, F>> {
         self.filtered_graph.packages()
     }
 

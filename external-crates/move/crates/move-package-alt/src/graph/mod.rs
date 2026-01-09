@@ -110,7 +110,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// Return the list of all packages that are in the package graph. Note that depending on whether the
     /// graph has been filtered or not, this may contain multiple packages with the same original
     /// ID
-    pub fn packages(&self) -> Vec<PackageInfo<F>> {
+    pub fn packages(&self) -> Vec<PackageInfo<'_, F>> {
         self.inner
             .node_indices()
             .map(|node| self.package_info(node))
@@ -118,7 +118,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     /// Return the list of all packages that are in the package graph, sorted in topological order.
-    pub fn sorted_packages(&self) -> Vec<PackageInfo<F>> {
+    pub fn sorted_packages(&self) -> Vec<PackageInfo<'_, F>> {
         let sorted = toposort(&self.inner, None).expect("to sort the graph");
         sorted.iter().map(|x| self.package_info(*x)).collect()
     }
@@ -182,7 +182,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     /// Return a `PackageInfo` for `id`. Panics if the ID is not present
-    fn get_package(&self, id: &PackageID) -> PackageInfo<F> {
+    fn get_package(&self, id: &PackageID) -> PackageInfo<'_, F> {
         let node = self
             .package_ids
             .get_by_left(id)
