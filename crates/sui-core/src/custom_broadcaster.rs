@@ -246,17 +246,6 @@ async fn handle_socket(mut socket: WebSocket, state: Arc<AppState>) {
                             }
                         }
 
-                        // 6. Object Deletions
-                        for obj_key in &outputs.deleted {
-                            let id = obj_key.0;
-                            if subscriptions_accounts.contains(&sender) || subscribe_all {
-                                let msg = StreamMessage::ObjectDeleted {
-                                    account: sender,
-                                    object_id: id,
-                                };
-                                let _ = send_json(&mut socket, &msg).await;
-                            }
-                        }
                     }
                     Err(_) => break,
                 }
