@@ -5,9 +5,6 @@ import { fileURLToPath } from "url";
 import path from "path";
 import math from "remark-math";
 import katex from "rehype-katex";
-//import rehypeRawFiles from "./src/rehype/rehype-raw-only.mjs";
-//import rehypeTabsMd from "./src/rehype/rehype-tabs.mjs";
-//import rehypeFixAnchorUrls from "./src/rehype/rehype-fix-anchor-urls.mjs";
 const npm2yarn = require("@docusaurus/remark-plugin-npm2yarn");
 
 const effortRemarkPlugin = require("./src/plugins/effort");
@@ -173,8 +170,6 @@ const config = {
             effortRemarkPlugin,
             betaRemarkPlugin,
           ],
-          //beforeDefaultRehypePlugins: [rehypeFixAnchorUrls],
-          //rehypePlugins: [katex, rehypeRawFiles, rehypeTabsMd],
           rehypePlugins: [katex],
         },
         theme: {
