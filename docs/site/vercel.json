@@ -183,6 +183,24 @@
       { "source": "/concepts/dynamic-fields/tables-bags", "destination": "/guides/developer/objects/tables-bags"},
       { "source": "/concepts/cryptography/nautilus", "destination": "/guides/developer/nautilus/index"},
       { "source": "/concepts/cryptography/nautilus", "destination": "/guides/developer/nautilus/"},
-      { "source": "/concepts/cryptography/nautilus/using-nautilus", "destination": "/guides/developer/nautilus/using-nautilus"}
+      { "source": "/concepts/cryptography/nautilus/using-nautilus", "destination": "/guides/developer/nautilus/using-nautilus"},
+      { "source": "/guides/developer/advanced/move-2024-migration", "destination": "/concepts/sui-move-concepts/move-2024-migration" },
+      { "source": "/guides/developer/sui-101/coin-mgt", "destination": "/concepts/transactions/coin-mgt" },
+      { "source": "/guides/developer/advanced/custom-indexer", "destination": "/guides/developer/accessing-data/custom-indexer" },
+      { "source": "/guides/developer/advanced/custom-indexer/build", "destination": "/guides/developer/accessing-data/custom-indexer/build" },
+      { "source": "/guides/developer/advanced/custom-indexer/indexer-data-integration", "destination": "/guides/developer/accessing-data/custom-indexer/indexer-data-integration" },
+      { "source": "/guides/developer/advanced/custom-indexer/indexer-runtime-perf", "destination": "/guides/developer/accessing-data/custom-indexer/indexer-runtime-perf" },
+      { "source": "/guides/developer/advanced/custom-indexer/indexer-walrus", "destination": "/guides/developer/accessing-data/custom-indexer/indexer-walrus" },
+      { "source": "/guides/developer/advanced/graphql-rpc", "destination": "/guides/developer/accessing-data/graphql-rpc" },
+      { "source": "/guides/developer/sui-101/using-events", "destination": "/guides/developer/accessing-data/using-events" },
+      { "source": "/guides/developer/sui-101/local-network", "destination": "/guides/developer/getting-started/local-network" },
+      { "source": "/guides/developer/advanced/local-fee-markets", "destination": "/guides/developer/objects/local-fee-markets" },
+      { "source": "/guides/developer/sui-101/access-time", "destination": "/guides/developer/on-chain-primitives/access-time" },
+      { "source": "/guides/developer/advanced/randomness-onchain", "destination": "/guides/developer/on-chain-primitives/randomness-onchain" },
+      { "source": "/guides/developer/sui-101/building-ptb", "destination": "/guides/developer/transactions/building-ptb" },
+      { "source": "/guides/developer/sui-101/sign-and-send-txn", "destination": "/guides/developer/transactions/sign-and-send-txn" },
+      { "source": "/guides/developer/sui-101/simulating-refs", "destination": "/guides/developer/transactions/simulating-refs" },
+      { "source": "/guides/developer/sui-101/sponsor-txn", "destination": "/guides/developer/transactions/sponsor-txn" },
+      { "source": "/guides/developer/sui-101/working-with-ptbs", "destination": "/guides/developer/transactions/working-with-ptbs" }
     ]
-  }
+}

@@ -27,6 +27,7 @@ const guides = [
         items: [
           'guides/developer/getting-started/install-source',
           'guides/developer/getting-started/install-binaries',
+          'guides/developer/getting-started/local-network',
         ],
       },
       'guides/developer/getting-started/configure-sui-client',
@@ -35,37 +36,6 @@ const guides = [
       'guides/developer/getting-started/hello-world',
       'guides/developer/getting-started/app-frontends',
       'guides/developer/getting-started/next-steps',
-    ],
-  },
-  {
-    type: 'category',
-    label: 'Sui Essentials',
-    link: {
-      type: 'doc',
-      id: 'guides/developer/sui-101',
-    },
-    items: [
-      'guides/developer/sui-101/using-events',
-      'guides/developer/sui-101/local-network',
-      'guides/developer/sui-101/connect',
-      'guides/developer/sui-101/access-time',
-      'guides/developer/sui-101/sign-and-send-txn',
-      'guides/developer/sui-101/sponsor-txn',
-      'guides/developer/sui-101/common-errors',
-
-      {
-        type: 'category',
-        label: 'Working with PTBs',
-        link: {
-          type: 'doc',
-          id: 'guides/developer/sui-101/working-with-ptbs',
-        },
-        items: [
-          'guides/developer/sui-101/building-ptb',
-          'guides/developer/sui-101/coin-mgt',
-          'guides/developer/sui-101/simulating-refs',
-        ],
-      },
     ],
   },
   {
@@ -112,6 +82,7 @@ const guides = [
 				items: ['guides/developer/objects/tables-bags'],
 			},
       'guides/developer/objects/versioning',
+      'guides/developer/objects/local-fee-markets',
     ],
     },
     {
@@ -124,6 +95,53 @@ const guides = [
 					'guides/developer/packages/automated-address-management',
 				],
 			},
+  {
+    type: 'category',
+    label: 'Transactions',
+    items: [
+          'guides/developer/transactions/sign-and-send-txn',
+          'guides/developer/transactions/sponsor-txn',
+          'guides/developer/transactions/working-with-ptbs',
+          'guides/developer/transactions/building-ptb',
+          'guides/developer/transactions/simulating-refs',
+        ],
+  },
+  {
+    type: 'category',
+    label: 'Accessing Data',
+    items: [
+      {
+        type: 'category',
+        label: 'gRPC',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/accessing-data/grpc-overview',
+        },
+        items: [
+          'guides/developer/accessing-data/graphql-rpc1',
+          'guides/developer/accessing-data/graphql-rpc',
+        ],
+      },
+      {
+        type: 'category',
+        label: 'Custom Indexer Framework',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/accessing-data/custom-indexing-framework',
+        },
+        items: [
+          'guides/developer/accessing-data/pipeline-architecture',
+          'guides/developer/accessing-data/custom-indexer/indexer-data-integration',
+          'guides/developer/accessing-data/custom-indexer/build',
+          'guides/developer/accessing-data/custom-indexer/indexer-runtime-perf',
+          'guides/developer/accessing-data/custom-indexer/indexer-walrus',
+
+        ],
+      },
+      'guides/developer/accessing-data/archival-store',
+      'guides/developer/accessing-data/using-events',
+    ],
+  },
   {
     type: 'category',
     label: 'Currencies and Tokens',
@@ -152,6 +170,14 @@ const guides = [
       'guides/developer/nft/nft-soulbound',
       'guides/developer/nft/nft-rental',
       'guides/developer/nft/asset-tokenization',
+    ],
+  },
+  {
+    type: 'category',
+    label: 'On-Chain Primitives',
+    items: [
+      'guides/developer/on-chain-primitives/access-time',
+      'guides/developer/on-chain-primitives/randomness-onchain',
     ],
   },
   {

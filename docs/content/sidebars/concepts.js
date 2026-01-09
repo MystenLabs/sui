@@ -32,6 +32,7 @@ const concepts = [
 			'concepts/transactions/prog-txn-blocks',
 			'concepts/transactions/sponsored-transactions',
 			'concepts/transactions/gas-smashing',
+			'concepts/transactions/coin-mgt',
 			{
 				type: 'category',
 				label: 'Transaction Authentication',
@@ -70,33 +71,11 @@ const concepts = [
 		items: [
 			'concepts/sui-move-concepts/packages',
 			'concepts/sui-move-concepts/conventions',
+			'concepts/sui-move-concepts/move-2024-migration',
 		],
 	},
-	{
-		type: 'category',
-		label: 'Data Access',
-		link: {
-			type: 'doc',
-			id: 'concepts/data-access/data-serving',
-		},
-		items: [
-			'concepts/data-access/grpc-overview',
-			{
-				type: 'category',
-				label: 'GraphQL and Indexer Framework',
-				link: {
-					type: 'doc',
-					id: 'concepts/data-access/graphql-indexer',
-				},
-				items: [
-					'concepts/data-access/graphql-rpc',
-					'concepts/data-access/custom-indexing-framework',
-					'concepts/data-access/pipeline-architecture',
-				],
-			},
-			'concepts/data-access/archival-store',
-		],
-	},
+	'concepts/data-access/data-serving',
+	'concepts/data-access/graphql-indexer',
 	{
 		type: 'category',
 		label: 'Cryptography',
