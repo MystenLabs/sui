@@ -2,13 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 */
-<<<<<<< HEAD
-/*
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-*/
-=======
->>>>>>> 788008035759ce620bddda9fc9f1edc445ebd30c
+
 import React, { useEffect, useState } from "react";
 import { useHistory } from "@docusaurus/router";
 import { usePluginData } from "@docusaurus/useGlobalData";
