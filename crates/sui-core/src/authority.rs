@@ -1069,8 +1069,6 @@ impl AuthorityState {
                 withdraw
                     .type_arg
                     .get_balance_type_param()
-                    // unwrap safe because we already verified the transaction.
-                    .unwrap()
                     .map(|ty| ty.to_canonical_string(false))
             })
             .collect::<BTreeSet<_>>();

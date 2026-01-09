@@ -242,6 +242,11 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         self.adapter_type_from_vm_type(&runtime_type)
     }
 
+    pub fn load_type_tag(&self, idx: usize, ty: &TypeTag) -> Result<Type, ExecutionError> {
+        let runtime_type = self.load_vm_type_from_type_tag(Some(idx), ty)?;
+        self.adapter_type_from_vm_type(&runtime_type)
+    }
+
     /// We verify that all types in the `StructTag` are defining ID-based types.
     pub fn load_type_from_struct(&self, tag: &StructTag) -> Result<Type, ExecutionError> {
         let vm_type =
@@ -494,7 +499,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     }
 
     /// Converts a VM runtime Type to an adapter Type.
-    fn adapter_type_from_vm_type(
+    pub fn adapter_type_from_vm_type(
         &self,
         vm_type: &vm_runtime_type::Type,
     ) -> Result<Type, ExecutionError> {

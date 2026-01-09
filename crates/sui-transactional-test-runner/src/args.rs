@@ -27,7 +27,6 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     Argument, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
 };
-use sui_types::type_input::TypeInput;
 
 pub const SUI_ARGS_LONG: &str = "sui-args";
 const DEFAULT_CONSISTENT_RANGE: usize = 300;
@@ -757,10 +756,8 @@ impl SuiValue {
                             type_tag
                         )
                     })?;
-                let inner_type_input = TypeInput::from(inner_type);
                 CallArg::FundsWithdrawal(FundsWithdrawalArg::balance_from_sender(
-                    amount,
-                    inner_type_input,
+                    amount, inner_type,
                 ))
             }
         })

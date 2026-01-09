@@ -2396,7 +2396,7 @@ impl SuiCallArg {
                 },
                 type_arg: match arg.type_arg {
                     WithdrawalTypeArg::Balance(type_input) => {
-                        SuiWithdrawalTypeArg::Balance(type_input.to_type_tag()?.into())
+                        SuiWithdrawalTypeArg::Balance(type_input.into())
                     }
                 },
                 withdraw_from: match arg.withdraw_from {

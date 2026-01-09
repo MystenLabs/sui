@@ -1318,7 +1318,7 @@ fn create_withdraw_balance_transaction(
 
     let withdraw_arg = FundsWithdrawalArg::balance_from_sender(
         withdraw_amount,
-        sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
+        sui_types::gas_coin::GAS::type_tag(),
     );
     let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
 
@@ -1972,10 +1972,7 @@ async fn test_explicit_sponsor_withdrawal_banned() {
     let rgp = test_cluster.wallet.get_reference_gas_price().await.unwrap();
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    let withdrawal = FundsWithdrawalArg::balance_from_sponsor(
-        1000,
-        sui_types::type_input::TypeInput::from(GAS::type_tag()),
-    );
+    let withdrawal = FundsWithdrawalArg::balance_from_sponsor(1000, GAS::type_tag());
     builder.funds_withdrawal(withdrawal).unwrap();
 
     let tx = TransactionData::V1(TransactionDataV1 {
@@ -2512,7 +2509,7 @@ async fn test_multiple_deposits_merged_in_effects() {
     for amount in &withdraw_amounts {
         let withdraw_arg = sui_types::transaction::FundsWithdrawalArg::balance_from_sender(
             *amount,
-            sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
+            sui_types::gas_coin::GAS::type_tag(),
         );
         let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
 
