@@ -284,13 +284,11 @@ mod tests {
 
         let bloom_bytes = &values[0].bloom_filter;
 
-        // Verify bloom filter contains package ID from the move call
         assert!(
             folded_bloom_contains(bloom_bytes, &ObjectID::ZERO.to_vec()),
             "Should contain package ID from move call"
         );
 
-        // Verify bloom filter contains sender addresses
         let sender_0 = checkpoint.transactions[0].transaction.sender();
         let sender_1 = checkpoint.transactions[1].transaction.sender();
         assert!(
@@ -302,7 +300,6 @@ mod tests {
             "Should contain sender address from tx 1"
         );
 
-        // Verify bloom filter contains affected object IDs
         for tx in &checkpoint.transactions {
             for ((obj_id, _, _), _, _) in tx.effects.all_changed_objects() {
                 assert!(
@@ -313,7 +310,6 @@ mod tests {
             }
         }
 
-        // Verify bloom filter does NOT contain random values
         let random_addr = SuiAddress::random_for_testing_only();
         assert!(
             !folded_bloom_contains(bloom_bytes, &random_addr.to_vec()),
@@ -329,7 +325,6 @@ mod tests {
         let mut builder = TestCheckpointBuilder::new(0);
         builder = builder
             .start_transaction(0)
-            // Empty transaction with no operations - still affects gas object
             .finish_transaction()
             .start_transaction(1)
             .add_move_call(ObjectID::ZERO, "module", "function")
@@ -341,7 +336,6 @@ mod tests {
 
         let bloom_bytes = &values[0].bloom_filter;
 
-        // Verify bloom filter contains sender addresses from both transactions
         let sender_0 = checkpoint.transactions[0].transaction.sender();
         let sender_1 = checkpoint.transactions[1].transaction.sender();
         assert!(
