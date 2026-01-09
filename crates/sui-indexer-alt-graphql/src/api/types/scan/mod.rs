@@ -7,34 +7,26 @@ mod bloom;
 pub(crate) use block::query_blocked_blooms;
 pub(crate) use bloom::candidate_cp_blooms;
 
-pub(super) fn bit_checks<T: AsRef<[usize]>>(
-    keys_positions: &[T],
-    column: &str,
-    fixed_size_bytes: Option<usize>,
-) -> String {
+use diesel::sql_types::Integer;
+use sui_pg_db::query::Query;
+use sui_sql_macro::query;
+
+/// Bloom filter "contains()" check query fragment. Used to check that the bloom filter has
+/// bits set at the given indexes.
+pub(super) fn contains_fragment<T: AsRef<[usize]>>(keys_positions: &[T]) -> Query<'static> {
     keys_positions
         .iter()
         .map(|positions| {
-            let checks: Vec<_> = positions
-                .as_ref()
-                .iter()
-                .map(|&pos| bit_check(pos, column, fixed_size_bytes))
-                .collect();
-            format!("({})", checks.join(" AND "))
-        })
-        .collect::<Vec<_>>()
-        .join(" AND ")
-}
+            let positions = positions.as_ref();
+            let byte_positions: Vec<i32> = positions.iter().map(|p| (p / 8) as i32).collect();
+            let bit_masks: Vec<i32> = positions.iter().map(|p| 1 << (p % 8)).collect();
 
-fn bit_check(pos: usize, column: &str, fixed_size_bytes: Option<usize>) -> String {
-    let mask = 1 << (pos % 8);
-    match fixed_size_bytes {
-        Some(size) => {
-            let byte_idx = (pos % (size * 8)) / 8;
-            format!("(get_byte({column}, {byte_idx}) & {mask}) != 0")
-        }
-        None => {
-            format!("(get_byte({column}, ({pos} % (length({column}) * 8)) / 8) & {mask}) != 0")
-        }
-    }
+            query!(
+                "bloom_contains(bloom_filter, {Array<Integer>}, {Array<Integer>})",
+                byte_positions,
+                bit_masks
+            )
+        })
+        .reduce(|a, b| a + query!(" AND ") + b)
+        .unwrap_or_else(|| query!("TRUE"))
 }

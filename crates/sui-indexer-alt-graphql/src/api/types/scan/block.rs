@@ -5,6 +5,9 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 
 use async_graphql::Context;
+use diesel::QueryableByName;
+use diesel::sql_types::BigInt;
+use diesel::sql_types::Integer;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_schema::blooms::blocked::BlockedBloomFilter;
 use sui_indexer_alt_schema::cp_bloom_blocks::BLOOM_BLOCK_BITS;
@@ -28,11 +31,11 @@ struct BloomCondition {
     bit_masks: Vec<usize>,
 }
 
-#[derive(diesel::QueryableByName, Debug)]
+#[derive(QueryableByName)]
 struct CpBlockRange {
-    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    #[diesel(sql_type = BigInt)]
     cp_lo: i64,
-    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    #[diesel(sql_type = BigInt)]
     cp_hi: i64,
 }
 
@@ -49,34 +52,29 @@ pub(crate) async fn query_blocked_blooms(
     let cp_block_lo = cp_block_id(cp_lo);
     let cp_block_hi = cp_block_id(cp_hi);
 
-    let (conditions, required_counts) =
-        compute_bloom_conditions(filter_keys, cp_block_lo, cp_block_hi);
-
-    let condition_values = build_condition_values(&conditions);
-    let req_counts_values = build_req_counts_values(&required_counts);
-    let limit = page.limit_with_overhead() as i64;
+    let (conditions, required_counts) = bloom_conditions(filter_keys, cp_block_lo, cp_block_hi);
 
     let query = query!(
         r#"
-WITH required_counts(cp_block_id, req_count) AS (VALUES {})
-, condition_data(cp_block_id, bloom_idx, byte_pos, bit_masks) AS (VALUES {})
-SELECT
-    MIN(bb.cp_sequence_number_lo)::BIGINT as cp_lo,
-    MAX(bb.cp_sequence_number_hi)::BIGINT as cp_hi
-FROM cp_bloom_blocks bb
-JOIN condition_data c ON bb.cp_block_id = c.cp_block_id
-                     AND bb.bloom_block_index = c.bloom_idx
-JOIN required_counts rc ON bb.cp_block_id = rc.cp_block_id
-WHERE check_bloom_bits(bb.bloom_filter, c.byte_pos, c.bit_masks)
-GROUP BY bb.cp_block_id, rc.req_count
-HAVING COUNT(DISTINCT c.bloom_idx)::BIGINT >= rc.req_count
-ORDER BY cp_lo {}
-LIMIT {BigInt}
-"#,
-        Query::new(&req_counts_values),
-        Query::new(&condition_values),
+        WITH required_counts(cp_block_id, req_count) AS (VALUES {})
+        , condition_data(cp_block_id, bloom_idx, byte_pos, bit_masks) AS (VALUES {})
+        SELECT
+            MIN(bb.cp_sequence_number_lo)::BIGINT as cp_lo,
+            MAX(bb.cp_sequence_number_hi)::BIGINT as cp_hi
+        FROM cp_bloom_blocks bb
+        JOIN condition_data c ON bb.cp_block_id = c.cp_block_id
+                            AND bb.bloom_block_index = c.bloom_idx
+        JOIN required_counts rc ON bb.cp_block_id = rc.cp_block_id
+        WHERE bloom_contains(bb.bloom_filter, c.byte_pos, c.bit_masks)
+        GROUP BY bb.cp_block_id, rc.req_count
+        HAVING COUNT(DISTINCT c.bloom_idx)::BIGINT >= rc.req_count
+        ORDER BY cp_lo {}
+        LIMIT {BigInt}
+        "#,
+        required_counts_fragment(&required_counts),
+        condition_fragment(&conditions),
         page.order_by_direction(),
-        limit
+        page.limit_with_overhead() as i64
     );
 
     let candidate_ranges: Vec<CpBlockRange> = conn.results(query).await?;
@@ -89,11 +87,11 @@ LIMIT {BigInt}
     ))
 }
 
-/// Compute bloom filter conditions for all checkpoint blocks in range.
+/// Bloom filter conditions for all checkpoint blocks in range.
 /// Returns:
 /// - A list of BloomCondition (one per cp_block_id + filter_key combination)
 /// - A map of cp_block_id -> required bloom block count
-fn compute_bloom_conditions(
+fn bloom_conditions(
     filter_keys: &[Vec<u8>],
     cp_block_lo: i64,
     cp_block_hi: i64,
@@ -107,13 +105,8 @@ fn compute_bloom_conditions(
             std::collections::HashSet::new();
 
         for key in filter_keys {
-            let (block_idx, positions) = BlockedBloomFilter::hash(
-                key,
-                seed,
-                NUM_BLOOM_BLOCKS,
-                NUM_HASHES,
-                BLOOM_BLOCK_BITS,
-            );
+            let (block_idx, positions) =
+                BlockedBloomFilter::hash(key, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BITS);
 
             bloom_blocks_for_cp.insert(block_idx as i16);
 
@@ -153,34 +146,29 @@ fn expand_ranges(ranges: &[CpBlockRange], cp_lo: u64, cp_hi: u64, ascending: boo
     candidates
 }
 
-fn build_condition_values(conditions: &[BloomCondition]) -> String {
+fn condition_fragment(conditions: &[BloomCondition]) -> Query<'_> {
     conditions
         .iter()
         .map(|c| {
-            format!(
-                "({}::BIGINT, {}::SMALLINT, ARRAY[{}], ARRAY[{}])",
+            let byte_positions: Vec<i32> = c.byte_positions.iter().map(|p| *p as i32).collect();
+            let bit_masks: Vec<i32> = c.bit_masks.iter().map(|m| *m as i32).collect();
+
+            query!(
+                "({BigInt}, {SmallInt}, {Array<Integer>}, {Array<Integer>})",
                 c.cp_block_id,
                 c.bloom_block_idx,
-                c.byte_positions
-                    .iter()
-                    .map(|p| p.to_string())
-                    .collect::<Vec<_>>()
-                    .join(","),
-                c.bit_masks
-                    .iter()
-                    .map(|m| m.to_string())
-                    .collect::<Vec<_>>()
-                    .join(",")
+                byte_positions,
+                bit_masks
             )
         })
-        .collect::<Vec<_>>()
-        .join(",\n        ")
+        .reduce(|a, b| a + query!(", ") + b)
+        .unwrap_or_else(|| query!(""))
 }
 
-fn build_req_counts_values(required_counts: &HashMap<i64, usize>) -> String {
+fn required_counts_fragment(required_counts: &HashMap<i64, usize>) -> Query<'_> {
     required_counts
         .iter()
-        .map(|(cp_id, count)| format!("({}::BIGINT, {}::BIGINT)", cp_id, count))
-        .collect::<Vec<_>>()
-        .join(", ")
+        .map(|(cp_id, count)| query!("({BigInt}, {BigInt})", *cp_id, *count as i64))
+        .reduce(|a, b| a + query!(", ") + b)
+        .unwrap_or_else(|| query!(""))
 }

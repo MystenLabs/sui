@@ -15,7 +15,7 @@ use crate::api::types::transaction::SCTransaction;
 use crate::error::RpcError;
 use crate::pagination::Page;
 
-use super::bit_checks;
+use super::contains_fragment;
 
 const CHECKPOINT_BATCH_SIZE: usize = 5000;
 const CHECKPOINT_SCAN_LIMIT: usize = 200;
@@ -39,7 +39,6 @@ pub(crate) async fn candidate_cp_blooms(
     let pg_reader: &PgReader = ctx.data()?;
     let mut conn = pg_reader.connect().await?;
 
-    let condition = bloom_condition(filter_keys);
     let mut filtered_checkpoints = Vec::new();
 
     for chunk in candidates.chunks(CHECKPOINT_BATCH_SIZE) {
@@ -57,7 +56,7 @@ pub(crate) async fn candidate_cp_blooms(
                 LIMIT {BigInt}
                 "#,
                 cp_array,
-                Query::new(&condition),
+                bloom_condition(filter_keys),
                 page.order_by_direction(),
                 remaining_limit as i64
             );
@@ -73,7 +72,7 @@ pub(crate) async fn candidate_cp_blooms(
     Ok(filtered_checkpoints)
 }
 
-fn bloom_condition(filter_keys: &[Vec<u8>]) -> String {
+fn bloom_condition(filter_keys: &[Vec<u8>]) -> Query<'static> {
     let keys_positions: Vec<Vec<usize>> = filter_keys
         .iter()
         .map(|key| {
@@ -85,5 +84,5 @@ fn bloom_condition(filter_keys: &[Vec<u8>]) -> String {
             )
         })
         .collect();
-    bit_checks(&keys_positions, "bloom_filter", None)
+    contains_fragment(&keys_positions)
 }
