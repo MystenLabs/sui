@@ -5,6 +5,7 @@
 use std::{fmt, path::PathBuf};
 
 use path_clean::PathClean;
+use sha2::{Digest, Sha256};
 use tracing::debug;
 
 use crate::{
@@ -15,7 +16,7 @@ use crate::{
     package::paths::PackagePath,
     schema::{
         EnvironmentID, EnvironmentName, LocalDepInfo, LockfileDependencyInfo, LockfileGitDepInfo,
-        ManifestGitDependency, ModeName, OnChainDepInfo, PackageName, RootDepInfo,
+        ManifestGitDependency, ModeName, OnChainDepInfo, PackageName, RenderToml, RootDepInfo,
     },
 };
 
@@ -235,6 +236,17 @@ impl Pinned {
             Pinned::OnChain(_on_chain) => "on-chain = true".to_string(),
             Pinned::Root(_) => "local = \".\"".to_string(),
         }
+    }
+
+    /// Returns the default hash for Self.
+    pub fn unique_hash(&self) -> u64 {
+        let lockfile_pin: LockfileDependencyInfo = self.clone().into();
+        let digest = Sha256::digest(lockfile_pin.render_as_toml().as_bytes());
+        // Take the first 8 bytes of the 32-byte SHA256 digest and convert to u64
+        let digest_bytes = digest.as_slice();
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&digest_bytes[..8]);
+        u64::from_be_bytes(bytes)
     }
 }
 

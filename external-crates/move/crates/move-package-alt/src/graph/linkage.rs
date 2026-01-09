@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, btree_map::Entry};
 use bimap::BiBTreeMap;
 use derive_where::derive_where;
 use indoc::formatdoc;
+use itertools::Itertools;
 use petgraph::{
     graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
@@ -90,8 +91,8 @@ impl<F: MoveFlavor> PackageGraph<F> {
             inner: DiGraph::new(),
         };
 
-        // add nodes
-        for pkg in linkage.values() {
+        // add nodes: We sort this by name to get a stable output order (and not depend on original id ordering in BTreeMap)
+        for pkg in linkage.values().sorted_by_key(|pkg| pkg.display_name()) {
             let package = &self.inner[pkg.node];
             let new_node = result.inner.add_node(package.clone());
             let old = result.package_ids.insert(pkg.id().clone(), new_node);
