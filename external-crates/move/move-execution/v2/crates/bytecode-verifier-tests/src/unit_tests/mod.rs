@@ -58,6 +58,7 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             private_generics_verifier_v2: false,
             sanity_check_with_regex_reference_safety: None,
             deprecate_global_storage_ops: false,
+            disable_entry_point_signature_check: false,
         },
         MeterConfig::old_default(),
     )
