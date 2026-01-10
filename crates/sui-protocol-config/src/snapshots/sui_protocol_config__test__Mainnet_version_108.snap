@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 107
+version: 108
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -44,13 +44,10 @@ feature_flags:
   include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true
-  enable_poseidon: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   enable_nitro_attestation: true
   enable_nitro_attestation_upgraded_parsing: true
-  enable_nitro_attestation_all_nonzero_pcrs_parsing: true
-  enable_nitro_attestation_always_include_required_pcrs_parsing: true
   reject_mutable_random_on_entry_functions: true
   per_object_congestion_control_mode:
     ExecutionTimeEstimate:
@@ -134,6 +131,9 @@ feature_flags:
   consensus_skip_gced_accept_votes: true
   include_cancelled_randomness_txns_in_prologue: true
   consensus_skip_gced_blocks_in_direct_finalization: true
+  gas_rounding_halve_digits: true
+  flexible_tx_context_positions: true
+  disable_entry_point_signature_check: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -434,6 +434,205 @@ gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
 use_object_per_epoch_marker_table_v2: true
 consensus_commit_rate_estimation_window_size: 10
+aliased_addresses:
+  - original:
+      - 205
+      - 137
+      - 98
+      - 218
+      - 210
+      - 120
+      - 216
+      - 181
+      - 15
+      - 160
+      - 249
+      - 235
+      - 1
+      - 134
+      - 191
+      - 164
+      - 203
+      - 222
+      - 204
+      - 109
+      - 89
+      - 55
+      - 114
+      - 20
+      - 200
+      - 141
+      - 2
+      - 134
+      - 160
+      - 172
+      - 149
+      - 98
+    aliased:
+      - 11
+      - 45
+      - 163
+      - 39
+      - 186
+      - 106
+      - 76
+      - 172
+      - 190
+      - 117
+      - 221
+      - 221
+      - 80
+      - 230
+      - 232
+      - 187
+      - 248
+      - 29
+      - 100
+      - 150
+      - 233
+      - 45
+      - 102
+      - 175
+      - 145
+      - 84
+      - 198
+      - 28
+      - 119
+      - 247
+      - 51
+      - 47
+    allowed_tx_digests:
+      - - 2
+        - 145
+        - 170
+        - 78
+        - 99
+        - 246
+        - 130
+        - 221
+        - 11
+        - 53
+        - 228
+        - 241
+        - 202
+        - 113
+        - 56
+        - 105
+        - 120
+        - 236
+        - 143
+        - 114
+        - 165
+        - 106
+        - 212
+        - 165
+        - 196
+        - 178
+        - 239
+        - 253
+        - 97
+        - 66
+        - 98
+        - 197
+  - original:
+      - 226
+      - 139
+      - 80
+      - 206
+      - 241
+      - 214
+      - 51
+      - 234
+      - 67
+      - 211
+      - 41
+      - 106
+      - 63
+      - 107
+      - 103
+      - 255
+      - 3
+      - 18
+      - 165
+      - 241
+      - 169
+      - 159
+      - 10
+      - 247
+      - 83
+      - 200
+      - 91
+      - 139
+      - 93
+      - 232
+      - 255
+      - 6
+    aliased:
+      - 11
+      - 45
+      - 163
+      - 39
+      - 186
+      - 106
+      - 76
+      - 172
+      - 190
+      - 117
+      - 221
+      - 221
+      - 80
+      - 230
+      - 232
+      - 187
+      - 248
+      - 29
+      - 100
+      - 150
+      - 233
+      - 45
+      - 102
+      - 175
+      - 145
+      - 84
+      - 198
+      - 28
+      - 119
+      - 247
+      - 51
+      - 47
+    allowed_tx_digests:
+      - - 253
+        - 118
+        - 94
+        - 221
+        - 205
+        - 105
+        - 164
+        - 185
+        - 146
+        - 65
+        - 207
+        - 179
+        - 194
+        - 136
+        - 51
+        - 126
+        - 222
+        - 28
+        - 78
+        - 230
+        - 151
+        - 0
+        - 147
+        - 120
+        - 44
+        - 55
+        - 155
+        - 111
+        - 243
+        - 35
+        - 173
+        - 119
 translation_per_command_base_charge: 1
 translation_per_input_base_charge: 1
 translation_pure_input_per_byte_charge: 1
