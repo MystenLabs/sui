@@ -93,8 +93,23 @@ module T::test {
       nodes { ...B }
     }
   }
+}
 
-  # Account B queries
+fragment O on MoveObject {
+  address
+  contents {
+    type { repr }
+    json
+  }
+}
+
+fragment B on Balance {
+  coinType { repr }
+  totalBalance
+}
+
+//# run-graphql
+{ # Account B queries
   accountB: address(address: "@{B}") {
     # All objects for B
     allObjects: objects {

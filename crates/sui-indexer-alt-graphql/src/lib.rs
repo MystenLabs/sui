@@ -31,6 +31,7 @@ use axum::routing::post;
 use axum_extra::TypedHeader;
 use config::RpcConfig;
 use extensions::query_limits::QueryLimitsChecker;
+use extensions::query_limits::rich;
 use extensions::query_limits::show_usage::ShowUsage;
 use extensions::timeout::Timeout;
 use headers::ContentLength;
@@ -404,7 +405,8 @@ async fn graphql(
         .into_inner()
         .data(content_length)
         .data(Session::new(addr))
-        .data(watermark.read().await.clone());
+        .data(watermark.read().await.clone())
+        .data(rich::Meter::default());
 
     if let Some(TypedHeader(show_usage)) = show_usage {
         request = request.data(show_usage);
