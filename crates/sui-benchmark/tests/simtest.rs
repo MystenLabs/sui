@@ -459,6 +459,7 @@ mod test {
                 "consensus-store-after-write",
                 "consensus-after-propose",
                 "consensus-after-leader-schedule-change",
+                "consensus-after-handle-commit",
             ],
             move || {
                 handle_failpoint(

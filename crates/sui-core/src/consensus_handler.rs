@@ -818,7 +818,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         info!(
             %consensus_commit,
-            "Received consensus output. Rejected transactions: {}",
+            "Received consensus output {}. Rejected transactions {}",
+            consensus_commit.commit_ref(),
             consensus_commit.rejected_transactions_debug_string(),
         );
 

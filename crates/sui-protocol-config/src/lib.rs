@@ -14,6 +14,7 @@ use move_binary_format::{
     file_format_common::VERSION_1,
 };
 use move_vm_config::verifier::VerifierConfig;
+use mysten_common::in_antithesis;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use sui_protocol_config_macros::{
@@ -23,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 106;
+const MAX_PROTOCOL_VERSION: u64 = 107;
 
 // Record history of protocol version allocations here:
 //
@@ -930,6 +931,10 @@ struct FeatureFlags {
     // If true, enable object funds withdraw.
     #[serde(skip_serializing_if = "is_false")]
     enable_object_funds_withdraw: bool,
+
+    // If true, skip GC'ed blocks in direct finalization.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_skip_gced_blocks_in_direct_finalization: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2477,6 +2482,11 @@ impl ProtocolConfig {
 
     pub fn enable_object_funds_withdraw(&self) -> bool {
         self.feature_flags.enable_object_funds_withdraw
+    }
+
+    pub fn consensus_skip_gced_blocks_in_direct_finalization(&self) -> bool {
+        self.feature_flags
+            .consensus_skip_gced_blocks_in_direct_finalization
     }
 }
 
@@ -4388,6 +4398,11 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_object_funds_withdraw = true;
                     }
                 }
+                107 => {
+                    cfg.feature_flags
+                        .consensus_skip_gced_blocks_in_direct_finalization = true;
+                }
+
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4403,9 +4418,9 @@ impl ProtocolConfig {
         }
 
         // Simtest specific overrides.
-        if cfg!(msim) {
+        if cfg!(msim) || in_antithesis() {
             // Trigger GC more often.
-            cfg.consensus_gc_depth = Some(5);
+            cfg.consensus_gc_depth = Some(6);
 
             // Trigger checkpoint splitting more often.
             // cfg.max_transactions_per_checkpoint = Some(10);
