@@ -12,7 +12,6 @@ use async_graphql::{CustomValidator, Enum, InputObject, InputValueError};
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::TransactionDataAPI;
-use tracing::debug;
 
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct TransactionFilter {
@@ -54,10 +53,41 @@ pub(crate) enum TransactionKindInput {
     ProgrammableTx = 1,
 }
 
+/// Validator for transactions pagination - allows at most one primary filter.
 pub(crate) struct TransactionFilterValidator;
 
 impl CustomValidator<TransactionFilter> for TransactionFilterValidator {
-    fn check(&self, _filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
+    fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
+        let filters = filter.affected_address.is_some() as u8
+            + filter.affected_object.is_some() as u8
+            + filter.function.is_some() as u8
+            + filter.kind.is_some() as u8;
+        if filters > 1 {
+            return Err(InputValueError::custom(
+                "At most one of [affectedAddress, affectedObject, function, kind] can be specified",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/// Validator for transactionsScan - requires at least one filter for bloom filter scanning.
+pub(crate) struct TransactionScanFilterValidator;
+
+impl CustomValidator<TransactionFilter> for TransactionScanFilterValidator {
+    fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
+        let has_filter = filter.function.is_some()
+            || filter.affected_address.is_some()
+            || filter.affected_object.is_some()
+            || filter.sent_address.is_some();
+
+        if !has_filter {
+            return Err(InputValueError::custom(
+                "transactionsScan requires at least one of: function, affectedAddress, affectedObject, or sentAddress",
+            ));
+        }
+
         Ok(())
     }
 }
@@ -124,34 +154,26 @@ impl TransactionFilter {
         filters
     }
 
-    /// Collect all filter keys that should be checked in the bloom filter.
-    pub(crate) fn filter_keys(&self) -> Vec<Vec<u8>> {
-        let mut keys = Vec::new();
+    /// Filter values for which probes can be built for containment check in bloom filters.
+    pub(crate) fn bloom_probe_values(&self) -> Vec<Vec<u8>> {
+        let mut values = Vec::new();
         if let Some(function) = &self.function {
             let pkg = function.package().into_vec();
-            keys.push(pkg);
+            values.push(pkg);
         }
         if let Some(affected_address) = &self.affected_address {
             let addr = affected_address.into_vec();
-            keys.push(addr);
+            values.push(addr);
         }
         if let Some(affected_object) = &self.affected_object {
             let obj = affected_object.into_vec();
-            keys.push(obj);
+            values.push(obj);
         }
         if let Some(sent_address) = &self.sent_address {
             let sent = sent_address.into_vec();
-            keys.push(sent);
+            values.push(sent);
         }
-        debug!(
-            filter_keys = keys.len(),
-            has_package = self.function.is_some(),
-            has_affected_address = self.affected_address.is_some(),
-            has_affected_object = self.affected_object.is_some(),
-            has_sent_address = self.sent_address.is_some(),
-            "collected filter keys"
-        );
-        keys
+        values
     }
 }
 

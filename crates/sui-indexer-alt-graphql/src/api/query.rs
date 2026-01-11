@@ -42,7 +42,10 @@ use super::{
         service_config::ServiceConfig,
         transaction::{
             CTransaction, SCTransaction, Transaction,
-            filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
+            filter::{
+                TransactionFilter, TransactionFilterValidator as TFValidator,
+                TransactionScanFilterValidator as TSFValidator,
+            },
         },
         zklogin::{self, ZkLoginIntentScope, ZkLoginVerifyResult},
     },
@@ -555,7 +558,7 @@ impl Query {
         after: Option<SCTransaction>,
         last: Option<u64>,
         before: Option<SCTransaction>,
-        #[graphql(validator(custom = "TFValidator"))] filter: Option<TransactionFilter>,
+        #[graphql(validator(custom = "TSFValidator"))] filter: Option<TransactionFilter>,
     ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
@@ -564,7 +567,7 @@ impl Query {
 
         // Use the filter if provided, otherwise use default (unfiltered)
         let filter = filter.unwrap_or_default();
-        return Transaction::scan(ctx, scope, page, filter).await.map(Some);
+        Transaction::scan(ctx, scope, page, filter).await.map(Some)
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.

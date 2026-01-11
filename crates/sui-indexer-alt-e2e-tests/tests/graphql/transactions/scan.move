@@ -44,13 +44,20 @@ module Test::M1 {
 
 //# create-checkpoint
 
+// Transactions 5-7: Multiple transactions in checkpoint 5 to test cursor with t > 1
+//# run Test::M1::create --sender A --args 10 @A
+
+//# run Test::M1::create --sender A --args 11 @A
+
+//# run Test::M1::create --sender A --args 12 @A
+
+//# create-checkpoint
+
 //# advance-epoch
 
 // Generate 10,501 checkpoints to create 10 complete blocks + 500 extra for incomplete block
-// This tests the fallback to cp_blooms for uncovered checkpoints
 //# create-checkpoint 10501
 
-// Transaction 5: A creates object for C after many checkpoints (checkpoint 10507)
 //# run Test::M1::create --sender A --args 100 @C
 
 //# create-checkpoint
@@ -87,19 +94,19 @@ fragment TX on TransactionConnection {
 # Test multi-filter queries (affectedAddress + affectedObject)
 {
   # Should find tx where A created object for B (task 4 created obj_4_0)
-  transactionsA_withObj: transactionsScan(filter: {
+  transactionsAWithObj: transactionsScan(filter: {
     affectedAddress: "@{A}",
     affectedObject: "@{obj_4_0}"
   }) { ...TX }
 
   # Should find tx where B created object for A
-  transactionsB_sentToA: transactionsScan(filter: {
+  transactionsBSentToA: transactionsScan(filter: {
     affectedAddress: "@{A}",
     sentAddress: "@{B}"
   }) { ...TX }
 
   # Should find tx where C created object for A
-  transactionsC_sentToA: transactionsScan(filter: {
+  transactionsCSentToA: transactionsScan(filter: {
     affectedAddress: "@{A}",
     sentAddress: "@{C}"
   }) { ...TX }
@@ -134,7 +141,7 @@ fragment TX on TransactionConnection {
   }) { ...TX }
 
   # Find transactions from A calling Test::M1 package
-  transactionsA_withPackage: transactionsScan(filter: {
+  transactionsAWithPackage: transactionsScan(filter: {
     affectedAddress: "@{A}",
     function: "@{Test}"
   }) { ...TX }
@@ -202,142 +209,40 @@ fragment TX on TransactionConnection {
   }
 }
 
-//# run-graphql
-# Test forward pagination with first parameter
-{
-  scanFirst2: transactionsScan(first: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
-  scanFirst1: transactionsScan(first: 1, filter: { affectedAddress: "@{A}" }) { ...TX }
+//# run-graphql --cursors {"t":0,"c":0} {"t":1,"c":1} {"t":0,"c":4} {"t":2,"c":5} {"t":0,"c":10508}
+{ # Comprehensive pagination test
+  # Basic pagination
+  first2: transactionsScan(first: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
+  last2: transactionsScan(last: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
+
+  # After cursor (offset from front)
+  afterCp0: transactionsScan(first: 10, after: "@{cursor_0}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  afterCp1: transactionsScan(first: 10, after: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
+
+  # After cursor with t > 1 (checkpoint 5, tx index 2)
+  afterCp5Tx2: transactionsScan(first: 10, after: "@{cursor_3}", filter: { affectedAddress: "@{A}" }) { ...TX }
+
+  # Before cursor (offset from back)
+  beforeCp4: transactionsScan(last: 10, before: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
+
+  # Bounded range (after + before)
+  betweenCp1AndCp4First: transactionsScan(first: 10, after: "@{cursor_1}", before: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
+  betweenCp1AndCp4Last: transactionsScan(last: 10, after: "@{cursor_1}", before: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
+
+  # Bounded range between first and last items (should return all except first and last)
+  betweenFirstAndLast: transactionsScan(first: 50, after: "@{cursor_0}", before: "@{cursor_4}", filter: { affectedAddress: "@{A}" }) { ...TX }
+
+  # Invalid cursor order (after > before)
+  invalidOrder: transactionsScan(first: 10, after: "@{cursor_2}", before: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
 }
 
 fragment TX on TransactionConnection {
-  pageInfo {
-    startCursor
-    endCursor
-    hasPreviousPage
-    hasNextPage
-  }
-  edges {
-    cursor
-    node {
-      digest
-      effects {
-        checkpoint {
-          sequenceNumber
-        }
-      }
-    }
-  }
-}
-
-//# run-graphql
-# Test backward pagination with last parameter
-{
-  scanLast2: transactionsScan(last: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
-  scanLast1: transactionsScan(last: 1, filter: { affectedAddress: "@{A}" }) { ...TX }
-}
-
-fragment TX on TransactionConnection {
-  pageInfo {
-    startCursor
-    endCursor
-    hasPreviousPage
-    hasNextPage
-  }
-  edges {
-    cursor
-    node {
-      digest
-      effects {
-        checkpoint {
-          sequenceNumber
-        }
-      }
-    }
-  }
-}
-
-//# run-graphql --cursors {"t":0,"c":1}
-# Test forward pagination with after cursor - skip transactions at or before checkpoint 1
-{
-  scanAfterCp1: transactionsScan(first: 10, after: "@{cursor_0}", filter: { affectedAddress: "@{A}" }) { ...TX }
-}
-
-fragment TX on TransactionConnection {
-  pageInfo {
-    startCursor
-    endCursor
-    hasPreviousPage
-    hasNextPage
-  }
-  edges {
-    cursor
-    node {
-      digest
-      effects {
-        checkpoint {
-          sequenceNumber
-        }
-      }
-    }
-  }
-}
-
-//# run-graphql --cursors {"t":0,"c":4}
-# Test backward pagination with before cursor - only get transactions before checkpoint 4
-{
-  scanBeforeCp4: transactionsScan(last: 10, before: "@{cursor_0}", filter: { affectedAddress: "@{A}" }) { ...TX }
-}
-
-fragment TX on TransactionConnection {
-  pageInfo {
-    startCursor
-    endCursor
-    hasPreviousPage
-    hasNextPage
-  }
-  edges {
-    cursor
-    node {
-      digest
-      effects {
-        checkpoint {
-          sequenceNumber
-        }
-      }
-    }
-  }
-}
-
-//# run-graphql --cursors {"t":0,"c":1} {"t":0,"c":4}
-# Test pagination with both after and before cursors - window between checkpoints 1 and 4
-{
-  scanBetweenCursors: transactionsScan(first: 10, after: "@{cursor_0}", before: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
-}
-
-fragment TX on TransactionConnection {
-  pageInfo {
-    startCursor
-    endCursor
-    hasPreviousPage
-    hasNextPage
-  }
-  edges {
-    cursor
-    node {
-      digest
-      effects {
-        checkpoint {
-          sequenceNumber
-        }
-      }
-    }
-  }
+  pageInfo { startCursor endCursor hasPreviousPage hasNextPage }
+  edges { cursor node { digest effects { checkpoint { sequenceNumber } } } }
 }
 
 //# run-graphql
-# Test scanning across block boundaries (incomplete block fallback)
-# Query range that spans complete blocks (0-9) and incomplete block (10)
-{
+{ # Test scanning across block boundaries (incomplete block fallback)
   scanAcrossBlocks: transactionsScan(filter: {
     affectedAddress: "@{A}",
     afterCheckpoint: 0,
@@ -346,21 +251,6 @@ fragment TX on TransactionConnection {
 }
 
 fragment TX on TransactionConnection {
-  pageInfo {
-    startCursor
-    endCursor
-    hasPreviousPage
-    hasNextPage
-  }
-  edges {
-    cursor
-    node {
-      digest
-      effects {
-        checkpoint {
-          sequenceNumber
-        }
-      }
-    }
-  }
+  pageInfo { startCursor endCursor hasPreviousPage hasNextPage }
+  edges { cursor node { digest effects { checkpoint { sequenceNumber } } } }
 }
