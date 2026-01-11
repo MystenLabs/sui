@@ -36,7 +36,6 @@ By default, each response contains the following HTTP response headers:
 - `x-sui-rpc-request-id`: A unique identifier for the request. This appears in application logs for debugging.
 
 - `x-sui-rpc-version`: The version of the service that handled the request.
-
 ```sh
 $ curl -i -X POST https://graphql.testnet.sui.io/graphql\
      --header 'x-sui-rpc-show-usage: true'                 \
@@ -243,7 +242,6 @@ Cursors are used to bound results from below (with `after`) and above (with `bef
 #### Consistency
 
 Cursors for queries that paginate live objects also guarantee **consistent** pagination. If a paginated query reads the state of the network at a specific checkpoint (checkpoint `X`), the query returns cursors that can be used by subsequent requests. When a future call fetches the next page of results, it uses the previous query's cursors and continues reading from the network as it existed at checkpoint `X`, even if newer checkpoints are available. Currently, the available range offers roughly 1 hour to finish pagination.
-
 This property requires that cursors that are used together (such as when supplying an `after` and `before` bound) are fixed on the same checkpoint, otherwise the query produces an error.
 
 ### Page limits
@@ -296,20 +294,112 @@ In addition to rate limits, queries are also validated against a number of rules
 
 ## Retention
 
-Different queries are subject to their own retention policies. For example, live object set queries work only for recent checkpoints (measured in minutes or hours), while transaction pagination might be available only back to certain checkpoints (measured in weeks or months), depending on the filters applied. Data outside these ranges is pruned. You can query the upper and lower bounds of that range for your query as follows:
+Different queries are subject to their own retention policies. In the vanilla, general purpose setup, live object set queries work only for recent checkpoints (measured in minutes or hours), while transaction pagination may be available only back to certain checkpoints (measured in weeks or months), depending on the filters applied. Data outside these ranges is pruned.
+
+### Data source retention
+
+GraphQL queries rely on different data sources with different retention ranges:
+
+| Data source          | Examples                                                  | Typical retention          |
+| -------------------- | --------------------------------------------------------- | -------------------------- |
+| **Consistent store** | `Query.objects`, `Address.balance`, objects by owner or type | ~1 hour                    |
+| **Database store**   | `Query.transactions`, `Query.events`, `Query.checkpoints` | ~(30-90) days              |
+| **Archival service** | Point lookups (transaction by digest, object by ID and version)        | Indefinite (if configured) |
+
+:::tip Operators
+
+Retention is dependent on the pruning policies of datasource pipelines configured by the stack operator. For production configuration examples, see [Indexer Stack Setup](/guides/operator/indexer-stack-setup).
+
+:::
+
+### Querying available range
+
+Query the available checkpoint range using `serviceConfig.availableRange`:
 
 ```graphql
+availableRange(type: String!, field: String, filters: [String!]): AvailableRange!
+```
+
+- **`type`**: The GraphQL type name, such as `"Query"` or `"Address"`.
+- **`field`**: The field on that type, such as `"transactions"` or `"events"`.
+- **`filters`**: Filter field names from the filter input type, such as `["affectedAddress"]` for `TransactionFilter`, `["module"]` for `EventFilter`, or direct query parameter names like `["version"]`.
+
+Match your query parameters to filter names: if your query uses `filter: { affectedAddress: "0x..." }`, pass `filters: ["affectedAddress"]`.
+
+:::info Strictest retention is returned by the available range query.
+Datasource pipelines can be configured with different retention ranges based on pruning configurations.
+When multiple filters are passed to the available range query, the strictest retention range of the pipelines that support the filters is returned.
+:::
+
+### Examples
+
+```graphql
+# Check available range for transaction queries filtered by affected address
 {
-  serviceConfig {
-    retention(type: "Query", field: "transactions", filter: "affectedAddress") {
-      first { sequenceNumber }
-      last { sequenceNumber }
-    }
-  }
+	serviceConfig {
+		availableRange(type: "Query", field: "transactions", filters: ["affectedAddress"]) {
+			first {
+				sequenceNumber
+			}
+			last {
+				sequenceNumber
+			}
+		}
+	}
 }
 ```
 
-The results are the first and last checkpoint for which pagination continues to work and produce a consistent result.
+```graphql
+# Check available range for a checkpoint transactions queries filtered by affected object
+{
+	serviceConfig {
+		availableRange(type: "Checkpoint", field: "Transactions", filters: ["affectedObject"]) {
+			first {
+				sequenceNumber
+			}
+			last {
+				sequenceNumber
+			}
+		}
+	}
+}
+```
+
+:::info Nested queries
+
+Each field in a nested query has its own retention limit:
+
+```graphql
+query {
+	address(address: "0x...") {
+		# Uses Consistent Store (~1 hour retention)
+		dynamicFields(first: 10) {
+			nodes {
+				value {
+					... on MoveObject {
+						# Uses DB Store (may have different retention)
+						objectAt(checkpoint: 10579000) {
+							version
+						}
+					}
+				}
+			}
+		}
+	}
+}
+```
+
+Use `serviceConfig.availableRange` to check retention for each field separately.
+
+:::
+
+### Handling "Outside available range" errors
+
+If you encounter an error indicating data is outside the available range, it means your query is requesting data that has been pruned. To resolve this:
+
+1. **Check the available range first** using `serviceConfig.availableRange` before starting long pagination runs.
+2. **Use fresh cursors**. Old cursors may reference checkpoints that have since been pruned.
+3. **Adjust your query bounds**. Ensure `afterCheckpoint`/`beforeCheckpoint` filters fall within the available range.
 
 ## Related links
 
