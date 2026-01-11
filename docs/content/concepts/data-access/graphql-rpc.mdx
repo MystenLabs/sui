@@ -480,11 +480,12 @@ Query the available checkpoint range using `serviceConfig.availableRange`:
 availableRange(type: String!, field: String, filters: [String!]): AvailableRange!
 ```
 
-- **`type`**: The GraphQL type name, such as `"Query"` or `"Address"`
-- **`field`**: The field on that type, such as `"transactions"` or `"events"`
+- **`type`**: The GraphQL type name, such as `"Query"` or `"Address"`.
+- **`field`**: The field on that type, such as `"transactions"` or `"events"`.
 - **`filters`**: Filter field names from the filter input type, such as `["affectedAddress"]` for `TransactionFilter`, `["module"]` for `EventFilter`, or direct query parameter names like `["version"]`.
 
 Match your query parameters to filter names: if your query uses `filter: { affectedAddress: "0x..." }`, pass `filters: ["affectedAddress"]`.
+
 :::info Strictest retention is returned by the available range query.
 Datasource pipelines can be configured with different retention ranges based on pruning configurations.
 When multiple filters are passed to the available range query, the strictest retention range of the pipelines that support the filters is returned.
