@@ -451,7 +451,7 @@ If a request performs more rich queries than the allowed limit, excess rich quer
 
 ## Retention
 
-Different queries are subject to their own retention policies. For example, live object set queries work only for recent checkpoints (measured in minutes or hours), while transaction pagination may be available only back to certain checkpoints (measured in weeks or months), depending on the filters applied. Data outside these ranges is pruned.
+Different queries are subject to their own retention policies. In the vanilla, general purpose setup, live object set queries work only for recent checkpoints (measured in minutes or hours), while transaction pagination may be available only back to certain checkpoints (measured in weeks or months), depending on the filters applied. Data outside these ranges is pruned.
 
 ### Data source retention
 
