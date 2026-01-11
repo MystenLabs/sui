@@ -6,6 +6,10 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use diesel::ExpressionMethods;
+use diesel::define_sql_function;
+use diesel::sql_types::Binary;
+use diesel::upsert::excluded;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Connection;
@@ -26,6 +30,12 @@ use sui_indexer_alt_schema::cp_blooms::MAX_FOLD_DENSITY;
 use sui_indexer_alt_schema::cp_blooms::MIN_FOLD_BITS;
 use sui_indexer_alt_schema::cp_blooms::StoredCpBlooms;
 use sui_indexer_alt_schema::schema::cp_blooms;
+
+// Define the bytea_or SQL function for merging bloom filters
+define_sql_function! {
+    /// Performs bitwise OR on two bytea values. Used for merging bloom filters.
+    fn bytea_or(a: Binary, b: Binary) -> Binary;
+}
 
 /// Indexes bloom filters per checkpoint for transaction scanning.
 pub(crate) struct CpBlooms;
@@ -71,10 +81,20 @@ impl Handler for CpBlooms {
             return Ok(0);
         }
 
-        // Single batched insert
+        // Upsert with bytea_or to merge bloom filters on conflict.
+        // This ensures bits are accumulated, never lost - if a checkpoint is reprocessed,
+        // the new bits are OR'd with existing bits rather than replacing them.
         let inserted = diesel::insert_into(cp_blooms::table)
             .values(values)
-            .on_conflict_do_nothing()
+            .on_conflict(cp_blooms::cp_sequence_number)
+            .do_update()
+            .set((
+                cp_blooms::bloom_filter.eq(bytea_or(
+                    cp_blooms::bloom_filter,
+                    excluded(cp_blooms::bloom_filter),
+                )),
+                cp_blooms::num_items.eq(excluded(cp_blooms::num_items)),
+            ))
             .execute(conn)
             .await?;
 
@@ -351,6 +371,81 @@ mod tests {
         assert!(
             folded_bloom_contains(bloom_bytes, &ObjectID::ZERO.to_vec()),
             "Should contain package ID from move call in tx 1"
+        );
+    }
+
+    /// Test that committing the same checkpoint twice merges bits (bytea_or behavior).
+    /// This verifies that reprocessing a checkpoint accumulates bits rather than
+    /// replacing them, preventing data loss from partial/incomplete processing.
+    #[tokio::test]
+    async fn test_cp_blooms_merge_on_conflict() {
+        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
+
+        // First commit: checkpoint 0 with package call to ObjectID::ZERO
+        let mut builder1 = TestCheckpointBuilder::new(0);
+        builder1 = builder1
+            .start_transaction(1)
+            .add_move_call(ObjectID::ZERO, "module", "function")
+            .finish_transaction();
+        let checkpoint1 = Arc::new(builder1.build_checkpoint());
+        let values1 = CpBlooms.process(&checkpoint1).await.unwrap();
+        let sender1 = checkpoint1.transactions[0].transaction.sender();
+
+        CpBlooms::commit(&values1, &mut conn).await.unwrap();
+
+        // Verify first key is present
+        let stored1 = get_all_bloom_filters(&mut conn).await;
+        assert_eq!(stored1.len(), 1);
+        assert!(
+            folded_bloom_contains(&stored1[0].bloom_filter, &ObjectID::ZERO.to_vec()),
+            "First commit should contain ObjectID::ZERO"
+        );
+        assert!(
+            folded_bloom_contains(&stored1[0].bloom_filter, &sender1.to_vec()),
+            "First commit should contain sender1"
+        );
+
+        // Second commit: same checkpoint 0 but with different package (ObjectID::from_single_byte(1))
+        // In real scenarios this might happen if indexer restarts or retries
+        let package2 = ObjectID::from_single_byte(1);
+        let mut builder2 = TestCheckpointBuilder::new(0);
+        builder2 = builder2
+            .start_transaction(2) // Different sender
+            .add_move_call(package2, "other_module", "other_function")
+            .finish_transaction();
+        let checkpoint2 = Arc::new(builder2.build_checkpoint());
+        let values2 = CpBlooms.process(&checkpoint2).await.unwrap();
+        let sender2 = checkpoint2.transactions[0].transaction.sender();
+
+        CpBlooms::commit(&values2, &mut conn).await.unwrap();
+
+        // Verify BOTH sets of keys are present after merge
+        let stored2 = get_all_bloom_filters(&mut conn).await;
+        assert_eq!(
+            stored2.len(),
+            1,
+            "Should still have only one row for checkpoint 0"
+        );
+
+        // Keys from first commit should survive
+        assert!(
+            folded_bloom_contains(&stored2[0].bloom_filter, &ObjectID::ZERO.to_vec()),
+            "ObjectID::ZERO from first commit should survive bytea_or merge"
+        );
+        assert!(
+            folded_bloom_contains(&stored2[0].bloom_filter, &sender1.to_vec()),
+            "sender1 from first commit should survive bytea_or merge"
+        );
+
+        // Keys from second commit should also be present
+        assert!(
+            folded_bloom_contains(&stored2[0].bloom_filter, &package2.to_vec()),
+            "package2 from second commit should be present after merge"
+        );
+        assert!(
+            folded_bloom_contains(&stored2[0].bloom_filter, &sender2.to_vec()),
+            "sender2 from second commit should be present after merge"
         );
     }
 }
