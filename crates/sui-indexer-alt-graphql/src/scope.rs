@@ -186,6 +186,30 @@ impl Scope {
     pub(crate) fn package_resolver(&self) -> Resolver<Self> {
         Resolver::new_with_limits(self.clone(), self.resolver_limits.clone())
     }
+
+    #[cfg(test)]
+    pub(crate) fn for_tests() -> Self {
+        #[derive(Clone)]
+        struct EmptyPackageStore;
+
+        #[async_trait]
+        impl PackageStore for EmptyPackageStore {
+            async fn fetch(
+                &self,
+                id: AccountAddress,
+            ) -> Result<Arc<Package>, PackageResolverError> {
+                Err(PackageResolverError::PackageNotFound(id))
+            }
+        }
+
+        Self {
+            checkpoint_viewed_at: Some(0),
+            root_version: None,
+            execution_objects: Arc::new(BTreeMap::new()),
+            package_store: Arc::new(EmptyPackageStore),
+            resolver_limits: Limits::default().package_resolver(),
+        }
+    }
 }
 
 /// Extract object contents from an ExecutedTransaction, including tombstones for deleted/wrapped objects.

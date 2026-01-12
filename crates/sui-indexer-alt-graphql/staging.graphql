@@ -327,6 +327,18 @@ type BalanceEdge {
 }
 
 """
+Input for withdrawing funds from an accumulator.
+"""
+type BalanceWithdraw {
+	reservation: WithdrawalReservation
+	"""
+	The type of the funds accumulator to withdraw from (e.g. `0x2::balance::Balance<0x2::sui::SUI>`).
+	"""
+	typeArg: MoveType
+	withdrawFrom: WithdrawFrom
+}
+
+"""
 String containing Base64-encoded binary data.
 """
 scalar Base64
@@ -1105,6 +1117,10 @@ type EndOfEpochTransactionKindEdge {
 	node: EndOfEpochTransactionKind!
 }
 
+type EntireBalance {
+	_: Boolean
+}
+
 """
 Activity on Sui is partitioned in time, into epochs.
 
@@ -1739,6 +1755,10 @@ type MakeMoveVecCommand {
 	If the elements are not objects, or the vector is empty, a type must be supplied.
 	"""
 	type: MoveType
+}
+
+type MaxAmountU64 {
+	amount: UInt53
 }
 
 """
@@ -3975,7 +3995,7 @@ input TransactionFilter {
 """
 Input argument to a Programmable Transaction Block (PTB) command.
 """
-union TransactionInput = Pure | OwnedOrImmutable | SharedInput | Receiving
+union TransactionInput = Pure | OwnedOrImmutable | SharedInput | Receiving | BalanceWithdraw
 
 type TransactionInputConnection {
 	"""
@@ -4398,6 +4418,16 @@ input VersionFilter {
 	"""
 	beforeVersion: UInt53
 }
+
+enum WithdrawFrom {
+	SENDER
+	SPONSOR
+}
+
+"""
+Reservation details for a withdrawal.
+"""
+union WithdrawalReservation = EntireBalance | MaxAmountU64
 
 """
 System transaction for writing the pre-computed storage cost for accumulator objects.
