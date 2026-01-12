@@ -1271,7 +1271,7 @@ impl From<crate::transaction::CallArg> for Input {
 
                 Self::FundsWithdrawal(FundsWithdrawal::new(
                     amount,
-                    coin_type.try_into().unwrap(),
+                    type_tag_core_to_sdk(coin_type).unwrap(),
                     source,
                 ))
             }
@@ -1319,7 +1319,7 @@ impl From<Input> for crate::transaction::CallArg {
                         .map(crate::transaction::Reservation::MaxAmountU64)
                         .unwrap(),
                     type_arg: crate::transaction::WithdrawalTypeArg::Balance(
-                        withdrawal.coin_type().to_owned().into(),
+                        type_tag_sdk_to_core(withdrawal.coin_type().to_owned()).unwrap(),
                     ),
                     withdraw_from: match withdrawal.source() {
                         sui_sdk_types::WithdrawFrom::Sender => {

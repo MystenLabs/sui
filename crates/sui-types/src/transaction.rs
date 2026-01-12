@@ -151,31 +151,23 @@ pub enum Reservation {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum WithdrawalTypeArg {
-    Balance(TypeInput),
+    Balance(TypeTag),
 }
 
 impl WithdrawalTypeArg {
     /// Convert the withdrawal type argument to a full type tag,
     /// e.g. `Balance<T>` -> `0x2::balance::Balance<T>`
-    pub fn to_type_tag(&self) -> UserInputResult<TypeTag> {
-        match self {
-            WithdrawalTypeArg::Balance(type_param) => {
-                Ok(Balance::type_tag(type_param.to_type_tag().map_err(
-                    |e| UserInputError::InvalidWithdrawReservation {
-                        error: e.to_string(),
-                    },
-                )?))
-            }
-        }
+    pub fn to_type_tag(&self) -> TypeTag {
+        let WithdrawalTypeArg::Balance(type_param) = self;
+        Balance::type_tag(type_param.clone())
     }
 
     /// If this is a Balance accumulator, return the type parameter of `Balance<T>`,
     /// e.g. `Balance<T>` -> `Some(T)`
     /// Otherwise, return `None`. This is not possible today, but in the future we will support other types of accumulators.
-    pub fn get_balance_type_param(&self) -> anyhow::Result<Option<TypeTag>> {
-        match self {
-            WithdrawalTypeArg::Balance(type_param) => type_param.to_type_tag().map(Some),
-        }
+    pub fn get_balance_type_param(&self) -> Option<TypeTag> {
+        let WithdrawalTypeArg::Balance(type_param) = self;
+        Some(type_param.clone())
     }
 }
 
@@ -201,7 +193,7 @@ pub enum WithdrawFrom {
 
 impl FundsWithdrawalArg {
     /// Withdraws from `Balance<balance_type>` in the sender's address.
-    pub fn balance_from_sender(amount: u64, balance_type: TypeInput) -> Self {
+    pub fn balance_from_sender(amount: u64, balance_type: TypeTag) -> Self {
         Self {
             reservation: Reservation::MaxAmountU64(amount),
             type_arg: WithdrawalTypeArg::Balance(balance_type),
@@ -210,7 +202,7 @@ impl FundsWithdrawalArg {
     }
 
     /// Withdraws from `Balance<balance_type>` in the sponsor's address (gas owner).
-    pub fn balance_from_sponsor(amount: u64, balance_type: TypeInput) -> Self {
+    pub fn balance_from_sponsor(amount: u64, balance_type: TypeTag) -> Self {
         Self {
             reservation: Reservation::MaxAmountU64(amount),
             type_arg: WithdrawalTypeArg::Balance(balance_type),
@@ -2631,10 +2623,10 @@ impl TransactionDataAPI for TransactionDataV1 {
 
             let account_address = withdraw.owner_for_withdrawal(self);
             let account_id =
-                AccumulatorValue::get_field_id(account_address, &withdraw.type_arg.to_type_tag()?)
+                AccumulatorValue::get_field_id(account_address, &withdraw.type_arg.to_type_tag())
                     .map_err(|e| UserInputError::InvalidWithdrawReservation {
-                        error: e.to_string(),
-                    })?;
+                    error: e.to_string(),
+                })?;
 
             let current_amount = withdraw_map.entry(account_id).or_default();
             *current_amount = current_amount.checked_add(reserved_amount).ok_or(
@@ -2668,11 +2660,9 @@ impl TransactionDataAPI for TransactionDataV1 {
             let withdrawal_owner = withdraw.owner_for_withdrawal(self);
 
             // unwrap checked at signing time
-            let account_id = AccumulatorValue::get_field_id(
-                withdrawal_owner,
-                &withdraw.type_arg.to_type_tag().unwrap(),
-            )
-            .unwrap();
+            let account_id =
+                AccumulatorValue::get_field_id(withdrawal_owner, &withdraw.type_arg.to_type_tag())
+                    .unwrap();
 
             let value = withdraw_map.entry(account_id).or_default();
             // overflow checked at signing time
@@ -3040,15 +3030,9 @@ impl TransactionDataV1 {
     fn get_funds_withdrawal_for_gas_payment(&self) -> Option<FundsWithdrawalArg> {
         if self.is_gas_paid_from_address_balance() {
             Some(if self.sender() != self.gas_owner() {
-                FundsWithdrawalArg::balance_from_sponsor(
-                    self.gas_data().budget,
-                    TypeInput::from(GAS::type_tag()),
-                )
+                FundsWithdrawalArg::balance_from_sponsor(self.gas_data().budget, GAS::type_tag())
             } else {
-                FundsWithdrawalArg::balance_from_sender(
-                    self.gas_data().budget,
-                    TypeInput::from(GAS::type_tag()),
-                )
+                FundsWithdrawalArg::balance_from_sender(self.gas_data().budget, GAS::type_tag())
             })
         } else {
             None

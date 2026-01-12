@@ -120,7 +120,7 @@ fn input<Mode: ExecutionMode>(
             };
             let funds_ty = match type_arg {
                 P::WithdrawalTypeArg::Balance(inner) => {
-                    let inner = env.load_type_input(0, inner)?;
+                    let inner = env.load_type_tag(0, &inner)?;
                     env.balance_type(inner)?
                 }
             };

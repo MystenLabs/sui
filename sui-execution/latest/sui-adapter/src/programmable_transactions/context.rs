@@ -1897,13 +1897,7 @@ mod checked {
                 type_arg,
                 withdraw_from,
             }) => {
-                let Ok(type_arg) = type_arg.to_type_tag() else {
-                    // TODO(address-balances): ensure this is caught at signing
-                    invariant_violation!(
-                        "FundsWithdrawArg type arg should have been \
-                        checked at signing"
-                    );
-                };
+                let type_arg = type_arg.to_type_tag();
                 let withdrawal_ty = Withdrawal::type_tag(type_arg);
                 let ty =
                     load_type(vm, linkage_view, new_packages, &withdrawal_ty).map_err(|e| {
