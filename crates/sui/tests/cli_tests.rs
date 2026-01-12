@@ -2194,7 +2194,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_failure_invalid");
     let build_config = BuildConfig::new_for_testing().config;
-    let _result = SuiClientCommands::TestPublish(TestPublishArgs {
+    let result = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path,
             build_config,
@@ -2217,8 +2217,12 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
         publish_unpublished_deps: false,
     })
     .execute(context)
-    .await?;
+    .await;
 
+    let expect = expect![[r#"
+        "Error while loading dependency tests/data/module_dependency_invalid: error while loading legacy manifest \"tests/data/module_dependency_invalid/Move.toml\": Unable to parse AccountAddress (must be hex string of length 32)"
+    "#]];
+    expect.assert_debug_eq(&result.unwrap_err().to_string());
     Ok(())
 }
 

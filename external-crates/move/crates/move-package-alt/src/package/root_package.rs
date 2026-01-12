@@ -961,7 +961,7 @@ pkg_b = { local = "../pkg_b" }"#,
             published-at = "0x3"
             version = 0
             "###,
-            path = scenario.path_for("root").display(),
+            path = scenario.path_for("root").canonicalize().unwrap().display(),
         )
         .unwrap();
 
@@ -1011,7 +1011,7 @@ pkg_b = { local = "../pkg_b" }"#,
             published-at = "0x3"
             version = 0
             "###,
-            path = scenario.path_for("dep").display()
+            path = scenario.path_for("dep").canonicalize().unwrap().display()
         )
         .unwrap();
 
@@ -1086,8 +1086,8 @@ pkg_b = { local = "../pkg_b" }"#,
         assert_snapshot!(err.to_string(), @"Multiple entries with `source = { local = \"/foo/bar\" }` exist in the publication file");
     }
 
-    /// Ephemerally loading a dep that is published but not in the ephemeral file produces the
-    /// original address. Note: it should also warn but this is not tested
+    /// Ephemerally loading a dep that is published but not in the ephemeral file produces no
+    /// address.
     #[test(tokio::test)]
     async fn ephemeral_only_pub() {
         let scenario = TestPackageGraph::new(["root"])
@@ -1119,16 +1119,12 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // check the dependency's addresses
 
-        let dep_addrs = root
+        let dep = root
             .filtered_graph
             .package_info_by_id(&PackageID::from("dep"))
-            .unwrap()
-            .published()
-            .unwrap()
-            .clone();
+            .unwrap();
 
-        assert_eq!(dep_addrs.original_id, OriginalID::from(1));
-        assert_eq!(dep_addrs.published_at, PublishedID::from(1));
+        assert!(dep.published().is_none());
     }
 
     /// Ephemerally loading a dep that is not published but is in the ephemeral file produces the
@@ -1152,7 +1148,7 @@ pkg_b = { local = "../pkg_b" }"#,
             published-at = "0x3"
             version = 0
             "###,
-            path = scenario.path_for("dep").display(),
+            path = scenario.path_for("dep").canonicalize().unwrap().display(),
         )
         .unwrap();
 
@@ -1319,7 +1315,7 @@ pkg_b = { local = "../pkg_b" }"#,
         "###);
     }
 
-    /// Loading an ephemeral root package from a non-existing file succeeds and uses the published
+    /// Loading an ephemeral root package from a non-existing file succeeds and has no published
     /// addresses for the build environment
     #[test(tokio::test)]
     async fn ephemeral_empty() {
@@ -1344,16 +1340,12 @@ pkg_b = { local = "../pkg_b" }"#,
         .unwrap();
 
         // check the dependency's addresses
-        let dep_addrs = root
+        let dep = root
             .filtered_graph
             .package_info_by_id(&PackageID::from("dep"))
-            .unwrap()
-            .published()
-            .unwrap()
-            .clone();
+            .unwrap();
 
-        assert_eq!(dep_addrs.original_id, OriginalID::from(1));
-        assert_eq!(dep_addrs.published_at, PublishedID::from(2));
+        assert!(dep.published().is_none());
     }
 
     /// Loading an ephemeral root package and then publishing correctly updates the ephemeral file
@@ -1408,7 +1400,12 @@ pkg_b = { local = "../pkg_b" }"#,
             std::fs::read_to_string(scenario.path_for("root/Published.toml")).unwrap();
         let ephemeral_data = std::fs::read_to_string(ephemeral.path()).unwrap();
         let ephemeral_data = ephemeral_data.replace(
-            scenario.path_for("root").to_string_lossy().as_ref(),
+            scenario
+                .path_for("root")
+                .canonicalize()
+                .unwrap()
+                .to_string_lossy()
+                .as_ref(),
             "<ROOT>",
         );
 
