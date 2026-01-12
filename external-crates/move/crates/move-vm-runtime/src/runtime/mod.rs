@@ -129,7 +129,7 @@ impl MoveRuntime {
             let total_timer = txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Total);
 
             let instance = try_block! {
-                let linkage_hash = match link_context.into_linkage_hash(&self.cache.interner) {
+                let linkage_hash = match link_context.to_linkage_hash(&self.cache.interner) {
                     Ok(hash) => hash,
                     Err(err) => {
                         // Anything better to do here?

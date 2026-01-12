@@ -80,7 +80,7 @@ impl MoveCache {
     /// Returns `true` if the package was newly inserted, `false` if it was already present.
     /// NB: in a parallel scenario the result of this function is not guaranteed to be
     /// deterministic.
-    pub fn add_package_to_cache(
+    pub(crate) fn add_package_to_cache(
         &self,
         package_key: VersionId,
         verified: verification::ast::Package,
@@ -103,7 +103,7 @@ impl MoveCache {
 
     /// Get a package from the cache, if it is present.
     /// If not present, returns `None`.
-    pub fn cached_package_at(&self, package_key: VersionId) -> Option<Arc<Package>> {
+    pub(crate) fn cached_package_at(&self, package_key: VersionId) -> Option<Arc<Package>> {
         self.package_cache.read().get(&package_key).map(Arc::clone)
     }
 
@@ -116,7 +116,7 @@ impl MoveCache {
     /// Returns `true` if the package was newly inserted, `false` if it was already present.
     /// NB: in a parallel scenario the result of this function is not guaranteed to be
     /// deterministic.
-    pub fn add_linkage_tables_to_cache(
+    pub(crate) fn add_linkage_tables_to_cache(
         &self,
         linkage_key: LinkageHash,
         vtables: VMDispatchTables,
@@ -128,7 +128,10 @@ impl MoveCache {
 
     /// Get cached linkage tables for a given linkage context, if present, and updates the LRU
     /// stats. If not present, returns `None`.
-    pub fn cached_linkage_tables_at(&self, linkage_key: &LinkageHash) -> Option<VMDispatchTables> {
+    pub(crate) fn cached_linkage_tables_at(
+        &self,
+        linkage_key: &LinkageHash,
+    ) -> Option<VMDispatchTables> {
         // We have to grab this as mutable because LRU cache updates the internal state on get.
         let mut linkage_vtables = self.linkage_vtables.write();
         linkage_vtables.get(linkage_key).cloned()
