@@ -14,7 +14,7 @@ use move_binary_format::{
     file_format_common::VERSION_1,
 };
 use move_vm_config::verifier::VerifierConfig;
-use mysten_common::in_test_configuration;
+use mysten_common::in_integration_test;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use sui_protocol_config_macros::{
@@ -4428,9 +4428,11 @@ impl ProtocolConfig {
                 107 => {
                     cfg.feature_flags
                         .consensus_skip_gced_blocks_in_direct_finalization = true;
-                    if in_test_configuration() {
-                        // Trigger GC more often.
+
+                    // Trigger edge cases more often in integration tests.
+                    if in_integration_test() {
                         cfg.consensus_gc_depth = Some(6);
+                        cfg.consensus_max_num_transactions_in_block = Some(8);
                     }
                 }
                 108 => {
