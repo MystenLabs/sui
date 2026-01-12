@@ -19,9 +19,16 @@ pub struct Build {
     /// when dumping bytecode as base64)
     #[clap(long, global = true)]
     pub with_unpublished_dependencies: bool,
-    /// Whether we are printing in base64.
+    /// Dump the compiled bytecode as base64-encoded strings in a JSON object, together with the
+    /// digest and list of dependencies.
     #[clap(long, global = true)]
     pub dump_bytecode_as_base64: bool,
+    /// By default, the CLI will drop any unused dependencies from the output and makes calls to
+    /// the RPC. This flag disables that behavior and avoids any RPC calls, keeping all
+    /// dependencies in the output (the dependency list). This is useful for offline compilation.
+    /// Only to be used with `--dump-bytecode-as-base64`.
+    #[clap(long, global = true, requires = "dump_bytecode_as_base64")]
+    pub no_tree_shaking: bool,
     /// If true, generate struct layout schemas for
     /// all struct types passed into `entry` functions declared by modules in this package
     /// These layout schemas can be consumed by clients (e.g.,

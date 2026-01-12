@@ -627,8 +627,11 @@ impl SuiCommand {
                         .build_async_from_root_pkg(&mut root_pkg)
                         .await?;
 
-                        let client = context.get_client().await?;
-                        pkg_tree_shake(client.read_api(), with_unpublished_deps, &mut pkg).await?;
+                        if !build.no_tree_shaking {
+                            let client = context.get_client().await?;
+                            pkg_tree_shake(client.read_api(), with_unpublished_deps, &mut pkg)
+                                .await?;
+                        }
 
                         println!(
                             "{}",
