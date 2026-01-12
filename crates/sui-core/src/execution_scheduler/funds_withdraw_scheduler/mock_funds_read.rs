@@ -75,7 +75,7 @@ impl MockFundsReadInner {
         self.cur_version = new_accumulator_version;
         for (account_id, balance_change) in funds_changes {
             let balance = self
-                .get_account_amoount(&account_id, self.cur_version)
+                .get_account_amount(&account_id, self.cur_version)
                 .unwrap_or_default();
             let new_balance = balance as i128 + balance_change;
             assert!(new_balance >= 0);
@@ -91,7 +91,7 @@ impl MockFundsReadInner {
         }
     }
 
-    fn get_account_amoount(
+    fn get_account_amount(
         &self,
         account_id: &AccumulatorObjId,
         accumulator_version: SequenceNumber,

@@ -71,10 +71,9 @@ impl FundsWithdrawSchedulerTrait for EagerFundsWithdrawScheduler {
             return;
         }
         let all_accounts = withdraws.all_accounts();
-        let untracked_accounts: Vec<_> = all_accounts
+        let untracked_accounts = all_accounts
             .iter()
-            .filter(|account_id| !inner_state.tracked_accounts.contains_key(account_id))
-            .collect();
+            .filter(|account_id| !inner_state.tracked_accounts.contains_key(account_id));
         let mut init_balances = BTreeMap::new();
         for account_id in untracked_accounts {
             // TODO: We can warm up the cache prior to holding the lock.
@@ -98,28 +97,13 @@ impl FundsWithdrawSchedulerTrait for EagerFundsWithdrawScheduler {
                         let (balance, version) = init_balances.get(&account_id).cloned().unwrap();
                         AccountState::new(account_id, balance, version)
                     });
-                entry.add_withdraw(pending_withdraw.clone());
-                // If there are existing blocking withdraws, we cannot schedule this withdraw either.
-                // Otherwise we schedule it immediately.
-                if entry.num_pending_reservations() == 1 {
-                    let result = entry.try_reserve_front(cur_accumulator_version);
-                    if !result {
-                        debug!(
-                            tx_digest = ?pending_withdraw.tx_digest(),
-                            accumulator_version = ?pending_withdraw.accumulator_version().value(),
-                            "Unable to determine if the withdraw can be satisfied yet");
-                    }
-                }
+                entry.try_reserve_new_withdraw(pending_withdraw.clone(), cur_accumulator_version);
             }
         }
-        assert!(
-            !inner_state
-                .pending_settlements
-                .contains_key(&withdraws.accumulator_version)
-        );
-        inner_state
+        let old = inner_state
             .pending_settlements
             .insert(withdraws.accumulator_version, all_accounts);
+        assert!(old.is_none());
     }
 
     async fn settle_funds(&self, settlement: FundsSettlement) {

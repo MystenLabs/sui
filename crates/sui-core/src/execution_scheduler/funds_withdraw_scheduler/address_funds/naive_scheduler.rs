@@ -63,7 +63,6 @@ impl FundsWithdrawSchedulerTrait for NaiveFundsWithdrawScheduler {
         let mut cur_funds = BTreeMap::new();
         let all_accounts = withdraws.all_accounts();
         for account_id in all_accounts {
-            // TODO: We can warm up the cache prior to holding the lock.
             let (balance, version) = self.funds_read.get_latest_account_amount(&account_id);
             if version > withdraws.accumulator_version {
                 withdraws.notify_skip_schedule();

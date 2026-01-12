@@ -1392,6 +1392,7 @@ impl AccountFundsRead for WritebackCache {
             ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                 .unwrap()
                 .version();
+        let mut loop_iter = 0;
         loop {
             let account_obj = ObjectCacheRead::get_object(self, account_id.inner());
             if let Some(account_obj) = account_obj {
@@ -1406,7 +1407,15 @@ impl AccountFundsRead for WritebackCache {
             if pre_root_version == post_root_version {
                 return (0, pre_root_version);
             }
+            debug!(
+                "Root version changed from {} to {} while reading account amount, retrying",
+                pre_root_version, post_root_version
+            );
             pre_root_version = post_root_version;
+            loop_iter += 1;
+            if loop_iter >= 3 {
+                debug_fatal!("Unable to get a stable version after 3 iterations");
+            }
         }
     }
 }

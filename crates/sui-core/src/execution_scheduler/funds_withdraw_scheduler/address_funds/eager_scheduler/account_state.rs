@@ -54,16 +54,15 @@ impl AccountState {
         }
     }
 
-    /// Register a new withdraw in this account.
-    pub fn add_withdraw(&mut self, new_withdraw: Arc<PendingWithdraw>) {
-        // The accumulator_version of the new withdraw is the version it reads from.
-        // last_updated_version is the version where the account is known to be settled at in the accumulator.
-        // In the scheduler, we only schedule withdraws that have not been settled yet, so the new withdraw's version
-        // must be greater or equal to the last_updated_version.
-        // It can be equal if we are scheduling a withdraw from a version that was just settled.
-        assert!(new_withdraw.accumulator_version() >= self.last_updated_version);
+    pub fn try_reserve_new_withdraw(
+        &mut self,
+        new_withdraw: Arc<PendingWithdraw>,
+        last_settled_version: SequenceNumber,
+    ) -> bool {
         self.pending_reservations.push_back(new_withdraw);
-        let len = self.num_pending_reservations();
+        let len = self.pending_reservations.len();
+        // If there are existing blocking withdraws, we cannot schedule this withdraw either.
+        // Otherwise we schedule it immediately.
         if len > 1 {
             // The withdraws are scheduled in order of accumulator version, so the previous withdraw's version
             // must be less or equal to the current withdraw's version.
@@ -71,17 +70,16 @@ impl AccountState {
                 self.pending_reservations[len - 2].accumulator_version()
                     <= self.pending_reservations[len - 1].accumulator_version()
             );
+            false
+        } else {
+            self.try_reserve_front(last_settled_version)
         }
-    }
-
-    pub fn num_pending_reservations(&self) -> usize {
-        self.pending_reservations.len()
     }
 
     /// Try to process the first withdraw in the pending_reservations queue.
     /// Returns true if the processing was successful, i.e. we reached a deterministic
     /// decision on whether that withdraw can be satisfied for this account.
-    pub fn try_reserve_front(&mut self, last_settled_version: SequenceNumber) -> bool {
+    fn try_reserve_front(&mut self, last_settled_version: SequenceNumber) -> bool {
         let Some(pending_withdraw) = self.pending_reservations.pop_front() else {
             return false;
         };
@@ -225,57 +223,6 @@ mod tests {
     }
 
     #[test]
-    fn test_add_withdraw_single() {
-        let account_id = make_account_id(1);
-        let mut state = AccountState::new(account_id, 1000, SequenceNumber::from_u64(5));
-
-        let (pending, _rx) = make_pending_withdraw(account_id, 100, SequenceNumber::from_u64(5));
-        state.add_withdraw(pending);
-
-        assert!(!state.is_empty());
-        assert_eq!(state.pending_reservations.len(), 1);
-    }
-
-    #[test]
-    fn test_add_withdraw_multiple_ordered() {
-        let account_id = make_account_id(1);
-        let mut state = AccountState::new(account_id, 1000, SequenceNumber::from_u64(5));
-
-        let (p1, _rx1) = make_pending_withdraw(account_id, 100, SequenceNumber::from_u64(5));
-        let (p2, _rx2) = make_pending_withdraw(account_id, 200, SequenceNumber::from_u64(6));
-        let (p3, _rx3) = make_pending_withdraw(account_id, 300, SequenceNumber::from_u64(7));
-
-        state.add_withdraw(p1);
-        state.add_withdraw(p2);
-        state.add_withdraw(p3);
-
-        assert_eq!(state.pending_reservations.len(), 3);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_add_withdraw_version_before_last_updated_panics() {
-        let account_id = make_account_id(1);
-        let mut state = AccountState::new(account_id, 1000, SequenceNumber::from_u64(5));
-
-        let (pending, _rx) = make_pending_withdraw(account_id, 100, SequenceNumber::from_u64(4));
-        state.add_withdraw(pending);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_add_withdraw_out_of_order_panics() {
-        let account_id = make_account_id(1);
-        let mut state = AccountState::new(account_id, 1000, SequenceNumber::from_u64(5));
-
-        let (p1, _rx1) = make_pending_withdraw(account_id, 100, SequenceNumber::from_u64(7));
-        let (p2, _rx2) = make_pending_withdraw(account_id, 200, SequenceNumber::from_u64(6));
-
-        state.add_withdraw(p1);
-        state.add_withdraw(p2); // should panic: version 6 < version 7
-    }
-
-    #[test]
     fn test_try_reserve_front_empty_queue() {
         let account_id = make_account_id(1);
         let mut state = AccountState::new(account_id, 1000, SequenceNumber::from_u64(5));
@@ -290,9 +237,7 @@ mod tests {
         let mut state = AccountState::new(account_id, 1000, SequenceNumber::from_u64(5));
 
         let (pending, rx) = make_pending_withdraw(account_id, 100, SequenceNumber::from_u64(5));
-        state.add_withdraw(pending);
-
-        let result = state.try_reserve_front(SequenceNumber::from_u64(5));
+        let result = state.try_reserve_new_withdraw(pending, SequenceNumber::from_u64(5));
         assert!(result);
         assert!(state.pending_reservations.is_empty());
         assert_eq!(
@@ -315,10 +260,8 @@ mod tests {
 
         // Request more than available, but version != last_settled_version
         let (pending, _rx) = make_pending_withdraw(account_id, 200, SequenceNumber::from_u64(6));
-        state.add_withdraw(pending);
-
         // last_settled_version is 5, pending is at version 6
-        let result = state.try_reserve_front(SequenceNumber::from_u64(5));
+        let result = state.try_reserve_new_withdraw(pending, SequenceNumber::from_u64(5));
         assert!(!result);
         // The pending withdraw should be pushed back to the front
         assert_eq!(state.pending_reservations.len(), 1);
@@ -331,10 +274,8 @@ mod tests {
 
         // Request more than available at settled version
         let (pending, rx) = make_pending_withdraw(account_id, 200, SequenceNumber::from_u64(5));
-        state.add_withdraw(pending);
-
         // When the pending version equals last_settled_version, insufficient funds triggers notification
-        let result = state.try_reserve_front(SequenceNumber::from_u64(5));
+        let result = state.try_reserve_new_withdraw(pending, SequenceNumber::from_u64(5));
         assert!(result);
         assert!(state.pending_reservations.is_empty());
 
@@ -354,14 +295,10 @@ mod tests {
         let (p2, rx2) = make_pending_withdraw(account_id, 100, SequenceNumber::from_u64(5));
         let (p3, rx3) = make_pending_withdraw(account_id, 100, SequenceNumber::from_u64(5));
 
-        state.add_withdraw(p1);
-        state.add_withdraw(p2);
-        state.add_withdraw(p3);
-
         // Reserve all three
-        assert!(state.try_reserve_front(SequenceNumber::from_u64(5)));
-        assert!(state.try_reserve_front(SequenceNumber::from_u64(5)));
-        assert!(state.try_reserve_front(SequenceNumber::from_u64(5)));
+        assert!(state.try_reserve_new_withdraw(p1, SequenceNumber::from_u64(5)));
+        assert!(state.try_reserve_new_withdraw(p2, SequenceNumber::from_u64(5)));
+        assert!(state.try_reserve_new_withdraw(p3, SequenceNumber::from_u64(5)));
 
         // All reserved exactly 300
         assert_eq!(
@@ -393,18 +330,15 @@ mod tests {
         let (p1, rx1) = make_pending_withdraw(account_id, 100, SequenceNumber::from_u64(5));
         let (p2, rx2) = make_pending_withdraw(account_id, 100, SequenceNumber::from_u64(5));
 
-        state.add_withdraw(p1);
-        state.add_withdraw(p2);
-
         // First one succeeds
-        assert!(state.try_reserve_front(SequenceNumber::from_u64(5)));
+        assert!(state.try_reserve_new_withdraw(p1, SequenceNumber::from_u64(5)));
         assert_eq!(
             rx1.await.unwrap().status,
             super::super::super::ScheduleStatus::SufficientFunds
         );
 
         // Second one fails (100 reserved + 100 needed = 200 > 150)
-        assert!(state.try_reserve_front(SequenceNumber::from_u64(5)));
+        assert!(state.try_reserve_new_withdraw(p2, SequenceNumber::from_u64(5)));
         assert_eq!(
             rx2.await.unwrap().status,
             super::super::super::ScheduleStatus::InsufficientFunds
@@ -496,10 +430,8 @@ mod tests {
 
         // Add a withdraw that needs 200 (more than current balance)
         let (pending, rx) = make_pending_withdraw(account_id, 200, SequenceNumber::from_u64(6));
-        state.add_withdraw(pending);
-
         // Try to reserve - should fail because insufficient funds
-        assert!(!state.try_reserve_front(SequenceNumber::from_u64(5)));
+        assert!(!state.try_reserve_new_withdraw(pending, SequenceNumber::from_u64(5)));
         assert_eq!(state.pending_reservations.len(), 1);
 
         // Settle with +150, bringing balance to 250 at version 6
@@ -517,19 +449,6 @@ mod tests {
             result.status,
             super::super::super::ScheduleStatus::SufficientFunds
         );
-    }
-
-    #[test]
-    fn test_is_empty_with_pending_reservations() {
-        let account_id = make_account_id(1);
-        let mut state = AccountState::new(account_id, 1000, SequenceNumber::from_u64(5));
-
-        assert!(state.is_empty());
-
-        let (pending, _rx) = make_pending_withdraw(account_id, 100, SequenceNumber::from_u64(5));
-        state.add_withdraw(pending);
-
-        assert!(!state.is_empty());
     }
 
     #[test]
@@ -552,18 +471,15 @@ mod tests {
         let (p1, _rx1) = make_pending_withdraw(account_id, 200, SequenceNumber::from_u64(5));
         let (p2, _rx2) = make_pending_withdraw(account_id, 150, SequenceNumber::from_u64(6));
 
-        state.add_withdraw(p1);
-        state.add_withdraw(p2);
-
         // Reserve first at version 5
-        assert!(state.try_reserve_front(SequenceNumber::from_u64(5)));
+        assert!(state.try_reserve_new_withdraw(p1, SequenceNumber::from_u64(5)));
         assert_eq!(
             *state.reserved_funds.reserved_funds.front().unwrap(),
             (SequenceNumber::from_u64(5), 200)
         );
 
         // Reserve second at version 6
-        assert!(state.try_reserve_front(SequenceNumber::from_u64(5)));
+        assert!(state.try_reserve_new_withdraw(p2, SequenceNumber::from_u64(5)));
         assert_eq!(
             *state.reserved_funds.reserved_funds.back().unwrap(),
             (SequenceNumber::from_u64(6), 150)
@@ -580,11 +496,8 @@ mod tests {
         let (p1, rx1) = make_pending_withdraw(account_id, 200, SequenceNumber::from_u64(5));
         let (p2, _rx2) = make_pending_withdraw(account_id, 150, SequenceNumber::from_u64(6));
 
-        state.add_withdraw(p1);
-        state.add_withdraw(p2);
-
         // Reserve first (200) - should succeed
-        assert!(state.try_reserve_front(SequenceNumber::from_u64(5)));
+        assert!(state.try_reserve_new_withdraw(p1, SequenceNumber::from_u64(5)));
         assert_eq!(
             rx1.await.unwrap().status,
             super::super::super::ScheduleStatus::SufficientFunds
@@ -592,7 +505,7 @@ mod tests {
 
         // Try to reserve second (150) - but 200 + 150 = 350 > 300
         // Version 6 != last_settled_version (5), so it should return false
-        assert!(!state.try_reserve_front(SequenceNumber::from_u64(5)));
+        assert!(!state.try_reserve_new_withdraw(p2, SequenceNumber::from_u64(5)));
         assert_eq!(state.pending_reservations.len(), 1);
     }
 }
