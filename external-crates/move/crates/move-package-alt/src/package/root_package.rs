@@ -156,6 +156,17 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         debug!("checking rename-from");
         unfiltered_graph.check_rename_from()?;
 
+        debug!("checking for legacy -> modern dependencies");
+        if unfiltered_graph.root_package().is_legacy()
+            && unfiltered_graph
+                .root_package_info()
+                .direct_deps()
+                .iter()
+                .any(|(_, pkg)| !pkg.package().is_legacy())
+        {
+            return Err(PackageError::LegacyDependsOnModern);
+        }
+
         debug!(
             "packages (unfiltered): {:?}",
             unfiltered_graph
