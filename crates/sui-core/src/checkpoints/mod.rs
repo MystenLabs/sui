@@ -1543,11 +1543,6 @@ impl CheckpointBuilder {
     ) -> CheckpointBuilderResult<CheckpointSequenceNumber> {
         let _scope = monitored_scope("CheckpointBuilder::make_checkpoint");
 
-        let pending_ckpt_str = format!(
-            "height={}, commit={}",
-            pending.details.checkpoint_height, pending.details.consensus_commit_ref
-        );
-
         let details = pending.details.clone();
 
         let highest_executed_sequence = self
@@ -1569,23 +1564,21 @@ impl CheckpointBuilder {
             .await?;
         assert_eq!(new_checkpoints.len(), 1, "Expected exactly one checkpoint");
         let sequence = *new_checkpoints.first().0.sequence_number();
+        let digest = new_checkpoints.first().0.digest();
         if sequence <= highest_executed_sequence && poll_count > 1 {
             debug_fatal!(
                 "resolve_checkpoint_transactions should be instantaneous when executed checkpoint is ahead of checkpoint builder"
             );
         }
 
-        let new_ckpt_str = format!(
-            "seq={}, digest={}",
-            new_checkpoints.first().0.sequence_number(),
-            new_checkpoints.first().0.digest()
-        );
-
         self.write_checkpoints(details.checkpoint_height, new_checkpoints)
             .await?;
         info!(
-            "Made new checkpoint {} from pending checkpoint {}",
-            new_ckpt_str, pending_ckpt_str
+            seq = sequence,
+            %digest,
+            height = details.checkpoint_height,
+            commit = %details.consensus_commit_ref,
+            "Made new checkpoint"
         );
 
         Ok(sequence)

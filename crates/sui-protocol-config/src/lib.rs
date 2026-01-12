@@ -2520,7 +2520,7 @@ impl ProtocolConfig {
         self.feature_flags
             .consensus_skip_gced_blocks_in_direct_finalization
     }
-    
+
     pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
         self.feature_flags.split_checkpoints_in_consensus_handler
     }
