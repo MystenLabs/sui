@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod balance_withdraw;
-pub mod object;
-pub mod pure;
-
 use async_graphql::Union;
 
 use sui_types::transaction::CallArg;
@@ -12,6 +8,10 @@ use sui_types::transaction::ObjectArg;
 
 use crate::api::scalars::base64::Base64;
 use crate::scope::Scope;
+
+pub mod balance_withdraw;
+pub mod object;
+pub mod pure;
 
 pub use balance_withdraw::BalanceWithdraw;
 pub use object::OwnedOrImmutable;

@@ -1,17 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Enum, SimpleObject, Union};
+use async_graphql::Enum;
+use async_graphql::SimpleObject;
+use async_graphql::Union;
 use move_core_types::account_address::AccountAddress;
-use sui_types::{
-    transaction::{
-        FundsWithdrawalArg as NativeFundsWithdrawalArg, Reservation as NativeReservation,
-        WithdrawFrom as NativeWithdrawFrom, WithdrawalTypeArg as NativeWithdrawalTypeArg,
-    },
-    type_input::{StructInput, TypeInput},
-};
+use sui_types::transaction::FundsWithdrawalArg as NativeFundsWithdrawalArg;
+use sui_types::transaction::Reservation as NativeReservation;
+use sui_types::transaction::WithdrawFrom as NativeWithdrawFrom;
+use sui_types::transaction::WithdrawalTypeArg as NativeWithdrawalTypeArg;
+use sui_types::type_input::StructInput;
+use sui_types::type_input::TypeInput;
 
-use crate::{api::scalars::big_int::BigInt, api::types::move_type::MoveType, scope::Scope};
+use crate::api::scalars::big_int::BigInt;
+use crate::api::types::move_type::MoveType;
+use crate::scope::Scope;
 
 /// Input for withdrawing funds from an accumulator.
 #[derive(SimpleObject, Clone)]
