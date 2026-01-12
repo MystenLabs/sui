@@ -9775,12 +9775,6 @@
       "SuiReservation": {
         "oneOf": [
           {
-            "type": "string",
-            "enum": [
-              "entireBalance"
-            ]
-          },
-          {
             "type": "object",
             "required": [
               "maxAmountU64"

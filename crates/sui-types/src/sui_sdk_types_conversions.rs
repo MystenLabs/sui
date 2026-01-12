@@ -1260,13 +1260,7 @@ impl From<crate::transaction::CallArg> for Input {
                 ),
             },
             crate::transaction::CallArg::FundsWithdrawal(withdrawal) => {
-                let amount = match withdrawal.reservation {
-                    crate::transaction::Reservation::EntireBalance => {
-                        todo!("entire balance isn't supported yet")
-                    }
-                    crate::transaction::Reservation::MaxAmountU64(amount) => amount,
-                };
-
+                let crate::transaction::Reservation::MaxAmountU64(amount) = withdrawal.reservation;
                 let crate::transaction::WithdrawalTypeArg::Balance(coin_type) = withdrawal.type_arg;
                 let source = match withdrawal.withdraw_from {
                     crate::transaction::WithdrawFrom::Sender => sui_sdk_types::WithdrawFrom::Sender,
@@ -1323,7 +1317,7 @@ impl From<Input> for crate::transaction::CallArg {
                     reservation: withdrawal
                         .amount()
                         .map(crate::transaction::Reservation::MaxAmountU64)
-                        .unwrap_or(crate::transaction::Reservation::EntireBalance),
+                        .unwrap(),
                     type_arg: crate::transaction::WithdrawalTypeArg::Balance(
                         withdrawal.coin_type().to_owned().into(),
                     ),
