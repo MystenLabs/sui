@@ -33,7 +33,14 @@ const TEST_PATTERN: &str = r"\.sh$";
 async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
     // set up test cluster
     let cluster = if path.starts_with(TEST_NET_DIR) {
-        Some(TestClusterBuilder::new().build().await)
+        Some(
+            TestClusterBuilder::new()
+                .with_epoch_duration_ms(60 * 60 * 1_000)
+                // TODO: bump back to default once we figure out why it fails on windows
+                .with_num_validators(1)
+                .build()
+                .await,
+        )
     } else {
         None
     };
@@ -82,10 +89,19 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
         String::from_utf8_lossy(&output.stdout), // for windows ...
         String::from_utf8_lossy(&output.stderr), // for windows ...
     );
-    // redact the temporary directory path
-    let mut result = result.replace(temp_config_dir.path().to_string_lossy().as_ref(), "<ROOT>");
-    // Convert windows path outputs on the snapshot to regular linux ones.
-    result = result.replace(r"\\", "/");
+
+    let result = result
+        // redact the temporary directory path
+        .replace(temp_config_dir.path().to_string_lossy().as_ref(), "<ROOT>")
+        // Redact the sandbox directory path so we can retain snapshots easily.
+        // We canonicalize also to make sure we catch absolute paths too.
+        .replace(
+            sandbox.canonicalize().unwrap().to_string_lossy().as_ref(),
+            "<SANDBOX_DIR>",
+        )
+        .replace(sandbox.to_string_lossy().as_ref(), "<SANDBOX_DIR>")
+        // Convert windows path outputs on the snapshot to regular linux ones.
+        .replace(r"\\", "/");
 
     insta_assert! {
         input_path: path,
