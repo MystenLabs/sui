@@ -27,7 +27,9 @@ use tokio_util::sync::CancellationToken;
 use crate::drivers::HistogramWrapper;
 use crate::drivers::driver::Driver;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionResult};
+use crate::workloads::payload::{
+    ConcurrentTransactionResult, Payload, SoftBundleExecutionResults, SoftBundleTransactionResult,
+};
 use crate::workloads::workload::ExpectedFailureType;
 use crate::workloads::{GroupID, WorkloadInfo};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -1094,6 +1096,78 @@ async fn run_bench_worker(
                                         .inc();
                                     NextOp::Failure
                                 }
+                            }
+                        };
+                        futures.push(Box::pin(res));
+                    } else if payload.is_concurrent_batch() {
+                        // Concurrent batch: submit multiple transactions separately but concurrently
+                        let txs = payload.make_concurrent_transactions();
+                        let num_txs = txs.len();
+                        let start = Arc::new(Instant::now());
+                        let metrics_clone = Arc::clone(&metrics);
+                        let proxy = worker.proxy.clone();
+
+                        let res = async move {
+                            // Submit all transactions concurrently
+                            let futures: Vec<_> = txs
+                                .into_iter()
+                                .map(|tx| {
+                                    let proxy = proxy.clone();
+                                    async move { proxy.execute_transaction_block(tx).await }
+                                })
+                                .collect();
+
+                            let results = futures::future::join_all(futures).await;
+                            let latency = start.elapsed();
+
+                            // Convert results to ConcurrentTransactionResult
+                            let mut concurrent_results = Vec::new();
+                            let mut any_success = false;
+
+                            for (_client_type, result) in results {
+                                match result {
+                                    Ok(effects) => {
+                                        any_success = true;
+                                        concurrent_results
+                                            .push(ConcurrentTransactionResult::Success { effects: Box::new(effects) });
+                                    }
+                                    Err(err) => {
+                                        // Check if it's an ObjectLockConflict (expected in concurrent mode)
+                                        let error = format!("{:?}", err);
+                                        if error.contains("ObjectLockConflict") {
+                                            debug!("Concurrent transaction rejected with ObjectLockConflict (expected)");
+                                        }
+                                        concurrent_results
+                                            .push(ConcurrentTransactionResult::Failure { error });
+                                    }
+                                }
+                            }
+
+                            // Let the payload handle the results
+                            payload.handle_concurrent_results(&concurrent_results);
+
+                            if any_success {
+                                metrics_clone
+                                    .num_success
+                                    .with_label_values(&[&payload.to_string(), "concurrent_batch"])
+                                    .inc();
+                                NextOp::Response {
+                                    latency,
+                                    num_commands: num_txs as u16,
+                                    gas_used: 0,
+                                    payload,
+                                }
+                            } else {
+                                // All transactions in the batch failed
+                                metrics_clone
+                                    .num_error
+                                    .with_label_values(&[
+                                        &payload.to_string(),
+                                        "concurrent_batch_all_failed",
+                                        "concurrent_batch",
+                                    ])
+                                    .inc();
+                                NextOp::Failure
                             }
                         };
                         futures.push(Box::pin(res));

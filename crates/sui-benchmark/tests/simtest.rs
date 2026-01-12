@@ -589,6 +589,8 @@ mod test {
 
             // Always enable the randomized tx workload in this test.
             simulated_load_config.randomized_transaction_weight = 1;
+            // Disable concurrent transactions in congestion control test to avoid lock conflicts
+            simulated_load_config.randomized_transaction_concurrency = 1;
             info!("Simulated load config: {:?}", simulated_load_config);
         }
 
@@ -1043,6 +1045,7 @@ mod test {
         shared_counter_hotness_factor: u32,
         randomness_weight: u32,
         randomized_transaction_weight: u32,
+        randomized_transaction_concurrency: u64,
         num_shared_counters: Option<u64>,
         use_shared_counter_max_tip: bool,
         shared_counter_max_tip: u64,
@@ -1066,7 +1069,8 @@ mod test {
                 shared_deletion_weight: 1,
                 shared_counter_hotness_factor: 50,
                 randomness_weight: 1,
-                randomized_transaction_weight: 0,
+                randomized_transaction_weight: 1,
+                randomized_transaction_concurrency: 4,
                 num_shared_counters: Some(1),
                 use_shared_counter_max_tip: false,
                 shared_counter_max_tip: 0,
@@ -1200,6 +1204,7 @@ mod test {
             num_shared_counters: config.num_shared_counters,
             shared_counter_max_tip,
             num_contested_objects: config.num_contested_objects,
+            randomized_transaction_concurrency: config.randomized_transaction_concurrency,
             target_qps,
             in_flight_ratio,
             duration,
