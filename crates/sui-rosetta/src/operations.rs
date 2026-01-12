@@ -768,6 +768,7 @@ impl Operations {
                         } else if account.address == new_gas_owner && amount.currency == *SUI {
                             amount.value += gas_used;
                         }
+                        operation.type_ = OperationType::PaySui;
                     }
                     _ => {
                         return Err(anyhow!(

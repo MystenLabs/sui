@@ -786,14 +786,22 @@ async fn test_transfer_single_gas_coin() {
     .unwrap();
 
     let mut balance = 0;
-    operations.into_iter().for_each(|op| {
+    let mut pay_sui_count = 0;
+    for op in operations {
+        assert_ne!(
+            op.type_,
+            OperationType::SuiBalanceChange,
+            "Expected PaySui operations, not SuiBalanceChange"
+        );
         if op.type_ == OperationType::Gas {
             assert_eq!(op.account.unwrap().address, sender);
         }
         if op.type_ == OperationType::PaySui {
             balance += op.amount.unwrap().value;
+            pay_sui_count += 1;
         }
-    });
+    }
+    assert_eq!(pay_sui_count, 2, "Expected exactly 2 PaySui operations");
     assert_eq!(balance, 0);
 }
 
