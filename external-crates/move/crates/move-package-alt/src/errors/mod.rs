@@ -123,6 +123,11 @@ pub enum PackageError {
         "You cannot have a dependency with the same name as the package. Rename the dependency, which will require adding `rename-from=\"{name}\"`"
     )]
     DependencyWithSameNameAsPackage { name: String },
+
+    #[error(
+        "Packages with old-style Move.toml files cannot depend on new-style packages. See https://docs.sui.io/references/package-managers/package-manager-migration for instructions."
+    )]
+    LegacyDependsOnModern,
 }
 
 /// Truncate `s` to the first `head` characters and the last `tail` characters of `s`, separated by
