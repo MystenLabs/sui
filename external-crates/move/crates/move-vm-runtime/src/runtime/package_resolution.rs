@@ -258,7 +258,7 @@ pub(crate) fn jit_and_cache_package(
     .map_err(|err| err.finish(Location::Package(version_id)));
     telemetry.report_time(timer);
 
-    let fresh_insert_to_cache = cache.add_to_cache(version_id, verified_pkg, runtime_pkg?);
+    let fresh_insert_to_cache = cache.add_package_to_cache(version_id, verified_pkg, runtime_pkg?);
 
     // If we compiled the package, but another thread already inserted it during compilation,
     // record that this was a redundant compilation for telemetry and move on.
