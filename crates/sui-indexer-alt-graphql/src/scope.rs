@@ -85,7 +85,7 @@ impl Scope {
         })
     }
 
-    /// A package resolver with access to the packages known at this scope.
+    /// Creates a resolver for looking up Move packages and types in this scope.
     pub(crate) fn package_resolver(&self) -> Resolver<Self> {
         Resolver::new_with_limits(self.clone(), self.resolver_limits.clone())
     }
