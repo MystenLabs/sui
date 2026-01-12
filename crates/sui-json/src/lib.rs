@@ -40,7 +40,7 @@ const HEX_PREFIX: &str = "0x";
 #[cfg(test)]
 mod tests;
 
-/// A list of error categories encountered when parsing numbers.
+/// A list of error categories encountered when validating homogeneous JSON arrays.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 pub enum SuiJsonValueErrorKind {
     /// JSON value must be of specific types.
@@ -105,7 +105,7 @@ impl SuiJsonValue {
                 // Must be castable to u64
                 if !n.is_u64() {
                     return Err(anyhow!(
-                        "{n} not allowed. Number must be unsigned integer of at most u32"
+                        "{n} not allowed. Number must be a non-negative integer representable as u64"
                     ));
                 }
             }
@@ -240,7 +240,7 @@ impl SuiJsonValue {
             // Bool to Bool is simple
             (JsonValue::Bool(b), MoveTypeLayout::Bool) => R::MoveValue::Bool(*b),
 
-            // In constructor, we have already checked that the JSON number is unsigned int of at most U32
+            // In constructor, we have already checked that the JSON number is a non-negative integer representable as u64
             (JsonValue::Number(n), MoveTypeLayout::U8) => match n.as_u64() {
                 Some(x) => R::MoveValue::U8(u8::try_from(x)?),
                 None => return Err(anyhow!("{} is not a valid number. Only u8 allowed.", n)),
@@ -423,7 +423,7 @@ fn move_value_to_json(move_value: &MoveValue) -> Option<JsonValue> {
                 }
             }
             MoveStruct { fields, type_ } if type_ == &ID::type_() => {
-                // option has a single vec field.
+                // ID has a single address field.
                 let (_, v) = fields.first()?;
                 if let MoveValue::Address(address) = v {
                     json!(SuiAddress::from(*address))
