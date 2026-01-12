@@ -16,7 +16,8 @@ use crate::{
     },
     shared::{
         constants::{
-            HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, VALUE_DEPTH_MAX,
+            HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_LRU_SIZE,
+            VALUE_DEPTH_MAX,
         },
         types::{DefiningTypeId, OriginalId},
         vm_pointer::VMPointer,
@@ -58,7 +59,7 @@ use std::{
 ///
 /// FUTURE(vm-rewrite): The representation can be optimized to use a more efficient data structure for
 /// vtable/cross-package function resolution but we will keep it simple for now.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VMDispatchTables {
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) interner: Arc<IdentifierInterner>,
@@ -123,10 +124,6 @@ pub struct DepthFormula {
     /// CBase
     pub constant: Option<u64>,
 }
-
-/// Size of the type depth LRU
-/// TODO(vm-rewrite): find a good bound for this
-const TYPE_DEPTH_LRU_SIZE: usize = 16_384;
 
 // -------------------------------------------------------------------------------------------------
 // Impls

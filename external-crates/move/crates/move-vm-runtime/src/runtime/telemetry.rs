@@ -33,6 +33,8 @@ pub struct MoveRuntimeTelemetry {
     pub type_count: u64,
     /// Total size of all string interner
     pub interner_size: u64,
+    /// Total number of VTables in the LRU
+    pub vtable_lru_count: u64,
 
     // -------------------------------------------
     // Telemetry Tracked over Execution
@@ -141,6 +143,8 @@ pub(crate) struct MoveCacheTelemetry {
     pub type_count: u64,
     /// Total identifiers interned
     pub interner_size: u64,
+    /// Total number of VTables in the LRU
+    pub vtable_lru_count: u64,
 }
 
 /// Timer Kinds
@@ -277,6 +281,7 @@ impl TelemetryContext {
             function_count,
             type_count,
             interner_size,
+            vtable_lru_count,
         } = package_cache.to_cache_telemetry();
 
         MoveRuntimeTelemetry {
@@ -287,6 +292,7 @@ impl TelemetryContext {
             function_count,
             type_count,
             interner_size,
+            vtable_lru_count,
 
             // Telemetry metrics.
             total_load_time,

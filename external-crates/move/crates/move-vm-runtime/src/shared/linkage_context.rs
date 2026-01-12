@@ -6,7 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMResult};
 use move_core_types::language_storage::{ModuleId, TypeTag};
 
-use crate::shared::types::{OriginalId, VersionId};
+use crate::{
+    cache::{self, identifier_interner::IdentifierKey},
+    shared::types::{OriginalId, VersionId},
+};
 
 /// An execution context that remaps the modules referred to at runtime according to a linkage
 /// table, allowing the same module in storage to be run against different dependencies.
@@ -21,6 +24,11 @@ pub struct LinkageContext {
     // 0xDEAD for this purpose.
     pub linkage_table: BTreeMap<OriginalId, VersionId>,
 }
+
+/// A hashable representation of a linkage context, for caching purposes.
+/// This is a vector of (key, value) pairs representing the linkage table.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct LinkageHash(Vec<(IdentifierKey, IdentifierKey)>);
 
 impl LinkageContext {
     pub fn new(linkage_table: BTreeMap<OriginalId, VersionId>) -> Self {
@@ -106,5 +114,32 @@ impl LinkageContext {
             .filter(|id| *id != &except)
             .cloned()
             .collect::<BTreeSet<_>>())
+    }
+
+    pub(crate) fn into_linkage_hash(
+        &self,
+        interner: &cache::identifier_interner::IdentifierInterner,
+    ) -> PartialVMResult<LinkageHash> {
+        let mut hash = vec![];
+        for (key, value) in &self.linkage_table {
+            let key_str = key.to_string();
+            let key_ident =
+                move_core_types::identifier::Identifier::new(key_str).map_err(|_| {
+                    PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
+                        .with_message(format!("Failed to create identifier for linkage key {key}"))
+                })?;
+            let value_str = key.to_string();
+            let value_ident =
+                move_core_types::identifier::Identifier::new(value_str).map_err(|_| {
+                    PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
+                        .with_message(format!(
+                            "Failed to create identifier for linkage key {value}"
+                        ))
+                })?;
+            let key_id = interner.intern_identifier(&key_ident)?;
+            let value_id = interner.intern_identifier(&value_ident)?;
+            hash.push((key_id, value_id));
+        }
+        Ok(LinkageHash(hash))
     }
 }
