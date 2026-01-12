@@ -1352,6 +1352,7 @@ async fn test_handle_transfer_transaction_ok() {
     // QD tests will eventually be removed when the QD path is fully deprecated.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -2010,6 +2011,7 @@ async fn test_conflicting_transactions() {
     // when disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -2283,6 +2285,7 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -2317,6 +2320,7 @@ async fn test_handle_confirmation_transaction_ok() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -2388,6 +2392,7 @@ async fn test_handle_confirmation_transaction_idempotent() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -2524,6 +2529,7 @@ async fn test_move_call_insufficient_gas() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -2900,6 +2906,7 @@ async fn test_idempotent_reversed_confirmation() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -3154,6 +3161,7 @@ async fn test_transfer_sui_no_amount() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -3204,6 +3212,7 @@ async fn test_transfer_sui_with_amount() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -3257,6 +3266,7 @@ async fn test_clear_cache_reverts_transfer_sui() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -3318,6 +3328,7 @@ async fn test_clear_cache_reverts_wrap_move_call() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -3399,6 +3410,7 @@ async fn test_clear_cache_reverts_unwrap_move_call() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -3674,6 +3686,7 @@ async fn test_clear_cache_removes_added_ofield() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -3783,6 +3796,7 @@ async fn test_clear_cache_reverts_removed_ofield() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -3905,6 +3919,7 @@ async fn test_iter_live_object_set() {
     // Gate with disable_preconsensus_locking=false.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 

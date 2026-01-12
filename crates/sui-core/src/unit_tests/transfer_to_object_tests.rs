@@ -1032,6 +1032,7 @@ async fn test_tto_not_locked() {
     // disable_preconsensus_locking=false for signed transaction storage.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 

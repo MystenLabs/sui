@@ -288,6 +288,7 @@ const MAX_PROTOCOL_VERSION: u64 = 108;
 // Version 107: Enable new digit based gas rounding.
 //              Support TxContext in all parameter positions.
 //              Disable entry point signature check.
+//              Enable address aliases on testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2490,7 +2491,10 @@ impl ProtocolConfig {
             "Address aliases requires Mysticeti fastpath to be enabled"
         );
         if address_aliases {
-            // TODO: when flag for disabling CertifiedTransaction is added, add assertion for it here.
+            assert!(
+                self.feature_flags.disable_preconsensus_locking,
+                "Address aliases requires CertifiedTransaction to be disabled"
+            );
         }
         address_aliases
     }
@@ -4433,6 +4437,10 @@ impl ProtocolConfig {
                     cfg.feature_flags.gas_rounding_halve_digits = true;
                     cfg.feature_flags.flexible_tx_context_positions = true;
                     cfg.feature_flags.disable_entry_point_signature_check = true;
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.address_aliases = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
