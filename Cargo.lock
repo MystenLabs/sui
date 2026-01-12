@@ -15102,7 +15102,6 @@ dependencies = [
  "fastcrypto-zkp",
  "futures",
  "headers",
- "hex",
  "im",
  "insta",
  "itertools 0.13.0",

@@ -3505,6 +3505,10 @@ type ServiceConfig {
 	"""
 	maxQueryPayloadSize: Int
 	"""
+	Maximum number of checkpoints that can be scanned in a single `transactionsScan` query.
+	"""
+	maxScanLimit: Int
+	"""
 	Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
 	
 	This is cumulative across all matching fields in a single GraphQL request.

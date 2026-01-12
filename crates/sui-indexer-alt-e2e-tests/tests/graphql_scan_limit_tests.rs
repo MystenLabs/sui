@@ -13,7 +13,6 @@ use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
 use sui_indexer_alt_graphql::config::Limits;
 use sui_indexer_alt_graphql::config::RpcConfig;
 
-/// Test that transactionsScan returns an error when the scan range exceeds the configured limit.
 #[tokio::test]
 async fn test_scan_limit_exceeded() {
     let registry = Registry::new();
@@ -56,7 +55,6 @@ async fn test_scan_limit_exceeded() {
         }
     "#;
 
-    // Use the zero address as a filter (won't match anything, but that's fine - we just want to test the limit)
     let variables = json!({
         "addr": "0x0000000000000000000000000000000000000000000000000000000000000000"
     });

@@ -1421,6 +1421,9 @@ ServiceConfig.maxDisplayOutputSize
 ServiceConfig.maxDisassembledModuleSize
   => {}
 
+ServiceConfig.maxScanLimit
+  => {}
+
 ServiceConfig.availableRange
   => {}
 

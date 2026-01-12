@@ -63,7 +63,6 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
-# Test basic scan with affectedAddress filter
 {
   transactionsA: transactionsScan(filter: { affectedAddress: "@{A}"}) { ...TX }
   transactionsB: transactionsScan(filter: { affectedAddress: "@{B}"}) { ...TX }
@@ -93,19 +92,14 @@ fragment TX on TransactionConnection {
 //# run-graphql
 # Test multi-filter queries (affectedAddress + affectedObject)
 {
-  # Should find tx where A created object for B (task 4 created obj_4_0)
   transactionsAWithObj: transactionsScan(filter: {
     affectedAddress: "@{A}",
     affectedObject: "@{obj_4_0}"
   }) { ...TX }
-
-  # Should find tx where B created object for A
   transactionsBSentToA: transactionsScan(filter: {
     affectedAddress: "@{A}",
     sentAddress: "@{B}"
   }) { ...TX }
-
-  # Should find tx where C created object for A
   transactionsCSentToA: transactionsScan(filter: {
     affectedAddress: "@{A}",
     sentAddress: "@{C}"
@@ -135,12 +129,9 @@ fragment TX on TransactionConnection {
 //# run-graphql
 # Test queries with function filter (package ID)
 {
-  # Find all transactions calling Test::M1 package
   transactionsWithPackage: transactionsScan(filter: {
     function: "@{Test}"
   }) { ...TX }
-
-  # Find transactions from A calling Test::M1 package
   transactionsAWithPackage: transactionsScan(filter: {
     affectedAddress: "@{A}",
     function: "@{Test}"
@@ -170,19 +161,14 @@ fragment TX on TransactionConnection {
 //# run-graphql
 # Test queries that should return empty results
 {
-  # Non-existent address (all zeros except last byte)
   emptyNonExistent: transactionsScan(filter: {
     affectedAddress: "0x0000000000000000000000000000000000000000000000000000000000000001"
   }) { ...TX }
-
-  # Conflicting filters - A never sent to C in early checkpoints
   emptyConflicting: transactionsScan(filter: {
     sentAddress: "@{A}",
     affectedAddress: "@{C}",
     beforeCheckpoint: 5
   }) { ...TX }
-
-  # Valid address but checkpoint range beyond our data
   emptyBeyondData: transactionsScan(filter: {
     affectedAddress: "@{A}",
     afterCheckpoint: 50000
@@ -210,29 +196,22 @@ fragment TX on TransactionConnection {
 }
 
 //# run-graphql --cursors {"t":0,"c":0} {"t":1,"c":1} {"t":0,"c":4} {"t":2,"c":5} {"t":0,"c":10508}
-{ # Comprehensive pagination test
-  # Basic pagination
+{ 
   first2: transactionsScan(first: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
   last2: transactionsScan(last: 2, filter: { affectedAddress: "@{A}" }) { ...TX }
 
-  # After cursor (offset from front)
   afterCp0: transactionsScan(first: 10, after: "@{cursor_0}", filter: { affectedAddress: "@{A}" }) { ...TX }
   afterCp1: transactionsScan(first: 10, after: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
 
-  # After cursor with t > 1 (checkpoint 5, tx index 2)
   afterCp5Tx2: transactionsScan(first: 10, after: "@{cursor_3}", filter: { affectedAddress: "@{A}" }) { ...TX }
 
-  # Before cursor (offset from back)
   beforeCp4: transactionsScan(last: 10, before: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
 
-  # Bounded range (after + before)
   betweenCp1AndCp4First: transactionsScan(first: 10, after: "@{cursor_1}", before: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
   betweenCp1AndCp4Last: transactionsScan(last: 10, after: "@{cursor_1}", before: "@{cursor_2}", filter: { affectedAddress: "@{A}" }) { ...TX }
 
-  # Bounded range between first and last items (should return all except first and last)
   betweenFirstAndLast: transactionsScan(first: 50, after: "@{cursor_0}", before: "@{cursor_4}", filter: { affectedAddress: "@{A}" }) { ...TX }
 
-  # Invalid cursor order (after > before)
   invalidOrder: transactionsScan(first: 10, after: "@{cursor_2}", before: "@{cursor_1}", filter: { affectedAddress: "@{A}" }) { ...TX }
 }
 
@@ -242,7 +221,7 @@ fragment TX on TransactionConnection {
 }
 
 //# run-graphql
-{ # Test scanning across block boundaries (incomplete block fallback)
+{
   scanAcrossBlocks: transactionsScan(filter: {
     affectedAddress: "@{A}",
     afterCheckpoint: 0,

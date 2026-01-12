@@ -72,7 +72,6 @@ sui-rpc-api.workspace = true
 sui-sdk-types.workspace = true
 sui-sql-macro.workspace = true
 sui-types.workspace = true
-hex.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
