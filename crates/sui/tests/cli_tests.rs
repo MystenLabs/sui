@@ -4809,6 +4809,7 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        ..Default::default()
     })
     .execute(context)
     .await?;
