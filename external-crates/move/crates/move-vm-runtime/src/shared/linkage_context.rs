@@ -116,29 +116,15 @@ impl LinkageContext {
             .collect::<BTreeSet<_>>())
     }
 
-    pub(crate) fn into_linkage_hash(
+    pub(crate) fn to_linkage_hash(
         &self,
         interner: &cache::identifier_interner::IdentifierInterner,
     ) -> PartialVMResult<LinkageHash> {
         let mut hash = vec![];
         for (key, value) in &self.linkage_table {
-            let key_str = key.to_string();
-            let key_ident =
-                move_core_types::identifier::Identifier::new(key_str).map_err(|_| {
-                    PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
-                        .with_message(format!("Failed to create identifier for linkage key {key}"))
-                })?;
-            let value_str = key.to_string();
-            let value_ident =
-                move_core_types::identifier::Identifier::new(value_str).map_err(|_| {
-                    PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
-                        .with_message(format!(
-                            "Failed to create identifier for linkage key {value}"
-                        ))
-                })?;
-            let key_id = interner.intern_identifier(&key_ident)?;
-            let value_id = interner.intern_identifier(&value_ident)?;
-            hash.push((key_id, value_id));
+            let key_key = interner.intern_address(key)?;
+            let value_key = interner.intern_address(value)?;
+            hash.push((key_key, value_key));
         }
         Ok(LinkageHash(hash))
     }

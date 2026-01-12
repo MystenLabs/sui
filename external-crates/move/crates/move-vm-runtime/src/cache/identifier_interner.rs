@@ -3,6 +3,7 @@
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
+    account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     vm_status::StatusCode,
 };
@@ -59,21 +60,27 @@ impl IdentifierInterner {
         }
     }
 
-    #[allow(dead_code)]
     /// Get the interned identifier value. This may raise an invariant error if `try_get_or_intern`
     /// fails, but that's likely a serious OOM issue.
     pub(crate) fn intern_identifier(&self, ident: &Identifier) -> PartialVMResult<IdentifierKey> {
         self.get_or_intern_str_internal(ident.borrow_str())
     }
 
-    #[allow(dead_code)]
     /// Get the interned identifier string value. This may raise an invariant error if
     /// `get_or_intern` fails, but that's likely a serious OOM issue.
     pub(crate) fn intern_ident_str(&self, ident_str: &IdentStr) -> PartialVMResult<IdentifierKey> {
         self.get_or_intern_str_internal(ident_str.borrow_str())
     }
 
-    #[allow(dead_code)]
+    /// Get the interned address value. This may raise an invariant error if `try_get_or_intern`
+    /// fails, but that's likely a serious OOM issue.
+    pub(crate) fn intern_address(
+        &self,
+        address: &AccountAddress,
+    ) -> PartialVMResult<IdentifierKey> {
+        self.get_or_intern_str_internal(&address.short_str_lossless())
+    }
+
     /// Get the interned identifier value, using `key_type` in the error case. This may raise an
     /// invariant error if `try_get_or_intern` fails, but that's likely a serious OOM issue.
     pub(crate) fn intern_identifier_with_msg(
