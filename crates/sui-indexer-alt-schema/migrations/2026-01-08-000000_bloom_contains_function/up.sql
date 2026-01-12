@@ -1,6 +1,5 @@
 -- Bloom filter membership check: returns true if all specified bits are set.
 -- Returns false as soon as any bit is not set.
--- This is critical for bloom filter performance where most rows are rejected.
 --
 -- Supports folded bloom filters: byte positions are automatically wrapped
 -- using modulo with the actual bloom filter length.
@@ -8,7 +7,7 @@
 -- Parameters:
 --   bloom: The bloom filter bytes
 --   byte_positions: Array of byte indices to check (will be wrapped to bloom size)
---   bit_masks: Array of bit masks (one per byte position)
+--   bit_masks: Array of bit masks to check (parallel to byte_positions)
 --
 -- Returns true if all bits are set, false otherwise.
 CREATE OR REPLACE FUNCTION bloom_contains(
