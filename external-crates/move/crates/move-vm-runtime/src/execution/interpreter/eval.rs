@@ -542,7 +542,7 @@ fn op_step_impl(
 
             gas_meter.charge_unpack(false, struct_.field_views())?;
 
-            for value in struct_.unpack()? {
+            for value in struct_.unpack() {
                 state.push_operand(value)?;
             }
         }
@@ -551,7 +551,7 @@ fn op_step_impl(
 
             gas_meter.charge_unpack(true, struct_.field_views())?;
 
-            for value in struct_.unpack()? {
+            for value in struct_.unpack() {
                 state.push_operand(value)?;
             }
         }
@@ -800,7 +800,7 @@ fn op_step_impl(
             let variant_tag = variant_ptr.variant_tag;
             gas_meter.charge_unpack(false, variant.field_views())?;
             variant.check_tag(variant_tag)?;
-            for value in variant.unpack()? {
+            for value in variant.unpack() {
                 state.push_operand(value)?;
             }
         }
@@ -819,7 +819,7 @@ fn op_step_impl(
             gas_meter.charge_unpack(true, variant.field_views())?;
             let variant_tag = variant_inst_ptr.variant.variant_tag;
             variant.check_tag(variant_tag)?;
-            for value in variant.unpack()? {
+            for value in variant.unpack() {
                 state.push_operand(value)?;
             }
         }

@@ -443,7 +443,7 @@ impl Value {
 
 fn unpack<const N: usize>(value: VMValue) -> Result<[VMValue; N], ExecutionError> {
     let value: values::Struct = value.cast().map_err(iv("cast"))?;
-    let unpacked = value.unpack().map_err(iv("unpack"))?.collect::<Vec<_>>();
+    let unpacked = value.unpack().collect::<Vec<_>>();
     assert_invariant!(unpacked.len() == N, "Expected {N} fields, got {unpacked:?}");
     Ok(unpacked.try_into().unwrap())
 }
