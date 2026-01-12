@@ -824,14 +824,11 @@ impl<'a> UnresolvedInput<'a> {
                             FieldViolation::new("amount").with_reason(ErrorReason::FieldMissing)
                         })?),
                         type_arg: WithdrawalTypeArg::Balance(
-                            w.coin_type()
-                                .parse::<sui_types::TypeTag>()
-                                .map_err(|e| {
-                                    FieldViolation::new("coin_type")
-                                        .with_description(format!("invalid coin_type: {e}"))
-                                        .with_reason(ErrorReason::FieldInvalid)
-                                })?
-                                .into(),
+                            w.coin_type().parse::<sui_types::TypeTag>().map_err(|e| {
+                                FieldViolation::new("coin_type")
+                                    .with_description(format!("invalid coin_type: {e}"))
+                                    .with_reason(ErrorReason::FieldInvalid)
+                            })?,
                         ),
                         withdraw_from: match w.source() {
                             sui_rpc::proto::sui::rpc::v2::funds_withdrawal::Source::Sender => {
