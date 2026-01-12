@@ -24,6 +24,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
 dependencies = [
  "cfg-if",
+ "getrandom 0.3.1",
  "once_cell",
  "version_check",
  "zerocopy 0.8.27",
@@ -1373,6 +1374,12 @@ dependencies = [
  "equivalent",
  "foldhash",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 
 [[package]]
 name = "heck"
@@ -2978,6 +2985,7 @@ dependencies = [
  "bcs",
  "better_any",
  "bumpalo",
+ "dashmap",
  "fail",
  "hex",
  "indexmap 2.8.0",
@@ -3000,6 +3008,7 @@ dependencies = [
  "parking_lot 0.11.2",
  "petgraph",
  "proptest",
+ "quick_cache",
  "serde",
  "sha2",
  "sha3",
@@ -3686,6 +3695,18 @@ name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
+
+[[package]]
+name = "quick_cache"
+version = "0.6.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ada44a88ef953a3294f6eb55d2007ba44646015e18613d2f213016379203ef3"
+dependencies = [
+ "ahash",
+ "equivalent",
+ "hashbrown 0.16.1",
+ "parking_lot 0.12.3",
+]
 
 [[package]]
 name = "quote"

@@ -27,3 +27,13 @@ pub const HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES: u64 = 256;
 /// Maximal nodes which are all allowed when instantiating a generic type. This does not include
 /// field types of datatypes.
 pub const MAX_TYPE_INSTANTIATION_NODES: u64 = 128;
+
+/// Size of the type depth LRU
+/// TODO(vm-rewrite): find a good bound for this
+pub const TYPE_DEPTH_LRU_SIZE: usize = 16_384;
+
+/// Size of the linkage-cahge virtual dispatch LRU
+/// TODO(vm-rewrite): find a good bound for this
+/// This number is currently 1 GB / 128 bytes (size of VMDispatchTables), giving approximately
+/// a gigabytes of storage to VTables (though this disregards key and LRU overhead).
+pub const VIRTUAL_DISPATCH_TABLE_CACHE_SIZE: usize = 1_000_000;
