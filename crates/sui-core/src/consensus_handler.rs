@@ -610,14 +610,14 @@ impl CheckpointQueue {
             return true;
         }
 
-        // If batching first with second would exceed constraints, build the first now.
-        let pending_roots_in_first_two_entries: usize = self
+        // If batching all pending roots would exceed constraints, build now so we can
+        // batch up to N-1 of them.
+        let total_pending_tx_count: usize = self
             .pending_roots
             .iter()
-            .take(2)
             .map(|q| q.roots.tx_roots.len())
             .sum();
-        if pending_roots_in_first_two_entries >= max_transactions_per_checkpoint {
+        if total_pending_tx_count >= max_transactions_per_checkpoint {
             return true;
         }
 
@@ -652,6 +652,7 @@ impl CheckpointQueue {
             let next_tx_count = queued.roots.tx_roots.len();
 
             if current_tx_count + next_tx_count > max_tx && !current_roots.is_empty() {
+                assert_reachable!("checkpoint split due to transaction limit");
                 let details = current_details.unwrap();
                 pending_checkpoints.push(PendingCheckpointV2 {
                     roots: std::mem::take(&mut current_roots),

@@ -2533,7 +2533,7 @@ impl ProtocolConfig {
         self.feature_flags
             .convert_withdrawal_compatibility_ptb_arguments
     }
-    
+
     pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
         self.feature_flags.split_checkpoints_in_consensus_handler
     }

@@ -42,7 +42,7 @@ use crate::{
         shared_object_congestion_tracker::CongestionPerObjectDebt,
     },
     checkpoints::{CheckpointHeight, PendingCheckpoint, PendingCheckpointV2},
-    consensus_handler::{SequencedConsensusTransactionKey, VerifiedSequencedConsensusTransaction},
+    consensus_handler::SequencedConsensusTransactionKey,
     epoch::{
         randomness::{VersionedProcessedMessage, VersionedUsedProcessedMessages},
         reconfiguration::ReconfigState,
