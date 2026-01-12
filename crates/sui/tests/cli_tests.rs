@@ -2111,59 +2111,6 @@ async fn test_package_publish_command_with_unpublished_dependency_fails()
 }
 
 #[sim_test]
-async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result<(), anyhow::Error>
-{
-    let with_unpublished_dependencies = true; // Value under test, incompatible with dependencies that specify non-zero address.
-
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let address = test_cluster.get_address_0();
-    let context = &mut test_cluster.wallet;
-
-    let client = context.get_client().await?;
-    let object_refs = client
-        .read_api()
-        .get_owned_objects(address, None, None, None)
-        .await?
-        .data;
-
-    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
-
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("module_publish_with_unpublished_dependency_with_non_zero_address");
-    let build_config = BuildConfig::new_for_testing().config;
-    let result = SuiClientCommands::TestPublish(TestPublishArgs {
-        publish_args: PublishArgs {
-            package_path,
-            build_config,
-            skip_dependency_verification: false,
-            verify_deps: true,
-            with_unpublished_dependencies,
-            payment: PaymentArgs {
-                gas: vec![gas_obj_id],
-            },
-            gas_data: GasDataArgs {
-                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-                ..Default::default()
-            },
-            processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
-        },
-        publish_unpublished_deps: false,
-    })
-    .execute(context)
-    .await;
-    let err = result.unwrap_err().to_string();
-
-    // errors due to tree shaking wanting to fetch the linkage table of this unpublished pkg
-    assert!(err.contains("Failed to fetch package UnpublishedNonZeroAddress"));
-    Ok(())
-}
-
-#[sim_test]
 async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Error> {
     let with_unpublished_dependencies = true; // Invalid packages should fail to publish, even if we allow unpublished dependencies.
 
@@ -2270,7 +2217,7 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
         publish_unpublished_deps: false,
     })
     .execute(context)
-    .await?;
+    .await;
 
     let expect = expect![[r#"
         Err(

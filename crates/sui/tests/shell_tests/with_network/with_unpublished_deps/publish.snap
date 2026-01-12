@@ -1,0 +1,43 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Package a depends on b
+# b has a declared address, but isn't actually published at that address
+# We try publish a --with-unpublished-deps
+#
+# This should fail, because we try to get the linkage table for `b` because `b` is not on-chain
+
+chain_id=$(sui client --client.config $CONFIG chain-identifier)
+
+add_env_to_toml() {
+  echo "[environments]" >> $1/Move.toml
+  echo "localnet = \"$chain_id\"" >> $1/Move.toml
+}
+
+add_env_to_toml a
+add_env_to_toml b
+
+echo "=== publish a ==="
+
+sui client --client.config $CONFIG publish a
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+=== publish a ===
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY UnpublishedNonZeroAddress
+BUILDING examples
+Failed to fetch package UnpublishedNonZeroAddress
+
+Caused by:
+    Object 0x0000000000000000000000000000000000000000000000000000000000000bad does not exist
+
+----- stderr -----

@@ -6,7 +6,7 @@ edition = "2024.beta"
 # published-at = "0x0"
 
 [dependencies]
-MoveStdlib = { local = "../../../../sui-framework/packages/move-stdlib" }
+MoveStdlib = { local = "../move-stdlib" }
 
 [addresses]
 # Address not set to 0x0. Error if --with-unpublished-dependencies is set.
