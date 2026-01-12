@@ -41,7 +41,7 @@ use super::{
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
         transaction::{
-            CTransaction, SCTransaction, Transaction,
+            CTransaction, SCTransaction, ScanError, Transaction,
             filter::{
                 TransactionFilter, TransactionFilterValidator as TFValidator,
                 TransactionScanFilterValidator as TSFValidator,
@@ -559,7 +559,7 @@ impl Query {
         last: Option<u64>,
         before: Option<SCTransaction>,
         #[graphql(validator(custom = "TSFValidator"))] filter: Option<TransactionFilter>,
-    ) -> Result<Option<Connection<String, Transaction>>, RpcError> {
+    ) -> Result<Option<Connection<String, Transaction>>, RpcError<ScanError>> {
         let scope = self.scope(ctx)?;
         let pagination: &PaginationConfig = ctx.data()?;
         let limits = pagination.limits("Query", "transactions");

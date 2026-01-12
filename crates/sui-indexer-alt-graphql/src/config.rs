@@ -145,6 +145,9 @@ pub struct Limits {
 
     /// Maximum output size of a disassembled Move module, in bytes.
     pub max_disassembled_module_size: usize,
+
+    /// Maximum number of checkpoints that can be scanned in a single transactionsScan query.
+    pub max_scan_limit: u64,
 }
 
 #[DefaultConfig]
@@ -171,6 +174,7 @@ pub struct LimitsLayer {
     pub max_display_field_depth: Option<usize>,
     pub max_display_output_size: Option<usize>,
     pub max_disassembled_module_size: Option<usize>,
+    pub max_scan_limit: Option<u64>,
 }
 
 #[DefaultConfig]
@@ -351,6 +355,7 @@ impl LimitsLayer {
             max_disassembled_module_size: self
                 .max_disassembled_module_size
                 .unwrap_or(base.max_disassembled_module_size),
+            max_scan_limit: self.max_scan_limit.unwrap_or(base.max_scan_limit),
         }
     }
 }
@@ -418,6 +423,7 @@ impl From<Limits> for LimitsLayer {
             max_display_field_depth: Some(value.max_display_field_depth),
             max_display_output_size: Some(value.max_display_output_size),
             max_disassembled_module_size: Some(value.max_disassembled_module_size),
+            max_scan_limit: Some(value.max_scan_limit),
         }
     }
 }
@@ -505,6 +511,8 @@ impl Default for Limits {
             max_display_field_depth: 10,
             max_display_output_size: 1024 * 1024,
             max_disassembled_module_size: 1024 * 1024,
+            // ~7 epochs worth of checkpoints (at 4 checkpoints/second, 24 hours/epoch)
+            max_scan_limit: 2_400_000,
         }
     }
 }

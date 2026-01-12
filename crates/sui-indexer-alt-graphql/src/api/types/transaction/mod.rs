@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use std::iter::Rev;
 use std::ops::Deref;
 use std::ops::Range;
@@ -12,14 +13,12 @@ use fastcrypto::encoding::{Base58, Encoding};
 use futures::future::try_join_all;
 use itertools::Either;
 use serde::{Deserialize, Serialize};
-
 use sui_indexer_alt_reader::{
     checkpoints::CheckpointKey,
     kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
     pg_reader::PgReader,
     tx_digests::TxDigestKey,
 };
-
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 use sui_types::{
@@ -41,7 +40,8 @@ use crate::{
             transaction::filter::TransactionKindInput,
         },
     },
-    error::RpcError,
+    config::Limits,
+    error::{RpcError, bad_user_input, upcast},
     pagination::Page,
     scope::Scope,
     task::watermark::Watermarks,
@@ -60,8 +60,23 @@ use super::{
 pub(crate) mod filter;
 pub(crate) mod scan;
 
+#[derive(thiserror::Error, Debug)]
+pub(crate) enum ScanError {
+    #[error(
+        "Scan range of {requested} checkpoints exceeds maximum of {max}. \
+         Use afterCheckpoint/beforeCheckpoint filters to narrow the range."
+    )]
+    LimitExceeded { requested: u64, max: u64 },
+}
+
 type DigestsByCheckpoint = std::collections::HashMap<CheckpointKey, Vec<TransactionDigest>>;
 type TransactionsByDigest = std::collections::HashMap<TransactionDigest, NativeTransactionContents>;
+
+/// Cursor for transaction pagination
+pub(crate) type CTransaction = JsonCursor<u64>;
+
+/// Cursor for transaction scanning
+pub(crate) type SCTransaction = JsonCursor<TransactionCursor>;
 
 #[derive(Clone)]
 pub(crate) struct Transaction {
@@ -82,28 +97,6 @@ pub(crate) struct TransactionCursor {
     #[serde(rename = "c")]
     pub cp_sequence_number: u64,
 }
-
-impl PartialOrd for TransactionCursor {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for TransactionCursor {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // Order by checkpoint first, then by transaction index within checkpoint
-        match self.cp_sequence_number.cmp(&other.cp_sequence_number) {
-            std::cmp::Ordering::Equal => self.tx_sequence_number.cmp(&other.tx_sequence_number),
-            other => other,
-        }
-    }
-}
-
-// Cursor For transaction scanning
-pub(crate) type SCTransaction = JsonCursor<TransactionCursor>;
-
-// Cursor For transaction pagination
-pub(crate) type CTransaction = JsonCursor<u64>;
 
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
@@ -327,14 +320,15 @@ impl Transaction {
         scope: Scope,
         page: Page<SCTransaction>,
         filter: TransactionFilter,
-    ) -> Result<Connection<String, Transaction>, RpcError> {
+    ) -> Result<Connection<String, Transaction>, RpcError<ScanError>> {
+        let limits: &Limits = ctx.data()?;
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {
             type_: "Query".to_string(),
             field: Some("transactions".to_string()),
             filters: Some(filter.active_filters()),
         };
-        let reader_lo = available_range_key.reader_lo(watermarks)?;
+        let reader_lo = available_range_key.reader_lo(watermarks).map_err(upcast)?;
 
         let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
             return Ok(Connection::new(false, false));
@@ -362,11 +356,22 @@ impl Transaction {
             return Ok(Connection::new(false, false));
         }
 
-        let filter_values = filter.bloom_probe_values();
-        // Checkpoints that might contain matching transactions
-        let candidate_cps = scan::candidate_cps(ctx, &filter_values, cp_lo, cp_hi, &page).await?;
+        let scan_range = cp_hi.saturating_sub(cp_lo);
+        if scan_range > limits.max_scan_limit {
+            return Err(bad_user_input(ScanError::LimitExceeded {
+                requested: scan_range,
+                max: limits.max_scan_limit,
+            }));
+        }
 
-        let (digests, native_transactions) = transactions_by_digest(ctx, &candidate_cps).await?;
+        let filter_values = filter.bloom_probe_values();
+        let candidate_cps = scan::candidate_cps(ctx, &filter_values, cp_lo, cp_hi, &page)
+            .await
+            .map_err(upcast)?;
+
+        let (digests, native_transactions) = transactions_by_digest(ctx, &candidate_cps)
+            .await
+            .map_err(upcast)?;
 
         let results = cp_transactions_paginated(
             candidate_cps,
@@ -375,7 +380,8 @@ impl Transaction {
             &filter,
             &scope,
             &page,
-        )?;
+        )
+        .map_err(upcast)?;
 
         page.paginate_results(results, |(s, _)| JsonCursor::new(*s), |(_, tx)| Ok(tx))
     }
@@ -425,6 +431,22 @@ impl TransactionContents {
             scope: self.scope.clone(),
             contents: Some(Arc::new(transaction)),
         })
+    }
+}
+
+impl PartialOrd for TransactionCursor {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TransactionCursor {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Order by checkpoint first, then by transaction index within checkpoint
+        match self.cp_sequence_number.cmp(&other.cp_sequence_number) {
+            std::cmp::Ordering::Equal => self.tx_sequence_number.cmp(&other.tx_sequence_number),
+            other => other,
+        }
     }
 }
 
