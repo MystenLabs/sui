@@ -13,7 +13,7 @@
 
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use sui_indexer_alt_framework_store_traits::{
     CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store,
@@ -88,8 +88,8 @@ impl BigTableConnection<'_> {
                     .client
                     .get_epoch(epoch_info.epoch - 1)
                     .await?
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
+                    .with_context(|| {
+                        format!(
                             "previous epoch {} not found when processing epoch {}",
                             epoch_info.epoch - 1,
                             epoch_info.epoch
