@@ -363,3 +363,191 @@ fn test_flatten_and_renumber_blocks_offset_overflow_protection() {
     let msg = format!("{:?}", err);
     assert!(msg.contains("overflow") || msg.contains("exceeds u16::MAX"));
 }
+
+// -------------------------------------------------------------------------
+// Super-instruction tests
+// -------------------------------------------------------------------------
+
+#[test]
+fn test_flatten_and_renumber_blocks_br_false_branch_targets() {
+    use crate::jit::optimization::ast as input;
+
+    let mut blocks = BTreeMap::new();
+    // Block 0: condition check with BrFalseBranch super-instruction
+    blocks.insert(
+        0u16,
+        vec![
+            input::Bytecode::LdTrue,
+            input::Bytecode::BrFalseBranch(10u16, 20u16), // false->10, true->20
+        ],
+    );
+    // Block 10: false branch
+    blocks.insert(10u16, vec![input::Bytecode::LdU64(100), input::Bytecode::Ret]);
+    // Block 20: true branch
+    blocks.insert(20u16, vec![input::Bytecode::LdU64(200), input::Bytecode::Ret]);
+
+    let mut jump_tables = vec![];
+
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
+    assert_eq!(result.len(), 6);
+
+    // Verify that BrFalseBranch targets were renumbered correctly
+    // Block 0 -> offset 0, 1
+    // Block 10 -> offset 2, 3
+    // Block 20 -> offset 4, 5
+    match &result[1] {
+        input::Bytecode::BrFalseBranch(false_target, true_target) => {
+            assert_eq!(*false_target, 2); // Block 10 starts at offset 2
+            assert_eq!(*true_target, 4); // Block 20 starts at offset 4
+        }
+        _ => panic!("Expected BrFalseBranch with renumbered targets"),
+    }
+}
+
+#[test]
+fn test_flatten_and_renumber_blocks_move_loc_pop_preserved() {
+    use crate::jit::optimization::ast as input;
+
+    let mut blocks = BTreeMap::new();
+    blocks.insert(
+        0u16,
+        vec![
+            input::Bytecode::MoveLocPop(5),
+            input::Bytecode::MoveLocPop(10),
+            input::Bytecode::Ret,
+        ],
+    );
+    let mut jump_tables = vec![];
+
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
+    assert_eq!(result.len(), 3);
+
+    // Verify MoveLocPop instructions are preserved with correct indices
+    assert!(matches!(result[0], input::Bytecode::MoveLocPop(5)));
+    assert!(matches!(result[1], input::Bytecode::MoveLocPop(10)));
+    assert!(matches!(result[2], input::Bytecode::Ret));
+}
+
+#[test]
+fn test_flatten_and_renumber_blocks_imm_borrow_field_read_ref_preserved() {
+    use crate::jit::optimization::ast as input;
+    use move_binary_format::file_format::FieldHandleIndex;
+
+    let mut blocks = BTreeMap::new();
+    let field_idx = FieldHandleIndex::new(3);
+    blocks.insert(
+        0u16,
+        vec![
+            input::Bytecode::ImmBorrowFieldReadRef(field_idx),
+            input::Bytecode::Pop,
+            input::Bytecode::Ret,
+        ],
+    );
+    let mut jump_tables = vec![];
+
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
+    assert_eq!(result.len(), 3);
+
+    // Verify ImmBorrowFieldReadRef is preserved with correct field index
+    match &result[0] {
+        input::Bytecode::ImmBorrowFieldReadRef(idx) => assert_eq!(*idx, field_idx),
+        _ => panic!("Expected ImmBorrowFieldReadRef"),
+    }
+}
+
+#[test]
+fn test_flatten_and_renumber_blocks_copy_loc_freeze_ref_preserved() {
+    use crate::jit::optimization::ast as input;
+
+    let mut blocks = BTreeMap::new();
+    blocks.insert(
+        0u16,
+        vec![
+            input::Bytecode::CopyLocFreezeRef(7),
+            input::Bytecode::Pop,
+            input::Bytecode::Ret,
+        ],
+    );
+    let mut jump_tables = vec![];
+
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
+    assert_eq!(result.len(), 3);
+
+    // Verify CopyLocFreezeRef is preserved with correct local index
+    assert!(matches!(result[0], input::Bytecode::CopyLocFreezeRef(7)));
+}
+
+#[test]
+fn test_flatten_and_renumber_blocks_br_false_branch_same_target() {
+    use crate::jit::optimization::ast as input;
+
+    // Test case where both targets point to the same block
+    let mut blocks = BTreeMap::new();
+    blocks.insert(
+        0u16,
+        vec![
+            input::Bytecode::LdFalse,
+            input::Bytecode::BrFalseBranch(5u16, 5u16), // Both targets same
+        ],
+    );
+    blocks.insert(5u16, vec![input::Bytecode::LdU64(42), input::Bytecode::Ret]);
+
+    let mut jump_tables = vec![];
+
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
+    assert_eq!(result.len(), 4);
+
+    match &result[1] {
+        input::Bytecode::BrFalseBranch(false_target, true_target) => {
+            assert_eq!(*false_target, 2);
+            assert_eq!(*true_target, 2); // Both should point to same offset
+        }
+        _ => panic!("Expected BrFalseBranch"),
+    }
+}
+
+#[test]
+fn test_flatten_and_renumber_blocks_mixed_super_instructions() {
+    use crate::jit::optimization::ast as input;
+    use move_binary_format::file_format::FieldHandleIndex;
+
+    // Test a realistic sequence with multiple super-instructions
+    let mut blocks = BTreeMap::new();
+    let field_idx = FieldHandleIndex::new(0);
+
+    blocks.insert(
+        0u16,
+        vec![
+            input::Bytecode::MoveLocPop(0),           // Discard unused local
+            input::Bytecode::CopyLocFreezeRef(1),     // Get immutable ref
+            input::Bytecode::ImmBorrowFieldReadRef(field_idx), // Read field
+            input::Bytecode::LdU64(0),
+            input::Bytecode::Eq,
+            input::Bytecode::BrFalseBranch(10u16, 20u16), // Conditional
+        ],
+    );
+    blocks.insert(10u16, vec![input::Bytecode::LdU64(1), input::Bytecode::Ret]);
+    blocks.insert(20u16, vec![input::Bytecode::LdU64(2), input::Bytecode::Ret]);
+
+    let mut jump_tables = vec![];
+
+    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
+    assert_eq!(result.len(), 10);
+
+    // Verify super-instructions are preserved
+    assert!(matches!(result[0], input::Bytecode::MoveLocPop(0)));
+    assert!(matches!(result[1], input::Bytecode::CopyLocFreezeRef(1)));
+    assert!(matches!(
+        result[2],
+        input::Bytecode::ImmBorrowFieldReadRef(_)
+    ));
+
+    // Verify BrFalseBranch targets
+    match &result[5] {
+        input::Bytecode::BrFalseBranch(false_target, true_target) => {
+            assert_eq!(*false_target, 6);
+            assert_eq!(*true_target, 8);
+        }
+        _ => panic!("Expected BrFalseBranch"),
+    }
+}

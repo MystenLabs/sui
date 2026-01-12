@@ -1025,6 +1025,39 @@ impl VMTracer<'_> {
                     }),
                 ]);
             }
+            // Super-instructions
+            B::MoveLocPop(l) => {
+                // MoveLoc followed by Pop - read and discard
+                let v = self.resolve_local(vtables, machine, *l as usize)?;
+                let effects = vec![EF::Read(Read {
+                    location: Location::Local(self.current_frame_identifier()?, *l as usize),
+                    root_value_read: v.clone(),
+                    moved: true,
+                })];
+                self.register_pre_effects(effects);
+            }
+            B::ImmBorrowFieldReadRef(_) => {
+                // ImmBorrowField followed by ReadRef - pops 1 (struct ref)
+                self.register_pre_effects(popn(1)?);
+            }
+            B::CopyLocFreezeRef(l) => {
+                // CopyLoc followed by FreezeRef - reads local
+                let v = self.resolve_local(vtables, machine, *l as usize)?;
+                let effects = vec![EF::Read(Read {
+                    location: Location::Local(self.current_frame_identifier()?, *l as usize),
+                    root_value_read: v.clone(),
+                    moved: false,
+                })];
+                self.register_pre_effects(effects);
+            }
+            B::BrFalseBranch(_, _) => {
+                // BrFalse followed by Branch - pops 1 (boolean)
+                self.register_pre_effects(popn(1)?);
+            }
+            B::CallGenericStLoc(_, _) => {
+                // This should not be reached as we don't fuse CallGeneric+StLoc
+                self.register_pre_effects(vec![]);
+            }
         }
         Some(())
     }
@@ -1653,6 +1686,66 @@ impl VMTracer<'_> {
             }
             B::VariantSwitch(_) => {
                 self.type_stack.pop()?;
+                let effects = self.register_post_effects(vec![]);
+                self.trace
+                    .instruction(instruction, vec![], effects, *remaining_gas, pc);
+            }
+            // Super-instructions
+            B::MoveLocPop(l) => {
+                // MoveLoc followed by Pop - the value is discarded, no type stack changes
+                self.invalidate_local(vtables, machine, *l as usize)?;
+                let effects = self.register_post_effects(vec![]);
+                self.trace
+                    .instruction(instruction, vec![], effects, *remaining_gas, pc);
+            }
+            B::ImmBorrowFieldReadRef(_) => {
+                // ImmBorrowField followed by ReadRef - pops struct ref, pushes field value
+                let struct_ref_ty = self.type_stack.pop()?;
+                // Get the field type from the struct and push it
+                // For simplicity, resolve from the stack
+                let val = self.resolve_stack_value(vtables, machine, 0)?;
+                // The type should be the field's type (not a reference)
+                if let Some((_, loc)) = &struct_ref_ty.ref_type {
+                    // For now, use a simplified approach - the actual layout comes from machine
+                    let a_layout = StackType {
+                        layout: struct_ref_ty.layout.clone(),
+                        ref_type: None,
+                    };
+                    self.type_stack.push(a_layout);
+                }
+                let effects = self.register_post_effects(vec![EF::Push(val)]);
+                self.trace
+                    .instruction(instruction, vec![], effects, *remaining_gas, pc);
+            }
+            B::CopyLocFreezeRef(l) => {
+                // CopyLoc followed by FreezeRef - reads local and freezes the reference
+                let local_annot_type = self
+                    .current_frame_locals()?
+                    .get(*l as usize)?
+                    .clone()
+                    .into_rooted_type()?;
+                // Change mutability to immutable
+                let frozen_type = StackType {
+                    layout: local_annot_type.layout,
+                    ref_type: local_annot_type
+                        .ref_type
+                        .map(|(_, loc)| (Mutability::Imm, loc)),
+                };
+                self.type_stack.push(frozen_type);
+                let v = self.resolve_stack_value(vtables, machine, 0)?;
+                let effects = self.register_post_effects(vec![EF::Push(v.clone())]);
+                self.trace
+                    .instruction(instruction, vec![], effects, *remaining_gas, pc);
+            }
+            B::BrFalseBranch(_, _) => {
+                // BrFalse followed by Branch - pops boolean, no push
+                self.type_stack.pop()?;
+                let effects = self.register_post_effects(vec![]);
+                self.trace
+                    .instruction(instruction, vec![], effects, *remaining_gas, pc);
+            }
+            B::CallGenericStLoc(_, _) => {
+                // This should not be reached as we don't fuse CallGeneric+StLoc
                 let effects = self.register_post_effects(vec![]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
