@@ -157,6 +157,15 @@ impl MoveRuntime {
                     );
                 }
 
+                if !(link_context == virtual_tables.link_context) {
+                    return Err(
+                        move_binary_format::errors::PartialVMError::new(
+                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("Cached VMDispatchTables linkage did not match hashed linkage".to_string())
+                        .finish(Location::Undefined)
+                    );
+                }
+
                 // Called and checked linkage, etc.
                 let instance = MoveVM {
                     virtual_tables,
@@ -210,6 +219,7 @@ impl MoveRuntime {
         let vtables = VMDispatchTables::new(
             self.vm_config.clone(),
             self.cache.interner.clone(),
+            link_context.clone(),
             runtime_packages,
         )?;
         self.cache
@@ -295,6 +305,7 @@ impl MoveRuntime {
                 let virtual_tables = VMDispatchTables::new(
                     self.vm_config.clone(),
                     self.cache.interner.clone(),
+                    link_context.clone(),
                     runtime_packages,
                 )?;
 

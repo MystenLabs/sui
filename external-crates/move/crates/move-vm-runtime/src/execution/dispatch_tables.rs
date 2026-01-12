@@ -19,6 +19,7 @@ use crate::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, TYPE_DEPTH_LRU_SIZE,
             VALUE_DEPTH_MAX,
         },
+        linkage_context::LinkageContext,
         types::{DefiningTypeId, OriginalId},
         vm_pointer::VMPointer,
     },
@@ -72,6 +73,7 @@ pub struct VMDispatchTables {
     /// Defining ID Set -- a set of all defining IDs on any types defined in the package.
     /// [SAFETY] Ordering is not guaranteed
     pub(crate) defining_id_origins: BTreeMap<DefiningTypeId, OriginalId>,
+    pub(crate) link_context: LinkageContext,
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -140,6 +142,7 @@ impl VMDispatchTables {
     pub(crate) fn new(
         vm_config: Arc<VMConfig>,
         interner: Arc<IdentifierInterner>,
+        link_context: LinkageContext,
         loaded_packages: BTreeMap<OriginalId, Arc<Package>>,
     ) -> VMResult<Self> {
         let defining_id_origins = {
@@ -164,6 +167,7 @@ impl VMDispatchTables {
             interner,
             loaded_packages,
             defining_id_origins,
+            link_context,
             type_depths: LruCache::new(NonZeroUsize::new(TYPE_DEPTH_LRU_SIZE).unwrap()),
         })
     }
