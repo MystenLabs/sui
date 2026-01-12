@@ -11,10 +11,10 @@ use async_graphql::Context;
 use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
+use sui_package_resolver::error::Error as PackageResolverError;
 use sui_package_resolver::Package;
 use sui_package_resolver::PackageStore;
 use sui_package_resolver::Resolver;
-use sui_package_resolver::error::Error as PackageResolverError;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
 use sui_types::base_types::ObjectID;
@@ -83,6 +83,11 @@ impl Scope {
             package_store: package_store.clone(),
             resolver_limits: limits.package_resolver(),
         })
+    }
+
+    /// A package resolver with access to the packages known at this scope.
+    pub(crate) fn package_resolver(&self) -> Resolver<Self> {
+        Resolver::new_with_limits(self.clone(), self.resolver_limits.clone())
     }
 
     /// Create a nested scope pinned to a past checkpoint. Returns `None` if the checkpoint is in
@@ -180,11 +185,6 @@ impl Scope {
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
-    }
-
-    /// A package resolver with access to the packages known at this scope.
-    pub(crate) fn package_resolver(&self) -> Resolver<Self> {
-        Resolver::new_with_limits(self.clone(), self.resolver_limits.clone())
     }
 
     #[cfg(test)]

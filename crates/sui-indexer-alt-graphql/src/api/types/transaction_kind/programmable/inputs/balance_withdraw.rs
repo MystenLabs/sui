@@ -1,48 +1,57 @@
-
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{Enum, SimpleObject, Union};
-use sui_types::transaction::{
-    FundsWithdrawalArg as NativeFundsWithdrawalArg, Reservation as NativeReservation,
-    WithdrawFrom as NativeWithdrawFrom,
+use move_core_types::account_address::AccountAddress;
+use sui_types::{
+    transaction::{
+        FundsWithdrawalArg as NativeFundsWithdrawalArg, Reservation as NativeReservation,
+        WithdrawFrom as NativeWithdrawFrom, WithdrawalTypeArg as NativeWithdrawalTypeArg,
+    },
+    type_input::{StructInput, TypeInput},
 };
 
-use crate::{api::scalars::uint53::UInt53, api::types::move_type::MoveType, scope::Scope};
+use crate::{api::scalars::big_int::BigInt, api::types::move_type::MoveType, scope::Scope};
 
 /// Input for withdrawing funds from an accumulator.
 #[derive(SimpleObject, Clone)]
 pub struct BalanceWithdraw {
+    /// How much to withdraw from the accumulator.
     pub reservation: Option<WithdrawalReservation>,
 
     /// The type of the funds accumulator to withdraw from (e.g. `0x2::balance::Balance<0x2::sui::SUI>`).
-    pub type_arg: Option<MoveType>,
+    #[graphql(name = "type")]
+    pub type_: Option<MoveType>,
 
+    /// The account to withdraw funds from.
     pub withdraw_from: Option<WithdrawFrom>,
 }
 
 /// Reservation details for a withdrawal.
 #[derive(Union, Clone)]
 pub enum WithdrawalReservation {
-    EntireBalance(EntireBalance),
-    MaxAmountU64(MaxAmountU64),
+    EntireBalance(WithdrawEntireBalance),
+    MaxAmountU64(WithdrawMaxAmountU64),
 }
 
 #[derive(SimpleObject, Clone)]
-pub struct EntireBalance {
+pub struct WithdrawEntireBalance {
     /// Placeholder field.
     #[graphql(name = "_")]
     pub dummy: Option<bool>,
 }
 
 #[derive(SimpleObject, Clone)]
-pub struct MaxAmountU64 {
-    pub amount: Option<UInt53>,
+pub struct WithdrawMaxAmountU64 {
+    pub amount: Option<BigInt>,
 }
 
+/// The account to withdraw funds from.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub enum WithdrawFrom {
+    /// The funds are withdrawn from the transaction sender's account.
     Sender,
+    /// The funds are withdrawn from the sponsor's account.
     Sponsor,
 }
 
@@ -56,10 +65,10 @@ impl BalanceWithdraw {
 
         let reservation = Some(match reservation {
             NativeReservation::EntireBalance => {
-                WithdrawalReservation::EntireBalance(EntireBalance { dummy: None })
+                WithdrawalReservation::EntireBalance(WithdrawEntireBalance { dummy: None })
             }
             NativeReservation::MaxAmountU64(amount) => {
-                WithdrawalReservation::MaxAmountU64(MaxAmountU64 {
+                WithdrawalReservation::MaxAmountU64(WithdrawMaxAmountU64 {
                     amount: Some(amount.into()),
                 })
             }
@@ -70,15 +79,66 @@ impl BalanceWithdraw {
             NativeWithdrawFrom::Sponsor => WithdrawFrom::Sponsor,
         });
 
-        let type_arg = type_arg
-            .to_type_tag()
-            .ok()
-            .map(|tag| MoveType::from_native(tag, scope));
+        let type_ = match type_arg {
+            NativeWithdrawalTypeArg::Coin(t) | NativeWithdrawalTypeArg::Balance(t) => {
+                let balance_struct = StructInput {
+                    address: AccountAddress::TWO,
+                    module: "balance".to_string(),
+                    name: "Balance".to_string(),
+                    type_params: vec![t],
+                };
+                Some(MoveType::from_input(
+                    TypeInput::Struct(Box::new(balance_struct)),
+                    scope,
+                ))
+            }
+        };
 
         Self {
             reservation,
-            type_arg,
+            type_,
             withdraw_from,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use move_core_types::account_address::AccountAddress;
+    use sui_types::gas_coin::GAS;
+    use sui_types::transaction::FundsWithdrawalArg;
+    use sui_types::transaction::Reservation as NativeReservation;
+    use sui_types::transaction::WithdrawFrom as NativeWithdrawFrom;
+    use sui_types::transaction::WithdrawalTypeArg as NativeWithdrawalTypeArg;
+
+    #[test]
+    fn test_from_native() {
+        let withdrawal = FundsWithdrawalArg {
+            reservation: NativeReservation::MaxAmountU64(42),
+            type_arg: NativeWithdrawalTypeArg::Balance(GAS::type_tag().into()),
+            withdraw_from: NativeWithdrawFrom::Sender,
+        };
+        let expected_type_tag = withdrawal.type_arg.to_type_tag().unwrap();
+
+        let withdraw = BalanceWithdraw::from_native(withdrawal, Scope::for_tests());
+
+        let Some(WithdrawalReservation::MaxAmountU64(reservation)) = withdraw.reservation else {
+            panic!("expected MaxAmountU64 reservation");
+        };
+        assert_eq!(
+            reservation.amount.map(|a| a.to_string()),
+            Some("42".to_string())
+        );
+        assert!(matches!(withdraw.withdraw_from, Some(WithdrawFrom::Sender)));
+
+        let type_tag = withdraw
+            .type_
+            .as_ref()
+            .and_then(|t| t.to_type_tag())
+            .unwrap();
+
+        assert_eq!(type_tag, expected_type_tag);
     }
 }
