@@ -1337,6 +1337,12 @@ Query.events
 Query.events (filter: module)
   => {"ev_emit_mod", "tx_digests"}
 
+Query.eventsScan
+  => {"ev_struct_inst", "tx_digests"}
+
+Query.eventsScan (filter: module)
+  => {"ev_emit_mod", "tx_digests"}
+
 Query.multiGetAddresses
   => {}
 
