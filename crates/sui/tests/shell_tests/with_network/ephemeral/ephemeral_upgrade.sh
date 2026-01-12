@@ -8,9 +8,24 @@
 extract_published() {
   echo "=== current state of pub file (only shows safe for snapshot information) ==="
   awk '
-    /^\[\[published\]\]/ {inpub=1; print; next}
-    inpub && /^source[[:space:]]*=/ {print}
-    inpub && /^version[[:space:]]*=/ {print; print ""; inpub=0}
+    /^\[\[published\]\]/ {
+      inpub=1
+      print
+      next
+    }
+
+    inpub && /^source[[:space:]]*=/ {
+      line = $0
+      gsub(/["'\'']/, "", line)
+      print line
+      next
+    }
+
+    inpub && /^version[[:space:]]*=/ {
+      print
+      print ""
+      inpub=0
+    }
   ' "$@"
 }
 

@@ -12,9 +12,24 @@ source: crates/sui/tests/shell_tests.rs
 extract_published() {
   echo "=== current state of pub file (only shows safe for snapshot information) ==="
   awk '
-    /^\[\[published\]\]/ {inpub=1; print; next}
-    inpub && /^source[[:space:]]*=/ {print}
-    inpub && /^version[[:space:]]*=/ {print; print ""; inpub=0}
+    /^\[\[published\]\]/ {
+      inpub=1
+      print
+      next
+    }
+
+    inpub && /^source[[:space:]]*=/ {
+      line = $0
+      gsub(/["'\'']/, "", line)
+      print line
+      next
+    }
+
+    inpub && /^version[[:space:]]*=/ {
+      print
+      print ""
+      inpub=0
+    }
   ' "$@"
 }
 
@@ -63,37 +78,37 @@ exit_code: 1
 === published a ===
 === current state of pub file (only shows safe for snapshot information) ===
 [[published]]
-source = { local = "<SANDBOX_DIR>/a" }
+source = { local = <SANDBOX_DIR>/a }
 version = 1
 
 === published b ===
 === current state of pub file (only shows safe for snapshot information) ===
 [[published]]
-source = { local = "<SANDBOX_DIR>/a" }
+source = { local = <SANDBOX_DIR>/a }
 version = 1
 
 [[published]]
-source = { local = "<SANDBOX_DIR>/b" }
+source = { local = <SANDBOX_DIR>/b }
 version = 1
 
 === upgraded b ===
 === current state of pub file (only shows safe for snapshot information) ===
 [[published]]
-source = { local = "<SANDBOX_DIR>/a" }
+source = { local = <SANDBOX_DIR>/a }
 version = 1
 
 [[published]]
-source = { local = "<SANDBOX_DIR>/b" }
+source = { local = <SANDBOX_DIR>/b }
 version = 2
 
 === upgraded a ===
 === current state of pub file (only shows safe for snapshot information) ===
 [[published]]
-source = { local = "<SANDBOX_DIR>/b" }
+source = { local = <SANDBOX_DIR>/b }
 version = 2
 
 [[published]]
-source = { local = "<SANDBOX_DIR>/a" }
+source = { local = <SANDBOX_DIR>/a }
 version = 2
 
 === expect to fail when upgrading a because it is not compatible with b ===

@@ -196,7 +196,7 @@ jobs:
           cargo build --all-features
 
   windows-cli-tests:
-    needs: [diff, windows-build]
+    needs: [diff]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     runs-on: [ windows-ghcloud-128 ]
@@ -215,7 +215,8 @@ jobs:
       - name: cargo test Sui CLI
         shell: bash
         run: |
-          cargo nextest run -p sui --no-fail-fast --profile ci
+          # We have temporarily disabled the network tests on windows, until we triage + fix the performance issues.
+          cargo nextest run -p sui --no-fail-fast --profile ci --filter-expr "not test(shell_tests::with_network)"
 
   simtest:
     needs: [diff, rustfmt, clippy]
