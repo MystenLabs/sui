@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use futures::FutureExt;
 use futures::stream::{FuturesUnordered, StreamExt};
-use mysten_common::{backoff, in_antithesis};
+use mysten_common::{backoff, in_antithesis, in_test_configuration};
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX, spawn_monitored_task};
 use mysten_metrics::{add_server_timing, spawn_logged_monitored_task};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
@@ -488,7 +488,7 @@ where
         let num_submissions = if !is_new_transaction {
             // No need to submit when the transaction is already being processed.
             0
-        } else if cfg!(msim) || in_antithesis() {
+        } else if in_test_configuration() {
             // Allow duplicated submissions in tests.
             let r = rand::thread_rng().gen_range(1..=100);
             let n = if r <= 10 {
