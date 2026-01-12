@@ -20,7 +20,6 @@ use sui_indexer_alt_schema::cp_blooms::CP_BLOOM_NUM_HASHES;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 
-use crate::api::types::transaction::SCTransaction;
 use crate::error::RpcError;
 use crate::pagination::Page;
 
@@ -55,12 +54,12 @@ struct CpResult {
 ///
 /// Does a coarse filter over checkpoints ranges using cp_bloom_blocks,
 /// then a finer filter over those ranges for checkpoint matches using cp_blooms.
-pub(super) async fn candidate_cps(
+pub(crate) async fn candidate_cps<C>(
     ctx: &Context<'_>,
     filter_values: &[Vec<u8>],
     cp_lo: u64,
     cp_hi: u64,
-    page: &Page<SCTransaction>,
+    page: &Page<C>,
 ) -> Result<Vec<u64>, RpcError> {
     let pg_reader: &PgReader = ctx.data()?;
     let mut conn = pg_reader

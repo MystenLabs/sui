@@ -38,6 +38,7 @@ use crate::api::types::checkpoint::filter::checkpoint_bounds;
 use crate::api::types::epoch::Epoch;
 use crate::api::types::gas_input::GasInput;
 use crate::api::types::lookups::CheckpointBounds;
+use crate::api::types::lookups::ScanCursor;
 use crate::api::types::lookups::TxBoundsCursor;
 use crate::api::types::scan;
 use crate::api::types::transaction::filter::TransactionFilter;
@@ -371,19 +372,13 @@ impl TransactionContents {
     }
 }
 
-impl PartialOrd for TransactionCursor {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
+impl ScanCursor for TransactionCursor {
+    fn cp_sequence_number(&self) -> u64 {
+        self.cp_sequence_number
     }
-}
 
-impl Ord for TransactionCursor {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // Order by checkpoint first, then by transaction index within checkpoint
-        match self.cp_sequence_number.cmp(&other.cp_sequence_number) {
-            std::cmp::Ordering::Equal => self.tx_sequence_number.cmp(&other.tx_sequence_number),
-            other => other,
-        }
+    fn tx_sequence_number(&self) -> u64 {
+        self.tx_sequence_number
     }
 }
 

@@ -33,7 +33,10 @@ use super::{
         checkpoint::{CCheckpoint, Checkpoint, filter::CheckpointFilter},
         coin_metadata::CoinMetadata,
         epoch::Epoch,
-        event::{CEvent, Event, filter::EventFilter},
+        event::{
+            CEvent, Event, SCEvent,
+            filter::{EventFilter, EventScanFilterValidator as ESFValidator},
+        },
         move_package::{self, MovePackage, PackageCheckpointFilter, PackageKey},
         move_type::{self, MoveType},
         name_service::name_to_address,
@@ -182,6 +185,28 @@ impl Query {
         let page = Page::from_params(limits, first, after, last, before)?;
 
         Event::paginate(ctx, scope, page, filter.unwrap_or_default())
+            .await
+            .map(Some)
+    }
+
+    /// Scan events using bloom filters, supporting multiple filters simultaneously.
+    ///
+    /// Unlike `events`, this query allows combining sender, module, and type filters together.
+    async fn events_scan(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<SCEvent>,
+        last: Option<u64>,
+        before: Option<SCEvent>,
+        #[graphql(validator(custom = "ESFValidator"))] filter: Option<EventFilter>,
+    ) -> Result<Option<Connection<String, Event>>, RpcError<ScanError>> {
+        let scope = self.scope(ctx)?;
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("Query", "events");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        Event::scan(ctx, scope, page, filter.unwrap_or_default())
             .await
             .map(Some)
     }

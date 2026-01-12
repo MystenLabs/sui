@@ -3163,6 +3163,12 @@ type Query {
 	"""
 	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
 	"""
+	Scan events using bloom filters, supporting multiple filters simultaneously.
+	
+	Unlike `events`, this query allows combining sender, module, and type filters together.
+	"""
+	eventsScan(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
+	"""
 	Fetch checkpoints by their sequence numbers.
 	
 	Returns a list of checkpoints that is guaranteed to be the same length as `keys`. If a checkpoint in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the checkpoint does not exist yet, or because it was pruned.

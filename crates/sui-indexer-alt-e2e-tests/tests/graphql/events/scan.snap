@@ -1,0 +1,1695 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 27 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 6-45:
+//# publish
+created: object(1,0)
+mutated: object(0,3)
+gas summary: computation_cost: 1000000, storage_cost: 6794400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 47-65:
+//# publish
+created: object(2,0)
+mutated: object(0,3)
+gas summary: computation_cost: 1000000, storage_cost: 5289600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 66:
+//# run P1::M1::emit_a --sender A --args 1
+events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [7, 69, 118, 101, 110, 116, 32, 65, 1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 68-70:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, line 71:
+//# run P1::M1::emit_b --sender B --args 2
+events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: B, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventB"), type_params: [] }, contents: [7, 69, 118, 101, 110, 116, 32, 66, 2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 6, lines 73-75:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, line 76:
+//# run P2::M2::emit_c --sender A --args 3
+events: Event { package_id: P2, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: P2, module: Identifier("M2"), name: Identifier("EventC"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 67, 32, 102, 114, 111, 109, 32, 80, 50, 3, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, lines 78-80:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 9, line 81:
+//# run P1::M1::emit_a --sender C --args 4
+events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: C, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [7, 69, 118, 101, 110, 116, 32, 65, 4, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 10, lines 83-85:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 11, line 86:
+//# run P1::M1::emit_multiple --sender A --args 3
+events: Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 1, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 2, 0, 0, 0, 0, 0, 0, 0] }, Event { package_id: P1, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: P1, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 102, 114, 111, 109, 32, 108, 111, 111, 112, 3, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, line 88:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 13, lines 90-92:
+//# advance-epoch
+Epoch advanced: 1
+
+task 14, lines 93-95:
+//# create-checkpoint 10501
+Checkpoint created: 10507
+
+task 15, line 96:
+//# run P2::M2::emit_c --sender B --args 100
+events: Event { package_id: P2, transaction_module: Identifier("M2"), sender: B, type_: StructTag { address: P2, module: Identifier("M2"), name: Identifier("EventC"), type_params: [] }, contents: [15, 69, 118, 101, 110, 116, 32, 67, 32, 102, 114, 111, 109, 32, 80, 50, 100, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, line 98:
+//# create-checkpoint
+Checkpoint created: 10508
+
+task 17, lines 100-124:
+//# run-graphql
+Response: {
+  "data": {
+    "eventsFromA": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a"
+              },
+              "name": "M2"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 2,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsFromB": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjoyfQ==",
+        "endCursor": "eyJ0IjowLCJlIjowLCJjIjoxMDUwOH0=",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjoyfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventB"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjoxMDUwOH0=",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a"
+              },
+              "name": "M2"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsFromC": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjo0fQ==",
+        "endCursor": "eyJ0IjowLCJlIjowLCJjIjo0fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo0fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 18, lines 126-149:
+//# run-graphql
+Response: {
+  "data": {
+    "eventsFromP1": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjoyfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventB"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo0fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 2,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsFromP2": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+        "endCursor": "eyJ0IjowLCJlIjowLCJjIjoxMDUwOH0=",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a"
+              },
+              "name": "M2"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjoxMDUwOH0=",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a"
+              },
+              "name": "M2"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 19, lines 151-175:
+//# run-graphql
+Response: {
+  "data": {
+    "eventTypeA": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo0fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 2,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventTypeB": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjoyfQ==",
+        "endCursor": "eyJ0IjowLCJlIjowLCJjIjoyfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjoyfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventB"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventTypeC": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+        "endCursor": "eyJ0IjowLCJlIjowLCJjIjoxMDUwOH0=",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a"
+              },
+              "name": "M2"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjoxMDUwOH0=",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a"
+              },
+              "name": "M2"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 20, lines 177-215:
+//# run-graphql
+Response: {
+  "data": {
+    "eventsAFromP1": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 2,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsAFromP2": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+        "endCursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a"
+              },
+              "name": "M2"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsBFromP1": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjoyfQ==",
+        "endCursor": "eyJ0IjowLCJlIjowLCJjIjoyfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjoyfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventB"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 21, lines 217-249:
+//# run-graphql
+Response: {
+  "data": {
+    "eventsATypeA": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 2,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventsCTypeA": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjo0fQ==",
+        "endCursor": "eyJ0IjowLCJlIjowLCJjIjo0fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo0fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 22, lines 251-277:
+//# run-graphql
+Response: {
+  "data": {
+    "eventsAP1TypeA": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 2,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 23, lines 279-317:
+//# run-graphql
+Response: {
+  "data": {
+    "earlyEvents": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a"
+              },
+              "name": "M2"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "laterEvents": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+        "endCursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 2,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "atCheckpoint5": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+        "endCursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 2,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "transactionModule": {
+              "package": {
+                "address": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd"
+              },
+              "name": "M1"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 24, lines 319-356:
+//# run-graphql
+Response: {
+  "data": {
+    "emptyNonExistent": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    },
+    "emptyConflicting": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    },
+    "emptyBeyondData": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    }
+  }
+}
+
+task 25, lines 358-385:
+//# run-graphql --cursors {"t":2,"e":0,"c":1} {"t":0,"e":0,"c":3} {"t":0,"e":0,"c":5} {"t":0,"e":2,"c":5}
+Response: {
+  "data": {
+    "first2": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "last2": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+        "endCursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 2,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "afterFirst": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+        "endCursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 2,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "afterSecond": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+        "endCursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+        "hasPreviousPage": true,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 2,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "beforeLast": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "betweenCursors": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+        "endCursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+        "hasPreviousPage": true,
+        "hasNextPage": true
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "invalidOrder": {
+      "pageInfo": {
+        "startCursor": null,
+        "endCursor": null,
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": []
+    }
+  }
+}
+
+task 26, lines 387-400:
+//# run-graphql
+Response: {
+  "data": {
+    "scanAcrossBlocks": {
+      "pageInfo": {
+        "startCursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+        "endCursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+        "hasPreviousPage": false,
+        "hasNextPage": false
+      },
+      "edges": [
+        {
+          "cursor": "eyJ0IjoyLCJlIjowLCJjIjoxfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjozfQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x6b31979b225c681ccf063718c20349047842c0e9a18ad25570cca92e325e956a::M2::EventC"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjowLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 0,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoxLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 1,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0IjowLCJlIjoyLCJjIjo1fQ==",
+          "node": {
+            "sequenceNumber": 2,
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x2745ab782eff22e9fb969b61dfa7e71c5bfb53eb6dfd79c64e80346a988dd9fd::M1::EventA"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

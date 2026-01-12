@@ -1,15 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod bloom;
+pub(crate) mod bloom;
 mod lookup;
 mod paginate;
 
+use std::iter::Rev;
+use std::ops::Range;
 use std::ops::RangeInclusive;
 
 use async_graphql::Context;
 use async_graphql::connection::Connection;
+use itertools::Either;
 
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::types::event::Event;
+use crate::api::types::event::SCEvent;
+use crate::api::types::event::filter::EventFilter;
+use crate::api::types::lookups::ScanCursor;
 use crate::api::types::transaction::SCTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
@@ -50,23 +58,57 @@ pub(crate) async fn transactions(
         return Ok(Connection::new(false, false));
     }
 
-    let (digests, transactions) = lookup::load_transactions(ctx, &candidate_cps)
+    let digests = lookup::load_digests(ctx, &candidate_cps)
         .await
         .map_err(upcast)?;
 
-    paginate::results(scope, filter, page, candidate_cps, digests, transactions)
+    let transactions = lookup::load_transactions(ctx, &digests)
+        .await
+        .map_err(upcast)?;
+
+    paginate::transaction_results(scope, filter, page, candidate_cps, &digests, &transactions)
 }
 
-fn validate_bounds(
+pub(crate) async fn events(
+    ctx: &Context<'_>,
+    scope: Scope,
+    filter: &EventFilter,
+    page: &Page<SCEvent>,
     cp_bounds: RangeInclusive<u64>,
-    page: &Page<SCTransaction>,
+    limits: &Limits,
+) -> Result<Connection<String, Event>, RpcError<ScanError>> {
+    let Some((cp_lo, cp_hi)) = validate_bounds(cp_bounds, page, limits)? else {
+        return Ok(Connection::new(false, false));
+    };
+
+    let filter_values = filter.bloom_probe_values();
+    let candidate_cps = bloom::candidate_cps(ctx, &filter_values, cp_lo, cp_hi, page)
+        .await
+        .map_err(upcast)?;
+
+    if candidate_cps.is_empty() {
+        return Ok(Connection::new(false, false));
+    }
+
+    let digests = lookup::load_digests(ctx, &candidate_cps)
+        .await
+        .map_err(upcast)?;
+
+    let events = lookup::load_events(ctx, &digests).await.map_err(upcast)?;
+
+    paginate::event_results(scope, filter, page, candidate_cps, &digests, &events)
+}
+
+pub(crate) fn validate_bounds<C: ScanCursor>(
+    cp_bounds: RangeInclusive<u64>,
+    page: &Page<JsonCursor<C>>,
     limits: &Limits,
 ) -> Result<Option<(u64, u64)>, RpcError<ScanError>> {
     let cp_lo = page.after().map_or(*cp_bounds.start(), |a| {
-        (*cp_bounds.start()).max(a.cp_sequence_number)
+        (*cp_bounds.start()).max(a.cp_sequence_number())
     });
     let cp_hi = page.before().map_or(*cp_bounds.end(), |b| {
-        (*cp_bounds.end()).min(b.cp_sequence_number)
+        (*cp_bounds.end()).min(b.cp_sequence_number())
     });
 
     if cp_lo > cp_hi {
@@ -82,4 +124,16 @@ fn validate_bounds(
     }
 
     Ok(Some((cp_lo, cp_hi)))
+}
+
+/// Creates a bidirectional iterator over a range based on page direction.
+pub(crate) fn directional_iter<C>(
+    page: &Page<C>,
+    range: Range<usize>,
+) -> Either<Range<usize>, Rev<Range<usize>>> {
+    if page.is_from_front() {
+        Either::Left(range)
+    } else {
+        Either::Right(range.rev())
+    }
 }
