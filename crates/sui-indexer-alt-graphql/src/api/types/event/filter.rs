@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::ops::Range;
-
 use anyhow::Context as _;
+use async_graphql::CustomValidator;
 use async_graphql::InputObject;
+use async_graphql::InputValueError;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 use sui_types::event::Event as NativeEvent;
@@ -13,11 +13,9 @@ use crate::api::scalars::module_filter::ModuleFilter;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeFilter;
 use crate::api::scalars::uint53::UInt53;
-use crate::api::types::event::CEvent;
 use crate::api::types::lookups::CheckpointBounds;
 use crate::error::RpcError;
 use crate::error::feature_unavailable;
-use crate::pagination::Page;
 
 #[derive(InputObject, Debug, Default, Clone)]
 pub(crate) struct EventFilter {
@@ -168,6 +166,39 @@ impl EventFilter {
         }
         filters
     }
+
+    /// Filter values for which probes can be built for containment check in bloom filters.
+    pub(crate) fn bloom_probe_values(&self) -> Vec<Vec<u8>> {
+        let mut values = Vec::new();
+        if let Some(sender) = &self.sender {
+            values.push(sender.into_vec());
+        }
+        if let Some(module) = &self.module {
+            values.push(module.package().into_vec());
+        }
+        if let Some(type_) = &self.type_ {
+            values.push(type_.package().into_vec());
+        }
+        values
+    }
+}
+
+/// Validator for eventsScan - requires at least one filter for bloom filter scanning.
+pub(crate) struct EventScanFilterValidator;
+
+impl CustomValidator<EventFilter> for EventScanFilterValidator {
+    fn check(&self, filter: &EventFilter) -> Result<(), InputValueError<EventFilter>> {
+        let has_filter =
+            filter.sender.is_some() || filter.module.is_some() || filter.type_.is_some();
+
+        if !has_filter {
+            return Err(InputValueError::custom(
+                "eventsScan requires at least one of: sender, module, or type",
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 impl CheckpointBounds for EventFilter {
@@ -182,31 +213,4 @@ impl CheckpointBounds for EventFilter {
     fn before_checkpoint(&self) -> Option<UInt53> {
         self.before_checkpoint
     }
-}
-
-/// The event indices (sequence_number) in a transaction's events array that are within the cursor bounds, inclusively.
-/// Event transaction numbers are always returned in ascending order.
-pub(super) fn tx_ev_bounds(
-    page: &Page<CEvent>,
-    tx_sequence_number: u64,
-    event_count: usize,
-) -> Range<usize> {
-    // Find start index from 'after' cursor, defaults to 0
-    let ev_lo = page
-        .after()
-        .filter(|c| c.tx_sequence_number == tx_sequence_number)
-        .map(|c| c.ev_sequence_number as usize)
-        .unwrap_or(0)
-        .min(event_count);
-
-    // Find exclusive end index from 'before' cursor, default to event_count
-    let ev_hi = page
-        .before()
-        .filter(|c| c.tx_sequence_number == tx_sequence_number)
-        .map(|c| (c.ev_sequence_number as usize).saturating_add(1))
-        .unwrap_or(event_count)
-        .max(ev_lo)
-        .min(event_count);
-
-    ev_lo..ev_hi
 }

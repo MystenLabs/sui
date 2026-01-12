@@ -350,7 +350,7 @@ collect_pipelines! {
         pipelines.insert("consistent".to_string());
         pipelines.insert("obj_versions".to_string());
     };
-    Query.[events] |pipelines, filters| {
+    Query.[events, eventsScan] |pipelines, filters| {
         pipelines.insert("tx_digests".to_string());
         if filters.contains("module") {
             pipelines.insert("ev_emit_mod".to_string());
