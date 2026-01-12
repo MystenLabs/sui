@@ -21,6 +21,7 @@ use sui_indexer_alt_framework::types::gas_coin::GAS;
 use sui_indexer_alt_schema::schema::tx_balance_changes;
 use sui_indexer_alt_schema::transactions::BalanceChange;
 use sui_indexer_alt_schema::transactions::StoredTxBalanceChange;
+use sui_types::TypeTag;
 use sui_types::balance_change::address_balance_changes_from_accumulator_events;
 use sui_types::full_checkpoint_content::ExecutedTransaction;
 use sui_types::object::Owner;

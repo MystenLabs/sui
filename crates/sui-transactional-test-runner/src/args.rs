@@ -119,10 +119,10 @@ pub struct TransferObjectCommand {
     pub sender: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "gas-budget-from-address-balance")]
+    pub gas_budget_from_address_balance: Option<u64>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
-    #[clap(long = "address-balance-gas")]
-    pub address_balance_gas: Option<bool>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -139,6 +139,8 @@ pub struct ProgrammableTransactionCommand {
     pub sponsor: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "gas-budget-from-address-balance")]
+    pub gas_budget_from_address_balance: Option<u64>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
     #[clap(long = "gas-payment", value_parser = parse_fake_id)]
@@ -170,6 +172,8 @@ pub struct UpgradePackageCommand {
     pub sender: String,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "gas-budget-from-address-balance")]
+    pub gas_budget_from_address_balance: Option<u64>,
     #[clap(long = "dry-run")]
     pub dry_run: bool,
     #[clap(long = "syntax")]

@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 8 tasks
+processed 11 tasks
 
 init:
 A: object(0,0), B: object(0,1), C: object(0,2)
@@ -38,16 +38,27 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
 }
 
 task 4, line 22:
-//# transfer-object --recipient A --sender B --address-balance-gas true 0,1 --gas-budget 1000000000
+//# transfer-object --recipient A --sender B 0,1 --gas-budget-from-address-balance 1000000000
 mutated: object(0,1)
 accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 5, line 24:
+task 5, lines 24-26:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 6, lines 26-43:
+task 6, lines 27-29:
+//# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(5000000) @C --gas-budget-from-address-balance 1000000000
+//> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
+//> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
+accumulators_written: (object(1,0), B, sui::balance::Balance<sui::sui::SUI>, Split), (object(1,1), C, sui::balance::Balance<sui::sui::SUI>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 7, line 31:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 8, lines 33-50:
 //# run-graphql
 Response: {
   "data": {
@@ -91,7 +102,7 @@ Response: {
   }
 }
 
-task 7, lines 45-62:
+task 9, lines 52-69:
 //# run-graphql
 Response: {
   "data": {
@@ -119,6 +130,41 @@ Response: {
               "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
             },
             "amount": "300000000000000"
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 10, lines 71-88:
+//# run-graphql
+Response: {
+  "data": {
+    "addressBalanceGasTransaction": {
+      "balanceChanges": {
+        "pageInfo": {
+          "hasNextPage": false,
+          "hasPreviousPage": false
+        },
+        "nodes": [
+          {
+            "owner": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            },
+            "coinType": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+            },
+            "amount": "-1000000"
+          },
+          {
+            "owner": {
+              "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
+            },
+            "coinType": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+            },
+            "amount": "5000000"
           }
         ]
       }
