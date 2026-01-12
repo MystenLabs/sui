@@ -33,7 +33,14 @@ const TEST_PATTERN: &str = r"\.sh$";
 async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
     // set up test cluster
     let cluster = if path.starts_with(TEST_NET_DIR) {
-        Some(TestClusterBuilder::new().build().await)
+        Some(
+            TestClusterBuilder::new()
+                .with_epoch_duration_ms(60 * 60 * 1_000)
+                // TODO: bump back to default once we figure out why it fails on windows
+                .with_num_validators(1)
+                .build()
+                .await,
+        )
     } else {
         None
     };
