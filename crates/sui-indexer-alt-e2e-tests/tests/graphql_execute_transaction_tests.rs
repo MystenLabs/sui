@@ -1,30 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
+
 use anyhow::Context;
 use prometheus::Registry;
 use reqwest::Client;
 use serde::Deserialize;
-use serde_json::{Value, json};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
-    start_rpc as start_graphql,
-};
-use sui_indexer_alt_reader::{
-    consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs,
-    system_package_task::SystemPackageTaskArgs,
-};
-use sui_macros::sim_test;
-use sui_pg_db::{DbArgs, temp::get_available_port};
-use sui_test_transaction_builder::make_transfer_sui_transaction;
-use sui_types::{gas_coin::GasCoin, transaction::SharedObjectMutability};
-
+use serde_json::Value;
+use serde_json::json;
 use sui_futures::service::Service;
+use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
+use sui_indexer_alt_graphql::args::KvArgs as GraphQlKvArgs;
+use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_graphql::start_rpc as start_graphql;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
+use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
+use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
+use sui_macros::sim_test;
+use sui_pg_db::DbArgs;
+use sui_pg_db::temp::get_available_port;
+use sui_test_transaction_builder::make_transfer_sui_transaction;
+use sui_types::base_types::SuiAddress;
+use sui_types::gas_coin::GasCoin;
+use sui_types::transaction::ObjectArg;
+use sui_types::transaction::SharedObjectMutability;
+use test_cluster::TestCluster;
+use test_cluster::TestClusterBuilder;
 use url::Url;
-
-use sui_types::{base_types::SuiAddress, transaction::ObjectArg};
-use test_cluster::{TestCluster, TestClusterBuilder};
 
 // Unified struct for all GraphQL transaction effects parsing
 #[derive(Debug, Deserialize)]
@@ -640,4 +645,113 @@ async fn test_execute_transaction_object_changes_input_output() {
         .as_str()
         .unwrap();
     assert_eq!(created_type, sui_coin_type);
+}
+
+#[sim_test]
+async fn test_execute_transaction_effects_json() {
+    let validator_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+
+    // Create a transfer transaction
+    let recipient = SuiAddress::random_for_testing_only();
+    let signed_tx =
+        make_transfer_sui_transaction(&validator_cluster.wallet, Some(recipient), Some(1_000_000))
+            .await;
+    let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            mutation($txData: Base64!, $sigs: [Base64!]!) {
+                executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
+                    effects {
+                        status
+                        effectsJson
+                    }
+                    errors
+                }
+            }
+        "#,
+            json!({
+                "txData": tx_bytes.encoded(),
+                "sigs": signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    // Use redactions to mask dynamic values that change between runs
+    insta::assert_json_snapshot!("execute_transaction_effects_json", result.pointer("/data/executeTransaction"), {
+        // Object IDs and addresses
+        ".**.objectId" => "[object_id]",
+        ".**.address" => "[address]",
+        // Digests (covers transactionDigest, eventsDigest, inputDigest, outputDigest)
+        ".**.digest" => "[digest]",
+        ".**.transactionDigest" => "[digest]",
+        ".**.inputDigest" => "[digest]",
+        ".**.outputDigest" => "[digest]",
+        // Dependencies array contains digest strings
+        ".effects.effectsJson.dependencies[]" => "[digest]",
+        // BCS values
+        ".**.bcs.value" => "[bcs]",
+        // Sort arrays that may have non-deterministic order
+        ".effects.effectsJson.changedObjects" => insta::sorted_redaction(),
+        ".effects.effectsJson.dependencies" => insta::sorted_redaction(),
+    });
+}
+
+#[sim_test]
+async fn test_execute_transaction_transaction_json() {
+    let validator_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+
+    // Create a transfer transaction
+    let recipient = SuiAddress::random_for_testing_only();
+    let signed_tx =
+        make_transfer_sui_transaction(&validator_cluster.wallet, Some(recipient), Some(1_000_000))
+            .await;
+    let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            mutation($txData: Base64!, $sigs: [Base64!]!) {
+                executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
+                    effects {
+                        status
+                        transaction {
+                            transactionJson
+                        }
+                    }
+                    errors
+                }
+            }
+        "#,
+            json!({
+                "txData": tx_bytes.encoded(),
+                "sigs": signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    // Use redactions to mask dynamic values that change between runs
+    insta::assert_json_snapshot!("execute_transaction_transaction_json", result.pointer("/data/executeTransaction"), {
+        // Addresses and owners
+        ".**.sender" => "[sender]",
+        ".**.owner" => "[owner]",
+        ".**.objectId" => "[object_id]",
+        // Digests
+        ".**.digest" => "[digest]",
+        // BCS values
+        ".**.bcs.value" => "[bcs]",
+        // Pure values contain dynamic data (recipient address)
+        ".**.pure" => "[pure]",
+    });
 }

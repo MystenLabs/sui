@@ -4,18 +4,23 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
+use anyhow::Result;
 use async_trait::async_trait;
-use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_json_rpc_types::SuiMoveValue;
 use sui_types::TypeTag;
-use sui_types::base_types::{EpochId, ObjectID};
+use sui_types::base_types::EpochId;
+use sui_types::base_types::ObjectID;
+use sui_types::dynamic_field::DynamicFieldName;
+use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::dynamic_field::visitor as DFV;
-use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
 use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::object::Object;
+use sui_types::object::Owner;
 use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::object::{Object, Owner};
 use tap::tap::TapFallible;
 use tracing::warn;
 

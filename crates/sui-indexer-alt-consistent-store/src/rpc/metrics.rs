@@ -1,10 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{
-    HistogramVec, IntCounter, IntCounterVec, Registry, register_histogram_vec_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-};
+use prometheus::HistogramVec;
+use prometheus::IntCounter;
+use prometheus::IntCounterVec;
+use prometheus::Registry;
+use prometheus::register_histogram_vec_with_registry;
+use prometheus::register_int_counter_vec_with_registry;
+use prometheus::register_int_counter_with_registry;
 
 /// Histogram buckets for the distribution of latency (time between receiving a request and sending
 /// a response).

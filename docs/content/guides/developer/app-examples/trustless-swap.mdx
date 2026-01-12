@@ -91,7 +91,7 @@ To tamper with the object would require unlocking it, which consumes the key. Co
 
 <ImportContent source="examples/trading/contracts/escrow/sources/lock.move" mode="code" struct="Locked,Key" noComments />
 
-- The `Locked<T>` type stores the `ID` of the key that unlocks it, and its own `id`. The object being locked is added as a [dynamic object field](/concepts/dynamic-fields.mdx), so that it is still readable at its own ID off-chain.
+- The `Locked<T>` type stores the `ID` of the key that unlocks it, and its own `id`. The object being locked is added as a [dynamic object field](/guides/developer/objects/dynamic-fields.mdx), so that it is still readable at its own ID off-chain.
 - The corresponding `Key` type only stores its own `id`.
 
 The lock and key are made single-use by the signatures of the `lock` and `unlock` functions. `lock` accepts any object of type `T: store` (the `store` ability is necessary for storing it inside a `Locked<T>`), and creates both the `Locked<T>` and its corresponding `Key`:
@@ -1382,7 +1382,7 @@ This instance of `useSuiClientInfiniteQuery()` is similar to the one in the `Loc
 
 ##### `LockedObject` and `Locked` component
 
-The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is mainly responsible for mapping an on-chain `SuiObjectData` `Locked` object to its corresponding `ApiLockedObject`, which is finally delegated to the `<Locked />` component for rendering. The `<LockedObject />` fetches the locked item object ID if the prop `itemId` is not supplied by using dApp Kit `useSuiClientQuery()` hook to call the `getDynamicFieldObject` RPC endpoint. Recall that in this smart contract, the locked item is put into a [dynamic object field](/concepts/dynamic-fields.mdx).
+The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is mainly responsible for mapping an on-chain `SuiObjectData` `Locked` object to its corresponding `ApiLockedObject`, which is finally delegated to the `<Locked />` component for rendering. The `<LockedObject />` fetches the locked item object ID if the prop `itemId` is not supplied by using dApp Kit `useSuiClientQuery()` hook to call the `getDynamicFieldObject` RPC endpoint. Recall that in this smart contract, the locked item is put into a [dynamic object field](/guides/developer/objects/dynamic-fields.mdx).
 
 <details>
 

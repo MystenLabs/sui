@@ -11,8 +11,8 @@ use std::{collections::BTreeMap, fmt::Debug};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::schema::{
-    EnvironmentID, EnvironmentName, LockfileDependencyInfo, PackageName, ParsedManifest,
-    ReplacementDependency, SystemDepName,
+    EnvironmentID, EnvironmentName, LockfileDependencyInfo, OriginalID, PackageName,
+    ParsedManifest, ReplacementDependency, SystemDepName,
 };
 use indexmap::IndexMap;
 
@@ -51,4 +51,9 @@ pub trait MoveFlavor: Debug + Send + Sync {
 
     /// Fail if an edition is not allowed
     fn validate_manifest(manifest: &ParsedManifest) -> Result<(), String>;
+
+    /// Should this address be considered published in all environments? Publications with system
+    /// addresses are not dropped when substituting ephemeral addresses (they can still be
+    /// overridden)
+    fn is_system_address(address: &OriginalID) -> bool;
 }

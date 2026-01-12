@@ -4,17 +4,21 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Interface, Object, SimpleObject};
-use sui_package_resolver::{DataDef, MoveData, OpenSignatureBody, VariantDef};
+use async_graphql::Context;
+use async_graphql::Interface;
+use async_graphql::Object;
+use async_graphql::SimpleObject;
+use sui_package_resolver::DataDef;
+use sui_package_resolver::MoveData;
+use sui_package_resolver::OpenSignatureBody;
+use sui_package_resolver::VariantDef;
 use tokio::sync::OnceCell;
 
+use crate::api::types::move_module::MoveModule;
+use crate::api::types::move_type::MoveAbility;
+use crate::api::types::move_type::abilities;
+use crate::api::types::open_move_type::OpenMoveType;
 use crate::error::RpcError;
-
-use super::{
-    move_module::MoveModule,
-    move_type::{MoveAbility, abilities},
-    open_move_type::OpenMoveType,
-};
 
 /// Interface implemented by all GraphQL types that represent a Move datatype definition (either a struct or an enum definition).
 ///

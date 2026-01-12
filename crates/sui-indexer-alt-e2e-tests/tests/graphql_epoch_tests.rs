@@ -3,30 +3,34 @@
 
 use std::time::Duration;
 
-use fastcrypto::encoding::{Base58, Encoding};
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
 use jsonrpsee::core::Serialize;
 use reqwest::Client;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use serde_json::{Value, json};
-use sui_indexer_alt::{
-    BootstrapGenesis,
-    config::{IndexerConfig, PipelineLayer},
-};
-use sui_indexer_alt_e2e_tests::{
-    OffchainCluster, OffchainClusterConfig, local_ingestion_client_args, write_checkpoint,
-};
-use sui_indexer_alt_schema::{checkpoints::StoredGenesis, epochs::StoredEpochStart};
-use sui_types::{
-    balance::Balance,
-    digests::Digest,
-    messages_checkpoint::{CheckpointCommitment, ECMHLiveObjectSetDigest},
-    sui_system_state::{
-        SuiSystemState, mock, sui_system_state_inner_v1::SuiSystemStateInnerV1,
-        sui_system_state_inner_v2::SuiSystemStateInnerV2,
-    },
-    test_checkpoint_data_builder::{AdvanceEpochConfig, TestCheckpointBuilder},
-};
+use serde_json::Value;
+use serde_json::json;
+use sui_indexer_alt::BootstrapGenesis;
+use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt::config::PipelineLayer;
+use sui_indexer_alt_schema::checkpoints::StoredGenesis;
+use sui_indexer_alt_schema::epochs::StoredEpochStart;
+use sui_types::balance::Balance;
+use sui_types::digests::Digest;
+use sui_types::messages_checkpoint::CheckpointCommitment;
+use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
+use sui_types::sui_system_state::SuiSystemState;
+use sui_types::sui_system_state::mock;
+use sui_types::sui_system_state::sui_system_state_inner_v1::SuiSystemStateInnerV1;
+use sui_types::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV2;
+use sui_types::test_checkpoint_data_builder::AdvanceEpochConfig;
+use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+use sui_indexer_alt_e2e_tests::OffchainCluster;
+use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
+use sui_indexer_alt_e2e_tests::local_ingestion_client_args;
+use sui_indexer_alt_e2e_tests::write_checkpoint;
 
 const SAFE_MODE_QUERY: &str = r#"
 query {

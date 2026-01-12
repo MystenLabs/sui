@@ -1,14 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{error::Error, pg_reader::PgReader};
-use async_graphql::dataloader::Loader;
-use diesel::{ExpressionMethods, QueryDsl};
 use std::collections::HashMap;
 
-use sui_indexer_alt_schema::{
-    cp_sequence_numbers::StoredCpSequenceNumbers, schema::cp_sequence_numbers,
-};
+use async_graphql::dataloader::Loader;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
+use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;
+use sui_indexer_alt_schema::schema::cp_sequence_numbers;
+
+use crate::error::Error;
+use crate::pg_reader::PgReader;
 
 /// Key for fetching information about checkpoint sequence numbers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

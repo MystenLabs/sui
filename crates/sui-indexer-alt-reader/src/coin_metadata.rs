@@ -5,15 +5,20 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use async_graphql::dataloader::Loader;
-use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl};
+use diesel::BoolExpressionMethods;
+use diesel::ExpressionMethods;
+use diesel::JoinOnDsl;
+use diesel::QueryDsl;
 use move_core_types::language_storage::StructTag;
-use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
-use sui_types::{
-    SUI_FRAMEWORK_ADDRESS, TypeTag,
-    coin::{COIN_METADATA_STRUCT_NAME, COIN_MODULE_NAME},
-};
+use sui_indexer_alt_schema::objects::StoredObjInfo;
+use sui_indexer_alt_schema::schema::obj_info;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::TypeTag;
+use sui_types::coin::COIN_METADATA_STRUCT_NAME;
+use sui_types::coin::COIN_MODULE_NAME;
 
-use crate::{error::Error, pg_reader::PgReader};
+use crate::error::Error;
+use crate::pg_reader::PgReader;
 
 /// Key for fetching the  of a CoinMetadata object, based on its coin marker type, e.g.
 /// `0x2::sui::SUI`.

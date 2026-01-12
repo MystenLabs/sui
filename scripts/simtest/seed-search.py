@@ -22,6 +22,7 @@ def safe_print(*args, **kwargs):
 parser = argparse.ArgumentParser(description='Run the simulator with different seeds')
 parser.add_argument('testname', type=str, help='Name of test to run')
 parser.add_argument('--test', type=str, help='Name of the test binary run', required=True)
+parser.add_argument('--no-capture', action='store_true', help='Whether to output logs as the test runs', default=False)
 parser.add_argument('--exact', action='store_true', help='Use exact matching for test name', default=False)
 parser.add_argument('--num-seeds', type=int, help='Number of seeds to run', default=200)
 parser.add_argument(
@@ -46,9 +47,11 @@ def run_command(command, env_vars):
         exit_code = process.returncode
         if exit_code != 0:
             safe_print(f"Command '{command}' failed with exit code {exit_code} for seed: " + env_vars["MSIM_TEST_SEED"])
+            if not args.no_capture:
+                safe_print(f"Run the script with --no-capture to see more details including error logs from simtest framework.")
             safe_print(f"stdout:\n=========================={stdout.decode('utf-8')}\n==========================")
             if stderr:
-              safe_print(f"stderr:\n=========================={stderr.decode('utf-8')}\n==========================")
+                safe_print(f"stderr:\n=========================={stderr.decode('utf-8')}\n==========================")
         else:
           safe_print("-- seed passed %s" % env_vars["MSIM_TEST_SEED"])
 
@@ -72,7 +75,6 @@ def main(commands):
             exit_code = future.result()
             if exit_code != 0:
                 all_passed = False
-                safe_print(f"Command '{cmd}' failed with exit code {exit_code}")
                 sys.exit(1)
 
         if all_passed:
@@ -105,9 +107,9 @@ if __name__ == "__main__":
 
     for i in range(1, args.num_seeds + 1):
         next_seed = args.seed_start + i
-        commands.append(("%s --test-threads 1 %s %s" % (binary, '--exact' if args.exact else '', args.testname), {
+        commands.append(("%s --test-threads 1 %s %s %s" % (binary, '--no-capture' if args.no_capture else '', '--exact' if args.exact else '', args.testname), {
           "MSIM_TEST_SEED": "%d" % next_seed,
-          "RUST_LOG": "off",
+          "RUST_LOG": "error",
         }))
 
     # register clean up code to kill all child processes when we exit

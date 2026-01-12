@@ -10,17 +10,13 @@ The [Sui Full Node gRPC API](/references/fullnode-protocol.mdx) provides a fast,
 
 <ImportContent source="json-rpc-deprecation.mdx" mode="snippet" />
 
-:::
-
-:::info
-
 <ImportContent source="data-serving-msg.mdx" mode="snippet" />
 
 :::
 
 ## What is gRPC?
 
-gRPC offers a high-performance, efficient communication protocol that uses [Protocol Buffers](https://protobuf.dev/overview/) for fast, compact data serialization. Its strongly typed interfaces reduce runtime errors and simplify client/server development across multiple languages. With built-in support for code generation, you can scaffold clients in TypeScript, Go, Rust, and more. This makes it ideal for scalable backend systems like indexers, blockchain explorers, and data-intensive decentralized apps.
+gRPC offers a high-performance, efficient communication protocol that uses [Protocol Buffers](https://protobuf.dev/overview/) for fast, compact data serialization. Its strongly typed interfaces reduce runtime errors and simplify client and server development across multiple languages. With built-in support for code generation, you can scaffold clients in TypeScript, Go, Rust, and more. This makes it ideal for scalable backend systems like indexers, blockchain explorers, and data-intensive decentralized apps.
 
 In addition to request-response calls, gRPC supports server-side streaming, enabling real-time data delivery without constant polling. This is especially useful in environments where you need to track events and transactions live. gRPC's binary format is significantly faster and lighter than JSON, saving bandwidth and improving latency.
 
@@ -28,53 +24,51 @@ Refer to [when to use gRPC vs GraphQL](/concepts/data-access/data-serving#when-t
 
 ## gRPC on Sui
 
-Protocol buffers define the gRPC interface. You can find the relevant `.proto` files at [sui-apis on Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), which apart from the gRPC messages (request and response payloads) include the following services:
+Protocol buffers define the gRPC interface. You can find the relevant `.proto` files at [`sui-apis` on Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), which apart from the gRPC messages (request and response payloads), include the following services:
 
-| Service | Proto | Purpose |
+| Service | `.proto` file | Purpose |
 | --- | --- | --- |
-| `TransactionExecutionService` | `sui/rpc/v2/transaction_execution_service.proto` | Submit and execute signed transactions on the Sui network. Wallets and apps use the service to send user actions to the network. |
-| `LedgerService` | `sui/rpc/v2/ledger_service.proto` | Lookup specific checkpoints, transactions, objects and more from the current state and recent history of the Sui network. “History” here refers to the recent past - limited to what a full node retains. |
-| `StateService` | `sui/rpc/v2/state_service.proto` | Query up-to-date on-chain data like balances, coin metadata, dynamic fields, or owned objects. Also supports dry-run simulations for transactions. |
+| `TransactionExecutionService` | `sui/rpc/v2/transaction_execution_service.proto` | Submit and execute signed transactions on the Sui network. Wallets and apps use this service to send user actions to the network. |
+| `LedgerService` | `sui/rpc/v2/ledger_service.proto` | Lookup specific checkpoints, transactions, objects, and more from the current state and recent history of the Sui network. "History" refers to the recent past, limited to what a full node retains. |
+| `StateService` | `sui/rpc/v2/state_service.proto` | Query up-to-date on-chain data like balances, coin metadata, dynamic fields, or owned objects. It also supports dry-run simulations for transactions. |
 | `SubscriptionService` | `sui/rpc/v2/subscription_service.proto` | Stream live updates for checkpoints. Ideal for building reactive systems such as indexers, bots, and dashboards. Refer to [Subscriptions for streaming data](#subscriptions-for-streaming-data). |
-| `MovePackageService` | `sui/rpc/v2/move_package_service.proto` | Access metadata and content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
-| `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that may include [zklogin](/concepts/cryptography/zklogin.mdx) or other signatures, simulate authentication, or build custom signing workflows. |
+| `MovePackageService` | `sui/rpc/v2/move_package_service.proto` | Access metadata and the content of Move packages deployed on the Sui network. Useful for tooling, analysis, and smart contract introspection. |
+| `SignatureVerificationService` | `sui/rpc/v2/signature_verification_service.proto` | Validate signatures outside transaction execution. Helps pre-verify payloads that might include [zklogin](/concepts/cryptography/zklogin.mdx) or other signatures, simulate authentication, or build custom signing workflows. |
 | `NameService` | `sui/rpc/v2/name_service.proto` | Resolve human-readable SuiNS names to their underlying name records, and perform reverse lookups from Sui addresses back to linked names. |
 
 Use these definitions to generate client libraries in various programming languages.
 
-:::info
+:::info 
 
-If you were using the `v2beta2` proto files previously, note that the latest definitions are now under the `v2` version. Also, the `LiveDataService` has been renamed to `StateService`, and the `SimulateTransaction` API has been moved to the `TransactionExecutionService`.
+If you were using the `v2beta2` `.proto` files previously, note that the latest definitions are now under the `v2` version. Also, the `LiveDataService` has been renamed to `StateService`, and the `SimulateTransaction` API has been moved to the `TransactionExecutionService`.
 
 :::
 
 ### Field masks
 
-A [`FieldMask` in Protocol Buffers](https://protobuf.dev/reference/protobuf/google.protobuf/#field-mask) is a mechanism used to specify a subset of fields within a message that should be read, updated, or returned. Instead of retrieving the entire object, a client can request only the specific fields they need by providing a list of field paths. This improves performance and reduces unnecessary data transfer.
+A [`FieldMask` in protocol buffers](https://protobuf.dev/reference/protobuf/google.protobuf/#field-mask) is a mechanism used to specify a subset of fields within a message that should be read, updated, or returned. Instead of retrieving the entire object, a client can request only the specific fields they need by providing a list of field paths. This improves performance and reduces unnecessary data transfer.
 
-In the Sui gRPC API, `FieldMask`s are used in requests like `GetTransaction`, `GetObject`, and so on to control which parts are included in the response (such as, `effects` and `events` of a transaction).
+In the Sui gRPC API, `FieldMask`s are used in requests like `GetTransaction`, `GetObject`, and so on to control which parts are included in the response (like the `effects` and `events` of a transaction).
 
-Key behaviors:
+Field masks are defined using `google.protobuf.FieldMask` and typically appear in the request message as `read_mask`. You can pass an explicit value of `*` to request all fields.
 
-- Field masks are defined using `google.protobuf.FieldMask` and typically appear in the request message as `read_mask`.
-- You can pass an explicit value of `*` to request all fields.
-- If you omit `read_mask`, it defaults to `*` (all fields), unless documented otherwise.
+If you omit `read_mask`, it defaults to `*` (all fields), unless documented otherwise.
+
 - Each field path in the mask must match the field structure of the response proto message. Nested fields are supported using dot notation.
-- In batch APIs, only the top-level `read_mask` is respected — the API ignores any masks inside sub-requests.
-- In some cases, non-terminal repeated fields might be supported in the mask (even if this is atypical per standard `FieldMask` behavior).
+
+- In batch APIs, only the top-level `read_mask` is respected. The API ignores any masks inside sub-requests.
+
+- In some cases, non-terminal repeated fields might be supported in the mask, even if this is atypical per standard `FieldMask` behavior.
 
 ### Field presence
 
-When using gRPC with Sui, it's important to understand how [field presence](https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md) works, especially when dealing with `proto3` syntax. In `proto3`, primitive fields (like numbers, booleans, and strings) are always initialized to a default value if not present in the message — this means you can’t tell whether a value is explicitly set or just left out. To give you that distinction, Sui marks all fields as `optional`, even if they’re required by the API.
+When using gRPC with Sui, it's important to understand how [field presence](https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md) works, especially when dealing with `proto3` syntax. In `proto3`, primitive fields like numbers, booleans, and strings are always initialized to a default value if not present in the message. This means you can't tell whether a value is explicitly set or just left out. To give you that distinction, Sui marks all fields as `optional`, even if they're required by the API.
 
-As a user of the API, this lets you:
-
-- Detect whether a field value is actually provided or just defaulted.
-- Write clients that can perform partial updates or simulate intent (for example, distinguish between an explicitly empty input versus a missing one).
+As a user of the API, this lets you detect whether a field value is actually provided or just defaulted and write clients that can perform partial updates or simulate intent like distinguishing between an explicitly empty input versus a missing one.
 
 :::info
 
-Remember that if a field is marked `optional` in the proto, it might still be **required** for the request to be valid — this is a protobuf quirk, not an indication of actual business logic.
+If a field is marked `optional` in the proto, it might still be **required** for the request to be valid. This is a protobuf quirk, not an indication of actual business logic.
 
 :::
 
@@ -83,21 +77,20 @@ Remember that if a field is marked `optional` in the proto, it might still be **
 In the Sui gRPC API, identifiers with standard human-readable formats are represented as `string`s in the proto schema:
 
 - `Address` and `ObjectId`: Represented as 64 hexadecimal characters with a leading `0x`.
+
 - `Digest`s: Represented as [Base58](https://learnmeabitcoin.com/technical/keys/base58/).
-- `TypeTag` and `StructTag`: Represented in their canonical string format (for example, `0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>`)
+
+- `TypeTag` and `StructTag`: Represented in their canonical string format (such as  `0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>`)
 
 ### Pagination
 
-When using gRPC APIs that return lists of data — such as account balances, owned objects, and so on — you typically need to handle pagination. These APIs return results in chunks and include tokens to help you request the next batch.
+When using gRPC APIs that return lists of data like account balances, owned objects, and so on, you typically need to handle pagination. These APIs return results in chunks and include tokens to help you request the next batch.
 
-Here’s how it works:
+In the request, provide a `page_size` to control how many items you want returned. If you leave this unset or set it to 0, the API uses a sensible default. You can also include a `page_token` in the request, which tells the server where to continue from. You get this token from the previous response.
 
-- In the request, provide a `page_size` to control how many items you want returned. If you leave this unset or set it to 0, the API uses a sensible default.
-- You can also include a `page_token` in the request, which tells the server where to continue from. You get this token from the previous response.
-- The response includes a list of results and a `next_page_token` value, which you can pass into your next request to get the next page.
-- When the server returns an empty `next_page_token`, you’ve reached the end of the list.
+The response includes a list of results and a `next_page_token` value, which you can pass into your next request to get the next page. When the server returns an empty `next_page_token`, you've reached the end of the list.
 
-Make sure to keep all other parameters in your request the same between paginated calls — otherwise, the server might reject the request with an `INVALID_ARGUMENT` error.
+Make sure to keep all other parameters in your request the same between paginated calls. Otherwise, the server might reject the request with an `INVALID_ARGUMENT` error.
 
 ### Errors
 
@@ -107,38 +100,41 @@ You can decode this message to access structured error details, which might incl
 
 ### HTTP headers
 
-In many gRPC responses, the Sui API includes additional metadata in the form of HTTP headers. These headers provide contextual information about the current network state and might be useful for debugging, telemetry, or understanding the data’s freshness.
+In many gRPC responses, the Sui API includes additional metadata in the form of HTTP headers. These headers provide contextual information about the current network state and might be useful for debugging, telemetry, or understanding the data's freshness.
 
 Here are the headers you might encounter:
 
 - `x-sui-chain-id`: The chain ID of the current network.
-- `x-sui-chain`: A human-readable name for the current network (such as `mainnet` or `testnet`).
+
+- `x-sui-chain`: A human-readable name for the current network (`mainnet`, `testnet`, or `devnet`).
+
 - `x-sui-checkpoint-height`: The height of the latest checkpoint at the time of the response.
+
 - `x-sui-lowest-available-checkpoint`: The earliest checkpoint for which transaction and checkpoint data can still be queried.
-- `x-sui-lowest-available-checkpoint-objects`: The earliest checkpoint from which object data (input/output) is available.
+
+- `x-sui-lowest-available-checkpoint-objects`: The earliest checkpoint from which object data (input and output) is available.
+
 - `x-sui-epoch`: The current epoch of the network.
+
 - `x-sui-timestamp-ms`: The network timestamp in milliseconds since the Unix epoch.
+
 - `x-sui-timestamp`: The network timestamp in milliseconds since the Unix epoch in human-readable [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339) format.
 
-Not all headers are guaranteed to be present in every API response — they are only included when applicable to the given RPC.
+Not all headers are guaranteed to be present in every API response. They are only included when applicable to the given RPC.
 
 ## Subscriptions for streaming data
 
-The `SubscriptionService` provides real-time streaming updates for on-chain activity via gRPC server-side streaming APIs.
+The `SubscriptionService` provides real-time streaming updates for on-chain activity through gRPC server-side streaming APIs. For example, the `SubscribeCheckpoint` RPC lets you subscribe to the global stream of executed checkpoints. When a subscription is initialized, the stream begins at the latest checkpoint known to the server. Checkpoints are guaranteed to arrive in order and without gaps. This allows clients to track exactly which checkpoint they last processed.
 
-For example, the `SubscribeCheckpoint` RPC lets you subscribe to the global stream of executed checkpoints. When a subscription is initialized, the stream begins at the latest checkpoint known to the server. Checkpoints are guaranteed to arrive in order and without gaps. This allows clients to track exactly which checkpoint they last processed.
-
-If the stream is interrupted — for example, due to client disconnect or network error — you can resume from the last known checkpoint using other APIs to backfill any missed data before resubscribing.
+If the stream is interrupted due to client disconnect or network error, you can resume from the last known checkpoint using other APIs to backfill any missed data before resubscribing.
 
 Streaming APIs are useful for building indexers, dashboards, or bots that need to react to real-time Sui activity with minimal latency. Refer to [Access streaming data with buf](#access-streaming-data-with-buf) for information on how to test.
 
 ## Handling pruned data
 
-If a full node doesn’t return a specific object, transaction, or event, it’s likely that the data has been pruned based on the node’s retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store & Service](/concepts/data-access/archival-store.mdx). The Archival Store retains historical data for the network.
+If a full node doesn't return a specific object, transaction, or event, it's likely that the data has been pruned based on the node's retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store and Service](/concepts/data-access/archival-store.mdx). The Archival Store retains historical data for the network.
 
-You can reuse the same gRPC `LedgerService` methods for this lookup. Simply change the endpoint in your client from the full node’s address to the archival service endpoint.
-
-This ensures that your application can access both recent and historical data reliably, regardless of a full node’s pruning settings.
+You can reuse the same gRPC `LedgerService` methods for this lookup. Simply change the endpoint in your client from the full node's address to the archival service endpoint. This ensures that your application can access both recent and historical data reliably, regardless of a full node's pruning settings.
 
 ## Developer access and usage recipes
 
@@ -146,19 +142,15 @@ The following recipes show how to accomplish some common tasks using gRPC.
 
 :::info
 
-Refer to the [list of RPC or data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that have enabled gRPC on their full nodes. Contact a provider directly to request access. If your RPC or data provider doesn’t yet support gRPC, ask them to enable support or contact the Sui Foundation team on Discord or Telegram for help.
+Refer to the [list of RPC or data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that have enabled gRPC on their full nodes. Contact a provider directly to request access. If your RPC or data provider doesn't yet support gRPC, ask them to enable support or contact the Sui Foundation team on Discord or Telegram for help.
 
 :::
 
-### Access using grpcurl
+### Access using `grpcurl`
 
-Simplest way to experiment with gRPC is by using [grpcurl](https://github.com/fullstorydev/grpcurl).
-
-:::note
+The simplest way to experiment with gRPC is by using [`grpcurl`](https://github.com/fullstorydev/grpcurl).
 
 Your results might differ from the examples that follow, depending on the breadth, maturity, and data retention of the gRPC APIs available on the Sui full node you use.
-
-:::
 
 #### List available gRPC services
 
@@ -166,7 +158,10 @@ Your results might differ from the examples that follow, depending on the breadt
 $ grpcurl <full node URL:port> list
 ```
 
-where the port on Sui Foundation managed Full nodes is `443`. It should return something like:
+The port on Sui Foundation managed full nodes is `443`. 
+
+<details>
+<summary>Output</summary>
 
 ```shell
 grpc.health.v1.Health
@@ -180,13 +175,16 @@ sui.rpc.v2.SubscriptionService
 sui.rpc.v2.TransactionExecutionService
 ```
 
+</details>
+
 #### List available APIs in the LedgerService
 
 ```shell
 $ grpcurl <full node URL:port> list sui.rpc.v2.LedgerService
 ```
 
-which should return something like:
+<details>
+<summary>Output</summary>
 
 ```shell
 sui.rpc.v2.LedgerService.BatchGetObjects
@@ -197,6 +195,7 @@ sui.rpc.v2.LedgerService.GetObject
 sui.rpc.v2.LedgerService.GetServiceInfo
 sui.rpc.v2.LedgerService.GetTransaction
 ```
+</details>
 
 #### Get the `events` and `effects` details of a particular transaction
 
@@ -228,15 +227,16 @@ $ grpcurl -d '{ "owner": "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b
 $ grpcurl -d '{ "parent": "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac" }' <full node URL:port> sui.rpc.v2.StateService/ListDynamicFields
 ```
 
-### Access streaming data with buf
+### Access streaming data with Buf
 
-`grpcurl` does not support server-side streaming RPCs. To test or experiment with `SubscriptionService`, use the [buf CLI](https://buf.build/docs/cli/) instead.
+`grpcurl` does not support server-side streaming RPCs. To test or experiment with `SubscriptionService`, use the [Buf CLI](https://buf.build/docs/cli/) instead.
 
 ```shell
 $ buf curl --protocol grpc https://<full node URL>/sui.rpc.v2.SubscriptionService/SubscribeCheckpoints -d '{ "readMask": "sequenceNumber,digest,summary.timestamp" }'  --timeout 1m
 ```
 
-which should return something like:
+<details>
+<summary>Output</summary>
 
 ```json
 {
@@ -274,11 +274,13 @@ which should return something like:
 ...
 ```
 
+</details>
+
 ### Sample clients in different programming languages
 
 :::info
 
-For Rust, consider using the [Sui-Rust-Sdk](https://github.com/MystenLabs/sui-rust-sdk).
+For Rust, consider using the [Sui Rust SDK](https://github.com/MystenLabs/sui-rust-sdk).
 
 :::
 
@@ -286,21 +288,17 @@ For Rust, consider using the [Sui-Rust-Sdk](https://github.com/MystenLabs/sui-ru
 
 <TabItem value="typescript" label="TypeScript">
 
-This is an example to build a TypeScript client for Sui gRPC API. If you want to use a different set of tools or modules that you’re comfortable with, you can adjust the instructions accordingly.
+This is an example for building a TypeScript client for Sui gRPC API. 
 
-**Install dependencies**
+#### Step 1: Install dependencies:
 
 ```shell
 npm init -y
-```
-```shell
 npm install @grpc/grpc-js @grpc/proto-loader
-```
-```shell
 npm i -D tsx
 ```
 
-**Project structure**
+The default project has this structure:
 
 ```shell
 .
@@ -314,9 +312,9 @@ npm i -D tsx
 ├── package.json
 ```
 
-Download all the `sui/rpc/v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto) in the same folder.
+Download all of the `sui/rpc/v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto) in the same folder.
 
-**Sample client.ts to get `events` and `effects` details of a particular transaction**
+#### Step 2: Edit `client.ts` to get `events` and `effects` details of a particular transaction
 
 ```ts
 import * as grpc from '@grpc/grpc-js';
@@ -365,38 +363,36 @@ client.GetTransaction(request, (err: any, response: any) => {
 });
 ```
 
-**Run the sample client**
+#### Step 3: Run the sample client
 
 ```shell
 npx tsx c
 ```
 
-:::info
+- `proto-loader` handles any nested `.proto` files. Just make sure paths and imports are correct.
 
-- `proto-loader` handles any nested `.proto` files - just make sure paths and imports are correct.
 - The example assumes that gRPC is available on port `443` which requires SSL.
-- Digest in the request is directly provided in the `Base58` format, but check if you need to decode from your source format.
 
-:::
+- Digest in the request is directly provided in the `Base58` format, but check if you need to decode from your source format.
 
 </TabItem>
 
 <TabItem value="golang" label="Golang">
 
-This is an example to build a golang client for Sui gRPC API. Feel free to use another set of tools or modules that you’re comfortable with.
+This is an example to build a golang client for Sui gRPC API. 
 
-**Install dependencies**
+#### Step 1: 
 
 First make sure you have `go` and `protoc` installed in your environment, and then install:
 
 ```shell
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-```
-```shell
 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 ```
 
-In your `go.mod`, add the following (make sure to update the version numbers to the latest versions):
+#### Step 2: Edit `go.mod` 
+
+Add the following content, making sure to update the version numbers to the latest versions:
 
 ```
 require (
@@ -405,7 +401,7 @@ require (
 )
 ```
 
-**Generate Golang code from proto files**
+#### Step 3: Generate Golang code from proto files
 
 Assuming you have the `v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), run:
 
@@ -413,7 +409,7 @@ Assuming you have the `v2` proto files from [Github](https://github.com/MystenLa
 protoc --proto_path=./protos --go_out=. --go-grpc_out=. protos/sui/rpc/v2/ledger_service.proto
 ```
 
-**Sample main.go to get `events` and `effects` details of a particular transaction**
+#### Step 4 Edit `main.go` to get `events` and `effects` details of a particular transaction
 
 ```go
 package main
@@ -467,7 +463,7 @@ func main() {
 }
 ```
 
-**Run the sample client**
+#### Step 5: Run the sample client
 
 If your `go.mod` is properly set up, and you've already generated the gRPC code (`*.pb.go`, `*_grpc.pb.go`), simply run:
 
@@ -475,26 +471,24 @@ If your `go.mod` is properly set up, and you've already generated the gRPC code 
 go run main.go
 ```
 
-:::info
+If you see errors like `cannot find package`, ensure you've generated the proto files and imported them correctly. If your generated files are in a nested directory like `sui/rpc/v2`, your import in `main.go` should match:
 
-- If you see errors like `cannot find package`, ensure you’ve generated the proto files and imported them correctly.
-- If your generated files are in a nested directory like `sui/rpc/v2`, your import in `main.go` should match:
 ```go
 import pb "your_project/sui/rpc/v2"
 ```
-You can replace `your_project` with a module name or relative import path depending on how your `go.mod` is defined.
-- The example assumes that gRPC is available on port `443` which requires SSL.
-- Digest in the request is directly provided in the `Base58` format, but check if you need to decode from your source format.
 
-:::
+You can replace `your_project` with a module name or relative import path depending on how your `go.mod` is defined.
+
+he example assumes that gRPC is available on port `443` which requires SSL. The digest in the request is directly provided in the `Base58` format, but check if you need to decode from your source format.
+
 
 </TabItem>
 
 <TabItem value="python" label="Python">
 
-This is an example to build a python client for Sui gRPC API. Feel free to use another set of tools or modules that you’re comfortable with. You can optionally refer to [pysui](https://github.com/FrankC01/pysui/) which is a community contributed SDK.
+This is an example to build a python client for Sui gRPC API. Optionally, refer to [`pysui`](https://github.com/FrankC01/pysui/), a community contributed SDK.
 
-**Install dependencies**
+#### Step 1: Install dependencies
 
 First make sure you have `python` and `protoc` installed in your environment, and then install:
 
@@ -502,7 +496,7 @@ First make sure you have `python` and `protoc` installed in your environment, an
 pip install grpcio grpcio-tools protobuf
 ```
 
-**Generate Python code from proto files**
+#### Step 2: Generate Python code from proto files
 
 Assuming you have the `v2` proto files from [Github](https://github.com/MystenLabs/sui-apis/tree/main/proto), run:
 
@@ -510,7 +504,7 @@ Assuming you have the `v2` proto files from [Github](https://github.com/MystenLa
 python -m grpc_tools.protoc -I./protos --python_out=. --grpc_python_out=. ./protos/sui/rpc/v2/ledger_service.proto
 ```
 
-**Sample client.py to get `events` and `effects` details of a particular transaction**
+#### Step 3: Edit `client.py` to get `events` and `effects` details of a particular transaction
 
 ```python
 import grpc
@@ -540,20 +534,15 @@ if __name__ == "__main__":
     main()
 ```
 
-**Run the sample client**
+#### Step 4: Run the sample client
 
 ```shell
 python client.py
 ```
 
-:::info
+The import paths like `sui.rpc.v2.ledger_service_pb2` depend on your proto structure. You might need to adjust `__init__.py` files or `$PYTHONPATH` to ensure proper module resolution.
 
-- The import paths like `sui.rpc.v2.ledger_service_pb2` depend on your proto structure.
-- You might need to adjust `__init__.py` files or PYTHONPATH to ensure proper module resolution.
-- The example assumes that gRPC is available on port `443` which requires SSL.
-- Digest in the request is directly provided in the `Base58` format, but check if you need to decode from your source format.
-
-:::
+The example assumes that gRPC is available on port `443` which requires SSL. Digest in the request is directly provided in the `Base58` format, but check if you need to decode from your source format.
 
 </TabItem>
 
@@ -561,27 +550,37 @@ python client.py
 
 ### Best practices
 
-- Always use [field masks](#field-masks) when applicable to reduce response size and latency, especially for large resources.
-- Use `TLS (port 443)` for production traffic to ensure encrypted transport and prevent downgrade attacks.
-- Use [streaming subscriptions](#subscriptions-for-streaming-data) for real-time use cases instead of polling repeatedly.
-- Generate client code from the official `.proto` definitions in [sui-apis](https://github.com/MystenLabs/sui-apis/tree/main/proto) to ensure compatibility and type safety.
-- [Paginate](#pagination) carefully — always check `next_page_token` and do not assume all data is returned at once.
-- Retry transient failures with [exponential backoff](https://en.wikipedia.org/wiki/Exponential_backoff), especially for streaming APIs or busy public nodes.
-- Validate all input data, including encodings and message formats, to prevent hard-to-debug API rejections.
+1. Always use [field masks](#field-masks) when applicable to reduce response size and latency, especially for large resources.
+
+1. Use `TLS (port 443)` for production traffic to ensure encrypted transport and prevent downgrade attacks.
+
+1. Use [streaming subscriptions](#subscriptions-for-streaming-data) for real-time use cases instead of polling repeatedly.
+
+1. Generate client code from the official `.proto` definitions in [`sui-apis`](https://github.com/MystenLabs/sui-apis/tree/main/proto) to ensure compatibility and type safety.
+
+1. [Paginate](#pagination) carefully. Always check `next_page_token` and do not assume all data is returned at once.
+
+1. Retry transient failures with [exponential backoff](https://en.wikipedia.org/wiki/Exponential_backoff), especially for streaming APIs or busy public nodes.
+
+1. Validate all input data, including encodings and message formats, to prevent hard-to-debug API rejections.
 
 ### Frequently asked questions
 
-- Q: Can I use field masks in batch requests?
-  - A: Only the top-level `read_mask` field is respected in batch requests like `BatchGetObjects`. Any [field masks](#field-masks) within individual `GetObjectRequest` items are ignored.
+#### Can I use field masks in batch requests?
 
-- Q: Why does the API return fewer results than the requested `page_size`?
-  - A: Even if you request a specific `page_size`, the server might return fewer items. This could be due to full node specific limits, filtered results, or reaching the end of available data.
+- Only the top-level `read_mask` field is respected in batch requests like `BatchGetObjects`. Any [field masks](#field-masks) within individual `GetObjectRequest` items are ignored.
 
-- Q: Why do some fields say `optional` if they're required?
-  - A: In `proto3`, marking a field as `optional` gives the API the ability to detect [field presence](#field-presence) — that is, whether a field value is explicitly set or simply defaulted. This doesn't mean the field is optional in practice. You still need to follow the API contract to ensure the request is valid.
+#### Why does the API return fewer results than the requested `page_size`?
 
-- Q: Are all services and related data guaranteed to be available on all Full nodes?
-  - A: Full nodes may vary in which services and retention they support. Some services might not be supported yet or some APIs may return `NOT_FOUND` depending on the node's configuration and data availability.
+- Even if you request a specific `page_size`, the server might return fewer items. This could be due to full node specific limits, filtered results, or reaching the end of available data.
+
+#### Why do some fields say `optional` if they're required?
+
+- In `proto3`, marking a field as `optional` gives the API the ability to detect [field presence](#field-presence), that is, whether a field value is explicitly set or simply defaulted. This doesn't mean the field is optional in practice. You still need to follow the API contract to ensure the request is valid.
+
+#### Are all services and related data guaranteed to be available on all full nodes?
+
+- Full nodes might vary in which services and retention they support. Some services might not be supported yet or some APIs might return `NOT_FOUND` depending on the node's configuration and data availability.
 
 ## Full node operator configuration
 

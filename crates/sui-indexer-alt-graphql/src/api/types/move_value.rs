@@ -3,24 +3,31 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context as _, anyhow};
-use async_graphql::{Context, Name, Object, Value, dataloader::DataLoader, indexmap::IndexMap};
-use move_core_types::{annotated_value as A, annotated_visitor as AV};
-use sui_indexer_alt_reader::{displays::DisplayKey, pg_reader::PgReader};
-use sui_types::{
-    TypeTag,
-    display::DisplayVersionUpdatedEvent,
-    object::{option_visitor as OV, rpc_visitor as RV},
-};
+use anyhow::Context as _;
+use anyhow::anyhow;
+use async_graphql::Context;
+use async_graphql::Name;
+use async_graphql::Object;
+use async_graphql::Value;
+use async_graphql::dataloader::DataLoader;
+use async_graphql::indexmap::IndexMap;
+use move_core_types::annotated_value as A;
+use move_core_types::annotated_visitor as AV;
+use sui_indexer_alt_reader::displays::DisplayKey;
+use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_types::TypeTag;
+use sui_types::display::DisplayVersionUpdatedEvent;
+use sui_types::object::option_visitor as OV;
+use sui_types::object::rpc_visitor as RV;
 use tokio::join;
 
-use crate::{
-    api::scalars::{base64::Base64, json::Json},
-    config::Limits,
-    error::{RpcError, resource_exhausted},
-};
-
-use super::{display::Display, move_type::MoveType};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::json::Json;
+use crate::api::types::display::Display;
+use crate::api::types::move_type::MoveType;
+use crate::config::Limits;
+use crate::error::RpcError;
+use crate::error::resource_exhausted;
 
 #[derive(Clone)]
 pub(crate) struct MoveValue {

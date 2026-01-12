@@ -2,45 +2,50 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use async_graphql::{
-    Context, InputObject, Object, Union,
-    connection::{Connection, Edge},
-};
+use async_graphql::Context;
+use async_graphql::InputObject;
+use async_graphql::Object;
+use async_graphql::Union;
+use async_graphql::connection::Connection;
+use async_graphql::connection::Edge;
 use move_core_types::language_storage::StructTag;
-use sui_types::{
-    SUI_FRAMEWORK_ADDRESS, TypeTag,
-    dynamic_field::{
-        DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME, DynamicFieldInfo,
-        DynamicFieldType, derive_dynamic_field_id, visitor as DFV,
-    },
-};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::TypeTag;
+use sui_types::dynamic_field::DYNAMIC_FIELD_FIELD_STRUCT_NAME;
+use sui_types::dynamic_field::DYNAMIC_FIELD_MODULE_NAME;
+use sui_types::dynamic_field::DynamicFieldInfo;
+use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::dynamic_field::derive_dynamic_field_id;
+use sui_types::dynamic_field::visitor as DFV;
 use tokio::sync::OnceCell;
 
-use crate::{
-    api::scalars::{
-        base64::Base64,
-        big_int::BigInt,
-        id::Id,
-        owner_kind::OwnerKind,
-        sui_address::SuiAddress,
-        type_filter::{TypeFilter, TypeInput},
-        uint53::UInt53,
-    },
-    error::RpcError,
-    pagination::Page,
-    scope::Scope,
-};
-
-use super::{
-    balance::{self, Balance},
-    move_object::MoveObject,
-    move_type::MoveType,
-    move_value::MoveValue,
-    object::{self, CLive, CVersion, Object, VersionFilter},
-    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
-    owner::Owner,
-    transaction::{CTransaction, Transaction, filter::TransactionFilter},
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::owner_kind::OwnerKind;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeFilter;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::balance::Balance;
+use crate::api::types::balance::{self as balance};
+use crate::api::types::move_object::MoveObject;
+use crate::api::types::move_type::MoveType;
+use crate::api::types::move_value::MoveValue;
+use crate::api::types::object::CLive;
+use crate::api::types::object::CVersion;
+use crate::api::types::object::Object;
+use crate::api::types::object::VersionFilter;
+use crate::api::types::object::{self as object};
+use crate::api::types::object_filter::ObjectFilter;
+use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
+use crate::api::types::owner::Owner;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::scope::Scope;
 
 pub(crate) struct DynamicField {
     pub(crate) super_: MoveObject,

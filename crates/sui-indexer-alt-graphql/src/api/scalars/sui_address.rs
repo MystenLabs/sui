@@ -1,12 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt, str::FromStr};
+use std::fmt;
+use std::str::FromStr;
 
-use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
+use async_graphql::InputValueError;
+use async_graphql::InputValueResult;
+use async_graphql::Scalar;
+use async_graphql::ScalarType;
+use async_graphql::Value;
 use move_core_types::account_address::AccountAddress;
-use serde::{Deserialize, Serialize};
-use sui_types::base_types::{ObjectID, SuiAddress as NativeSuiAddress};
+use serde::Deserialize;
+use serde::Serialize;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
 const SUI_ADDRESS_LENGTH: usize = 32;
 
@@ -140,8 +147,9 @@ impl From<ObjectID> for SuiAddress {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use async_graphql::Value;
+
+    use super::*;
 
     const FULL_ADDRESS_STR: &str =
         "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

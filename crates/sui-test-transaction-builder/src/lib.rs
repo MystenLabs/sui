@@ -428,7 +428,7 @@ impl TestTransactionBuilder {
                     .ptb_builder
                     .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
                         reservation,
-                        type_arg.clone().into(),
+                        type_arg.clone(),
                     ))
                     .unwrap();
                 for (amount, recipient) in amounts_and_recipients {

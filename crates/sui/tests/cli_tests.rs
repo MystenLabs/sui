@@ -15,7 +15,8 @@ use fastcrypto::encoding::{Base64, Encoding};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use sui::client_commands::{
-    GasDataArgs, PaymentArgs, PublishArgs, TestPublishArgs, TxProcessingArgs,
+    EphemeralArgs, GasDataArgs, PaymentArgs, PublishArgs, TestPublishArgs, TxProcessingArgs,
+    UpgradeArgs,
 };
 use sui::client_ptb::ptb::PTB;
 use sui::sui_commands::RpcArgs;
@@ -266,7 +267,7 @@ upgrade-capability = "{}""#,
         let mut build_config = BuildConfig::new_for_testing().config;
         build_config.install_dir = None;
 
-        let resp = SuiClientCommands::Upgrade {
+        let resp = SuiClientCommands::Upgrade(UpgradeArgs {
             package_path: self.package_path(package_name),
             upgrade_capability: Some(upgrade_capability),
             build_config,
@@ -282,7 +283,7 @@ upgrade-capability = "{}""#,
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        }
+        })
         .execute(self.test_cluster.wallet_mut())
         .await?;
 
@@ -338,8 +339,11 @@ async fn test_publish_package(
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(pubfile_path),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(pubfile_path),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -646,8 +650,11 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -948,8 +955,11 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1256,8 +1266,11 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1425,8 +1438,11 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1549,8 +1565,11 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1693,8 +1712,11 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1837,8 +1859,11 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1983,8 +2008,11 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds()
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -2064,8 +2092,11 @@ async fn test_package_publish_command_with_unpublished_dependency_fails()
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -2076,56 +2107,6 @@ async fn test_package_publish_command_with_unpublished_dependency_fails()
         )
     "#]];
     expect.assert_debug_eq(&result);
-    Ok(())
-}
-
-#[sim_test]
-async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result<(), anyhow::Error>
-{
-    let with_unpublished_dependencies = true; // Value under test, incompatible with dependencies that specify non-zero address.
-
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let address = test_cluster.get_address_0();
-    let context = &mut test_cluster.wallet;
-
-    let client = context.get_client().await?;
-    let object_refs = client
-        .read_api()
-        .get_owned_objects(address, None, None, None)
-        .await?
-        .data;
-
-    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
-
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("module_publish_with_unpublished_dependency_with_non_zero_address");
-    let build_config = BuildConfig::new_for_testing().config;
-    let result = SuiClientCommands::TestPublish(TestPublishArgs {
-        publish_args: PublishArgs {
-            package_path,
-            build_config,
-            skip_dependency_verification: false,
-            verify_deps: true,
-            with_unpublished_dependencies,
-            payment: PaymentArgs {
-                gas: vec![gas_obj_id],
-            },
-            gas_data: GasDataArgs {
-                gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-                ..Default::default()
-            },
-            processing: TxProcessingArgs::default(),
-        },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
-    })
-    .execute(context)
-    .await;
-    let err = result.unwrap_err().to_string();
-
-    // errors due to tree shaking wanting to fetch the linkage table of this unpublished pkg
-    assert!(err.contains("Failed to fetch package UnpublishedNonZeroAddress"));
     Ok(())
 }
 
@@ -2176,8 +2157,11 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -2226,8 +2210,11 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -2235,7 +2222,7 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
     let expect = expect![[r#"
         Err(
             ModulePublishFailure {
-                error: "The `publish` subcommand should not be used with the `--test` flag\n\nCode in published packages must not depend on test code.\nIn order to fix this and publish the package without `--test`, remove any non-test dependencies on test-only code.\nYou can ensure all test-only dependencies have been removed by compiling the package normally with `sui move build`.",
+                error: "The `publish` or `upgrade` subcommand should not be used with the `--test` flag\n\nCode in published packages must not depend on test code.\nIn order to fix this and publish or upgrade the package without `--test`, remove any non-test dependencies on test-only code.\nYou can ensure all test-only dependencies have been removed by compiling the package normally with `sui move build`.",
             },
         )
     "#]];
@@ -2290,8 +2277,11 @@ async fn test_package_publish_empty() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -2374,7 +2364,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     assert_eq!(effects.gas_object().object_id(), gas_obj_id);
 
     // Now run the upgrade
-    let resp = SuiClientCommands::Upgrade {
+    let resp = SuiClientCommands::Upgrade(UpgradeArgs {
         package_path,
         upgrade_capability: None,
         build_config,
@@ -2390,7 +2380,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
             ..Default::default()
         },
         processing: TxProcessingArgs::default(),
-    }
+    })
     .execute(context)
     .await?;
 
@@ -2479,7 +2469,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     assert_eq!(effects.gas_object().object_id(), gas_obj_id);
 
     // Now run the upgrade
-    let upgrade_response = SuiClientCommands::Upgrade {
+    let upgrade_response = SuiClientCommands::Upgrade(UpgradeArgs {
         package_path: package_path.to_path_buf(),
         upgrade_capability: None,
         build_config: build_config.clone(),
@@ -2495,7 +2485,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
             ..Default::default()
         },
         processing: TxProcessingArgs::default(),
-    }
+    })
     .execute(context)
     .await?;
 
@@ -4776,8 +4766,11 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
             },
             processing: TxProcessingArgs::default(),
         },
-        build_env: Some("testnet".to_string()),
-        pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        ephemeral: EphemeralArgs {
+            build_env: Some("testnet".to_string()),
+            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
+        },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;

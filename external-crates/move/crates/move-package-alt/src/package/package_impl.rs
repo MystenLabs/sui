@@ -2,10 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    sync::{LazyLock, Mutex},
-};
+use std::collections::BTreeMap;
 
 use derive_where::derive_where;
 use sha2::{Digest as _, Sha256};
@@ -32,9 +29,6 @@ use crate::{
     schema::{Environment, OriginalID, PackageMetadata, PackageName, PublishedID},
 };
 use crate::{errors::FileHandle, package::package_loader::PackageConfig};
-
-// TODO: is this the right way to handle this?
-static DUMMY_ADDRESSES: LazyLock<Mutex<u16>> = LazyLock::new(|| Mutex::new(0x1000));
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
@@ -111,7 +105,6 @@ impl<F: MoveFlavor> Package<F> {
                 .as_ref()
                 .and_then(|legacy| legacy.publication::<F>(env))
         });
-        let dummy_addr = create_dummy_addr();
 
         // TODO: try to gather dependencies from the modern lockfile
         //   - if it fails (no lockfile / out of date lockfile), compute them from the manifest
@@ -131,6 +124,8 @@ impl<F: MoveFlavor> Package<F> {
 
         // compute the digest (TODO: this should only compute over the environment specific data)
         let digest = Self::compute_digest(&deps);
+
+        let dummy_addr = OriginalID::from(dep.unique_hash() as u16);
 
         let result = Self {
             env: env.name().clone(),
@@ -152,10 +147,10 @@ impl<F: MoveFlavor> Package<F> {
     }
 
     /// Create a copy of this package with the publication information replaced by `publish`
-    pub(crate) fn override_publish(&self, publish: Publication<F>) -> Self {
+    pub(crate) fn override_publish(&self, publish: Option<Publication<F>>) -> Self {
         let mut result = self.clone();
         debug!("updating address to {publish:?}");
-        result.publication = Some(publish);
+        result.publication = publish;
         result
     }
 
@@ -364,14 +359,6 @@ pub async fn cache_package<F: MoveFlavor>(
     })
 }
 
-/// Return a fresh OriginalID
-fn create_dummy_addr() -> OriginalID {
-    let lock = DUMMY_ADDRESSES.lock();
-    let mut dummy_addr = lock.unwrap();
-    *dummy_addr += 1;
-    (*dummy_addr).into()
-}
-
 /// Check that `env` is defined in `manifest`, returning an error if it isn't
 fn check_for_environment<F: MoveFlavor>(
     manifest: &Manifest,
@@ -497,6 +484,10 @@ mod tests {
         fn validate_manifest(_: &ParsedManifest) -> Result<(), String> {
             Ok(())
         }
+
+        fn is_system_address(_: &OriginalID) -> bool {
+            false
+        }
     }
 
     /// Loading a package includes the implicit dependencies, and the system dependencies are
@@ -616,5 +607,21 @@ mod tests {
         assert_eq!(published_at, PublishedID::from(2));
         assert_eq!(original_id, OriginalID::from(1));
         assert_eq!(chain_id, DEFAULT_ENV_ID);
+    }
+
+    #[test(tokio::test)]
+    async fn test_dummy_addr_determinism() {
+        let scenario = TestPackageGraph::new(["root", "a", "b"])
+            .add_deps([("root", "a"), ("root", "b")])
+            .build();
+
+        let first_load = scenario.root_package("root").await;
+        let first_load_addresses = first_load.package_info().named_addresses().unwrap();
+
+        drop(first_load);
+        let second_load = scenario.root_package("root").await;
+        let second_load_addresses = second_load.package_info().named_addresses().unwrap();
+
+        assert_eq!(first_load_addresses, second_load_addresses);
     }
 }

@@ -2582,7 +2582,6 @@ impl From<crate::transaction::FundsWithdrawalArg> for FundsWithdrawal {
         let mut message = Self::default();
 
         message.amount = match value.reservation {
-            crate::transaction::Reservation::EntireBalance => None,
             crate::transaction::Reservation::MaxAmountU64(amount) => Some(amount),
         };
         let crate::transaction::WithdrawalTypeArg::Balance(coin_type) = value.type_arg;

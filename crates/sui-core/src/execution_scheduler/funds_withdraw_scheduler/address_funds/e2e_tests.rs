@@ -92,8 +92,7 @@ impl TestEnv {
             .into_iter()
             .enumerate()
             .map(|(idx, amount)| {
-                let withdraw =
-                    FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag().into());
+                let withdraw = FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag());
                 let mut tx_builder = TestTransactionBuilder::new(
                     self.sender,
                     self.gas_object.compute_object_reference(),

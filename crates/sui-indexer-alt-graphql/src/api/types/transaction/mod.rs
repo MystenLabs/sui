@@ -1,53 +1,54 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{ops::Deref, sync::Arc};
+use std::ops::Deref;
+use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, connection::Connection, dataloader::DataLoader};
-use diesel::{QueryableByName, sql_types::BigInt};
-use fastcrypto::encoding::{Base58, Encoding};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use async_graphql::dataloader::DataLoader;
+use diesel::QueryableByName;
+use diesel::sql_types::BigInt;
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
-use sui_indexer_alt_reader::{
-    kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
-    pg_reader::PgReader,
-    tx_digests::TxDigestKey,
-};
+use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
+use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
-use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress,
-    digests::TransactionDigest,
-    transaction::{TransactionDataAPI, TransactionExpiration},
-};
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::digests::TransactionDigest;
+use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::TransactionExpiration;
 
-use crate::{
-    api::{
-        scalars::{
-            base64::Base64, cursor::JsonCursor, digest::Digest, fq_name_filter::FqNameFilter,
-            id::Id, sui_address::SuiAddress,
-        },
-        types::{
-            available_range::AvailableRangeKey,
-            lookups::{CheckpointBounds, TxBoundsCursor},
-            transaction::filter::TransactionKindInput,
-        },
-    },
-    error::RpcError,
-    pagination::Page,
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
-use super::{
-    address::Address,
-    epoch::Epoch,
-    gas_input::GasInput,
-    transaction::filter::TransactionFilter,
-    transaction_effects::{EffectsContents, TransactionEffects},
-    transaction_kind::TransactionKind,
-    user_signature::UserSignature,
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::digest::Digest;
+use crate::api::scalars::fq_name_filter::FqNameFilter;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::json::Json;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::types::address::Address;
+use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::epoch::Epoch;
+use crate::api::types::gas_input::GasInput;
+use crate::api::types::lookups::CheckpointBounds;
+use crate::api::types::lookups::TxBoundsCursor;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction::filter::TransactionKindInput;
+use crate::api::types::transaction_effects::EffectsContents;
+use crate::api::types::transaction_effects::TransactionEffects;
+use crate::api::types::transaction_kind::TransactionKind;
+use crate::api::types::user_signature::UserSignature;
+use crate::error::RpcError;
+use crate::extensions::query_limits;
+use crate::pagination::Page;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
 
@@ -175,6 +176,24 @@ impl TransactionContents {
             };
 
             Ok(Some(Base64(content.raw_transaction()?)))
+        }
+        .await
+        .transpose()
+    }
+
+    /// The transaction as a JSON blob, matching the gRPC proto format (excluding BCS).
+    async fn transaction_json(&self) -> Option<Result<Json, RpcError>> {
+        async {
+            let Some(content) = &self.contents else {
+                return Ok(None);
+            };
+
+            let mut proto_transaction = content.proto_transaction()?;
+            // Clear the bcs field as transactionJson is intended to provide a full structured output
+            proto_transaction.bcs = None;
+            let json_value = serde_json::to_value(&proto_transaction)
+                .context("Failed to serialize transaction to JSON")?;
+            Ok(Some(json_value.try_into()?))
         }
         .await
         .transpose()
@@ -492,6 +511,7 @@ async fn tx_sequence_numbers(
     mut query: Query<'_>,
     page: &Page<CTransaction>,
 ) -> Result<Vec<u64>, RpcError> {
+    query_limits::rich::debit(ctx)?;
     let pg_reader: &PgReader = ctx.data()?;
 
     query += query!(
@@ -546,6 +566,7 @@ async fn tx_unfiltered(
     mut query: Query<'_>,
     page: &Page<CTransaction>,
 ) -> Result<Vec<u64>, RpcError> {
+    query_limits::rich::debit(ctx)?;
     let pg_reader: &PgReader = ctx.data()?;
 
     query += query!(

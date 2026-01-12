@@ -5,14 +5,15 @@ use std::sync::Arc;
 
 use sui_futures::service::Service;
 use tokio::time::interval;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
-use crate::{
-    metrics::IndexerMetrics,
-    store::{Connection, Store},
-};
-
-use super::{Handler, PrunerConfig};
+use crate::metrics::IndexerMetrics;
+use crate::pipeline::concurrent::Handler;
+use crate::pipeline::concurrent::PrunerConfig;
+use crate::store::Connection;
+use crate::store::Store;
 
 /// The reader watermark task is responsible for updating the `reader_lo` and `pruner_timestamp`
 /// values for a pipeline's row in the watermark table, based on the pruner configuration, and the
@@ -100,17 +101,17 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use async_trait::async_trait;
     use std::sync::Arc;
+
+    use async_trait::async_trait;
     use sui_pg_db::FieldCount;
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::time::Duration;
 
-    use crate::{
-        metrics::IndexerMetrics,
-        mocks::store::*,
-        pipeline::{Processor, concurrent::BatchStatus},
-    };
+    use crate::metrics::IndexerMetrics;
+    use crate::mocks::store::*;
+    use crate::pipeline::Processor;
+    use crate::pipeline::concurrent::BatchStatus;
 
     use super::*;
 

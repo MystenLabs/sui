@@ -23,10 +23,6 @@ storage
 
 # Move-related files
 Move.lock
-!crates/sui-framework/packages/move-stdlib/Move.lock
-!crates/sui-framework/packages/sui-framework/Move.lock
-!crates/sui-framework/packages/sui-system/Move.lock
-!crates/sui-framework/packages/deepbook/Move.lock
 .trace
 .coverage_map.mvcov
 

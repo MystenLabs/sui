@@ -251,9 +251,11 @@ impl NetworkClient for TonicClient {
             .await
             .map_err(|e| {
                 if e.code() == tonic::Code::DeadlineExceeded {
-                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks failed: {e:?}"))
+                    ConsensusError::NetworkRequestTimeout(format!(
+                        "fetch_latest_blocks failed: {e:?}"
+                    ))
                 } else {
-                    ConsensusError::NetworkRequest(format!("fetch_blocks failed: {e:?}"))
+                    ConsensusError::NetworkRequest(format!("fetch_latest_blocks failed: {e:?}"))
                 }
             })?
             .into_inner();

@@ -2,18 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context;
-use diesel::{
-    FromSqlRow, backend::Backend, deserialize, expression::AsExpression, prelude::*, serialize,
-    sql_types::SmallInt,
-};
-
+use diesel::FromSqlRow;
+use diesel::backend::Backend;
+use diesel::deserialize;
+use diesel::expression::AsExpression;
+use diesel::prelude::*;
+use diesel::serialize;
+use diesel::sql_types::SmallInt;
 use sui_field_count::FieldCount;
-use sui_types::object::{Object, Owner};
+use sui_types::object::Object;
+use sui_types::object::Owner;
 
-use crate::schema::{
-    coin_balance_buckets, coin_balance_buckets_deletion_reference, kv_objects, obj_info,
-    obj_info_deletion_reference, obj_versions,
-};
+use crate::schema::coin_balance_buckets;
+use crate::schema::coin_balance_buckets_deletion_reference;
+use crate::schema::kv_objects;
+use crate::schema::obj_info;
+use crate::schema::obj_info_deletion_reference;
+use crate::schema::obj_versions;
 
 #[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]

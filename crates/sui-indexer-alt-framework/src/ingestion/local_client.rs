@@ -5,9 +5,10 @@ use async_trait::async_trait;
 use axum::body::Bytes;
 use std::path::PathBuf;
 
-use crate::ingestion::ingestion_client::{
-    FetchData, FetchError, FetchResult, IngestionClientTrait,
-};
+use crate::ingestion::ingestion_client::FetchData;
+use crate::ingestion::ingestion_client::FetchError;
+use crate::ingestion::ingestion_client::FetchResult;
+use crate::ingestion::ingestion_client::IngestionClientTrait;
 
 // FIXME: To productionize this, we need to add garbage collection to remove old checkpoint files.
 
@@ -44,7 +45,8 @@ pub(crate) mod tests {
     use crate::ingestion::ingestion_client::IngestionClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_ingestion_metrics;
-    use sui_storage::blob::{Blob, BlobEncoding};
+    use sui_storage::blob::Blob;
+    use sui_storage::blob::BlobEncoding;
 
     #[tokio::test]
     async fn local_test_fetch() {

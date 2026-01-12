@@ -115,7 +115,7 @@ Response: {
       }
     },
     "epoch1AtCheckpoint2": {
-      "totalTransactions": null,
+      "totalTransactions": 3,
       "transactions": {
         "edges": [
           {

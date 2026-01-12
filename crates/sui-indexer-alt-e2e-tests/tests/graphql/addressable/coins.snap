@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 12 tasks
+processed 13 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -62,7 +62,7 @@ task 9, line 50:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 10, lines 52-146:
+task 10, lines 52-109:
 //# run-graphql
 Response: {
   "data": {
@@ -358,7 +358,14 @@ Response: {
           }
         ]
       }
-    },
+    }
+  }
+}
+
+task 11, lines 111-161:
+//# run-graphql
+Response: {
+  "data": {
     "accountB": {
       "allObjects": {
         "pageInfo": {
@@ -514,7 +521,7 @@ Response: {
   }
 }
 
-task 11, lines 148-175:
+task 12, lines 163-190:
 //# run-graphql
 Response: {
   "data": {

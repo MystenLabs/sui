@@ -3,28 +3,31 @@
 
 use std::sync::Arc;
 
-use async_graphql::{Context, Object, SimpleObject, connection::Connection};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::SimpleObject;
+use async_graphql::connection::Connection;
 use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorV1;
 
-use crate::{
-    api::{
-        scalars::{
-            base64::Base64, big_int::BigInt, cursor::JsonCursor, sui_address::SuiAddress,
-            type_filter::TypeInput, uint53::UInt53,
-        },
-        types::{
-            address::Address,
-            balance,
-            balance::Balance,
-            move_object::MoveObject,
-            object::{CLive, Error},
-            object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
-            validator_set::ValidatorSetContents,
-        },
-    },
-    error::{RpcError, upcast},
-    pagination::{Page, PaginationConfig},
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address::Address;
+use crate::api::types::balance;
+use crate::api::types::balance::Balance;
+use crate::api::types::move_object::MoveObject;
+use crate::api::types::object::CLive;
+use crate::api::types::object::Error;
+use crate::api::types::object_filter::ObjectFilter;
+use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
+use crate::api::types::validator_set::ValidatorSetContents;
+use crate::error::RpcError;
+use crate::error::upcast;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Validator {

@@ -3,17 +3,18 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result, bail};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::bail;
 use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    pipeline::Processor,
-    postgres::{Connection, handler::Handler},
-    types::full_checkpoint_content::Checkpoint,
-};
-use sui_indexer_alt_schema::{
-    checkpoints::StoredGenesis, epochs::StoredFeatureFlag, schema::kv_feature_flags,
-};
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::handler::Handler;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_schema::checkpoints::StoredGenesis;
+use sui_indexer_alt_schema::epochs::StoredFeatureFlag;
+use sui_indexer_alt_schema::schema::kv_feature_flags;
 use sui_protocol_config::ProtocolConfig;
 
 pub(crate) struct KvFeatureFlags(pub(crate) StoredGenesis);
@@ -73,9 +74,8 @@ impl Handler for KvFeatureFlags {
 
 #[cfg(test)]
 mod tests {
-    use sui_indexer_alt_framework::types::test_checkpoint_data_builder::{
-        AdvanceEpochConfig, TestCheckpointBuilder,
-    };
+    use sui_indexer_alt_framework::types::test_checkpoint_data_builder::AdvanceEpochConfig;
+    use sui_indexer_alt_framework::types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use sui_protocol_config::ProtocolVersion;
 
     use super::*;

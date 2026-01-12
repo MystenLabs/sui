@@ -131,7 +131,6 @@
  "use"
  "public"
  "package"
- "spec"
  "module"
  "abort"
  "const"

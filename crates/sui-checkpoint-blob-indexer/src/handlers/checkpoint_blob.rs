@@ -1,16 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
+use std::sync::LazyLock;
 
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::BufMut;
+use bytes::Bytes;
+use bytes::BytesMut;
 use object_store::path::Path as ObjectPath;
 use prost::Message;
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::concurrent::BatchStatus;
 use sui_indexer_alt_framework::pipeline::concurrent::Handler;
-use sui_indexer_alt_framework::pipeline::{Processor, concurrent::BatchStatus};
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_object_store::ObjectStore;
-use sui_rpc::field::{FieldMask, FieldMaskUtil};
+use sui_rpc::field::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::merge::Merge;
 use sui_rpc::proto::sui::rpc;
 use sui_types::full_checkpoint_content::Checkpoint;

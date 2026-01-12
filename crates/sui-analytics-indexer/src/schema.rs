@@ -13,7 +13,9 @@ use std::sync::Arc;
 use sui_types::dynamic_field::DynamicFieldType;
 use thiserror::Error;
 
-use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
+use crate::tables::InputObjectKind;
+use crate::tables::ObjectStatus;
+use crate::tables::OwnerType;
 
 /// Error type for column access operations.
 #[derive(Debug, Error)]

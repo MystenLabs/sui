@@ -10,8 +10,9 @@ use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use super::{get_move_struct, parse_struct};
 use crate::Row;
+use crate::handlers::tables::get_move_struct;
+use crate::handlers::tables::parse_struct;
 use crate::package_store::PackageCache;
 use crate::pipeline::Pipeline;
 use crate::tables::WrappedObjectRow;

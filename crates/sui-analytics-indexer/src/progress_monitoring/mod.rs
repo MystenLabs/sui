@@ -7,15 +7,16 @@
 //! of data through analytics pipelines, including checking checkpoints in
 //! external stores like Snowflake.
 
-mod snowflake;
-
 use std::fs;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use anyhow::anyhow;
 use tracing::info;
 
 use crate::config::IndexerConfig;
 use crate::metrics::Metrics;
+
+mod snowflake;
 
 pub use snowflake::SnowflakeMaxCheckpointReader;
 

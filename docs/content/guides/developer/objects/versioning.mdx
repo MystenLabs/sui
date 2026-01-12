@@ -120,19 +120,19 @@ The `I` version before wrapping is less than the `I` version after unwrapping.
 
 ### Dynamic fields
 
-From a versioning perspective, values held in [dynamic fields](/concepts/dynamic-fields.mdx) behave like [wrapped](/guides/developer/objects/object-ownership/wrapped.mdx) objects. They are only accessible through the field's parent object, not as direct transaction inputs. You do not need to supply their IDs or versions with the transaction inputs. 
+From a versioning perspective, values held in [dynamic fields](/guides/developer/objects/dynamic-fields.mdx) behave like [wrapped](/guides/developer/objects/object-ownership/wrapped.mdx) objects. They are only accessible through the field's parent object, not as direct transaction inputs. You do not need to supply their IDs or versions with the transaction inputs. 
 
 Lamport timestamp-based versioning makes sure that when a field contains an object and a transaction removes that field, its value becomes accessible by its ID and the value's version has been incremented to a previously unused version.
 
 :::info
 
-A distinction between [dynamic fields](/concepts/dynamic-fields.mdx) and [wrapped](/guides/developer/objects/object-ownership/wrapped.mdx) objects is that if a transaction modifies a dynamic object field, its version is incremented in that transaction, where a wrapped object's version would not be.
+A distinction between [dynamic fields](/guides/developer/objects/dynamic-fields.mdx) and [wrapped](/guides/developer/objects/object-ownership/wrapped.mdx) objects is that if a transaction modifies a dynamic object field, its version is incremented in that transaction, where a wrapped object's version would not be.
 
 :::
 
 Adding a new dynamic field to a parent object also creates a `Field` object, responsible for associating the field name and value with that parent. Unlike other newly created objects, the ID for the resulting instance of `Field` is not created using `sui::object::new`. Instead, it is computed as a hash of the parent object ID and the type and value of the field name, so that you can use it to look up the `Field` through its parent and name.
 
-When you remove a field, Sui deletes its associated `Field`, and if you add a new field with the same name, Sui creates a new instance with the same ID. Versioning using Lamport timestamps coupled with [dynamic fields](/concepts/dynamic-fields.mdx) being only accessible through their parent object ensures that (`ID`, `version`) pairs are not reused in the process.
+When you remove a field, Sui deletes its associated `Field`, and if you add a new field with the same name, Sui creates a new instance with the same ID. Versioning using Lamport timestamps coupled with [dynamic fields](/guides/developer/objects/dynamic-fields.mdx) being only accessible through their parent object ensures that (`ID`, `version`) pairs are not reused in the process.
 
 The transaction that deletes the original field increments the parent's version to be greater than the deleted field's version. The transaction that creates the new version of the same field creates the field with a version that is greater than the parent's version.
 

@@ -61,9 +61,9 @@ dependencies = [
 
 [[package]]
 name = "aes-gcm"
-version = "0.10.1"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82e1366e0c69c9f927b1fa5ce2c7bf9eafc8f9268c0b9800729e8b267612447c"
+checksum = "831010a0f742e1209b3bcea8fab6a8e149051ba6099432c8cb2cc117dec3ead1"
 dependencies = [
  "aead",
  "aes",
@@ -2706,19 +2706,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bigdecimal"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51d712318a27c7150326677b321a5fa91b55f6d9034ffd67f20319e147d40cee"
-dependencies = [
- "autocfg",
- "libm",
- "num-bigint 0.4.4",
- "num-integer",
- "num-traits",
-]
-
-[[package]]
 name = "bimap"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4955,12 +4942,6 @@ name = "doc-comment"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
-
-[[package]]
-name = "dotenvy"
-version = "0.15.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "downcast"
@@ -14754,40 +14735,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-deepbook-indexer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum 0.8.3",
- "backoff",
- "bcs",
- "bigdecimal",
- "clap",
- "diesel",
- "diesel-async",
- "futures",
- "hex-literal 0.3.4",
- "mysten-metrics",
- "prometheus",
- "serde",
- "serde_json",
- "serde_yaml 0.8.26",
- "sui-config",
- "sui-data-ingestion-core",
- "sui-indexer-builder",
- "sui-json-rpc-types",
- "sui-sdk",
- "sui-types",
- "tap",
- "telemetry-subscribers",
- "tempfile",
- "tokio",
- "tower-http",
- "tracing",
-]
-
-[[package]]
 name = "sui-default-config"
 version = "1.64.0"
 dependencies = [
@@ -15800,11 +15747,15 @@ dependencies = [
  "clap",
  "gcp_auth",
  "http 1.3.1",
+ "humantime",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
  "serde",
  "sui-data-ingestion-core",
+ "sui-indexer-alt-framework",
+ "sui-indexer-alt-framework-store-traits",
+ "sui-indexer-alt-metrics",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -16386,6 +16337,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-config",
+ "mysten-common",
  "schemars 0.8.21",
  "serde",
  "serde-env",
@@ -17455,45 +17407,6 @@ dependencies = [
  "move-vm-config",
  "sui-protocol-config",
  "sui-types",
-]
-
-[[package]]
-name = "suins-indexer"
-version = "1.64.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "backoff",
- "base64-url",
- "bcs",
- "bytes",
- "diesel",
- "diesel-async",
- "dotenvy",
- "futures",
- "futures-util",
- "move-core-types",
- "mysten-metrics",
- "mysten-service",
- "object_store",
- "prometheus",
- "rand 0.8.5",
- "rustls 0.23.25",
- "serde",
- "serde_json",
- "serde_yaml 0.8.26",
- "sui-data-ingestion-core",
- "sui-name-service",
- "sui-storage",
- "sui-types",
- "telemetry-subscribers",
- "tempfile",
- "tokio",
- "tokio-postgres",
- "tokio-postgres-rustls",
- "tracing",
- "url",
- "webpki-roots 0.26.3",
 ]
 
 [[package]]

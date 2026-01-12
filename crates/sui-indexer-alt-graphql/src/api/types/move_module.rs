@@ -3,29 +3,33 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context as _, anyhow};
-use async_graphql::{
-    Context, Enum, Object,
-    connection::{Connection, CursorType, Edge},
-};
+use anyhow::Context as _;
+use anyhow::anyhow;
+use async_graphql::Context;
+use async_graphql::Enum;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
 use move_binary_format::file_format::Visibility;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
 use sui_package_resolver::Module as ParsedModule;
-use tokio::{join, sync::OnceCell};
+use tokio::join;
+use tokio::sync::OnceCell;
 
-use crate::{
-    api::scalars::{base64::Base64, cursor::JsonCursor},
-    config::Limits,
-    error::{RpcError, resource_exhausted},
-    pagination::{Page, PaginationConfig},
-};
-
-use super::{
-    move_datatype::{MoveDatatype, MoveEnum, MoveStruct},
-    move_function::MoveFunction,
-    move_package::MovePackage,
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::types::move_datatype::MoveDatatype;
+use crate::api::types::move_datatype::MoveEnum;
+use crate::api::types::move_datatype::MoveStruct;
+use crate::api::types::move_function::MoveFunction;
+use crate::api::types::move_package::MovePackage;
+use crate::config::Limits;
+use crate::error::RpcError;
+use crate::error::resource_exhausted;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
 
 #[derive(Clone)]
 pub(crate) struct MoveModule {

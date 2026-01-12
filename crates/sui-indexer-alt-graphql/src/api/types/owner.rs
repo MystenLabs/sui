@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{SimpleObject, Union};
+use async_graphql::SimpleObject;
+use async_graphql::Union;
 use sui_types::object::Owner as NativeOwner;
 
-use crate::{api::scalars::uint53::UInt53, scope::Scope};
-
-use super::address::Address;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address::Address;
+use crate::scope::Scope;
 
 /// The object's owner kind.
 #[derive(Union, Clone)]

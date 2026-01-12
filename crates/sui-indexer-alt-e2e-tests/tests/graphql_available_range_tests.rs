@@ -7,22 +7,31 @@ use std::time::Duration;
 use insta::assert_json_snapshot;
 use move_core_types::ident_str;
 use reqwest::Client;
-use serde_json::{Value, json};
+use serde_json::Value;
+use serde_json::json;
 use simulacrum::Simulacrum;
-
-use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
-use sui_indexer_alt_e2e_tests::{FullCluster, OffchainClusterConfig, find::address_owned};
-use sui_indexer_alt_graphql::config::{RpcConfig as GraphQlConfig, WatermarkConfig};
+use sui_indexer_alt::config::ConcurrentLayer;
+use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt::config::PipelineLayer;
+use sui_indexer_alt::config::PrunerLayer;
+use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_graphql::config::WatermarkConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    crypto::{Signature, Signer, get_account_key_pair},
-    digests::TransactionDigest,
-    effects::TransactionEffectsAPI,
-    object::Owner,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{Transaction, TransactionData},
-};
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::Signature;
+use sui_types::crypto::Signer;
+use sui_types::crypto::get_account_key_pair;
+use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+
+use sui_indexer_alt_e2e_tests::FullCluster;
+use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
+use sui_indexer_alt_e2e_tests::find::address_owned;
 
 /// 5 SUI gas budget
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;

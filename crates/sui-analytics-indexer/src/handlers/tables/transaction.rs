@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -12,7 +13,9 @@ use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::CheckpointContents;
-use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
+use sui_types::transaction::Command;
+use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::TransactionKind;
 use tracing::error;
 
 use crate::Row;

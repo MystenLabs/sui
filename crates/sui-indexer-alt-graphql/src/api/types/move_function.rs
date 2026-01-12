@@ -4,17 +4,18 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, SimpleObject};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::SimpleObject;
 use sui_package_resolver::FunctionDef;
 use tokio::sync::OnceCell;
 
+use crate::api::types::move_module::MoveModule;
+use crate::api::types::move_module::MoveVisibility;
+use crate::api::types::move_type::MoveAbility;
+use crate::api::types::move_type::abilities;
+use crate::api::types::open_move_type::OpenMoveType;
 use crate::error::RpcError;
-
-use super::{
-    move_module::{MoveModule, MoveVisibility},
-    move_type::{MoveAbility, abilities},
-    open_move_type::OpenMoveType,
-};
 
 pub(crate) struct MoveFunction {
     /// The module that this function is defined in.

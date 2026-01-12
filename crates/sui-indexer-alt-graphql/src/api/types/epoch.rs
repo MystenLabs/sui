@@ -4,49 +4,60 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, connection::Connection, dataloader::DataLoader};
-use fastcrypto::encoding::{Base58, Encoding};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use async_graphql::dataloader::DataLoader;
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
+use futures::future::OptionFuture;
+use futures::join;
 use futures::try_join;
 use sui_indexer_alt_reader::cp_sequence_numbers::CpSequenceNumberKey;
-use sui_indexer_alt_reader::{
-    epochs::{CheckpointBoundedEpochStartKey, EpochEndKey, EpochStartKey},
-    pg_reader::PgReader,
-};
+use sui_indexer_alt_reader::epochs::CheckpointBoundedEpochStartKey;
+use sui_indexer_alt_reader::epochs::EpochEndKey;
+use sui_indexer_alt_reader::epochs::EpochStartKey;
+use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;
-use sui_indexer_alt_schema::epochs::{StoredEpochEnd, StoredEpochStart};
+use sui_indexer_alt_schema::epochs::StoredEpochEnd;
+use sui_indexer_alt_schema::epochs::StoredEpochStart;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::messages_checkpoint::CheckpointCommitment;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::OnceCell;
 
+use crate::api::scalars::big_int::BigInt;
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::date_time::DateTime;
 use crate::api::scalars::id::Id;
-use crate::{
-    api::scalars::{big_int::BigInt, date_time::DateTime, uint53::UInt53},
-    api::types::safe_mode::{SafeMode, from_system_state},
-    api::types::stake_subsidy::{StakeSubsidy, from_stake_subsidy_v1},
-    api::types::storage_fund::StorageFund,
-    api::types::system_parameters::{
-        SystemParameters, from_system_parameters_v1, from_system_parameters_v2,
-    },
-    api::types::validator_set::ValidatorSet,
-    error::RpcError,
-    error::upcast,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
-
-use super::{
-    checkpoint::{CCheckpoint, Checkpoint, filter::CheckpointFilter},
-    move_package::{CSysPackage, MovePackage},
-    object::Object,
-    protocol_configs::ProtocolConfigs,
-    transaction::{
-        CTransaction, Transaction,
-        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
-    },
-};
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::checkpoint::CCheckpoint;
+use crate::api::types::checkpoint::Checkpoint;
+use crate::api::types::checkpoint::filter::CheckpointFilter;
+use crate::api::types::move_package::CSysPackage;
+use crate::api::types::move_package::MovePackage;
+use crate::api::types::object::Object;
+use crate::api::types::protocol_configs::ProtocolConfigs;
+use crate::api::types::safe_mode::SafeMode;
+use crate::api::types::safe_mode::from_system_state;
+use crate::api::types::stake_subsidy::StakeSubsidy;
+use crate::api::types::stake_subsidy::from_stake_subsidy_v1;
+use crate::api::types::storage_fund::StorageFund;
+use crate::api::types::system_parameters::SystemParameters;
+use crate::api::types::system_parameters::from_system_parameters_v1;
+use crate::api::types::system_parameters::from_system_parameters_v2;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
+use crate::api::types::validator_set::ValidatorSet;
+use crate::error::RpcError;
+use crate::error::upcast;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 pub(crate) type CEpoch = JsonCursor<usize>;
 
@@ -55,7 +66,16 @@ pub(crate) struct Epoch {
     scope: Scope,
     start: OnceCell<Option<StoredEpochStart>>,
     end: OnceCell<Option<StoredEpochEnd>>,
-    cp_sequence_numbers: OnceCell<Option<StoredCpSequenceNumbers>>,
+    sequence_numbers: OnceCell<SequenceNumbers>,
+}
+
+#[derive(Default)]
+struct SequenceNumbers {
+    /// Sequence numbers (transaction and checkpoint) at the start of this epoch.
+    start: Option<StoredCpSequenceNumbers>,
+    /// Sequence numbers for the checkpoint after `checkpoint_viewed_at`. Used to determine
+    /// the transaction count for in-progress epochs when the epoch hasn't ended yet.
+    next: Option<StoredCpSequenceNumbers>,
 }
 
 /// Activity on Sui is partitioned in time, into epochs.
@@ -307,19 +327,34 @@ impl Epoch {
         .transpose()
     }
 
-    /// The total number of transaction blocks in this epoch (or `null` if the epoch has not finished yet).
+    /// The total number of transaction blocks in this epoch.
+    ///
+    /// If the epoch has not finished yet, this number is computed based on the number of transactions at the latest known checkpoint.
     async fn total_transactions(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
         async {
-            let (Some(cp_sequence_numbers), Some(end)) =
-                try_join!(self.cp_sequence_numbers(ctx), self.end(ctx))?
-            else {
+            let watermarks: &Arc<Watermarks> = ctx.data()?;
+            let (sequence_numbers, end) = try_join!(self.sequence_numbers(ctx), self.end(ctx))?;
+
+            let Some(start) = &sequence_numbers.start else {
                 return Ok(None);
             };
 
-            let lo = cp_sequence_numbers.tx_lo as u64;
-            let hi = end.tx_hi as u64;
+            let lo = start.tx_lo as u64;
+            let hi = if let Some(end) = end {
+                // If the epoch has already ended as of the latest checkpoint, its end record
+                // stores its transaction high watermark.
+                end.tx_hi as u64
+            } else if let Some(next) = &sequence_numbers.next {
+                // Otherwise, we have attempted to fetch the transaction low watermark of the
+                // checkpoint *after* the one being viewed at.
+                next.tx_lo as u64
+            } else {
+                // If all else fails, assume that the checkpoint being viewed at is the latest one
+                // known to the service, and use its global transaction high watermark.
+                watermarks.high_watermark().transaction()
+            };
 
-            Ok(Some(UInt53::from(hi - lo)))
+            Ok(Some(UInt53::from(hi.saturating_sub(lo))))
         }
         .await
         .transpose()
@@ -505,7 +540,7 @@ impl Epoch {
             scope,
             start: OnceCell::new(),
             end: OnceCell::new(),
-            cp_sequence_numbers: OnceCell::new(),
+            sequence_numbers: OnceCell::new(),
         }
     }
 
@@ -546,7 +581,7 @@ impl Epoch {
             scope: scope.clone(),
             start: OnceCell::from(Some(start)),
             end: OnceCell::new(),
-            cp_sequence_numbers: OnceCell::new(),
+            sequence_numbers: OnceCell::new(),
         }))
     }
 
@@ -622,24 +657,30 @@ impl Epoch {
             .await
     }
 
-    async fn cp_sequence_numbers(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<&Option<StoredCpSequenceNumbers>, RpcError> {
-        let Some(start) = self.start(ctx).await? else {
-            return Ok(&None);
-        };
-
-        self.cp_sequence_numbers
+    async fn sequence_numbers(&self, ctx: &Context<'_>) -> Result<&SequenceNumbers, RpcError> {
+        self.sequence_numbers
             .get_or_try_init(async || {
+                let Some(start) = self.start(ctx).await? else {
+                    return Ok(SequenceNumbers::default());
+                };
+
                 let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
-                let stored = pg_loader
-                    .load_one(CpSequenceNumberKey(start.cp_lo as u64))
-                    .await
-                    .context("Failed to fetch cp sequence number information")?;
+                let start = pg_loader.load_one(CpSequenceNumberKey(start.cp_lo as u64));
+                let next: OptionFuture<_> = self
+                    .scope
+                    .checkpoint_viewed_at()
+                    .map(|cp| pg_loader.load_one(CpSequenceNumberKey(cp + 1)))
+                    .into();
 
-                Ok(stored)
+                let (start, next) = join!(start, next);
+                let start = start.context("Failed to fetch epoch start sequence numbers")?;
+                let next = next
+                    .transpose()
+                    .context("Failed to fetch latest checkpoint sequence numbers")?
+                    .flatten();
+
+                Ok(SequenceNumbers { start, next })
             })
             .await
     }

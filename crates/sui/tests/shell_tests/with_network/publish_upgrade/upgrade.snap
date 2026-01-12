@@ -1,0 +1,110 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Test an ephemeral upgrade workflow. We have
+# B --> A
+
+chain_id=$(sui client --client.config $CONFIG chain-identifier)
+
+extract_published() {
+  awk '
+    /^\[published\.[^]]+\]/ {
+      print
+      inpub=1
+      next
+    }
+    inpub && /^version[[:space:]]*=/ {
+      print
+      print ""
+      inpub=0
+    }
+  ' "$@"
+}
+
+add_env_to_toml() {
+  echo "[environments]" >> $1/Move.toml
+  echo "localnet = \"$chain_id\"" >> $1/Move.toml
+}
+
+add_env_to_toml a
+add_env_to_toml b
+
+echo "=== test-publish a, then test-publish b, then add a module to b & upgrade b ==="
+
+sui client --client.config $CONFIG publish a > /dev/null || echo "failed to publish a"
+
+echo "=== published a ==="
+extract_published a/Published.toml
+
+sui client --client.config $CONFIG publish b > /dev/null || echo "failed to publish b"
+
+echo "=== published b ==="
+extract_published b/Published.toml
+
+echo "module b::new_module; public fun b() { a::a::a() }" >> b/sources/new_module.move
+
+sui client --client.config $CONFIG upgrade b > /dev/null || echo "failed to upgrade b"
+
+echo "=== upgraded b ==="
+extract_published b/Published.toml
+
+sui client --client.config $CONFIG upgrade a > /dev/null || echo "failed to upgrade a"
+
+echo "=== upgraded a ==="
+extract_published a/Published.toml
+
+# Try to do an incompatible upgrade to make sure we detect errors properly in the command
+echo "=== expect to fail when upgrading a because it is not compatible with b ==="
+
+# Does an incompatilbe update (changes public function's return type)
+echo "module b::new_module; public fun b(): bool { true }" > b/sources/new_module.move
+
+sui client --client.config $CONFIG upgrade b
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+=== test-publish a, then test-publish b, then add a module to b & upgrade b ===
+=== published a ===
+[published.localnet]
+version = 1
+
+=== published b ===
+[published.localnet]
+version = 1
+
+=== upgraded b ===
+[published.localnet]
+version = 2
+
+=== upgraded a ===
+[published.localnet]
+version = 2
+
+=== expect to fail when upgrading a because it is not compatible with b ===
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY a
+BUILDING b
+error[Compatibility E03001]: function signature mismatch
+  ┌─ <SANDBOX_DIR>/b/sources/new_module.move:1:34
+  │
+1 │ module b::new_module; public fun b(): bool { true }
+  │                                  ^ Expected 0 return types, found 1
+  │
+  = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+  = Restore the original function's return types for function 'b'.
+
+
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'. Use --skip-verify-compatibility to bypass this check locally.
+
+----- stderr -----
+[Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.
+[Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.
+[Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.

@@ -1,19 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 
-use diesel::{
-    QueryableByName,
-    sql_types::{BigInt, Bytea},
-};
+use diesel::QueryableByName;
+use diesel::sql_types::BigInt;
+use diesel::sql_types::Bytea;
 use move_core_types::account_address::AccountAddress;
 use sui_futures::service::Service;
 use sui_sql_macro::query;
 use tokio::time;
-use tracing::{info, warn};
+use tracing::info;
+use tracing::warn;
 
-use crate::{package_resolver::PackageCache, pg_reader::PgReader};
+use crate::package_resolver::PackageCache;
+use crate::pg_reader::PgReader;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct SystemPackageTaskArgs {

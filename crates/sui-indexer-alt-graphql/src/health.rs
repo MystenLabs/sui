@@ -3,19 +3,22 @@
 
 use std::time::Duration;
 
-use anyhow::{anyhow, bail};
-use axum::{
-    Extension, Json,
-    extract::Query,
-    http::StatusCode,
-    response::{IntoResponse, Response as AxumResponse},
-};
+use anyhow::anyhow;
+use anyhow::bail;
+use axum::Extension;
+use axum::Json;
+use axum::extract::Query;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::response::Response as AxumResponse;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::net::TcpStream;
 use url::Url;
 
-use crate::{WatermarksLock, config::HealthConfig};
+use crate::WatermarksLock;
+use crate::config::HealthConfig;
 
 /// Extension that holds a DB URL to probe as part of health checks.
 #[derive(Clone)]

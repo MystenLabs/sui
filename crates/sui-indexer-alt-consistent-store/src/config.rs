@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_default_config::DefaultConfig;
-use sui_indexer_alt_framework::{self as framework, pipeline::CommitterConfig};
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::{self as framework};
 
-use crate::{DbConfig, rpc::pagination::PaginationConfig};
+use crate::DbConfig;
+use crate::rpc::pagination::PaginationConfig;
 
 #[DefaultConfig]
 #[derive(Default)]

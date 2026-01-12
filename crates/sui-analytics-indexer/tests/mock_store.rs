@@ -8,15 +8,23 @@
 
 use std::ops::Range;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::stream::BoxStream;
-use object_store::{
-    GetOptions, GetResult, ListResult, MultipartUpload, ObjectMeta, ObjectStore, PutMultipartOpts,
-    PutOptions, PutPayload, PutResult, Result, path::Path,
-};
-use std::sync::RwLock;
+use object_store::GetOptions;
+use object_store::GetResult;
+use object_store::ListResult;
+use object_store::MultipartUpload;
+use object_store::ObjectMeta;
+use object_store::ObjectStore;
+use object_store::PutMultipartOpts;
+use object_store::PutOptions;
+use object_store::PutPayload;
+use object_store::PutResult;
+use object_store::Result;
+use object_store::path::Path;
 
 /// Configuration for failure injection.
 #[derive(Debug, Clone, Default)]

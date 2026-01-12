@@ -35,6 +35,7 @@ pub struct VerifierConfig {
     pub private_generics_verifier_v2: bool,
     pub sanity_check_with_regex_reference_safety: Option</* meter limit */ u128>,
     pub deprecate_global_storage_ops: bool,
+    pub disable_entry_point_signature_check: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +86,7 @@ impl Default for VerifierConfig {
             private_generics_verifier_v2: false,
             sanity_check_with_regex_reference_safety: Some(8_000_000),
             deprecate_global_storage_ops: true,
+            disable_entry_point_signature_check: false,
         }
     }
 }

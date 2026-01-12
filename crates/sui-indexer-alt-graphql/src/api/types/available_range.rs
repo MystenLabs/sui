@@ -1,20 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+use std::sync::Arc;
+
 use anyhow::anyhow;
-use async_graphql::{
-    Context, Object,
-    registry::{MetaType, Registry},
-};
-use std::{collections::BTreeSet, sync::Arc};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::registry::MetaType;
+use async_graphql::registry::Registry;
 
-use crate::{
-    error::{RpcError, bad_user_input, feature_unavailable, upcast},
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
-use super::checkpoint::Checkpoint;
+use crate::api::types::checkpoint::Checkpoint;
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::feature_unavailable;
+use crate::error::upcast;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -393,14 +395,21 @@ collect_pipelines! {
 
 #[cfg(test)]
 mod field_piplines_tests {
-    use super::*;
+    use std::collections::BTreeSet;
+    use std::sync::Arc;
+
+    use async_graphql::Response;
+    use async_graphql::extensions::Extension;
+    use async_graphql::extensions::ExtensionContext;
+    use async_graphql::extensions::ExtensionFactory;
+    use async_graphql::extensions::NextRequest;
+    use async_graphql::registry::MetaType;
+    use async_graphql::registry::MetaTypeName;
+    use async_graphql::registry::Registry;
+
     use crate::schema;
-    use async_graphql::{
-        Response,
-        extensions::{Extension, ExtensionContext, ExtensionFactory, NextRequest},
-        registry::{MetaType, MetaTypeName, Registry},
-    };
-    use std::{collections::BTreeSet, sync::Arc};
+
+    use super::*;
 
     fn test_collect_pipelines(
         type_: &str,

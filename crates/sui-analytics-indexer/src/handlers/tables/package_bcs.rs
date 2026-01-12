@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;

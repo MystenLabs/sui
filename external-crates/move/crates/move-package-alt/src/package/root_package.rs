@@ -13,7 +13,7 @@ use crate::graph::PackageInfo;
 use crate::package::package_loader::{LoadType, PackageConfig, PackageLoader};
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{
-    Environment, LocalPub, LockfileDependencyInfo, ModeName, PackageID, ParsedEphemeralPubs,
+    Environment, EphemeralDependencyInfo, LocalPub, ModeName, PackageID, ParsedEphemeralPubs,
     ParsedPublishedFile, Publication, RenderToml,
 };
 use crate::{
@@ -103,7 +103,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     }
 
     /// The metadata for the root package in [PackageInfo] form
-    pub fn package_info(&self) -> PackageInfo<F> {
+    pub fn package_info(&self) -> PackageInfo<'_, F> {
         self.filtered_graph.root_package_info()
     }
 
@@ -133,6 +133,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
         debug!("getting ephemeral files");
         let (env, ephemeral_pubs) = Self::get_env_and_ephemeral_file(&mut config).await?;
+        debug!("ephemeral_pubs: {ephemeral_pubs:#?}");
 
         debug!("loading unfiltered graph");
         let unfiltered_graph = if config.force_repin {
@@ -149,7 +150,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let mut filtered_graph = unfiltered_graph.filter_for_mode(&config.modes).linkage()?;
         if let Some(ephemeral_pubs) = ephemeral_pubs {
             debug!("adding overrides");
-            filtered_graph.add_publish_overrides(localpubs_to_publications(&ephemeral_pubs)?);
+            filtered_graph.make_ephemeral(localpubs_to_publications(&ephemeral_pubs)?);
         }
 
         debug!("checking rename-from");
@@ -221,8 +222,14 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Return the list of all packages in the root package's package graph (including itself and all
     /// transitive dependencies). This includes the non-duplicate addresses only.
-    pub fn packages(&self) -> Vec<PackageInfo<F>> {
+    pub fn packages(&self) -> Vec<PackageInfo<'_, F>> {
         self.filtered_graph.packages()
+    }
+
+    /// Return the list of all packages in the root package's package graph (including itself and all
+    /// transitive dependencies). This includes the non-duplicate addresses only, sorted in topological order.
+    pub fn sorted_packages(&self) -> Vec<PackageInfo<'_, F>> {
+        self.filtered_graph.sorted_packages()
     }
 
     /// Update the dependencies in the lockfile for this environment to match the dependency graph
@@ -367,7 +374,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
 fn localpubs_to_publications<F: MoveFlavor>(
     pubfile: &ParsedEphemeralPubs<F>,
-) -> PackageResult<BTreeMap<LockfileDependencyInfo, Publication<F>>> {
+) -> PackageResult<BTreeMap<EphemeralDependencyInfo, Publication<F>>> {
     let mut result = BTreeMap::new();
     for local_pub in &pubfile.published {
         let new = Publication::<F> {
@@ -949,11 +956,12 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ root = true }}
+            source = {{ local = "{path}" }}
             original-id = "0x2"
             published-at = "0x3"
             version = 0
             "###,
+            path = scenario.path_for("root").canonicalize().unwrap().display(),
         )
         .unwrap();
 
@@ -998,11 +1006,12 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ local = "../dep" }}
+            source = {{ local = "{path}" }}
             original-id = "0x2"
             published-at = "0x3"
             version = 0
             "###,
+            path = scenario.path_for("dep").canonicalize().unwrap().display()
         )
         .unwrap();
 
@@ -1048,13 +1057,13 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ root = true }}
+            source = {{ local = "/foo/bar" }}
             version = 1
             published-at = "0x1"
             original-id = "0x2"
 
             [[published]]
-            source = {{ root = true }}
+            source = {{ local = "/foo/bar" }}
             version = 2
             published-at = "0x1"
             original-id = "0x2"
@@ -1074,11 +1083,11 @@ pkg_b = { local = "../pkg_b" }"#,
         .await
         .unwrap_err();
 
-        assert_snapshot!(err.to_string(), @"Multiple entries with `source = { root = true }` exist in the publication file");
+        assert_snapshot!(err.to_string(), @"Multiple entries with `source = { local = \"/foo/bar\" }` exist in the publication file");
     }
 
-    /// Ephemerally loading a dep that is published but not in the ephemeral file produces the
-    /// original address. Note: it should also warn but this is not tested
+    /// Ephemerally loading a dep that is published but not in the ephemeral file produces no
+    /// address.
     #[test(tokio::test)]
     async fn ephemeral_only_pub() {
         let scenario = TestPackageGraph::new(["root"])
@@ -1110,16 +1119,12 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // check the dependency's addresses
 
-        let dep_addrs = root
+        let dep = root
             .filtered_graph
             .package_info_by_id(&PackageID::from("dep"))
-            .unwrap()
-            .published()
-            .unwrap()
-            .clone();
+            .unwrap();
 
-        assert_eq!(dep_addrs.original_id, OriginalID::from(1));
-        assert_eq!(dep_addrs.published_at, PublishedID::from(1));
+        assert!(dep.published().is_none());
     }
 
     /// Ephemerally loading a dep that is not published but is in the ephemeral file produces the
@@ -1138,11 +1143,12 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ local = "../dep" }}
+            source = {{ local = "{path}" }}
             original-id = "0x2"
             published-at = "0x3"
             version = 0
             "###,
+            path = scenario.path_for("dep").canonicalize().unwrap().display(),
         )
         .unwrap();
 
@@ -1309,7 +1315,7 @@ pkg_b = { local = "../pkg_b" }"#,
         "###);
     }
 
-    /// Loading an ephemeral root package from a non-existing file succeeds and uses the published
+    /// Loading an ephemeral root package from a non-existing file succeeds and has no published
     /// addresses for the build environment
     #[test(tokio::test)]
     async fn ephemeral_empty() {
@@ -1334,16 +1340,12 @@ pkg_b = { local = "../pkg_b" }"#,
         .unwrap();
 
         // check the dependency's addresses
-        let dep_addrs = root
+        let dep = root
             .filtered_graph
             .package_info_by_id(&PackageID::from("dep"))
-            .unwrap()
-            .published()
-            .unwrap()
-            .clone();
+            .unwrap();
 
-        assert_eq!(dep_addrs.original_id, OriginalID::from(1));
-        assert_eq!(dep_addrs.published_at, PublishedID::from(2));
+        assert!(dep.published().is_none());
     }
 
     /// Loading an ephemeral root package and then publishing correctly updates the ephemeral file
@@ -1397,6 +1399,15 @@ pkg_b = { local = "../pkg_b" }"#,
         let postpublish_pubfile =
             std::fs::read_to_string(scenario.path_for("root/Published.toml")).unwrap();
         let ephemeral_data = std::fs::read_to_string(ephemeral.path()).unwrap();
+        let ephemeral_data = ephemeral_data.replace(
+            scenario
+                .path_for("root")
+                .canonicalize()
+                .unwrap()
+                .to_string_lossy()
+                .as_ref(),
+            "<ROOT>",
+        );
 
         assert_eq!(prepublish_pubfile, postpublish_pubfile);
         assert_snapshot!(ephemeral_data, @r###"
@@ -1408,7 +1419,7 @@ pkg_b = { local = "../pkg_b" }"#,
         chain-id = "localnet"
 
         [[published]]
-        source = { root = true }
+        source = { local = "<ROOT>" }
         published-at = "0x0000000000000000000000000000000000000000000000000000000000000002"
         original-id = "0x0000000000000000000000000000000000000000000000000000000000000001"
         version = 0

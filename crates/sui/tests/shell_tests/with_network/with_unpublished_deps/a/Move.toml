@@ -1,0 +1,8 @@
+[package]
+name = "examples"
+version = "0.0.1"
+implicit-dependencies = false
+
+[dependencies]
+sui = { local = "../sui-framework" }
+non_zero = { local = "../b" }

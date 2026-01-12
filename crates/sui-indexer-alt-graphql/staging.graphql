@@ -1219,7 +1219,9 @@ type Epoch implements Node {
 	"""
 	totalStakeSubsidies: BigInt
 	"""
-	The total number of transaction blocks in this epoch (or `null` if the epoch has not finished yet).
+	The total number of transaction blocks in this epoch.
+	
+	If the epoch has not finished yet, this number is computed based on the number of transactions at the latest known checkpoint.
 	"""
 	totalTransactions: UInt53
 	"""
@@ -3567,6 +3569,10 @@ type ServiceConfig {
 	"""
 	maxQueryPayloadSize: Int
 	"""
+	Maximum number of paginated fields that can return results in a single request. Queries on paginated fields that exceed this limit will return an error.
+	"""
+	maxRichQueries: Int
+	"""
 	Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
 	
 	This is cumulative across all matching fields in a single GraphQL request.
@@ -3810,6 +3816,10 @@ type Transaction implements Node {
 	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
 	"""
 	transactionBcs: Base64
+	"""
+	The transaction as a JSON blob, matching the gRPC proto format (excluding BCS).
+	"""
+	transactionJson: JSON
 }
 
 """
@@ -3876,6 +3886,10 @@ type TransactionEffects {
 	A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
 	"""
 	effectsDigest: String
+	"""
+	The effects as a JSON blob, matching the gRPC proto format (excluding BCS).
+	"""
+	effectsJson: JSON
 	"""
 	The epoch this transaction was finalized in.
 	"""

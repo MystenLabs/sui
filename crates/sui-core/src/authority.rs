@@ -1069,8 +1069,6 @@ impl AuthorityState {
                 withdraw
                     .type_arg
                     .get_balance_type_param()
-                    // unwrap safe because we already verified the transaction.
-                    .unwrap()
                     .map(|ty| ty.to_canonical_string(false))
             })
             .collect::<BTreeSet<_>>();
@@ -2485,6 +2483,7 @@ impl AuthorityState {
         &self,
         mut transaction: TransactionData,
         checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
     ) -> SuiResult<SimulateTransactionResult> {
         if transaction.kind().is_system_tx() {
             return Err(SuiErrorKind::UnsupportedFeatureError {
@@ -2525,7 +2524,7 @@ impl AuthorityState {
         )?;
 
         // mock a gas object if one was not provided
-        let mock_gas_id = if transaction.gas().is_empty() {
+        let mock_gas_id = if allow_mock_gas_coin && transaction.gas().is_empty() {
             let mock_gas_object = Object::new_move(
                 MoveObject::new_gas_coin(
                     OBJECT_START_VERSION,
