@@ -268,8 +268,7 @@ This module holds shared implementation of macros used in <code>std</code>
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>let</b> max_t = $max_t;
-    <b>if</b> (y &gt; max_t - x) <a href="../std/option.md#std_option_none">option::none</a>()
-    <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x + y)
+    <b>if</b> (y &gt; max_t - x) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x + y)
 }
 </code></pre>
 
@@ -295,8 +294,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_sub">num_checked_sub</a>&lt;$T&gt;($x: $T, $y: $T): Option&lt;$T&gt; {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
-    <b>if</b> (x &lt; y) <a href="../std/option.md#std_option_none">option::none</a>()
-    <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x - y)
+    <b>if</b> (x &lt; y) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x - y)
 }
 </code></pre>
 
@@ -351,8 +349,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_div">num_checked_div</a>&lt;$T&gt;($x: $T, $y: $T): Option&lt;$T&gt; {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
-    <b>if</b> (y == 0) <a href="../std/option.md#std_option_none">option::none</a>()
-    <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x / y)
+    <b>if</b> (y == 0) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x / y)
 }
 </code></pre>
 
