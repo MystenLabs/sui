@@ -118,13 +118,14 @@ impl TestEnv {
         let tx = TestTransactionBuilder::new(address, gas, self.rgp)
             .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(amount, address)])
             .build();
-        let (_, effects) = self
+        let (digest, effects) = self
             .cluster
             .sign_and_execute_transaction_directly(&tx)
             .await
             .unwrap();
         // update the gas object we used.
         self.gas_objects.get_mut(&address).unwrap()[0] = effects.gas_object().0;
+        self.cluster.wait_for_tx_settlement(&[digest]).await;
     }
 
     #[allow(dead_code)]
