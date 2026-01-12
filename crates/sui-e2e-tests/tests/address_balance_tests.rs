@@ -3878,3 +3878,91 @@ async fn address_balance_stress_test() {
         total
     );
 }
+
+#[sim_test]
+async fn test_address_balance_gas_merge_accumulator_events() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.enable_address_balance_gas_payments_for_testing();
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let chain_id = test_cluster.get_chain_identifier();
+    let context = &mut test_cluster.wallet;
+
+    let (sender, gas_objects) = get_sender_and_all_gas(context).await;
+
+    let initial_balance = 100_000_000u64;
+    let deposit_tx = TestTransactionBuilder::new(sender, gas_objects[0], rgp)
+        .transfer_sui_to_address_balance(
+            FundSource::coin(gas_objects[0]),
+            vec![(initial_balance, sender)],
+        )
+        .build();
+    let resp = test_cluster.sign_and_execute_transaction(&deposit_tx).await;
+    let gas = resp.effects.unwrap().gas_object().reference.to_object_ref();
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        verify_accumulator_exists(child_object_resolver, sender, initial_balance);
+    });
+
+    let send_to_self_amount = 5_000_000u64;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let coin_input = builder.obj(ObjectArg::ImmOrOwnedObject(gas)).unwrap();
+    let amount_arg = builder.pure(send_to_self_amount).unwrap();
+    let recipient_arg = builder.pure(sender).unwrap();
+    let coin = builder.command(Command::SplitCoins(coin_input, vec![amount_arg]));
+    let Argument::Result(coin_idx) = coin else {
+        panic!("coin is not a result");
+    };
+    let coin = Argument::NestedResult(coin_idx, 0);
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("coin").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec!["0x2::sui::SUI".parse().unwrap()],
+        vec![coin, recipient_arg],
+    );
+
+    let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+    let budget = 10_000_000u64;
+    let tx_data = create_address_balance_transaction(tx_kind, sender, budget, rgp, chain_id);
+
+    let signed_tx = test_cluster.sign_transaction(&tx_data).await;
+    let (effects, _) = test_cluster
+        .execute_transaction_return_raw_effects(signed_tx)
+        .await
+        .expect("Transaction execution should succeed");
+
+    assert!(effects.status().is_ok());
+
+    let gas_cost = effects.gas_cost_summary().net_gas_usage();
+    let acc_events = effects.accumulator_events();
+
+    assert_eq!(acc_events.len(), 1);
+
+    let expected_net = send_to_self_amount as i64 - gas_cost;
+    match &acc_events[0].write.value {
+        sui_types::effects::AccumulatorValue::Integer(value) => {
+            assert_eq!(*value, expected_net.unsigned_abs());
+        }
+        _ => panic!("Expected Integer accumulator value"),
+    }
+
+    let expected_final_balance = initial_balance as i64 + expected_net;
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        verify_accumulator_exists(child_object_resolver, sender, expected_final_balance as u64);
+    });
+
+    test_cluster.trigger_reconfiguration().await;
+}
