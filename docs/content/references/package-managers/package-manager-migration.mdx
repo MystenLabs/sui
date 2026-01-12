@@ -8,48 +8,64 @@ pagination_prev: null
 
 Version 1.63 of the Sui CLI introduced a major overhaul of the package management system. This document describes the changes between the old and new systems and gives guidance on migrating your packages. See [the package management user guide](/guides/developer/packages/move-package-management.mdx) for full details on the new system.
 
+The new system provides several benefits:
+
+ - **Designed for multiple environments**: You should never need multiple `Move.toml` files for the same package.
+ - **Predictability and offline rebuilds**: Your dependencies will only change if you change your manifest.
+ - **Flexible and local naming**: You can depend on multiple packages with the same name.
+ - **Other conveniences**: Faster git downloads, stored upgrade capabilities, and tooling for local publications.
+
 With any change of this magnitude there are bound to be some issues that crop up. Report any issues you encounter while using the new package system [here](https://github.com/MystenLabs/sui/issues/24540).
 
-## Advantages of the new package management system
+## Migrating `Move.toml`
 
-The new system provides several benefits.
+Although the new package system will continue to work with existing packages, it is encouraged to migrate to the new format as soon as possible. The steps to migrate are:
 
-**Designed for multiple environments**
+1. Replace the `name` field in `Move.toml` with the name that your Move code uses for your package ([more info](#package-section)).
+2. Replace your dependency names in `Move.toml` to match the names your Move code uses to refer to them ([more info](#dependencies-section)).
+3. Remove the `[addresses]` and `[dev-addresses]` sections of `Move.toml` ([more info](#no-addresses-section)).
+4. If necessary, replace `[dev-dependencies]` with [moded dependencies](/guides/developer/packages/move-package-management.mdx#advanced-dependency-configuration).
 
-The system ensures that you can write a single manifest that works correctly for multiple environments, for example, Mainnet and Testnet. You can override dependencies for specific environments, so you have more flexibility in your testing deployment process. You can add multiple environments on the same network to support more complex deployment scenarios. These are not strictly tied to the environments defined in the CLI.
+For example, if your old `Move.toml` was
 
-**Predictability and offline rebuilds**
+```toml
+[package]
+name = "MyPackage"
 
-The system pins dependencies to specific versions and only updates them when you update your manifest. This enables you to create reliable builds over time. If you do not change your `Move.toml`, you do not change your dependencies. This also means that building does not need to access git once you fetch the dependencies for the first time.
+[dependencies]
+Dependency = { ... }
 
-**Flexible and local naming**
-
-You can rename dependencies, so you can now depend on multiple packages with the same name. The `[addresses]` section is gone, and dependency names and package names are unified. Dependency names are not inherited from dependencies, so understanding what package a name refers to only requires looking at your `Move.toml` and not your dependencies' `Move.toml` files.
-
-**Other conveniences**
-
-The new system brings several conveniences, such as efficient git downloads, stored upgrade capabilities, and tooling for managing dependency publication on local networks.
-
-**Upcoming features**
-
-The new implementation is a solid foundation for future features that are planned, including improved source verification and on-chain dependencies.
-
-## Installing and running the new package manager
-
-The new package system is included in the 1.63 release of the Sui CLI, which was released in January. However, you can install it before then using [`suiup`](https://github.com/MystenLabs/suiup):
-
-```sh
-$ suiup install sui --nightly=sui-pkg-alt
-$ suiup install sui --nightly=ml/pkg-alt-integration mvr
+[addresses]
+my_package = "0x0"
 ```
 
-This compiles `sui` from the prototype branch, so it requires the Rust toolchain installed and might take a while to complete installation.
+Then your new `Move.toml` would be
+
+```toml
+[package]
+name = "my_package"
+
+[dependencies]
+dep = { ... }
+```
+
+## Publishing on Devnet and Localnet
+
+Publication workflows on Mainnet and Testnet should not change with the new package system. However, publishing on ephemeral networks like `localnet` or `devnet` should use the `sui client test-publish` command to avoid polluting the `Published.toml` file with local addresses.
+
+Instead of writing to `Published.toml`, the `test-publish` command writes the addresses to an ephemeral publication file (e.g. `Pub.localnet.toml`). You can select the file to use with the `--pubfile-path` option. If you want to publish multiple packages, you should use the same ephemeral publication file for all of the packages, so that the dependency addresses will be set correctly. You can also automate this with the `--publish-unpublished-deps` [flag](/guides/developer/packages/move-package-management.mdx#ephemerally-publishing-dependencies).
+
+:::caution
+If you were using `--with-unpublished-deps`, you should almost certainly use `--publish-unpublished-deps` instead.
+:::
+
+The `test-publish` command requires a "build environment" (Testnet or Mainnet by default, although you can [define your own](/guides/developer/packages/move-package-management.mdx#environments)) to determine which dependencies to use for the ephemeral publication. Specify the build environment by passing the `--build-env <env>` flag.
 
 ## Changes to the `Move.toml` file
 
 Configure packages using a `Move.toml` file. The system also manages its own information in `Move.lock` files. The format of these files has changed.
 
-### No addresses section
+### No `addresses` section
 
 In the new system, you can no longer provide named addresses. Instead, the names used for packages come from the names they are given in the `[dependencies]` section or in the `[package]` section for the package's own name.
 
@@ -137,66 +153,12 @@ The new system handles git dependencies much more efficiently than the old syste
 
 However, if you have a git dependency with `rev = "<commit hash>"` and `<commit hash>` is not a full 40-character SHA, the system is forced to download the entire commit history to expand the SHA. If you want to add a dependency on a particular commit, include the entire 40-character SHA.
 
-### `environments` and `dep-replacements` sections
+## Changes to `Move.lock`
 
-In the new system, all package operations happen in the context of an environment. Every environment has a name and a chain ID. There are 2 implicitly defined environments: `mainnet` and `testnet`. You can add your own environments in the `[environments]` section:
+With the new package system, the `Move.lock` file format has changed. You should never need to read or modify `Move.lock` by hand, but be aware that the first time you run the new CLI on your package, it will regenerate the `Move.lock` file; you should check these changes into source control.
 
-```toml
-[environments]
-testnet_alpha = "4c78adac"
-```
+## Introduction of `Published.toml`
 
-Replace your dependencies in specific environments by adding a `[dep-replacements]` section:
+The new package system no longer writes published addresses into the `Move.lock` file; instead they are written to a new file called `Published.toml`. You should check this file into source control.
 
-```toml
-[dependencies]
-example_dependency = { git = "example.git" }
-
-[dep-replacements]
-testnet.example_dependency = { git = "example.git", rev = "testnet-1.2.3" }
-```
-
-:::info
-
-The `Move.toml` file allows you to add `example_dependency = {...}` to `[dep-replacements.testnet]`. This is the same as adding `testnet.example_dependency = {...}` to `[dep-replacements]`.
-
-:::
-
-### Environment-specific dependency fields
-
-There are additional fields that you can add to dependencies in the `[dep-replacements]` section:
-
-You can add a `use-environment` field to indicate which of the dependency's environments to use. For example, if the dependency defines a `testnet_alpha` environment, you can depend on that environment:
-
-```toml
-[dependencies]
-example_dependency = { git = "example.git" }
-
-[dep-replacements]
-testnet.example_dependency = { use-environment = "testnet_alpha" }
-```
-
-This uses the published address for the `testnet_alpha` version of `example_dependency` when publishing this package to `testnet`.
-
-Normally you do not need to specify dependencies' addresses in your manifest, but if you depend on legacy packages or packages that have been published but have not updated their lockfile, you can override the `published-at` and `original-id` fields for the dependency. If you want to do one of these, you must do both:
-
-```toml
-[dep-replacements]
-testnet.example_dependency = { published-at = "0x5678", original-id = "0x1234" }
-```
-
-:::info
-
-The `git` fields are currently not merged between `[dependencies]` and `[dep-replacements]`. For example, you cannot give a different `rev` field in the `[dep-replacements]`; you must also include the `git` field. Moreover, if you do give a `git` field, the `subdir` and `rev` fields are not copied over.
-
-:::
-
-## CLI changes
-
-The package manager is integrated into the `sui` binary, so most of the previous commands work the same way. There are a few changes though.
-
-All operations must be done in a specific environment due to `dep-replacements` and how some details about how package conflicts are determined. By default, the `sui` binary tries to choose the right environment based on the `sui client` environment determined by `sui client active-env`.
-
-If there is not an obvious choice of environment, either because the manifest declares multiple environments with the same chain ID or because it does not declare one at all, you must choose a specific environment by passing `-e <environment>`.
-
-This means that to publish to Devnet or Localnet, for example, you need to have environments defined for them.
+For [ephemeral publication](/guides/developer/packages/move-package-management.mdx#environments), the package system will use ephemeral files (often named `Pub.<env>.toml`); these files should not be committed to source control. We recommend adding `Pub.*.toml` to your `.gitignore` file.

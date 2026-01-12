@@ -190,7 +190,7 @@ pub struct StateSyncConfig {
 
     /// If true, the v2 version of get_checkpoint_contents will be used.
     ///
-    /// If unspecified, this will default to false.
+    /// If unspecified, this will default to true.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_get_checkpoint_contents_v2: Option<bool>,
 
@@ -287,7 +287,7 @@ impl StateSyncConfig {
     }
 
     pub fn use_get_checkpoint_contents_v2(&self) -> bool {
-        const DEFAULT_USE_GET_CHECKPOINT_CONTENTS_V2: bool = false;
+        const DEFAULT_USE_GET_CHECKPOINT_CONTENTS_V2: bool = true;
 
         self.use_get_checkpoint_contents_v2
             .unwrap_or(DEFAULT_USE_GET_CHECKPOINT_CONTENTS_V2)

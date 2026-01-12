@@ -986,6 +986,7 @@ mod tests {
         // UserTransaction is not allowed. Gate with disable_preconsensus_locking=false.
         let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
             config.set_disable_preconsensus_locking_for_testing(false);
+            config.set_address_aliases_for_testing(false);
             config
         });
 

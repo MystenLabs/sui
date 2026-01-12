@@ -24,7 +24,7 @@ You should commit the `Move.lock` file to source control so that your collaborat
 
 The third file that the package management system uses is the publication file (`Published.toml`). Each time you publish your package, the package system updates this file with metadata about the publication, such as its on-chain address, upgrade capability address, and information about the compiler version used to build the package. The `Published.toml` file should be committed to source control.
 
-Finally, the `test-publish` command makes use of ephemeral publication files, typically named `Pub.<env-name>.toml`. These files contain information about temporary publications that are not intended to be shared, such as publications to local networks.
+Finally, the `test-publish` command makes use of ephemeral publication files, typically named `Pub.<env-name>.toml`. These files contain information about temporary publications that are not intended to be shared, such as publications to local networks. These files should not be committed to source control.
 
 ## Dependencies
 
@@ -249,6 +249,12 @@ This is easier to achieve if you are using `mvr`, which automatically resolves t
 codec = { r.mvr = "@potatoes/codec" }
 ```
 
+:::info
+
+The `git` fields are currently not merged between `[dependencies]` and `[dep-replacements]`. For example, you cannot give a different `rev` field in the `[dep-replacements]`; you must also include the `git` field. Moreover, if you do provide a `git` field, the `subdir` and `rev` fields are not copied over.
+
+:::
+
 #### Environment-specific dependency configuration
 
 There are additional fields that you can provide for dependencies in the `dep-replacements` section that only make sense for a specific environment: `use-environment`, `published-at`, and `original-id`.
@@ -287,16 +293,19 @@ chain-id = "35834a8a"
 original-id = "0x9c11913b6be956a7020cb9e120f03f396e52c3b766164c6163569ac9d7fabe06"
 published-at = "0x9c11913b6be956a7020cb9e120f03f396e52c3b766164c6163569ac9d7fabe06"
 version = 2
-toolchain-version = "sui-1.63.0"
-upgrade-capability = "0x7804be7ba062dcd09e7adfeda7be090b9fe35cda9c02ad2c417b88d6c419ca52"
+toolchain-version = "1.64.0"
+build-config = { flavor = "sui", edition = "2024" }
+upgrade-capability = "0x34f7cf31a0a12f81252ab947cb51146bc8138fa5adb3f1fe38e244734319d73c"
 
 [published.testnet]
 chain-id = "4c78adac"
-original-id = "0x65d106ccd0feddc4183dcaa92decafd3376ee9b34315aae938dc838f6d654f18"
-published-at = "0x65d106ccd0feddc4183dcaa92decafd3376ee9b34315aae938dc838f6d654f18"
+published-at = "0x9813c40d93200714a1f7c9b9733ebb537e7dc60fd4b29148f7bcc0e857793813"
+original-id = "0x9813c40d93200714a1f7c9b9733ebb537e7dc60fd4b29148f7bcc0e857793813"
 version = 1
-toolchain-version = "sui-1.62.4"
-upgrade-capability = "0xe03549eaeab8d9461977ff1e993adf37a7d320f688a787b30fbdd30ce53c939c"
+toolchain-version = "1.64.0"
+build-config = { flavor = "sui", edition = "2024" }
+upgrade-capability = "0x34f7cf31a0a12f81252ab947cb51146bc8138fa5adb3f1fe38e244734319d73c"
+
 ```
 
 You should commit the publication file to source control so that other packages can depend on your package.
@@ -309,11 +318,21 @@ In the old system, the `Published.toml` information was stored in `Move.lock`.
 
 :::
 
-### Ephemeral publication {#test-publish}
+## Ephemeral publication {#test-publish}
+
+:::info
+
+The old package management system does not support ephemeral publication.
+
+:::
 
 By design, the `Published.toml` file should only record publications to persistent environments like Mainnet and Testnet. Addresses for ephemeral publications on local networks or Devnet should not usually be committed to source control.
 
 Instead, the package manager supports ephemeral publication of a package and its dependencies for testing. The `sui client test-publish` command works like a normal publish, except that the system reads the publication addresses for packages and writes them to a separate file.
+
+The command `sui client test-publish --pubfile-path <pubfile> --build-env <env>` builds the root package for the `<env>` environment (see [the build environment](#the-build-environment)) and then publishes it to a chain using the addresses from the ephemeral publication file `<pubfile>`.
+
+If `<pubfile>` is omitted, it defaults to `Pub.<env-name>.toml` where `<env-name>` is the name of the active CLI environment, irrespective of the environments defined in the manifest. This file contains the addresses to use for publication.
 
 The format of an ephemeral publication file is as follows:
 
@@ -326,7 +345,7 @@ build-env = "mainnet"
 chain-id = "localnet chain ID"
 
 [[published]]
-source = { root = true }
+source = "/home/User/move/packages/package1"
 published-at = "..."
 original-id = "..."
 upgrade-cap = "..."
@@ -338,7 +357,7 @@ original-id = "0x000000000000000000000000000000000000000000000000000000000000cc0
 upgrade-cap = "0x000000000000000000000000000000000000000000000000000000000011cc00"
 
 [[published]]
-source = { local = "../foo" }
+source = { local = "/home/User/move/packages/package2" }
 published-at = "0x0000000000000000000000000000000000000000000000000000000000001234"
 original-id = "0x0000000000000000000000000000000000000000000000000000000000005678"
 upgrade-cap = "0x000000000000000000000000000000000000000000000000000000000022cc00"
@@ -346,23 +365,7 @@ upgrade-cap = "0x000000000000000000000000000000000000000000000000000000000022cc0
 
 :::caution
 
-You should not commit ephemeral publication files to source control because they contain information that is only relevant in a local development environment.
-
-:::
-
-The system identifies entries by the `source` field. These fields are pinned dependencies, so they might be different from the dependencies written in your manifest file, however they should match the `source` fields in the lockfile.
-
-If an entry for a dependency is missing, the `test-publish` command attempts to obtain the published address for the dependency from the build environment. This produces an error if the dependency is not published on the ephemeral environment.
-
-The command `sui client test-publish <pubfile> --build-env <env>` builds the root package for the `<env>` environment and then publishes it to a chain using the addresses from the ephemeral publication file `<pubfile>`.
-
-If `<pubfile>` is omitted, it defaults to `Pub.<env-name>.toml` where `<env-name>` is the name of the active CLI environment, irrespective of the environments defined in the manifest. This file contains the addresses to use for publication.
-
-If `--build-env <env>` is omitted, it defaults to the `build-env` name of the file at `<file>`. If that is missing, the system errors. The build environment determines how the system resolves dependencies for the package.
-
-:::info
-
-The old system did not support ephemeral publication.
+You should not commit ephemeral publication files to source control because they contain information that is only relevant in a local development environment, such as localnet addresses and absolute paths. It is encouraged to add `Pub.*.toml` to your `.gitignore` file.
 
 :::
 
@@ -375,6 +378,47 @@ Although publication files and ephemeral publication files are similar, they hol
 | **Scope** | Multiple networks in 1 file | Single network per file |
 | **Commit to source control** | Yes since others can depend on your package | No since it contains local development data |
 | **Created by** | `sui client publish` | `sui client test-publish` |
+
+### The build environment
+
+Since packages can have different dependencies in different environments, it is important to have a "real" environment present when building a package for ephemeral publication; the real environment is referred to as the build environment, and is specified by the `--build-env <env>` flag.
+
+If `--build-env <env>` is omitted, it defaults to the `build-env` name of the file at `<file>`. If that is missing, the system errors. The build environment determines how the system resolves dependencies for the package.
+
+For example, if you want to build and publish the testnet version of your package on localnet, you would switch your CLI's active environment to localnet, and run with `--build-env testnet`:
+
+```sh
+sui client env switch localnet
+sui client test-publish --build-env testnet
+```
+
+### Ephemerally publishing dependencies
+
+The ephemeral publication file format is designed to make it simple to publish your dependencies along with your main package. There are two ways to do this: manually or automatically.
+
+To manually publish your dependencies, simply use the same ephemeral publication file when publishing all of your dependencies. For example, suppose you have directories `packages/a` and `packages/b`, and that `b` depends on `a`. You could run the following:
+
+```sh
+cd packages/a
+sui client test-publish --build-env testnet --pubfile-path ../Pub.localnet.toml
+
+cd ../b
+sui client test-publish --build-env testnet --pubfile-path ../Pub.localnet.toml
+```
+
+When you publish `a`, the `packages/Pub.localnet.toml` file will be updated with an entry with `a`'s localnet address. Then when you publish `b`, it will take `a`'s address from `packages/Pub.localnet.toml`, and will also write `b`'s localnet address.
+
+You can also automate this process using the `--publish-unpublished-deps` command-line argument. In the same example, you could run:
+
+```sh
+cd packages/b
+sui client test-publish --build-env testnet --publish-unpublished-deps`
+```
+
+This will create a fresh publication of each of `a`'s dependencies, and then publish `a`, and record all of the addresses to `Pub.localnet.toml`.
+
+The system identifies entries of an ephemeral publication file by the `source` field. These fields are pinned dependencies, so they might be different from the dependencies written in your manifest file, however they should match the `source` fields in the lockfile.
+
 
 ## Register your package on `mvr`
 
