@@ -1680,4 +1680,25 @@ pkg_b = { local = "../pkg_b" }"#,
             &NamedAddress::Defined(OriginalID::from(2))
         );
     }
+
+    #[test(tokio::test)]
+    /// ```mermaid
+    /// graph LR
+    ///     root --> legacy --> modern
+    /// ```
+    ///
+    /// Loading `legacy` should fail, but loading `root` should succeed
+    async fn legacy_depends_on_modern() {
+        let scenario = TestPackageGraph::new(["root", "modern"])
+            .add_legacy_packages(["legacy"])
+            .add_deps([("root", "legacy"), ("legacy", "modern")])
+            .build();
+
+        // should succeed
+        let root = scenario.root_package("root");
+        drop(root);
+
+        let legacy_err = scenario.root_package_err("legacy").await;
+        assert_snapshot!(legacy_err, @"Packages with old-style Move.toml files cannot depend on new-style packages. See https://docs.sui.io/references/package-managers/package-manager-migration for instructions.");
+    }
 }
