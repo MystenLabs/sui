@@ -10,23 +10,23 @@ Version 1.63 of the Sui CLI introduced a major overhaul of the package managemen
 
 The new system provides several benefits:
 
- - **Designed for multiple environments**: you should never have to have multiple `Move.toml` files for the same package
- - **Predictability and offline rebuilds**: your dependencies will only change if you change your manifest
- - **Flexible and local naming**: you can depend on multiple packages with the same name
- - **Other conveniences**: faster git downloads, stored upgrade capabilities, tooling for local publications
+ - **Designed for multiple environments**: You should never need multiple `Move.toml` files for the same package.
+ - **Predictability and offline rebuilds**: Your dependencies will only change if you change your manifest.
+ - **Flexible and local naming**: You can depend on multiple packages with the same name.
+ - **Other conveniences**: Faster git downloads, stored upgrade capabilities, and tooling for local publications.
 
 With any change of this magnitude there are bound to be some issues that crop up. Report any issues you encounter while using the new package system [here](https://github.com/MystenLabs/sui/issues/24540).
 
-## TLDR: Migrating Move.toml
+## Migrating `Move.toml`
 
 Although the new package system will continue to work with existing packages, we encourage you to migrate to the new format as soon as possible. The steps to migrate are:
 
-1. Replace the `name` field in `Move.toml` with the name that your Move code uses for your package ([more info](#package-section))
-2. Replace your dependency names in `Move.toml` to match the names your Move code uses to refer to them ([more info](#dependencies-section))
-3. Remove the `[addresses]` and `[dev-addresses]` sections of `Move.toml` ([more info](#no-addresses-section))
-4. If necessary, replace `[dev-dependencies]` with [moded dependencies](/guides/developer/packages/move-package-management.mdx#advanced-dependency-configuration)
+1. Replace the `name` field in `Move.toml` with the name that your Move code uses for your package ([more info](#package-section)).
+2. Replace your dependency names in `Move.toml` to match the names your Move code uses to refer to them ([more info](#dependencies-section)).
+3. Remove the `[addresses]` and `[dev-addresses]` sections of `Move.toml` ([more info](#no-addresses-section)).
+4. If necessary, replace `[dev-dependencies]` with [moded dependencies](/guides/developer/packages/move-package-management.mdx#advanced-dependency-configuration).
 
-For example, if your old-style `Move.toml` was
+For example, if your old `Move.toml` was
 
 ```toml
 [package]
@@ -39,7 +39,7 @@ Dependency = { ... }
 my_package = "0x0"
 ```
 
-Then your new-style `Move.toml` would be
+Then your new `Move.toml` would be
 
 ```toml
 [package]
@@ -49,7 +49,7 @@ name = "my_package"
 dep = { ... }
 ```
 
-## TLDR: Publishing on devnet and localnet
+## Publishing on Devnet and Localnet
 
 Publication workflows on Mainnet and Testnet should not change with the new package system. However, publishing on ephemeral networks like `localnet` or `devnet` should use the `sui client test-publish` command to avoid polluting the `Published.toml` file with local addresses.
 
@@ -59,7 +59,7 @@ Instead of writing to `Published.toml`, the `test-publish` command writes the ad
 If you were using `--with-unpublished-deps`, you should almost certainly use `--publish-unpublished-deps` instead.
 :::
 
-The `test-publish` command requires a "build environment" (testnet or mainnet by default, although you can [define your own](/guides/developer/packages/move-package-management.mdx#environments)) to determine which dependencies to use for the ephemeral publication. You specify the build environment by passing the `--build-env <env>` flag.
+The `test-publish` command requires a "build environment" (Testnet or Mainnet by default, although you can [define your own](/guides/developer/packages/move-package-management.mdx#environments)) to determine which dependencies to use for the ephemeral publication. Specify the build environment by passing the `--build-env <env>` flag.
 
 ## Changes to the `Move.toml` file
 
