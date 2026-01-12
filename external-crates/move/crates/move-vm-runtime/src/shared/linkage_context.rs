@@ -13,7 +13,7 @@ use crate::{
 
 /// An execution context that remaps the modules referred to at runtime according to a linkage
 /// table, allowing the same module in storage to be run against different dependencies.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkageContext {
     // Linkage Table. This is a table indicating, for a given Address, how it should be linked.
     // This is purely for versioning. Assume some Package P is published at V1 and V2 as:
