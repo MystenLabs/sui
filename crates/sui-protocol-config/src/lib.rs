@@ -4447,6 +4447,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.address_aliases = true;
                     }
+
+                    cfg.feature_flags.enable_poseidon = true;
                 }
                 // Use this template when making changes:
                 //
