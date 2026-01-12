@@ -3,11 +3,16 @@
 
 //! Double hashing for bloom filters.
 //!
-//! A single SipHash-1-3 call produces one 64-bit hash, which is split
-//! into h1 and h2 components. Subsequent positions use double hashing
-//! with rotation: `h1 = h1.wrapping_add(h2).rotate_left(5)`.
+//! Bloom filters need k independent hash functions to set k bit positions per element.
+//! Rather than computing k separate cryptographic hashes, double hashing
+//! generates k positions from just two hash values without any loss to
+//! asymptotic false positive rate. [Kirsch-Mitzenmacher 2006]
 //!
-//! Reference: <https://github.com/tomtomwombat/fastbloom>
+//! This hasher takes a single SipHash-1-3 call to produce one 64-bit hash, which is split into h1 and h2
+//! components. Subsequent positions use enhanced double hashing with rotation. [fastbloom]
+//!
+//! [Kirsch-Mitzenmacher 2006]: https://www.eecs.harvard.edu/~michaelm/postscripts/esa2006a.pdf
+//! [fastbloom]: https://github.com/tomtomwombat/fastbloom
 use std::hash::Hasher;
 
 use siphasher::sip::SipHasher13;
