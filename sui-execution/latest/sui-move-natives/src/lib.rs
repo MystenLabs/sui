@@ -1312,7 +1312,7 @@ pub fn get_nested_struct_field(mut v: Value, offsets: &[usize]) -> Result<Value,
 }
 
 pub fn get_nth_struct_field(v: Value, n: usize) -> Result<Value, PartialVMError> {
-    let mut itr = v.value_as::<Struct>()?.unpack()?;
+    let mut itr = v.value_as::<Struct>()?.unpack();
     Ok(itr.nth(n).unwrap())
 }
 
