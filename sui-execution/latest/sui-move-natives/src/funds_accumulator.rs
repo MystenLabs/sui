@@ -64,10 +64,7 @@ pub fn add_to_accumulator_address(
         .into();
 
     // TODO this will need to look at the layout of T when this is not guaranteed to be a Balance
-    let Some([amount]): Option<[Value; 1]> = value
-        .unpack()
-        .ok()
-        .and_then(|vs| vs.collect::<Vec<_>>().try_into().ok())
+    let Some([amount]): Option<[Value; 1]> = value.unpack().collect::<Vec<_>>().try_into().ok()
     else {
         debug_assert!(false);
         return Err(

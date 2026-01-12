@@ -74,7 +74,7 @@ fn struct_pack_and_unpack() -> PartialVMResult<()> {
         Value::u128(30),
         Value::u256(U256::max_value()),
     ]);
-    let unpacked: Vec<_> = s.unpack()?.collect();
+    let unpacked: Vec<_> = s.unpack().collect();
 
     assert!(vals.len() == unpacked.len());
     for (v1, v2) in vals.iter().zip(unpacked.iter()) {
