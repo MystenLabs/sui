@@ -19,3 +19,12 @@ echo "=== expect to fail when publishing e because prereqs aren't published ==="
 sui client --client.config $CONFIG \
   test-publish --build-env testnet --pubfile-path Pub.local.toml e \
   > /dev/null || echo "failed to build e"
+
+
+# publish a
+sui client --client.config $CONFIG \
+  test-publish --build-env testnet --pubfile-path Pub.local.toml a \
+  > /dev/null || echo "failed to publish a"
+
+# trying to republish should fail now.
+sui client --client.config $CONFIG test-publish --build-env testnet --pubfile-path Pub.local.toml a

@@ -2023,15 +2023,12 @@ async fn compatibility_checks(
         }
     }
 
-    if !compiled_package.is_system_package()
-        && let Some(already_published) = compiled_package.published_root_module()
-    {
+    if !compiled_package.is_system_package() && compiled_package.published_root_module().is_some() {
         return Err(SuiErrorKind::ModulePublishFailure {
-            error: format!(
-                "Modules must all have 0x0 as their addresses. \
-                 Violated by module {:?}",
-                already_published.self_id(),
-            ),
+            error: "Your package is already published. You have to manually remove the publication entry to publish again.\n \
+            - If you are doing a regular publish, you can remove the entry for your environment from `Published.toml`.\n \
+            - If you are doing a test publish, you can either specify a new file with `--pubfile-path`, \
+            or remove the entry from your existing ephemeral publication file.".to_string(),
         }
         .into());
     }

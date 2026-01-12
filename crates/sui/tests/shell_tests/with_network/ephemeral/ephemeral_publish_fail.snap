@@ -24,11 +24,26 @@ sui client --client.config $CONFIG \
   test-publish --build-env testnet --pubfile-path Pub.local.toml e \
   > /dev/null || echo "failed to build e"
 
+
+# publish a
+sui client --client.config $CONFIG \
+  test-publish --build-env testnet --pubfile-path Pub.local.toml a \
+  > /dev/null || echo "failed to publish a"
+
+# trying to republish should fail now.
+sui client --client.config $CONFIG test-publish --build-env testnet --pubfile-path Pub.local.toml a
+
 ----- results -----
-success: true
-exit_code: 0
+success: false
+exit_code: 1
 ----- stdout -----
 === expect to fail when publishing e because prereqs aren't published ===
 failed to build e
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING a
+Failed to publish the Move module(s), reason: Your package is already published. You have to manually remove the publication entry to publish again.
+ - If you are doing a regular publish, you can remove the entry for your environment from `Published.toml`.
+ - If you are doing a test publish, you can either specify a new file with `--pubfile-path`, or remove the entry from your existing ephemeral publication file.
 
 ----- stderr -----
