@@ -52,6 +52,8 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
 
     let sui_package_dir_src = get_sui_package_dir();
 
+    // TODO DVX-1950 If you have gitignored files it can affect the snapshots, so we should only
+    // copy non-ignored files
     fs_extra::dir::copy(srcdir, sandbox, &CopyOptions::new().content_only(true))?;
     fs_extra::dir::copy(
         sui_package_dir_src,

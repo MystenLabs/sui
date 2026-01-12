@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::schema::{
-    Environment, EnvironmentID, EnvironmentName, LockfileDependencyInfo, PackageName,
+    Environment, EnvironmentID, EnvironmentName, LockfileDependencyInfo, OriginalID, PackageName,
     ParsedManifest, ReplacementDependency,
 };
 
@@ -69,5 +69,9 @@ impl MoveFlavor for Vanilla {
 
     fn validate_manifest(_: &ParsedManifest) -> Result<(), String> {
         Ok(())
+    }
+
+    fn is_system_address(address: &crate::schema::OriginalID) -> bool {
+        address == &OriginalID::from(0xBEEF)
     }
 }
