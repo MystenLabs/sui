@@ -147,10 +147,10 @@ impl<F: MoveFlavor> Package<F> {
     }
 
     /// Create a copy of this package with the publication information replaced by `publish`
-    pub(crate) fn override_publish(&self, publish: Publication<F>) -> Self {
+    pub(crate) fn override_publish(&self, publish: Option<Publication<F>>) -> Self {
         let mut result = self.clone();
         debug!("updating address to {publish:?}");
-        result.publication = Some(publish);
+        result.publication = publish;
         result
     }
 
@@ -483,6 +483,10 @@ mod tests {
 
         fn validate_manifest(_: &ParsedManifest) -> Result<(), String> {
             Ok(())
+        }
+
+        fn is_system_address(_: &OriginalID) -> bool {
+            false
         }
     }
 

@@ -608,7 +608,7 @@ pub struct PaymentArgs {
 }
 
 /// Arguments related to setting gas data, apart from payment coins.
-#[derive(Args, Debug, Default)]
+#[derive(Args, Debug, Default, Clone)]
 pub struct GasDataArgs {
     /// An optional gas budget for this transaction (in MIST). If gas budget is not provided, the
     /// tool will first perform a dry run to estimate the gas cost, and then it will execute the
@@ -635,7 +635,7 @@ pub struct GasDataArgs {
 }
 
 /// Arguments related to what to do to a transaction after it has been built.
-#[derive(Args, Debug, Default)]
+#[derive(Args, Debug, Default, Clone)]
 pub struct TxProcessingArgs {
     /// Compute the transaction digest and print it out, but do not execute the transaction.
     #[arg(long)]
@@ -742,7 +742,7 @@ pub struct UpgradeArgs {
     pub processing: TxProcessingArgs,
 }
 
-#[derive(Args, Debug, Default)]
+#[derive(Args, Debug, Default, Clone)]
 pub struct EphemeralArgs {
     /// The build environment
     #[clap(long)]
@@ -752,12 +752,23 @@ pub struct EphemeralArgs {
     pub pubfile_path: Option<PathBuf>,
 }
 
+impl EphemeralArgs {
+    pub fn get_pubfile_path_or_default(&self, alias: &str) -> PathBuf {
+        self.pubfile_path
+            .clone()
+            .unwrap_or_else(|| PathBuf::from(format!("Pub.{alias}.toml")))
+    }
+}
+
 #[derive(Args, Debug, Default)]
 pub struct TestPublishArgs {
     #[clap(flatten)]
     pub publish_args: PublishArgs,
     #[clap(flatten)]
     pub ephemeral: EphemeralArgs,
+    #[clap(long, default_value = "false")]
+    /// Publishes transitive dependencies that have not already been published.
+    pub publish_unpublished_deps: bool,
 }
 
 #[derive(Args, Debug, Default)]
@@ -928,12 +939,33 @@ impl SuiClientCommands {
                 let read_api = client.read_api();
                 let chain_id = read_api.get_chain_identifier().await?;
                 let active_env = context.get_active_env()?;
+                let alias = active_env.alias.clone();
+
+                let modes = args.publish_args.build_config.mode_set();
+                let build_env = args.ephemeral.build_env.clone();
+                // We produce a pub file path only once, even for transitive deps.
+                let pubfile_path = args.ephemeral.get_pubfile_path_or_default(&alias);
+
+                // Do a transitive publication for each dependency that is not yet published
+                if args.publish_unpublished_deps {
+                    publish_ephemeral_unpublished_dependencies(
+                        &args,
+                        &chain_id,
+                        build_env.clone(),
+                        pubfile_path.clone(),
+                        modes.clone(),
+                        context,
+                    )
+                    .await?;
+                }
+
+                // Load root package from scratch, as everything needs to be recomputed
                 let mut root_package = load_root_pkg_for_ephemeral_publish_or_upgrade(
                     args.publish_args.package_path.as_path(),
-                    &active_env.alias,
                     &chain_id,
-                    &args.ephemeral,
-                    args.publish_args.build_config.mode_set(),
+                    build_env.clone(),
+                    pubfile_path.clone(),
+                    modes.clone(),
                 )
                 .await?;
 
@@ -3390,19 +3422,14 @@ pub async fn load_root_pkg_for_publish_upgrade(
 
 async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
     package_path: &Path,
-    active_env: &str,
     chain_id: &str,
-    ephemeral: &EphemeralArgs,
+    build_env: Option<String>,
+    pubfile_path: PathBuf,
     modes: Vec<ModeName>,
 ) -> anyhow::Result<RootPackage<SuiFlavor>> {
-    let pubfile_path: PathBuf = ephemeral
-        .pubfile_path
-        .clone()
-        .unwrap_or_else(|| PathBuf::from(format!("Pub.{active_env}.toml")));
-
     Ok(PackageLoader::new_ephemeral(
         package_path,
-        ephemeral.build_env.clone(),
+        build_env.clone(),
         chain_id.to_string(),
         pubfile_path,
     )
@@ -3578,11 +3605,12 @@ async fn upgrade_command(
             })?;
 
     let mut root_pkg = if let Some(ephemeral_args) = ephemeral_args {
+        let alias = context.get_active_env()?.alias.clone();
         load_root_pkg_for_ephemeral_publish_or_upgrade(
             &package_path,
-            &context.get_active_env()?.alias,
             &chain_id,
-            &ephemeral_args,
+            ephemeral_args.build_env.clone(),
+            ephemeral_args.get_pubfile_path_or_default(&alias),
             build_config.mode_set(),
         )
         .await?
@@ -3694,6 +3722,91 @@ async fn upgrade_command(
     root_pkg.write_publish_data(publish_data)?;
 
     Ok(result)
+}
+
+async fn publish_ephemeral_unpublished_dependencies(
+    args: &TestPublishArgs,
+    chain_id: &str,
+    build_env: Option<String>,
+    pubfile_path: PathBuf,
+    modes: Vec<ModeName>,
+    context: &mut WalletContext,
+) -> Result<(), anyhow::Error> {
+    if !args.publish_unpublished_deps {
+        return Ok(());
+    }
+
+    if args.publish_args.gas_data.gas_sponsor.is_some() {
+        bail!(
+            "Cannot specify gas data when publishing transitively, as it executes multiple transactions."
+        );
+    }
+
+    if !args.publish_args.payment.gas.is_empty() {
+        bail!(
+            "Cannot specify payment when publishing transitively, as it executes multiple transactions."
+        );
+    }
+
+    if args.publish_args.with_unpublished_dependencies {
+        bail!(
+            "You cannot specify both `--publish-unpublished-deps` and `--with-unpublished-dependencies` at the same time."
+        );
+    }
+
+    let root_package = load_root_pkg_for_ephemeral_publish_or_upgrade(
+        args.publish_args.package_path.as_path(),
+        chain_id,
+        build_env.clone(),
+        pubfile_path.clone(),
+        modes.clone(),
+    )
+    .await?;
+
+    if root_package.package_info().published().is_some() {
+        bail!(
+            "The root package is already published in {pubfile_path:?}, consider removing it or using the test-upgrade command"
+        );
+    }
+
+    // Reverse the deps, we want the "deeper" ones first.
+    for dep in root_package.sorted_packages().into_iter().rev() {
+        // skip root package
+        if dep.is_root() {
+            continue;
+        }
+
+        // Skip already ephemerally published packages as well as system packages
+        if dep.published().is_some() {
+            continue;
+        }
+
+        let dep_path = dep.path().path();
+        let mut dep_root_package = load_root_pkg_for_ephemeral_publish_or_upgrade(
+            dep_path,
+            chain_id,
+            build_env.clone(),
+            pubfile_path.clone(),
+            modes.clone(),
+        )
+        .await?;
+
+        let publish_args = PublishArgs {
+            package_path: dep_path.to_path_buf(),
+            build_config: args.publish_args.build_config.clone(),
+            skip_dependency_verification: args.publish_args.skip_dependency_verification,
+            verify_deps: args.publish_args.verify_deps,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs::default(),
+            gas_data: args.publish_args.gas_data.clone(),
+            processing: args.publish_args.processing.clone(),
+        };
+
+        eprintln!("Publishing transitive dependency: {}", dep.display_name());
+        publish_command(publish_args, &mut dep_root_package, context).await?;
+    }
+
+    Ok(())
 }
 
 /// Make sure we do not have test mode enabled for publish or upgrade

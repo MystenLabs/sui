@@ -150,7 +150,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let mut filtered_graph = unfiltered_graph.filter_for_mode(&config.modes).linkage()?;
         if let Some(ephemeral_pubs) = ephemeral_pubs {
             debug!("adding overrides");
-            filtered_graph.add_publish_overrides(localpubs_to_publications(&ephemeral_pubs)?);
+            filtered_graph.make_ephemeral(localpubs_to_publications(&ephemeral_pubs)?);
         }
 
         debug!("checking rename-from");
@@ -224,6 +224,12 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// transitive dependencies). This includes the non-duplicate addresses only.
     pub fn packages(&self) -> Vec<PackageInfo<'_, F>> {
         self.filtered_graph.packages()
+    }
+
+    /// Return the list of all packages in the root package's package graph (including itself and all
+    /// transitive dependencies). This includes the non-duplicate addresses only, sorted in topological order.
+    pub fn sorted_packages(&self) -> Vec<PackageInfo<'_, F>> {
+        self.filtered_graph.sorted_packages()
     }
 
     /// Update the dependencies in the lockfile for this environment to match the dependency graph

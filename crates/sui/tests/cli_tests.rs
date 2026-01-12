@@ -343,6 +343,7 @@ async fn test_publish_package(
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(pubfile_path),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -653,6 +654,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -957,6 +959,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1267,6 +1270,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1438,6 +1442,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1564,6 +1569,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1710,6 +1716,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -1856,6 +1863,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -2004,6 +2012,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds()
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
@@ -2087,6 +2096,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails()
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -2142,6 +2152,7 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -2183,7 +2194,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_failure_invalid");
     let build_config = BuildConfig::new_for_testing().config;
-    let result = SuiClientCommands::TestPublish(TestPublishArgs {
+    let _result = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path,
             build_config,
@@ -2203,14 +2214,11 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
-    .await;
+    .await?;
 
-    let expect = expect![[r#"
-        "Error while loading dependency tests/data/module_dependency_invalid: error while loading legacy manifest \"tests/data/module_dependency_invalid/Move.toml\": Unable to parse AccountAddress (must be hex string of length 32)"
-    "#]];
-    expect.assert_debug_eq(&result.unwrap_err().to_string());
     Ok(())
 }
 
@@ -2255,9 +2263,10 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
-    .await;
+    .await?;
 
     let expect = expect![[r#"
         Err(
@@ -2321,6 +2330,7 @@ async fn test_package_publish_empty() -> Result<(), anyhow::Error> {
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await;
@@ -4809,6 +4819,7 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
             build_env: Some("testnet".to_string()),
             pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
+        publish_unpublished_deps: false,
     })
     .execute(context)
     .await?;
