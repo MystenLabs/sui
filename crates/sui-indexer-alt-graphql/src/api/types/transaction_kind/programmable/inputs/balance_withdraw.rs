@@ -33,15 +33,7 @@ pub struct BalanceWithdraw {
 /// Reservation details for a withdrawal.
 #[derive(Union, Clone)]
 pub enum WithdrawalReservation {
-    EntireBalance(WithdrawEntireBalance),
     MaxAmountU64(WithdrawMaxAmountU64),
-}
-
-#[derive(SimpleObject, Clone)]
-pub struct WithdrawEntireBalance {
-    /// Placeholder field.
-    #[graphql(name = "_")]
-    pub dummy: Option<bool>,
 }
 
 #[derive(SimpleObject, Clone)]
@@ -67,9 +59,6 @@ impl BalanceWithdraw {
         } = withdrawal;
 
         let reservation = Some(match reservation {
-            NativeReservation::EntireBalance => {
-                WithdrawalReservation::EntireBalance(WithdrawEntireBalance { dummy: None })
-            }
             NativeReservation::MaxAmountU64(amount) => {
                 WithdrawalReservation::MaxAmountU64(WithdrawMaxAmountU64 {
                     amount: Some(amount.into()),
