@@ -62,7 +62,10 @@ use crate::{
         package_lock::PackageSystemLock,
         paths::PackagePath,
     },
-    schema::{Environment, ModeName, OriginalID, PublishAddresses, PublishedID},
+    schema::{
+        Environment, EphemeralDependencyInfo, LocalPub, ModeName, OriginalID, Publication,
+        PublishAddresses, PublishedID,
+    },
     test_utils::{Project, project},
 };
 
@@ -846,6 +849,34 @@ impl Scenario {
         let mut file_contents = std::fs::read_to_string(&path).unwrap();
         file_contents.push_str(contents.as_ref());
         std::fs::write(&path, &file_contents).unwrap();
+    }
+
+    /// Return an ephemeral entry for the given package with the given addreses
+    pub fn ephemeral_for(
+        &self,
+        package: impl AsRef<str>,
+        original_id: OriginalID,
+        published_at: PublishedID,
+    ) -> (EphemeralDependencyInfo, Publication<Vanilla>) {
+        let source = EphemeralDependencyInfo::Local(crate::schema::LocalDepInfo {
+            local: self
+                .root_path
+                .join(package.as_ref())
+                .canonicalize()
+                .expect("valid path"),
+        });
+
+        let publish = Publication {
+            chain_id: DEFAULT_ENV_ID.to_string(),
+            addresses: PublishAddresses {
+                published_at,
+                original_id,
+            },
+            version: 0,
+            metadata: Default::default(),
+        };
+
+        (source, publish)
     }
 }
 
