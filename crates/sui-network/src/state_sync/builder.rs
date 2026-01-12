@@ -149,8 +149,14 @@ where
             peers: HashMap::new(),
             unprocessed_checkpoints: HashMap::new(),
             sequence_number_to_digest: HashMap::new(),
+            scores: HashMap::new(),
             wait_interval_when_no_peer_to_sync_content: config
                 .wait_interval_when_no_peer_to_sync_content(),
+            peer_scoring_window: config.peer_scoring_window(),
+            peer_failure_threshold: config.peer_failure_threshold(),
+            peer_good_throughput_threshold: config.peer_good_throughput_threshold(),
+            checkpoint_content_timeout_min: config.checkpoint_content_timeout_min(),
+            checkpoint_content_timeout_max: config.checkpoint_content_timeout_max(),
         }
         .pipe(RwLock::new)
         .pipe(Arc::new);
