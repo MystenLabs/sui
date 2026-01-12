@@ -48,18 +48,40 @@ function activate(context) {
 			provideDocumentRangeFormattingEdits: async (document, range, _opts, token) => {
 				const options = await findMatchingConfig(document.uri);
 
+				channel.appendLine('Sending text to worker for: ' + document.uri.fsPath);
+
 				// send the text and options to the worker
-				worker.postMessage(JSON.stringify({ text: document.getText(), options }));
+				worker.postMessage(
+					JSON.stringify({
+						text: document.getText(),
+						options,
+						documentUri: document.uri.fsPath,
+					}),
+				);
 
 				// wait for the worker to send the formatted text back. If it
 				// takes longer than 5 seconds, reject the promise.
-				const edited = await new Promise((resolve, reject) => {
-					setTimeout(() => reject(), WAIT_TIME);
-					worker.once('message', ({ text, message }) => {
-						message && channel.appendLine(message);
-						resolve(text);
-					});
+				const { text: edited, documentUri } = await new Promise((resolve, reject) => {
+					setTimeout(() => {
+						reject();
+						worker.off('message', handleMessage);
+						channel.appendLine('Timeout waiting for formatted text for: ' + documentUri);
+					}, WAIT_TIME);
+
+					worker.on('message', handleMessage);
+
+					function handleMessage({ text, message, documentUri }) {
+						if (documentUri === document.uri.fsPath) {
+							channel.appendLine('Received formatted text for: ' + documentUri);
+							resolve({ text, documentUri });
+							worker.off('message', handleMessage);
+						} else {
+							channel.appendLine('Message from wrong document: ' + documentUri);
+						}
+					}
 				});
+
+				channel.appendLine('Document: ' + document.uri.fsPath);
 
 				return [vscode.TextEdit.replace(range, edited)];
 			},
@@ -68,7 +90,7 @@ function activate(context) {
 }
 
 /**
- * For the given filepath, seach for one of the following configuration files:
+ * For the given filepath, search for one of the following configuration files:
  * - .prettierrc (prettier.json etc)
  *
  * Alternatively use (in order, if set):
