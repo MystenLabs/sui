@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 108;
+const MAX_PROTOCOL_VERSION: u64 = 109;
 
 // Record history of protocol version allocations here:
 //
@@ -288,6 +288,7 @@ const MAX_PROTOCOL_VERSION: u64 = 108;
 // Version 107: Enable new digit based gas rounding.
 //              Support TxContext in all parameter positions.
 //              Disable entry point signature check.
+// Version 109: split_checkpoints_in_consensus_handler in devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -950,6 +951,10 @@ struct FeatureFlags {
     // If true, disable entry point signature check.
     #[serde(skip_serializing_if = "is_false")]
     disable_entry_point_signature_check: bool,
+
+    // If true, split checkpoints in consensus handler.
+    #[serde(skip_serializing_if = "is_false")]
+    split_checkpoints_in_consensus_handler: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2514,6 +2519,10 @@ impl ProtocolConfig {
     pub fn consensus_skip_gced_blocks_in_direct_finalization(&self) -> bool {
         self.feature_flags
             .consensus_skip_gced_blocks_in_direct_finalization
+    }
+
+    pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
+        self.feature_flags.split_checkpoints_in_consensus_handler
     }
 }
 
@@ -4434,6 +4443,11 @@ impl ProtocolConfig {
                     cfg.feature_flags.flexible_tx_context_positions = true;
                     cfg.feature_flags.disable_entry_point_signature_check = true;
                 }
+                109 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4824,6 +4838,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_object_funds_withdraw_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_object_funds_withdraw = val;
+    }
+
+    pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
+        self.feature_flags.split_checkpoints_in_consensus_handler = val;
     }
 }
 

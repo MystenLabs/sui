@@ -355,8 +355,8 @@ impl CheckpointExecutor {
         checkpoint: VerifiedCheckpoint,
         mut pipeline_handle: PipelineHandle,
     ) -> bool /* is final checkpoint */ {
-        info!("executing checkpoint");
         let sequence_number = checkpoint.sequence_number;
+        info!("executing checkpoint");
 
         checkpoint.report_checkpoint_age(
             &self.metrics.checkpoint_contents_age,
