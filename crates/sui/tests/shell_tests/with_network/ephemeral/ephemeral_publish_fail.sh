@@ -26,5 +26,5 @@ sui client --client.config $CONFIG \
   test-publish --build-env testnet --pubfile-path Pub.local.toml a \
   > /dev/null || echo "failed to publish a"
 
-# trying to republsh should fail now.
+# trying to republish should fail now.
 sui client --client.config $CONFIG test-publish --build-env testnet --pubfile-path Pub.local.toml a
