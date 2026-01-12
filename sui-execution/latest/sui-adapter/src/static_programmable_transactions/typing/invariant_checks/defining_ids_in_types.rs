@@ -22,6 +22,9 @@ pub fn verify(env: &env::Env, tt: &T::Transaction) -> Result<(), ExecutionError>
     tt.receiving
         .iter()
         .try_for_each(|receiving_input| check_type(&receiving_input.ty))?;
+    tt.withdrawals
+        .iter()
+        .try_for_each(|withdrawal_input| check_type(&withdrawal_input.ty))?;
 
     // Verify all types in commands are defining-id based.
     tt.commands.iter().try_for_each(|sp!(_, c)| {
