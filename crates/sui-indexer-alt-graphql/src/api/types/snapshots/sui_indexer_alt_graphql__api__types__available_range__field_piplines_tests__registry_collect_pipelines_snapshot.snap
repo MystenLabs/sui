@@ -1337,6 +1337,9 @@ Query.events
 Query.events (filter: module)
   => {"ev_emit_mod", "tx_digests"}
 
+Query.scanEvents
+  => {"cp_bloom_blocks", "cp_blooms"}
+
 Query.multiGetAddresses
   => {}
 

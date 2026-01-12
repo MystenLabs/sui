@@ -5,6 +5,7 @@ use std::ops::Range;
 
 use anyhow::Context as _;
 use async_graphql::InputObject;
+use sui_indexer_alt_schema::blooms::should_skip_for_bloom;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 use sui_types::event::Event as NativeEvent;
@@ -167,6 +168,19 @@ impl EventFilter {
             filters.push("type".to_string());
         }
         filters
+    }
+
+    /// Values to probe in bloom filters.
+    pub(crate) fn bloom_probe_values(&self) -> Vec<[u8; 32]> {
+        [
+            self.sender.map(|s| s.into_bytes()),
+            self.module.as_ref().map(|m| m.package().into_bytes()),
+            self.type_.as_ref().map(|t| t.package().into_bytes()),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|v| !should_skip_for_bloom(v))
+        .collect()
     }
 }
 

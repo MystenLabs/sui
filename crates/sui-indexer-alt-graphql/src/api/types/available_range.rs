@@ -362,6 +362,10 @@ collect_pipelines! {
             pipelines.insert("ev_struct_inst".to_string());
         }
     };
+    Query.[scanEvents] |pipelines, _filters| {
+        pipelines.insert("cp_blooms".to_string());
+        pipelines.insert("cp_bloom_blocks".to_string());
+    };
     Query.[nameRecord] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
     };
