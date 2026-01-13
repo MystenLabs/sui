@@ -130,17 +130,29 @@ impl TryFrom<&Checkpoint> for crate::full_checkpoint_content::Checkpoint {
             summary, signature,
         );
 
-        let contents = checkpoint
+        let contents: crate::messages_checkpoint::CheckpointContents = checkpoint
             .contents()
             .bcs()
             .deserialize()
             .map_err(|e| TryFromProtoError::invalid("contents.bcs", e))?;
 
+        let user_signatures: Vec<_> = contents
+            .clone()
+            .into_iter_with_signatures()
+            .map(|(_, user_signatures)| user_signatures)
+            .collect();
+
         let transactions = checkpoint
             .transactions()
             .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
+            .zip(user_signatures)
+            .map(|(tx, user_signatures)| {
+                let mut executed_tx: crate::full_checkpoint_content::ExecutedTransaction =
+                    tx.try_into()?;
+                executed_tx.signatures = user_signatures;
+                Ok(executed_tx)
+            })
+            .collect::<Result<_, TryFromProtoError>>()?;
 
         let object_set = checkpoint.objects().try_into()?;
 
@@ -2582,7 +2594,6 @@ impl From<crate::transaction::FundsWithdrawalArg> for FundsWithdrawal {
         let mut message = Self::default();
 
         message.amount = match value.reservation {
-            crate::transaction::Reservation::EntireBalance => None,
             crate::transaction::Reservation::MaxAmountU64(amount) => Some(amount),
         };
         let crate::transaction::WithdrawalTypeArg::Balance(coin_type) = value.type_arg;

@@ -61,16 +61,22 @@ impl FundsWithdrawSchedulerTrait for NaiveFundsWithdrawScheduler {
         // Map from each account ID that we have seen so far to the current
         // remaining funds for reservation.
         let mut cur_funds = BTreeMap::new();
+        let all_accounts = withdraws.all_accounts();
+        for account_id in all_accounts {
+            let (balance, version) = self.funds_read.get_latest_account_amount(&account_id);
+            if version > withdraws.accumulator_version {
+                withdraws.notify_skip_schedule();
+                return;
+            }
+            cur_funds.insert(account_id, balance);
+        }
         for (withdraw, sender) in withdraws.withdraws.into_iter().zip(withdraws.senders) {
             // Try to reserve all withdraws in this transaction.
             // Note that this is not atomic, so it is possible that we reserve some withdraws and not others.
             // This is intentional to be semantically consistent with the eager scheduler.
             let mut success = true;
             for (object_id, reservation) in &withdraw.reservations {
-                let entry = cur_funds.entry(*object_id).or_insert_with(|| {
-                    self.funds_read
-                        .get_account_amount(object_id, withdraws.accumulator_version)
-                });
+                let entry = cur_funds.get_mut(object_id).unwrap();
                 if *entry < *reservation as u128 {
                     debug!(
                         tx_digest =? withdraw.tx_digest,

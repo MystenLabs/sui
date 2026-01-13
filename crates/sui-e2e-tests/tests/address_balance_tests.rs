@@ -12,7 +12,7 @@ use std::{
     },
 };
 use sui_core::accumulators::balances::get_currency_types_for_owner;
-use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse};
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
@@ -21,17 +21,14 @@ use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::accumulator_metadata::get_accumulator_object_count;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
-    accumulator_metadata::AccumulatorOwner,
-    accumulator_root::{AccumulatorValue, U128},
+    accumulator_root::AccumulatorValue,
     balance::Balance,
-    base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress, dbg_addr},
-    coin_reservation::ParsedObjectRefWithdrawal,
+    base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr},
     digests::{ChainIdentifier, CheckpointDigest},
     effects::{InputConsensusObject, TransactionEffectsAPI},
     gas::GasCostSummary,
     gas_coin::GAS,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    storage::ChildObjectResolver,
     supported_protocol_versions::SupportedProtocolVersions,
     transaction::{
         Argument, CallArg, Command, FundsWithdrawalArg, GasData, ObjectArg, Transaction,
@@ -39,7 +36,10 @@ use sui_types::{
         TransactionKind, VerifiedTransaction,
     },
 };
-use test_cluster::{TestCluster, TestClusterBuilder};
+use test_cluster::{
+    TestCluster, TestClusterBuilder,
+    addr_balance_test_env::{TestEnv, TestEnvBuilder, verify_accumulator_exists},
+};
 
 async fn get_sender_and_all_gas(context: &mut WalletContext) -> (SuiAddress, Vec<ObjectRef>) {
     get_nth_sender_and_all_gas(context, 0).await
@@ -47,14 +47,6 @@ async fn get_sender_and_all_gas(context: &mut WalletContext) -> (SuiAddress, Vec
 
 async fn get_sender_and_one_gas(context: &mut WalletContext) -> (SuiAddress, ObjectRef) {
     let (sender, gas) = get_sender_and_all_gas(context).await;
-    (sender, gas.into_iter().next().unwrap())
-}
-
-async fn get_nth_sender_and_one_gas(
-    context: &mut WalletContext,
-    n: usize,
-) -> (SuiAddress, ObjectRef) {
-    let (sender, gas) = get_nth_sender_and_all_gas(context, n).await;
     (sender, gas.into_iter().next().unwrap())
 }
 
@@ -357,43 +349,40 @@ async fn test_accumulators_disabled() {
 
 #[sim_test]
 async fn test_deposits() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
-        cfg
-    });
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
 
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
-
-    let (sender, gas) = get_sender_and_one_gas(context).await;
-
+    let (sender, gas) = test_env.get_sender_and_gas(0);
     let recipient = SuiAddress::random_for_testing_only();
 
-    let tx = TestTransactionBuilder::new(sender, gas, rgp)
+    let tx = test_env
+        .tx_builder(sender)
         .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1000, recipient)])
         .build();
-
-    let res = test_cluster.sign_and_execute_transaction(&tx).await;
-    let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
+    test_env.exec_tx_directly(tx).await.unwrap();
 
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
-    let tx = TestTransactionBuilder::new(sender, gas, rgp)
+    let (_, gas) = test_env.get_sender_and_gas(0);
+    let tx = test_env
+        .tx_builder(sender)
         .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1000, recipient)])
         .build();
+    test_env.exec_tx_directly(tx).await.unwrap();
 
-    test_cluster.sign_and_execute_transaction(&tx).await;
-
-    test_cluster.fullnode_handle.sui_node.with(|node| {
+    test_env.cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
         verify_accumulator_exists(child_object_resolver, recipient, 2000);
 
         // Ensure that the accumulator root object is considered a read-only InputConsensusObject
-        // by the settlement transaction. This is necessary so that causal sorting in CheckpointBuilder
-        // orders barriers after settlements.
+        // by the settlement transaction.
         let sui_coin_type = Balance::type_tag(GAS::type_tag());
         let accumulator_object =
             AccumulatorValue::load_object(child_object_resolver, None, recipient, &sui_coin_type)
@@ -418,46 +407,43 @@ async fn test_deposits() {
         assert_eq!(object_count, 5);
     });
 
-    // ensure that no conservation failures are detected during reconfig.
-    test_cluster.trigger_reconfiguration().await;
+    test_env.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_multiple_settlement_txns() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_accumulators_for_testing();
-        cfg.set_max_updates_per_settlement_txn_for_testing(3);
-        cfg
-    });
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_accumulators_for_testing();
+            cfg.set_max_updates_per_settlement_txn_for_testing(3);
+            cfg
+        }))
+        .build()
+        .await;
 
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
-
-    let (sender, gas) = get_sender_and_one_gas(context).await;
-
+    let (sender, gas) = test_env.get_sender_and_gas(0);
     let recipient = SuiAddress::random_for_testing_only();
 
     let amounts_and_recipients = (0..20)
         .map(|_| (1u64, SuiAddress::random_for_testing_only()))
         .collect::<Vec<_>>();
 
-    let tx = TestTransactionBuilder::new(sender, gas, rgp)
+    let tx = test_env
+        .tx_builder(sender)
         .transfer_sui_to_address_balance(FundSource::coin(gas), amounts_and_recipients.clone())
         .build();
-
-    let res = test_cluster.sign_and_execute_transaction(&tx).await;
-    let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
+    test_env.exec_tx_directly(tx).await.unwrap();
 
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
-    let tx = TestTransactionBuilder::new(sender, gas, rgp)
+    let (_, gas) = test_env.get_sender_and_gas(0);
+    let tx = test_env
+        .tx_builder(sender)
         .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1000, recipient)])
         .build();
+    test_env.exec_tx_directly(tx).await.unwrap();
 
-    test_cluster.sign_and_execute_transaction(&tx).await;
-
-    test_cluster.fullnode_handle.sui_node.with(|node| {
+    test_env.cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
 
@@ -473,283 +459,156 @@ async fn test_multiple_settlement_txns() {
         assert_eq!(object_count, 105);
     });
 
-    // ensure that no conservation failures are detected during reconfig.
-    test_cluster.trigger_reconfiguration().await;
-}
-
-fn get_balance(child_object_resolver: &dyn ChildObjectResolver, owner: SuiAddress) -> u64 {
-    let sui_coin_type = Balance::type_tag(GAS::type_tag());
-    let accumulator_value =
-        AccumulatorValue::load(child_object_resolver, None, owner, &sui_coin_type)
-            .expect("read cannot fail");
-    match accumulator_value {
-        Some(AccumulatorValue::U128(u128_val)) => u128_val.value as u64,
-        None => 0,
-    }
-}
-
-fn verify_accumulator_exists(
-    child_object_resolver: &dyn ChildObjectResolver,
-    owner: SuiAddress,
-    expected_balance: u64,
-) {
-    let sui_coin_type = Balance::type_tag(GAS::type_tag());
-
-    assert!(
-        AccumulatorValue::exists(child_object_resolver, None, owner, &sui_coin_type).unwrap(),
-        "Accumulator value should have been created"
-    );
-
-    let accumulator_object =
-        AccumulatorValue::load_object(child_object_resolver, None, owner, &sui_coin_type)
-            .expect("read cannot fail")
-            .expect("accumulator should exist");
-
-    assert!(
-        accumulator_object
-            .data
-            .try_as_move()
-            .unwrap()
-            .type_()
-            .is_efficient_representation()
-    );
-
-    let accumulator_value =
-        AccumulatorValue::load(child_object_resolver, None, owner, &sui_coin_type)
-            .expect("read cannot fail")
-            .expect("accumulator should exist");
-
-    assert_eq!(
-        accumulator_value,
-        AccumulatorValue::U128(U128 {
-            value: expected_balance as u128
-        }),
-        "Accumulator value should be {expected_balance}"
-    );
-
-    assert!(
-        AccumulatorOwner::exists(child_object_resolver, None, owner).unwrap(),
-        "Owner object should have been created"
-    );
-
-    let owner = AccumulatorOwner::load(child_object_resolver, None, owner)
-        .expect("read cannot fail")
-        .expect("owner must exist");
-
-    assert!(
-        owner
-            .metadata_exists(child_object_resolver, None, &sui_coin_type)
-            .unwrap(),
-        "Metadata object should have been created"
-    );
-
-    let _metadata = owner
-        .load_metadata(child_object_resolver, None, &sui_coin_type)
-        .unwrap();
+    test_env.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_deposit_and_withdraw() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
-        cfg
-    });
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
 
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
+    let sender = test_env.get_sender(0);
 
-    let (sender, gas) = get_sender_and_one_gas(context).await;
+    test_env.fund_one_address_balance(sender, 1000).await;
+    test_env.verify_accumulator_exists(sender, 1000);
 
-    let tx = TestTransactionBuilder::new(sender, gas, rgp)
-        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1000, sender)])
-        .build();
-    let res = test_cluster.sign_and_execute_transaction(&tx).await;
-
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        verify_accumulator_exists(child_object_resolver, sender, 1000);
-
-        // Verify the accumulator object count after settlement.
-        // 1 account (sender) with SUI balance = 5 objects.
-        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
-            .expect("read cannot fail")
-            .expect("accumulator object count should exist after settlement");
-        assert_eq!(object_count, 5);
-    });
-
-    let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
-
-    let tx = TestTransactionBuilder::new(sender, gas, rgp)
+    let tx = test_env
+        .tx_builder(sender)
         .transfer_sui_to_address_balance(
             FundSource::address_fund_with_reservation(1000),
             vec![(1000, dbg_addr(2))],
         )
         .build();
-    test_cluster.sign_and_execute_transaction(&tx).await;
-
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        let sui_coin_type = Balance::type_tag(GAS::type_tag());
-
-        assert!(
-            !AccumulatorValue::exists(child_object_resolver, None, sender, &sui_coin_type).unwrap(),
-            "Accumulator value should have been removed"
-        );
-        assert!(
-            !AccumulatorOwner::exists(child_object_resolver, None, sender).unwrap(),
-            "Owner object should have been removed"
-        );
-    });
-
-    // ensure that no conservation failures are detected during reconfig.
-    test_cluster.trigger_reconfiguration().await;
+    test_env.exec_tx_directly(tx).await.unwrap();
+    // Verify the accumulator object count after settlement.
+    // 1 account (sender) with SUI balance = 5 objects.
+    test_env.verify_accumulator_object_count(5);
+    test_env.verify_accumulator_removed(sender);
+    test_env.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_deposit_and_withdraw_with_larger_reservation() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
-        cfg
-    });
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
 
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
+    let sender = test_env.get_sender(0);
 
-    let (sender, gas) = get_sender_and_one_gas(context).await;
-
-    let tx = TestTransactionBuilder::new(sender, gas, rgp)
-        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(1000, sender)])
-        .build();
-    let res = test_cluster.sign_and_execute_transaction(&tx).await;
-    let gas = res.effects.unwrap().gas_object().reference.to_object_ref();
+    test_env.fund_one_address_balance(sender, 1000).await;
 
     // Withdraw 800 with a reservation of 1000 (larger than actual withdrawal)
-    let tx = TestTransactionBuilder::new(sender, gas, rgp)
+    let tx = test_env
+        .tx_builder(sender)
         .transfer_sui_to_address_balance(
             FundSource::address_fund_with_reservation(1000),
             vec![(800, dbg_addr(2))],
         )
         .build();
-    test_cluster.sign_and_execute_transaction(&tx).await;
+    test_env.exec_tx_directly(tx).await.unwrap();
 
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        // Verify that the accumulator still exists, as the entire balance was not withdrawn
-        verify_accumulator_exists(child_object_resolver, sender, 200);
-
-        // Verify the accumulator object count after settlement.
-        // 2 accounts (sender with 200, dbg_addr(2) with 800), each with 5 objects = 10.
-        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
-            .expect("read cannot fail")
-            .expect("accumulator object count should exist after settlement");
-        assert_eq!(object_count, 10);
-    });
-
-    // ensure that no conservation failures are detected during reconfig.
-    test_cluster.trigger_reconfiguration().await;
+    // Verify that the accumulator still exists, as the entire balance was not withdrawn
+    test_env.verify_accumulator_exists(sender, 200);
+    // Verify the accumulator object count after settlement.
+    // 2 accounts (sender with 200, dbg_addr(2) with 800), each with 5 objects = 10.
+    test_env.verify_accumulator_object_count(10);
+    test_env.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_withdraw_non_existent_balance() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg
+        }))
         .build()
         .await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
 
-    let (sender, gas) = get_sender_and_one_gas(context).await;
+    let sender = test_env.get_sender(0);
 
-    // Settlement transaction fails with EInvalidSplitAmount because
-    let tx = TestTransactionBuilder::new(sender, gas, rgp)
+    // Settlement transaction fails because balance doesn't exist
+    let tx = test_env
+        .tx_builder(sender)
         .transfer_sui_to_address_balance(
             FundSource::address_fund_with_reservation(1000),
             vec![(1000, dbg_addr(2))],
         )
         .build();
-    let signed_tx = test_cluster.sign_transaction(&tx).await;
-    let err = test_cluster
-        .wallet
-        .execute_transaction_may_fail(signed_tx)
-        .await
-        .unwrap_err();
+    let err = test_env.exec_tx_directly(tx).await.unwrap_err();
 
     assert!(err.to_string().contains("is less than requested"));
 }
 
 #[sim_test]
 async fn test_withdraw_insufficient_balance() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg
+        }))
         .build()
         .await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
 
-    let (sender, mut gas) = get_sender_and_all_gas(context).await;
-
-    let gas1 = gas.pop().unwrap();
-    let gas2 = gas.pop().unwrap();
+    let (sender, gas) = test_env.get_sender_and_all_gas(0);
+    let gas1 = gas[0];
+    let gas2 = gas[1];
 
     // send 1000 from our gas coin to our balance
-    let tx = TestTransactionBuilder::new(sender, gas1, rgp)
+    let tx = test_env
+        .tx_builder_with_gas(sender, gas1)
         .transfer_sui_to_address_balance(FundSource::coin(gas1), vec![(1000, sender)])
         .build();
-    let res = test_cluster.sign_and_execute_transaction(&tx).await;
-    let gas1 = res.effects.unwrap().gas_object().reference.to_object_ref();
+    test_env.exec_tx_directly(tx).await.unwrap();
 
-    // Try to withdraw 1001 from balance
-    // Transaction fails at signing time
-    let tx = TestTransactionBuilder::new(sender, gas1, rgp)
+    let gas1 = test_env.get_sender_and_gas(0).1;
+
+    // Try to withdraw 1001 from balance - should fail
+    let tx = test_env
+        .tx_builder_with_gas(sender, gas1)
         .transfer_sui_to_address_balance(
             FundSource::address_fund_with_reservation(1001),
             vec![(1001, dbg_addr(2))],
         )
         .build();
-    let signed_tx = test_cluster.sign_transaction(&tx).await;
-    let err = test_cluster
-        .wallet
-        .execute_transaction_may_fail(signed_tx)
-        .await
-        .unwrap_err();
-
+    let err = test_env.exec_tx_directly(tx).await.unwrap_err();
     assert!(err.to_string().contains("is less than requested"));
+
+    // Refresh gas1 after the failed transaction
+    let gas1 = test_env.get_sender_and_gas(0).1;
 
     // Now exceed the balance with two transactions, each of which can be certified
     // The second one will fail at execution time
-    let tx1 = TestTransactionBuilder::new(sender, gas1, rgp)
+    let tx1 = test_env
+        .tx_builder_with_gas(sender, gas1)
         .transfer_sui_to_address_balance(
             FundSource::address_fund_with_reservation(500),
             vec![(500, dbg_addr(2))],
         )
         .build();
-    let tx2 = TestTransactionBuilder::new(sender, gas2, rgp)
+    let tx2 = test_env
+        .tx_builder_with_gas(sender, gas2)
         .transfer_sui_to_address_balance(
             FundSource::address_fund_with_reservation(501),
             vec![(501, dbg_addr(2))],
         )
         .build();
 
-    let mut effects = test_cluster
+    let mut effects = test_env
+        .cluster
         .sign_and_execute_txns_in_soft_bundle(&[tx1, tx2])
         .await
         .unwrap();
@@ -763,50 +622,40 @@ async fn test_withdraw_insufficient_balance() {
         "Expected transaction to fail due to insufficient balance"
     );
 
-    // ensure that no conservation failures are detected during reconfig.
-    test_cluster.trigger_reconfiguration().await;
+    test_env.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_address_balance_gas() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
 
-    let mut test_cluster = TestClusterBuilder::new().build().await;
-    let (sender, gas_package_id) =
-        setup_address_balance_account(&mut test_cluster, 10_000_000).await;
+    let (sender, gas_package_id) = setup_address_balance_account(&mut test_env, 10_000_000).await;
 
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        verify_accumulator_exists(child_object_resolver, sender, 10_000_000);
-
-        // Verify the accumulator object count after settlement.
-        // 1 account (sender) with SUI balance = 5 objects.
-        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
-            .expect("read cannot fail")
-            .expect("accumulator object count should exist after settlement");
-        assert_eq!(object_count, 5);
-    });
-
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let chain_id = test_cluster.get_chain_identifier();
+    test_env.verify_accumulator_exists(sender, 10_000_000);
+    // Verify the accumulator object count after settlement.
+    // 1 account (sender) with SUI balance = 5 objects.
+    test_env.verify_accumulator_object_count(5);
 
     // check that a transaction with a zero gas budget is rejected
     {
         let mut tx = create_storage_test_transaction_address_balance(
             sender,
             gas_package_id,
-            rgp,
-            chain_id,
+            test_env.rgp,
+            test_env.chain_id,
             None,
             0,
         );
         tx.gas_data_mut().budget = 0;
-        let signed_tx = test_cluster.sign_transaction(&tx).await;
-        let err = test_cluster
+        let signed_tx = test_env.cluster.sign_transaction(&tx).await;
+        let err = test_env
+            .cluster
             .wallet
             .execute_transaction_may_fail(signed_tx)
             .await
@@ -817,14 +666,15 @@ async fn test_address_balance_gas() {
     let tx = create_storage_test_transaction_address_balance(
         sender,
         gas_package_id,
-        rgp,
-        chain_id,
+        test_env.rgp,
+        test_env.chain_id,
         None,
         0,
     );
 
-    let signed_tx = test_cluster.sign_transaction(&tx).await;
-    let (effects, _) = test_cluster
+    let signed_tx = test_env.cluster.sign_transaction(&tx).await;
+    let (effects, _) = test_env
+        .cluster
         .execute_transaction_return_raw_effects(signed_tx)
         .await
         .expect("Transaction should succeed with address balance gas payment");
@@ -846,87 +696,61 @@ async fn test_address_balance_gas() {
 
     let expected_balance = 10_000_000 - gas_used;
 
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        verify_accumulator_exists(child_object_resolver, sender, expected_balance);
-    });
+    test_env.verify_accumulator_exists(sender, expected_balance);
 
-    test_cluster.trigger_reconfiguration().await;
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_sponsored_address_balance_storage_rebates() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
         .build()
         .await;
 
-    let addresses = test_cluster.wallet.get_addresses();
-    let sender = addresses[0];
-    let sponsor = addresses[1];
+    let gas_test_package_id = setup_test_package(&mut test_env.cluster.wallet).await;
 
-    let chain_id = test_cluster.get_chain_identifier();
-    let gas_test_package_id = setup_test_package(&mut test_cluster.wallet).await;
-    let rgp = test_cluster.wallet.get_reference_gas_price().await.unwrap();
+    test_env.update_all_gas().await;
+    let (sender, sender_gas) = test_env.get_sender_and_gas(0);
+    let (sponsor, sponsor_gas) = test_env.get_sender_and_gas(1);
 
-    let sender_gas = test_cluster
-        .wallet
-        .gas_objects(sender)
-        .await
-        .unwrap()
-        .pop()
-        .unwrap()
-        .1
-        .object_ref();
-    let deposit_tx_sender = TestTransactionBuilder::new(sender, sender_gas, rgp)
+    let deposit_tx_sender = test_env
+        .tx_builder_with_gas(sender, sender_gas)
         .transfer_sui_to_address_balance(FundSource::coin(sender_gas), vec![(100_000_000, sender)])
         .build();
-    test_cluster
-        .sign_and_execute_transaction(&deposit_tx_sender)
-        .await;
+    test_env.exec_tx_directly(deposit_tx_sender).await.unwrap();
 
-    let sponsor_gas = test_cluster
-        .wallet
-        .gas_objects(sponsor)
-        .await
-        .unwrap()
-        .pop()
-        .unwrap()
-        .1
-        .object_ref();
-    let deposit_tx_sponsor = TestTransactionBuilder::new(sponsor, sponsor_gas, rgp)
+    let deposit_tx_sponsor = test_env
+        .tx_builder_with_gas(sponsor, sponsor_gas)
         .transfer_sui_to_address_balance(
             FundSource::coin(sponsor_gas),
             vec![(100_000_000, sponsor)],
         )
         .build();
-    test_cluster
-        .sign_and_execute_transaction(&deposit_tx_sponsor)
-        .await;
+    test_env.exec_tx_directly(deposit_tx_sponsor).await.unwrap();
 
     let create_txn = create_storage_test_transaction_address_balance(
         sender,
         gas_test_package_id,
-        rgp,
-        chain_id,
+        test_env.rgp,
+        test_env.chain_id,
         Some(sponsor),
         0,
     );
 
-    let sender_sig = test_cluster
+    let sender_sig = test_env
+        .cluster
         .wallet
         .config
         .keystore
         .sign_secure(&sender, &create_txn, Intent::sui_transaction())
         .await
         .unwrap();
-    let sponsor_sig = test_cluster
+    let sponsor_sig = test_env
+        .cluster
         .wallet
         .config
         .keystore
@@ -935,7 +759,10 @@ async fn test_sponsored_address_balance_storage_rebates() {
         .unwrap();
 
     let signed_create_txn = Transaction::from_data(create_txn, vec![sender_sig, sponsor_sig]);
-    let create_resp = test_cluster.execute_transaction(signed_create_txn).await;
+    let create_resp = test_env
+        .cluster
+        .execute_transaction(signed_create_txn)
+        .await;
     let create_effects = create_resp.effects.as_ref().unwrap();
 
     assert!(
@@ -953,24 +780,19 @@ async fn test_sponsored_address_balance_storage_rebates() {
         gas_used
     );
 
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
+    let sponsor_actual = test_env.get_sui_balance(sponsor);
+    let sender_actual = test_env.get_sui_balance(sender);
 
-        let sponsor_actual = get_balance(child_object_resolver, sponsor);
-        let sender_actual = get_balance(child_object_resolver, sender);
-
-        assert!(
-            sponsor_actual < 100_000_000,
-            "Sponsor balance should have decreased from 100_000_000, got: {}",
-            sponsor_actual
-        );
-        assert_eq!(
-            sender_actual, 100_000_000,
-            "Sender balance should remain at 100_000_000, got: {}",
-            sender_actual
-        );
-    });
+    assert!(
+        sponsor_actual < 100_000_000,
+        "Sponsor balance should have decreased from 100_000_000, got: {}",
+        sponsor_actual
+    );
+    assert_eq!(
+        sender_actual, 100_000_000,
+        "Sender balance should remain at 100_000_000, got: {}",
+        sender_actual
+    );
 
     let created_objects: Vec<_> = create_effects.created().iter().collect();
     assert_eq!(
@@ -983,19 +805,21 @@ async fn test_sponsored_address_balance_storage_rebates() {
         sender,
         gas_test_package_id,
         created_obj,
-        rgp,
-        chain_id,
+        test_env.rgp,
+        test_env.chain_id,
         Some(sponsor),
     );
 
-    let sender_delete_sig = test_cluster
+    let sender_delete_sig = test_env
+        .cluster
         .wallet
         .config
         .keystore
         .sign_secure(&sender, &delete_txn, Intent::sui_transaction())
         .await
         .unwrap();
-    let sponsor_delete_sig = test_cluster
+    let sponsor_delete_sig = test_env
+        .cluster
         .wallet
         .config
         .keystore
@@ -1005,7 +829,10 @@ async fn test_sponsored_address_balance_storage_rebates() {
 
     let signed_delete_txn =
         Transaction::from_data(delete_txn, vec![sender_delete_sig, sponsor_delete_sig]);
-    let delete_resp = test_cluster.execute_transaction(signed_delete_txn).await;
+    let delete_resp = test_env
+        .cluster
+        .execute_transaction(signed_delete_txn)
+        .await;
     let delete_effects = delete_resp.effects.as_ref().unwrap();
 
     assert!(
@@ -1021,24 +848,19 @@ async fn test_sponsored_address_balance_storage_rebates() {
         delete_gas_summary.storage_rebate
     );
 
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
+    let sponsor_final = test_env.get_sui_balance(sponsor);
+    let sender_final = test_env.get_sui_balance(sender);
 
-        let sponsor_final = get_balance(child_object_resolver, sponsor);
-        let sender_final = get_balance(child_object_resolver, sender);
+    assert_eq!(
+        sender_final, 100_000_000,
+        "Sender balance should remain unchanged at 100_000_000"
+    );
+    assert_ne!(
+        sponsor_final, 100_000_000,
+        "Sponsor balance should have changed from 100_000_000"
+    );
 
-        assert_eq!(
-            sender_final, 100_000_000,
-            "Sender balance should remain unchanged at 100_000_000"
-        );
-        assert_ne!(
-            sponsor_final, 100_000_000,
-            "Sponsor balance should have changed from 100_000_000"
-        );
-    });
-
-    test_cluster.trigger_reconfiguration().await;
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 async fn setup_test_package(context: &mut WalletContext) -> ObjectID {
@@ -1061,22 +883,20 @@ async fn setup_test_package(context: &mut WalletContext) -> ObjectID {
 }
 
 async fn setup_address_balance_account(
-    test_cluster: &mut TestCluster,
+    test_env: &mut TestEnv,
     deposit_amount: u64,
 ) -> (SuiAddress, ObjectID) {
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let context = &mut test_cluster.wallet;
+    let gas_package_id = setup_test_package(&mut test_env.cluster.wallet).await;
 
-    let (sender, gas_objects) = get_sender_and_all_gas(context).await;
-    let gas_package_id = setup_test_package(context).await;
+    test_env.update_all_gas().await;
 
-    let deposit_tx = TestTransactionBuilder::new(sender, gas_objects[1], rgp)
-        .transfer_sui_to_address_balance(
-            FundSource::coin(gas_objects[1]),
-            vec![(deposit_amount, sender)],
-        )
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+
+    let deposit_tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(deposit_amount, sender)])
         .build();
-    test_cluster.sign_and_execute_transaction(&deposit_tx).await;
+    test_env.exec_tx_directly(deposit_tx).await.unwrap();
 
     (sender, gas_package_id)
 }
@@ -1318,7 +1138,7 @@ fn create_withdraw_balance_transaction(
 
     let withdraw_arg = FundsWithdrawalArg::balance_from_sender(
         withdraw_amount,
-        sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
+        sui_types::gas_coin::GAS::type_tag(),
     );
     let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
 
@@ -1723,31 +1543,21 @@ async fn test_transaction_expiration_edge_cases() {
 
 #[sim_test]
 async fn test_address_balance_gas_cost_parity() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
         .build()
         .await;
     let (sender, gas_test_package_id) =
-        setup_address_balance_account(&mut test_cluster, 100_000_000).await;
+        setup_address_balance_account(&mut test_env, 100_000_000).await;
 
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let chain_id = test_cluster.get_chain_identifier();
+    let (_, gas_coin) = test_env.get_sender_and_gas(0);
 
-    let gas_coin = test_cluster
-        .wallet
-        .get_one_gas_object()
-        .await
-        .unwrap()
-        .unwrap()
-        .1;
-    let coin_tx = create_storage_test_transaction_gas(sender, gas_test_package_id, gas_coin, rgp);
-    let coin_resp = test_cluster.sign_and_execute_transaction(&coin_tx).await;
-    let coin_effects = coin_resp.effects.as_ref().unwrap();
+    let coin_tx =
+        create_storage_test_transaction_gas(sender, gas_test_package_id, gas_coin, test_env.rgp);
+    let (_, coin_effects) = test_env.exec_tx_directly(coin_tx).await.unwrap();
 
     assert!(
         coin_effects.status().is_ok(),
@@ -1758,15 +1568,12 @@ async fn test_address_balance_gas_cost_parity() {
     let address_balance_tx = create_storage_test_transaction_address_balance(
         sender,
         gas_test_package_id,
-        rgp,
-        chain_id,
+        test_env.rgp,
+        test_env.chain_id,
         None,
         0,
     );
-    let address_balance_resp = test_cluster
-        .sign_and_execute_transaction(&address_balance_tx)
-        .await;
-    let address_balance_effects = address_balance_resp.effects.as_ref().unwrap();
+    let (_, address_balance_effects) = test_env.exec_tx_directly(address_balance_tx).await.unwrap();
 
     assert!(
         address_balance_effects.status().is_ok(),
@@ -1796,9 +1603,8 @@ async fn test_address_balance_gas_cost_parity() {
         "Computation costs should be identical for the same transaction"
     );
 
-    let coin_created_objects: Vec<_> = coin_effects.created().iter().collect();
-    let address_balance_created_objects: Vec<_> =
-        address_balance_effects.created().iter().collect();
+    let coin_created_objects: Vec<_> = coin_effects.created().to_vec();
+    let address_balance_created_objects: Vec<_> = address_balance_effects.created().to_vec();
 
     assert_eq!(
         coin_created_objects.len(),
@@ -1811,41 +1617,33 @@ async fn test_address_balance_gas_cost_parity() {
         "Should have created exactly one object with address balance payment"
     );
 
-    let coin_created_obj = coin_created_objects[0].reference.to_object_ref();
-    let address_balance_created_obj = address_balance_created_objects[0].reference.to_object_ref();
+    let coin_created_obj = coin_created_objects[0].0;
+    let address_balance_created_obj = address_balance_created_objects[0].0;
 
-    let gas_coin_for_delete = test_cluster
-        .wallet
-        .get_one_gas_object()
-        .await
-        .unwrap()
-        .unwrap()
-        .1;
+    let (_, gas_coin_for_delete) = test_env.get_sender_and_gas(0);
 
     let coin_delete_tx = create_delete_transaction_gas(
         sender,
         gas_test_package_id,
         coin_created_obj,
         gas_coin_for_delete,
-        rgp,
+        test_env.rgp,
     );
-    let coin_delete_resp = test_cluster
-        .sign_and_execute_transaction(&coin_delete_tx)
-        .await;
-    let coin_delete_effects = coin_delete_resp.effects.as_ref().unwrap();
+    let (_, coin_delete_effects) = test_env.exec_tx_directly(coin_delete_tx).await.unwrap();
 
     let address_balance_delete_tx = create_delete_transaction_address_balance(
         sender,
         gas_test_package_id,
         address_balance_created_obj,
-        rgp,
-        chain_id,
+        test_env.rgp,
+        test_env.chain_id,
         None,
     );
-    let address_balance_delete_resp = test_cluster
-        .sign_and_execute_transaction(&address_balance_delete_tx)
-        .await;
-    let address_balance_delete_effects = address_balance_delete_resp.effects.as_ref().unwrap();
+    let address_balance_delete_resp = test_env
+        .exec_tx_directly(address_balance_delete_tx)
+        .await
+        .unwrap();
+    let (_, address_balance_delete_effects) = address_balance_delete_resp;
 
     let coin_delete_gas_summary = coin_delete_effects.gas_cost_summary();
     let address_balance_delete_gas_summary = address_balance_delete_effects.gas_cost_summary();
@@ -1874,52 +1672,37 @@ async fn test_address_balance_gas_cost_parity() {
         "Deletion computation costs should be identical for both payment methods"
     );
 
-    test_cluster.trigger_reconfiguration().await;
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_address_balance_gas_charged_on_move_abort() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
         .build()
         .await;
+
     let (sender, gas_test_package_id) =
-        setup_address_balance_account(&mut test_cluster, 10_000_000).await;
+        setup_address_balance_account(&mut test_env, 10_000_000).await;
 
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        verify_accumulator_exists(child_object_resolver, sender, 10_000_000);
-
-        // Verify the accumulator object count after settlement.
-        // 1 account (sender) with SUI balance = 5 objects.
-        let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
-            .expect("read cannot fail")
-            .expect("accumulator object count should exist after settlement");
-        assert_eq!(object_count, 5);
-    });
-
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let chain_id = test_cluster.get_chain_identifier();
+    test_env.verify_accumulator_exists(sender, 10_000_000);
+    // Verify the accumulator object count after settlement.
+    // 1 account (sender) with SUI balance = 5 objects.
+    test_env.verify_accumulator_object_count(5);
 
     let abort_tx = create_abort_test_transaction_address_balance(
         sender,
         gas_test_package_id,
-        rgp,
-        chain_id,
+        test_env.rgp,
+        test_env.chain_id,
         true,
         None,
     );
-    let signed_tx = test_cluster.sign_transaction(&abort_tx).await;
-    let (effects, _) = test_cluster
-        .execute_transaction_return_raw_effects(signed_tx)
-        .await
-        .expect("Transaction execution should succeed even with Move abort");
+
+    let (_, effects) = test_env.exec_tx_directly(abort_tx).await.unwrap();
 
     assert!(
         effects.status().is_err(),
@@ -1941,13 +1724,9 @@ async fn test_address_balance_gas_charged_on_move_abort() {
 
     let expected_balance = 10_000_000 - gas_used;
 
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        verify_accumulator_exists(child_object_resolver, sender, expected_balance);
-    });
+    test_env.verify_accumulator_exists(sender, expected_balance);
 
-    test_cluster.trigger_reconfiguration().await;
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -1972,10 +1751,7 @@ async fn test_explicit_sponsor_withdrawal_banned() {
     let rgp = test_cluster.wallet.get_reference_gas_price().await.unwrap();
 
     let mut builder = ProgrammableTransactionBuilder::new();
-    let withdrawal = FundsWithdrawalArg::balance_from_sponsor(
-        1000,
-        sui_types::type_input::TypeInput::from(GAS::type_tag()),
-    );
+    let withdrawal = FundsWithdrawalArg::balance_from_sponsor(1000, GAS::type_tag());
     builder.funds_withdrawal(withdrawal).unwrap();
 
     let tx = TransactionData::V1(TransactionDataV1 {
@@ -2013,92 +1789,64 @@ async fn test_explicit_sponsor_withdrawal_banned() {
 
 #[sim_test]
 async fn test_sponsor_insufficient_balance_charges_zero_gas() {
-    let _guard: sui_protocol_config::OverrideGuard =
-        ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg
-        });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
+        }))
         .build()
         .await;
 
-    let addresses = test_cluster.wallet.get_addresses();
-    let sender = addresses[0];
-    let sponsor = addresses[1];
+    let gas_test_package_id = setup_test_package(&mut test_env.cluster.wallet).await;
 
-    let chain_id = test_cluster.get_chain_identifier();
-    let gas_test_package_id = setup_test_package(&mut test_cluster.wallet).await;
-    let rgp = test_cluster.wallet.get_reference_gas_price().await.unwrap();
+    test_env.update_all_gas().await;
+    let (sender, sender_gas) = test_env.get_sender_and_gas(0);
+    let (sponsor, sponsor_gas) = test_env.get_sender_and_gas(1);
 
-    let sender_gas = test_cluster
-        .wallet
-        .gas_objects(sender)
-        .await
-        .unwrap()
-        .pop()
-        .unwrap()
-        .1
-        .object_ref();
-    let deposit_tx_sender = TestTransactionBuilder::new(sender, sender_gas, rgp)
+    let deposit_tx_sender = test_env
+        .tx_builder_with_gas(sender, sender_gas)
         .transfer_sui_to_address_balance(FundSource::coin(sender_gas), vec![(100_000_000, sender)])
         .build();
-    test_cluster
-        .sign_and_execute_transaction(&deposit_tx_sender)
-        .await;
+    test_env.exec_tx_directly(deposit_tx_sender).await.unwrap();
 
     let sponsor_initial_balance = 15_000_000u64;
-    let sponsor_gas = test_cluster
-        .wallet
-        .gas_objects(sponsor)
-        .await
-        .unwrap()
-        .pop()
-        .unwrap()
-        .1
-        .object_ref();
-    let deposit_tx_sponsor = TestTransactionBuilder::new(sponsor, sponsor_gas, rgp)
+    let deposit_tx_sponsor = test_env
+        .tx_builder_with_gas(sponsor, sponsor_gas)
         .transfer_sui_to_address_balance(
             FundSource::coin(sponsor_gas),
             vec![(sponsor_initial_balance, sponsor)],
         )
         .build();
-    test_cluster
-        .sign_and_execute_transaction(&deposit_tx_sponsor)
-        .await;
-
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        verify_accumulator_exists(child_object_resolver, sponsor, sponsor_initial_balance);
-    });
+    test_env.exec_tx_directly(deposit_tx_sponsor).await.unwrap();
+    test_env.verify_accumulator_exists(sponsor, sponsor_initial_balance);
 
     let tx1 = create_storage_test_transaction_address_balance(
         sender,
         gas_test_package_id,
-        rgp,
-        chain_id,
+        test_env.rgp,
+        test_env.chain_id,
         Some(sponsor),
         0,
     );
     let tx2 = create_storage_test_transaction_address_balance(
         sender,
         gas_test_package_id,
-        rgp,
-        chain_id,
+        test_env.rgp,
+        test_env.chain_id,
         Some(sponsor),
         1,
     );
 
-    let sender_sig1 = test_cluster
+    let sender_sig1 = test_env
+        .cluster
         .wallet
         .config
         .keystore
         .sign_secure(&sender, &tx1, Intent::sui_transaction())
         .await
         .unwrap();
-    let sponsor_sig1 = test_cluster
+    let sponsor_sig1 = test_env
+        .cluster
         .wallet
         .config
         .keystore
@@ -2107,14 +1855,16 @@ async fn test_sponsor_insufficient_balance_charges_zero_gas() {
         .unwrap();
     let signed_tx1 = Transaction::from_data(tx1, vec![sender_sig1, sponsor_sig1]);
 
-    let sender_sig2 = test_cluster
+    let sender_sig2 = test_env
+        .cluster
         .wallet
         .config
         .keystore
         .sign_secure(&sender, &tx2, Intent::sui_transaction())
         .await
         .unwrap();
-    let sponsor_sig2 = test_cluster
+    let sponsor_sig2 = test_env
+        .cluster
         .wallet
         .config
         .keystore
@@ -2131,12 +1881,14 @@ async fn test_sponsor_insufficient_balance_charges_zero_gas() {
         "Transaction digests should be different"
     );
 
-    let mut effects = test_cluster
+    let mut effects = test_env
+        .cluster
         .execute_signed_txns_in_soft_bundle(&[signed_tx1, signed_tx2])
         .await
         .unwrap();
 
-    test_cluster
+    test_env
+        .cluster
         .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
         .await;
 
@@ -2180,11 +1932,7 @@ async fn test_sponsor_insufficient_balance_charges_zero_gas() {
 
     let successful_tx_gas = succeeded_gas;
 
-    let final_sponsor_balance = test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        get_balance(child_object_resolver, sponsor)
-    });
+    let final_sponsor_balance = test_env.get_sui_balance(sponsor);
 
     let expected_final_sponsor_balance = sponsor_initial_balance - successful_tx_gas;
     assert_eq!(
@@ -2192,55 +1940,56 @@ async fn test_sponsor_insufficient_balance_charges_zero_gas() {
         "Sponsor balance should reflect only the successful transaction"
     );
 
-    let final_sender_balance = test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        get_balance(child_object_resolver, sender)
-    });
+    let final_sender_balance = test_env.get_sui_balance(sender);
 
     assert_eq!(
         final_sender_balance, 100_000_000,
         "Sender balance should remain unchanged"
     );
 
-    test_cluster.trigger_reconfiguration().await;
+    test_env.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_insufficient_balance_charges_zero_gas() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
         .build()
         .await;
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let chain_id = test_cluster.get_chain_identifier();
 
-    let (sender, gas_for_deposit) = get_sender_and_one_gas(&mut test_cluster.wallet).await;
+    let (sender, gas_for_deposit) = test_env.get_sender_and_gas(0);
 
     let initial_balance = 30_000_000u64;
     let withdraw_amount = 15_000_000u64;
 
-    let deposit_tx = TestTransactionBuilder::new(sender, gas_for_deposit, rgp)
+    let deposit_tx = test_env
+        .tx_builder_with_gas(sender, gas_for_deposit)
         .transfer_sui_to_address_balance(
             FundSource::coin(gas_for_deposit),
             vec![(initial_balance, sender)],
         )
         .build();
-    test_cluster.sign_and_execute_transaction(&deposit_tx).await;
+    test_env.exec_tx_directly(deposit_tx).await.unwrap();
+    test_env.verify_accumulator_exists(sender, initial_balance);
 
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        verify_accumulator_exists(child_object_resolver, sender, initial_balance);
-    });
-    let tx1 = create_withdraw_balance_transaction(sender, rgp, chain_id, withdraw_amount, 0);
+    let tx1 = create_withdraw_balance_transaction(
+        sender,
+        test_env.rgp,
+        test_env.chain_id,
+        withdraw_amount,
+        0,
+    );
 
-    let tx2 = create_withdraw_balance_transaction(sender, rgp, chain_id, withdraw_amount, 1);
+    let tx2 = create_withdraw_balance_transaction(
+        sender,
+        test_env.rgp,
+        test_env.chain_id,
+        withdraw_amount,
+        1,
+    );
 
     let tx1_digest = tx1.digest();
     let tx2_digest = tx2.digest();
@@ -2250,7 +1999,8 @@ async fn test_insufficient_balance_charges_zero_gas() {
         "Transaction digests should be different"
     );
 
-    let mut effects = test_cluster
+    let mut effects = test_env
+        .cluster
         .sign_and_execute_txns_in_soft_bundle(&[tx1, tx2])
         .await
         .unwrap();
@@ -2295,88 +2045,55 @@ async fn test_insufficient_balance_charges_zero_gas() {
 
     let successful_tx_gas = succeeded_gas;
 
-    test_cluster
+    test_env
+        .cluster
         .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
         .await;
 
-    test_cluster
-        .fullnode_handle
-        .sui_node
-        .with_async(|node| async move {
-            let state = node.state();
-            let child_object_resolver = state.get_child_object_resolver().as_ref();
+    let final_sender_balance = test_env.get_sui_balance(sender);
 
-            let final_sender_balance = get_balance(child_object_resolver, sender);
+    let expected_final_balance = initial_balance - withdraw_amount - successful_tx_gas;
+    assert_eq!(
+        final_sender_balance, expected_final_balance,
+        "Final balance should reflect only the successful transaction"
+    );
 
-            let expected_final_balance = initial_balance - withdraw_amount - successful_tx_gas;
-            assert_eq!(
-                final_sender_balance, expected_final_balance,
-                "Final balance should reflect only the successful transaction"
-            );
-        })
-        .await;
-
-    test_cluster.trigger_reconfiguration().await;
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_soft_bundle_different_gas_payers() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
         .build()
         .await;
 
-    let addresses = test_cluster.wallet.get_addresses();
-    let sender1 = addresses[0];
-    let sender2 = addresses[1];
+    let gas_test_package_id = setup_test_package(&mut test_env.cluster.wallet).await;
 
-    let rgp = test_cluster.wallet.get_reference_gas_price().await.unwrap();
-    let chain_id = test_cluster.get_chain_identifier();
+    test_env.update_all_gas().await;
+    let (sender1, sender1_gas) = test_env.get_sender_and_gas(0);
+    let (sender2, sender2_gas) = test_env.get_sender_and_gas(1);
 
-    let gas_test_package_id = setup_test_package(&mut test_cluster.wallet).await;
-
-    let sender1_gas = test_cluster
-        .wallet
-        .gas_objects(sender1)
-        .await
-        .unwrap()
-        .pop()
-        .unwrap()
-        .1
-        .object_ref();
-    let deposit_tx1 = TestTransactionBuilder::new(sender1, sender1_gas, rgp)
+    let deposit_tx1 = test_env
+        .tx_builder_with_gas(sender1, sender1_gas)
         .transfer_sui_to_address_balance(FundSource::coin(sender1_gas), vec![(10_000_000, sender1)])
         .build();
-    test_cluster
-        .sign_and_execute_transaction(&deposit_tx1)
-        .await;
+    test_env.exec_tx_directly(deposit_tx1).await.unwrap();
 
-    let sender2_gas = test_cluster
-        .wallet
-        .gas_objects(sender2)
-        .await
-        .unwrap()
-        .pop()
-        .unwrap()
-        .1
-        .object_ref();
-    let deposit_tx2 = TestTransactionBuilder::new(sender2, sender2_gas, rgp)
+    let deposit_tx2 = test_env
+        .tx_builder_with_gas(sender2, sender2_gas)
         .transfer_sui_to_address_balance(FundSource::coin(sender2_gas), vec![(10_000_000, sender2)])
         .build();
-    test_cluster
-        .sign_and_execute_transaction(&deposit_tx2)
-        .await;
+    test_env.exec_tx_directly(deposit_tx2).await.unwrap();
 
     let tx1 = create_storage_test_transaction_address_balance(
         sender1,
         gas_test_package_id,
-        rgp,
-        chain_id,
+        test_env.rgp,
+        test_env.chain_id,
         None,
         0,
     );
@@ -2384,8 +2101,8 @@ async fn test_soft_bundle_different_gas_payers() {
     let tx2 = create_storage_test_transaction_address_balance(
         sender2,
         gas_test_package_id,
-        rgp,
-        chain_id,
+        test_env.rgp,
+        test_env.chain_id,
         None,
         1,
     );
@@ -2398,7 +2115,8 @@ async fn test_soft_bundle_different_gas_payers() {
         "Transaction digests should be different"
     );
 
-    let mut effects = test_cluster
+    let mut effects = test_env
+        .cluster
         .sign_and_execute_txns_in_soft_bundle(&[tx1, tx2])
         .await
         .unwrap();
@@ -2425,35 +2143,26 @@ async fn test_soft_bundle_different_gas_payers() {
     let expected_balance1 = 10_000_000 - gas_used1;
     let expected_balance2 = 10_000_000 - gas_used2;
 
-    test_cluster
+    test_env
+        .cluster
         .wait_for_tx_settlement(&[tx1_digest, tx2_digest])
         .await;
 
-    test_cluster
-        .fullnode_handle
-        .sui_node
-        .with_async(|node| async move {
-            let state = node.state();
+    let actual_balance1 = test_env.get_sui_balance(sender1);
+    let actual_balance2 = test_env.get_sui_balance(sender2);
 
-            let child_object_resolver = state.get_child_object_resolver().as_ref();
+    assert_eq!(
+        actual_balance1, expected_balance1,
+        "Sender1 balance should be {} after gas deduction, got {}",
+        expected_balance1, actual_balance1
+    );
+    assert_eq!(
+        actual_balance2, expected_balance2,
+        "Sender2 balance should be {} after gas deduction, got {}",
+        expected_balance2, actual_balance2
+    );
 
-            let actual_balance1 = get_balance(child_object_resolver, sender1);
-            let actual_balance2 = get_balance(child_object_resolver, sender2);
-
-            assert_eq!(
-                actual_balance1, expected_balance1,
-                "Sender1 balance should be {} after gas deduction, got {}",
-                expected_balance1, actual_balance1
-            );
-            assert_eq!(
-                actual_balance2, expected_balance2,
-                "Sender2 balance should be {} after gas deduction, got {}",
-                expected_balance2, actual_balance2
-            );
-        })
-        .await;
-
-    test_cluster.trigger_reconfiguration().await;
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -2512,7 +2221,7 @@ async fn test_multiple_deposits_merged_in_effects() {
     for amount in &withdraw_amounts {
         let withdraw_arg = sui_types::transaction::FundsWithdrawalArg::balance_from_sender(
             *amount,
-            sui_types::type_input::TypeInput::from(sui_types::gas_coin::GAS::type_tag()),
+            sui_types::gas_coin::GAS::type_tag(),
         );
         let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
 
@@ -2600,26 +2309,17 @@ async fn test_multiple_deposits_merged_in_effects() {
 
 #[sim_test]
 async fn test_address_balance_gas_budget_enforcement_with_storage() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
         .build()
         .await;
-    let (sender, gas_package_id) =
-        setup_address_balance_account(&mut test_cluster, 100_000_000).await;
 
-    test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        verify_accumulator_exists(child_object_resolver, sender, 100_000_000);
-    });
+    let (sender, gas_package_id) = setup_address_balance_account(&mut test_env, 100_000_000).await;
 
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let chain_id = test_cluster.get_chain_identifier();
+    test_env.verify_accumulator_exists(sender, 100_000_000);
 
     // First, create a simple object to use as input
     let mut builder1 = ProgrammableTransactionBuilder::new();
@@ -2632,9 +2332,15 @@ async fn test_address_balance_gas_budget_enforcement_with_storage() {
         vec![value1],
     );
     let tx_kind1 = TransactionKind::ProgrammableTransaction(builder1.finish());
-    let tx1 = create_address_balance_transaction(tx_kind1, sender, 5_000_000, rgp, chain_id);
-    let res1 = test_cluster.sign_and_execute_transaction(&tx1).await;
-    let created_obj = res1.effects.unwrap().created()[0].reference.to_object_ref();
+    let tx1 = create_address_balance_transaction(
+        tx_kind1,
+        sender,
+        5_000_000,
+        test_env.rgp,
+        test_env.chain_id,
+    );
+    let (_, effects1) = test_env.exec_tx_directly(tx1).await.unwrap();
+    let created_obj = effects1.created()[0].0;
 
     // Now create a transaction with the created object as input to trigger storage OOG
     let mut builder = ProgrammableTransactionBuilder::new();
@@ -2665,13 +2371,15 @@ async fn test_address_balance_gas_budget_enforcement_with_storage() {
     let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
 
     let low_budget = 1_500_000;
-    let tx = create_address_balance_transaction(tx_kind, sender, low_budget, rgp, chain_id);
+    let tx = create_address_balance_transaction(
+        tx_kind,
+        sender,
+        low_budget,
+        test_env.rgp,
+        test_env.chain_id,
+    );
 
-    let signed_tx = test_cluster.sign_transaction(&tx).await;
-    let (effects, _) = test_cluster
-        .execute_transaction_return_raw_effects(signed_tx)
-        .await
-        .expect("Transaction execution should not panic");
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
 
     let gas_summary = effects.gas_cost_summary();
     let computation_cost = gas_summary.computation_cost;
@@ -2707,25 +2415,20 @@ async fn test_address_balance_gas_budget_enforcement_with_storage() {
         low_budget
     );
 
-    test_cluster.trigger_reconfiguration().await;
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_address_balance_computation_oog() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
         .build()
         .await;
-    let (sender, gas_package_id) =
-        setup_address_balance_account(&mut test_cluster, 100_000_000).await;
 
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let chain_id = test_cluster.get_chain_identifier();
+    let (sender, gas_package_id) = setup_address_balance_account(&mut test_env, 100_000_000).await;
 
     // Create many small objects to trigger computation OOG
 
@@ -2743,13 +2446,15 @@ async fn test_address_balance_computation_oog() {
     let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
 
     let low_budget = 1_000_000;
-    let tx = create_address_balance_transaction(tx_kind, sender, low_budget, rgp, chain_id);
+    let tx = create_address_balance_transaction(
+        tx_kind,
+        sender,
+        low_budget,
+        test_env.rgp,
+        test_env.chain_id,
+    );
 
-    let signed_tx = test_cluster.sign_transaction(&tx).await;
-    let (effects, _) = test_cluster
-        .execute_transaction_return_raw_effects(signed_tx)
-        .await
-        .expect("Transaction execution should not panic");
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
 
     let gas_summary = effects.gas_cost_summary();
     let computation_cost = gas_summary.computation_cost;
@@ -2776,25 +2481,20 @@ async fn test_address_balance_computation_oog() {
         gas_summary.storage_cost
     );
 
-    test_cluster.trigger_reconfiguration().await;
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_address_balance_large_rebate() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
         .build()
         .await;
-    let (sender, gas_package_id) =
-        setup_address_balance_account(&mut test_cluster, 100_000_000).await;
 
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let chain_id = test_cluster.get_chain_identifier();
+    let (sender, gas_package_id) = setup_address_balance_account(&mut test_env, 100_000_000).await;
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let value = builder.pure(42u64).unwrap();
@@ -2808,13 +2508,15 @@ async fn test_address_balance_large_rebate() {
         vec![value, data_arg],
     );
     let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
-    let tx = create_address_balance_transaction(tx_kind, sender, 50_000_000, rgp, chain_id);
+    let tx = create_address_balance_transaction(
+        tx_kind,
+        sender,
+        50_000_000,
+        test_env.rgp,
+        test_env.chain_id,
+    );
 
-    let signed_tx = test_cluster.sign_transaction(&tx).await;
-    let (effects, _) = test_cluster
-        .execute_transaction_return_raw_effects(signed_tx)
-        .await
-        .expect("Transaction execution should not panic");
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
 
     assert!(
         effects.status().is_ok(),
@@ -2829,11 +2531,7 @@ async fn test_address_balance_large_rebate() {
         .map(|(obj_ref, _)| *obj_ref)
         .expect("Should have created an object");
 
-    let initial_balance = test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        get_balance(child_object_resolver, sender)
-    });
+    let initial_balance = test_env.get_sui_balance(sender);
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let object_arg = builder
@@ -2849,13 +2547,15 @@ async fn test_address_balance_large_rebate() {
         vec![object_arg],
     );
     let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
-    let tx = create_address_balance_transaction(tx_kind, sender, 50_000_000, rgp, chain_id);
+    let tx = create_address_balance_transaction(
+        tx_kind,
+        sender,
+        50_000_000,
+        test_env.rgp,
+        test_env.chain_id,
+    );
 
-    let signed_tx = test_cluster.sign_transaction(&tx).await;
-    let (effects, _) = test_cluster
-        .execute_transaction_return_raw_effects(signed_tx)
-        .await
-        .expect("Transaction execution should not panic");
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
 
     assert!(
         effects.status().is_ok(),
@@ -2880,11 +2580,7 @@ async fn test_address_balance_large_rebate() {
         net_gas
     );
 
-    let final_balance = test_cluster.fullnode_handle.sui_node.with(|node| {
-        let state = node.state();
-        let child_object_resolver = state.get_child_object_resolver().as_ref();
-        get_balance(child_object_resolver, sender)
-    });
+    let final_balance = test_env.get_sui_balance(sender);
 
     let expected_balance = (initial_balance as i128 - net_gas) as u64;
     assert_eq!(
@@ -2900,64 +2596,39 @@ async fn test_address_balance_large_rebate() {
         final_balance
     );
 
-    test_cluster.trigger_reconfiguration().await;
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
 async fn test_sponsored_address_balance_storage_oog() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.enable_address_balance_gas_payments_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
         .build()
         .await;
-    let rgp = test_cluster.get_reference_gas_price().await;
 
-    let addresses = test_cluster.wallet.get_addresses();
-    let sender = addresses[0];
-    let sponsor = addresses[1];
+    let gas_package_id = setup_test_package(&mut test_env.cluster.wallet).await;
 
-    let gas_package_id = setup_test_package(&mut test_cluster.wallet).await;
+    test_env.update_all_gas().await;
+    let (sender, sender_gas) = test_env.get_sender_and_gas(0);
+    let (sponsor, sponsor_gas) = test_env.get_sender_and_gas(1);
 
-    let sender_gas = test_cluster
-        .wallet
-        .gas_objects(sender)
-        .await
-        .unwrap()
-        .pop()
-        .unwrap()
-        .1
-        .object_ref();
-    let deposit_tx_sender = TestTransactionBuilder::new(sender, sender_gas, rgp)
+    let deposit_tx_sender = test_env
+        .tx_builder(sender)
         .transfer_sui_to_address_balance(FundSource::coin(sender_gas), vec![(100_000_000, sender)])
         .build();
-    test_cluster
-        .sign_and_execute_transaction(&deposit_tx_sender)
-        .await;
+    test_env.exec_tx_directly(deposit_tx_sender).await.unwrap();
 
-    let sponsor_gas = test_cluster
-        .wallet
-        .gas_objects(sponsor)
-        .await
-        .unwrap()
-        .pop()
-        .unwrap()
-        .1
-        .object_ref();
-    let deposit_tx_sponsor = TestTransactionBuilder::new(sponsor, sponsor_gas, rgp)
+    let deposit_tx_sponsor = test_env
+        .tx_builder(sponsor)
         .transfer_sui_to_address_balance(
             FundSource::coin(sponsor_gas),
             vec![(100_000_000, sponsor)],
         )
         .build();
-    test_cluster
-        .sign_and_execute_transaction(&deposit_tx_sponsor)
-        .await;
-
-    let chain_id = test_cluster.get_chain_identifier();
+    test_env.exec_tx_directly(deposit_tx_sponsor).await.unwrap();
 
     // Create a large object to trigger storage OOG
 
@@ -2980,18 +2651,20 @@ async fn test_sponsored_address_balance_storage_oog() {
         sender,
         Some(sponsor),
         sponsor_budget,
-        rgp,
-        chain_id,
+        test_env.rgp,
+        test_env.chain_id,
     );
 
-    let sender_sig = test_cluster
+    let sender_sig = test_env
+        .cluster
         .wallet
         .config
         .keystore
         .sign_secure(&sender, &tx, Intent::sui_transaction())
         .await
         .unwrap();
-    let sponsor_sig = test_cluster
+    let sponsor_sig = test_env
+        .cluster
         .wallet
         .config
         .keystore
@@ -3000,7 +2673,8 @@ async fn test_sponsored_address_balance_storage_oog() {
         .unwrap();
 
     let signed_tx = Transaction::from_data(tx, vec![sender_sig, sponsor_sig]);
-    let (effects, _) = test_cluster
+    let (effects, _) = test_env
+        .cluster
         .execute_transaction_return_raw_effects(signed_tx)
         .await
         .expect("Transaction execution should not panic");
@@ -3026,7 +2700,7 @@ async fn test_sponsored_address_balance_storage_oog() {
         sponsor_budget
     );
 
-    test_cluster.trigger_reconfiguration().await;
+    test_env.cluster.trigger_reconfiguration().await;
 }
 
 #[sim_test]
@@ -3422,233 +3096,6 @@ async fn test_reject_signing_transaction_executed_in_previous_epoch() {
 }
 
 #[sim_test]
-async fn test_coin_reservation_validation() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
-        cfg.enable_coin_reservation_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let chain_id = test_cluster.get_chain_identifier();
-    let context = &mut test_cluster.wallet;
-
-    let (sender1, gas1) = get_nth_sender_and_one_gas(context, 0).await;
-    let (sender2, gas2) = get_nth_sender_and_one_gas(context, 1).await;
-
-    // send 1000 gas from the gas coins to the balances
-    let tx = TestTransactionBuilder::new(sender1, gas1, rgp)
-        .transfer_sui_to_address_balance(FundSource::coin(gas1), vec![(1000, sender1)])
-        .build();
-
-    let (_, effects) = test_cluster
-        .sign_and_execute_transaction_directly(&tx)
-        .await
-        .unwrap();
-    let gas1 = effects.gas_object().0;
-
-    // compute the sender's SUI accumulator object id
-    let accumulator_obj_id = AccumulatorValue::get_field_id(
-        sender1,
-        &Balance::type_tag(sui_types::gas_coin::GAS::type_tag()),
-    )
-    .unwrap();
-
-    let encode_coin_reservation = |epoch: u64, amount: u64| {
-        ParsedObjectRefWithdrawal::new(*accumulator_obj_id.inner(), epoch, amount)
-            .encode(SequenceNumber::new(), chain_id)
-    };
-
-    // Verify transaction is rejected if it reserves more than the available balance
-    {
-        let coin_reservation = encode_coin_reservation(0, 1001);
-
-        let err =
-            try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender1, sender1, gas1)
-                .await
-                .unwrap_err();
-        assert!(err.to_string().contains("is less than requested"));
-    }
-
-    // Verify transaction is rejected if it uses a bogus accumulator object id.
-    {
-        let random_id = ObjectID::random();
-        let coin_reservation = ParsedObjectRefWithdrawal::new(random_id, 0, 1001)
-            .encode(SequenceNumber::new(), chain_id);
-
-        let err =
-            try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender1, sender1, gas1)
-                .await
-                .unwrap_err();
-        assert!(
-            err.to_string()
-                .contains(format!("object id {} not found", random_id).as_str())
-        );
-    }
-
-    // Verify transaction is rejected if it is not valid in the current epoch.
-    {
-        let coin_reservation = encode_coin_reservation(1, 100);
-
-        let err =
-            try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender1, sender1, gas1)
-                .await
-                .unwrap_err();
-        assert!(err.to_string().contains("Transaction Expired"));
-    }
-
-    // Verify transaction is rejected if the reservation amount is zero.
-    {
-        let coin_reservation = encode_coin_reservation(0, 0);
-
-        let err =
-            try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender1, sender1, gas1)
-                .await
-                .unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("reservation amount must be non-zero")
-        );
-    }
-
-    // Verify the transaction is rejected if the accumulator object is not owned by the sender.
-    {
-        let coin_reservation = encode_coin_reservation(0, 100);
-
-        let recipient = SuiAddress::random_for_testing_only();
-        let err = try_coin_reservation_tx(
-            &mut test_cluster,
-            coin_reservation,
-            sender2,
-            recipient,
-            gas2,
-        )
-        .await
-        .unwrap_err();
-        assert!(
-            err.to_string()
-                .contains(format!("is owned by {}, not sender {}", sender1, sender2).as_str())
-        );
-    }
-
-    // Verify coin reservations cannot (yet) be used to pay gas.
-    {
-        let coin_reservation = encode_coin_reservation(0, 10000000);
-
-        let err =
-            try_coin_reservation_tx(&mut test_cluster, gas1, sender1, sender1, coin_reservation)
-                .await
-                .unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("Gas object is not an owned object")
-        );
-    }
-
-    // Verify that total reservation limit is enforced for coin reservations.
-    {
-        // 1 regular reservation
-        let mut tx_builder = TestTransactionBuilder::new(sender1, gas1, rgp)
-            .transfer_sui_to_address_balance(
-                FundSource::address_fund_with_reservation(1),
-                vec![(1, sender1)],
-            );
-
-        // plus 10 coin reservations
-        for _ in 0..10 {
-            let random_object_id = ObjectID::random();
-
-            let coin = ParsedObjectRefWithdrawal::new(random_object_id, 0, 100)
-                .encode(SequenceNumber::new(), chain_id);
-
-            tx_builder = tx_builder.transfer(FullObjectRef::from_fastpath_ref(coin), sender1);
-        }
-
-        let tx = tx_builder.build();
-
-        let err = test_cluster
-            .sign_and_execute_transaction_directly(&tx)
-            .await
-            .unwrap_err();
-
-        assert!(
-            err.to_string()
-                .contains("Maximum number of balance withdraw reservations is 10")
-        );
-    }
-}
-
-#[sim_test]
-async fn test_coin_reservation_gating() {
-    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
-        cfg.create_root_accumulator_object_for_testing();
-        cfg.enable_accumulators_for_testing();
-        cfg
-    });
-
-    let mut test_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-
-    let chain_id = test_cluster.get_chain_identifier();
-    let context = &mut test_cluster.wallet;
-
-    let (sender, gas) = get_sender_and_one_gas(context).await;
-
-    // compute the sender's SUI accumulator object id
-    let accumulator_obj_id = AccumulatorValue::get_field_id(
-        sender,
-        &Balance::type_tag(sui_types::gas_coin::GAS::type_tag()),
-    )
-    .unwrap();
-
-    let encode_coin_reservation = |epoch: u64, amount: u64| {
-        ParsedObjectRefWithdrawal::new(*accumulator_obj_id.inner(), epoch, amount)
-            .encode(SequenceNumber::new(), chain_id)
-    };
-
-    // Verify transaction is rejected if coin reservation is not enabled.
-    {
-        let coin_reservation = encode_coin_reservation(0, 1);
-
-        let err = try_coin_reservation_tx(&mut test_cluster, coin_reservation, sender, sender, gas)
-            .await
-            .unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("coin reservation backward compatibility layer is not enabled")
-        );
-    }
-}
-
-async fn try_coin_reservation_tx(
-    test_cluster: &mut TestCluster,
-    coin_reservation: ObjectRef,
-    sender: SuiAddress,
-    recipient: SuiAddress,
-    gas: ObjectRef,
-) -> anyhow::Result<SuiTransactionBlockResponse> {
-    let rgp = test_cluster.get_reference_gas_price().await;
-
-    let tx = TestTransactionBuilder::new(sender, gas, rgp)
-        .transfer_sui_to_address_balance(FundSource::coin(coin_reservation), vec![(1, recipient)])
-        .build();
-
-    let signed_tx = test_cluster.wallet.sign_transaction(&tx).await;
-    test_cluster
-        .wallet
-        .execute_transaction_may_fail(signed_tx)
-        .await
-}
-
-#[sim_test]
 async fn address_balance_stress_test() {
     telemetry_subscribers::init_for_testing();
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
@@ -3877,4 +3324,92 @@ async fn address_balance_stress_test() {
         "Expected at least 10 total transactions, got {}",
         total
     );
+}
+
+#[sim_test]
+async fn test_address_balance_gas_merge_accumulator_events() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.enable_address_balance_gas_payments_for_testing();
+        cfg
+    });
+
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let chain_id = test_cluster.get_chain_identifier();
+    let context = &mut test_cluster.wallet;
+
+    let (sender, gas_objects) = get_sender_and_all_gas(context).await;
+
+    let initial_balance = 100_000_000u64;
+    let deposit_tx = TestTransactionBuilder::new(sender, gas_objects[0], rgp)
+        .transfer_sui_to_address_balance(
+            FundSource::coin(gas_objects[0]),
+            vec![(initial_balance, sender)],
+        )
+        .build();
+    let resp = test_cluster.sign_and_execute_transaction(&deposit_tx).await;
+    let gas = resp.effects.unwrap().gas_object().reference.to_object_ref();
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        verify_accumulator_exists(child_object_resolver, sender, initial_balance);
+    });
+
+    let send_to_self_amount = 5_000_000u64;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let coin_input = builder.obj(ObjectArg::ImmOrOwnedObject(gas)).unwrap();
+    let amount_arg = builder.pure(send_to_self_amount).unwrap();
+    let recipient_arg = builder.pure(sender).unwrap();
+    let coin = builder.command(Command::SplitCoins(coin_input, vec![amount_arg]));
+    let Argument::Result(coin_idx) = coin else {
+        panic!("coin is not a result");
+    };
+    let coin = Argument::NestedResult(coin_idx, 0);
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("coin").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec!["0x2::sui::SUI".parse().unwrap()],
+        vec![coin, recipient_arg],
+    );
+
+    let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+    let budget = 10_000_000u64;
+    let tx_data = create_address_balance_transaction(tx_kind, sender, budget, rgp, chain_id);
+
+    let signed_tx = test_cluster.sign_transaction(&tx_data).await;
+    let (effects, _) = test_cluster
+        .execute_transaction_return_raw_effects(signed_tx)
+        .await
+        .expect("Transaction execution should succeed");
+
+    assert!(effects.status().is_ok());
+
+    let gas_cost = effects.gas_cost_summary().net_gas_usage();
+    let acc_events = effects.accumulator_events();
+
+    assert_eq!(acc_events.len(), 1);
+
+    let expected_net = send_to_self_amount as i64 - gas_cost;
+    match &acc_events[0].write.value {
+        sui_types::effects::AccumulatorValue::Integer(value) => {
+            assert_eq!(*value, expected_net.unsigned_abs());
+        }
+        _ => panic!("Expected Integer accumulator value"),
+    }
+
+    let expected_final_balance = initial_balance as i64 + expected_net;
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let state = node.state();
+        let child_object_resolver = state.get_child_object_resolver().as_ref();
+        verify_accumulator_exists(child_object_resolver, sender, expected_final_balance as u64);
+    });
+
+    test_cluster.trigger_reconfiguration().await;
 }

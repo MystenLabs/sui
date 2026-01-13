@@ -1,33 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    future::Future,
-    net::SocketAddr,
-    pin::Pin,
-    sync::{Arc, OnceLock},
-    task::{Context, Poll},
-};
+use std::future::Future;
+use std::net::SocketAddr;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::OnceLock;
+use std::task::Context;
+use std::task::Poll;
 
-use async_graphql::{
-    Request, Response, ServerError, ServerResult, ValidationResult, Value, Variables,
-    extensions::{
-        Extension, ExtensionContext, ExtensionFactory, NextParseQuery, NextPrepareRequest,
-        NextRequest, NextResolve, NextValidation, ResolveInfo,
-    },
-    parser::types::ExecutableDocument,
-};
+use async_graphql::Request;
+use async_graphql::Response;
+use async_graphql::ServerError;
+use async_graphql::ServerResult;
+use async_graphql::ValidationResult;
+use async_graphql::Value;
+use async_graphql::Variables;
+use async_graphql::extensions::Extension;
+use async_graphql::extensions::ExtensionContext;
+use async_graphql::extensions::ExtensionFactory;
+use async_graphql::extensions::NextParseQuery;
+use async_graphql::extensions::NextPrepareRequest;
+use async_graphql::extensions::NextRequest;
+use async_graphql::extensions::NextResolve;
+use async_graphql::extensions::NextValidation;
+use async_graphql::extensions::ResolveInfo;
+use async_graphql::parser::types::ExecutableDocument;
 use axum::http::HeaderName;
-use pin_project::{pin_project, pinned_drop};
+use pin_project::pin_project;
+use pin_project::pinned_drop;
 use prometheus::HistogramTimer;
 use serde_json::json;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 use uuid::Uuid;
 
-use crate::{
-    error::{code, error_codes, fill_error_code},
-    metrics::RpcMetrics,
-};
+use crate::error::code;
+use crate::error::error_codes;
+use crate::error::fill_error_code;
+use crate::metrics::RpcMetrics;
 
 /// This custom response header contains a unique request-id used for debugging and appears in the logs.
 pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-request-id");
@@ -251,7 +263,10 @@ fn is_loud_query(codes: &[&str]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema};
+    use async_graphql::EmptyMutation;
+    use async_graphql::EmptySubscription;
+    use async_graphql::Object;
+    use async_graphql::Schema;
     use prometheus::Registry;
 
     use super::*;

@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use futures::FutureExt;
 use futures::stream::{FuturesUnordered, StreamExt};
-use mysten_common::{backoff, in_antithesis};
+use mysten_common::{backoff, in_integration_test};
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX, spawn_monitored_task};
 use mysten_metrics::{add_server_timing, spawn_logged_monitored_task};
 use prometheus::core::{AtomicI64, AtomicU64, GenericCounter, GenericGauge};
@@ -488,7 +488,7 @@ where
         let num_submissions = if !is_new_transaction {
             // No need to submit when the transaction is already being processed.
             0
-        } else if cfg!(msim) || in_antithesis() {
+        } else if in_integration_test() {
             // Allow duplicated submissions in tests.
             let r = rand::thread_rng().gen_range(1..=100);
             let n = if r <= 10 {
@@ -542,14 +542,12 @@ where
 
         // Wait for execution result outside of this call to become available.
         let digests = [tx_digest];
-        let mut local_effects_future = epoch_store
-            .within_alive_epoch(
-                self.validator_state
-                    .get_transaction_cache_reader()
-                    .notify_read_executed_effects(
-                    "TransactionOrchestrator::notify_read_execute_transaction_with_effects_waiting",
-                    &digests,
-                ),
+        let mut local_effects_future = self
+            .validator_state
+            .get_transaction_cache_reader()
+            .notify_read_executed_effects(
+                "TransactionOrchestrator::notify_read_execute_transaction_with_effects_waiting",
+                &digests,
             )
             .boxed();
 
@@ -561,53 +559,46 @@ where
                 biased;
 
                 // Local effects might be available
-                local_effects_result = &mut local_effects_future => {
-                    match local_effects_result {
-                        Ok(effects) => {
-                            debug!(
-                                "Effects became available while execution was running"
-                            );
-                            if let Some(effects) = effects.into_iter().next() {
-                                self.metrics.concurrent_execution.inc();
-                                let epoch = effects.executed_epoch();
-                                let events = if include_events {
-                                    if effects.events_digest().is_some() {
-                                        Some(self.validator_state.get_transaction_events(effects.transaction_digest())
-                                            .map_err(TransactionSubmissionError::TransactionDriverInternalError)?)
-                                    } else {
-                                        None
-                                    }
-                                } else {
-                                    None
-                                };
-                                let input_objects = include_input_objects
-                                    .then(|| self.validator_state.get_transaction_input_objects(&effects))
-                                    .transpose()
-                                    .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
-                                let output_objects = include_output_objects
-                                    .then(|| self.validator_state.get_transaction_output_objects(&effects))
-                                    .transpose()
-                                    .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
-                                let response = QuorumTransactionResponse {
-                                    effects: FinalizedEffects {
-                                        effects,
-                                        finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
-                                    },
-                                    events,
-                                    input_objects,
-                                    output_objects,
-                                    auxiliary_data: None,
-                                };
-                                break Ok((response, true));
-                            }
-                        }
-                        Err(_) => {
-                            warn!("Epoch terminated before effects were available");
-                        }
-                    };
+                all_effects = &mut local_effects_future => {
+                    debug!(
+                        "Effects became available while execution was running"
+                    );
+                    if all_effects.len() != 1 {
+                        break Err(TransactionSubmissionError::TransactionDriverInternalError(SuiErrorKind::Unknown(format!("Unexpected number of effects found: {}", all_effects.len())).into()));
+                    }
+                    self.metrics.concurrent_execution.inc();
 
-                    // Prevent this branch from being selected again
-                    local_effects_future = futures::future::pending().boxed();
+                    let effects = all_effects.into_iter().next().unwrap();
+                    let epoch = effects.executed_epoch();
+                    let events = if include_events {
+                        if effects.events_digest().is_some() {
+                            Some(self.validator_state.get_transaction_events(effects.transaction_digest())
+                                .map_err(TransactionSubmissionError::TransactionDriverInternalError)?)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    let input_objects = include_input_objects
+                        .then(|| self.validator_state.get_transaction_input_objects(&effects))
+                        .transpose()
+                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
+                    let output_objects = include_output_objects
+                        .then(|| self.validator_state.get_transaction_output_objects(&effects))
+                        .transpose()
+                        .map_err(TransactionSubmissionError::TransactionDriverInternalError)?;
+                    let response = QuorumTransactionResponse {
+                        effects: FinalizedEffects {
+                            effects,
+                            finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
+                        },
+                        events,
+                        input_objects,
+                        output_objects,
+                        auxiliary_data: None,
+                    };
+                    break Ok((response, true));
                 }
 
                 // This branch is disabled if execution_futures is empty.
@@ -1108,10 +1099,11 @@ where
         &self,
         transaction: TransactionData,
         checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
     ) -> Result<SimulateTransactionResult, SuiError> {
         self.inner
             .validator_state
-            .simulate_transaction(transaction, checks)
+            .simulate_transaction(transaction, checks, allow_mock_gas_coin)
     }
 }
 

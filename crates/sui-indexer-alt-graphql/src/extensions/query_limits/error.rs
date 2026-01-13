@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{ErrorExtensions, PathSegment, Pos, ServerError, parser::types::OperationType};
+use async_graphql::ErrorExtensions;
+use async_graphql::PathSegment;
+use async_graphql::Pos;
+use async_graphql::ServerError;
+use async_graphql::parser::types::OperationType;
 
 use crate::error::code;
 

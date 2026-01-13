@@ -3,13 +3,14 @@
 
 use std::ops::Deref;
 
-use fastcrypto::{
-    encoding::{Base64, Encoding},
-    error::FastCryptoError,
-};
-use serde::{Serialize, de::DeserializeOwned};
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
+use fastcrypto::error::FastCryptoError;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
-use crate::error::{RpcError, invalid_params};
+use crate::error::RpcError;
+use crate::error::invalid_params;
 
 pub(crate) trait Cursor: Sized {
     /// Interpret the string as a cursor, Base64-decode it, and then deserialize it from JSON. A

@@ -106,3 +106,23 @@ fun test_to_string() {
 fun test_dos() {
     integer_tests::test_dos!(MAX, CASES);
 }
+
+#[test]
+fun test_checked_add() {
+    integer_tests::test_checked_add!(MAX, CASES);
+}
+
+#[test]
+fun test_checked_sub() {
+    integer_tests::test_checked_sub!(MAX, CASES);
+}
+
+#[test]
+fun test_checked_mul() {
+    integer_tests::test_checked_mul!(MAX, CASES);
+}
+
+#[test]
+fun test_checked_div() {
+    integer_tests::test_checked_div!(MAX, CASES);
+}

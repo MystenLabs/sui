@@ -1,20 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{iter::Rev, ops::Range};
+use std::iter::Rev;
+use std::ops::Range;
 
 use anyhow::Context as _;
 use async_graphql::Context;
 use itertools::Either;
-use sui_indexer_alt_reader::kv_loader::{KvLoader, TransactionEventsContents};
+use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::kv_loader::TransactionEventsContents;
 use sui_types::digests::TransactionDigest;
 
-use crate::{api::types::transaction::tx_digests, error::RpcError, pagination::Page, scope::Scope};
-
-use super::{
-    CEvent, Event, EventCursor,
-    filter::{EventFilter, tx_ev_bounds},
-};
+use crate::api::types::event::CEvent;
+use crate::api::types::event::Event;
+use crate::api::types::event::EventCursor;
+use crate::api::types::event::filter::EventFilter;
+use crate::api::types::event::filter::tx_ev_bounds;
+use crate::api::types::transaction::tx_digests;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::scope::Scope;
 
 /// The page of Event cursors and Events emitted from transactions with cursors and limits with
 /// overhead applied.

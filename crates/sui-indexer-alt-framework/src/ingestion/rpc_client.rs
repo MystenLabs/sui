@@ -10,9 +10,10 @@ use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_types::full_checkpoint_content::Checkpoint;
 use tonic::Code;
 
-use crate::ingestion::ingestion_client::{
-    FetchData, FetchError, FetchResult, IngestionClientTrait,
-};
+use crate::ingestion::ingestion_client::FetchData;
+use crate::ingestion::ingestion_client::FetchError;
+use crate::ingestion::ingestion_client::FetchResult;
+use crate::ingestion::ingestion_client::IngestionClientTrait;
 
 #[async_trait]
 impl IngestionClientTrait for RpcClient {

@@ -3,17 +3,16 @@
 
 use std::mem;
 
-use async_graphql::{
-    ServerResult,
-    parser::types::{ExecutableDocument, Selection},
-};
-use serde::{Deserialize, Serialize};
+use async_graphql::ServerResult;
+use async_graphql::parser::types::ExecutableDocument;
+use async_graphql::parser::types::Selection;
+use serde::Deserialize;
+use serde::Serialize;
 
-use super::{
-    QueryLimitsConfig,
-    chain::Chain,
-    error::{Error, ErrorKind},
-};
+use crate::extensions::query_limits::QueryLimitsConfig;
+use crate::extensions::query_limits::chain::Chain;
+use crate::extensions::query_limits::error::Error;
+use crate::extensions::query_limits::error::ErrorKind;
 
 /// How many input nodes the query used, and how deep the deepest part of the query was.
 #[derive(Serialize, Deserialize)]

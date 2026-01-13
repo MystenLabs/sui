@@ -1,18 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 
-use object_store::{
-    ClientOptions, aws::AmazonS3Builder, azure::MicrosoftAzureBuilder,
-    gcp::GoogleCloudStorageBuilder, http::HttpBuilder, local::LocalFileSystem,
-};
-use sui_checkpoint_blob_indexer::{CheckpointBlobPipeline, EpochsPipeline};
+use object_store::ClientOptions;
+use object_store::aws::AmazonS3Builder;
+use object_store::azure::MicrosoftAzureBuilder;
+use object_store::gcp::GoogleCloudStorageBuilder;
+use object_store::http::HttpBuilder;
+use object_store::local::LocalFileSystem;
+use sui_indexer_alt_framework::Indexer;
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::service::Error;
-use sui_indexer_alt_framework::{Indexer, IndexerArgs, ingestion::ClientArgs};
 use sui_indexer_alt_metrics::MetricsArgs;
 use sui_indexer_alt_object_store::ObjectStore;
 use url::Url;
+
+use sui_checkpoint_blob_indexer::CheckpointBcsPipeline;
+use sui_checkpoint_blob_indexer::CheckpointBlobPipeline;
+use sui_checkpoint_blob_indexer::EpochsPipeline;
 
 #[derive(Debug, clap::Parser)]
 #[command(name = "sui-checkpoint-blob-indexer")]
@@ -71,10 +80,9 @@ struct Args {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     use clap::Parser;
-    use sui_indexer_alt_framework::{
-        ingestion::IngestionConfig,
-        pipeline::{CommitterConfig, concurrent::ConcurrentConfig},
-    };
+    use sui_indexer_alt_framework::ingestion::IngestionConfig;
+    use sui_indexer_alt_framework::pipeline::CommitterConfig;
+    use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
     use tracing::info;
 
     let args = Args::parse();
@@ -159,6 +167,10 @@ async fn main() -> anyhow::Result<()> {
 
     indexer
         .concurrent_pipeline(EpochsPipeline, config.clone())
+        .await?;
+
+    indexer
+        .concurrent_pipeline(CheckpointBcsPipeline, config.clone())
         .await?;
 
     let s_metrics = metrics_service.run().await?;

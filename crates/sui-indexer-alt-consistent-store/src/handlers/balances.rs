@@ -1,29 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use sui_indexer_alt_framework::{
-    pipeline::{Processor, sequential},
-    types::{
-        TypeTag,
-        base_types::SuiAddress,
-        coin::Coin,
-        full_checkpoint_content::Checkpoint,
-        object::{Object, Owner},
-    },
-};
+use serde::Deserialize;
+use serde::Serialize;
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::sequential;
+use sui_indexer_alt_framework::types::TypeTag;
+use sui_indexer_alt_framework::types::base_types::SuiAddress;
+use sui_indexer_alt_framework::types::coin::Coin;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_framework::types::object::Object;
+use sui_indexer_alt_framework::types::object::Owner;
 
-use crate::{
-    Schema,
-    restore::Restore,
-    schema::balances::Key,
-    store::{Connection, Store},
-};
-
-use super::{checkpoint_input_objects, checkpoint_output_objects};
+use crate::Schema;
+use crate::handlers::checkpoint_input_objects;
+use crate::handlers::checkpoint_output_objects;
+use crate::restore::Restore;
+use crate::schema::balances::Key;
+use crate::store::Connection;
+use crate::store::Store;
 
 pub(crate) struct Balances;
 

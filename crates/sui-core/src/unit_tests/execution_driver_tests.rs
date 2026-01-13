@@ -353,6 +353,7 @@ async fn test_execution_with_dependencies() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_random_beacon_for_testing(false);
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -523,6 +524,7 @@ async fn test_per_object_overload() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_random_beacon_for_testing(false);
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 
@@ -651,6 +653,7 @@ async fn test_txn_age_overload() {
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_random_beacon_for_testing(false);
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 

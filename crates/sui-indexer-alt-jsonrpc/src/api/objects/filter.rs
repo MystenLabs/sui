@@ -2,31 +2,38 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl, sql_types::Bool};
+use diesel::BoolExpressionMethods;
+use diesel::ExpressionMethods;
+use diesel::JoinOnDsl;
+use diesel::QueryDsl;
+use diesel::sql_types::Bool;
 use move_core_types::language_storage::StructTag;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use serde_with::serde_as;
-use sui_indexer_alt_schema::{
-    objects::{StoredObjInfo, StoredOwnerKind},
-    schema::obj_info,
-};
-use sui_json_rpc_types::{Page as PageResponse, SuiObjectDataOptions};
+use sui_indexer_alt_schema::objects::StoredObjInfo;
+use sui_indexer_alt_schema::objects::StoredOwnerKind;
+use sui_indexer_alt_schema::schema::obj_info;
+use sui_json_rpc_types::Page as PageResponse;
+use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_sql_macro::sql;
-use sui_types::{
-    Identifier, SUI_FRAMEWORK_ADDRESS, TypeTag,
-    base_types::{ObjectID, SuiAddress},
-    dynamic_field::{DYNAMIC_FIELD_FIELD_STRUCT_NAME, DYNAMIC_FIELD_MODULE_NAME},
-    sui_serde::SuiStructTag,
-};
+use sui_types::Identifier;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::TypeTag;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress;
+use sui_types::dynamic_field::DYNAMIC_FIELD_FIELD_STRUCT_NAME;
+use sui_types::dynamic_field::DYNAMIC_FIELD_MODULE_NAME;
+use sui_types::sui_serde::SuiStructTag;
 
-use crate::{
-    context::Context,
-    error::{RpcError, invalid_params},
-    paginate::{BcsCursor, Cursor as _, Page},
-};
-
-use super::error::Error;
+use crate::api::objects::error::Error;
+use crate::context::Context;
+use crate::error::RpcError;
+use crate::error::invalid_params;
+use crate::paginate::BcsCursor;
+use crate::paginate::Cursor as _;
+use crate::paginate::Page;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase", rename = "ObjectResponseQuery", default)]

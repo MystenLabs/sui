@@ -1,22 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod make_move_vec;
-mod merge_coins;
-mod move_call;
-mod publish;
-mod split_coins;
-mod transaction_argument;
-mod transfer_objects;
-mod upgrade;
-
-use async_graphql::*;
+use async_graphql::SimpleObject;
+use async_graphql::Union;
 use sui_types::transaction::Command as NativeCommand;
 
-use crate::api::{
-    scalars::{base64::Base64, sui_address::SuiAddress},
-    types::move_type::MoveType,
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::types::move_type::MoveType;
+use crate::scope::Scope;
 
 pub use make_move_vec::MakeMoveVecCommand;
 pub use merge_coins::MergeCoinsCommand;
@@ -27,7 +19,14 @@ pub use transaction_argument::TransactionArgument;
 pub use transfer_objects::TransferObjectsCommand;
 pub use upgrade::UpgradeCommand;
 
-use crate::scope::Scope;
+mod make_move_vec;
+mod merge_coins;
+mod move_call;
+mod publish;
+mod split_coins;
+mod transaction_argument;
+mod transfer_objects;
+mod upgrade;
 
 /// A single command in the programmable transaction.
 #[derive(Union, Clone)]

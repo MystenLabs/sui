@@ -5,13 +5,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Context;
-use diesel::{ConnectionError, ConnectionResult};
+use diesel::ConnectionError;
+use diesel::ConnectionResult;
 use diesel_async::AsyncPgConnection;
-use rustls::{
-    ClientConfig, DigitallySignedStruct, RootCertStore,
-    client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
-    pki_types::{CertificateDer, ServerName, UnixTime},
-};
+use rustls::ClientConfig;
+use rustls::DigitallySignedStruct;
+use rustls::RootCertStore;
+use rustls::client::danger::HandshakeSignatureValid;
+use rustls::client::danger::ServerCertVerified;
+use rustls::client::danger::ServerCertVerifier;
+use rustls::pki_types::CertificateDer;
+use rustls::pki_types::ServerName;
+use rustls::pki_types::UnixTime;
 use tokio_postgres_rustls::MakeRustlsConnect;
 use tracing::error;
 use webpki_roots::TLS_SERVER_ROOTS;

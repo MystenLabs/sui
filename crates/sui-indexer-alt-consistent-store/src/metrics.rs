@@ -3,11 +3,11 @@
 
 use std::sync::Arc;
 
-use prometheus::{
-    IntGaugeVec, Opts,
-    core::{Collector, Desc},
-    proto::MetricFamily,
-};
+use prometheus::IntGaugeVec;
+use prometheus::Opts;
+use prometheus::core::Collector;
+use prometheus::core::Desc;
+use prometheus::proto::MetricFamily;
 
 pub struct ColumnFamilyStatsCollector {
     db: Arc<crate::db::Db>,

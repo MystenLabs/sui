@@ -80,6 +80,34 @@ public macro fun num_to_string($x: _): String {
     buffer.to_string()
 }
 
+public macro fun num_checked_add<$T>($x: $T, $y: $T, $max_t: $T): Option<$T> {
+    let x = $x;
+    let y = $y;
+    let max_t = $max_t;
+    if (y > max_t - x) option::none() else option::some(x + y)
+}
+
+public macro fun num_checked_sub<$T>($x: $T, $y: $T): Option<$T> {
+    let x = $x;
+    let y = $y;
+    if (x < y) option::none() else option::some(x - y)
+}
+
+public macro fun num_checked_mul<$T>($x: $T, $y: $T, $max_t: $T): Option<$T> {
+    let x = $x;
+    let y = $y;
+    let max_t = $max_t;
+    if (x == 0 || y == 0) option::some(0)
+    else if (y > max_t / x) option::none()
+    else option::some(x * y)
+}
+
+public macro fun num_checked_div<$T>($x: $T, $y: $T): Option<$T> {
+    let x = $x;
+    let y = $y;
+    if (y == 0) option::none() else option::some(x / y)
+}
+
 public macro fun range_do<$T, $R: drop>($start: $T, $stop: $T, $f: |$T| -> $R) {
     let mut i = $start;
     let stop = $stop;

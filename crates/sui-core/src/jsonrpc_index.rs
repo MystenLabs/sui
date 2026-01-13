@@ -118,6 +118,7 @@ const ENV_VAR_INVALIDATE_INSTEAD_OF_UPDATE: &str = "INVALIDATE_INSTEAD_OF_UPDATE
 pub struct TotalBalance {
     pub balance: i128,
     pub num_coins: i64,
+    pub address_balance: u64,
 }
 
 #[derive(Debug)]
@@ -634,6 +635,7 @@ impl IndexStore {
                 let entry = map.entry(coin_type).or_insert(TotalBalance {
                     num_coins: 0,
                     balance: 0,
+                    address_balance: 0,
                 });
                 entry.num_coins -= 1;
                 entry.balance -= coin.balance.value() as i128;
@@ -678,6 +680,7 @@ impl IndexStore {
                 let entry = map.entry(coin_type).or_insert(TotalBalance {
                     num_coins: 0,
                     balance: 0,
+                    address_balance: 0,
                 });
                 entry.num_coins += 1;
                 entry.balance += coin.balance.value() as i128;
@@ -1765,7 +1768,11 @@ impl IndexStore {
             balance += coin_info.balance as i128;
             num_coins += 1;
         }
-        Ok(TotalBalance { balance, num_coins })
+        Ok(TotalBalance {
+            balance,
+            num_coins,
+            address_balance: 0,
+        })
     }
 
     /// Read all balances for a `SuiAddress` from the backend database
@@ -1798,6 +1805,7 @@ impl IndexStore {
                 TotalBalance {
                     num_coins: coin_object_count,
                     balance: total_balance,
+                    address_balance: 0,
                 },
             );
         }
@@ -1839,6 +1847,7 @@ impl IndexStore {
                 Ok(TotalBalance {
                     balance: old_balance.balance + balance_delta.balance,
                     num_coins: old_balance.num_coins + balance_delta.num_coins,
+                    address_balance: old_balance.address_balance,
                 })
             } else {
                 balance_delta.clone()
@@ -1872,10 +1881,12 @@ impl IndexStore {
                     let old = new_balance.entry(key.clone()).or_insert(TotalBalance {
                         balance: 0,
                         num_coins: 0,
+                        address_balance: 0,
                     });
                     let new_total = TotalBalance {
                         balance: old.balance + delta.balance,
                         num_coins: old.num_coins + delta.num_coins,
+                        address_balance: old.address_balance,
                     };
                     new_balance.insert(key.clone(), new_total);
                 }

@@ -8,6 +8,7 @@ pub(crate) mod date_time;
 pub(crate) mod digest;
 pub(crate) mod domain;
 pub(crate) mod fq_name_filter;
+pub(crate) mod id;
 pub(crate) mod json;
 pub(crate) mod module_filter;
 pub(crate) mod owner_kind;

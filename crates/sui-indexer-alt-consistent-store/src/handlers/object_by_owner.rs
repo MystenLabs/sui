@@ -4,18 +4,19 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use sui_indexer_alt_framework::{
-    pipeline::{Processor, sequential},
-    types::{base_types::VersionDigest, full_checkpoint_content::Checkpoint, object::Object},
-};
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::sequential;
+use sui_indexer_alt_framework::types::base_types::VersionDigest;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_framework::types::object::Object;
 
-use crate::store::{Connection, Store};
-use crate::{
-    restore::Restore,
-    schema::{Schema, object_by_owner::Key},
-};
-
-use super::{checkpoint_input_objects, checkpoint_output_objects};
+use crate::handlers::checkpoint_input_objects;
+use crate::handlers::checkpoint_output_objects;
+use crate::restore::Restore;
+use crate::schema::Schema;
+use crate::schema::object_by_owner::Key;
+use crate::store::Connection;
+use crate::store::Store;
 
 pub(crate) struct ObjectByOwner;
 

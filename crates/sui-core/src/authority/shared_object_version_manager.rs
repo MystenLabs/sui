@@ -558,7 +558,6 @@ mod tests {
 
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::FundsWithdrawalArg;
-    use sui_types::type_input::TypeInput;
     use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 
     #[tokio::test]
@@ -1090,7 +1089,7 @@ mod tests {
                 ptb_builder
                     .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
                         200,
-                        TypeInput::from(GAS::type_tag()),
+                        GAS::type_tag(),
                     ))
                     .unwrap();
                 tx_builder.build()
@@ -1135,7 +1134,7 @@ mod tests {
                 ptb_builder
                     .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
                         200,
-                        TypeInput::from(GAS::type_tag()),
+                        GAS::type_tag(),
                     ))
                     .unwrap();
                 tx_builder.build()

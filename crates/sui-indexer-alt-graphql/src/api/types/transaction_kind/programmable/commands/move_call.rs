@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::*;
+use async_graphql::Object;
 use sui_types::transaction::ProgrammableMoveCall as NativeMoveCall;
 
-use crate::{
-    api::types::{move_function::MoveFunction, move_module::MoveModule, move_package::MovePackage},
-    scope::Scope,
-};
-
-use super::TransactionArgument;
+use crate::api::types::move_function::MoveFunction;
+use crate::api::types::move_module::MoveModule;
+use crate::api::types::move_package::MovePackage;
+use crate::api::types::transaction_kind::programmable::commands::TransactionArgument;
+use crate::scope::Scope;
 
 /// A call to a Move function.
 #[derive(Clone)]

@@ -3,11 +3,15 @@
 
 use std::sync::Arc;
 
-use prometheus::{
-    Histogram, HistogramVec, IntCounter, IntCounterVec, Registry,
-    register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-};
+use prometheus::Histogram;
+use prometheus::HistogramVec;
+use prometheus::IntCounter;
+use prometheus::IntCounterVec;
+use prometheus::Registry;
+use prometheus::register_histogram_vec_with_registry;
+use prometheus::register_histogram_with_registry;
+use prometheus::register_int_counter_vec_with_registry;
+use prometheus::register_int_counter_with_registry;
 
 /// Histogram buckets for the distribution of latency (time between sending a DB request and
 /// receiving a response).

@@ -14,6 +14,7 @@
 
 fragment E on MoveEnum {
   name
+  fullyQualifiedName
   abilities
   typeParameters {
     constraints
@@ -76,6 +77,7 @@ module P1::M {
 
 fragment E on MoveEnum {
   name
+  fullyQualifiedName
   abilities
   typeParameters {
     constraints
@@ -119,6 +121,7 @@ fragment E on MoveEnumConnection {
   }
   nodes {
     name
+    fullyQualifiedName
   }
 }
 
@@ -149,7 +152,7 @@ fragment E on MoveEnumConnection {
 
 fragment EnumDetails on MoveEnum {
   name
-  module { name }
+  fullyQualifiedName
   abilities
   typeParameters {
     constraints

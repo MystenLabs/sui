@@ -7,11 +7,12 @@ use anyhow::Context;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::CHECKPOINT_METADATA;
 use tonic::metadata::AsciiMetadataValue;
 
-use crate::config::{ConsistencyConfig, RpcConfig};
+use crate::config::ConsistencyConfig;
+use crate::config::RpcConfig;
+use crate::rpc::error::RpcError;
+use crate::rpc::error::StatusCode;
 use crate::schema::Schema;
 use crate::store::Store;
-
-use super::error::{RpcError, StatusCode};
 
 /// State exposed to RPC service implementations.
 #[derive(Clone)]

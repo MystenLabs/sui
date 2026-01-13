@@ -3,11 +3,15 @@
 
 use std::sync::Arc;
 
-use anyhow::{Result, anyhow};
-use arrow_array::{
-    ArrayRef, RecordBatch,
-    builder::{ArrayBuilder, BooleanBuilder, GenericStringBuilder, Int64Builder, UInt64Builder},
-};
+use anyhow::Result;
+use anyhow::anyhow;
+use arrow_array::ArrayRef;
+use arrow_array::RecordBatch;
+use arrow_array::builder::ArrayBuilder;
+use arrow_array::builder::BooleanBuilder;
+use arrow_array::builder::GenericStringBuilder;
+use arrow_array::builder::Int64Builder;
+use arrow_array::builder::UInt64Builder;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;

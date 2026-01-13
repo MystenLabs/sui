@@ -3,7 +3,8 @@
 
 use std::borrow::Cow;
 
-use crate::lexer::{Lexeme, Token};
+use crate::lexer::Lexeme;
+use crate::lexer::Token;
 
 /// Recursive descent parser for format strings. This struct is intended to be lightweight to
 /// support efficient backtracking. Backtracking is implemented by operating on a copy of the

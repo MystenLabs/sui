@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::{
-    body::Body,
-    extract::State,
-    http::{HeaderName, HeaderValue, Request},
-    middleware::Next,
-    response::Response,
-};
+use axum::body::Body;
+use axum::extract::State;
+use axum::http::HeaderName;
+use axum::http::HeaderValue;
+use axum::http::Request;
+use axum::middleware::Next;
+use axum::response::Response;
 
 pub(crate) static VERSION_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-version");
 

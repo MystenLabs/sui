@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::accumulators::funds_read::AccountFundsRead;
 use crate::authority::AuthorityStore;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
@@ -11,11 +12,10 @@ use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
 use itertools::Itertools;
-use mysten_common::fatal;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::bridge::Bridge;
 
-use futures::{FutureExt, future::BoxFuture};
+use futures::future::BoxFuture;
 use prometheus::Registry;
 use std::collections::HashSet;
 use std::path::Path;
@@ -71,6 +71,7 @@ pub struct ExecutionCacheTraitPointers {
     pub state_sync_store: Arc<dyn StateSyncAPI>,
     pub cache_commit: Arc<dyn ExecutionCacheCommit>,
     pub testing_api: Arc<dyn TestingAPI>,
+    pub account_funds_read: Arc<dyn AccountFundsRead>,
 }
 
 impl ExecutionCacheTraitPointers {
@@ -88,6 +89,7 @@ impl ExecutionCacheTraitPointers {
             + StateSyncAPI
             + ExecutionCacheCommit
             + TestingAPI
+            + AccountFundsRead
             + 'static,
     {
         Self {
@@ -104,6 +106,7 @@ impl ExecutionCacheTraitPointers {
             state_sync_store: cache.clone(),
             cache_commit: cache.clone(),
             testing_api: cache.clone(),
+            account_funds_read: cache.clone(),
         }
     }
 }
@@ -471,28 +474,7 @@ pub trait TransactionCacheRead: Send + Sync {
     fn multi_get_executed_effects(
         &self,
         digests: &[TransactionDigest],
-    ) -> Vec<Option<TransactionEffects>> {
-        let effects_digests = self.multi_get_executed_effects_digests(digests);
-        assert_eq!(effects_digests.len(), digests.len());
-
-        let mut results = vec![None; digests.len()];
-        let mut fetch_digests = Vec::with_capacity(digests.len());
-        let mut fetch_indices = Vec::with_capacity(digests.len());
-
-        for (i, digest) in effects_digests.into_iter().enumerate() {
-            if let Some(digest) = digest {
-                fetch_digests.push(digest);
-                fetch_indices.push(i);
-            }
-        }
-
-        let effects = self.multi_get_effects(&fetch_digests);
-        for (i, effects) in fetch_indices.into_iter().zip(effects.into_iter()) {
-            results[i] = effects;
-        }
-
-        results
-    }
+    ) -> Vec<Option<TransactionEffects>>;
 
     fn get_executed_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
         self.multi_get_executed_effects(&[*digest])
@@ -549,19 +531,7 @@ pub trait TransactionCacheRead: Send + Sync {
         &'a self,
         task_name: &'static str,
         digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, Vec<TransactionEffects>> {
-        async move {
-            let digests = self
-                .notify_read_executed_effects_digests(task_name, digests)
-                .await;
-            // once digests are available, effects must be present as well
-            self.multi_get_effects(&digests)
-                .into_iter()
-                .map(|e| e.unwrap_or_else(|| fatal!("digests must exist")))
-                .collect()
-        }
-        .boxed()
-    }
+    ) -> BoxFuture<'a, Vec<TransactionEffects>>;
 
     /// Get the execution outputs of a mysticeti fastpath certified transaction, if it exists.
     fn get_mysticeti_fastpath_outputs(

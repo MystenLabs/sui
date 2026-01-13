@@ -1,28 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::ops::Range;
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 
-use anyhow::{Context, Result};
-use diesel::{ExpressionMethods, QueryDsl};
+use anyhow::Context;
+use anyhow::Result;
+use async_trait::async_trait;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    pipeline::Processor,
-    postgres::{Connection, handler::Handler},
-    types::{
-        coin::Coin, effects::TransactionEffectsAPI, full_checkpoint_content::Checkpoint,
-        gas_coin::GAS,
-    },
-};
-use sui_indexer_alt_schema::{
-    schema::tx_balance_changes,
-    transactions::{BalanceChange, StoredTxBalanceChange},
-};
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::handler::Handler;
+use sui_indexer_alt_framework::types::coin::Coin;
+use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_framework::types::gas_coin::GAS;
+use sui_indexer_alt_schema::schema::tx_balance_changes;
+use sui_indexer_alt_schema::transactions::BalanceChange;
+use sui_indexer_alt_schema::transactions::StoredTxBalanceChange;
 use sui_types::full_checkpoint_content::ExecutedTransaction;
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
-use async_trait::async_trait;
 
 pub(crate) struct TxBalanceChanges;
 
@@ -131,14 +132,14 @@ fn balance_changes(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use diesel_async::RunQueryDsl;
-    use sui_indexer_alt_framework::{
-        Indexer, types::test_checkpoint_data_builder::TestCheckpointBuilder,
-    };
+    use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_framework::types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use sui_indexer_alt_schema::MIGRATIONS;
 
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
+
+    use super::*;
 
     async fn get_all_tx_balance_changes(conn: &mut Connection<'_>) -> Result<Vec<i64>> {
         Ok(tx_balance_changes::table

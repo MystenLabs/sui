@@ -3,12 +3,17 @@
 
 use std::sync::Arc;
 
-use prometheus::{
-    Histogram, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry,
-};
+use prometheus::Histogram;
+use prometheus::IntCounter;
+use prometheus::IntCounterVec;
+use prometheus::IntGauge;
+use prometheus::IntGaugeVec;
+use prometheus::Registry;
+use prometheus::register_histogram_with_registry;
+use prometheus::register_int_counter_vec_with_registry;
+use prometheus::register_int_counter_with_registry;
+use prometheus::register_int_gauge_vec_with_registry;
+use prometheus::register_int_gauge_with_registry;
 
 /// Histogram buckets for the distribution of latency (time between receiving a request and sending
 /// a response).

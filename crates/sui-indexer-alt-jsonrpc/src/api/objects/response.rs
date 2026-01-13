@@ -1,31 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt::Write};
+use std::collections::BTreeMap;
+use std::fmt::Write;
 
-use anyhow::{Context as _, bail};
+use anyhow::Context as _;
+use anyhow::bail;
 use futures::future::OptionFuture;
-use move_core_types::{annotated_value::MoveTypeLayout, language_storage::StructTag};
+use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::language_storage::StructTag;
 use sui_display::v1::Format;
 use sui_indexer_alt_reader::displays::DisplayKey;
-use sui_json_rpc_types::{
-    DisplayFieldsResponse, SuiData, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
-    SuiParsedData, SuiPastObjectResponse, SuiRawData,
-};
-use sui_types::{
-    TypeTag,
-    base_types::{ObjectID, ObjectType, SequenceNumber},
-    display::DisplayVersionUpdatedEvent,
-    error::SuiObjectResponseError,
-    object::{Data, Object},
-};
+use sui_json_rpc_types::DisplayFieldsResponse;
+use sui_json_rpc_types::SuiData;
+use sui_json_rpc_types::SuiObjectData;
+use sui_json_rpc_types::SuiObjectDataOptions;
+use sui_json_rpc_types::SuiObjectResponse;
+use sui_json_rpc_types::SuiParsedData;
+use sui_json_rpc_types::SuiPastObjectResponse;
+use sui_json_rpc_types::SuiRawData;
+use sui_types::TypeTag;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectType;
+use sui_types::base_types::SequenceNumber;
+use sui_types::display::DisplayVersionUpdatedEvent;
+use sui_types::error::SuiObjectResponseError;
+use sui_types::object::Data;
+use sui_types::object::Object;
 use tokio::join;
 
-use crate::{
-    context::Context,
-    data::load_live,
-    error::{InternalContext, RpcError, rpc_bail},
-};
+use crate::context::Context;
+use crate::data::load_live;
+use crate::error::InternalContext;
+use crate::error::RpcError;
+use crate::error::rpc_bail;
 
 /// Fetch the necessary data from the stores in `ctx` and transform it to build a response for a
 /// the latest version of an object, identified by its ID, according to the response `options`.

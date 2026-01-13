@@ -1,15 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Context, Object, Result};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::Result;
 
-use crate::{
-    api::types::available_range::{AvailableRange, AvailableRangeKey, Error},
-    config::Limits,
-    error::RpcError,
-    pagination::{PaginationConfig, is_connection},
-    scope::Scope,
-};
+use crate::api::types::available_range::AvailableRange;
+use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::available_range::Error;
+use crate::config::Limits;
+use crate::error::RpcError;
+use crate::pagination::PaginationConfig;
+use crate::pagination::is_connection;
+use crate::scope::Scope;
 
 pub(crate) struct ServiceConfig {
     /// Retention queries will use this scope if it is populated, instead of creating a fresh scope from
@@ -203,6 +206,12 @@ impl ServiceConfig {
     ) -> Result<Option<usize>, RpcError> {
         let limits: &Limits = ctx.data()?;
         Ok(Some(limits.max_disassembled_module_size))
+    }
+
+    /// Maximum number of paginated fields that can return results in a single request. Queries on paginated fields that exceed this limit will return an error.
+    async fn max_rich_queries(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_rich_queries))
     }
 
     /// Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.

@@ -145,16 +145,13 @@ fn input<Mode: ExecutionMode>(
                 withdraw_from,
             } = f;
             let amount = match reservation {
-                P::Reservation::EntireBalance => {
-                    invariant_violation!("Entire balance reservation amount is not yet supported")
-                }
                 P::Reservation::MaxAmountU64(u) => U256::from(u),
                 // TODO when types other than u64 are supported, we must check that this is a
                 // valid amount for the type
             };
             let funds_ty = match type_arg {
                 P::WithdrawalTypeArg::Balance(inner) => {
-                    let inner = env.load_type_input(0, inner)?;
+                    let inner = env.load_type_tag(0, &inner)?;
                     env.balance_type(inner)?
                 }
             };

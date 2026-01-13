@@ -1,5 +1,6 @@
 ---
 source: crates/sui-indexer-alt-graphql/src/lib.rs
+assertion_line: 466
 expression: sdl
 ---
 """
@@ -72,7 +73,7 @@ type ActiveJwkEdge {
 	node: ActiveJwk!
 }
 
-type Address implements IAddressable {
+type Address implements Node & IAddressable {
 	"""
 	The Address' identifier, a 32-byte number represented as a 64-character hex string, with a lead "0x".
 	"""
@@ -114,6 +115,10 @@ type Address implements IAddressable {
 	Returns `null` if a dynamic object field with that name could not be found attached to the object with this address.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	The address's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
+	id: ID!
 	"""
 	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
@@ -327,6 +332,24 @@ type BalanceEdge {
 }
 
 """
+Input for withdrawing funds from an accumulator.
+"""
+type BalanceWithdraw {
+	"""
+	How much to withdraw from the accumulator.
+	"""
+	reservation: WithdrawalReservation
+	"""
+	The type of the funds accumulator to withdraw from (e.g. `0x2::balance::Balance<0x2::sui::SUI>`).
+	"""
+	type: MoveType
+	"""
+	The account to withdraw funds from.
+	"""
+	withdrawFrom: WithdrawFrom
+}
+
+"""
 String containing Base64-encoded binary data.
 """
 scalar Base64
@@ -400,7 +423,7 @@ type ChangeEpochTransaction {
 """
 Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 """
-type Checkpoint {
+type Checkpoint implements Node {
 	"""
 	A commitment by the committee at each checkpoint on the artifacts of the checkpoint.
 	e.g., object checkpoint states
@@ -422,6 +445,10 @@ type Checkpoint {
 	The epoch that this checkpoint is part of.
 	"""
 	epoch: Epoch
+	"""
+	The checkpoint's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
+	id: ID!
 	"""
 	The total number of transactions in the network by the end of this checkpoint.
 	"""
@@ -885,7 +912,7 @@ There are two sub-types of dynamic fields:
 - Dynamic fields can store any value that has `store`. Objects stored in this kind of field will be considered wrapped (not accessible via its ID by external tools like explorers, wallets, etc. accessing storage).
 - Dynamic object fields can only store objects (values that have the `key` ability, and an `id: UID` as its first field) that have `store`, but they will still be directly accessible off-chain via their ID after being attached as a field.
 """
-type DynamicField implements IAddressable & IMoveObject & IObject {
+type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	The DynamicField's ID.
 	"""
@@ -936,6 +963,10 @@ type DynamicField implements IAddressable & IMoveObject & IObject {
 	Both these operations require the object to have both the `key` and `store` abilities.
 	"""
 	hasPublicTransfer: Boolean
+	"""
+	The dynamic field's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
+	id: ID!
 	"""
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
@@ -1109,7 +1140,7 @@ During a particular epoch the following data is fixed:
 - system package versions,
 - validators in the committee.
 """
-type Epoch {
+type Epoch implements Node {
 	"""
 	The epoch's corresponding checkpoints.
 	"""
@@ -1141,6 +1172,10 @@ type Epoch {
 	This fund is used to redistribute storage fees from past transactions to future validators.
 	"""
 	fundSize: BigInt
+	"""
+	The epoch's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
+	id: ID!
 	"""
 	A commitment by the committee at the end of epoch on the contents of the live object set at that time.
 	This can be used to verify state snapshots.
@@ -1207,7 +1242,9 @@ type Epoch {
 	"""
 	totalStakeSubsidies: BigInt
 	"""
-	The total number of transaction blocks in this epoch (or `null` if the epoch has not finished yet).
+	The total number of transaction blocks in this epoch.
+	
+	If the epoch has not finished yet, this number is computed based on the number of transactions at the latest known checkpoint.
 	"""
 	totalTransactions: UInt53
 	"""
@@ -1560,6 +1597,10 @@ interface IMoveDatatype {
 	"""
 	abilities: [MoveAbility!]
 	"""
+	The datatype's fully-qualified name, including package address, module name, and datatype name.
+	"""
+	fullyQualifiedName: String!
+	"""
 	The module that this datatype is defined in
 	"""
 	module: MoveModule!
@@ -1787,6 +1828,10 @@ type MoveDatatype implements IMoveDatatype {
 	"""
 	asMoveStruct: MoveStruct
 	"""
+	The datatype's fully-qualified name, including package address, module name, and datatype name.
+	"""
+	fullyQualifiedName: String!
+	"""
 	The module that this datatype is defined in.
 	"""
 	module: MoveModule!
@@ -1855,6 +1900,10 @@ type MoveEnum implements IMoveDatatype {
 	Abilities on this enum definition.
 	"""
 	abilities: [MoveAbility!]
+	"""
+	The enum's fully-qualified name, including package address, module name, and datatype name.
+	"""
+	fullyQualifiedName: String!
 	"""
 	The module that this enum is defined in.
 	"""
@@ -1936,6 +1985,10 @@ type MoveField {
 A function defined in a Move module.
 """
 type MoveFunction {
+	"""
+	The function's fully-qualified name, including package address, module name, and function name.
+	"""
+	fullyQualifiedName: String!
 	"""
 	Whether the function is marked `entry` or not.
 	"""
@@ -2046,6 +2099,10 @@ type MoveModule {
 	"""
 	friends(first: Int, after: String, last: Int, before: String): MoveModuleConnection
 	"""
+	The module's fully-qualified name, including its package address.
+	"""
+	fullyQualifiedName: String!
+	"""
 	The function named `name` in this module.
 	"""
 	function(name: String!): MoveFunction
@@ -2103,7 +2160,7 @@ type MoveModuleEdge {
 """
 A MoveObject is a kind of Object that reprsents data stored on-chain.
 """
-type MoveObject implements IAddressable & IMoveObject & IObject {
+type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	The MoveObject's ID.
 	"""
@@ -2162,6 +2219,10 @@ type MoveObject implements IAddressable & IMoveObject & IObject {
 	Both these operations require the object to have both the `key` and `store` abilities.
 	"""
 	hasPublicTransfer: Boolean
+	"""
+	The Move object's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
+	id: ID!
 	"""
 	The Base64-encoded BCS serialize of this object, as a `MoveObject`.
 	"""
@@ -2260,7 +2321,7 @@ type MoveObjectEdge {
 """
 A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
 """
-type MovePackage implements IAddressable & IObject {
+type MovePackage implements Node & IAddressable & IObject {
 	"""
 	The MovePackage's ID.
 	"""
@@ -2283,6 +2344,10 @@ type MovePackage implements IAddressable & IObject {
 	32-byte hash that identifies the package's contents, encoded in Base58.
 	"""
 	digest: String
+	"""
+	The package's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
+	id: ID!
 	"""
 	The transitive dependencies of this package.
 	"""
@@ -2414,6 +2479,10 @@ type MoveStruct implements IMoveDatatype {
 	Field types reference type parameters by their index in the defining struct's `typeParameters` list.
 	"""
 	fields: [MoveField!]
+	"""
+	The struct's fully-qualified name, including package address, module name, and datatype name.
+	"""
+	fullyQualifiedName: String!
 	"""
 	The module that this struct is defined in.
 	"""
@@ -2609,11 +2678,21 @@ type Mutation {
 }
 
 """
+An interface implemented by types that can be uniquely identified by a globally unique `ID`, following the GraphQL Global Object Identification specification.
+"""
+interface Node {
+	"""
+	The node's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
+	id: ID!
+}
+
+"""
 An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
 
 Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
 """
-type Object implements IAddressable & IObject {
+type Object implements Node & IAddressable & IObject {
 	"""
 	The Object's ID.
 	"""
@@ -2660,6 +2739,10 @@ type Object implements IAddressable & IObject {
 	Returns `null` if a dynamic object field with that name could not be found attached to this object.
 	"""
 	dynamicObjectField(name: DynamicFieldName!): DynamicField
+	"""
+	The object's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
+	id: ID!
 	"""
 	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
@@ -3211,6 +3294,10 @@ type Query {
 	"""
 	multiGetTypes(keys: [String!]!): [MoveType]!
 	"""
+	Fetch a `Node` by its globally unique `ID`. Returns `null` if the node cannot be found (e.g., the underlying data was pruned or never existed).
+	"""
+	node(id: ID!): Node
+	"""
 	Fetch an object by its address.
 	
 	If `version` is specified, the object will be fetched at that exact version.
@@ -3505,6 +3592,10 @@ type ServiceConfig {
 	"""
 	maxQueryPayloadSize: Int
 	"""
+	Maximum number of paginated fields that can return results in a single request. Queries on paginated fields that exceed this limit will return an error.
+	"""
+	maxRichQueries: Int
+	"""
 	Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
 	
 	This is cumulative across all matching fields in a single GraphQL request.
@@ -3711,7 +3802,7 @@ type SystemParameters {
 """
 Description of a transaction, the unit of activity on Sui.
 """
-type Transaction {
+type Transaction implements Node {
 	"""
 	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
 	"""
@@ -3729,6 +3820,10 @@ type Transaction {
 	"""
 	gasInput: GasInput
 	"""
+	The transaction's globally unique identifier, which can be passed to `Query.node` to refetch it.
+	"""
+	id: ID!
+	"""
 	The type of this transaction as well as the commands and/or parameters comprising the transaction of this kind.
 	"""
 	kind: TransactionKind
@@ -3744,6 +3839,10 @@ type Transaction {
 	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
 	"""
 	transactionBcs: Base64
+	"""
+	The transaction as a JSON blob, matching the gRPC proto format (excluding BCS).
+	"""
+	transactionJson: JSON
 }
 
 """
@@ -3789,6 +3888,10 @@ type TransactionEffects {
 	"""
 	balanceChanges(first: Int, after: String, last: Int, before: String): BalanceChangeConnection
 	"""
+	The balance changes as a JSON array, matching the gRPC proto format.
+	"""
+	balanceChangesJson: JSON
+	"""
 	The checkpoint this transaction was finalized in.
 	"""
 	checkpoint: Checkpoint
@@ -3810,6 +3913,10 @@ type TransactionEffects {
 	A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
 	"""
 	effectsDigest: String
+	"""
+	The effects as a JSON blob, matching the gRPC proto format (excluding BCS).
+	"""
+	effectsJson: JSON
 	"""
 	The epoch this transaction was finalized in.
 	"""
@@ -3895,7 +4002,7 @@ input TransactionFilter {
 """
 Input argument to a Programmable Transaction Block (PTB) command.
 """
-union TransactionInput = Pure | OwnedOrImmutable | SharedInput | Receiving
+union TransactionInput = Pure | OwnedOrImmutable | SharedInput | Receiving | BalanceWithdraw
 
 type TransactionInputConnection {
 	"""
@@ -4318,6 +4425,29 @@ input VersionFilter {
 	"""
 	beforeVersion: UInt53
 }
+
+"""
+The account to withdraw funds from.
+"""
+enum WithdrawFrom {
+	"""
+	The funds are withdrawn from the transaction sender's account.
+	"""
+	SENDER
+	"""
+	The funds are withdrawn from the sponsor's account.
+	"""
+	SPONSOR
+}
+
+type WithdrawMaxAmountU64 {
+	amount: BigInt
+}
+
+"""
+Reservation details for a withdrawal.
+"""
+union WithdrawalReservation = WithdrawMaxAmountU64
 
 """
 System transaction for writing the pre-computed storage cost for accumulator objects.

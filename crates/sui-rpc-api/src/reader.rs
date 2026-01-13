@@ -200,6 +200,29 @@ impl StateReader {
     ) -> CheckpointTransactionsIter {
         CheckpointTransactionsIter::new(self.clone(), direction, cursor)
     }
+
+    pub fn lookup_address_balance(
+        &self,
+        owner: sui_types::base_types::SuiAddress,
+        coin_type: move_core_types::language_storage::StructTag,
+    ) -> Option<u64> {
+        use sui_types::MoveTypeTagTraitGeneric;
+        use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+        use sui_types::accumulator_root::AccumulatorKey;
+        use sui_types::dynamic_field::DynamicFieldKey;
+
+        let balance_type = sui_types::balance::Balance::type_tag(coin_type.into());
+
+        let key = AccumulatorKey { owner };
+        let key_type_tag = AccumulatorKey::get_type_tag(&[balance_type]);
+
+        DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
+            .into_unbounded_id()
+            .unwrap()
+            .load_object(self.inner())
+            .and_then(|o| o.load_value::<u128>().ok())
+            .map(|balance| balance as u64)
+    }
 }
 
 #[derive(Debug)]

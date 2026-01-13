@@ -16,8 +16,9 @@ use sui_config::{Config, ExecutionCacheConfig, SUI_CLIENT_CONFIG, SUI_NETWORK_CO
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
+use sui_json_rpc_api::CoinReadApiClient;
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    Balance, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
     TransactionFilter,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -62,6 +63,8 @@ use tokio::time::{Instant, timeout};
 use tokio::{task::JoinHandle, time::sleep};
 use tonic::IntoRequest;
 use tracing::{error, info};
+
+pub mod addr_balance_test_env;
 
 const NUM_VALIDATOR: usize = 4;
 
@@ -918,6 +921,22 @@ impl TestCluster {
             .unwrap();
         assert_eq!(&SuiExecutionStatus::Success, effects.status());
         effects.created().first().unwrap().object_id()
+    }
+
+    pub async fn get_sui_balance(&self, address: SuiAddress) -> Balance {
+        self.fullnode_handle
+            .rpc_client
+            .get_balance(address, Some("0x2::sui::SUI".to_string()))
+            .await
+            .unwrap()
+    }
+
+    pub async fn get_address_balance(&self, address: SuiAddress, coin_type: &str) -> Balance {
+        self.fullnode_handle
+            .rpc_client
+            .get_balance(address, Some(coin_type.to_string()))
+            .await
+            .unwrap()
     }
 
     #[cfg(msim)]

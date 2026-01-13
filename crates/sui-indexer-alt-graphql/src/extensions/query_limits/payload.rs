@@ -3,20 +3,24 @@
 
 use std::collections::BTreeSet;
 
-use async_graphql::{
-    Name, Pos, Positioned, ServerResult, Variables, parser::types::ExecutableDocument,
-    registry::Registry,
-};
-use async_graphql_value::{ConstValue, Value};
-use serde::{Deserialize, Serialize};
+use async_graphql::Name;
+use async_graphql::Pos;
+use async_graphql::Positioned;
+use async_graphql::ServerResult;
+use async_graphql::Variables;
+use async_graphql::parser::types::ExecutableDocument;
+use async_graphql::registry::Registry;
+use async_graphql_value::ConstValue;
+use async_graphql_value::Value;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::extensions::query_limits::ErrorKind;
-
-use super::{
-    QueryLimitsConfig,
-    error::Error,
-    visitor::{Driver, FieldDriver, Visitor},
-};
+use crate::extensions::query_limits::QueryLimitsConfig;
+use crate::extensions::query_limits::error::Error;
+use crate::extensions::query_limits::visitor::Driver;
+use crate::extensions::query_limits::visitor::FieldDriver;
+use crate::extensions::query_limits::visitor::Visitor;
 
 /// The proportion of the query content that was transaction payload versus query payload.
 #[derive(Serialize, Deserialize)]

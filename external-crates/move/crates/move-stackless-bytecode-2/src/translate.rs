@@ -546,10 +546,10 @@ pub(crate) fn bytecode<K: SourceKind>(
         IB::Mod => binop!(Op::Modulo, lhs => lhs.ty.clone()),
         IB::Mul => binop!(Op::Multiply, lhs => lhs.ty.clone()),
         IB::Div => binop!(Op::Divide, lhs => lhs.ty.clone()),
+        IB::BitAnd => binop!(Op::BitAnd, lhs => lhs.ty.clone()),
+        IB::BitOr => binop!(Op::BitOr, lhs => lhs.ty.clone()),
+        IB::Xor => binop!(Op::Xor, lhs => lhs.ty.clone()),
 
-        IB::BitAnd => binop!(Op::BitAnd, lhs => N::Type::Bool.into()),
-        IB::BitOr => binop!(Op::BitOr, lhs => N::Type::Bool.into()),
-        IB::Xor => binop!(Op::Xor, lhs => N::Type::Bool.into()),
         IB::And => binop!(Op::And, lhs => N::Type::Bool.into()),
         IB::Or => binop!(Op::Or, lhs => N::Type::Bool.into()),
         IB::Eq => binop!(Op::Equal, lhs => N::Type::Bool.into()),

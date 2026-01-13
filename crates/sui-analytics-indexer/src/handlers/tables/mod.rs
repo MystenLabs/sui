@@ -6,19 +6,30 @@
 //! Each module implements a `Processor` that extracts data from checkpoints
 //! and produces typed entries for a specific analytics table.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-use anyhow::{Result, anyhow};
-use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout, MoveValue};
-use move_core_types::language_storage::{StructTag, TypeTag};
-use sui_package_resolver::{PackageStore, Resolver};
+use anyhow::Result;
+use anyhow::anyhow;
+use move_core_types::annotated_value::MoveStruct;
+use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::annotated_value::MoveValue;
+use move_core_types::language_storage::StructTag;
+use move_core_types::language_storage::TypeTag;
+use sui_package_resolver::PackageStore;
+use sui_package_resolver::Resolver;
 use sui_types::base_types::ObjectID;
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::Object;
+use sui_types::object::Owner;
 use sui_types::object::bounded_visitor::BoundedVisitor;
-use sui_types::object::{Object, Owner};
-use sui_types::transaction::{TransactionData, TransactionDataAPI};
+use sui_types::transaction::TransactionData;
+use sui_types::transaction::TransactionDataAPI;
 
-use crate::tables::{InputObjectKind, ObjectStatus, OwnerType};
+use crate::tables::InputObjectKind;
+use crate::tables::ObjectStatus;
+use crate::tables::OwnerType;
 
 pub mod checkpoint;
 pub mod df;
@@ -294,7 +305,9 @@ fn parse_struct_field(
 mod tests {
     use super::parse_struct;
     use move_core_types::account_address::AccountAddress;
-    use move_core_types::annotated_value::{MoveStruct, MoveValue, MoveVariant};
+    use move_core_types::annotated_value::MoveStruct;
+    use move_core_types::annotated_value::MoveValue;
+    use move_core_types::annotated_value::MoveVariant;
     use move_core_types::identifier::Identifier;
     use move_core_types::language_storage::StructTag;
     use std::collections::BTreeMap;

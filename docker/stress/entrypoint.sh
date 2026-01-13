@@ -30,10 +30,12 @@ echo 'Setup Complete'
     --in-flight-ratio 30 \
     --shared-counter "${STRESS_SHARED_COUNTER}" \
     --transfer-object "${STRESS_TRANSFER_OBJECT}" \
-    --randomness "${STRESS_RANDOMNESS:-5}" \
+    --randomness "${STRESS_RANDOMNESS}" \
     --delegation "${STRESS_DELEGATION}" \
+    --randomized-transaction "${STRESS_RANDOMIZED_TRANSACTION}" \
     --batch-payment "${BATCH_PAYMENT}" \
     --batch-payment-size "${BATCH_PAYMENT_SIZE}" \
     --adversarial "${STRESS_ADVERSARIAL}" \
+    --composite "${STRESS_COMPOSITE}" \
     --client-metric-host 0.0.0.0 \
     --num-workers 24

@@ -1,15 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use anyhow::Context as _;
 use async_graphql::dataloader::Loader;
-use diesel::sql_types::{Array, BigInt, Bytea};
-use sui_indexer_alt_schema::packages::{StoredPackage, StoredPackageOriginalId};
+use diesel::sql_types::Array;
+use diesel::sql_types::BigInt;
+use diesel::sql_types::Bytea;
+use sui_indexer_alt_schema::packages::StoredPackage;
+use sui_indexer_alt_schema::packages::StoredPackageOriginalId;
 use sui_types::base_types::ObjectID;
 
-use crate::{error::Error, pg_reader::PgReader};
+use crate::error::Error;
+use crate::pg_reader::PgReader;
 
 /// Key for fetching the original ID of a package
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

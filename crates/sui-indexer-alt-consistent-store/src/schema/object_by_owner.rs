@@ -1,18 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use bincode::{
-    Decode, Encode,
-    de::{Decoder, read::Reader},
-    enc::{Encoder, write::Writer},
-    error::{AllowedEnumVariants, DecodeError, EncodeError},
-    serde::{BorrowCompat, Compat},
-};
+use bincode::Decode;
+use bincode::Encode;
+use bincode::de::Decoder;
+use bincode::de::read::Reader;
+use bincode::enc::Encoder;
+use bincode::enc::write::Writer;
+use bincode::error::AllowedEnumVariants;
+use bincode::error::DecodeError;
+use bincode::error::EncodeError;
+use bincode::serde::BorrowCompat;
+use bincode::serde::Compat;
 use move_core_types::language_storage::StructTag;
-use sui_indexer_alt_framework::types::{
-    base_types::{ObjectID, SuiAddress},
-    object::{Object, Owner},
-};
+use sui_indexer_alt_framework::types::base_types::ObjectID;
+use sui_indexer_alt_framework::types::base_types::SuiAddress;
+use sui_indexer_alt_framework::types::object::Object;
+use sui_indexer_alt_framework::types::object::Owner;
 
 /// Key for the index that supports fetching an owner's objects, optionally filtering by object
 /// type.

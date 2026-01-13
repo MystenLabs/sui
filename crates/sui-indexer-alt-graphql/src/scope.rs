@@ -1,26 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    fmt,
-    fmt::{Debug, Formatter},
-    sync::Arc,
-};
+use std::collections::BTreeMap;
+use std::fmt;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::sync::Arc;
 
 use async_graphql::Context;
 use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
-use sui_package_resolver::{Package, PackageStore, Resolver, error::Error as PackageResolverError};
+use sui_package_resolver::Package;
+use sui_package_resolver::PackageStore;
+use sui_package_resolver::Resolver;
+use sui_package_resolver::error::Error as PackageResolverError;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
-use sui_types::{
-    base_types::{ObjectID, SequenceNumber},
-    object::Object as NativeObject,
-};
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
+use sui_types::object::Object as NativeObject;
 
-use crate::{config::Limits, error::RpcError, task::watermark::Watermarks};
+use crate::config::Limits;
+use crate::error::RpcError;
+use crate::task::watermark::Watermarks;
 
 /// A map of objects from an executed transaction, keyed by (ObjectID, SequenceNumber).
 /// None values indicate tombstones for deleted/wrapped objects.
@@ -80,6 +83,31 @@ impl Scope {
             package_store: package_store.clone(),
             resolver_limits: limits.package_resolver(),
         })
+    }
+
+    /// Create a scope instance for tests with no package data.
+    #[cfg(test)]
+    pub(crate) fn for_tests() -> Self {
+        #[derive(Clone)]
+        struct EmptyPackageStore;
+
+        #[async_trait]
+        impl PackageStore for EmptyPackageStore {
+            async fn fetch(
+                &self,
+                id: AccountAddress,
+            ) -> Result<Arc<Package>, PackageResolverError> {
+                Err(PackageResolverError::PackageNotFound(id))
+            }
+        }
+
+        Self {
+            checkpoint_viewed_at: Some(0),
+            root_version: None,
+            execution_objects: Arc::new(BTreeMap::new()),
+            package_store: Arc::new(EmptyPackageStore),
+            resolver_limits: Limits::default().package_resolver(),
+        }
     }
 
     /// Create a nested scope pinned to a past checkpoint. Returns `None` if the checkpoint is in

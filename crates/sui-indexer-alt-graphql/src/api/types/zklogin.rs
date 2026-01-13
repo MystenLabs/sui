@@ -4,32 +4,38 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Enum, SimpleObject};
-use im::hashmap::{Entry, HashMap};
+use async_graphql::Context;
+use async_graphql::Enum;
+use async_graphql::SimpleObject;
+use im::hashmap::Entry;
+use im::hashmap::HashMap;
 use serde::Serialize;
-use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
-use sui_types::{
-    SUI_AUTHENTICATOR_STATE_ADDRESS, TypeTag,
-    authenticator_state::{ActiveJwk, AuthenticatorStateInner},
-    crypto::ToFromBytes,
-    dynamic_field::DynamicFieldType,
-    signature::{GenericSignature, VerifyParams},
-    signature_verification::VerifiedDigestCache,
-    transaction::TransactionData,
-};
+use shared_crypto::intent::Intent;
+use shared_crypto::intent::IntentMessage;
+use shared_crypto::intent::PersonalMessage;
+use sui_types::SUI_AUTHENTICATOR_STATE_ADDRESS;
+use sui_types::TypeTag;
+use sui_types::authenticator_state::ActiveJwk;
+use sui_types::authenticator_state::AuthenticatorStateInner;
+use sui_types::crypto::ToFromBytes;
+use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::signature::GenericSignature;
+use sui_types::signature::VerifyParams;
+use sui_types::signature_verification::VerifiedDigestCache;
+use sui_types::transaction::TransactionData;
 use tracing::warn;
 
-use crate::{
-    api::{
-        scalars::{base64::Base64, sui_address::SuiAddress, type_filter::TypeInput},
-        types::dynamic_field::{DynamicField, DynamicFieldName},
-    },
-    config::ZkLoginConfig,
-    error::{RpcError, bad_user_input, upcast},
-    scope::Scope,
-};
-
-use super::epoch::Epoch;
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::types::dynamic_field::DynamicField;
+use crate::api::types::dynamic_field::DynamicFieldName;
+use crate::api::types::epoch::Epoch;
+use crate::config::ZkLoginConfig;
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::upcast;
+use crate::scope::Scope;
 
 /// An enum that specifies the intent scope to be used to parse the bytes for signature verification.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]

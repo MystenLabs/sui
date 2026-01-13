@@ -1,20 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+use std::sync::Arc;
+
 use anyhow::anyhow;
-use async_graphql::{
-    Context, Object,
-    registry::{MetaType, Registry},
-};
-use std::{collections::BTreeSet, sync::Arc};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::registry::MetaType;
+use async_graphql::registry::Registry;
 
-use crate::{
-    error::{RpcError, bad_user_input, feature_unavailable, upcast},
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
-use super::checkpoint::Checkpoint;
+use crate::api::types::checkpoint::Checkpoint;
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::feature_unavailable;
+use crate::error::upcast;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -292,13 +294,13 @@ collect_pipelines! {
         pipelines.insert("obj_versions".to_string());
     };
 
-    MoveDatatype.[module, name] => IMoveDatatype.*;
+    MoveDatatype.[module, name, fullyQualifiedName] => IMoveDatatype.*;
     MoveDatatype.[abilities, typeParameters] => IMoveDatatype.*;
     MoveDatatype.[asMoveEnum, asMoveStruct] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
     };
 
-    MoveEnum.[module, name] => IMoveDatatype.*;
+    MoveEnum.[module, name, fullyQualifiedName] => IMoveDatatype.*;
     MoveEnum.[abilities, typeParameters] => IMoveDatatype.*;
     MoveEnum.[variants] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
@@ -321,7 +323,7 @@ collect_pipelines! {
     MovePackage.[digest, objectBcs, owner, previousTransaction, storageRebate, version] => IObject.*;
     MovePackage.[receivedTransactions] => IObject.receivedTransactions();
 
-    MoveStruct.[module, name] => IMoveDatatype.*;
+    MoveStruct.[module, name, fullyQualifiedName] => IMoveDatatype.*;
     MoveStruct.[abilities, typeParameters] => IMoveDatatype.*;
     MoveStruct.[fields] |pipelines, _filters| {
         pipelines.insert("obj_versions".to_string());
@@ -383,6 +385,11 @@ collect_pipelines! {
         pipelines.insert("tx_digests".to_string());
     };
 
+    TransactionEffects.[balanceChangesJson] |pipelines, _filters| {
+        pipelines.insert("tx_balance_changes".to_string());
+        pipelines.insert("tx_digests".to_string());
+    };
+
     Validator.[address] => IAddressable.*;
     Validator.[balance, balances, multiGetBalances, objects] => IAddressable.*;
     Validator.[defaultSuinsName] => IAddressable.defaultSuinsName();
@@ -393,14 +400,21 @@ collect_pipelines! {
 
 #[cfg(test)]
 mod field_piplines_tests {
-    use super::*;
+    use std::collections::BTreeSet;
+    use std::sync::Arc;
+
+    use async_graphql::Response;
+    use async_graphql::extensions::Extension;
+    use async_graphql::extensions::ExtensionContext;
+    use async_graphql::extensions::ExtensionFactory;
+    use async_graphql::extensions::NextRequest;
+    use async_graphql::registry::MetaType;
+    use async_graphql::registry::MetaTypeName;
+    use async_graphql::registry::Registry;
+
     use crate::schema;
-    use async_graphql::{
-        Response,
-        extensions::{Extension, ExtensionContext, ExtensionFactory, NextRequest},
-        registry::{MetaType, MetaTypeName, Registry},
-    };
-    use std::{collections::BTreeSet, sync::Arc};
+
+    use super::*;
 
     fn test_collect_pipelines(
         type_: &str,
@@ -478,6 +492,7 @@ mod field_piplines_tests {
 
         for (interface_name, meta_type) in registry.types.iter() {
             let MetaType::Interface {
+                name,
                 possible_types,
                 fields,
                 ..
@@ -485,6 +500,13 @@ mod field_piplines_tests {
             else {
                 continue;
             };
+
+            // Node is part of the GraphQL Global Identification specification, it does not have
+            // any retention requirements, so can be safely skipped.
+            if name == "Node" {
+                continue;
+            }
+
             for type_name in possible_types {
                 for (interface_field_name, _) in fields {
                     let Some((delegate_type, delegate_field)) =
