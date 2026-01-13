@@ -14,7 +14,7 @@ use move_binary_format::{
     file_format_common::VERSION_1,
 };
 use move_vm_config::verifier::VerifierConfig;
-use mysten_common::in_antithesis;
+use mysten_common::in_integration_test;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use sui_protocol_config_macros::{
@@ -4401,6 +4401,12 @@ impl ProtocolConfig {
                 107 => {
                     cfg.feature_flags
                         .consensus_skip_gced_blocks_in_direct_finalization = true;
+
+                    // Trigger edge cases more often in integration tests.
+                    if in_integration_test() {
+                        cfg.consensus_gc_depth = Some(6);
+                        cfg.consensus_max_num_transactions_in_block = Some(8);
+                    }
                 }
 
                 // Use this template when making changes:
@@ -4418,10 +4424,7 @@ impl ProtocolConfig {
         }
 
         // Simtest specific overrides.
-        if cfg!(msim) || in_antithesis() {
-            // Trigger GC more often.
-            cfg.consensus_gc_depth = Some(6);
-
+        if cfg!(msim) {
             // Trigger checkpoint splitting more often.
             // cfg.max_transactions_per_checkpoint = Some(10);
             // FIXME: Re-introduce this once we resolve the checkpoint splitting issue
