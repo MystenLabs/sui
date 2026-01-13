@@ -36,6 +36,10 @@ struct Args {
     #[arg(long, default_value = "1m", value_parser = humantime::parse_duration)]
     watermark_interval: Duration,
 
+    /// Maximum random jitter to add to the watermark interval.
+    #[arg(long, default_value = "0s", value_parser = humantime::parse_duration)]
+    watermark_interval_jitter: Duration,
+
     /// Write to AWS S3. Provide the bucket name or endpoint-and-bucket.
     /// (env: AWS_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION)
     #[arg(long, group = "store")]
@@ -141,6 +145,7 @@ async fn main() -> anyhow::Result<()> {
         committer: CommitterConfig {
             write_concurrency: args.write_concurrency,
             watermark_interval_ms: args.watermark_interval.as_millis() as u64,
+            watermark_interval_jitter_ms: args.watermark_interval_jitter.as_millis() as u64,
             ..Default::default()
         },
         ..Default::default()
