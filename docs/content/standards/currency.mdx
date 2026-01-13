@@ -132,7 +132,7 @@ For OTW created currencies, you **must** call `finalize_registration` to promote
 # This step is only required for OTW created currencies.
 sui client ptb
 --assign @created_currency_object_id currency_to_promote
---move-call 0x2::coin_registry::finalize_registration @0xc currency_to_promote
+--move-call 0x2::coin_registry::finalize_registration <CURRENCY_CYPE> @0xc currency_to_promote
 ```
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/registries/coin_registry.move" mode="code" fun="finalize_registration" signatureOnly />
