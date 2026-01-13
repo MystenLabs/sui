@@ -26,6 +26,8 @@ title: Module `sui::accumulator`
 -  [Function `root_remove_accumulator`](#sui_accumulator_root_remove_accumulator)
 -  [Function `emit_deposit_event`](#sui_accumulator_emit_deposit_event)
 -  [Function `emit_withdraw_event`](#sui_accumulator_emit_withdraw_event)
+-  [Function `pending_deposits`](#sui_accumulator_pending_deposits)
+-  [Function `pending_withdrawals`](#sui_accumulator_pending_withdrawals)
 
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
@@ -596,6 +598,56 @@ Balance object methods
     owner: <b>address</b>,
     amount: u64,
 );
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_accumulator_pending_deposits"></a>
+
+## Function `pending_deposits`
+
+Returns the total pending deposits for the given address and type <code>T</code> within the current
+transaction. This is the sum of all <code>Balance&lt;T&gt;</code> values sent via <code>send_funds</code> to the address
+during this transaction, before they are settled.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_pending_deposits">pending_deposits</a>&lt;T&gt;(<b>address</b>: <b>address</b>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_pending_deposits">pending_deposits</a>&lt;T&gt;(<b>address</b>: <b>address</b>): u64;
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_accumulator_pending_withdrawals"></a>
+
+## Function `pending_withdrawals`
+
+Returns the total pending withdrawals for the given address and type <code>T</code> within the current
+transaction. This is the sum of all <code>Balance&lt;T&gt;</code> values being withdrawn from the address
+during this transaction, before they are settled.
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_pending_withdrawals">pending_withdrawals</a>&lt;T&gt;(<b>address</b>: <b>address</b>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>native</b> <b>fun</b> <a href="../sui/accumulator.md#sui_accumulator_pending_withdrawals">pending_withdrawals</a>&lt;T&gt;(<b>address</b>: <b>address</b>): u64;
 </code></pre>
 
 

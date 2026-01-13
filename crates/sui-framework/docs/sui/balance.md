@@ -24,6 +24,9 @@ custom coins with <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a
 -  [Function `redeem_funds`](#sui_balance_redeem_funds)
 -  [Function `withdraw_funds_from_object`](#sui_balance_withdraw_funds_from_object)
 -  [Function `settled_funds_value`](#sui_balance_settled_funds_value)
+-  [Function `pending_funds_deposits`](#sui_balance_pending_funds_deposits)
+-  [Function `pending_funds_withdrawals`](#sui_balance_pending_funds_withdrawals)
+-  [Function `positive_pending_funds_value`](#sui_balance_positive_pending_funds_value)
 -  [Function `create_supply_internal`](#sui_balance_create_supply_internal)
 -  [Function `create_staking_rewards`](#sui_balance_create_staking_rewards)
 -  [Function `destroy_storage_rebates`](#sui_balance_destroy_storage_rebates)
@@ -535,6 +538,98 @@ the current consensus commit. Can read either address-owned or object-owned bala
     <b>let</b> val: u128 = root.u128_read&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt;(<b>address</b>);
     <b>let</b> val = <a href="../std/u128.md#std_u128_min">std::u128::min</a>(<a href="../std/u64.md#std_u64_max_value">std::u64::max_value</a>!() <b>as</b> u128, val);
     val <b>as</b> u64
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_balance_pending_funds_deposits"></a>
+
+## Function `pending_funds_deposits`
+
+Read the total pending deposits for the given address within the current transaction.
+This is the sum of all <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;</code> values sent via <code><a href="../sui/balance.md#sui_balance_send_funds">send_funds</a></code> to the address during this
+transaction, before they are settled.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_pending_funds_deposits">pending_funds_deposits</a>&lt;T&gt;(<b>address</b>: <b>address</b>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_pending_funds_deposits">pending_funds_deposits</a>&lt;T&gt;(<b>address</b>: <b>address</b>): u64 {
+    <a href="../sui/accumulator.md#sui_accumulator_pending_deposits">sui::accumulator::pending_deposits</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt;(<b>address</b>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_balance_pending_funds_withdrawals"></a>
+
+## Function `pending_funds_withdrawals`
+
+Read the total pending withdrawals for the given address within the current transaction.
+This is the sum of all <code><a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;</code> values being withdrawn from the address during this
+transaction, before they are settled.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_pending_funds_withdrawals">pending_funds_withdrawals</a>&lt;T&gt;(<b>address</b>: <b>address</b>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_pending_funds_withdrawals">pending_funds_withdrawals</a>&lt;T&gt;(<b>address</b>: <b>address</b>): u64 {
+    <a href="../sui/accumulator.md#sui_accumulator_pending_withdrawals">sui::accumulator::pending_withdrawals</a>&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt;(<b>address</b>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_balance_positive_pending_funds_value"></a>
+
+## Function `positive_pending_funds_value`
+
+Read the expected balance for the given address after the current transaction settles.
+Returns <code>Some(settled + deposits - withdrawals)</code> if the result is non-negative,
+or <code>None</code> if the result would underflow (withdrawals exceed settled + deposits).
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_positive_pending_funds_value">positive_pending_funds_value</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, <b>address</b>: <b>address</b>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;u64&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_positive_pending_funds_value">positive_pending_funds_value</a>&lt;T&gt;(
+    root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>,
+    <b>address</b>: <b>address</b>,
+): Option&lt;u64&gt; {
+    <b>let</b> settled = <a href="../sui/balance.md#sui_balance_settled_funds_value">settled_funds_value</a>&lt;T&gt;(root, <b>address</b>);
+    <b>let</b> deposits = <a href="../sui/balance.md#sui_balance_pending_funds_deposits">pending_funds_deposits</a>&lt;T&gt;(<b>address</b>);
+    <b>let</b> withdrawals = <a href="../sui/balance.md#sui_balance_pending_funds_withdrawals">pending_funds_withdrawals</a>&lt;T&gt;(<b>address</b>);
+    <b>let</b> total_available = (settled <b>as</b> u128) + (deposits <b>as</b> u128);
+    <b>if</b> (total_available &gt;= (withdrawals <b>as</b> u128)) {
+        <a href="../std/option.md#std_option_some">std::option::some</a>(((total_available - (withdrawals <b>as</b> u128)) <b>as</b> u64))
+    } <b>else</b> {
+        <a href="../std/option.md#std_option_none">std::option::none</a>()
+    }
 }
 </code></pre>
 
