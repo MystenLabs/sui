@@ -130,16 +130,23 @@ impl TryFrom<&Checkpoint> for crate::full_checkpoint_content::Checkpoint {
             summary, signature,
         );
 
-        let contents = checkpoint
+        let contents: crate::messages_checkpoint::CheckpointContents = checkpoint
             .contents()
             .bcs()
             .deserialize()
             .map_err(|e| TryFromProtoError::invalid("contents.bcs", e))?;
 
+        let user_signatures: Vec<_> = contents
+            .clone()
+            .into_iter_with_signatures()
+            .map(|(_, user_signatures)| user_signatures)
+            .collect();
+
         let transactions = checkpoint
             .transactions()
             .iter()
-            .map(TryInto::try_into)
+            .zip(user_signatures)
+            .map(|(tx, user_signatures)| tx_with_signatures_try_from_proto(tx, user_signatures))
             .collect::<Result<_, _>>()?;
 
         let object_set = checkpoint.objects().try_into()?;
@@ -151,6 +158,40 @@ impl TryFrom<&Checkpoint> for crate::full_checkpoint_content::Checkpoint {
             object_set,
         })
     }
+}
+
+fn tx_with_signatures_try_from_proto(
+    value: &ExecutedTransaction,
+    signatures: Vec<crate::signature::GenericSignature>,
+) -> Result<crate::full_checkpoint_content::ExecutedTransaction, TryFromProtoError> {
+    Ok(crate::full_checkpoint_content::ExecutedTransaction {
+        transaction: value
+            .transaction()
+            .bcs()
+            .deserialize()
+            .map_err(|e| TryFromProtoError::invalid("transaction.bcs", e))?,
+        signatures,
+        effects: value
+            .effects()
+            .bcs()
+            .deserialize()
+            .map_err(|e| TryFromProtoError::invalid("effects.bcs", e))?,
+        events: value
+            .events_opt()
+            .map(|events| {
+                events
+                    .bcs()
+                    .deserialize()
+                    .map_err(|e| TryFromProtoError::invalid("events.bcs", e))
+            })
+            .transpose()?,
+        unchanged_loaded_runtime_objects: value
+            .effects()
+            .unchanged_loaded_runtime_objects()
+            .iter()
+            .map(TryInto::try_into)
+            .collect::<Result<_, _>>()?,
+    })
 }
 
 impl TryFrom<&ExecutedTransaction> for crate::full_checkpoint_content::ExecutedTransaction {
