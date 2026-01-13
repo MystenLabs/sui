@@ -293,7 +293,8 @@ async fn test_address_to_address_transfer() {
     assert_eq!(balances.len(), 1);
     assert_eq!(balances[0].0, GAS::type_().to_canonical_string(true));
 
-    // Historical query at checkpoint 3 should show two balances for A, with one of them being a balance of 1000 for MY_COIN
+    // Historical query at checkpoint 3 should show two balances for A, with one of them being a
+    // balance of 500 for MY_COIN
     let (balances, _) = cluster
         .list_balances(a, Some(3), None, Some(10))
         .await
