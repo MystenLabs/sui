@@ -20,14 +20,13 @@ use sui_indexer_alt_schema::cp_blooms::CP_BLOOM_NUM_HASHES;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 
+use crate::api::types::transaction::SCTransaction;
 use crate::error::RpcError;
 use crate::pagination::Page;
 
-// Multiplier to apply to page limit when querying for candidate checkpoints to account for
-// false positives (~15%) from bloom filters.
 const OVERFETCH_MULTIPLIER: f64 = 1.2;
 
-/// Probe that represent the block and bits that should be set for values if they exists in a checkpoint block.
+/// Probe that represent the block and bits that should be set for values if they exists the bloom filter.
 /// We pre-compute these probes to avoid repeated hashing in SQL.
 struct CpBloomBlockProbe {
     // Checkpoint block ID to check for a value
@@ -40,7 +39,7 @@ struct CpBloomBlockProbe {
     bit_masks: Vec<usize>,
 }
 
-/// Probe that represent the bits that should be set for values if they exist in a checkpoint.
+/// Probe that represent the bits that should be set if they exist the bloom filter.
 struct CpBloomProbe {
     byte_offsets: Vec<usize>,
     bit_masks: Vec<usize>,
@@ -56,12 +55,12 @@ struct CpResult {
 ///
 /// Does a coarse filter over checkpoints ranges using cp_bloom_blocks,
 /// then a finer filter over those ranges for checkpoint matches using cp_blooms.
-pub(crate) async fn candidate_cps<C>(
+pub(super) async fn candidate_cps(
     ctx: &Context<'_>,
     filter_values: &[Vec<u8>],
     cp_lo: u64,
     cp_hi: u64,
-    page: &Page<C>,
+    page: &Page<SCTransaction>,
 ) -> Result<Vec<u64>, RpcError> {
     let pg_reader: &PgReader = ctx.data()?;
     let mut conn = pg_reader
@@ -98,13 +97,13 @@ pub(crate) async fn candidate_cps<C>(
             WHERE bloom_contains(bb.bloom_filter, c.byte_pos, c.bit_masks)
             GROUP BY bb.cp_block_id
             HAVING COUNT(*) = (SELECT COUNT(*) FROM condition_data c2 WHERE c2.cp_block_id = bb.cp_block_id)
-             -- ^ Only keep blocks where ALL probes matched (AND semantics)
+             -- ^ Only keep blocks where ALL probes matched
             ORDER BY cp_lo {}
             LIMIT {BigInt}
             -- ^ Limit number of matching blocks to a page of results
         )
 
-        -- Expand matchedd blocks into individual checkpoint sequences
+        -- Expand matched blocks into individual checkpoint sequences
         , candidate_cps AS (
             SELECT DISTINCT gs.cp AS cp_sequence_number
             FROM blocked_matches bm
@@ -142,7 +141,7 @@ pub(crate) async fn candidate_cps<C>(
         .collect())
 }
 
-/// Bloom filter probes for checkpoint blocks in range. Used to find the block and bits
+/// The filter probes for checkpoint blocks in a range. Used to find the block and bits
 /// that should be set if the filter keys are present in that checkpoint block.
 ///
 /// Each probe contains parallel arrays of byte_offsets and bit_masks. These are passed to
@@ -210,8 +209,7 @@ fn cp_bloom_block_probes_fragment(probes: &[CpBloomBlockProbe]) -> Query<'static
     query!("{}", Query::new(values))
 }
 
-/// Build a single probe combining all filter keys.
-/// Since all keys must match (AND semantics), we just need all bits to be set.
+/// The probe containing all filter keys for per-checkpoint bloom filters.
 fn cp_bloom_probe(filter_values: &[Vec<u8>]) -> CpBloomProbe {
     let mut probe = CpBloomProbe {
         byte_offsets: Vec::new(),

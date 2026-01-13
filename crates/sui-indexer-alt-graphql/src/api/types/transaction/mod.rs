@@ -1,64 +1,59 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::iter::Rev;
 use std::ops::Deref;
-use std::ops::Range;
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, connection::Connection, dataloader::DataLoader};
-use diesel::{QueryableByName, sql_types::BigInt};
-use fastcrypto::encoding::{Base58, Encoding};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use async_graphql::dataloader::DataLoader;
+use diesel::QueryableByName;
+use diesel::sql_types::BigInt;
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
 use futures::future::try_join_all;
-use itertools::Either;
-use serde::{Deserialize, Serialize};
-use sui_indexer_alt_reader::{
-    checkpoints::CheckpointKey,
-    kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
-    pg_reader::PgReader,
-    tx_digests::TxDigestKey,
-};
+use serde::Deserialize;
+use serde::Serialize;
+use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
+use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
-use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress,
-    digests::TransactionDigest,
-    transaction::{TransactionDataAPI, TransactionExpiration},
-};
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::digests::TransactionDigest;
+use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::TransactionExpiration;
 
-use crate::{
-    api::{
-        scalars::{
-            base64::Base64, cursor::JsonCursor, digest::Digest, fq_name_filter::FqNameFilter,
-            sui_address::SuiAddress,
-        },
-        types::{
-            available_range::AvailableRangeKey,
-            checkpoint::filter::checkpoint_bounds,
-            lookups::{CheckpointBounds, TxBoundsCursor},
-            transaction::filter::TransactionKindInput,
-        },
-    },
-    config::Limits,
-    error::{RpcError, bad_user_input, upcast},
-    pagination::Page,
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
-use super::{
-    address::Address,
-    epoch::Epoch,
-    gas_input::GasInput,
-    transaction::filter::TransactionFilter,
-    transaction_effects::{EffectsContents, TransactionEffects},
-    transaction_kind::TransactionKind,
-    user_signature::UserSignature,
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::digest::Digest;
+use crate::api::scalars::fq_name_filter::FqNameFilter;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::types::address::Address;
+use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
+use crate::api::types::epoch::Epoch;
+use crate::api::types::gas_input::GasInput;
+use crate::api::types::lookups::CheckpointBounds;
+use crate::api::types::lookups::TxBoundsCursor;
+use crate::api::types::scan;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction::filter::TransactionKindInput;
+use crate::api::types::transaction_effects::EffectsContents;
+use crate::api::types::transaction_effects::TransactionEffects;
+use crate::api::types::transaction_kind::TransactionKind;
+use crate::api::types::user_signature::UserSignature;
+use crate::config::Limits;
+use crate::error::RpcError;
+use crate::error::upcast;
+use crate::pagination::Page;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
-pub(crate) mod scan;
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum ScanError {
@@ -68,9 +63,6 @@ pub(crate) enum ScanError {
     )]
     LimitExceeded { requested: u64, max: u64 },
 }
-
-type DigestsByCheckpoint = std::collections::HashMap<CheckpointKey, Vec<TransactionDigest>>;
-type TransactionsByDigest = std::collections::HashMap<TransactionDigest, NativeTransactionContents>;
 
 /// Cursor for transaction pagination
 pub(crate) type CTransaction = JsonCursor<u64>;
@@ -308,13 +300,6 @@ impl Transaction {
         )
     }
 
-    /// Scan through checkpoints using two-stage bloom filtering to find transactions that match ALL the filters.
-    ///
-    /// 1. **Checkpoint bounds calculation**: Determines the range to scan based on filter
-    /// 2. **Stage 1 (Blocked blooms)**: Filters for checkpoint ranges that might contain matching transactions
-    /// 3. **Stage 2 (Per-checkpoint blooms)**: Filters for checkpoints that might contain matching transactions
-    /// 4. **Transaction loading**: Loads transactions from candidate checkpoints
-    /// 5. **Final filtering**: Applies exact filter match on loaded transactions and paginates results
     pub(crate) async fn scan(
         ctx: &Context<'_>,
         scope: Scope,
@@ -344,46 +329,7 @@ impl Transaction {
             return Ok(Connection::new(false, false));
         };
 
-        let cp_lo = page.after().map_or(*cp_bounds.start(), |a| {
-            (*cp_bounds.start()).max(a.cp_sequence_number)
-        });
-        let cp_hi = page.before().map_or(*cp_bounds.end(), |b| {
-            (*cp_bounds.end()).min(b.cp_sequence_number)
-        });
-
-        // Check if the range is still valid after applying cursor bounds
-        if cp_lo > cp_hi {
-            return Ok(Connection::new(false, false));
-        }
-
-        let scan_range = cp_hi.saturating_sub(cp_lo);
-        if scan_range > limits.max_scan_limit {
-            return Err(bad_user_input(ScanError::LimitExceeded {
-                requested: scan_range,
-                max: limits.max_scan_limit,
-            }));
-        }
-
-        let filter_values = filter.bloom_probe_values();
-        let candidate_cps = scan::candidate_cps(ctx, &filter_values, cp_lo, cp_hi, &page)
-            .await
-            .map_err(upcast)?;
-
-        let (digests, native_transactions) = transactions_by_digest(ctx, &candidate_cps)
-            .await
-            .map_err(upcast)?;
-
-        let results = cp_transactions_paginated(
-            candidate_cps,
-            &digests,
-            &native_transactions,
-            &filter,
-            &scope,
-            &page,
-        )
-        .map_err(upcast)?;
-
-        page.paginate_results(results, |(s, _)| JsonCursor::new(*s), |(_, tx)| Ok(tx))
+        scan::transactions(ctx, scope, &filter, &page, cp_bounds, limits).await
     }
 }
 
@@ -711,117 +657,4 @@ async fn tx_unfiltered(
 
     let tx_sequence_numbers = (tx_lo..tx_hi).collect();
     Ok(tx_sequence_numbers)
-}
-
-/// Loads transaction digests and full transaction data for candidate checkpoints.
-async fn transactions_by_digest(
-    ctx: &Context<'_>,
-    candidate_cps: &[u64],
-) -> Result<(DigestsByCheckpoint, TransactionsByDigest), RpcError> {
-    let kv_loader: &KvLoader = ctx.data()?;
-
-    let digests = kv_loader
-        .load_many_checkpoints_transactions(candidate_cps.to_vec())
-        .await
-        .context("Failed to load checkpoint transactions")?;
-
-    let tx_digests_to_load: Vec<_> = digests.values().flatten().copied().collect();
-    let native_transactions = kv_loader
-        .load_many_transactions(tx_digests_to_load)
-        .await
-        .context("Failed to load transactions")?;
-
-    Ok((digests, native_transactions))
-}
-
-/// The transaction indices in a checkpoint that are within cursor bounds.
-fn cp_tx_bounds(
-    page: &Page<SCTransaction>,
-    cp_sequence_number: u64,
-    tx_count: usize,
-) -> Range<usize> {
-    let tx_lo = page
-        .after()
-        .filter(|c| c.cp_sequence_number == cp_sequence_number)
-        .map(|c| c.tx_sequence_number as usize)
-        .unwrap_or(0)
-        .min(tx_count);
-
-    let tx_hi = page
-        .before()
-        .filter(|c| c.cp_sequence_number == cp_sequence_number)
-        .map(|c| (c.tx_sequence_number as usize).saturating_add(1))
-        .unwrap_or(tx_count)
-        .max(tx_lo)
-        .min(tx_count);
-
-    tx_lo..tx_hi
-}
-
-/// Applies final filter and builds result list with cursors.
-fn cp_transactions_paginated(
-    candidate_cps: Vec<u64>,
-    digests: &DigestsByCheckpoint,
-    native_transactions: &TransactionsByDigest,
-    filter: &TransactionFilter,
-    scope: &Scope,
-    page: &Page<SCTransaction>,
-) -> Result<Vec<(TransactionCursor, Transaction)>, RpcError> {
-    let mut results = Vec::new();
-    let limit = page.limit_with_overhead();
-
-    'outer: for cp_sequence_number in candidate_cps {
-        let checkpoint_digests = digests
-            .get(&CheckpointKey(cp_sequence_number))
-            .with_context(|| {
-                format!("Missing transaction digests for checkpoint {cp_sequence_number}")
-            })?;
-
-        let bounds: Either<Range<usize>, Rev<Range<usize>>> = if page.is_from_front() {
-            Either::Left(cp_tx_bounds(
-                page,
-                cp_sequence_number,
-                checkpoint_digests.len(),
-            ))
-        } else {
-            Either::Right(cp_tx_bounds(page, cp_sequence_number, checkpoint_digests.len()).rev())
-        };
-
-        for tx_sequence_number in bounds {
-            let digest = &checkpoint_digests[tx_sequence_number];
-            let native_transaction = native_transactions
-                .get(digest)
-                .with_context(|| format!("Missing transaction data for digest {digest}"))?;
-
-            if !filter.matches(native_transaction) {
-                continue;
-            }
-
-            let cursor = TransactionCursor {
-                tx_sequence_number: tx_sequence_number as u64,
-                cp_sequence_number,
-            };
-
-            results.push((
-                cursor,
-                Transaction {
-                    digest: *digest,
-                    contents: TransactionContents {
-                        scope: scope.clone(),
-                        contents: Some(Arc::new(native_transaction.clone())),
-                    },
-                },
-            ));
-
-            if results.len() >= limit {
-                break 'outer;
-            }
-        }
-    }
-
-    if !page.is_from_front() {
-        results.reverse();
-    }
-
-    Ok(results)
 }
