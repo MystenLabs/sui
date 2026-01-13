@@ -14,6 +14,8 @@ use test_cluster::addr_balance_test_env::TestEnvBuilder;
 async fn test_coin_reservation_validation() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
             cfg.enable_coin_reservation_for_testing();
             cfg
         }))
@@ -150,7 +152,14 @@ async fn test_coin_reservation_validation() {
 
 #[sim_test]
 async fn test_coin_reservation_gating() {
-    let mut test_env = TestEnvBuilder::new().build().await;
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.create_root_accumulator_object_for_testing();
+            cfg.enable_accumulators_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
 
     let sender = test_env.get_sender(0);
 
