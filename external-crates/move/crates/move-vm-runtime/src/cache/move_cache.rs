@@ -33,6 +33,8 @@ pub struct MoveCache {
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) package_cache: Arc<RwLock<PackageCache>>,
     pub(crate) interner: Arc<IdentifierInterner>,
+    pub(crate) seen_linkages:
+        Arc<RwLock<std::collections::HashSet<std::collections::BTreeSet<VersionId>>>>,
 }
 
 #[derive(Debug)]
@@ -53,6 +55,7 @@ impl MoveCache {
             vm_config,
             package_cache: Arc::new(RwLock::new(HashMap::new())),
             interner: Arc::new(IdentifierInterner::new()),
+            seen_linkages: Arc::new(RwLock::new(std::collections::HashSet::new())),
         }
     }
 
@@ -186,11 +189,13 @@ impl Clone for MoveCache {
             vm_config,
             package_cache,
             interner,
+            seen_linkages,
         } = self;
         Self {
             vm_config: Arc::clone(vm_config),
             package_cache: Arc::clone(package_cache),
             interner: Arc::clone(interner),
+            seen_linkages: Arc::clone(seen_linkages),
         }
     }
 }

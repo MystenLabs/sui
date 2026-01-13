@@ -20,6 +20,7 @@ use crate::{
     },
 };
 use indexmap::{IndexMap, IndexSet};
+use lru::LruCache;
 use move_binary_format::{
     CompiledModule,
     compatibility::{Compatibility, InclusionCheck},
@@ -40,7 +41,10 @@ use move_vm_runtime::{
         vm::{LoadedFunctionInformation, MoveVM},
     },
     natives::extensions::NativeExtensions,
-    shared::gas::{GasMeter as _, SimpleInstruction},
+    shared::{
+        gas::{GasMeter as _, SimpleInstruction},
+        linkage_context::LinkageContext,
+    },
     validation::verification::ast::Package as VerifiedPackage,
 };
 use mysten_common::debug_fatal;
@@ -50,6 +54,7 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     fmt,
+    num::NonZero,
     rc::Rc,
     sync::Arc,
 };
@@ -135,6 +140,29 @@ macro_rules! charge_gas {
     ($context:ident, $case:ident, $value_view:expr) => {{ charge_gas_!($context.gas_charger, $context.env, $case, $value_view) }};
 }
 
+macro_rules! with_vm {
+    ($self:ident, $linkage:expr, $body:expr) => {{
+        let link_context = $linkage.linkage_context();
+        let mut vm = if let Some(vm) = $self.tearoffs.pop(&link_context) {
+            vm
+        } else {
+            let data_store = &$self.env.linkable_store.package_store;
+            $self
+                .env
+                .vm
+                .make_vm_with_native_extensions(
+                    data_store,
+                    link_context.clone(),
+                    $self.native_extensions.clone(),
+                )
+                .map_err(|e| $self.env.convert_linked_vm_error(e, $linkage))?
+        };
+        let result = $body(&mut vm)?;
+        $self.tearoffs.put(link_context, vm);
+        Ok(result)
+    }};
+}
+
 /// Type wrapper around Value to ensure safe usage
 #[derive(Debug)]
 pub struct CtxValue(Value);
@@ -191,8 +219,8 @@ enum ResolvedLocation<'a> {
 }
 
 /// Maintains all runtime state specific to programmable transactions
-pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
-    pub env: &'env Env<'pc, 'vm, 'state, 'linkage>,
+pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension> {
+    pub env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension>,
     /// Metrics for reporting exceeded limits
     pub metrics: Arc<LimitsMetrics>,
     pub native_extensions: NativeExtensions<'env>,
@@ -205,6 +233,7 @@ pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
     user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
     // runtime data
     locations: Locations,
+    tearoffs: lru::LruCache<LinkageContext, MoveVM<'env>>,
 }
 
 impl Locations {
@@ -252,10 +281,12 @@ impl Locations {
     }
 }
 
-impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas> {
+impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
+    Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
+{
     #[instrument(name = "Context::new", level = "trace", skip_all)]
     pub fn new(
-        env: &'env Env<'pc, 'vm, 'state, 'linkage>,
+        env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension>,
         metrics: Arc<LimitsMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &'gas mut GasCharger,
@@ -340,6 +371,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
                 receiving_inputs,
                 results: vec![],
             },
+            tearoffs: LruCache::new(NonZero::new(1024).unwrap()),
         })
     }
 
@@ -498,6 +530,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
     pub fn take_user_events(
         &mut self,
+        vm: &MoveVM<'_>,
         version_mid: ModuleId,
         function_def_idx: FunctionDefinitionIndex,
         instr_length: u16,
@@ -517,11 +550,17 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         let new_events = events
             .into_iter()
             .map(|(tag, value)| {
-                let layout = self.env.type_layout_for_struct(&tag)?;
+                let type_tag = TypeTag::Struct(Box::new(tag));
+                let layout = vm
+                    .runtime_type_layout(&type_tag)
+                    .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
                 let Some(bytes) = value.typed_serialize(&layout) else {
                     invariant_violation!("Failed to serialize Move event");
                 };
-                Ok((version_mid.clone(), tag, bytes))
+                let TypeTag::Struct(tag) = type_tag else {
+                    unreachable!()
+                };
+                Ok((version_mid.clone(), *tag, bytes))
             })
             .collect::<Result<Vec<_>, ExecutionError>>()?;
         self.user_events.extend(new_events);
@@ -709,60 +748,38 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
         args: Vec<CtxValue>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, ExecutionError> {
-        let result = self.execute_function_bypass_visibility(
-            &function.original_mid,
-            &function.name,
-            &function.type_arguments,
-            args,
-            &function.linkage,
-            trace_builder_opt,
-        )?;
-        self.take_user_events(
-            function.version_mid,
-            function.definition_index,
-            function.instruction_length,
-            &function.linkage,
-        )?;
-        Ok(result)
+        with_vm!(self, &function.linkage, |vm: &mut MoveVM<'env>| {
+            let ty_args = function
+                .type_arguments
+                .iter()
+                .map(|ty| {
+                    let tag: TypeTag = ty.clone().try_into().map_err(|e| {
+                        ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, e)
+                    })?;
+                    vm.load_type(&tag)
+                        .map_err(|e| self.env.convert_linked_vm_error(e, &function.linkage))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let result = self.execute_function_bypass_visibility_with_vm(
+                vm,
+                &function.original_mid,
+                &function.name,
+                ty_args,
+                args,
+                &function.linkage,
+                trace_builder_opt,
+            )?;
+            self.take_user_events(
+                vm,
+                function.version_mid,
+                function.definition_index,
+                function.instruction_length,
+                &function.linkage,
+            )?;
+            Ok::<Vec<CtxValue>, ExecutionError>(result)
+        })
     }
 
-    pub fn execute_function_bypass_visibility(
-        &mut self,
-        original_mid: &ModuleId,
-        function_name: &IdentStr,
-        ty_args: &[Type],
-        args: Vec<CtxValue>,
-        linkage: &ExecutableLinkage,
-        tracer: &mut Option<MoveTraceBuilder>,
-    ) -> Result<Vec<CtxValue>, ExecutionError> {
-        let ty_args = ty_args
-            .iter()
-            .enumerate()
-            .map(|(idx, ty)| self.env.load_vm_type_argument_from_adapter_type(idx, ty))
-            .collect::<Result<Vec<_>, _>>()?;
-        let data_store = &self.env.linkable_store.package_store;
-        let link_context = linkage.linkage_context();
-        let mut vm = self
-            .env
-            .vm
-            .make_vm_with_native_extensions(
-                data_store,
-                link_context,
-                self.native_extensions.clone(),
-            )
-            .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
-        self.execute_function_bypass_visibility_with_vm(
-            &mut vm,
-            original_mid,
-            function_name,
-            ty_args,
-            args,
-            linkage,
-            tracer,
-        )
-    }
-
-    // TODO(vm-rewrite): Need to update the function call to pass deserialized args to the VM.
     fn execute_function_bypass_visibility_with_vm(
         &mut self,
         vm: &mut MoveVM<'env>,
@@ -969,6 +986,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas> Context<'env, 'pc, 'vm, 'state, 'li
 
             let version_mid = ModuleId::new(package_id.into(), module.self_id().name().to_owned());
             self.take_user_events(
+                &vm,
                 version_mid,
                 fdef_idx,
                 fdef.code.as_ref().map(|c| c.code.len() as u16).unwrap_or(0),
