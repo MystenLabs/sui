@@ -85,9 +85,29 @@ impl Scope {
         })
     }
 
-    /// Creates a resolver for looking up Move packages and types in this scope.
-    pub(crate) fn package_resolver(&self) -> Resolver<Self> {
-        Resolver::new_with_limits(self.clone(), self.resolver_limits.clone())
+    /// Create a scope instance for tests with no package data.
+    #[cfg(test)]
+    pub(crate) fn for_tests() -> Self {
+        #[derive(Clone)]
+        struct EmptyPackageStore;
+
+        #[async_trait]
+        impl PackageStore for EmptyPackageStore {
+            async fn fetch(
+                &self,
+                id: AccountAddress,
+            ) -> Result<Arc<Package>, PackageResolverError> {
+                Err(PackageResolverError::PackageNotFound(id))
+            }
+        }
+
+        Self {
+            checkpoint_viewed_at: Some(0),
+            root_version: None,
+            execution_objects: Arc::new(BTreeMap::new()),
+            package_store: Arc::new(EmptyPackageStore),
+            resolver_limits: Limits::default().package_resolver(),
+        }
     }
 
     /// Create a nested scope pinned to a past checkpoint. Returns `None` if the checkpoint is in
@@ -187,28 +207,9 @@ impl Scope {
         })
     }
 
-    #[cfg(test)]
-    pub(crate) fn for_tests() -> Self {
-        #[derive(Clone)]
-        struct EmptyPackageStore;
-
-        #[async_trait]
-        impl PackageStore for EmptyPackageStore {
-            async fn fetch(
-                &self,
-                id: AccountAddress,
-            ) -> Result<Arc<Package>, PackageResolverError> {
-                Err(PackageResolverError::PackageNotFound(id))
-            }
-        }
-
-        Self {
-            checkpoint_viewed_at: Some(0),
-            root_version: None,
-            execution_objects: Arc::new(BTreeMap::new()),
-            package_store: Arc::new(EmptyPackageStore),
-            resolver_limits: Limits::default().package_resolver(),
-        }
+    /// A package resolver with access to the packages known at this scope.
+    pub(crate) fn package_resolver(&self) -> Resolver<Self> {
+        Resolver::new_with_limits(self.clone(), self.resolver_limits.clone())
     }
 }
 

@@ -108,7 +108,7 @@ mod tests {
     fn test_from_native() {
         let withdrawal = FundsWithdrawalArg {
             reservation: NativeReservation::MaxAmountU64(42),
-            type_arg: NativeWithdrawalTypeArg::Balance(GAS::type_tag().into()),
+            type_arg: NativeWithdrawalTypeArg::Balance(GAS::type_tag()),
             withdraw_from: NativeWithdrawFrom::Sender,
         };
         let expected_type_tag = withdrawal.type_arg.to_type_tag();
