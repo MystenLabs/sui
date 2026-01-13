@@ -13,7 +13,9 @@ use sui_sdk::rpc_types::{
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::balance::Balance;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::committee::EpochId;
 use sui_types::crypto::{AccountKeyPair, Signature, Signer, get_key_pair};
+use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GAS;
 use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
@@ -23,9 +25,10 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
-    Argument, CallArg, DEFAULT_VALIDATOR_GAS_PRICE, FundsWithdrawalArg, ObjectArg,
+    Argument, CallArg, DEFAULT_VALIDATOR_GAS_PRICE, FundsWithdrawalArg, GasData, ObjectArg,
     SharedObjectMutability, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData, TransactionDataV1,
+    TransactionExpiration,
 };
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{SUI_SYSTEM_PACKAGE_ID, TypeTag};
@@ -50,6 +53,14 @@ pub enum FundSource {
 pub enum ObjectFundObject {
     Owned(ObjectRef),
     Shared(ObjectID, SequenceNumber /* init shared version */),
+}
+
+/// Configuration for paying gas from address balance instead of a coin object.
+#[derive(Clone)]
+pub struct AddressBalanceGasConfig {
+    pub chain_identifier: ChainIdentifier,
+    pub current_epoch: EpochId,
+    pub nonce: u32,
 }
 
 impl FundSource {
@@ -92,6 +103,7 @@ pub struct TestTransactionBuilder {
     gas_object: ObjectRef,
     gas_price: u64,
     gas_budget: Option<u64>,
+    address_balance_gas: Option<AddressBalanceGasConfig>,
 }
 
 impl TestTransactionBuilder {
@@ -102,6 +114,7 @@ impl TestTransactionBuilder {
             gas_object,
             gas_price,
             gas_budget: None,
+            address_balance_gas: None,
         }
     }
 
@@ -150,6 +163,20 @@ impl TestTransactionBuilder {
 
     pub fn with_gas_budget(mut self, gas_budget: u64) -> Self {
         self.gas_budget = Some(gas_budget);
+        self
+    }
+
+    pub fn with_address_balance_gas(
+        mut self,
+        chain_identifier: ChainIdentifier,
+        current_epoch: EpochId,
+        nonce: u32,
+    ) -> Self {
+        self.address_balance_gas = Some(AddressBalanceGasConfig {
+            chain_identifier,
+            current_epoch,
+            nonce,
+        });
         self
     }
 
@@ -574,14 +601,38 @@ impl TestTransactionBuilder {
 
     pub fn build(self) -> TransactionData {
         let pt = self.ptb_builder.finish();
-        TransactionData::new_programmable(
-            self.sender,
-            vec![self.gas_object],
-            pt,
-            self.gas_budget
-                .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE),
-            self.gas_price,
-        )
+        let gas_budget = self
+            .gas_budget
+            .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE);
+
+        if let Some(ab_gas) = self.address_balance_gas {
+            TransactionData::V1(TransactionDataV1 {
+                kind: sui_types::transaction::TransactionKind::ProgrammableTransaction(pt),
+                sender: self.sender,
+                gas_data: GasData {
+                    payment: vec![],
+                    owner: self.sender,
+                    price: self.gas_price,
+                    budget: gas_budget,
+                },
+                expiration: TransactionExpiration::ValidDuring {
+                    min_epoch: Some(ab_gas.current_epoch),
+                    max_epoch: Some(ab_gas.current_epoch + 1),
+                    min_timestamp: None,
+                    max_timestamp: None,
+                    chain: ab_gas.chain_identifier,
+                    nonce: ab_gas.nonce,
+                },
+            })
+        } else {
+            TransactionData::new_programmable(
+                self.sender,
+                vec![self.gas_object],
+                pt,
+                gas_budget,
+                self.gas_price,
+            )
+        }
     }
 
     pub fn build_and_sign(self, signer: &dyn Signer<Signature>) -> Transaction {

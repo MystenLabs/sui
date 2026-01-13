@@ -469,6 +469,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         let SystemState {
             reference_gas_price,
             protocol_config,
+            ..
         } = system_state_observer.state.borrow().clone();
         let protocol_config = protocol_config.unwrap();
         let gas_budget = protocol_config.max_tx_gas();
