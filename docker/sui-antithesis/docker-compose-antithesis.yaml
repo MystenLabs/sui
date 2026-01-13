@@ -176,6 +176,7 @@ services:
       - BATCH_PAYMENT=1
       - BATCH_PAYMENT_SIZE=15
       - STRESS_ADVERSARIAL=0
+      - STRESS_COMPOSITE=5
       - TRANSACTION_DRIVER=${TRANSACTION_DRIVER:-0}
     volumes:
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
