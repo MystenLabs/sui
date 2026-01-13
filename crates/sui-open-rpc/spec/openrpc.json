@@ -5530,7 +5530,6 @@
         "required": [
           "coinObjectCount",
           "coinType",
-          "fundsInAddressBalance",
           "lockedBalance",
           "totalBalance"
         ],
@@ -5545,6 +5544,7 @@
           },
           "fundsInAddressBalance": {
             "description": "The portion of `total_balance` that resides in the address balance rather than in the coin objects. `total_balance` is the total amount of funds owned by the address. That is, do not add these two fields together.",
+            "default": "0",
             "allOf": [
               {
                 "$ref": "#/components/schemas/BigInt_for_uint128"
