@@ -124,3 +124,23 @@ fun test_saturating_sub() {
 fun test_saturating_mul() {
     integer_tests::test_saturating_mul!(MAX, CASES);
 }
+
+#[test]
+fun test_checked_shl() {
+    integer_tests::test_checked_shl!(MAX, BIT_SIZE);
+}
+
+#[test]
+fun test_checked_shr() {
+    integer_tests::test_checked_shr!(MAX, BIT_SIZE);
+}
+
+#[test]
+fun test_exact_shl() {
+    integer_tests::test_exact_shl!(MAX, BIT_SIZE);
+}
+
+#[test]
+fun test_exact_shr() {
+    integer_tests::test_exact_shr!(MAX, BIT_SIZE);
+}
