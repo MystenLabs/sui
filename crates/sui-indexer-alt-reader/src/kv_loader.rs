@@ -198,7 +198,7 @@ impl KvLoader {
                 .load_many(keys)
                 .await?
                 .into_iter()
-                .map(|(key, (__iterator_get_unchecked, contents, _))| {
+                .map(|(key, (_, contents, _))| {
                     let digests: Vec<TransactionDigest> =
                         contents.iter().map(|d| d.transaction).collect();
 
