@@ -1473,6 +1473,12 @@ pub struct ProtocolConfig {
     event_emit_output_cost_per_byte: Option<u64>,
     event_emit_auth_stream_cost: Option<u64>,
 
+    // `accumulator` module
+    // Cost params for the Move native functions `emit_deposit_event` and `emit_withdraw_event`
+    accumulator_emit_cost_base: Option<u64>,
+    // Cost params for the Move native functions `pending_deposits` and `pending_withdrawals`
+    accumulator_pending_balance_cost_base: Option<u64>,
+
     //  `object` module
     // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`
     object_borrow_uid_cost_base: Option<u64>,
@@ -2850,6 +2856,10 @@ impl ProtocolConfig {
             event_emit_tag_size_derivation_cost_per_byte: Some(5),
             event_emit_output_cost_per_byte: Some(10),
             event_emit_auth_stream_cost: None,
+
+            // `accumulator` module
+            accumulator_emit_cost_base: Some(52),
+            accumulator_pending_balance_cost_base: Some(52),
 
             //  `object` module
             // Cost params for the Move native function `borrow_uid<T: key>(obj: &T): &UID`

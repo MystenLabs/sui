@@ -1,18 +1,18 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 11 tasks
+processed 23 tasks
 
 init:
 A: object(0,0), B: object(0,1), C: object(0,2), D: object(0,3)
 
-task 1, lines 8-48:
+task 1, lines 8-148:
 //# publish
 created: object(1,0)
 mutated: object(0,4)
-gas summary: computation_cost: 1000000, storage_cost: 8846400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 18164000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2, lines 50-53:
+task 2, lines 150-153:
 //# programmable --sender A --inputs 1042 @B
 // Send some SUI from A to B
 //> 0: SplitCoins(Gas, [Input(0)]);
@@ -21,11 +21,11 @@ mutated: object(0,0)
 accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3, line 55:
+task 3, line 155:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 4, lines 57-59:
+task 4, lines 157-159:
 //# programmable --sender A --inputs immshared(2764) @B 1042
 // Check that we can read the balance of B
 //> 0: test::balance_read::balance_check(Input(0), Input(1), Input(2));
@@ -33,7 +33,7 @@ mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5, lines 61-67:
+task 5, lines 161-167:
 //# programmable --sender A --inputs immshared(2764) @C 0
 // Check that C has a zero balance
 //> 0: test::balance_read::balance_check(Input(0), Input(1), Input(2));
@@ -44,14 +44,14 @@ mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, lines 68-69:
+task 6, lines 168-169:
 //# programmable --sender A --inputs @A
 //> 0: test::balance_read::create_supply_holder();
 created: object(6,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2363600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7, lines 70-71:
+task 7, lines 170-171:
 //# programmable --sender A --inputs object(6,0) 0 @D
 //> 0: test::balance_read::send_max(Input(0), Input(1), Input(2));
 created: object(7,0)
@@ -60,7 +60,7 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(7,1), D, sui::balance::Balance<u64>, Merge)
 gas summary: computation_cost: 1000000, storage_cost: 4202800,  storage_rebate: 2339964, non_refundable_storage_fee: 23636
 
-task 8, lines 72-73:
+task 8, lines 172-173:
 //# programmable --sender A --inputs object(6,0) 1 @D
 //> 0: test::balance_read::send_max(Input(0), Input(1), Input(2));
 created: object(8,0)
@@ -69,14 +69,125 @@ unchanged_shared: 0x000000000000000000000000000000000000000000000000000000000000
 accumulators_written: (object(7,1), D, sui::balance::Balance<u64>, Merge)
 gas summary: computation_cost: 1000000, storage_cost: 4202800,  storage_rebate: 2339964, non_refundable_storage_fee: 23636
 
-task 9, line 75:
+task 9, line 175:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 10, lines 77-79:
+task 10, lines 177-181:
 //# programmable --sender A --inputs immshared(2764) @D 18446744073709551615
 // Check that D's balance is clamped to u64::MAX
 //> 0: test::balance_read::balance_check_fake(Input(0), Input(1), Input(2));
+// Test pending deposits: check that C has 0 pending deposits initially
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, lines 182-185:
+//# programmable --sender A --inputs @C 0
+//> 0: test::balance_read::pending_deposits_check(Input(0), Input(1));
+// Test pending deposits: send funds and check that pending deposits is updated within same tx
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, lines 186-191:
+//# programmable --sender A --inputs 777 @C 777
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
+//> 2: test::balance_read::pending_deposits_check(Input(1), Input(2));
+// Test pending withdrawals: check that B has 0 pending withdrawals
+mutated: object(0,0)
+accumulators_written: (object(12,0), C, sui::balance::Balance<sui::sui::SUI>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, lines 192-197:
+//# programmable --sender A --inputs @B 0
+//> 0: test::balance_read::pending_withdrawals_check(Input(0), Input(1));
+// Test pending withdrawals with a withdrawal arg (account balance withdrawal):
+// B has 1042 SUI from the earlier send (task 2). Create a withdrawal arg, redeem it,
+// and verify pending_withdrawals is updated.
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14, lines 198-205:
+//# programmable --sender B --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(200) @B 200 0
+//> 0: test::balance_read::pending_withdrawals_check(Input(1), Input(3));
+//> 1: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
+//> 2: test::balance_read::pending_withdrawals_check(Input(1), Input(2));
+//> 3: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
+// Test pending withdrawals with withdraw_funds_from_object (object balance withdrawal):
+// First create an object we can fund
+mutated: object(0,1)
+accumulators_written: (object(2,0), B, sui::balance::Balance<sui::sui::SUI>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 15, lines 206-209:
+//# programmable --sender A
+//> 0: test::balance_read::create_funded_object();
+// Send funds to the object's address
+created: object(15,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2363600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, lines 210-213:
+//# programmable --sender A --inputs 500 object(15,0)
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: test::balance_read::funded_object_address(Input(1));
+//> 2: sui::coin::send_funds<sui::sui::SUI>(Result(0), Result(1));
+mutated: object(0,0), object(15,0)
+accumulators_written: (object(16,0), fake(15,0), sui::balance::Balance<sui::sui::SUI>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 2363600,  storage_rebate: 2339964, non_refundable_storage_fee: 23636
+
+task 17, lines 215-217:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 18, lines 218-223:
+//# programmable --sender A --inputs object(15,0) 333
+//> 0: test::balance_read::withdraw_and_check_pending(Input(0), Input(1));
+// Test positive_pending_funds_value:
+// Case 1: C has 777 settled (from earlier deposit in task 12). Send 100 more.
+// Expected: settled(777) + deposits(100) - withdrawals(0) = 877
+mutated: object(0,0), object(15,0)
+accumulators_written: (object(16,0), fake(15,0), sui::balance::Balance<sui::sui::SUI>, Split), (object(18,0), _, sui::balance::Balance<sui::sui::SUI>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 2363600,  storage_rebate: 2339964, non_refundable_storage_fee: 23636
+
+task 19, lines 224-231:
+//# programmable --sender A --inputs immshared(2764) 100 @C 877
+//> 0: SplitCoins(Gas, [Input(1)]);
+//> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(2));
+//> 2: test::balance_read::pending_net_positive_check(Input(0), Input(2), Input(3));
+// Case 2: withdrawals > settled - should return None
+// Create a new object and withdraw from it. The object has 0 settled funds,
+// so any withdrawal causes underflow: settled(0) + deposits(0) - withdrawals(100) = -100
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
+accumulators_written: (object(12,0), C, sui::balance::Balance<sui::sui::SUI>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 20, lines 232-233:
+//# programmable --sender A
+//> 0: test::balance_read::create_funded_object();
+created: object(20,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2363600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 21, lines 235-240:
+//# programmable --sender A --inputs immshared(2764) object(20,0) 100
+//> 0: test::balance_read::withdraw_and_check_underflow(Input(0), Input(1), Input(2));
+// Case 3: settled + deposits = withdrawals - should return Some(0)
+// D has u64::MAX - 1 + u64::MAX - 1 settled (clamped to u64::MAX).
+// Withdraw u64::MAX, deposit 0. Expected: u64::MAX - u64::MAX = 0
+mutated: object(0,0), object(20,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000acc
+accumulators_written: (object(18,0), _, sui::balance::Balance<sui::sui::SUI>, Merge), (object(21,0), fake(20,0), sui::balance::Balance<sui::sui::SUI>, Split)
+gas summary: computation_cost: 1000000, storage_cost: 2363600,  storage_rebate: 2339964, non_refundable_storage_fee: 23636
+
+task 22, lines 241-244:
+//# programmable --sender D --inputs immshared(2764) withdraw<sui::balance::Balance<u64>>(18446744073709551615) @D 0
+//> 0: sui::balance::redeem_funds<u64>(Input(1));
+//> 1: test::balance_read::pending_net_positive_check_fake(Input(0), Input(2), Input(3));
+//> 2: sui::balance::send_funds<u64>(Result(0), Input(2));
+mutated: object(0,3)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403, 0x0000000000000000000000000000000000000000000000000000000000000acc
+accumulators_written: (object(7,1), D, sui::balance::Balance<u64>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0

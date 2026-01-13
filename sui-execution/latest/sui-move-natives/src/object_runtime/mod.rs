@@ -113,8 +113,8 @@ pub(crate) struct ObjectRuntimeState {
     // is correct.
     settlement_input_sui: u64,
     settlement_output_sui: u64,
-    accumulator_merge_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
-    accumulator_split_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
+    pub(crate) accumulator_merge_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
+    pub(crate) accumulator_split_totals: BTreeMap<(AccountAddress, TypeTag), u128>,
 }
 
 #[derive(Tid)]

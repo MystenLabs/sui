@@ -26,6 +26,7 @@ use self::{
         DynamicFieldHasChildObjectCostParams, DynamicFieldHasChildObjectWithTyCostParams,
         DynamicFieldHashTypeAndKeyCostParams, DynamicFieldRemoveChildObjectCostParams,
     },
+    accumulator::{AccumulatorEmitCostParams, AccumulatorPendingBalanceCostParams},
     event::EventEmitCostParams,
     object::{BorrowUidCostParams, DeleteImplCostParams, RecordNewIdCostParams},
     transfer::{
@@ -115,6 +116,10 @@ pub struct NativesCostTable {
 
     // Event natives
     pub event_emit_cost_params: EventEmitCostParams,
+
+    // Accumulator natives
+    pub accumulator_emit_cost_params: AccumulatorEmitCostParams,
+    pub accumulator_pending_balance_cost_params: AccumulatorPendingBalanceCostParams,
 
     // Object
     pub borrow_uid_cost_params: BorrowUidCostParams,
@@ -307,6 +312,15 @@ impl NativesCostTable {
                 event_emit_auth_stream_cost: protocol_config
                     .event_emit_auth_stream_cost_as_option()
                     .map(Into::into),
+            },
+
+            accumulator_emit_cost_params: AccumulatorEmitCostParams {
+                accumulator_emit_cost_base: protocol_config.accumulator_emit_cost_base().into(),
+            },
+            accumulator_pending_balance_cost_params: AccumulatorPendingBalanceCostParams {
+                accumulator_pending_balance_cost_base: protocol_config
+                    .accumulator_pending_balance_cost_base()
+                    .into(),
             },
 
             borrow_uid_cost_params: BorrowUidCostParams {
@@ -896,6 +910,16 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "accumulator",
             "emit_withdraw_event",
             make_native!(accumulator::emit_withdraw_event),
+        ),
+        (
+            "accumulator",
+            "pending_deposits",
+            make_native!(accumulator::pending_deposits),
+        ),
+        (
+            "accumulator",
+            "pending_withdrawals",
+            make_native!(accumulator::pending_withdrawals),
         ),
         (
             "accumulator_settlement",

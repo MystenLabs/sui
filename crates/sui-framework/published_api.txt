@@ -1576,6 +1576,12 @@ emit_deposit_event
 emit_withdraw_event
 	public(package) fun
 	0x2::accumulator
+pending_deposits
+	public(package) fun
+	0x2::accumulator
+pending_withdrawals
+	public(package) fun
+	0x2::accumulator
 Bag
 	public struct
 	0x2::bag
@@ -1973,6 +1979,15 @@ withdraw_funds_from_object
 	public fun
 	0x2::balance
 settled_funds_value
+	public fun
+	0x2::balance
+pending_funds_deposits
+	public fun
+	0x2::balance
+pending_funds_withdrawals
+	public fun
+	0x2::balance
+positive_pending_funds_value
 	public fun
 	0x2::balance
 create_supply_internal
