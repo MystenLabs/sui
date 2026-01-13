@@ -151,9 +151,7 @@ mod tests {
     use tempfile::TempDir;
     use test_log::test;
 
-    use crate::{
-        flavor::vanilla::default_environment, package::paths::PackagePath, schema::PackageName,
-    };
+    use crate::{Vanilla, package::paths::PackagePath, schema::PackageName};
 
     use super::Manifest;
 
@@ -207,7 +205,7 @@ mod tests {
 
         let name = PackageName::new("foo").unwrap();
         assert!(manifest.dependencies().contains_key(&name));
-        let default_env = default_environment();
+        let default_env = Vanilla::default_environment();
         assert!(!manifest.dep_replacements()[default_env.name()].contains_key(&name));
     }
 }

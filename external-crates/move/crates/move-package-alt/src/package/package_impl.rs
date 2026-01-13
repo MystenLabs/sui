@@ -33,9 +33,6 @@ use crate::{errors::FileHandle, package::package_loader::PackageConfig};
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
 
-// pub type PackageName = Identifier;
-pub type AddressInfo = String;
-
 #[derive(Debug)]
 #[derive_where(Clone)]
 pub struct Package<F: MoveFlavor> {
@@ -407,7 +404,7 @@ fn check_for_environment<F: MoveFlavor>(
 #[cfg(test)]
 mod tests {
     use crate::{
-        flavor::vanilla::{DEFAULT_ENV_ID, DEFAULT_ENV_NAME, Vanilla, default_environment},
+        flavor::vanilla::{DEFAULT_ENV_ID, DEFAULT_ENV_NAME, Vanilla},
         package::RootPackage,
         schema::{
             LocalDepInfo, LockfileDependencyInfo, PublishAddresses, ReplacementDependency,
@@ -498,7 +495,7 @@ mod tests {
 
         let root = RootPackage::<TestFlavor>::load(
             scenario.path_for("root"),
-            default_environment(),
+            Vanilla::default_environment(),
             vec![],
         )
         .await
@@ -522,6 +519,10 @@ mod tests {
                 .as_str(),
             "foo"
         );
+    }
+
+    fn default_environment() -> Environment {
+        Vanilla::default_environment()
     }
 
     /// Loading a package includes the implicit dependencies, and the system dependencies are

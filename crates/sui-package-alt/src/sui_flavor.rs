@@ -92,9 +92,7 @@ impl MoveFlavor for SuiFlavor {
         IndexMap::from([(testnet.name, testnet.id), (mainnet.name, mainnet.id)])
     }
 
-    fn implicit_dependencies(
-        environment: &EnvironmentID,
-    ) -> BTreeMap<PackageName, ReplacementDependency> {
+    fn implicit_dependencies(_: &EnvironmentID) -> BTreeMap<PackageName, ReplacementDependency> {
         BTreeMap::from([
             (
                 PackageName::new("sui").expect("sui is a valid identifier"),

@@ -416,7 +416,7 @@ mod tests {
     use crate::{
         flavor::{
             Vanilla,
-            vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME, default_environment},
+            vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME},
         },
         graph::NamedAddress,
         schema::{
@@ -441,7 +441,7 @@ mod tests {
     ///   depends_a_b/Move.toml  # depends on pkg_a and pkg_b
     /// ```
     async fn setup_test_move_project() -> (Environment, PathBuf) {
-        let env = crate::flavor::vanilla::default_environment();
+        let env = Vanilla::default_environment();
         let project = test_utils::project()
             .file(
                 "packages/pkg_a/Move.toml",
@@ -587,9 +587,13 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_deps([("a", "b")])
             .build();
 
-        RootPackage::<Vanilla>::load(scenario.path_for("a"), default_environment(), vec![])
-            .await
-            .unwrap_err();
+        RootPackage::<Vanilla>::load(
+            scenario.path_for("a"),
+            Vanilla::default_environment(),
+            vec![],
+        )
+        .await
+        .unwrap_err();
     }
 
     /// This gives a snapshot of a generated lockfile
@@ -599,7 +603,7 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_deps([("example", "baz"), ("baz", "bar")])
             .build();
 
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let mut root = RootPackage::<Vanilla>::load(scenario.path_for("example"), env, vec![])
             .await
             .unwrap();
@@ -653,7 +657,7 @@ pkg_b = { local = "../pkg_b" }"#,
     /// A git dependency on a branch gets pinned to the sha
     #[test(tokio::test)]
     pub async fn git_branch_dep_pinned() {
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let repo = git::new().await;
         let commit = repo.commit(|project| project.add_packages(["a"])).await;
         commit.branch("branch-name").await;
@@ -676,7 +680,7 @@ pkg_b = { local = "../pkg_b" }"#,
     /// A git dependency on a short sha gets pinned to the sha
     #[test(tokio::test)]
     pub async fn git_short_sha_dep_pinned() {
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let repo = git::new().await;
         let commit = repo.commit(|project| project.add_packages(["a"])).await;
 
@@ -699,7 +703,7 @@ pkg_b = { local = "../pkg_b" }"#,
     /// we get the sha of the first commit. See also [git_force_repin]
     #[test(tokio::test)]
     pub async fn git_no_repin() {
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let repo = git::new().await;
         let commit1 = repo.commit(|project| project.add_packages(["a"])).await;
         commit1.branch("branch-name").await;
@@ -738,7 +742,7 @@ pkg_b = { local = "../pkg_b" }"#,
     /// with forced repinning, we get the sha of the second commit. See also [git_no_repin]
     #[test(tokio::test)]
     pub async fn git_force_repin() {
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let repo = git::new().await;
         let commit1 = repo.commit(|project| project.add_packages(["a"])).await;
         commit1.branch("branch-name").await;
@@ -778,7 +782,7 @@ pkg_b = { local = "../pkg_b" }"#,
     /// change should trigger a repin
     #[test(tokio::test)]
     pub async fn git_change_manifest() {
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let repo = git::new().await;
         let commit1 = repo.commit(|project| project.add_packages(["a"])).await;
         commit1.branch("branch-name").await;
@@ -823,7 +827,7 @@ pkg_b = { local = "../pkg_b" }"#,
         // we first pin root, then we update the branch and dirty `dirty`
         // when we reload `root`, we should notice that `dirty` is dirty and repin, which should
         // cause `git_dep` to be bumped to the latest version
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let repo = git::new().await;
         let commit1 = repo
             .commit(|project| project.add_packages(["git_dep"]))
@@ -1578,10 +1582,13 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_dep("a", "c2", |dep| dep.set_override().modes(["test"]))
             .build();
 
-        let root =
-            RootPackage::<Vanilla>::load(scenario.path_for("root"), default_environment(), vec![])
-                .await
-                .unwrap();
+        let root = RootPackage::<Vanilla>::load(
+            scenario.path_for("root"),
+            Vanilla::default_environment(),
+            vec![],
+        )
+        .await
+        .unwrap();
 
         let mut package_names: Vec<_> = root
             .packages()
@@ -1613,7 +1620,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         let root = RootPackage::<Vanilla>::load(
             scenario.path_for("root"),
-            default_environment(),
+            Vanilla::default_environment(),
             vec!["test".to_string()],
         )
         .await
