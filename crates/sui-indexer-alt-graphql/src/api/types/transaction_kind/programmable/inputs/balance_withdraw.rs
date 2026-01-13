@@ -71,19 +71,18 @@ impl BalanceWithdraw {
             NativeWithdrawFrom::Sponsor => WithdrawFrom::Sponsor,
         });
 
-        let type_ = match type_arg {
-            NativeWithdrawalTypeArg::Coin(t) | NativeWithdrawalTypeArg::Balance(t) => {
-                let balance_struct = StructInput {
-                    address: AccountAddress::TWO,
-                    module: "balance".to_string(),
-                    name: "Balance".to_string(),
-                    type_params: vec![t],
-                };
-                Some(MoveType::from_input(
-                    TypeInput::Struct(Box::new(balance_struct)),
-                    scope,
-                ))
-            }
+        let type_ = {
+            let NativeWithdrawalTypeArg::Balance(t) = type_arg;
+            let balance_struct = StructInput {
+                address: AccountAddress::TWO,
+                module: "balance".to_string(),
+                name: "Balance".to_string(),
+                type_params: vec![t.into()],
+            };
+            Some(MoveType::from_input(
+                TypeInput::Struct(Box::new(balance_struct)),
+                scope,
+            ))
         };
 
         Self {
@@ -98,7 +97,7 @@ impl BalanceWithdraw {
 mod tests {
     use super::*;
 
-    use move_core_types::account_address::AccountAddress;
+    use async_graphql::ScalarType;
     use sui_types::gas_coin::GAS;
     use sui_types::transaction::FundsWithdrawalArg;
     use sui_types::transaction::Reservation as NativeReservation;
@@ -112,7 +111,7 @@ mod tests {
             type_arg: NativeWithdrawalTypeArg::Balance(GAS::type_tag().into()),
             withdraw_from: NativeWithdrawFrom::Sender,
         };
-        let expected_type_tag = withdrawal.type_arg.to_type_tag().unwrap();
+        let expected_type_tag = withdrawal.type_arg.to_type_tag();
 
         let withdraw = BalanceWithdraw::from_native(withdrawal, Scope::for_tests());
 
@@ -120,7 +119,12 @@ mod tests {
             panic!("expected MaxAmountU64 reservation");
         };
         assert_eq!(
-            reservation.amount.map(|a| a.to_string()),
+            reservation.amount.as_ref().map(|a| {
+                let async_graphql::Value::String(s) = a.to_value() else {
+                    panic!("expected string value");
+                };
+                s
+            }),
             Some("42".to_string())
         );
         assert!(matches!(withdraw.withdraw_from, Some(WithdrawFrom::Sender)));

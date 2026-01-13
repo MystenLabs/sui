@@ -1,5 +1,6 @@
 ---
 source: crates/sui-indexer-alt-graphql/src/api/types/available_range.rs
+assertion_line: 627
 expression: output
 ---
 AccumulatorRootCreateTransaction._
@@ -119,7 +120,7 @@ BalanceChange.amount
 BalanceWithdraw.reservation
   => {}
 
-BalanceWithdraw.typeArg
+BalanceWithdraw.type
   => {}
 
 BalanceWithdraw.withdrawFrom
@@ -461,9 +462,6 @@ DynamicField.value
 EndOfEpochTransaction.transactions
   => {}
 
-EntireBalance._
-  => {}
-
 Epoch.id
   => {}
 
@@ -756,9 +754,6 @@ MakeMoveVecCommand.type
   => {}
 
 MakeMoveVecCommand.elements
-  => {}
-
-MaxAmountU64.amount
   => {}
 
 MergeCoinsCommand.coin
@@ -1833,6 +1828,9 @@ ValidatorSet.validatorCandidatesId
   => {}
 
 ValidatorSet.validatorCandidatesSize
+  => {}
+
+WithdrawMaxAmountU64.amount
   => {}
 
 WriteAccumulatorStorageCostTransaction._
