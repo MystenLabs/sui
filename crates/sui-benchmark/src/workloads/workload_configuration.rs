@@ -20,7 +20,7 @@ use std::sync::Arc;
 use tracing::info;
 
 use super::adversarial::{AdversarialPayloadCfg, AdversarialWorkloadBuilder};
-use super::composite::CompositeWorkloadBuilder;
+use super::composite::{CompositeWorkloadBuilder, CompositeWorkloadConfig};
 use super::expected_failure::{ExpectedFailurePayloadCfg, ExpectedFailureWorkloadBuilder};
 use super::randomized_transaction::RandomizedTransactionWorkloadBuilder;
 use super::randomness::RandomnessWorkloadBuilder;
@@ -87,6 +87,7 @@ impl WorkloadConfiguration {
                 slow,
                 party,
                 conflicting_transfer,
+                composite,
                 shared_counter_hotness_factor,
                 num_shared_counters,
                 shared_counter_max_tip,
@@ -125,7 +126,7 @@ impl WorkloadConfiguration {
                             slow: slow[i],
                             party: party[i],
                             conflicting_transfer: conflicting_transfer[i],
-                            composite: 0,
+                            composite: composite[i],
                         },
                         adversarial_cfg: AdversarialPayloadCfg::from_str(&adversarial_cfg[i])
                             .unwrap(),
@@ -142,7 +143,11 @@ impl WorkloadConfiguration {
                         target_qps: target_qps[i],
                         in_flight_ratio: in_flight_ratio[i],
                         duration: duration[i],
-                        composite_config: None,
+                        composite_config: if composite[i] > 0 {
+                            Some(CompositeWorkloadConfig::balanced())
+                        } else {
+                            None
+                        },
                     };
                     let builders =
                         Self::create_workload_builders(config, system_state_observer.clone()).await;

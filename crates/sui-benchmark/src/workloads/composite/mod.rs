@@ -185,6 +185,25 @@ pub struct CompositeWorkloadConfig {
 }
 
 impl CompositeWorkloadConfig {
+    pub fn balanced() -> Self {
+        let mut probabilities = HashMap::new();
+        probabilities.insert(SharedCounterIncrement::FLAG, 0.3);
+        probabilities.insert(SharedCounterRead::FLAG, 0.3);
+        probabilities.insert(RandomnessRead::FLAG, 0.2);
+        probabilities.insert(AddressBalanceDeposit::FLAG, 0.2);
+        probabilities.insert(AddressBalanceWithdraw::FLAG, 0.2);
+        probabilities.insert(ObjectBalanceDeposit::FLAG, 0.2);
+        probabilities.insert(ObjectBalanceWithdraw::FLAG, 0.2);
+        probabilities.insert(TestCoinMint::FLAG, 0.1);
+        probabilities.insert(TestCoinAddressDeposit::FLAG, 0.1);
+        probabilities.insert(TestCoinAddressWithdraw::FLAG, 0.1);
+        probabilities.insert(TestCoinObjectWithdraw::FLAG, 0.1);
+        Self {
+            probabilities,
+            ..Default::default()
+        }
+    }
+
     pub fn with_probability(mut self, flag: u32, prob: f32) -> Self {
         self.probabilities.insert(flag, prob);
         self
