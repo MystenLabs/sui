@@ -1,4 +1,3 @@
-
 ```sh
 Client for interacting with the Sui network
 
@@ -37,11 +36,11 @@ Commands:
   pay-all-sui                 Pay all residual SUI coins to the recipient with input coins,
                                   after deducting the gas cost. The input coins also include the
                                   coin for gas payment, so no extra gas coin is required
-  pay-sui                     Pay SUI coins to recipients following following specified amounts,
-                                  with input coins. Length of recipients must be the same as that of
+  pay-sui                     Pay SUI coins to recipients following specified amounts, with
+                                  input coins. Length of recipients must be the same as that of
                                   amounts. The input coins also include the coin for gas payment, so
                                   no extra gas coin is required
-  ptb                         Run a PTB from the provided args
+  ptb                         
   publish                     Publish Move modules
   serialized-tx               Execute, dry-run, dev-inspect or otherwise inspect an already
                                   serialized transaction
@@ -49,6 +48,7 @@ Commands:
                                   serialized transaction kind
   split-coin                  Split a coin object into multiple coins
   switch                      Switch active address and network(e.g., devnet, local rpc server)
+  test-publish                Publish a package using ephemeral addresses for dependencies
   tx-block                    Get the effects of executing the given transaction block
   transfer                    Transfer object
   transfer-sui                Transfer SUI, and pay gas with the same SUI coin object. If amount
@@ -59,9 +59,12 @@ Commands:
   verify-source               Verify local Move packages against on-chain packages, and
                                   optionally their dependencies
   remove-address              Remove an existing address by its alias or hexadecimal string
-  replay-transaction          Replay a given transaction to view transaction effects. Set
-                                  environment variable MOVE_VM_STEP=1 to debug
-  replay-batch                Replay transactions listed in a file
+  replay-transaction          Replay a given transaction to view transaction effects
+                                  (deprecated; use `sui replay` instead)
+  replay-batch                Replay transactions listed in a file (deprecated; use `sui replay`
+                                  instead)
+  replay-checkpoint           Replay all transactions in a range of checkpoints (deprecated; use
+                                  `sui replay` instead)
   help                        Print this message or the help of the given subcommand(s)
 
 Options:
@@ -69,8 +72,9 @@ Options:
                                 will be created if missing)
       --client.env <ENV>        The Sui environment to use. This must be present in the current
                                 config file
+  -y, --yes                     Create a new sui config without prompting if none exists
+  -q, --quiet                   Display less output
       --json                    Return command outputs in json format
-  -y, --yes                     
   -h, --help                    Print help
   -V, --version                 Print version
 ```

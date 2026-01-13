@@ -1,4 +1,3 @@
-
 ```sh
 A tool for validators and validator candidates
 
@@ -6,14 +5,15 @@ Usage: sui validator [OPTIONS] [COMMAND]
 
 Commands:
   make-validator-info               
-  become-candidate                  
-  join-committee                    
-  leave-committee                   
+  become-candidate                  Arguments related to transaction processing
+  join-committee                    Arguments related to transaction processing
+  leave-committee                   Arguments related to transaction processing
   display-metadata                  
-  update-metadata                   
+  update-metadata                   Arguments related to transaction processing
   update-gas-price                  Update gas price that is used to calculate Reference Gas
                                         Price
-  report-validator                  Report or un-report a validator
+  report-validator                  Report or un-report a validator. Report or un-report a
+                                        validator
   serialize-payload-pop             Serialize the payload that is used to generate Proof of
                                         Possession. This is useful to take the payload offline for
                                         an Authority protocol keypair to sign
@@ -26,8 +26,11 @@ Commands:
 Options:
       --client.config <CONFIG>  Sets the file storing the state of our user accounts (an empty one
                                 will be created if missing)
+      --client.env <ENV>        The Sui environment to use. This must be present in the current
+                                config file
+  -y, --yes                     Create a new sui config without prompting if none exists
+  -q, --quiet                   Display less output
       --json                    Return command outputs in json format
-  -y, --yes                     
   -h, --help                    Print help
   -V, --version                 Print version
 ```

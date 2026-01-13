@@ -5,9 +5,6 @@ import { fileURLToPath } from "url";
 import path from "path";
 import math from "remark-math";
 import katex from "rehype-katex";
-//import rehypeRawFiles from "./src/rehype/rehype-raw-only.mjs";
-//import rehypeTabsMd from "./src/rehype/rehype-tabs.mjs";
-//import rehypeFixAnchorUrls from "./src/rehype/rehype-fix-anchor-urls.mjs";
 const npm2yarn = require("@docusaurus/remark-plugin-npm2yarn");
 
 const effortRemarkPlugin = require("./src/plugins/effort");
@@ -56,7 +53,7 @@ const config = {
     //require.resolve('./src/plugins/framework'),
     "docusaurus-plugin-copy-page-button",
     [
-      require.resolve("./src/plugins/plausible"),
+      require.resolve("./src/shared/plugins/plausible"),
       {
         domain: "docs.sui.io",
         enableInDev: false,
@@ -83,7 +80,7 @@ const config = {
                     {
                       loader: path.resolve(
                         __dirname,
-                        "./src/plugins/inject-code/stepLoader.js",
+                        "./src/shared/plugins/inject-code/stepLoader.js",
                       ),
                     },
                   ],
@@ -117,7 +114,7 @@ const config = {
         },
       },
     ],
-    //require.resolve("./src/plugins/tabs-md-client/index.mjs"),
+    //require.resolve("./src/shared/plugins/tabs-md-client/index.mjs"),
     async function myPlugin(context, options) {
       return {
         name: "docusaurus-tailwindcss",
@@ -129,7 +126,7 @@ const config = {
         },
       };
     },
-    path.resolve(__dirname, `./src/plugins/descriptions`),
+    path.resolve(__dirname, `./src/shared/plugins/descriptions`),
     path.resolve(__dirname, `./src/plugins/framework`),
     path.resolve(__dirname, `./src/plugins/askcookbook`),
     path.resolve(__dirname, `./src/plugins/protocol`),
@@ -161,8 +158,6 @@ const config = {
             effortRemarkPlugin,
             betaRemarkPlugin,
           ],
-          //beforeDefaultRehypePlugins: [rehypeFixAnchorUrls],
-          //rehypePlugins: [katex, rehypeRawFiles, rehypeTabsMd],
           rehypePlugins: [katex],
         },
         theme: {

@@ -7,7 +7,7 @@ import {
   useNavbarMobileSidebar,
 } from "@docusaurus/theme-common/internal";
 import NavbarItem from "@theme/NavbarItem";
-import ThemeToggle from "@site/src/components/ThemeToggle";
+import ThemeToggle from "@site/src/shared/components/ThemeToggle";
 // import SearchBar from "@theme/SearchBar";
 import NavbarMobileSidebarToggle from "@theme/Navbar/MobileSidebar/Toggle";
 import NavbarLogo from "@theme/Navbar/Logo";
