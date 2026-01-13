@@ -83,6 +83,8 @@ const guides = [
 			},
       'guides/developer/objects/versioning',
       'guides/developer/objects/local-fee-markets',
+      'guides/developer/objects/simulating-refs',
+
     ],
     },
     {
@@ -100,10 +102,8 @@ const guides = [
     label: 'Transactions',
     items: [
           'guides/developer/transactions/sign-and-send-txn',
-          'guides/developer/transactions/sponsor-txn',
-          'guides/developer/transactions/working-with-ptbs',
           'guides/developer/transactions/building-ptb',
-          'guides/developer/transactions/simulating-refs',
+          'guides/developer/transactions/sponsor-txn',
         ],
   },
   {
@@ -221,34 +221,6 @@ const guides = [
   },
   {
     type: 'category',
-    label: 'Advanced',
-    link: {
-      type: 'doc',
-      id: 'guides/developer/advanced',
-    },
-    items: [
-      'guides/developer/advanced/move-2024-migration',
-      {
-        type: 'category',
-        label: 'Custom Indexer',
-        link: {
-          type: 'doc',
-          id: 'guides/developer/advanced/custom-indexer',
-        },
-        items: [
-          'guides/developer/advanced/custom-indexer/build',
-          'guides/developer/advanced/custom-indexer/indexer-walrus',
-          'guides/developer/advanced/custom-indexer/indexer-data-integration',
-          'guides/developer/advanced/custom-indexer/indexer-runtime-perf',
-        ],
-      },
-      'guides/developer/advanced/randomness-onchain',
-      'guides/developer/advanced/graphql-rpc',
-      'guides/developer/advanced/local-fee-markets',
-    ],
-  },
-  {
-    type: 'category',
     label: 'App Examples',
     link: {
       type: 'doc',
@@ -276,8 +248,6 @@ const guides = [
       },
     ],
   },
-  'guides/developer/starter-templates',
-  'guides/developer/zklogin-onboarding',
   'guides/developer/dev-cheat-sheet',
   {
     type: 'category',

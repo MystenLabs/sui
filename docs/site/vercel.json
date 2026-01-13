@@ -199,8 +199,12 @@
       { "source": "/guides/developer/advanced/randomness-onchain", "destination": "/guides/developer/on-chain-primitives/randomness-onchain" },
       { "source": "/guides/developer/sui-101/building-ptb", "destination": "/guides/developer/transactions/building-ptb" },
       { "source": "/guides/developer/sui-101/sign-and-send-txn", "destination": "/guides/developer/transactions/sign-and-send-txn" },
-      { "source": "/guides/developer/sui-101/simulating-refs", "destination": "/guides/developer/transactions/simulating-refs" },
+      { "source": "/guides/developer/sui-101/simulating-refs", "destination": "/guides/developer/objects/simulating-refs" },
       { "source": "/guides/developer/sui-101/sponsor-txn", "destination": "/guides/developer/transactions/sponsor-txn" },
-      { "source": "/guides/developer/sui-101/working-with-ptbs", "destination": "/guides/developer/transactions/working-with-ptbs" }
+      { "source": "/guides/developer/sui-101/working-with-ptbs", "destination": "/guides/developer/transactions/working-with-ptbs" },
+      { "source": "/concepts/data-access/archival-store", "destination": "/guides/developer/accessing-data/archival-store" },
+      { "source": "/concepts/data-access/custom-indexing-framework", "destination": "/guides/developer/accessing-data/custom-indexing-framework" },
+      { "source": "/concepts/data-access/grpc-overview", "destination": "/guides/developer/accessing-data/grpc-overview" },
+      { "source": "/concepts/data-access/pipeline-architecture", "destination": "/guides/developer/accessing-data/pipeline-architecture" }
     ]
 }
