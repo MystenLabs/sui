@@ -19,6 +19,7 @@ use sui_indexer_alt_metrics::MetricsArgs;
 use sui_indexer_alt_object_store::ObjectStore;
 use url::Url;
 
+use sui_checkpoint_blob_indexer::CheckpointBcsPipeline;
 use sui_checkpoint_blob_indexer::CheckpointBlobPipeline;
 use sui_checkpoint_blob_indexer::EpochsPipeline;
 
@@ -166,6 +167,10 @@ async fn main() -> anyhow::Result<()> {
 
     indexer
         .concurrent_pipeline(EpochsPipeline, config.clone())
+        .await?;
+
+    indexer
+        .concurrent_pipeline(CheckpointBcsPipeline, config.clone())
         .await?;
 
     let s_metrics = metrics_service.run().await?;

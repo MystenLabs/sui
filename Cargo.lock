@@ -14423,6 +14423,7 @@ dependencies = [
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-object-store",
  "sui-rpc",
+ "sui-storage",
  "sui-types",
  "tokio",
  "tracing",

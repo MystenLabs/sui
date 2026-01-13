@@ -3,6 +3,8 @@
 
 mod handlers;
 
+pub use handlers::BcsCheckpoint;
+pub use handlers::CheckpointBcsPipeline;
 pub use handlers::CheckpointBlob;
 pub use handlers::CheckpointBlobPipeline;
 pub use handlers::EpochCheckpoint;
