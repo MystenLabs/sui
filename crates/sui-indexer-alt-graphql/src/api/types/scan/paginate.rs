@@ -10,8 +10,8 @@ use itertools::Either;
 use sui_indexer_alt_reader::checkpoints::CheckpointKey;
 
 use crate::api::scalars::cursor::JsonCursor;
+use crate::api::types::scan::ScanError;
 use crate::api::types::transaction::SCTransaction;
-use crate::api::types::transaction::ScanError;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::TransactionContents;
 use crate::api::types::transaction::TransactionCursor;

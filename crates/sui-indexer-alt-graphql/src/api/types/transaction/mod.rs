@@ -55,15 +55,6 @@ use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
 
-#[derive(thiserror::Error, Debug)]
-pub(crate) enum ScanError {
-    #[error(
-        "Scan range of {requested} checkpoints exceeds maximum of {max}. \
-         Use afterCheckpoint/beforeCheckpoint filters to narrow the range."
-    )]
-    LimitExceeded { requested: u64, max: u64 },
-}
-
 /// Cursor for transaction pagination
 pub(crate) type CTransaction = JsonCursor<u64>;
 
@@ -305,7 +296,7 @@ impl Transaction {
         scope: Scope,
         page: Page<SCTransaction>,
         filter: TransactionFilter,
-    ) -> Result<Connection<String, Transaction>, RpcError<ScanError>> {
+    ) -> Result<Connection<String, Transaction>, RpcError<scan::ScanError>> {
         let limits: &Limits = ctx.data()?;
         let watermarks: &Arc<Watermarks> = ctx.data()?;
         let available_range_key = AvailableRangeKey {

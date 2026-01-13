@@ -7,6 +7,7 @@ use futures::future::try_join_all;
 use sui_indexer_alt_reader::fullnode_client::{Error::GrpcExecutionError, FullnodeClient};
 use sui_rpc::proto::sui::rpc::v2 as proto;
 
+use crate::api::types::scan::ScanError;
 use crate::{
     api::{
         mutation::TransactionInputError,
@@ -41,7 +42,7 @@ use super::{
         protocol_configs::ProtocolConfigs,
         service_config::ServiceConfig,
         transaction::{
-            CTransaction, SCTransaction, ScanError, Transaction,
+            CTransaction, SCTransaction, Transaction,
             filter::{
                 TransactionFilter, TransactionFilterValidator as TFValidator,
                 TransactionScanFilterValidator as TSFValidator,
