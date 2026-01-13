@@ -842,7 +842,7 @@ impl BalanceCluster {
             self.pkg,
             module,
             func,
-            self.treasury_cap(&coin_type).await,
+            self.treasury_cap(coin_type).await,
             amount,
             recipient,
             self.cluster.reference_gas_price(),
@@ -868,7 +868,7 @@ impl BalanceCluster {
             self.pkg,
             module,
             func,
-            self.treasury_cap(&coin_type).await,
+            self.treasury_cap(coin_type).await,
             amount,
             recipient,
             self.cluster.reference_gas_price(),
@@ -943,7 +943,7 @@ impl BalanceCluster {
             "No treasury cap found for coin type {}",
             coin_type
         );
-        caps[0].clone()
+        caps[0]
     }
 
     fn my_coin_type(&self) -> TypeTag {
@@ -1125,7 +1125,6 @@ async fn paginate_list_balances(
         after_token: after_token.map(Into::into),
         before_token: before_token.map(Into::into),
         end,
-        ..Default::default()
     });
 
     client.list_balances(request).await.map(|r| r.into_inner())
