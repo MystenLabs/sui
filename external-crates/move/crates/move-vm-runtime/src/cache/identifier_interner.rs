@@ -3,7 +3,6 @@
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
-    account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     vm_status::StatusCode,
 };
