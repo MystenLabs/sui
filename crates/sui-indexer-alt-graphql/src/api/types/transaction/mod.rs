@@ -21,33 +21,28 @@ use sui_types::{
     transaction::{TransactionDataAPI, TransactionExpiration},
 };
 
-use crate::{
-    api::{
-        scalars::{
-            base64::Base64, cursor::JsonCursor, digest::Digest, fq_name_filter::FqNameFilter,
-            sui_address::SuiAddress,
-        },
-        types::{
-            available_range::AvailableRangeKey,
-            lookups::{CheckpointBounds, TxBoundsCursor},
-            transaction::filter::TransactionKindInput,
-        },
-    },
-    error::RpcError,
-    pagination::Page,
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
-use super::{
-    address::Address,
-    epoch::Epoch,
-    gas_input::GasInput,
-    transaction::filter::TransactionFilter,
-    transaction_effects::{EffectsContents, TransactionEffects},
-    transaction_kind::TransactionKind,
-    user_signature::UserSignature,
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::digest::Digest;
+use crate::api::scalars::fq_name_filter::FqNameFilter;
+use crate::api::scalars::json::Json;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::types::address::Address;
+use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::epoch::Epoch;
+use crate::api::types::gas_input::GasInput;
+use crate::api::types::lookups::CheckpointBounds;
+use crate::api::types::lookups::TxBoundsCursor;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction::filter::TransactionKindInput;
+use crate::api::types::transaction_effects::EffectsContents;
+use crate::api::types::transaction_effects::TransactionEffects;
+use crate::api::types::transaction_kind::TransactionKind;
+use crate::api::types::user_signature::UserSignature;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
 
@@ -170,6 +165,24 @@ impl TransactionContents {
             };
 
             Ok(Some(Base64(content.raw_transaction()?)))
+        }
+        .await
+        .transpose()
+    }
+
+    /// The transaction as a JSON blob, matching the gRPC proto format (excluding BCS).
+    async fn transaction_json(&self) -> Option<Result<Json, RpcError>> {
+        async {
+            let Some(content) = &self.contents else {
+                return Ok(None);
+            };
+
+            let mut proto_transaction = content.proto_transaction()?;
+            // Clear the bcs field as transactionJson is intended to provide a full structured output
+            proto_transaction.bcs = None;
+            let json_value = serde_json::to_value(&proto_transaction)
+                .context("Failed to serialize transaction to JSON")?;
+            Ok(Some(json_value.try_into()?))
         }
         .await
         .transpose()

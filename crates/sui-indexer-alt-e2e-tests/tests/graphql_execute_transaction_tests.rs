@@ -641,3 +641,114 @@ async fn test_execute_transaction_object_changes_input_output() {
         .unwrap();
     assert_eq!(created_type, sui_coin_type);
 }
+
+#[sim_test]
+async fn test_execute_transaction_effects_json() {
+    let validator_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+
+    // Create a transfer transaction
+    let recipient = SuiAddress::random_for_testing_only();
+    let signed_tx =
+        make_transfer_sui_transaction(&validator_cluster.wallet, Some(recipient), Some(1_000_000))
+            .await;
+    let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            mutation($txData: Base64!, $sigs: [Base64!]!) {
+                executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
+                    effects {
+                        status
+                        effectsJson
+                        balanceChangesJson
+                    }
+                    errors
+                }
+            }
+        "#,
+            json!({
+                "txData": tx_bytes.encoded(),
+                "sigs": signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    // Use redactions to mask dynamic values that change between runs
+    insta::assert_json_snapshot!("execute_transaction_effects_json", result.pointer("/data/executeTransaction"), {
+        // Object IDs and addresses
+        ".**.objectId" => "[object_id]",
+        ".**.address" => "[address]",
+        // Digests (covers transactionDigest, eventsDigest, inputDigest, outputDigest)
+        ".**.digest" => "[digest]",
+        ".**.transactionDigest" => "[digest]",
+        ".**.inputDigest" => "[digest]",
+        ".**.outputDigest" => "[digest]",
+        // Dependencies array contains digest strings
+        ".effects.effectsJson.dependencies[]" => "[digest]",
+        // BCS values
+        ".**.bcs.value" => "[bcs]",
+        // Sort arrays that may have non-deterministic order
+        ".effects.effectsJson.changedObjects" => insta::sorted_redaction(),
+        ".effects.effectsJson.dependencies" => insta::sorted_redaction(),
+        ".effects.balanceChangesJson" => insta::sorted_redaction(),
+    });
+}
+
+#[sim_test]
+async fn test_execute_transaction_transaction_json() {
+    let validator_cluster = TestClusterBuilder::new()
+        .with_num_validators(1)
+        .build()
+        .await;
+    let graphql_cluster = create_graphql_test_cluster(&validator_cluster).await;
+
+    // Create a transfer transaction
+    let recipient = SuiAddress::random_for_testing_only();
+    let signed_tx =
+        make_transfer_sui_transaction(&validator_cluster.wallet, Some(recipient), Some(1_000_000))
+            .await;
+    let (tx_bytes, signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            mutation($txData: Base64!, $sigs: [Base64!]!) {
+                executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
+                    effects {
+                        status
+                        transaction {
+                            transactionJson
+                        }
+                    }
+                    errors
+                }
+            }
+        "#,
+            json!({
+                "txData": tx_bytes.encoded(),
+                "sigs": signatures.iter().map(|s| s.encoded()).collect::<Vec<_>>()
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    // Use redactions to mask dynamic values that change between runs
+    insta::assert_json_snapshot!("execute_transaction_transaction_json", result.pointer("/data/executeTransaction"), {
+        // Addresses and owners
+        ".**.sender" => "[sender]",
+        ".**.owner" => "[owner]",
+        ".**.objectId" => "[object_id]",
+        // Digests
+        ".**.digest" => "[digest]",
+        // BCS values
+        ".**.bcs.value" => "[bcs]",
+        // Pure values contain dynamic data (recipient address)
+        ".**.pure" => "[pure]",
+    });
+}
