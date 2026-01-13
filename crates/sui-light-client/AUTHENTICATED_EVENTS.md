@@ -74,7 +74,12 @@ while let Some(result) = stream.next().await {
             println!("Verified event at checkpoint {}", event.checkpoint);
         }
         Err(e) => {
-            // Terminal errors indicate verification failure or invalid state
+            // Transient errors (TransportError, RpcError) are retried automatically.
+            // Terminal errors require action:
+            // - VerificationError: Data integrity issue, try a different RPC endpoint
+            // - InternalError: Invalid state, investigate the cause
+            // See "Error Handling" section for details.
+            eprintln!("Terminal error: {:?}", e);
             break;
         }
     }
@@ -83,9 +88,12 @@ while let Some(result) = stream.next().await {
 
 ### Resuming from a Checkpoint
 
+To resume a stream, the client needs a verified starting state. To guarantee completeness, this requires an OCS inclusion proof showing the `EventStreamHead` at that checkpoint — which only exists if authenticated events were emitted for the stream at that checkpoint. In practice, this would be the checkpoint sequence of the last event the client recieved before a disconnection.
+
+If the specified checkpoint does not have events for that stream_id, the client will fail to initialize.
+
 ```rust
-// Resume from where you left off
-let last_checkpoint = 12345; // Must be a checkpoint where EventStreamHead was modified
+let last_checkpoint = 12345;
 let mut stream = client.clone()
     .stream_events_from_checkpoint(stream_id, last_checkpoint)
     .await?;
@@ -223,6 +231,14 @@ The client verifies a checkpoint range by:
 If any event is missing, modified, or out of order, the computed MMR will not match the on-chain state.
 
 The client automatically handles epoch transitions and committee changes.
+
+## Security Guarantees
+
+**Completeness**: When you receive event N from a stream, you are guaranteed to have received all events 0..N-1 in the correct order. The MMR structure ensures that any missing or reordered events would cause verification to fail.
+
+**What completeness does NOT guarantee**: An intermediary (e.g., RPC provider) is not obligated to return all events up to a requested checkpoint height. To detect withholding, clients must verify against the on-chain `EventStreamHead` which contains the authoritative event count. The reference client does this automatically — if the events received don't match the on-chain commitment, verification fails.
+
+**Correctness**: Each event's content is committed to the MMR. Any modification to event data would cause the computed MMR to diverge from the on-chain state.
 
 ## Limitations
 
