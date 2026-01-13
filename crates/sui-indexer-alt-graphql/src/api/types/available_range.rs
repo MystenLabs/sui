@@ -385,6 +385,11 @@ collect_pipelines! {
         pipelines.insert("tx_digests".to_string());
     };
 
+    TransactionEffects.[balanceChangesJson] |pipelines, _filters| {
+        pipelines.insert("tx_balance_changes".to_string());
+        pipelines.insert("tx_digests".to_string());
+    };
+
     Validator.[address] => IAddressable.*;
     Validator.[balance, balances, multiGetBalances, objects] => IAddressable.*;
     Validator.[defaultSuinsName] => IAddressable.defaultSuinsName();
