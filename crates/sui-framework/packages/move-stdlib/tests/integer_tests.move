@@ -510,7 +510,7 @@ public(package) macro fun test_saturating_mul<$T>($max: $T, $cases: vector<$T>) 
         };
         if (case_pred != 0 && case_succ <= max / case_pred) {
             assert_eq!(case_pred.saturating_mul(case_succ), case_pred * case_succ);
-        } else if (case_succ != 0) {
+        } else if (case_pred != 0) {
             assert_eq!(case_pred.saturating_mul(case_succ), max);
         };
     });
