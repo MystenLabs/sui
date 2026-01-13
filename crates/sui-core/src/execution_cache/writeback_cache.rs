@@ -231,7 +231,8 @@ struct UncommittedData {
 
     unchanged_loaded_runtime_objects: DashMap<TransactionDigest, Vec<ObjectKey>>,
 
-    executed_effects: DashMap<TransactionDigest, Arc<TransactionEffects>>,
+    executed_effects:
+        DashMap<TransactionDigest, (TransactionEffectsDigest, Arc<TransactionEffects>)>,
 
     // Transaction outputs that have not yet been written to the DB. Items are removed from this
     // table as they are flushed to the db.
@@ -348,7 +349,10 @@ struct CachedCommittedData {
 
     transaction_events: MonotonicCache<TransactionDigest, PointCacheItem<Arc<TransactionEvents>>>,
 
-    executed_effects: MonotonicCache<TransactionDigest, PointCacheItem<Arc<TransactionEffects>>>,
+    executed_effects: MonotonicCache<
+        TransactionDigest,
+        PointCacheItem<(TransactionEffectsDigest, Arc<TransactionEffects>)>,
+    >,
 
     transaction_executed_in_last_epoch:
         MonotonicCache<(EpochId, TransactionDigest), PointCacheItem<()>>,
@@ -464,6 +468,8 @@ pub struct WritebackCache {
     object_locks: ObjectLocks,
 
     executed_effects_notify_read: NotifyRead<TransactionDigest, TransactionEffects>,
+    executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
+
     object_notify_read: NotifyRead<InputKey, ()>,
     fastpath_transaction_outputs_notify_read:
         NotifyRead<TransactionDigest, Arc<TransactionOutputs>>,
@@ -532,6 +538,7 @@ impl WritebackCache {
             packages,
             object_locks: ObjectLocks::new(),
             executed_effects_notify_read: NotifyRead::new(),
+            executed_effects_digests_notify_read: NotifyRead::new(),
             object_notify_read: NotifyRead::new(),
             fastpath_transaction_outputs_notify_read: NotifyRead::new(),
             store,
@@ -1014,10 +1021,13 @@ impl WritebackCache {
         self.metrics.record_cache_write("executed_effects");
         self.dirty
             .executed_effects
-            .insert(tx_digest, effects_content);
+            .insert(tx_digest, (effects_digest, effects_content.clone()));
 
         self.executed_effects_notify_read
-            .notify(&tx_digest, effects);
+            .notify(&tx_digest, &effects_content);
+
+        self.executed_effects_digests_notify_read
+            .notify(&tx_digest, &effects_digest);
 
         self.metrics
             .pending_notify_read
@@ -1155,6 +1165,7 @@ impl WritebackCache {
         } = outputs;
 
         let effects_digest = effects.digest();
+        let effects_content = Arc::new(effects.clone());
 
         // Update cache before removing from self.dirty to avoid
         // unnecessary cache misses
@@ -1166,18 +1177,21 @@ impl WritebackCache {
                 Ticket::Write,
             )
             .ok();
-        let effects = Arc::new(effects.clone());
         self.cached
             .transaction_effects
             .insert(
                 &effects_digest,
-                PointCacheItem::Some(effects.clone()),
+                PointCacheItem::Some(effects_content.clone()),
                 Ticket::Write,
             )
             .ok();
         self.cached
             .executed_effects
-            .insert(&tx_digest, PointCacheItem::Some(effects), Ticket::Write)
+            .insert(
+                &tx_digest,
+                PointCacheItem::Some((effects_digest, effects_content)),
+                Ticket::Write,
+            )
             .ok();
         self.cached
             .transaction_events
@@ -2030,10 +2044,10 @@ impl TransactionCacheRead for WritebackCache {
             |(digest, _)| {
                 self.metrics
                     .record_cache_request("executed_effects_digests", "uncommitted");
-                if let Some(effects) = self.dirty.executed_effects.get(digest) {
+                if let Some(entry) = self.dirty.executed_effects.get(digest) {
                     self.metrics
                         .record_cache_hit("executed_effects_digests", "uncommitted");
-                    return CacheResult::Hit(Some(effects.digest()));
+                    return CacheResult::Hit(Some(entry.0));
                 }
                 self.metrics
                     .record_cache_miss("executed_effects_digests", "uncommitted");
@@ -2045,10 +2059,10 @@ impl TransactionCacheRead for WritebackCache {
                     .get(digest)
                     .map(|l| l.lock().clone())
                 {
-                    Some(PointCacheItem::Some(effects)) => {
+                    Some(PointCacheItem::Some(entry)) => {
                         self.metrics
                             .record_cache_hit("executed_effects_digests", "committed");
-                        CacheResult::Hit(Some(effects.digest()))
+                        CacheResult::Hit(Some(entry.0))
                     }
                     Some(PointCacheItem::None) => CacheResult::NegativeHit,
                     None => {
@@ -2091,10 +2105,10 @@ impl TransactionCacheRead for WritebackCache {
             |(digest, _)| {
                 self.metrics
                     .record_cache_request("executed_effects", "uncommitted");
-                if let Some(effects) = self.dirty.executed_effects.get(digest) {
+                if let Some(entry) = self.dirty.executed_effects.get(digest) {
                     self.metrics
                         .record_cache_hit("executed_effects", "uncommitted");
-                    return CacheResult::Hit(Some((**effects).clone()));
+                    return CacheResult::Hit(Some((*entry.1).clone()));
                 }
                 self.metrics
                     .record_cache_miss("executed_effects", "uncommitted");
@@ -2106,10 +2120,10 @@ impl TransactionCacheRead for WritebackCache {
                     .get(digest)
                     .map(|l| l.lock().clone())
                 {
-                    Some(PointCacheItem::Some(effects)) => {
+                    Some(PointCacheItem::Some(entry)) => {
                         self.metrics
                             .record_cache_hit("executed_effects", "committed");
-                        CacheResult::Hit(Some((*effects).clone()))
+                        CacheResult::Hit(Some((*entry.1).clone()))
                     }
                     Some(PointCacheItem::None) => CacheResult::NegativeHit,
                     None => {
@@ -2244,8 +2258,10 @@ impl TransactionCacheRead for WritebackCache {
         task_name: &'static str,
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, Vec<TransactionEffectsDigest>> {
-        self.notify_read_executed_effects(task_name, digests)
-            .map(|effects| effects.iter().map(|e| e.digest()).collect())
+        self.executed_effects_digests_notify_read
+            .read(task_name, digests, |digests| {
+                self.multi_get_executed_effects_digests(digests)
+            })
             .boxed()
     }
 
