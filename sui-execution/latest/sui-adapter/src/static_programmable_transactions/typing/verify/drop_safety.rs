@@ -41,7 +41,9 @@ mod refine {
     struct Context {
         // All locations that were used
         used: BTreeSet<T::Location>,
-        // All locations that were used via a Move
+        // All locations that were used via a Move. This is a subset of `used`, but `used` does
+        // not track how each value was used in each instance. For simplicity, this is kept as a
+        // separate set.
         moved: BTreeSet<T::Location>,
     }
 

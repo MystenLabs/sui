@@ -1068,14 +1068,10 @@ fn lift_result_indices(
 
 /// Returns the inner type `T` if the type is `sui::coin::Coin<T>`, else `None`
 pub(crate) fn coin_inner_type(ty: &Type) -> Option<&Type> {
-    let Type::Datatype(dt) = ty else {
-        return None;
-    };
-    if dt.type_arguments.len() != 1 {
-        return None;
-    }
-    let resolved = dt.qualified_ident();
-    if resolved == RESOLVED_COIN_STRUCT {
+    if let Type::Datatype(dt) = ty
+        && dt.type_arguments.len() == 1
+        && dt.qualified_ident() == RESOLVED_COIN_STRUCT
+    {
         Some(&dt.type_arguments[0])
     } else {
         None
@@ -1084,14 +1080,10 @@ pub(crate) fn coin_inner_type(ty: &Type) -> Option<&Type> {
 
 /// Returns the inner type `T` if the type is `sui::balance::Balance<T>`, else `None`
 pub(crate) fn balance_inner_type(ty: &Type) -> Option<&Type> {
-    let Type::Datatype(dt) = ty else {
-        return None;
-    };
-    if dt.type_arguments.len() != 1 {
-        return None;
-    }
-    let resolved = dt.qualified_ident();
-    if resolved == RESOLVED_BALANCE_STRUCT {
+    if let Type::Datatype(dt) = ty
+        && dt.type_arguments.len() == 1
+        && dt.qualified_ident() == RESOLVED_BALANCE_STRUCT
+    {
         Some(&dt.type_arguments[0])
     } else {
         None
@@ -1100,14 +1092,10 @@ pub(crate) fn balance_inner_type(ty: &Type) -> Option<&Type> {
 
 /// Returns the inner type `T` if the type is `sui::funds_accumulator::Withdrawal<T>`, else `None`
 pub(crate) fn withdrawal_inner_type(ty: &Type) -> Option<&Type> {
-    let Type::Datatype(dt) = ty else {
-        return None;
-    };
-    if dt.type_arguments.len() != 1 {
-        return None;
-    }
-    let resolved = dt.qualified_ident();
-    if resolved == RESOLVED_WITHDRAWAL_STRUCT {
+    if let Type::Datatype(dt) = ty
+        && dt.type_arguments.len() == 1
+        && dt.qualified_ident() == RESOLVED_WITHDRAWAL_STRUCT
+    {
         Some(&dt.type_arguments[0])
     } else {
         None
