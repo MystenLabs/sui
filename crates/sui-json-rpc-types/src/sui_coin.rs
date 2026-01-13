@@ -20,6 +20,10 @@ use sui_types::sui_serde::SequenceNumber as AsSequenceNumber;
 
 pub type CoinPage = Page<Coin, String>;
 
+fn default_funds_in_address_balance() -> u128 {
+    0
+}
+
 #[serde_as]
 #[derive(Serialize, Deserialize, Debug, JsonSchema, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +43,7 @@ pub struct Balance {
     /// of funds owned by the address. That is, do not add these two fields together.
     #[schemars(with = "BigInt<u128>")]
     #[serde_as(as = "BigInt<u128>")]
+    #[serde(default = "default_funds_in_address_balance")]
     pub funds_in_address_balance: u128,
 }
 
