@@ -227,7 +227,7 @@ fn build_test_info<'func>(
             (function.loc, "Invalid test function")
         );
         diag.add_note("Test functions with arguments have been deprecated");
-        diag.add_note("If you would like to test functions with random inputs, consider using '#[rand_test]' instead");
+        diag.add_note("If you would like to test functions with random inputs, consider using '#[random_test]' instead");
         context.add_diag(diag);
         return None;
     }
