@@ -740,6 +740,7 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // reload the root package with force repinning and save the lockfile again
         let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .force_repin(true)
             .load::<Vanilla>()
             .await
             .unwrap();
