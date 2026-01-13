@@ -58,22 +58,29 @@ use std::{
 /// transaction, is immutable for the execution of the transaction, and is dropped at the end of
 /// the transaction.
 ///
-/// FUTURE(vm-rewrite): The representation can be optimized to use a more efficient data structure for
-/// vtable/cross-package function resolution but we will keep it simple for now.
+/// This structure may be cached and reused across transactions with identical linkages, so we add
+/// an Arc<> around the inner data structures to facilitate more-efficient sharing.
+///
+/// FUTURE(vm-rewrite): The representation can be optimized to use a more efficient data structure
+/// for vtable/cross-package function resolution but we will keep it simple for now.
 #[derive(Debug, Clone)]
 pub struct VMDispatchTables {
     pub(crate) vm_config: Arc<VMConfig>,
     pub(crate) interner: Arc<IdentifierInterner>,
-    pub(crate) loaded_packages: BTreeMap<OriginalId, Arc<Package>>,
+    pub(crate) loaded_packages: Arc<BTreeMap<OriginalId, Arc<Package>>>,
+    /// Defining ID Set -- a set of all defining IDs on any types defined in the package.
+    /// [SAFETY] Ordering is not guaranteed
+    pub(crate) defining_id_origins: Arc<BTreeMap<DefiningTypeId, OriginalId>>,
+    pub(crate) link_context: Arc<LinkageContext>,
     /// Representation of runtime type depths. This is separate from the underlying packages to
     /// avoid grabbing write-locks and toward the possibility these may change based on linkage
     /// (e.g., type ugrades or similar).
     /// [SAFETY] Ordering of inner maps is not guaranteed
+    /// NB: This cache is mutated during execution, so VMDispatchTables cannot be fully immutable.
+    /// However, the contents of the cache do not affect execution correctness, only performance.
+    /// To this end, we do not wrap this in an Arc<_> or similar -- to do so would introduce a
+    /// RwLock that may be contended during execution.
     pub(crate) type_depths: LruCache<VirtualTableKey, DepthFormula>,
-    /// Defining ID Set -- a set of all defining IDs on any types defined in the package.
-    /// [SAFETY] Ordering is not guaranteed
-    pub(crate) defining_id_origins: BTreeMap<DefiningTypeId, OriginalId>,
-    pub(crate) link_context: LinkageContext,
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -162,6 +169,11 @@ impl VMDispatchTables {
             }
             defining_id_map
         };
+
+        let loaded_packages = Arc::new(loaded_packages);
+        let defining_id_origins = Arc::new(defining_id_origins);
+        let link_context = Arc::new(link_context);
+
         Ok(Self {
             vm_config,
             interner,
