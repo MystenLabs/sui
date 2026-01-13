@@ -515,3 +515,71 @@ public(package) macro fun test_saturating_mul<$T>($max: $T, $cases: vector<$T>) 
         };
     });
 }
+
+public(package) macro fun test_checked_shl<$T>($max: $T, $bit_size: u8) {
+    let max = $max;
+    let bit_size = $bit_size;
+    // valid shifts
+    assert_eq!((0: $T).checked_shl(0).destroy_some(), 0);
+    assert_eq!((1: $T).checked_shl(0).destroy_some(), 1);
+    assert_eq!((1: $T).checked_shl(1).destroy_some(), 2);
+    assert_eq!((1: $T).checked_shl(bit_size - 1).destroy_some(), 1 << (bit_size - 1));
+    assert_eq!(max.checked_shl(0).destroy_some(), max);
+    // invalid shifts (>= bit_size)
+    assert!((0: $T).checked_shl(bit_size).is_none());
+    assert!((1: $T).checked_shl(bit_size).is_none());
+    assert!(max.checked_shl(bit_size).is_none());
+    assert!((1: $T).checked_shl(bit_size + 1).is_none());
+}
+
+public(package) macro fun test_checked_shr<$T>($max: $T, $bit_size: u8) {
+    let max = $max;
+    let bit_size = $bit_size;
+    // valid shifts
+    assert_eq!((0: $T).checked_shr(0).destroy_some(), 0);
+    assert_eq!((1: $T).checked_shr(0).destroy_some(), 1);
+    assert_eq!((2: $T).checked_shr(1).destroy_some(), 1);
+    assert_eq!(max.checked_shr(0).destroy_some(), max);
+    assert_eq!(max.checked_shr(bit_size - 1).destroy_some(), 1);
+    // invalid shifts (>= bit_size)
+    assert!((0: $T).checked_shr(bit_size).is_none());
+    assert!((1: $T).checked_shr(bit_size).is_none());
+    assert!(max.checked_shr(bit_size).is_none());
+    assert!((1: $T).checked_shr(bit_size + 1).is_none());
+}
+
+public(package) macro fun test_exact_shl<$T>($max: $T, $bit_size: u8) {
+    let max = $max;
+    let bit_size = $bit_size;
+    // exact shifts (no bits lost)
+    assert_eq!((0: $T).exact_shl(0).destroy_some(), 0);
+    assert_eq!((0: $T).exact_shl(bit_size - 1).destroy_some(), 0);
+    assert_eq!((1: $T).exact_shl(0).destroy_some(), 1);
+    assert_eq!((1: $T).exact_shl(1).destroy_some(), 2);
+    assert_eq!((1: $T).exact_shl(bit_size - 1).destroy_some(), 1 << (bit_size - 1));
+    // inexact shifts (bits lost)
+    assert!((1: $T).exact_shl(bit_size).is_none());
+    assert!(max.exact_shl(1).is_none());
+    assert!((1 << (bit_size - 1): $T).exact_shl(1).is_none());
+    // high bit set, any shift loses it
+    let high_bit = (1: $T) << (bit_size - 1);
+    assert!(high_bit.exact_shl(1).is_none());
+}
+
+public(package) macro fun test_exact_shr<$T>($max: $T, $bit_size: u8) {
+    let max = $max;
+    let bit_size = $bit_size;
+    // exact shifts (no bits lost)
+    assert_eq!((0: $T).exact_shr(0).destroy_some(), 0);
+    assert_eq!((0: $T).exact_shr(bit_size - 1).destroy_some(), 0);
+    assert_eq!((1: $T).exact_shr(0).destroy_some(), 1);
+    assert_eq!((2: $T).exact_shr(1).destroy_some(), 1);
+    assert_eq!((4: $T).exact_shr(2).destroy_some(), 1);
+    let high_bit = (1: $T) << (bit_size - 1);
+    assert_eq!(high_bit.exact_shr(bit_size - 1).destroy_some(), 1);
+    // inexact shifts (bits lost)
+    assert!((1: $T).exact_shr(bit_size).is_none());
+    assert!((1: $T).exact_shr(1).is_none());
+    assert!((3: $T).exact_shr(1).is_none());
+    assert!(max.exact_shr(1).is_none());
+}
