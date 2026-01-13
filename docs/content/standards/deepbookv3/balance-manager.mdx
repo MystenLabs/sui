@@ -50,7 +50,7 @@ The `new()` function creates a `BalanceManager`. Combine it with `share`, or els
 </details>
 
 <details>
-<summary>Create a BalanceManager with custom owner</summary>
+<summary>Create a `BalanceManager` with custom owner</summary>
 
 The `new_with_custom_owner()` function creates a `BalanceManager` with a custom owner. Combine it with `share`, or else the transaction fails. You can combine the transaction with deposit calls, allowing you to create, deposit, then share the balance manager in one transaction.
 
@@ -86,7 +86,7 @@ Move code using DeepBookV3 uses `DepositCap`, `WithdrawCap`, and `TradeCap`, whi
 </details>
 
 <details>
-<summary>Mint a TradeCap</summary>
+<summary>Mint a `TradeCap`</summary>
 
 The owner of a `BalanceManager` can mint a `TradeCap` and send it to another address. Upon receipt, that address will have the capability to place orders with this `BalanceManager`. The address owner cannot deposit or withdraw funds, however. The maximum total number of `TradeCap`, `WithdrawCap`, and `DepositCap` that can be assigned for a `BalanceManager` is `1000`. If this limit is reached, one or more existing caps must be revoked before minting new ones. You can also use `revoke_trade_cap` to revoke `DepositCap` and `WithdrawCap`.
 
@@ -101,7 +101,7 @@ The owner of a `BalanceManager` can mint a `TradeCap` and send it to another add
 </details>
 
 <details>
-<summary>Mint a DepositCap or WithdrawCap</summary>
+<summary>Mint a `DepositCap` or `WithdrawCap`</summary>
 
 The owner of a `BalanceManager` can mint a `DepositCap` or `WithdrawCap` and send it to another address. Upon receipt, that address will have the capability to deposit in or withdraw from `BalanceManager`. The address owner cannot execute trades, however. The maximum total number of `TradeCap`, `WithdrawCap`, and `DepositCap` that can be assigned for a `BalanceManager` is `1000`. If this limit is reached, one or more existing caps must be revoked before minting new ones.
 
@@ -116,7 +116,7 @@ The owner of a `BalanceManager` can mint a `DepositCap` or `WithdrawCap` and sen
 </details>
 
 <details>
-<summary>Generate a TradeProof</summary>
+<summary>Generate a `TradeProof`</summary>
 
 To call any function that requires a balance check or transfer, the user must provide their `BalanceManager` as well as a `TradeProof`. There are two ways to generate a trade proof, one used by the owner and another used by a `TradeCap` owner.
 
@@ -161,7 +161,7 @@ Only the owner can call this function to withdraw funds from the `BalanceManager
 </details>
 
 <details>
-<summary>Deposit funds using DepositCap</summary>
+<summary>Deposit funds using `DepositCap`</summary>
 
 Only holders of a `DepositCap` for the `BalanceManager` can call this function to deposit funds into the `BalanceManager`.
 
@@ -236,7 +236,7 @@ Register a balance manager with the registry. This adds the balance manager to t
 ## Events
 
 <details>
-<summary>BalanceManagerEvent</summary>
+<summary>`BalanceManagerEvent`</summary>
 
 Emitted when a new balance manager is created.
 
