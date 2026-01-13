@@ -150,3 +150,27 @@ fun test_saturating_sub() {
 fun test_saturating_mul() {
     integer_tests::test_saturating_mul!(MAX, CASES);
 }
+
+#[test]
+fun test_exact_shl() {
+    // valid shifts that preserve all bits
+    assert_eq!(0u256.exact_shl(0).destroy_some(), 0);
+    assert_eq!(1u256.exact_shl(0).destroy_some(), 1);
+    assert_eq!(1u256.exact_shl(1).destroy_some(), 2);
+    assert_eq!(1u256.exact_shl(255).destroy_some(), 1 << 255);
+    // shifts that lose bits
+    assert!(MAX.exact_shl(1).is_none());
+    assert!((1u256 << 255).exact_shl(1).is_none());
+}
+
+#[test]
+fun test_exact_shr() {
+    // valid shifts that preserve all bits
+    assert_eq!(0u256.exact_shr(0).destroy_some(), 0);
+    assert_eq!(2u256.exact_shr(1).destroy_some(), 1);
+    assert_eq!((1u256 << 255).exact_shr(255).destroy_some(), 1);
+    assert_eq!(MAX.exact_shr(0).destroy_some(), MAX);
+    // shifts that lose bits
+    assert!(1u256.exact_shr(1).is_none());
+    assert!(MAX.exact_shr(1).is_none());
+}
