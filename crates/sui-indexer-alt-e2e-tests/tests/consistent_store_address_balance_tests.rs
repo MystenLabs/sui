@@ -4,25 +4,35 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    BatchGetBalancesRequest, GetBalanceRequest, ListBalancesRequest, ListObjectsByTypeRequest,
-    consistent_service_client::ConsistentServiceClient,
-};
-use sui_indexer_alt_e2e_tests::{FullCluster, find};
-use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::BatchGetBalancesRequest;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::GetBalanceRequest;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::ListBalancesRequest;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::ListObjectsByTypeRequest;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_client::ConsistentServiceClient;
+use sui_test_transaction_builder::FundSource;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::Identifier;
-use sui_types::{
-    TypeTag,
-    base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    crypto::{AccountKeyPair, get_account_key_pair},
-    effects::TransactionEffectsAPI,
-    gas_coin::GAS,
-    object::Owner,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{CallArg, ObjectArg, Transaction, TransactionData},
-};
+use sui_types::TypeTag;
+use sui_types::base_types::ObjectDigest;
+use sui_types::base_types::ObjectId;
+use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::get_account_key_pair;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::gas_coin::GAS;
+use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::CallArg;
+use sui_types::transaction::ObjectArg;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
 
 use tonic::transport::Channel;
+
+use sui_indexer_alt_e2e_tests::FullCluster;
+use sui_indexer_alt_e2e_tests::find;
 
 /// 5 SUI gas budget
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;

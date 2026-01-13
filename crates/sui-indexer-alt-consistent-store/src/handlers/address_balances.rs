@@ -1,29 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use anyhow::Context;
 use async_trait::async_trait;
-use sui_indexer_alt_framework::{
-    pipeline::{Processor, sequential},
-    types::{
-        base_types::SuiAddress,
-        dynamic_field::Field,
-        full_checkpoint_content::Checkpoint,
-        object::Object,
-        transaction::{TransactionDataAPI, TransactionKind},
-    },
-};
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::pipeline::sequential;
+use sui_indexer_alt_framework::transaction::TransactionDataAPI;
+use sui_indexer_alt_framework::transaction::TransactionKind;
+use sui_indexer_alt_framework::types::base_types::SuiAddress;
+use sui_indexer_alt_framework::types::dynamic_field::Field;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_framework::types::object::Object;
 
-use crate::store::{Connection, Store};
-use crate::{
-    restore::Restore,
-    schema::{Schema, address_balances::Key},
-};
+use crate::restore::Restore;
+use crate::schema::Schema;
+use crate::schema::address_balances::Key;
+use crate::store::Connection;
+use crate::store::Store;
 
 pub(crate) struct AddressBalances;
 
