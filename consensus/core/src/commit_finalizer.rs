@@ -936,66 +936,15 @@ impl BlockState {
 
 #[cfg(test)]
 mod tests {
-    use mysten_metrics::monitored_mpsc;
-    use parking_lot::RwLock;
-
     use crate::{
-        TestBlock, VerifiedBlock, block::BlockTransactionVotes, block_verifier::NoopBlockVerifier,
-        dag_state::DagState, linearizer::Linearizer, storage::mem_store::MemStore,
-        test_dag_builder::DagBuilder,
+        TestBlock, VerifiedBlock, block::BlockTransactionVotes,
+        commit_test_fixture::CommitTestFixture, test_dag_builder::DagBuilder,
     };
 
     use super::*;
 
-    struct Fixture {
-        context: Arc<Context>,
-        dag_state: Arc<RwLock<DagState>>,
-        transaction_certifier: TransactionCertifier,
-        linearizer: Linearizer,
-        commit_finalizer: CommitFinalizer,
-    }
-
-    impl Fixture {
-        fn add_blocks(&self, blocks: Vec<VerifiedBlock>) {
-            self.transaction_certifier
-                .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
-            self.dag_state.write().accept_blocks(blocks);
-        }
-    }
-
-    fn create_commit_finalizer_fixture() -> Fixture {
-        let (mut context, _keys) = Context::new_for_test(4);
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(5);
-        let context = Arc::new(context);
-        let dag_state = Arc::new(RwLock::new(DagState::new(
-            context.clone(),
-            Arc::new(MemStore::new()),
-        )));
-        let linearizer = Linearizer::new(context.clone(), dag_state.clone());
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            Arc::new(NoopBlockVerifier {}),
-            dag_state.clone(),
-            blocks_sender,
-        );
-        let (commit_sender, _commit_receiver) = unbounded_channel("consensus_commit_output");
-        let commit_finalizer = CommitFinalizer::new(
-            context.clone(),
-            dag_state.clone(),
-            transaction_certifier.clone(),
-            commit_sender,
-        );
-        Fixture {
-            context,
-            dag_state,
-            transaction_certifier,
-            linearizer,
-            commit_finalizer,
-        }
+    fn create_commit_finalizer_fixture() -> CommitTestFixture {
+        CommitTestFixture::with_options(4, 0, Some(5))
     }
 
     fn create_block(
@@ -1029,15 +978,9 @@ mod tests {
 
         // Create round 1-4 blocks with 10 transactions each. Add these blocks to transaction certifier.
         let mut dag_builder = DagBuilder::new(fixture.context.clone());
-        dag_builder
-            .layers(1..=4)
-            .num_transactions(10)
-            .build()
-            .persist_layers(fixture.dag_state.clone());
+        dag_builder.layers(1..=4).num_transactions(10).build();
         let blocks = dag_builder.all_blocks();
-        fixture
-            .transaction_certifier
-            .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
+        fixture.add_blocks(blocks.clone());
 
         // Select a round 2 block as the leader and create CommittedSubDag.
         let leader = blocks.iter().find(|b| b.round() == 2).unwrap();
@@ -1066,13 +1009,10 @@ mod tests {
 
         // Create round 1 blocks with 10 transactions each.
         let mut dag_builder = DagBuilder::new(fixture.context.clone());
-        dag_builder
-            .layer(1)
-            .num_transactions(10)
-            .build()
-            .persist_layers(fixture.dag_state.clone());
+        dag_builder.layer(1).num_transactions(10).build();
+
         let round_1_blocks = dag_builder.all_blocks();
-        fixture.transaction_certifier.add_voted_blocks(
+        fixture.add_blocks_with_own_votes(
             round_1_blocks
                 .iter()
                 .map(|b| {
@@ -1177,13 +1117,10 @@ mod tests {
 
         // Create round 1 blocks with 10 transactions each.
         let mut dag_builder = DagBuilder::new(fixture.context.clone());
-        dag_builder
-            .layer(1)
-            .num_transactions(10)
-            .build()
-            .persist_layers(fixture.dag_state.clone());
+        dag_builder.layer(1).num_transactions(10).build();
+
         let round_1_blocks = dag_builder.all_blocks();
-        fixture.transaction_certifier.add_voted_blocks(
+        fixture.add_blocks_with_own_votes(
             round_1_blocks
                 .iter()
                 .map(|b| {
@@ -1340,15 +1277,9 @@ mod tests {
 
         // Create round 1 blocks with 10 transactions each.
         let mut dag_builder = DagBuilder::new(fixture.context.clone());
-        dag_builder
-            .layer(1)
-            .num_transactions(10)
-            .build()
-            .persist_layers(fixture.dag_state.clone());
+        dag_builder.layer(1).num_transactions(10).build();
         let round_1_blocks = dag_builder.all_blocks();
-        fixture
-            .transaction_certifier
-            .add_voted_blocks(round_1_blocks.iter().map(|b| (b.clone(), vec![])).collect());
+        fixture.add_blocks(round_1_blocks.clone());
 
         // Select B1(3) to be rejected due to GC.
         let block_rejected = round_1_blocks[3].clone();
@@ -1449,15 +1380,10 @@ mod tests {
 
         // Create round 1 blocks with 10 transactions each.
         let mut dag_builder = DagBuilder::new(fixture.context.clone());
-        dag_builder
-            .layer(1)
-            .num_transactions(10)
-            .build()
-            .persist_layers(fixture.dag_state.clone());
+        dag_builder.layer(1).num_transactions(10).build();
+
         let round_1_blocks = dag_builder.all_blocks();
-        fixture
-            .transaction_certifier
-            .add_voted_blocks(round_1_blocks.iter().map(|b| (b.clone(), vec![])).collect());
+        fixture.add_blocks(round_1_blocks.clone());
 
         // Select B1(3) to have a rejected transaction.
         let block_with_rejected_txn = round_1_blocks[3].clone();
@@ -1572,7 +1498,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_finalize_remote_commits_with_reject_votes() {
-        let mut fixture: Fixture = create_commit_finalizer_fixture();
+        let mut fixture: CommitTestFixture = create_commit_finalizer_fixture();
         let mut all_blocks = vec![];
 
         // Create round 1 blocks with 10 transactions each.
@@ -1603,7 +1529,7 @@ mod tests {
         assert_eq!(leaders.len(), 6);
 
         async fn add_blocks_and_process_commit(
-            fixture: &mut Fixture,
+            fixture: &mut CommitTestFixture,
             leaders: &[VerifiedBlock],
             all_blocks: &[Vec<VerifiedBlock>],
             index: usize,
