@@ -57,5 +57,6 @@ fragment M on MoveModuleConnection {
   }
   nodes {
     name
+    fullyQualifiedName
   }
 }

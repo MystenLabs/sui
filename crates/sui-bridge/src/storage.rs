@@ -1,18 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::error::{BridgeError, BridgeResult};
+use crate::types::{BridgeAction, BridgeActionDigest};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use sui_types::Identifier;
-
 use sui_types::event::EventID;
 use typed_store::DBMapUtils;
 use typed_store::Map;
 use typed_store::rocks::{DBMap, MetricConf};
-
-use crate::error::{BridgeError, BridgeResult};
-use crate::types::{BridgeAction, BridgeActionDigest};
 
 #[derive(DBMapUtils)]
 pub struct BridgeOrchestratorTables {
@@ -21,7 +20,7 @@ pub struct BridgeOrchestratorTables {
     /// module identifier to the last processed EventID
     pub(crate) sui_syncer_cursors: DBMap<Identifier, EventID>,
     /// contract address to the last processed block
-    pub(crate) eth_syncer_cursors: DBMap<ethers::types::Address, u64>,
+    pub(crate) eth_syncer_cursors: DBMap<AlloyAddressSerializedAsEthers, u64>,
     /// sequence number for the next record to be processed from the bridge records table
     pub(crate) sui_syncer_sequence_number_cursor: DBMap<(), u64>,
 }
@@ -104,13 +103,16 @@ impl BridgeOrchestratorTables {
 
     pub(crate) fn update_eth_event_cursor(
         &self,
-        contract_address: ethers::types::Address,
+        contract_address: alloy::primitives::Address,
         cursor: u64,
     ) -> BridgeResult<()> {
         let mut batch = self.eth_syncer_cursors.batch();
 
         batch
-            .insert_batch(&self.eth_syncer_cursors, [(contract_address, cursor)])
+            .insert_batch(
+                &self.eth_syncer_cursors,
+                [(AlloyAddressSerializedAsEthers(contract_address), cursor)],
+            )
             .map_err(|e| {
                 BridgeError::StorageError(format!(
                     "Coudln't insert into eth_syncer_cursors: {:?}",
@@ -151,13 +153,43 @@ impl BridgeOrchestratorTables {
 
     pub fn get_eth_event_cursors(
         &self,
-        contract_addresses: &[ethers::types::Address],
+        contract_addresses: &[alloy::primitives::Address],
     ) -> BridgeResult<Vec<Option<u64>>> {
+        let wrapped_addresses: Vec<AlloyAddressSerializedAsEthers> = contract_addresses
+            .iter()
+            .map(|addr| AlloyAddressSerializedAsEthers(*addr))
+            .collect();
         self.eth_syncer_cursors
-            .multi_get(contract_addresses)
+            .multi_get(&wrapped_addresses)
             .map_err(|e| {
                 BridgeError::StorageError(format!("Couldn't get eth_syncer_cursors: {:?}", e))
             })
+    }
+}
+
+/// Wrapper around alloy::primitives::Address that serializes in the same format
+/// as ethers::types::Address (as a hex string) for backward compatibility.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AlloyAddressSerializedAsEthers(pub alloy::primitives::Address);
+
+impl Serialize for AlloyAddressSerializedAsEthers {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let hex_string = format!("0x{:x}", self.0);
+        hex_string.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for AlloyAddressSerializedAsEthers {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let address = s.parse().map_err(serde::de::Error::custom)?;
+        Ok(AlloyAddressSerializedAsEthers(address))
     }
 }
 
@@ -244,7 +276,7 @@ mod tests {
         assert!(actions.is_empty());
 
         // update eth event cursor
-        let eth_contract_address = ethers::types::Address::random();
+        let eth_contract_address = alloy::primitives::Address::random();
         let eth_block_num = 199999u64;
         assert!(
             store
@@ -296,5 +328,35 @@ mod tests {
             store.get_sui_sequence_number_cursor().unwrap().unwrap(),
             sui_sequence_number_cursor
         );
+    }
+
+    #[tokio::test]
+    async fn test_address_serialization() {
+        let alloy_address =
+            alloy::primitives::Address::from_str("0x90f8bf6a479f320ead074411a4b0e7944ea8c9c1")
+                .unwrap();
+        let expected_ethers_serialized = vec![
+            42, 0, 0, 0, 0, 0, 0, 0, 48, 120, 57, 48, 102, 56, 98, 102, 54, 97, 52, 55, 57, 102,
+            51, 50, 48, 101, 97, 100, 48, 55, 52, 52, 49, 49, 97, 52, 98, 48, 101, 55, 57, 52, 52,
+            101, 97, 56, 99, 57, 99, 49,
+        ];
+        let wrapped_address = AlloyAddressSerializedAsEthers(alloy_address);
+        let alloy_serialized = bincode::serialize(&wrapped_address).unwrap();
+        assert_eq!(alloy_serialized, expected_ethers_serialized);
+    }
+
+    #[tokio::test]
+    async fn test_address_deserialization() {
+        let ethers_serialized = vec![
+            42, 0, 0, 0, 0, 0, 0, 0, 48, 120, 57, 48, 102, 56, 98, 102, 54, 97, 52, 55, 57, 102,
+            51, 50, 48, 101, 97, 100, 48, 55, 52, 52, 49, 49, 97, 52, 98, 48, 101, 55, 57, 52, 52,
+            101, 97, 56, 99, 57, 99, 49,
+        ];
+        let wrapped_address: AlloyAddressSerializedAsEthers =
+            bincode::deserialize(&ethers_serialized).unwrap();
+        let expected_address =
+            alloy::primitives::Address::from_str("0x90f8bf6a479f320ead074411a4b0e7944ea8c9c1")
+                .unwrap();
+        assert_eq!(wrapped_address.0, expected_address);
     }
 }

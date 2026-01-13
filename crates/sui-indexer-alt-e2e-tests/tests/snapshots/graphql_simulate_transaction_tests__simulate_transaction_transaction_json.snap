@@ -1,0 +1,76 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_simulate_transaction_tests.rs
+expression: "result.pointer(\"/data/simulateTransaction\")"
+---
+{
+  "effects": {
+    "status": "SUCCESS",
+    "transaction": {
+      "transactionJson": {
+        "digest": "[digest]",
+        "version": 1,
+        "kind": {
+          "kind": "PROGRAMMABLE_TRANSACTION",
+          "programmableTransaction": {
+            "inputs": [
+              {
+                "kind": "PURE",
+                "pure": "[pure]"
+              },
+              {
+                "kind": "PURE",
+                "pure": "[pure]"
+              }
+            ],
+            "commands": [
+              {
+                "splitCoins": {
+                  "coin": {
+                    "kind": "GAS"
+                  },
+                  "amounts": [
+                    {
+                      "kind": "INPUT",
+                      "input": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "transferObjects": {
+                  "objects": [
+                    {
+                      "kind": "RESULT",
+                      "result": 0
+                    }
+                  ],
+                  "address": {
+                    "kind": "INPUT",
+                    "input": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "sender": "[sender]",
+        "gasPayment": {
+          "objects": [
+            {
+              "objectId": "[object_id]",
+              "version": "1",
+              "digest": "[digest]"
+            }
+          ],
+          "owner": "[owner]",
+          "price": "1000",
+          "budget": "5000000000"
+        },
+        "expiration": {
+          "kind": "NONE"
+        }
+      }
+    }
+  },
+  "error": null
+}

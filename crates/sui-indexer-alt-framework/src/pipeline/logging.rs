@@ -3,11 +3,11 @@
 
 use std::time::Instant;
 
-use tracing::{debug, info};
+use tracing::debug;
+use tracing::info;
 
+use crate::pipeline::Processor;
 use crate::store::CommitterWatermark;
-
-use super::Processor;
 
 /// Tracing message for the watermark update will be logged at info level at least this many
 /// checkpoints.

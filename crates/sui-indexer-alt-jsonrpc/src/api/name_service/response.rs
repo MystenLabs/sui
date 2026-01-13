@@ -2,20 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
 use futures::future::OptionFuture;
 use sui_indexer_alt_schema::schema::watermarks;
-use sui_name_service::{Domain, NameRecord, NameServiceError};
-use sui_types::{base_types::SuiAddress, dynamic_field::Field};
+use sui_name_service::Domain;
+use sui_name_service::NameRecord;
+use sui_name_service::NameServiceError;
+use sui_types::base_types::SuiAddress;
+use sui_types::dynamic_field::Field;
 use tokio::join;
 
-use crate::{
-    context::Context,
-    data::load_live,
-    error::{InternalContext, RpcError, invalid_params},
-};
-
-use super::Error;
+use crate::api::name_service::Error;
+use crate::context::Context;
+use crate::data::load_live;
+use crate::error::InternalContext;
+use crate::error::RpcError;
+use crate::error::invalid_params;
 
 /// Attempt to translate the given SuiNS `name` to its address, as long as the mapping exists,
 /// and it hasn't expired.

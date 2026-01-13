@@ -8,7 +8,7 @@
 // We query the coin using the cursor we got from the first query and see a coin with balance 1400.
 // In graphql, the returned coin will be from checkpoint_viewed_at = 1, and has balance 3400.
 
-//# init --protocol-version 70 --addresses Test=0x0 --accounts A B --simulator --objects-snapshot-min-checkpoint-lag 2
+//# init --protocol-version 70 --addresses Test=0x0 --accounts A B --simulator --consistent-range 2
 
 //# programmable --sender A --inputs 12000 @A
 //> 0: SplitCoins(Gas, [Input(0)]);

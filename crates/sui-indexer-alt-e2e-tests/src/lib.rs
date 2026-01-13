@@ -1,65 +1,69 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::HashMap,
-    fs,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::Path,
-    time::Duration,
-};
+use std::collections::HashMap;
+use std::fs;
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
+use std::path::Path;
+use std::time::Duration;
 
-use anyhow::{Context, ensure};
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use anyhow::Context;
+use anyhow::ensure;
+use diesel::ExpressionMethods;
+use diesel::OptionalExtension;
+use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use reqwest::Client;
-use serde_json::{Value, json};
+use serde_json::Value;
+use serde_json::json;
 use simulacrum::Simulacrum;
 use sui_futures::service::Service;
-use sui_indexer_alt::{BootstrapGenesis, config::IndexerConfig, setup_indexer};
-use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    AvailableRangeRequest, consistent_service_client::ConsistentServiceClient,
-};
-use sui_indexer_alt_consistent_store::{
-    args::RpcArgs as ConsistentArgs, args::TlsArgs as ConsistentTlsArgs,
-    config::ServiceConfig as ConsistentConfig, start_service as start_consistent_store,
-};
-use sui_indexer_alt_framework::{
-    IndexerArgs,
-    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
-    postgres::schema::watermarks,
-};
-use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
-    start_rpc as start_graphql,
-};
-use sui_indexer_alt_jsonrpc::{
-    NodeArgs as JsonRpcNodeArgs, RpcArgs as JsonRpcArgs, config::RpcConfig as JsonRpcConfig,
-    start_rpc as start_jsonrpc,
-};
-use sui_indexer_alt_reader::{
-    bigtable_reader::BigtableArgs, consistent_reader::ConsistentReaderArgs,
-    fullnode_client::FullnodeArgs, system_package_task::SystemPackageTaskArgs,
-};
-use sui_pg_db::{
-    Db, DbArgs,
-    temp::{TempDb, get_available_port},
-};
-use sui_storage::blob::{Blob, BlobEncoding};
-use sui_types::full_checkpoint_content::{Checkpoint, CheckpointData};
-use sui_types::{
-    base_types::{ObjectRef, SuiAddress},
-    crypto::AccountKeyPair,
-    effects::TransactionEffects,
-    error::ExecutionError,
-    messages_checkpoint::VerifiedCheckpoint,
-    transaction::Transaction,
-};
+use sui_indexer_alt::BootstrapGenesis;
+use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt::setup_indexer;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::AvailableRangeRequest;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_client::ConsistentServiceClient;
+use sui_indexer_alt_consistent_store::args::RpcArgs as ConsistentArgs;
+use sui_indexer_alt_consistent_store::args::TlsArgs as ConsistentTlsArgs;
+use sui_indexer_alt_consistent_store::config::ServiceConfig as ConsistentConfig;
+use sui_indexer_alt_consistent_store::start_service as start_consistent_store;
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
+use sui_indexer_alt_framework::postgres::schema::watermarks;
+use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
+use sui_indexer_alt_graphql::args::KvArgs as GraphQlKvArgs;
+use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_graphql::start_rpc as start_graphql;
+use sui_indexer_alt_jsonrpc::NodeArgs as JsonRpcNodeArgs;
+use sui_indexer_alt_jsonrpc::RpcArgs as JsonRpcArgs;
+use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
+use sui_indexer_alt_jsonrpc::start_rpc as start_jsonrpc;
+use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
+use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
+use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
+use sui_pg_db::Db;
+use sui_pg_db::DbArgs;
+use sui_pg_db::temp::TempDb;
+use sui_pg_db::temp::get_available_port;
+use sui_storage::blob::Blob;
+use sui_storage::blob::BlobEncoding;
+use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::AccountKeyPair;
+use sui_types::effects::TransactionEffects;
+use sui_types::error::ExecutionError;
+use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::messages_checkpoint::VerifiedCheckpoint;
+use sui_types::transaction::Transaction;
 use tempfile::TempDir;
-use tokio::{
-    time::{error::Elapsed, interval},
-    try_join,
-};
+use tokio::time::error::Elapsed;
+use tokio::time::interval;
+use tokio::try_join;
 use url::Url;
 
 pub mod coin_registry;

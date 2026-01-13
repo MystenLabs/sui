@@ -11,7 +11,7 @@ task 1, lines 6-14:
 Response: {
   "data": {
     "epoch0AfterCp0NoTx": {
-      "totalTransactions": null,
+      "totalTransactions": 1,
       "transactions": {
         "edges": []
       }
@@ -44,7 +44,7 @@ task 5, lines 26-34:
 Response: {
   "data": {
     "epoch0AfterCp0WithTx": {
-      "totalTransactions": null,
+      "totalTransactions": 3,
       "transactions": {
         "edges": [
           {
@@ -106,7 +106,7 @@ task 9, lines 46-54:
 Response: {
   "data": {
     "epoch0AfterCp1WithTx": {
-      "totalTransactions": null,
+      "totalTransactions": 5,
       "transactions": {
         "edges": [
           {
@@ -171,7 +171,7 @@ task 14, lines 68-82:
 Response: {
   "data": {
     "epoch1AfterCp2": {
-      "totalTransactions": null,
+      "totalTransactions": 2,
       "transactions": {
         "edges": [
           {
@@ -206,7 +206,7 @@ Response: {
       }
     },
     "epoch1AfterNonExistentCp5": {
-      "totalTransactions": null,
+      "totalTransactions": 2,
       "transactions": {
         "edges": []
       }

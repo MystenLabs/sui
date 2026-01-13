@@ -3,17 +3,19 @@
 
 use std::ops::RangeInclusive;
 
-use crate::{
-    api::{scalars::uint53::UInt53, types::checkpoint::CCheckpoint},
-    pagination::Page,
-};
 use anyhow::Context as _;
-use async_graphql::{Context, Error as RpcError, InputObject};
-use diesel::{prelude::QueryableByName, sql_types::BigInt};
+use async_graphql::Context;
+use async_graphql::Error as RpcError;
+use async_graphql::InputObject;
+use diesel::prelude::QueryableByName;
+use diesel::sql_types::BigInt;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_sql_macro::query;
 
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::checkpoint::CCheckpoint;
 use crate::intersect;
+use crate::pagination::Page;
 
 // Filter for checkpoint-based queries across checkpoints, packages, and epochs.
 #[derive(InputObject, Debug, Default, Clone)]
@@ -90,7 +92,6 @@ impl CheckpointFilter {
 ///         [------------[--------------------------]------------]
 ///                         filter.at_checkpoint
 /// ```
-///
 pub(crate) fn checkpoint_bounds(
     cp_after: Option<u64>,
     cp_at: Option<u64>,
@@ -131,7 +132,6 @@ pub(crate) fn checkpoint_bounds(
 ///
 /// pg_lo: The maximum of the cursor and the start of the checkpoint bound.
 /// pg_hi_inclusive: The minimum of the cursor and the end of the checkpoint bound.
-///
 pub(super) fn cp_unfiltered(cp_bounds: &RangeInclusive<u64>, page: &Page<CCheckpoint>) -> Vec<u64> {
     let cp_lo = *cp_bounds.start();
     let cp_hi = *cp_bounds.end();

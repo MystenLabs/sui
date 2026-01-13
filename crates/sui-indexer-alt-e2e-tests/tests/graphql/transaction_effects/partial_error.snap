@@ -1,0 +1,82 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-8:
+//# programmable --sender A --inputs 1
+//> SplitCoins(Gas, [Input(0)]);
+//> MergeCoins(Gas, [Result(0)])
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 10:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 12-31:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionEffects": {
+      "status": "SUCCESS",
+      "lamportVersion": 2,
+      "effectsDigest": "FiubPwB9XVPgZpXcZnCmjwSEvpu9Qk2AdrJspCoRGfqh",
+      "events": null
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot provide both 'first' and 'last' parameters for connection",
+      "locations": [
+        {
+          "line": 9,
+          "column": 5
+        }
+      ],
+      "path": [
+        "transactionEffects",
+        "events"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 4, lines 33-53:
+//# run-graphql
+Response: {
+  "data": {
+    "validEffects": {
+      "status": "SUCCESS",
+      "lamportVersion": 2
+    },
+    "partialErrorEffects": {
+      "status": "SUCCESS",
+      "objectChanges": null
+    }
+  },
+  "errors": [
+    {
+      "message": "Cannot provide both 'first' and 'last' parameters for connection",
+      "locations": [
+        {
+          "line": 11,
+          "column": 5
+        }
+      ],
+      "path": [
+        "partialErrorEffects",
+        "objectChanges"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}

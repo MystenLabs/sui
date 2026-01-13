@@ -32,7 +32,7 @@ use move_bytecode_verifier_meter::Scope;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
 };
-use move_package_alt::schema::ModeName;
+use move_package_alt::{package::package_loader::PackageLoader, schema::ModeName};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
@@ -999,7 +999,7 @@ impl SuiClientCommands {
                 let response = if let SuiClientCommandResult::TransactionBlock(ref tx) = result {
                     tx
                 } else {
-                    bail!("Failed to get the transaction response from the upgrade result.");
+                    return Ok(result);
                 };
 
                 let publish_data = update_publication(
@@ -3522,7 +3522,7 @@ pub async fn load_root_pkg_for_publish_upgrade(
     path: &Path,
 ) -> anyhow::Result<RootPackage<SuiFlavor>> {
     let env = find_environment(path, build_config.environment.clone(), wallet).await?;
-    Ok(RootPackage::<SuiFlavor>::load(path, env, build_config.mode_set()).await?)
+    Ok(build_config.package_loader(path, &env).load().await?)
 }
 
 async fn load_root_pkg_for_test_publish(
@@ -3536,14 +3536,12 @@ async fn load_root_pkg_for_test_publish(
     let pubfile_path =
         pubfile_path.unwrap_or_else(|| PathBuf::from(format!("Pub.{active_env}.toml")));
 
-    Ok(RootPackage::<SuiFlavor>::load_ephemeral(
-        package_path,
-        build_env,
-        chain_id,
-        pubfile_path,
-        modes,
+    Ok(
+        PackageLoader::new_ephemeral(package_path, build_env, chain_id, pubfile_path)
+            .modes(modes)
+            .load()
+            .await?,
     )
-    .await?)
 }
 
 /// Return the update publication data, without writing it to lockfile
@@ -3663,7 +3661,7 @@ async fn publish_command(
     let response = if let SuiClientCommandResult::TransactionBlock(ref tx) = result {
         tx
     } else {
-        bail!("Error")
+        return Ok(result);
     };
 
     let publish_data = update_publication(

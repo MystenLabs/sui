@@ -1,15 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{marker::PhantomData, ops};
+use std::marker::PhantomData;
+use std::ops;
 
-use diesel::{
-    QueryResult,
-    pg::Pg,
-    query_builder::{AstPass, QueryFragment, QueryId},
-    serialize::ToSql,
-    sql_types::{HasSqlType, Untyped},
-};
+use diesel::QueryResult;
+use diesel::pg::Pg;
+use diesel::query_builder::AstPass;
+use diesel::query_builder::QueryFragment;
+use diesel::query_builder::QueryId;
+use diesel::serialize::ToSql;
+use diesel::sql_types::HasSqlType;
+use diesel::sql_types::Untyped;
 
 /// A full SQL query constructed from snippets of raw SQL and bindings.
 ///
@@ -121,7 +123,8 @@ impl ops::AddAssign for Query<'_> {
 
 #[cfg(test)]
 mod tests {
-    use diesel::sql_types::{BigInt, Text};
+    use diesel::sql_types::BigInt;
+    use diesel::sql_types::Text;
 
     use super::*;
 

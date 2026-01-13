@@ -1,0 +1,52 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+task 1, lines 8-20:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4309200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 22-24:
+//# programmable --dev-inspect --inputs struct(@0,vector[],0,0,0)
+// Invalid, cannot specify inferred TxContext
+//> test::m::mut_id(Input(0));
+Error: Transaction Effects Status: ArityMismatch in command 0
+Execution Error: ArityMismatch in command 0
+
+task 3, lines 27-30:
+//# programmable --dev-inspect --inputs struct(@0,vector[],0,0,0)
+// Invalid, cannot specify inferred TxContext
+//> 0: test::m::owned(Input(0));
+//> test::m::mut_id(Result(0));
+Error: Transaction Effects Status: ArityMismatch in command 1
+Execution Error: ArityMismatch in command 1
+
+task 4, lines 32-34:
+//# programmable --dev-inspect --inputs struct(@0,vector[],0,0,0)
+// Invalid, cannot specify inferred TxContext
+//> test::m::owned_mut(Input(0), Input(0));
+Error: Transaction Effects Status: ArityMismatch in command 0
+Execution Error: ArityMismatch in command 0
+
+task 5, lines 36-39:
+//# programmable --dev-inspect --inputs struct(@0,vector[],0,0,0)
+// Invalid, cannot specify inferred TxContext
+//> 0: test::m::owned(Input(0));
+//> test::m::owned_mut(Result(0), Result(0));
+Error: Transaction Effects Status: ArityMismatch in command 1
+Execution Error: ArityMismatch in command 1
+
+task 6, lines 41-48:
+//# programmable --dev-inspect --inputs struct(@0,vector[],0,0,0) struct(@0,vector[],0,0,0) struct(@0,vector[],0,0,0)
+// Valid, owned TxContext usage is not inferred since it is impossible outside of dev inspect
+//> 0: test::m::owned(Input(0));
+//> 1: test::m::owned(Result(0));
+//> 2: test::m::owned(Input(1));
+//> test::m::owned_mut(Result(1));
+//> test::m::owned_mut(Result(2));
+//> test::m::owned_mut(Input(2));
+mutated: object(_)
+gas summary: computation_cost: 500000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0

@@ -1,25 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeSet,
-    sync::{Arc, Mutex},
-};
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::sync::Mutex;
 
-use async_graphql::{
-    Response, ServerError, ServerResult, ValidationResult, Variables,
-    extensions::{
-        Extension, ExtensionContext, ExtensionFactory, NextParseQuery, NextRequest, NextValidation,
-    },
-    parser::types::ExecutableDocument,
-    value,
-};
+use async_graphql::Response;
+use async_graphql::ServerError;
+use async_graphql::ServerResult;
+use async_graphql::ValidationResult;
+use async_graphql::Variables;
+use async_graphql::extensions::Extension;
+use async_graphql::extensions::ExtensionContext;
+use async_graphql::extensions::ExtensionFactory;
+use async_graphql::extensions::NextParseQuery;
+use async_graphql::extensions::NextRequest;
+use async_graphql::extensions::NextValidation;
+use async_graphql::parser::types::ExecutableDocument;
+use async_graphql::value;
 use headers::ContentLength;
 
-use crate::{metrics::RpcMetrics, pagination::PaginationConfig};
-
-use self::error::{Error, ErrorKind};
-use self::show_usage::ShowUsage;
+use crate::extensions::query_limits::error::Error;
+use crate::extensions::query_limits::error::ErrorKind;
+use crate::extensions::query_limits::show_usage::ShowUsage;
+use crate::metrics::RpcMetrics;
+use crate::pagination::PaginationConfig;
 
 mod chain;
 mod error;
@@ -214,13 +219,19 @@ impl Extension for QueryLimitsCheckerExt {
 mod tests {
     use std::collections::BTreeMap;
 
-    use async_graphql::{EmptySubscription, Object, Request, Schema, connection::Connection};
+    use async_graphql::EmptySubscription;
+    use async_graphql::Object;
+    use async_graphql::Request;
+    use async_graphql::Schema;
+    use async_graphql::connection::Connection;
     use async_graphql_value::ConstValue;
     use axum::http::HeaderValue;
-    use insta::{assert_json_snapshot, assert_snapshot};
+    use insta::assert_json_snapshot;
+    use insta::assert_snapshot;
     use serde_json::json;
 
-    use crate::{api::scalars::json::Json, pagination::PageLimits};
+    use crate::api::scalars::json::Json;
+    use crate::pagination::PageLimits;
 
     use super::*;
 

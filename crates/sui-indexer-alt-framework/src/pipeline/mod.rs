@@ -4,7 +4,8 @@
 use std::time::Duration;
 
 pub use processor::Processor;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::store::CommitterWatermark;
 

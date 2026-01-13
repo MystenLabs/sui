@@ -1,40 +1,42 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+
 use anyhow::Context;
-use fastcrypto::encoding::{Base64, Encoding};
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
 use prometheus::Registry;
 use reqwest::Client;
 use serde::Deserialize;
-use serde_json::{Value, json};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::path::PathBuf;
-use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
-use sui_indexer_alt_framework::{
-    IndexerArgs,
-    ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
-};
-use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
-    start_rpc as start_graphql,
-};
-use sui_indexer_alt_reader::{
-    consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs,
-    system_package_task::SystemPackageTaskArgs,
-};
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_pg_db::{
-    DbArgs,
-    temp::{TempDb, get_available_port},
-};
-use sui_test_transaction_builder::make_transfer_sui_transaction;
-use sui_types::gas_coin::GasCoin;
-
+use serde_json::Value;
+use serde_json::json;
 use sui_futures::service::Service;
-use url::Url;
-
+use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt::setup_indexer;
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
+use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
+use sui_indexer_alt_graphql::args::KvArgs as GraphQlKvArgs;
+use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_graphql::start_rpc as start_graphql;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
+use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
+use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
+use sui_pg_db::DbArgs;
+use sui_pg_db::temp::TempDb;
+use sui_pg_db::temp::get_available_port;
+use sui_test_transaction_builder::make_transfer_sui_transaction;
 use sui_types::base_types::SuiAddress;
-use test_cluster::{TestCluster, TestClusterBuilder};
+use sui_types::gas_coin::GasCoin;
+use test_cluster::TestCluster;
+use test_cluster::TestClusterBuilder;
+use url::Url;
 
 // Structs for parsing command results
 #[derive(Debug, Deserialize)]
@@ -590,7 +592,9 @@ async fn test_simulate_transaction_command_results() {
     // Command 1: get_object_value(Result(0)) -> u64 (should return 42)
     // Command 2: check_gas_coin(Gas) -> u64 (gas coin value)
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::{Argument, CallArg, Command};
+    use sui_types::transaction::Argument;
+    use sui_types::transaction::CallArg;
+    use sui_types::transaction::Command;
 
     let mut ptb = ProgrammableTransactionBuilder::new();
 
@@ -1172,4 +1176,115 @@ async fn test_simulate_transaction_with_gas_selection() {
         execute_result.pointer("/data/executeTransaction/errors"),
         Some(&serde_json::Value::Null)
     );
+}
+
+#[tokio::test]
+async fn test_simulate_transaction_effects_json() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    // Create a transfer transaction
+    let recipient = SuiAddress::random_for_testing_only();
+    let signed_tx =
+        make_transfer_sui_transaction(&validator_cluster.wallet, Some(recipient), Some(1_000_000))
+            .await;
+    let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
+                    effects {
+                        status
+                        effectsJson
+                    }
+                    error
+                }
+            }
+        "#,
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    // Use redactions to mask dynamic values that change between runs
+    // The `.**.field` syntax matches the field at any nesting level
+    insta::assert_json_snapshot!("simulate_transaction_effects_json", result.pointer("/data/simulateTransaction"), {
+        // Object IDs and addresses
+        ".**.objectId" => "[object_id]",
+        ".**.address" => "[address]",
+        // Digests
+        ".**.digest" => "[digest]",
+        ".**.transactionDigest" => "[digest]",
+        ".**.eventsDigest" => "[digest]",
+        ".**.inputDigest" => "[digest]",
+        ".**.outputDigest" => "[digest]",
+        // Dependencies array contains digest strings
+        ".effects.effectsJson.dependencies[]" => "[digest]",
+        // BCS values
+        ".**.bcs.value" => "[bcs]",
+        // Sort arrays that may have non-deterministic order
+        ".effects.effectsJson.changedObjects" => insta::sorted_redaction(),
+        ".effects.effectsJson.dependencies" => insta::sorted_redaction(),
+    });
+}
+
+#[tokio::test]
+async fn test_simulate_transaction_transaction_json() {
+    let validator_cluster = TestClusterBuilder::new().build().await;
+    let graphql_cluster = GraphQlTestCluster::new(&validator_cluster).await;
+
+    // Create a transfer transaction
+    let recipient = SuiAddress::random_for_testing_only();
+    let signed_tx =
+        make_transfer_sui_transaction(&validator_cluster.wallet, Some(recipient), Some(1_000_000))
+            .await;
+    let (tx_bytes, _signatures) = signed_tx.to_tx_bytes_and_signatures();
+
+    let result = graphql_cluster
+        .execute_graphql(
+            r#"
+            query($txData: JSON!) {
+                simulateTransaction(transaction: $txData) {
+                    effects {
+                        status
+                        transaction {
+                            transactionJson
+                        }
+                    }
+                    error
+                }
+            }
+        "#,
+            json!({
+                "txData": {
+                    "bcs": {
+                        "value": tx_bytes.encoded()
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("GraphQL request failed");
+
+    // Use redactions to mask dynamic values that change between runs
+    insta::assert_json_snapshot!("simulate_transaction_transaction_json", result.pointer("/data/simulateTransaction"), {
+        // Addresses and owners
+        ".**.sender" => "[sender]",
+        ".**.owner" => "[owner]",
+        ".**.objectId" => "[object_id]",
+        // Digests
+        ".**.digest" => "[digest]",
+        // BCS values
+        ".**.bcs.value" => "[bcs]",
+        // Pure values can contain dynamic data
+        ".**.pure" => "[pure]",
+    });
 }

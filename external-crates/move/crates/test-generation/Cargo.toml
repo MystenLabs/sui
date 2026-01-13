@@ -19,7 +19,6 @@ getrandom.workspace = true
 crossbeam-channel.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-once_cell.workspace = true
 
 move-bytecode-verifier.workspace = true
 move-core-types.workspace = true

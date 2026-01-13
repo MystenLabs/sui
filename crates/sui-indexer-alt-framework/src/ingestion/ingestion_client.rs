@@ -14,7 +14,9 @@ use sui_futures::future::with_slow_future_monitor;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
 use sui_storage::blob::Blob;
-use tracing::{debug, error, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::warn;
 use url::Url;
 
 use crate::ingestion::Error as IngestionError;
@@ -24,7 +26,8 @@ use crate::ingestion::local_client::LocalIngestionClient;
 use crate::ingestion::remote_client::RemoteIngestionClient;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IngestionMetrics;
-use crate::types::full_checkpoint_content::{Checkpoint, CheckpointData};
+use crate::types::full_checkpoint_content::Checkpoint;
+use crate::types::full_checkpoint_content::CheckpointData;
 
 /// Wait at most this long between retries for transient errors.
 const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
@@ -77,7 +80,7 @@ pub enum FetchError {
         #[source]
         error: anyhow::Error,
     },
-    #[error("Permenent error in {reason}: {error}")]
+    #[error("Permanent error in {reason}: {error}")]
     Permanent {
         reason: &'static str,
         #[source]

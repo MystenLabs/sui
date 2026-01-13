@@ -308,50 +308,7 @@ fn command<Mode: ExecutionMode>(
                 arguments: largs,
             } = *lmc;
             let arg_locs = locations(context, 0, largs)?;
-            let tx_context_kind = tx_context_kind(&function);
-            let parameter_tys = match tx_context_kind {
-                TxContextKind::None => &function.signature.parameters,
-                TxContextKind::Mutable | TxContextKind::Immutable => {
-                    let Some(n_) = function.signature.parameters.len().checked_sub(1) else {
-                        invariant_violation!(
-                            "A function with a TxContext should have at least one parameter"
-                        )
-                    };
-                    &function.signature.parameters[0..n_]
-                }
-            };
-            let num_args = arg_locs.len();
-            let num_parameters = parameter_tys.len();
-            if num_args != num_parameters {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::ArityMismatch,
-                    format!(
-                        "Expected {} argument{} calling function '{}::{}', but found {}",
-                        num_parameters,
-                        if num_parameters == 1 { "" } else { "s" },
-                        function.storage_id,
-                        function.name,
-                        num_args,
-                    ),
-                ));
-            }
-            let mut args = arguments(env, context, 0, arg_locs, parameter_tys.iter().cloned())?;
-            match tx_context_kind {
-                TxContextKind::None => (),
-                TxContextKind::Mutable | TxContextKind::Immutable => {
-                    let is_mut = match tx_context_kind {
-                        TxContextKind::Mutable => true,
-                        TxContextKind::Immutable => false,
-                        TxContextKind::None => unreachable!(),
-                    };
-                    // TODO this is out of bounds of the original PTB arguments... what do we
-                    // do here?
-                    let idx = args.len() as u16;
-                    let arg__ = T::Argument__::Borrow(is_mut, T::Location::TxContext);
-                    let ty = Type::Reference(is_mut, Rc::new(env.tx_context_type()?));
-                    args.push(sp(idx, (arg__, ty)));
-                }
-            }
+            let args = move_call_arguments(env, context, &function, arg_locs)?;
             let result = function.signature.return_.clone();
             (
                 T::Command__::MoveCall(Box::new(T::MoveCall {
@@ -481,11 +438,100 @@ fn command<Mode: ExecutionMode>(
     })
 }
 
-fn tx_context_kind(function: &L::LoadedFunction) -> TxContextKind {
-    match function.signature.parameters.last() {
-        Some(ty) => ty.is_tx_context(),
-        None => TxContextKind::None,
+fn move_call_parameters<'a>(
+    env: &Env,
+    function: &'a L::LoadedFunction,
+) -> Vec<(&'a Type, TxContextKind)> {
+    if env.protocol_config.flexible_tx_context_positions() {
+        function
+            .signature
+            .parameters
+            .iter()
+            .map(|ty| (ty, ty.is_tx_context()))
+            .collect()
+    } else {
+        let mut kinds = function
+            .signature
+            .parameters
+            .iter()
+            .map(|ty| (ty, TxContextKind::None))
+            .collect::<Vec<_>>();
+        if let Some((ty, kind)) = kinds.last_mut() {
+            *kind = ty.is_tx_context();
+        }
+        kinds
     }
+}
+
+fn move_call_arguments(
+    env: &Env,
+    context: &mut Context,
+    function: &L::LoadedFunction,
+    args: Vec<SplatLocation>,
+) -> Result<Vec<T::Argument>, ExecutionError> {
+    let params = move_call_parameters(env, function);
+    assert_invariant!(
+        params.len() == function.signature.parameters.len(),
+        "Generated parameter types does not match the function signature"
+    );
+    // check arity
+    let num_tx_contexts = params
+        .iter()
+        .filter(|(_, k)| matches!(k, TxContextKind::Mutable | TxContextKind::Immutable))
+        .count();
+    let num_user_args = args.len();
+    let Some(num_args) = num_user_args.checked_add(num_tx_contexts) else {
+        invariant_violation!("usize overflow when calculating number of arguments");
+    };
+    let num_parameters = params.len();
+    if num_args != num_parameters {
+        return Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::ArityMismatch,
+            format!(
+                "Expected {} argument{} calling function '{}::{}', but found {}",
+                num_parameters,
+                if num_parameters == 1 { "" } else { "s" },
+                function.storage_id,
+                function.name,
+                num_args,
+            ),
+        ));
+    }
+    // construct arguments, injecting tx context args as needed
+    let mut args = args.into_iter().enumerate();
+    let res = params
+        .into_iter()
+        .enumerate()
+        .map(|(param_idx, (expected_ty, tx_context_kind))| {
+            Ok(match tx_context_kind {
+                TxContextKind::None => {
+                    let Some((arg_idx, location)) = args.next() else {
+                        invariant_violation!("arguments are empty but arity was already checked");
+                    };
+                    argument(env, context, arg_idx, location, expected_ty.clone())?
+                }
+                TxContextKind::Mutable | TxContextKind::Immutable => {
+                    let is_mut = match tx_context_kind {
+                        TxContextKind::Mutable => true,
+                        TxContextKind::Immutable => false,
+                        TxContextKind::None => unreachable!(),
+                    };
+                    // TODO this might overlap or be  out of bounds of the original PTB arguments...
+                    // what do we do here?
+                    let idx = param_idx as u16;
+                    let arg__ = T::Argument__::Borrow(is_mut, T::Location::TxContext);
+                    let ty = Type::Reference(is_mut, Rc::new(env.tx_context_type()?));
+                    sp(idx, (arg__, ty))
+                }
+            })
+        })
+        .collect::<Result<Vec<_>, ExecutionError>>()?;
+
+    assert_invariant!(
+        args.next().is_none(),
+        "some arguments went unused but arity was already checked"
+    );
+    Ok(res)
 }
 
 fn one_location(

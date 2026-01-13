@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{FullObjectID, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
@@ -1816,6 +1817,13 @@ async fn test_delete_before_two_mutations() {
 
 #[tokio::test]
 async fn test_object_lock_conflict() {
+    // This test requires preconsensus locking to be enabled because it tests ObjectLockConflict
+    // errors which only happen with preconsensus locking.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config
+    });
+
     let mut user_1 = TestRunner::new("shared_object_deletion").await;
     let effects = user_1.create_shared_object().await;
 

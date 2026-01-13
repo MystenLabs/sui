@@ -2,15 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future;
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use sui_json_rpc_types::{DynamicFieldInfo as DynamicFieldInfoResponse, Page, SuiObjectResponse};
+use jsonrpsee::core::RpcResult;
+use jsonrpsee::proc_macros::rpc;
+use sui_json_rpc_types::DynamicFieldInfo as DynamicFieldInfoResponse;
+use sui_json_rpc_types::Page;
+use sui_json_rpc_types::SuiObjectResponse;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::{base_types::ObjectID, dynamic_field::DynamicFieldName};
+use sui_types::base_types::ObjectID;
+use sui_types::dynamic_field::DynamicFieldName;
 
-use crate::{api::objects, context::Context, error::InternalContext};
-
-use super::rpc_module::RpcModule;
+use crate::api::objects;
+use crate::api::rpc_module::RpcModule;
+use crate::context::Context;
+use crate::error::InternalContext;
 
 mod error;
 mod response;

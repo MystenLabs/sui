@@ -2,10 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    sync::{LazyLock, Mutex},
-};
+use std::collections::BTreeMap;
 
 use derive_where::derive_where;
 use sha2::{Digest as _, Sha256};
@@ -15,11 +12,10 @@ use tracing::debug;
 use super::manifest::Manifest;
 use super::package_lock::PackageSystemLock;
 use super::paths::PackagePath;
-use crate::errors::FileHandle;
 use crate::{
     compatibility::legacy::LegacyData,
     dependency::Pinned,
-    package::manifest::ManifestError,
+    package::{manifest::ManifestError, package_loader::PackageLoader},
     schema::{
         CachedPackageInfo, DefaultDependency, ManifestDependencyInfo, ParsedManifest, Publication,
     },
@@ -32,9 +28,7 @@ use crate::{
     package::manifest::Digest,
     schema::{Environment, OriginalID, PackageMetadata, PackageName, PublishedID},
 };
-
-// TODO: is this the right way to handle this?
-static DUMMY_ADDRESSES: LazyLock<Mutex<u16>> = LazyLock::new(|| Mutex::new(0x1000));
+use crate::{errors::FileHandle, package::package_loader::PackageConfig};
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
@@ -82,9 +76,10 @@ impl<F: MoveFlavor> Package<F> {
         dep: Pinned,
         env: &Environment,
         mtx: &PackageSystemLock,
+        config: &PackageConfig,
     ) -> PackageResult<Self> {
         debug!("loading package {:?}", dep);
-        let path = FetchedDependency::fetch(&dep).await?;
+        let path = FetchedDependency::fetch(&dep, config.allow_dirty).await?;
 
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
@@ -110,7 +105,6 @@ impl<F: MoveFlavor> Package<F> {
                 .as_ref()
                 .and_then(|legacy| legacy.publication::<F>(env))
         });
-        let dummy_addr = create_dummy_addr();
 
         // TODO: try to gather dependencies from the modern lockfile
         //   - if it fails (no lockfile / out of date lockfile), compute them from the manifest
@@ -130,6 +124,8 @@ impl<F: MoveFlavor> Package<F> {
 
         // compute the digest (TODO: this should only compute over the environment specific data)
         let digest = Self::compute_digest(&deps);
+
+        let dummy_addr = OriginalID::from(dep.unique_hash() as u16);
 
         let result = Self {
             env: env.name().clone(),
@@ -343,11 +339,17 @@ pub async fn cache_package<F: MoveFlavor>(
         CombinedDependency::from_default(toml_handle, package, env.name().clone(), default_dep);
 
     // pin
-    let root = Pinned::Root(dummy_path);
+    let root = Pinned::Root(dummy_path.clone());
     let deps = PinnedDependencyInfo::pin::<F>(&root, vec![combined], env.id()).await?;
 
     // load
-    let package = Package::<F>::load(deps[0].as_ref().clone(), env, &mtx).await?;
+    let package = Package::<F>::load(
+        deps[0].as_ref().clone(),
+        env,
+        &mtx,
+        PackageLoader::new(dummy_path.path(), env.clone()).config(),
+    )
+    .await?;
 
     // summarize
     Ok(CachedPackageInfo {
@@ -355,14 +357,6 @@ pub async fn cache_package<F: MoveFlavor>(
         addresses: package.publication().map(|p| p.addresses.clone()),
         chain_id: env.id.clone(),
     })
-}
-
-/// Return a fresh OriginalID
-fn create_dummy_addr() -> OriginalID {
-    let lock = DUMMY_ADDRESSES.lock();
-    let mut dummy_addr = lock.unwrap();
-    *dummy_addr += 1;
-    (*dummy_addr).into()
 }
 
 /// Check that `env` is defined in `manifest`, returning an error if it isn't
@@ -609,5 +603,21 @@ mod tests {
         assert_eq!(published_at, PublishedID::from(2));
         assert_eq!(original_id, OriginalID::from(1));
         assert_eq!(chain_id, DEFAULT_ENV_ID);
+    }
+
+    #[test(tokio::test)]
+    async fn test_dummy_addr_determinism() {
+        let scenario = TestPackageGraph::new(["root", "a", "b"])
+            .add_deps([("root", "a"), ("root", "b")])
+            .build();
+
+        let first_load = scenario.root_package("root").await;
+        let first_load_addresses = first_load.package_info().named_addresses().unwrap();
+
+        drop(first_load);
+        let second_load = scenario.root_package("root").await;
+        let second_load_addresses = second_load.package_info().named_addresses().unwrap();
+
+        assert_eq!(first_load_addresses, second_load_addresses);
     }
 }

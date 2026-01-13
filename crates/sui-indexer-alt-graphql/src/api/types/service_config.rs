@@ -1,15 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Context, Object, Result};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::Result;
 
-use crate::{
-    api::types::available_range::{AvailableRange, AvailableRangeKey, Error},
-    config::Limits,
-    error::RpcError,
-    pagination::{PaginationConfig, is_connection},
-    scope::Scope,
-};
+use crate::api::types::available_range::AvailableRange;
+use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::available_range::Error;
+use crate::config::Limits;
+use crate::error::RpcError;
+use crate::pagination::PaginationConfig;
+use crate::pagination::is_connection;
+use crate::scope::Scope;
 
 pub(crate) struct ServiceConfig {
     /// Retention queries will use this scope if it is populated, instead of creating a fresh scope from

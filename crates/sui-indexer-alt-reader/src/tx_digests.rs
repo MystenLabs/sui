@@ -1,13 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 
 use async_graphql::dataloader::Loader;
-use diesel::{ExpressionMethods, QueryDsl};
-use sui_indexer_alt_schema::{schema::tx_digests, transactions::StoredTxDigest};
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
+use sui_indexer_alt_schema::schema::tx_digests;
+use sui_indexer_alt_schema::transactions::StoredTxDigest;
 
-use crate::{error::Error, pg_reader::PgReader};
+use crate::error::Error;
+use crate::pg_reader::PgReader;
 
 /// Key for fetching a transaction's digest by its sequence number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

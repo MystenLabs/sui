@@ -1,31 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
-use anyhow::{Result, anyhow, bail, ensure};
+use anyhow::Result;
+use anyhow::anyhow;
+use anyhow::bail;
+use anyhow::ensure;
+use async_trait::async_trait;
 use diesel::prelude::QueryableByName;
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    FieldCount,
-    pipeline::Processor,
-    postgres::{Connection, handler::Handler},
-    types::{
-        TypeTag,
-        base_types::{ObjectID, SuiAddress},
-        full_checkpoint_content::Checkpoint,
-        object::{Object, Owner},
-    },
-};
-use sui_indexer_alt_schema::{
-    objects::{
-        StoredCoinBalanceBucket, StoredCoinBalanceBucketDeletionReference, StoredCoinOwnerKind,
-    },
-    schema::{coin_balance_buckets, coin_balance_buckets_deletion_reference},
-};
+use sui_indexer_alt_framework::FieldCount;
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::handler::Handler;
+use sui_indexer_alt_framework::types::TypeTag;
+use sui_indexer_alt_framework::types::base_types::ObjectID;
+use sui_indexer_alt_framework::types::base_types::SuiAddress;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_framework::types::object::Object;
+use sui_indexer_alt_framework::types::object::Owner;
+use sui_indexer_alt_schema::objects::StoredCoinBalanceBucket;
+use sui_indexer_alt_schema::objects::StoredCoinBalanceBucketDeletionReference;
+use sui_indexer_alt_schema::objects::StoredCoinOwnerKind;
+use sui_indexer_alt_schema::schema::coin_balance_buckets;
+use sui_indexer_alt_schema::schema::coin_balance_buckets_deletion_reference;
 
-use super::checkpoint_input_objects;
-use async_trait::async_trait;
+use crate::handlers::checkpoint_input_objects;
 
 /// This handler is used to track the balance buckets of address-owned coins.
 /// The balance bucket is calculated using log10 of the coin balance.
@@ -354,20 +356,22 @@ pub(crate) fn get_coin_balance_bucket(coin: &Object) -> anyhow::Result<i16> {
 mod tests {
     use std::str::FromStr;
 
-    use super::*;
     use diesel::QueryDsl;
-    use sui_indexer_alt_framework::{
-        Indexer,
-        types::{
-            base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, dbg_addr},
-            digests::TransactionDigest,
-            gas_coin::GAS,
-            object::{MoveObject, Object},
-            test_checkpoint_data_builder::TestCheckpointBuilder,
-        },
-    };
+    use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_framework::types::base_types::MoveObjectType;
+    use sui_indexer_alt_framework::types::base_types::ObjectID;
+    use sui_indexer_alt_framework::types::base_types::SequenceNumber;
+    use sui_indexer_alt_framework::types::base_types::SuiAddress;
+    use sui_indexer_alt_framework::types::base_types::dbg_addr;
+    use sui_indexer_alt_framework::types::digests::TransactionDigest;
+    use sui_indexer_alt_framework::types::gas_coin::GAS;
+    use sui_indexer_alt_framework::types::object::MoveObject;
+    use sui_indexer_alt_framework::types::object::Object;
+    use sui_indexer_alt_framework::types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use sui_indexer_alt_schema::MIGRATIONS;
     use sui_protocol_config::ProtocolConfig;
+
+    use super::*;
 
     // Get all balance buckets from the database, sorted by object_id and cp_sequence_number.
     async fn get_all_balance_buckets(conn: &mut Connection<'_>) -> Vec<StoredCoinBalanceBucket> {

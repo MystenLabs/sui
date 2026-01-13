@@ -18,6 +18,7 @@
 
 fragment S on MoveStruct {
   name
+  fullyQualifiedName
   abilities
   typeParameters {
     constraints
@@ -62,6 +63,7 @@ module P1::M {
 
 fragment S on MoveStruct {
   name
+  fullyQualifiedName
   abilities
   typeParameters {
     constraints
@@ -102,5 +104,6 @@ fragment S on MoveStructConnection {
   }
   nodes {
     name
+    fullyQualifiedName
   }
 }

@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use proc_macro::TokenStream;
+
 use quote::quote;
-use syn::{DeriveInput, parse_macro_input};
+use syn::DeriveInput;
+use syn::parse_macro_input;
 
 #[proc_macro_derive(FieldCount)]
 pub fn field_count_derive(input: TokenStream) -> TokenStream {

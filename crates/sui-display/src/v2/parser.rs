@@ -1329,7 +1329,13 @@ mod tests {
 
     use crate::v2::meter::Limits;
 
-    use super::{Accessor as A, Chain as C, Expr as E, Literal as L, Parser, Strand as S, *};
+    use super::Accessor as A;
+    use super::Chain as C;
+    use super::Expr as E;
+    use super::Literal as L;
+    use super::Parser;
+    use super::Strand as S;
+    use super::*;
 
     fn strands(src: &str) -> String {
         let limits = Limits::default();

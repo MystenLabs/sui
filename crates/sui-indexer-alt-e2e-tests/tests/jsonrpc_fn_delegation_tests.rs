@@ -1,24 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use anyhow::Context;
 use prometheus::Registry;
 use reqwest::Client;
-use serde_json::{Value, json};
+use serde_json::Value;
+use serde_json::json;
 use sui_futures::service::Service;
-use sui_indexer_alt_jsonrpc::{
-    NodeArgs, RpcArgs, args::SystemPackageTaskArgs, config::RpcConfig, start_rpc,
-};
+use sui_indexer_alt_jsonrpc::NodeArgs;
+use sui_indexer_alt_jsonrpc::RpcArgs;
+use sui_indexer_alt_jsonrpc::args::SystemPackageTaskArgs;
+use sui_indexer_alt_jsonrpc::config::RpcConfig;
+use sui_indexer_alt_jsonrpc::start_rpc;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_macros::sim_test;
-use sui_pg_db::{DbArgs, temp::get_available_port};
+use sui_pg_db::DbArgs;
+use sui_pg_db::temp::get_available_port;
 use sui_swarm_config::genesis_config::AccountConfig;
-use sui_test_transaction_builder::{make_publish_transaction, make_staking_transaction};
-use sui_types::{base_types::SuiAddress, transaction::TransactionDataAPI};
-use test_cluster::{TestCluster, TestClusterBuilder};
+use sui_test_transaction_builder::make_publish_transaction;
+use sui_test_transaction_builder::make_staking_transaction;
+use sui_types::base_types::SuiAddress;
+use sui_types::transaction::TransactionDataAPI;
+use test_cluster::TestCluster;
+use test_cluster::TestClusterBuilder;
 use url::Url;
 
 struct FnDelegationTestCluster {

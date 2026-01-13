@@ -4,9 +4,7 @@
 
 //! Provides pragmas and properties of the specification language.
 
-use std::collections::BTreeMap;
-
-use once_cell::sync::Lazy;
+use std::{collections::BTreeMap, sync::LazyLock};
 
 /// Pragma indicating whether verification should be performed for a function.
 pub const VERIFY_PRAGMA: &str = "verify";
@@ -152,8 +150,8 @@ pub const INTRINSIC_FUN_MAP_BORROW: &str = "map_borrow";
 pub const INTRINSIC_FUN_MAP_BORROW_MUT: &str = "map_borrow_mut";
 
 /// All intrinsic functions associated with the map type
-pub static INTRINSIC_TYPE_MAP_ASSOC_FUNCTIONS: Lazy<BTreeMap<&'static str, bool>> =
-    Lazy::new(|| {
+pub static INTRINSIC_TYPE_MAP_ASSOC_FUNCTIONS: LazyLock<BTreeMap<&'static str, bool>> =
+    LazyLock::new(|| {
         BTreeMap::from([
             (INTRINSIC_FUN_MAP_NEW, true),
             (INTRINSIC_FUN_MAP_SPEC_NEW, false),
