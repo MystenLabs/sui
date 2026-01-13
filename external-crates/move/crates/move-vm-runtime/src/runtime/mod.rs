@@ -157,7 +157,7 @@ impl MoveRuntime {
                     );
                 }
 
-                if !(link_context == virtual_tables.link_context) {
+                if !(link_context == *virtual_tables.link_context) {
                     return Err(
                         move_binary_format::errors::PartialVMError::new(
                             StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
