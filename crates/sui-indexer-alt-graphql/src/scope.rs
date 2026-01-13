@@ -85,6 +85,31 @@ impl Scope {
         })
     }
 
+    /// Create a scope instance for tests with no package data.
+    #[cfg(test)]
+    pub(crate) fn for_tests() -> Self {
+        #[derive(Clone)]
+        struct EmptyPackageStore;
+
+        #[async_trait]
+        impl PackageStore for EmptyPackageStore {
+            async fn fetch(
+                &self,
+                id: AccountAddress,
+            ) -> Result<Arc<Package>, PackageResolverError> {
+                Err(PackageResolverError::PackageNotFound(id))
+            }
+        }
+
+        Self {
+            checkpoint_viewed_at: Some(0),
+            root_version: None,
+            execution_objects: Arc::new(BTreeMap::new()),
+            package_store: Arc::new(EmptyPackageStore),
+            resolver_limits: Limits::default().package_resolver(),
+        }
+    }
+
     /// Create a nested scope pinned to a past checkpoint. Returns `None` if the checkpoint is in
     /// the future, or if the current scope is in execution context (no checkpoint is set).
     pub(crate) fn with_checkpoint_viewed_at(&self, checkpoint_viewed_at: u64) -> Option<Self> {

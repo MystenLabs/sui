@@ -327,6 +327,24 @@ type BalanceEdge {
 }
 
 """
+Input for withdrawing funds from an accumulator.
+"""
+type BalanceWithdraw {
+	"""
+	How much to withdraw from the accumulator.
+	"""
+	reservation: WithdrawalReservation
+	"""
+	The type of the funds accumulator to withdraw from (e.g. `0x2::balance::Balance<0x2::sui::SUI>`).
+	"""
+	type: MoveType
+	"""
+	The account to withdraw funds from.
+	"""
+	withdrawFrom: WithdrawFrom
+}
+
+"""
 String containing Base64-encoded binary data.
 """
 scalar Base64
@@ -3979,7 +3997,7 @@ input TransactionFilter {
 """
 Input argument to a Programmable Transaction Block (PTB) command.
 """
-union TransactionInput = Pure | OwnedOrImmutable | SharedInput | Receiving
+union TransactionInput = Pure | OwnedOrImmutable | SharedInput | Receiving | BalanceWithdraw
 
 type TransactionInputConnection {
 	"""
@@ -4402,6 +4420,29 @@ input VersionFilter {
 	"""
 	beforeVersion: UInt53
 }
+
+"""
+The account to withdraw funds from.
+"""
+enum WithdrawFrom {
+	"""
+	The funds are withdrawn from the transaction sender's account.
+	"""
+	SENDER
+	"""
+	The funds are withdrawn from the sponsor's account.
+	"""
+	SPONSOR
+}
+
+type WithdrawMaxAmountU64 {
+	amount: BigInt
+}
+
+"""
+Reservation details for a withdrawal.
+"""
+union WithdrawalReservation = WithdrawMaxAmountU64
 
 """
 System transaction for writing the pre-computed storage cost for accumulator objects.
