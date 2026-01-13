@@ -24,7 +24,7 @@ Each `MarginManager` is associated with a specific DeepBook pool and can borrow 
 Following are the different public functions that the `MarginManager` exposes.
 
 <details>
-<summary>Create a MarginManager</summary>
+<summary>Create a `MarginManager`</summary>
 
 The `new()` function creates and shares a `MarginManager` in one transaction. It validates that margin trading is enabled for the specified pool.
 
@@ -40,7 +40,7 @@ The `new()` function creates and shares a `MarginManager` in one transaction. It
 </details>
 
 <details>
-<summary>Create a MarginManager with initializer</summary>
+<summary>Create a `MarginManager` with initializer</summary>
 
 The `new_with_initializer()` function creates a `MarginManager` and returns it along with an initializer hot potato. The initializer ensures the margin manager is properly shared after creation using the `share()` function.
 
@@ -221,7 +221,7 @@ Emitted when collateral is withdrawn from a margin manager.
 </details>
 
 <details>
-<summary>LoanBorrowedEvent</summary>
+<summary>`LoanBorrowedEvent`</summary>
 
 Emitted when assets are borrowed from a margin pool.
 
@@ -236,7 +236,7 @@ Emitted when assets are borrowed from a margin pool.
 </details>
 
 <details>
-<summary>LoanRepaidEvent</summary>
+<summary>`LoanRepaidEvent`</summary>
 
 Emitted when borrowed assets are repaid.
 
@@ -251,7 +251,7 @@ Emitted when borrowed assets are repaid.
 </details>
 
 <details>
-<summary>LiquidationEvent</summary>
+<summary>`LiquidationEvent`</summary>
 
 Emitted when a margin manager is liquidated.
 
