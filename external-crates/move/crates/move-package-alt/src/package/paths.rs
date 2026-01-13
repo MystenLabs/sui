@@ -293,19 +293,6 @@ impl OutputPath {
             .1
     }
 
-    /// Read the contents of the pubfile from the output directory
-    #[cfg(test)]
-    pub async fn dump_pubfile<F: MoveFlavor>(
-        &self,
-        mtx: &PackageSystemLock,
-    ) -> ParsedPublishedFile<F> {
-        PackagePath(self.clone())
-            .read_pubfile(mtx)
-            .unwrap()
-            .unwrap()
-            .1
-    }
-
     fn manifest_path(&self) -> PathBuf {
         self.path().join("Move.toml")
     }

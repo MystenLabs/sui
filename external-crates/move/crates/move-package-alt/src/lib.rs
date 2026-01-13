@@ -6,8 +6,6 @@
 //!
 //! TODO: major modules, etc
 
-#![allow(unused)]
-
 mod compatibility;
 mod dependency;
 mod errors;

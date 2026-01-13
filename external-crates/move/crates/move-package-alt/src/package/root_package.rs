@@ -10,10 +10,10 @@ use tracing::debug;
 use super::paths::{EphemeralPubfilePath, OutputPath, PackagePath};
 use super::{EnvironmentID, manifest::Manifest};
 use crate::graph::PackageInfo;
-use crate::package::package_loader::{LoadType, PackageConfig, PackageLoader};
+use crate::package::package_loader::{LoadType, PackageConfig};
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{
-    Environment, EphemeralDependencyInfo, LocalPub, ModeName, PackageID, ParsedEphemeralPubs,
+    Environment, EphemeralDependencyInfo, LocalPub, PackageID, ParsedEphemeralPubs,
     ParsedPublishedFile, Publication, RenderToml,
 };
 use crate::{
@@ -70,36 +70,6 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         }
 
         Ok(environments)
-    }
-
-    /// Load the root package for `env` using the "normal" path - we first try to load from the
-    /// lockfiles; if the digests don't match then we repin using the manifests. Note that it does
-    /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
-    ///
-    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
-    pub(crate) async fn load(
-        path: impl AsRef<Path>,
-        env: Environment,
-        modes: Vec<ModeName>,
-    ) -> PackageResult<Self> {
-        PackageLoader::new(path, env).modes(modes).load().await
-    }
-
-    /// Loads the root package from path and builds a dependency graph from the manifests.
-    /// This forcefully re-pins all dependencies even if the manifest digests match. Note that it
-    /// does not write to the lockfile; you should call [Self::save_to_disk] to save the results.
-    ///
-    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
-    pub(crate) async fn load_force_repin(
-        path: impl AsRef<Path>,
-        env: Environment,
-        modes: Vec<ModeName>,
-    ) -> PackageResult<Self> {
-        PackageLoader::new(path, env)
-            .modes(modes)
-            .force_repin(true)
-            .load()
-            .await
     }
 
     /// The metadata for the root package in [PackageInfo] form
@@ -414,6 +384,7 @@ mod tests {
 
     use super::*;
     use crate::{
+        PackageLoader,
         flavor::{
             Vanilla,
             vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME},
@@ -496,9 +467,11 @@ pkg_b = { local = "../pkg_b" }"#,
 
         for name in names {
             let pkg_path = root_path.join("packages").join(name);
-            let package = RootPackage::<Vanilla>::load(&pkg_path, env.clone(), vec![])
+            let package = PackageLoader::new(&pkg_path, env.clone())
+                .load::<Vanilla>()
                 .await
                 .unwrap();
+
             assert_eq!(
                 &&package.name().to_string(),
                 name,
@@ -520,7 +493,8 @@ pkg_b = { local = "../pkg_b" }"#,
         );
 
         // Test loading root package with check for environment existing in manifest
-        let root = RootPackage::<Vanilla>::load(&pkg_path, env, vec![])
+        let root = PackageLoader::new(&pkg_path, env)
+            .load::<Vanilla>()
             .await
             .unwrap();
 
@@ -544,7 +518,8 @@ pkg_b = { local = "../pkg_b" }"#,
         let environment =
             Environment::new(DEFAULT_ENV_NAME.to_string(), DEFAULT_ENV_ID.to_string());
 
-        let load_err = RootPackage::<Vanilla>::load(&project.root(), environment, vec![])
+        let load_err = PackageLoader::new(&project.root(), environment)
+            .load::<Vanilla>()
             .await
             .unwrap_err();
 
@@ -565,11 +540,11 @@ pkg_b = { local = "../pkg_b" }"#,
         let path = root_path.join("graph");
         // should fail as devnet does not exist in the manifest
         assert!(
-            RootPackage::<Vanilla>::load(
+            PackageLoader::new(
                 &path,
                 Environment::new("devnet".to_string(), "abcd1234".to_string()),
-                vec![]
             )
+            .load::<Vanilla>()
             .await
             .is_err()
         );
@@ -587,13 +562,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_deps([("a", "b")])
             .build();
 
-        RootPackage::<Vanilla>::load(
-            scenario.path_for("a"),
-            Vanilla::default_environment(),
-            vec![],
-        )
-        .await
-        .unwrap_err();
+        PackageLoader::new(scenario.path_for("a"), Vanilla::default_environment())
+            .load::<Vanilla>()
+            .await
+            .unwrap_err();
     }
 
     /// This gives a snapshot of a generated lockfile
@@ -604,7 +576,8 @@ pkg_b = { local = "../pkg_b" }"#,
             .build();
 
         let env = Vanilla::default_environment();
-        let mut root = RootPackage::<Vanilla>::load(scenario.path_for("example"), env, vec![])
+        let mut root = PackageLoader::new(scenario.path_for("example"), env)
+            .load::<Vanilla>()
             .await
             .unwrap();
 
@@ -666,10 +639,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_git_dep("root", &repo, "a", "branch-name", |dep| dep)
             .build();
 
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
 
         root_pkg.save_lockfile_to_disk().unwrap();
 
@@ -688,10 +661,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_git_dep("root", &repo, "a", commit.short_sha(), |dep| dep)
             .build();
 
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
 
         root_pkg.save_lockfile_to_disk().unwrap();
 
@@ -713,10 +686,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .build();
 
         // load the root package and save the lockfile
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
         drop(root_pkg); // release the fs lock
 
@@ -727,10 +700,10 @@ pkg_b = { local = "../pkg_b" }"#,
         commit2.branch("branch-name").await;
 
         // reload the root package and save the lockfile again
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
 
         // sha should still be for commit 1
@@ -752,10 +725,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .build();
 
         // load the root package and save the lockfile
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
         drop(root_pkg); // release FS lock
 
@@ -766,10 +739,10 @@ pkg_b = { local = "../pkg_b" }"#,
         commit2.branch("branch-name").await;
 
         // reload the root package with force repinning and save the lockfile again
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
 
         // since we repinned, sha should be for commit 2
@@ -792,10 +765,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .build();
 
         // load the root package and save the lockfile
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
         drop(root_pkg); // release FS lock
 
@@ -840,10 +813,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .build();
 
         // load the root package and save the lockfile
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
         drop(root_pkg); // release package lock
 
@@ -1582,13 +1555,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_dep("a", "c2", |dep| dep.set_override().modes(["test"]))
             .build();
 
-        let root = RootPackage::<Vanilla>::load(
-            scenario.path_for("root"),
-            Vanilla::default_environment(),
-            vec![],
-        )
-        .await
-        .unwrap();
+        let root = PackageLoader::new(scenario.path_for("root"), Vanilla::default_environment())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
 
         let mut package_names: Vec<_> = root
             .packages()
@@ -1618,13 +1588,11 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_dep("a", "c2", |dep| dep.set_override().modes(["test"]))
             .build();
 
-        let root = RootPackage::<Vanilla>::load(
-            scenario.path_for("root"),
-            Vanilla::default_environment(),
-            vec!["test".to_string()],
-        )
-        .await
-        .unwrap();
+        let root = PackageLoader::new(scenario.path_for("root"), Vanilla::default_environment())
+            .modes(vec!["test".to_string()])
+            .load::<Vanilla>()
+            .await
+            .unwrap();
 
         let mut package_names: Vec<_> = root
             .packages()

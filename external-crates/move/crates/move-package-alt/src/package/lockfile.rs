@@ -6,7 +6,6 @@ use std::collections::BTreeMap;
 
 use crate::{
     errors::{FileHandle, PackageResult},
-    flavor::MoveFlavor,
     schema::{PackageID, ParsedLockfile, Pin},
 };
 

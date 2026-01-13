@@ -26,7 +26,7 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::manifest::Digest,
-    schema::{Environment, OriginalID, PackageMetadata, PackageName, PublishedID},
+    schema::{Environment, OriginalID, PackageMetadata, PackageName},
 };
 use crate::{errors::FileHandle, package::package_loader::PackageConfig};
 
@@ -206,13 +206,6 @@ impl<F: MoveFlavor> Package<F> {
     /// [Self::override_publish]).
     pub fn publication(&self) -> Option<&Publication<F>> {
         self.publication.as_ref()
-    }
-
-    /// Tries to get the `published-at` entry for the given package,
-    /// including support for backwards compatibility (legacy packages)
-    pub fn published_at(&self) -> Option<&PublishedID> {
-        self.publication()
-            .map(|publication| &publication.addresses.published_at)
     }
 
     /// Tries to get the `original-id` entry for the given package,
@@ -405,10 +398,9 @@ fn check_for_environment<F: MoveFlavor>(
 mod tests {
     use crate::{
         flavor::vanilla::{DEFAULT_ENV_ID, DEFAULT_ENV_NAME, Vanilla},
-        package::RootPackage,
         schema::{
-            LocalDepInfo, LockfileDependencyInfo, PublishAddresses, ReplacementDependency,
-            SystemDepName,
+            LocalDepInfo, LockfileDependencyInfo, PublishAddresses, PublishedID,
+            ReplacementDependency, SystemDepName,
         },
         test_utils::graph_builder::TestPackageGraph,
     };
@@ -493,13 +485,10 @@ mod tests {
     async fn test_default_implicit_deps() {
         let scenario = TestPackageGraph::new(["root", "foo", "bar", "baz"]).build();
 
-        let root = RootPackage::<TestFlavor>::load(
-            scenario.path_for("root"),
-            Vanilla::default_environment(),
-            vec![],
-        )
-        .await
-        .unwrap();
+        let root = PackageLoader::new(scenario.path_for("root"), Vanilla::default_environment())
+            .load::<TestFlavor>()
+            .await
+            .unwrap();
 
         assert_eq!(
             root.package_info()
@@ -533,10 +522,10 @@ mod tests {
             .add_package("a", |a| a.implicit_deps(false))
             .build();
 
-        let root =
-            RootPackage::<TestFlavor>::load(scenario.path_for("a"), default_environment(), vec![])
-                .await
-                .unwrap();
+        let root = PackageLoader::new(scenario.path_for("a"), default_environment())
+            .load::<TestFlavor>()
+            .await
+            .unwrap();
 
         assert!(root.package_info().direct_deps().is_empty());
     }
@@ -548,10 +537,10 @@ mod tests {
             .add_dep("a", "b", |dep| dep.name("foo").rename_from("b"))
             .build();
 
-        let err =
-            RootPackage::<TestFlavor>::load(scenario.path_for("a"), default_environment(), vec![])
-                .await
-                .unwrap_err();
+        let err = PackageLoader::new(scenario.path_for("a"), default_environment())
+            .load::<TestFlavor>()
+            .await
+            .unwrap_err();
 
         let message = err
             .to_string()
@@ -570,7 +559,8 @@ mod tests {
             .add_dep("a", "b", |dep| dep.name("foo").rename_from("b"))
             .build();
 
-        RootPackage::<TestFlavor>::load(scenario.path_for("a"), default_environment(), vec![])
+        PackageLoader::new(scenario.path_for("a"), default_environment())
+            .load::<TestFlavor>()
             .await
             .unwrap();
     }

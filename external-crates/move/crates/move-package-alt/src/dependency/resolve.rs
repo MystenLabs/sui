@@ -21,7 +21,6 @@ use tracing::debug;
 
 use crate::{
     dependency::combine::Combined,
-    flavor::MoveFlavor,
     logging::user_info,
     package::{EnvironmentID, EnvironmentName},
     schema::{
