@@ -23,8 +23,7 @@ use move_compiler::{
     shared::{SaveFlag, SaveHook, files::MappedFiles},
 };
 use move_package_alt::{
-    MoveFlavor, RootPackage, SourcePackageLayout, compatibility::legacy_parser::PACKAGE_NAME,
-    errors::PackageResult, schema::PackageID,
+    MoveFlavor, PackageResult, RootPackage, SourcePackageLayout, schema::PackageID,
 };
 use move_symbol_pool::Symbol;
 use toml_edit::{DocumentMut, value};

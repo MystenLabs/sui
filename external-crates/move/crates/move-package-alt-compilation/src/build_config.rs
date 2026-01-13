@@ -19,8 +19,7 @@ use move_compiler::{
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_model_2::source_model;
 use move_package_alt::{
-    MoveFlavor, PackageLoader, RootPackage,
-    graph::NamedAddress,
+    MoveFlavor, NamedAddress, PackageLoader, RootPackage,
     schema::{Environment, EnvironmentName, ModeName, OriginalID},
 };
 use move_symbol_pool::Symbol;

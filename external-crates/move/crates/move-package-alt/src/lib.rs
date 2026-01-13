@@ -23,7 +23,10 @@ pub use package::paths::read_name_from_manifest;
 // TODO: maybe put Vanilla into test_utils
 // TODO: maybe put SourcePackageLayout, NamedAddress into schema
 
+pub use errors::{PackageError, PackageResult};
 pub use flavor::{MoveFlavor, Vanilla};
 pub use graph::{NamedAddress, PackageInfo};
 pub use package::layout::SourcePackageLayout;
-pub use package::{RootPackage, package_impl::cache_package, package_loader::PackageLoader};
+pub use package::{
+    RootPackage, package_impl::cache_package, package_loader::PackageLoader, paths::PackagePath,
+};
