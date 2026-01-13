@@ -24,7 +24,7 @@ swapExactBaseForQuote({ params: SwapParams });
 
 ### swapExactQuoteForBase
 
-Use `swapExactQuoteForBase` to swap exact quote amount for base amount. The call returns a function that takes a `Transaction` object. 
+Use `swapExactQuoteForBase` to swap exact quote amount for base amount. The call returns a function that takes a `Transaction` object.
 
 **Parameters**
 
@@ -33,6 +33,44 @@ Use `swapExactQuoteForBase` to swap exact quote amount for base amount. The call
 ```tsx
 swapExactQuoteForBase({ params: SwapParams });
 ```
+
+### `swapExactQuantity`
+
+Use `swapExactQuantity` to swap an exact quantity in either direction (base to quote or quote to base) without using a balance manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `params`: `SwapParams & { isBaseToCoin: boolean }` object containing:
+  - `poolKey`: String that identifies the pool.
+  - `amount`: Number representing the amount to swap.
+  - `deepAmount`: Number representing the DEEP amount for fees.
+  - `minOut`: Number representing minimum output amount.
+  - `isBaseToCoin`: Boolean indicating swap direction (true = base to quote).
+  - `baseCoin`: Optional `TransactionArgument` for base coin input.
+  - `quoteCoin`: Optional `TransactionArgument` for quote coin input.
+  - `deepCoin`: Optional `TransactionArgument` for DEEP coin input.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="swapExactQuantity" signatureOnly/>
+
+### swapExactQuantityWithManager
+
+Use `swapExactQuantityWithManager` to swap an exact quantity using a balance manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `params`: `SwapWithManagerParams & { isBaseToCoin: boolean }` object containing:
+  - `poolKey`: String that identifies the pool.
+  - `balanceManagerKey`: String that identifies the balance manager.
+  - `amount`: Number representing the amount to swap.
+  - `minOut`: Number representing minimum output amount.
+  - `isBaseToCoin`: Boolean indicating swap direction (true = base to quote).
+  - `tradeCap`: Optional `TransactionArgument` for trade capability.
+  - `depositCap`: Optional `TransactionArgument` for deposit capability.
+  - `withdrawCap`: Optional `TransactionArgument` for withdraw capability.
+  - `baseCoin`: Optional `TransactionArgument` for base coin input.
+  - `quoteCoin`: Optional `TransactionArgument` for quote coin input.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="swapExactQuantityWithManager" signatureOnly/>
 
 ### Examples
 

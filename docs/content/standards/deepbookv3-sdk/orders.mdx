@@ -68,6 +68,18 @@ The `orderId` is the protocol `orderId` generated during order placement, which 
 
 <ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="cancelOrder" signatureOnly/>
 
+### cancelOrders
+
+Use `cancelOrders` to cancel multiple orders atomically by providing an array of order IDs. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `balanceManagerKey`: String that identifies the `BalanceManager`.
+- `orderIds`: Array of strings representing the protocol order IDs to cancel.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="cancelOrders" signatureOnly/>
+
 ### cancelAllOrders
 
 Use `cancelAllOrders` to cancel every order for the balance manager whose key you provide. The call returns a function that takes a `Transaction` object.
@@ -102,6 +114,17 @@ Use `withdrawSettledAmounts` to withdraw all settled amounts for a balance manag
 - `balanceManagerKey`: String that identifies the `BalanceManager`.
 
 <ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawSettledAmounts" signatureOnly/>
+
+### `withdrawSettledAmountsPermissionless`
+
+Use `withdrawSettledAmountsPermissionless` to withdraw settled amounts permissionlessly for any balance manager. This can be called by anyone and does not require a trade proof. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `balanceManagerKey`: String that identifies the `BalanceManager`.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="withdrawSettledAmountsPermissionless" signatureOnly/>
 
 ## Examples
 
