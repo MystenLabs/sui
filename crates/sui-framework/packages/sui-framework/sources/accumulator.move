@@ -159,3 +159,15 @@ public(package) native fun emit_withdraw_event<T>(
     owner: address,
     amount: u64,
 );
+
+// === Natives for reading pending balance changes ===
+
+/// Returns the total pending deposits for the given address and type `T` within the current
+/// transaction. This is the sum of all `Balance<T>` values sent via `send_funds` to the address
+/// during this transaction, before they are settled.
+public(package) native fun pending_deposits<T>(address: address): u64;
+
+/// Returns the total pending withdrawals for the given address and type `T` within the current
+/// transaction. This is the sum of all `Balance<T>` values being withdrawn from the address
+/// during this transaction, before they are settled.
+public(package) native fun pending_withdrawals<T>(address: address): u64;

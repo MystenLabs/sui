@@ -125,6 +125,38 @@ public fun settled_funds_value<T>(root: &sui::accumulator::AccumulatorRoot, addr
     val as u64
 }
 
+/// Read the total pending deposits for the given address within the current transaction.
+/// This is the sum of all `Balance<T>` values sent via `send_funds` to the address during this
+/// transaction, before they are settled.
+public fun pending_funds_deposits<T>(address: address): u64 {
+    sui::accumulator::pending_deposits<Balance<T>>(address)
+}
+
+/// Read the total pending withdrawals for the given address within the current transaction.
+/// This is the sum of all `Balance<T>` values being withdrawn from the address during this
+/// transaction, before they are settled.
+public fun pending_funds_withdrawals<T>(address: address): u64 {
+    sui::accumulator::pending_withdrawals<Balance<T>>(address)
+}
+
+/// Read the expected balance for the given address after the current transaction settles.
+/// Returns `Some(settled + deposits - withdrawals)` if the result is non-negative,
+/// or `None` if the result would underflow (withdrawals exceed settled + deposits).
+public fun positive_pending_funds_value<T>(
+    root: &sui::accumulator::AccumulatorRoot,
+    address: address,
+): Option<u64> {
+    let settled = settled_funds_value<T>(root, address);
+    let deposits = pending_funds_deposits<T>(address);
+    let withdrawals = pending_funds_withdrawals<T>(address);
+    let total_available = (settled as u128) + (deposits as u128);
+    if (total_available >= (withdrawals as u128)) {
+        std::option::some(((total_available - (withdrawals as u128)) as u64))
+    } else {
+        std::option::none()
+    }
+}
+
 // === SUI specific operations ===
 
 public(package) fun create_supply_internal<T>(): Supply<T> {
