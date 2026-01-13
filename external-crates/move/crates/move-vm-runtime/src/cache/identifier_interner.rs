@@ -72,15 +72,6 @@ impl IdentifierInterner {
         self.get_or_intern_str_internal(ident_str.borrow_str())
     }
 
-    /// Get the interned address value. This may raise an invariant error if `try_get_or_intern`
-    /// fails, but that's likely a serious OOM issue.
-    pub(crate) fn intern_address(
-        &self,
-        address: &AccountAddress,
-    ) -> PartialVMResult<IdentifierKey> {
-        self.get_or_intern_str_internal(&address.short_str_lossless())
-    }
-
     /// Get the interned identifier value, using `key_type` in the error case. This may raise an
     /// invariant error if `try_get_or_intern` fails, but that's likely a serious OOM issue.
     pub(crate) fn intern_identifier_with_msg(
