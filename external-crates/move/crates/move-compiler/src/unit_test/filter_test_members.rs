@@ -70,7 +70,7 @@ impl FilterContext for Context<'_> {
     }
 
     // Mode filtering happens in the mode filter for `#[mode(test)]`. We further remove any
-    // `#[test]` or `#[rand_test]` that is not in our source definition. This means we will filter
+    // `#[test]` or `#[random_test]` that is not in our source definition. This means we will filter
     // the following definitions:
     // * Definitions annotated as a test function (test, random_test, abort) and test mode is not set
     // * Definitions in a library annotated with the same
