@@ -134,6 +134,7 @@ impl CommitterLayer {
             watermark_interval_ms: self
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
+            ..Default::default()
         }
     }
 }
