@@ -289,6 +289,7 @@ const MAX_PROTOCOL_VERSION: u64 = 108;
 //              Support TxContext in all parameter positions.
 //              Disable entry point signature check.
 //              Enable address aliases on testnet.
+//              Enable poseidon_bn254 on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
