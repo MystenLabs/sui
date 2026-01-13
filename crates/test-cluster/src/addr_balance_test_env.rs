@@ -4,10 +4,12 @@
 use std::collections::BTreeMap;
 
 use crate::{TestCluster, TestClusterBuilder};
+use sui_json_rpc_api::CoinReadApiClient;
 use sui_keys::keystore::AccountKeystore;
 use sui_protocol_config::{OverrideGuard, ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
+    TypeTag,
     accumulator_metadata::{AccumulatorOwner, get_accumulator_object_count},
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
@@ -240,12 +242,30 @@ impl TestEnv {
         });
     }
 
-    pub fn get_balance(&self, owner: SuiAddress) -> u64 {
-        self.cluster.fullnode_handle.sui_node.with(|node| {
-            let state = node.state();
-            let child_object_resolver = state.get_child_object_resolver().as_ref();
-            get_balance(child_object_resolver, owner)
-        })
+    pub fn get_sui_balance(&self, owner: SuiAddress) -> u64 {
+        self.get_balance(owner, GAS::type_tag())
+    }
+
+    pub fn get_balance(&self, owner: SuiAddress, coin_type: TypeTag) -> u64 {
+        let db_balance = self.cluster.fullnode_handle.sui_node.with({
+            let coin_type = coin_type.clone();
+            move |node| {
+                let state = node.state();
+                let child_object_resolver = state.get_child_object_resolver().as_ref();
+                get_balance(child_object_resolver, owner, coin_type)
+            }
+        });
+
+        let client = self.cluster.fullnode_handle.rpc_client.clone();
+        tokio::task::spawn(async move {
+            let rpc_balance = client
+                .get_balance(owner, Some(coin_type.to_canonical_string(true)))
+                .await
+                .unwrap();
+            assert_eq!(db_balance, rpc_balance.funds_in_address_balance as u64);
+        });
+
+        db_balance
     }
 
     pub fn verify_accumulator_removed(&self, owner: SuiAddress) {
@@ -276,15 +296,16 @@ pub fn get_sui_accumulator_object_id(sender: SuiAddress) -> ObjectID {
         .inner()
 }
 
-pub fn get_balance(child_object_resolver: &dyn ChildObjectResolver, owner: SuiAddress) -> u64 {
-    let sui_coin_type = Balance::type_tag(GAS::type_tag());
-    let accumulator_value =
-        AccumulatorValue::load(child_object_resolver, None, owner, &sui_coin_type)
-            .expect("read cannot fail");
-    match accumulator_value {
-        Some(AccumulatorValue::U128(u128_val)) => u128_val.value as u64,
-        None => 0,
-    }
+pub fn get_balance(
+    child_object_resolver: &dyn ChildObjectResolver,
+    owner: SuiAddress,
+    coin_type: TypeTag,
+) -> u64 {
+    sui_core::accumulators::balances::get_balance(owner, child_object_resolver, coin_type).unwrap()
+}
+
+pub fn get_sui_balance(child_object_resolver: &dyn ChildObjectResolver, owner: SuiAddress) -> u64 {
+    get_balance(child_object_resolver, owner, GAS::type_tag())
 }
 
 pub fn verify_accumulator_exists(

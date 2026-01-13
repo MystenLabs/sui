@@ -464,6 +464,7 @@ impl StateRead for AuthorityState {
                     total_balance.balance += address_balance as i128;
                     total_balance.num_coins += 1;
                 }
+                total_balance.address_balance = address_balance;
                 Ok(total_balance)
             })
             .await
@@ -497,9 +498,11 @@ impl StateRead for AuthorityState {
                     let existing_balance = all_balances.entry(coin_type).or_insert(TotalBalance {
                         balance: 0,
                         num_coins: 0,
+                        address_balance: 0,
                     });
                     existing_balance.balance += balance as i128;
                     existing_balance.num_coins += 1;
+                    existing_balance.address_balance = balance;
                 }
                 Ok(Arc::new(all_balances))
             },
