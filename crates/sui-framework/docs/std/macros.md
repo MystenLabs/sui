@@ -16,6 +16,9 @@ This module holds shared implementation of macros used in <code>std</code>
 -  [Macro function `num_checked_sub`](#std_macros_num_checked_sub)
 -  [Macro function `num_checked_mul`](#std_macros_num_checked_mul)
 -  [Macro function `num_checked_div`](#std_macros_num_checked_div)
+-  [Macro function `num_saturating_add`](#std_macros_num_saturating_add)
+-  [Macro function `num_saturating_sub`](#std_macros_num_saturating_sub)
+-  [Macro function `num_saturating_mul`](#std_macros_num_saturating_mul)
 -  [Macro function `range_do`](#std_macros_range_do)
 -  [Macro function `range_do_eq`](#std_macros_range_do_eq)
 -  [Macro function `do`](#std_macros_do)
@@ -350,6 +353,88 @@ This module holds shared implementation of macros used in <code>std</code>
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>if</b> (y == 0) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x / y)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_saturating_add"></a>
+
+## Macro function `num_saturating_add`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_saturating_add">num_saturating_add</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): $T
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_saturating_add">num_saturating_add</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): $T {
+    <b>let</b> x = $x;
+    <b>let</b> y = $y;
+    <b>let</b> max_t = $max_t;
+    <b>if</b> (y &gt; max_t - x) max_t <b>else</b> x + y
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_saturating_sub"></a>
+
+## Macro function `num_saturating_sub`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_saturating_sub">num_saturating_sub</a>&lt;$T&gt;($x: $T, $y: $T): $T
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_saturating_sub">num_saturating_sub</a>&lt;$T&gt;($x: $T, $y: $T): $T {
+    <b>let</b> x = $x;
+    <b>let</b> y = $y;
+    <b>if</b> (x &lt; y) 0 <b>else</b> x - y
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_saturating_mul"></a>
+
+## Macro function `num_saturating_mul`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_saturating_mul">num_saturating_mul</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): $T
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_saturating_mul">num_saturating_mul</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): $T {
+    <b>let</b> x = $x;
+    <b>let</b> y = $y;
+    <b>let</b> max_t = $max_t;
+    <b>if</b> (x == 0 || y == 0) 0
+    <b>else</b> <b>if</b> (y &gt; max_t / x) max_t
+    <b>else</b> x * y
 }
 </code></pre>
 
