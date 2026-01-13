@@ -10,7 +10,6 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
     Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
 };
-use sui_types::type_input::TypeInput;
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -351,8 +350,7 @@ impl Operation for AddressBalanceWithdraw {
             rng.gen_range(100..1000)
         };
 
-        let withdrawal_arg =
-            FundsWithdrawalArg::balance_from_sender(amount, TypeInput::from(GAS::type_tag()));
+        let withdrawal_arg = FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag());
 
         let balance = builder.funds_withdrawal(withdrawal_arg).unwrap();
 
@@ -751,10 +749,8 @@ impl Operation for TestCoinAddressWithdraw {
             rng.gen_range(100..500)
         };
 
-        let withdrawal_arg = FundsWithdrawalArg::balance_from_sender(
-            amount,
-            TypeInput::from(test_coin_type.clone()),
-        );
+        let withdrawal_arg =
+            FundsWithdrawalArg::balance_from_sender(amount, test_coin_type.clone());
 
         let balance = builder.funds_withdrawal(withdrawal_arg).unwrap();
 
