@@ -285,10 +285,11 @@ const MAX_PROTOCOL_VERSION: u64 = 108;
 //              nitro attestation native function in Devnet and Testnet.
 // Version 106: Framework update: accumulator storage fund calculations
 //              Enable address balances on devnet
-// Version 107: Enable new digit based gas rounding.
+// Version 108: Enable new digit based gas rounding.
 //              Support TxContext in all parameter positions.
 //              Disable entry point signature check.
 //              Enable address aliases on testnet.
+//              Enable poseidon_bn254 on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4447,6 +4448,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.address_aliases = true;
                     }
+
+                    cfg.feature_flags.enable_poseidon = true;
                 }
                 // Use this template when making changes:
                 //
