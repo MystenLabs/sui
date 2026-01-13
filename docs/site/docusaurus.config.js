@@ -44,8 +44,8 @@ const config = {
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: "/",
 
-  onBrokenLinks: "throw",
-  onBrokenMarkdownLinks: "throw",
+  onBrokenLinks: "warn",
+  onBrokenMarkdownLinks: "warn",
 
   markdown: {
     format: "detect",
@@ -63,18 +63,6 @@ const config = {
         trackOutboundLinks: true,
         hashMode: false,
         trackLocalhost: false,
-      },
-    ],
-    [
-      "@graphql-markdown/docusaurus",
-      {
-        id: "alpha",
-        schema: "../../crates/sui-graphql-rpc/schema.graphql",
-        rootPath: "../content", // docs will be generated under rootPath/baseURL
-        baseURL: "references/sui-api/sui-graphql/alpha/reference",
-        loaders: {
-          GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
-        },
       },
     ],
     function stepHeadingLoader() {

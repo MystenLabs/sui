@@ -32,6 +32,7 @@ const concepts = [
 			'concepts/transactions/prog-txn-blocks',
 			'concepts/transactions/sponsored-transactions',
 			'concepts/transactions/gas-smashing',
+			'concepts/transactions/coin-mgt',
 			{
 				type: 'category',
 				label: 'Transaction Authentication',
@@ -68,57 +69,13 @@ const concepts = [
 			id: 'concepts/sui-move-concepts',
 		},
 		items: [
-			{
-				type: 'category',
-				label: 'Packages',
-				link: {
-					type: 'doc',
-					id: 'concepts/sui-move-concepts/packages',
-				},
-				items: [
-					'concepts/sui-move-concepts/packages/upgrade',
-					'concepts/sui-move-concepts/packages/custom-policies',
-					'concepts/sui-move-concepts/packages/automated-address-management',
-				],
-			},
-			{
-				type: 'category',
-				label: 'Dynamic Fields',
-				link: {
-					type: 'doc',
-					id: 'concepts/dynamic-fields',
-				},
-				items: ['concepts/dynamic-fields/tables-bags'],
-			},
-			'concepts/sui-move-concepts/derived-objects',
+			'concepts/sui-move-concepts/packages',
 			'concepts/sui-move-concepts/conventions',
+			'concepts/sui-move-concepts/move-2024-migration',
 		],
 	},
-	{
-		type: 'category',
-		label: 'Data Access',
-		link: {
-			type: 'doc',
-			id: 'concepts/data-access/data-serving',
-		},
-		items: [
-			'concepts/data-access/grpc-overview',
-			{
-				type: 'category',
-				label: 'GraphQL and Indexer Framework',
-				link: {
-					type: 'doc',
-					id: 'concepts/data-access/graphql-indexer',
-				},
-				items: [
-					'concepts/data-access/graphql-rpc',
-					'concepts/data-access/custom-indexing-framework',
-					'concepts/data-access/pipeline-architecture',
-				],
-			},
-			'concepts/data-access/archival-store',
-		],
-	},
+	'concepts/data-access/data-serving',
+	'concepts/data-access/graphql-indexer',
 	{
 		type: 'category',
 		label: 'Cryptography',
@@ -129,18 +86,7 @@ const concepts = [
 		items: [
 			'concepts/cryptography/zklogin',
 			'concepts/cryptography/passkeys',
-			{
-				type: 'category',
-				label: 'Nautilus',
-				link: {
-					type: 'doc',
-					id: 'concepts/cryptography/nautilus',
-				},
-				items: [
-					'concepts/cryptography/nautilus/nautilus-design',
-					'concepts/cryptography/nautilus/using-nautilus',
-				],
-			},
+			'concepts/cryptography/nautilus/nautilus-design',
 			'concepts/cryptography/system/checkpoint-verification',
 			/*{
 				type: 'category',
@@ -152,7 +98,6 @@ const concepts = [
 				items: [
 					'concepts/cryptography/system/validator-signatures',
 					'concepts/cryptography/system/intents-for-validation',
-					'concepts/cryptography/system/checkpoint-verification',
 				],
 			},*/
 		],

@@ -1,0 +1,169 @@
+---
+title: Customizing, Testing, and Management
+description: Details on how to customize Nautilus server logic, test functionality locally, and manage the enclave. 
+keywords: [ nautilus, using nautilus, deploy aws nitro enclave, aws nitro, enclaves, tee, ec2 ]
+---
+
+The Nautilus server logic is located in the directory [`src/nautilus-server`](https://github.com/MystenLabs/nautilus/tree/main/src/nautilus-server). To customize the application, refer to the [Using Nautilus guide](/guides/developer/nautilus/using-nautilus.mdx) as a template.
+
+## Create custom server logic
+
+You can customize the Nautilus server to define allowed endpoints and specify any external domains your application needs to access. You can create `mod.rs` to define your `process_data` logic and register any additional endpoints.
+
+The following files typically do not require modification:
+
+- `common.rs` handles the `get_attestation` endpoint.
+
+- `main.rs` initializes the ephemeral key pair and sets up the HTTP server.
+
+## Local testing 
+
+You can test most functionality by running the server locally. However, the `get_attestation` endpoint doesn't work locally because it requires access to the Nitro Secure Module (NSM) driver, which is only available when running the code inside the configured EC2 instance. This endpoint functions correctly when the server runs within the enclave as described in the setup steps.
+
+To test the `process_data` endpoint locally, run the following:
+
+```sh
+$ cd src/nautilus-server/
+$ RUST_LOG=debug API_KEY=045a27812dbe456392913223221306 cargo run --features=weather-example --bin nautilus-server
+$ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Francisco"}}' -X POST http://localhost:3000/process_data
+```
+
+<details>
+
+<summary>Output</summary>
+
+```json
+{
+  "response":
+    {
+      "intent":0,
+      "timestamp_ms":1744041600000,
+      "data":
+        {
+          "location":"San Francisco",
+          "temperature":13
+        }
+    },
+  "signature":"b75d2d44c4a6b3c676fe087465c0e85206b101e21be6cda4c9ab2fd4ba5c0d8c623bf0166e274c5491a66001d254ce4c8c345b78411fdee7225111960cff250a"
+}
+```
+
+</details>
+
+## Check reproducibility
+
+Every enclave built from the same source code (everything in `/src`) can produce identical PCRs through reproducible builds. This includes any traffic forwarding changes made in `run.sh` (see branch `example-configuration`).
+
+```sh
+$ cd nautilus/
+$ make ENCLAVE_APP=weather-example
+$ cat out/nitro.pcrs
+```
+
+<details>
+
+<summary>Output</summary>
+
+```sh
+911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e PCR0
+911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e PCR1
+21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a PCR2
+```
+
+</details>
+
+```sh
+# Add env var that will be used later when registering the enclave.
+$ PCR0=911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e
+$ PCR1=911c87d0abc8c9840a0810d57dfb718865f35dc42010a2d5b30e7840b03edeea83a26aad51593ade1e47ab6cced4653e
+$ PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
+```
+
+## Enclave management
+
+The template allows the admin to register multiple `Enclave` objects associated with one `EnclaveConfig` that defines PCRs. Each `Enclave` object represents a specific enclave instance with a unique public key, while the `EnclaveConfig` tracks the PCR values and their associated version. You can register all new `Enclave` instances with the latest `config_version` to ensure consistency.
+
+This design allows the admin to run multiple instances of the same enclave with different public keys, where `config_version` is set to the latest version when creating an `Enclave` object. The admin can register or destroy their `Enclave` objects.
+
+### Update PCRs
+
+The deployer of the smart contract holds the `EnclaveCap`, which allows for updating the PCRs and enclave public key if the Nautilus server code has been modified. You can retrieve the new PCRs using `make ENCLAVE_APP=<APP> && cat out/nitro.pcrs`. To update the PCRs or register the enclave again, reuse the steps outlined in the previous section.
+
+## Verified computation in Move
+
+Write frontend code to interact with the enclave for computation, and then send the resulting data to the Move contract for use. For the [weather example](/guides/developer/nautilus/using-nautilus.mdx), you can request the enclave to retrieve weather data for a specific location:
+
+```sh
+$ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Francisco"}}' -X POST http://<PUBLIC_IP>:3000/process_data
+```
+
+<details>
+
+<summary>Output</summary>
+
+```json
+{
+  "response":
+    {
+      "intent":0,
+      "timestamp_ms":1744683300000,
+      "data":
+        {
+          "location":"San Francisco",
+          "temperature":13
+        }
+    },
+  "signature":"77b6d8be225440d00f3d6eb52e91076a8927cebfb520e58c19daf31ecf06b3798ec3d3ce9630a9eceee46d24f057794a60dd781657cb06d952269cfc5ae19500"
+}
+```
+
+</details>
+
+Then use the values from the enclave response, `signature`, `timestamp`, `location`, and `temperature`, to call `update_weather` in the Move contract. In this example, the call is demonstrated using a script, but it should be integrated into your dApp frontend.
+
+```sh
+$ sh ../../update_weather.sh \
+    $APP_PACKAGE_ID \
+    $MODULE_NAME \
+    $OTW_NAME \
+    $ENCLAVE_OBJECT_ID \
+    "77b6d8be225440d00f3d6eb52e91076a8927cebfb520e58c19daf31ecf06b3798ec3d3ce9630a9eceee46d24f057794a60dd781657cb06d952269cfc5ae19500" \
+    1744683300000 \
+    "San Francisco" \
+    13
+```
+
+An example of a [created weather NFT](https://testnet.suivision.xyz/object/0xa78e166630c0ed004b3115b474fed15d71f27fc80b68e37d451494c6e815931e) is available on network scanners.
+
+### Sign the payload
+
+Signing payloads in Move are constructed using Binary Canonical Serialization (BCS). These must match the structure specified in the enclave Rust code when generating the signature. Otherwise, signature verification in `enclave.move` might fail.
+
+Write unit tests in both Move and Rust to ensure consistency. See `test_serde()` in `src/nautilus-server/src/app.rs` and the examples in `move/enclave/enclave.move`.
+
+## FAQs
+
+Some questions the community often asks about are answered in the following sections.
+
+#### Why did Sui choose AWS Nitro Enclaves initially?
+
+- There are many TEE providers available, but initial support for AWS Nitro Enclaves is due to their maturity and support for reproducible builds. Support for additional TEE providers might be considered in the future.
+
+<ImportContent source="contact-nautilus.mdx" mode="snippet" />
+
+#### Where is the root of trust of AWS?
+
+- It is stored as part of the Sui framework and used to verify AWS attestation documents. You can verify its hash by following the steps outlined on [AWS](https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html#validation-process).
+
+```sh
+$ curl https://raw.githubusercontent.com/MystenLabs/sui/refs/heads/main/crates/sui-types/src/nitro_root_certificate.pem -o cert_sui.pem
+$ sha256sum cert_sui.pem
+
+6eb9688305e4bbca67f44b59c29a0661ae930f09b5945b5d1d9ae01125c8d6c0
+
+$ curl https://aws-nitro-enclaves.amazonaws.com/AWS_NitroEnclaves_Root-G1.zip -o cert_aws.zip
+$ unzip cert_aws.zip
+$ sha256sum root.pem
+
+6eb9688305e4bbca67f44b59c29a0661ae930f09b5945b5d1d9ae01125c8d6c0 # check it matches from the one downloaded from the Sui repo
+```

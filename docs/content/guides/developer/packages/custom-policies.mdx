@@ -1,6 +1,6 @@
 ---
 title: Custom Upgrade Policies
-description: Custom upgrade policies are used to upgrade live packages while addressing the security risks of single-key ownership upgrades.
+description: Custom upgrade policies are used to upgrade live packages while addressing the security risks of single key ownership upgrades.
 keywords: [ upgrade policies, custom upgrade policies, immutable policy, dependency policy, additive policy, compatible policy, create an upgrade policy, isolate a policy ]
 ---
 
@@ -8,7 +8,7 @@ Protecting the ability to upgrade a package on-chain using a single key can pose
 
 <ImportContent source="upgrade-single-key-risk.mdx" mode="snippet" />
 
-To address the security risk of single-key upgrade ownership while still providing the opportunity to [upgrade live packages](./upgrade.mdx), Sui offers _custom upgrade policies_. These policies protect `UpgradeCap` access and issue `UpgradeTicket` objects that authorize upgrades on a case-by-case basis.
+To address these risks while still providing the opportunity to [upgrade live packages](/guides/developer/packages/upgrade.mdx), Sui offers custom upgrade policies. These policies protect `UpgradeCap` access and issue `UpgradeTicket` objects that authorize upgrades on a case-by-case basis.
 
 ## Compatibility {#compatibility}
 
@@ -17,41 +17,33 @@ Sui comes with a set of built-in package compatibility policies, listed here fro
 | Policy          | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Immutable       | No one can upgrade the package.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Dependency-only | You can modify the dependencies of the package only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Dependency-only | You can only modify the dependencies of the package.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Additive        | You can add new functionality to the package (for example, new public functions or structs) but you can't change any of the existing functionality (for example, the code in existing public functions cannot change).                                                                                                                                                                                                                                                                                                                                                                        |
 | Compatible      | The most relaxed policy. In addition to what the more restrictive policies allow, in an upgraded version of the package: <ul><li>You can change all function implementations.</li><li>You can remove the ability constraints on generic type parameters in function signatures.</li><li>You can change, remove, or make `public` any `private`, `public(friend)`, and `entry` function signatures.</li><li>You cannot change `public` function signatures (except in the case of ability constraints mentioned previously).</li><li>You cannot change existing types.</li></ul> |
 
 Each of these policies, in the order listed, is a superset of the previous one in the type of changes allowed in the upgraded package.
 
-When you publish a package, by default it adopts the most relaxed, compatible policy. You can publish a package as part of a transaction that can change the policy before the transaction successfully completes, making the package available on chain for the first time at the desired policy level, rather than at the default one.
+When you publish a package, by default it adopts the most relaxed, compatible policy. You can publish a package as part of a transaction that can change the policy before the transaction successfully completes, making the package available on-chain for the first time at the desired policy level, rather than at the default one.
 
-You can change the current policy by calling one of the functions in `sui::package` (`only_additive_upgrades`, `only_dep_upgrades`, `make_immutable`) on the package's `UpgradeCap` and a policy can become only more restrictive. For example, after you call `sui::package::only_dep_upgrades` to restrict the policy to become dependency-only, calling `sui::package::only_additive_upgrades` on the `UpgradeCap` of the same package results in an error.
+You can change the current policy by calling one of the functions in `sui::package` (`only_additive_upgrades`, `only_dep_upgrades`, `make_immutable`) on the package's `UpgradeCap` and a policy can only become more restrictive. For example, after you call `sui::package::only_dep_upgrades` to restrict the policy to become dependency-only, calling `sui::package::only_additive_upgrades` on the `UpgradeCap` of the same package results in an error.
 
 ## Upgrade overview {#upgrade-overview}
 
-Package upgrades must occur end-to-end in a single transaction and are composed of three commands:
+Package upgrades must occur end-to-end in a single transaction and are composed of 3 commands:
 
-1. **Authorization:** Get permission from the `UpgradeCap` to perform
-   the upgrade, creating an `UpgradeTicket`.
-1. **Execution:** Consume the `UpgradeTicket` and verify the package
-   bytecode and compatibility against the previous version, and create
-   the on-chain object representing the upgraded package. Return an
-   `UpgradeReceipt` as a result on success.
-1. **Commit:** Update the `UpgradeCap` with information about the
-   newly created package.
+1. **Authorization:** Get permission from the `UpgradeCap` to perform the upgrade, creating an `UpgradeTicket`.
+1. **Execution:** Consume the `UpgradeTicket` and verify the package bytecode and compatibility against the previous version, then create the on-chain object representing the upgraded package. Return an `UpgradeReceipt` as a result on success.
+1. **Commit:** Update the `UpgradeCap` with information about the newly created package.
 
 While step 2 is a built-in command, steps 1 and 3 are implemented as Move functions. The Sui framework provides their most basic implementation:
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/package.move" mode="" fun="authorize_upgrade,commit_upgrade" noComments />
 
-These are the functions that `sui client upgrade` calls for authorization and commit. Custom upgrade policies work by guarding
-access to a package `UpgradeCap` (and therefore to calls of these functions) behind extra conditions that are specific to that policy
-(such as voting, governance, permission lists, timelocks, and so on).
+These are the functions that `sui client upgrade` calls for authorization and commit. Custom upgrade policies work by guarding access to a package `UpgradeCap` (and therefore to calls of these functions) behind extra conditions that are specific to that policy (such as voting, governance, permission lists, timelocks, and so on).
 
-Any pair of functions that produces an `UpgradeTicket` from an `UpgradeCap` and consumes an `UpgradeReceipt` to update an
-`UpgradeCap` constitutes a custom upgrade policy.
+Any pair of functions that produces an `UpgradeTicket` from an `UpgradeCap` and consumes an `UpgradeReceipt`. To update an `UpgradeCap` constitutes a custom upgrade policy.
 
-## UpgradeCap {#upgradecap}
+## `UpgradeCap` {#upgradecap}
 
 The `UpgradeCap` is the central type responsible for coordinating package upgrades.
 
@@ -60,47 +52,57 @@ The `UpgradeCap` is the central type responsible for coordinating package upgrad
 Publishing a package creates the `UpgradeCap` object and upgrading the package updates that object. The owner of this object has permission to:
 
 - Change the compatibility requirements for future upgrades.
+
 - Authorize future upgrades.
+
 - Make the package immutable (not upgradeable).
 
-And its API guarantees the following properties:
+Its API guarantees the following properties:
 
 - Only the latest version of a package can be upgraded (a linear history is guaranteed).
-- Only one upgrade can be in-flight at any time (cannot authorize multiple concurrent upgrades).
-- An upgrade can only be authorized for the extent of a single transaction; no one can `store` the `UpgradeTicket` that proves authorization.
+
+- Only 1 upgrade can be in-flight at any time (cannot authorize multiple concurrent upgrades).
+
+- An upgrade can only be authorized for the extent of a single transaction. No one can `store` the `UpgradeTicket` that proves authorization.
+
 - Compatibility requirements for a package can be made only more restrictive over time.
 
-## UpgradeTicket {#upgradeticket}
+## `UpgradeTicket` {#upgradeticket}
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/package.move" mode="code" struct="UpgradeTicket" noComments />
 
 An `UpgradeTicket` is proof that an upgrade has been authorized. This authorization is specific to:
 
 - A particular `package: ID` to upgrade from, which must be the latest package in the family identified by the `UpgradeCap` at `cap: ID`.
+
 - A particular `policy: u8` that attests to the kind of compatibility guarantees that the upgrade expects to adhere to.
+
 - A particular `digest: vector<u8>` that identifies the contents of the package after the upgrade.
 
-When you attempt to run the upgrade, the validator checks that the upgrade it is about to perform matches the upgrade that was authorized along all those lines, and does not perform the upgrade if any of these criteria are not met.
+When you attempt to run the upgrade, the validator checks that the upgrade it is about to perform matches the upgrade that was authorized, and does not perform the upgrade if any of these criteria are not met.
 
-After creating an `UpgradeTicket`, you must use it within that transaction (you cannot store it for later, drop it, or burn it), or the transaction fails.
+After creating an `UpgradeTicket`, you must use it within that transaction or the transaction fails. You cannot store it for later, drop it, or burn it.
 
 ### Package digest {#package-digest}
 
-The `UpgradeTicket` `digest` field comes from the `digest` parameter to `authorize_upgrade`, which the caller must supply. While
-`authorize_upgrade` does not process the `digest`, custom policies can use it to authorize only upgrades that it has seen the
-bytecode or source code for ahead of time. Sui calculates the digest as follows:
+The `UpgradeTicket` `digest` field comes from the `digest` parameter to `authorize_upgrade`, which the caller must supply. While `authorize_upgrade` does not process the `digest`, custom policies can use it to authorize only upgrades that it has seen the bytecode or source code for ahead of time. Sui calculates the digest as follows:
 
 - Take the bytecode for each module, represented as an array of bytes.
+
 - Append the list of the package's transitive dependencies, each represented as an array of bytes.
+
 - Sort this list of byte-arrays lexicographically.
+
 - Feed each element in the sorted list, in order, into a `Blake2B` hasher.
+
 - Compute the digest from this hash state.
 
-Refer to the [implementation for digest calculation](https://github.com/MystenLabs/sui/blob/d8cb153d886d54752763fbdab631b062da7d894b/crates/sui-types/src/move_package.rs#L232-L251) for more information, but in most cases, you can rely on the Move toolchain to output the digest as part of the build, when passing the `--dump-bytecode-as-base64` flag:
+Refer to the [implementation for digest calculation](https://github.com/MystenLabs/sui/blob/d8cb153d886d54752763fbdab631b062da7d894b/crates/sui-types/src/move_package.rs#L232-L251) for more information, but in most cases, you can rely on the Move toolchain to output the digest as part of the build when passing the `--dump-bytecode-as-base64` flag:
 
 ```sh
 $ sui move build --dump-bytecode-as-base64
 ```
+
 ```sh
 FETCHING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
 INCLUDING DEPENDENCY Sui
@@ -109,32 +111,27 @@ BUILDING test
 {"modules":[<MODULE-BYTES-BASE64>],"dependencies":[<DEPENDENCY-IDS>],"digest":[59,43,173,195,216,88,176,182,18,8,24,200,200,192,196,197,248,35,118,184,207,205,33,59,228,109,184,230,50,31,235,201]}
 ```
 
-## UpgradeReceipt {#upgradereceipt}
+## `UpgradeReceipt` {#upgradereceipt}
 
 <ImportContent source="crates/sui-framework/packages/sui-framework/sources/package.move" mode="code" struct="UpgradeReceipt" noComments />
 
-The `UpgradeReceipt` is proof that the `Upgrade` command ran successfully, and Sui added the new package to the set of created
-objects for the transaction. It is used to update its `UpgradeCap` (identified by `cap: ID`) with the ID of the latest package in its
-family (`package: ID`).
+The `UpgradeReceipt` is proof that the `Upgrade` command ran successfully, and Sui added the new package to the set of created objects for the transaction. It is used to update its `UpgradeCap` (identified by `cap: ID`) with the ID of the latest package in its family (`package: ID`).
 
-After Sui creates an `UpgradeReceipt`, you must use it to update its `UpgradeCap` within the same transaction (you cannot store it for later, drop it, or burn it), or the transaction fails.
+After Sui creates an `UpgradeReceipt`, you must use it to update its `UpgradeCap` within the same transaction or the transaction fails. You cannot store it for later, drop it, or burn it. 
 
 ## Isolating policies {#isolating-policies}
 
 When writing custom upgrade policies, prefer:
 
-- separating them into their own package (not co-located with the code they govern the upgradeability of),
-- making that package immutable (not upgradeable), and
-- locking in the policy of the `UpgradeCap`, so that the policy cannot be made less restrictive later.
+- Separating them into their own package, not co-located with the code they govern the upgradeability of.
 
-These best practices help uphold **informed user consent** and **bounded risk** by making it clear what a package's upgrade policy is
-at the moment a user locks value into it, and ensuring that the policy does not evolve to be more permissive with time, without the package user realizing and choosing to accept the new terms.
+- Making the package immutable.
+
+- Locking in the policy of the `UpgradeCap`, so that the policy cannot be made less restrictive later.
+
+These best practices help uphold informed user consent and bounded risk by making it clear what a package's upgrade policy is at the moment a user locks value into it, ensuring that the policy does not evolve to be more permissive with time without the package user realizing and choosing to accept the new terms.
 
 ## Example: Day of the week upgrade policy {#example-upgrade}
-
-Time to put everything into practice by writing a toy upgrade policy that only authorizes upgrades on a particular day of the week (of the package creator's choosing).
-
-### Creating an upgrade policy {#creating-upgrade-policy}
 
 Start by creating a new Move package for the upgrade policy:
 
@@ -144,7 +141,7 @@ $ sui move new policy
 
 The command creates a `policy` directory with a `sources` folder and `Move.toml` manifest.
 
-In the `sources` folder, create a source file named `day_of_week.move`. Copy and paste the following code into the file:
+In the `sources` folder, create a source file named `day_of_week.move` that contains the following code:
 
 ```move
 module policy::day_of_week;
@@ -172,7 +169,7 @@ public fun new_policy(
 
 This code includes a constructor and defines the object type for the custom upgrade policy.
 
-You then need to add a function to authorize an upgrade, if on the correct day of the week. First, define a couple of constants, one for the error code that identifies an attempted upgrade on a day the policy doesn't allow, and another to define the number of milliseconds in a day (to be used shortly). Add these definitions directly under the current `ENotWeekDay` one.
+You then need to add a function to authorize an upgrade if it is the correct day of the week. First, define a couple of constants, one for the error code that identifies an attempted upgrade on a day the policy doesn't allow, and another to define the number of milliseconds in a day. Add these definitions directly under the current `ENotWeekDay` one.
 
 ```move
 // Request to authorize upgrade on the wrong day of the week.
@@ -297,11 +294,9 @@ $ sui client publish
 ```
 
 <details>
-  <summary>
-  Console output
-  </summary>
-
-A successful publish returns the following:
+<summary>
+Console output
+</summary>
 
 ```sh
 UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
@@ -442,7 +437,7 @@ Transaction Digest: 5BzYX5iV6GP2RaSkZ7JPBRmListD5cEVC7REoKsNoCYc
 
 </details>
 
-Following best practices, use the Sui Client CLI to call `sui::package::make_immutable` on the `UpgradeCap` to make the policy immutable. In your shell, create a variable `upgradecap` and set its value to the `UpgradeCap` object ID listed in the *Object Changes* section of your publish response. Of course, the object ID for your upgrade capability is different than the following example.
+Following best practices, use the Sui client CLI to call `sui::package::make_immutable` on the `UpgradeCap` to make the policy immutable. In your command line, create the variable `upgradecap` and set its value to the `UpgradeCap` object ID listed in the **Object Changes** section of `sui client publish` output. The object ID for your upgrade capability is different than the following example.
 
 ```sh
 $ upgradecap=0x4de927a10f97520311239cadb7159d4b893275bc74ab4e0af1b16c41ba8275a0
@@ -455,11 +450,9 @@ $ sui client call \
 ```
 
 <details>
-  <summary>
-  Console output
-  </summary>
-
-A successful call returns a response similar to the following:
+<summary>
+Console output
+</summary>
 
 ```sh
 Transaction Digest: EuQYMunxnMUFedvXXPck9HrehQnNY4GJ27eFBD7ptk2H
@@ -568,9 +561,7 @@ Transaction Digest: EuQYMunxnMUFedvXXPck9HrehQnNY4GJ27eFBD7ptk2H
 
 ### Creating a package for testing {#creating-testing-package}
 
-With a policy now available on chain, you need a package to upgrade. This topic creates a basic package and references it in the following scenarios, but you can use any package you might have available instead of creating a new one.
-
-If you don't have a package available, use the `sui move new` command to create the template for a new package called `example`.
+With a policy now available on-chain, you need a package to upgrade. If you don't have a package available, use the `sui move new` command to create the template for a new package called `example`.
 
 ```sh
 $ sui move new example
@@ -589,7 +580,7 @@ module example::example {
 
 The instruction that follows publishes this example package and then upgrades it to change the value in the `Event` it emits. Because you are using a custom upgrade policy, you need to use the TypeScript SDK to build the package's publish and upgrade commands.
 
-### Using TypeScript SDK {#using-typeccript-sdk}
+### Using TypeScript SDK {#using-typescript-sdk}
 
 Create a new directory to store a Node.js project. You can use the `npm init` function to create the `package.json`, or manually create the file. Depending on your approach to creating `package.json`, populate or add the following JSON to it:
 
@@ -605,9 +596,10 @@ $ npm install @mysten/sui
 
 ### Publishing a package with custom policy {#publishing-custom-policy}
 
-In the root of your Node.js project, create a script file named `publish.js`. Open the file for editing and define some constants:
+In the root of your Node.js project, create a script file named `publish.js`. Open the file define some constants:
 
 - `SUI`: the location of the `sui` CLI binary.
+
 - `POLICY_PACKAGE_ID`: the ID of our published `day_of_week` package.
 
 ```js
@@ -615,7 +607,7 @@ const SUI = 'sui';
 const POLICY_PACKAGE_ID = '<POLICY-PACKAGE>';
 ```
 
-Next, add boilerplate code to get the signer key pair for the currently active address in the Sui Client CLI:
+Next, add boilerplate code to get the signer key pair for the currently active address of the Sui client CLI:
 
 ```js
 import { execSync } from 'child_process';
@@ -647,8 +639,7 @@ const signer = (() => {
 })();
 ```
 
-Next, define the path of the package you are publishing. The following snippet assumes that the package is in a sibling directory to
-`publish.js`, called `example`:
+Define the path of the package you are publishing. The following snippet assumes that the package is in a directory to `publish.js` called `example`:
 
 ```js
 import { fileURLToPath } from 'url';
@@ -686,7 +677,7 @@ const tuesdayUpgradeCap = tx.moveCall({
 tx.transferObjects([tuesdayUpgradeCap], tx.pure(sender));
 ```
 
-And finally, execute that transaction and display its effects to the console. The following snippet assumes that you're running your examples against a local network. Pass `devnet`, `testnet`, or `mainnet` to the `getFullnodeUrl()` function to run on Devnet, Testnet, or Mainnet respectively:
+Finally, execute that transaction and display its effects to the console. The following snippet assumes that you're running your examples against a local network. Pass `devnet`, `testnet`, or `mainnet` to the `getFullnodeUrl()` function to run on Devnet, Testnet, or Mainnet respectively:
 
 ```js
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
@@ -789,11 +780,9 @@ $ node publish.js
 ```
 
 <details>
-  <summary>
-  Console output
-  </summary>
-
-If the script is successful, the console prints the following response:
+<summary>
+Console output
+</summary>
 
 ```sh
 INCLUDING DEPENDENCY Sui
@@ -858,7 +847,7 @@ BUILDING example
 
 :::tip
 
-If you receive a `ReferenceError: fetch is not defined` error, use Node.js version 18 or greater.
+If you receive a `ReferenceError: fetch is not defined` error, use Node.js version 18 or newer.
 
 :::
 
@@ -872,11 +861,9 @@ $ sui client call --gas-budget 10000000 \
 ```
 
 <details>
-  <summary>
-  Console output
-  </summary>
-
-A successful call responds with the following:
+<summary>
+Console output
+</summary>
 
 ```sh
 ----- Transaction Digest ----
@@ -950,7 +937,7 @@ If you used the example package provided, notice you have an `Events` section th
 
 ### Upgrading a package with custom policy {#upgrading-custom-policy}
 
-With your package published, you can prepare an `upgrade.js` script to perform an upgrade using the new policy. It behaves identically to `publish.js` up until building the package. When building the package, the script also captures its `digest`, and the transaction now performs the three upgrade commands (authorize, execute, commit). The full script for `upgrade.js` follows:
+With your package published, you can prepare an `upgrade.js` script to perform an upgrade using the new policy. It behaves identically to `publish.js` up until building the package. When building the package, the script also captures its `digest`, and the transaction now performs the 3 upgrade commands (authorize, execute, and commit). The full script for `upgrade.js` is as follows:
 
 ```js
 import { execSync } from 'child_process';
@@ -1029,7 +1016,7 @@ const result = await client.signAndExecuteTransaction({
 console.log(result);
 ```
 
-If today is not Tuesday, wait until next Tuesday to run the script, when your policy allows you to perform upgrades. At that point, update your `example.move` so the event is emitted with a different constant and use Node.js to run the upgrade script:
+If today is not Tuesday, wait until next Tuesday to run the script or edit the `week_day` function to be the current weekday. At that point, update your `example.move` so the event is emitted with a different constant and use Node.js to run the upgrade script:
 
 ```sh
 $ node upgrade.js
@@ -1040,7 +1027,7 @@ $ node upgrade.js
   Console output
   </summary>
 
-If the script is successful (and today is Tuesday), your console displays the following response:
+If the script is successful, your console displays the following response:
 
 ```sh
 INCLUDING DEPENDENCY Sui
@@ -1105,7 +1092,7 @@ BUILDING example
 
 </details>
 
-Use the Sui Client CLI to test the upgraded package (the package ID is **different** from the original version of your example package):
+Use the Sui client CLI to test the upgraded package. The package ID is **different** from the original version of your example package:
 
 ```sh
 $ sui client call --gas-budget 10000000 \
@@ -1115,11 +1102,10 @@ $ sui client call --gas-budget 10000000 \
 ```
 
 <details>
-  <summary>
-  Console output
-  </summary>
+<summary>
+Console output
+</summary>
 
-If successful, the console prints the following response:
 
 ```sh
 ----- Transaction Digest ----
