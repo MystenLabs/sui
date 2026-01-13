@@ -415,3 +415,103 @@ public(package) macro fun test_checked_div<$T>($max: $T, $cases: vector<$T>) {
         assert_eq!(case_succ.checked_div(0), option::none());
     });
 }
+
+public(package) macro fun test_saturating_add<$T>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    // basic cases
+    assert_eq!((0: $T).saturating_add(0), 0);
+    assert_eq!((0: $T).saturating_add(1), 1);
+    assert_eq!((1: $T).saturating_add(0), 1);
+    assert_eq!((0: $T).saturating_add(max), max);
+    assert_eq!(max.saturating_add(0), max);
+    // saturation cases
+    assert_eq!(max.saturating_add(1), max);
+    assert_eq!((1: $T).saturating_add(max), max);
+    assert_eq!(max.saturating_add(max), max);
+    // case iteration
+    cases!(max, cases, |case_pred, case, case_succ| {
+        assert_eq!(case.saturating_add(0), case);
+        assert_eq!((0: $T).saturating_add(case), case);
+        if (case <= max - 1) {
+            assert_eq!(case.saturating_add(1), case + 1);
+        } else {
+            assert_eq!(case.saturating_add(1), max);
+        };
+        if (case <= max - case) {
+            assert_eq!(case.saturating_add(case), case + case);
+        } else {
+            assert_eq!(case.saturating_add(case), max);
+        };
+        if (case_pred <= max - case_succ) {
+            assert_eq!(case_pred.saturating_add(case_succ), case_pred + case_succ);
+        } else {
+            assert_eq!(case_pred.saturating_add(case_succ), max);
+        };
+    });
+}
+
+public(package) macro fun test_saturating_sub<$T>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    // basic cases
+    assert_eq!((0: $T).saturating_sub(0), 0);
+    assert_eq!((1: $T).saturating_sub(0), 1);
+    assert_eq!((1: $T).saturating_sub(1), 0);
+    assert_eq!(max.saturating_sub(0), max);
+    assert_eq!(max.saturating_sub(max), 0);
+    // saturation cases
+    assert_eq!((0: $T).saturating_sub(1), 0);
+    assert_eq!((0: $T).saturating_sub(max), 0);
+    assert_eq!((1: $T).saturating_sub(2), 0);
+    assert_eq!((1: $T).saturating_sub(max), 0);
+    // case iteration
+    cases!(max, cases, |case_pred, case, case_succ| {
+        assert_eq!(case.saturating_sub(0), case);
+        assert_eq!(case.saturating_sub(case), 0);
+        assert_eq!(case_succ.saturating_sub(case), case_succ - case);
+        assert_eq!(case_succ.saturating_sub(case_pred), case_succ - case_pred);
+        assert_eq!(case.saturating_sub(case_pred), case - case_pred);
+        assert_eq!(case_pred.saturating_sub(case_succ), 0);
+    });
+}
+
+public(package) macro fun test_saturating_mul<$T>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    // basic cases
+    assert_eq!((0: $T).saturating_mul(0), 0);
+    assert_eq!((0: $T).saturating_mul(1), 0);
+    assert_eq!((1: $T).saturating_mul(0), 0);
+    assert_eq!((1: $T).saturating_mul(1), 1);
+    assert_eq!((0: $T).saturating_mul(max), 0);
+    assert_eq!(max.saturating_mul(0), 0);
+    assert_eq!(max.saturating_mul(1), max);
+    assert_eq!((1: $T).saturating_mul(max), max);
+    // saturation cases
+    assert_eq!(max.saturating_mul(2), max);
+    assert_eq!((2: $T).saturating_mul(max), max);
+    assert_eq!(max.saturating_mul(max), max);
+    // case iteration
+    cases!(max, cases, |case_pred, case, case_succ| {
+        assert_eq!(case.saturating_mul(0), 0);
+        assert_eq!((0: $T).saturating_mul(case), 0);
+        assert_eq!(case.saturating_mul(1), case);
+        assert_eq!((1: $T).saturating_mul(case), case);
+        if (case != 0 && case <= max / 2) {
+            assert_eq!(case.saturating_mul(2), case * 2);
+        } else if (case != 0) {
+            assert_eq!(case.saturating_mul(2), max);
+        };
+        if (case != 0 && case <= max / case) {
+            assert_eq!(case.saturating_mul(case), case * case);
+        } else if (case != 0) {
+            assert_eq!(case.saturating_mul(case), max);
+        };
+        if (case_pred != 0 && case_succ <= max / case_pred) {
+            assert_eq!(case_pred.saturating_mul(case_succ), case_pred * case_succ);
+        } else if (case_succ != 0) {
+            assert_eq!(case_pred.saturating_mul(case_succ), max);
+        };
+    });
+}
