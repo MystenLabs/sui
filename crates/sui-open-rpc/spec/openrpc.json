@@ -3193,7 +3193,8 @@
                 "coinType": "0x2::sui::SUI",
                 "coinObjectCount": 15,
                 "totalBalance": "3000000000",
-                "lockedBalance": {}
+                "lockedBalance": {},
+                "fundsInAddressBalance": "42"
               }
             ]
           }
@@ -3345,7 +3346,8 @@
               "coinType": "0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC",
               "coinObjectCount": 15,
               "totalBalance": "15",
-              "lockedBalance": {}
+              "lockedBalance": {},
+              "fundsInAddressBalance": "42"
             }
           }
         }
@@ -5528,6 +5530,7 @@
         "required": [
           "coinObjectCount",
           "coinType",
+          "fundsInAddressBalance",
           "lockedBalance",
           "totalBalance"
         ],
@@ -5539,6 +5542,14 @@
           },
           "coinType": {
             "type": "string"
+          },
+          "fundsInAddressBalance": {
+            "description": "The portion of `total_balance` that resides in the address balance rather than in the coin objects. `total_balance` is the total amount of funds owned by the address. That is, do not add these two fields together.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint128"
+              }
+            ]
           },
           "lockedBalance": {
             "type": "object",
