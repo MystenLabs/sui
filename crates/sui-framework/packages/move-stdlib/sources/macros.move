@@ -130,6 +130,46 @@ public(package) macro fun num_saturating_mul<$T>($x: $T, $y: $T, $max_t: $T): $T
     else x * y
 }
 
+public macro fun num_checked_shl<$T>($x: $T, $shift: u8, $bit_size: u8): Option<$T> {
+    let x = $x;
+    let shift = $shift;
+    let bit_size = $bit_size;
+    if (shift >= bit_size) option::none()
+    else option::some(x << shift)
+}
+
+public macro fun num_checked_shr<$T>($x: $T, $shift: u8, $bit_size: u8): Option<$T> {
+    let x = $x;
+    let shift = $shift;
+    let bit_size = $bit_size;
+    if (shift >= bit_size) option::none()
+    else option::some(x >> shift)
+}
+
+public macro fun num_exact_shl<$T>($x: $T, $shift: u8, $bit_size: u8): Option<$T> {
+    let x = $x;
+    let shift = $shift;
+    let bit_size = $bit_size;
+    if (shift >= bit_size) option::none()
+    else {
+        let result = x << shift;
+        if (result >> shift == x) option::some(result)
+        else option::none()
+    }
+}
+
+public macro fun num_exact_shr<$T>($x: $T, $shift: u8, $bit_size: u8): Option<$T> {
+    let x = $x;
+    let shift = $shift;
+    let bit_size = $bit_size;
+    if (shift >= bit_size) option::none()
+    else {
+        let result = x >> shift;
+        if (result << shift == x) option::some(result)
+        else option::none()
+    }
+}
+
 public macro fun range_do<$T, $R: drop>($start: $T, $stop: $T, $f: |$T| -> $R) {
     let mut i = $start;
     let stop = $stop;
