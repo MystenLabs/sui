@@ -9,12 +9,12 @@ use anyhow::Context;
 use async_trait::async_trait;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::sequential;
-use sui_indexer_alt_framework::transaction::TransactionDataAPI;
-use sui_indexer_alt_framework::transaction::TransactionKind;
 use sui_indexer_alt_framework::types::base_types::SuiAddress;
 use sui_indexer_alt_framework::types::dynamic_field::Field;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::object::Object;
+use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
+use sui_indexer_alt_framework::types::transaction::TransactionKind;
 
 use crate::restore::Restore;
 use crate::schema::Schema;

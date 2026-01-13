@@ -14,7 +14,7 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::Identifier;
 use sui_types::TypeTag;
 use sui_types::base_types::ObjectDigest;
-use sui_types::base_types::ObjectId;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
