@@ -1554,7 +1554,7 @@ TransactionEffects.balanceChanges
   => {"tx_balance_changes", "tx_digests"}
 
 TransactionEffects.balanceChangesJson
-  => {}
+  => {"tx_balance_changes", "tx_digests"}
 
 TransactionEffects.effectsBcs
   => {}

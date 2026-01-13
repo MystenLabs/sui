@@ -3790,8 +3790,6 @@ type TransactionEffects {
 	balanceChanges(first: Int, after: String, last: Int, before: String): BalanceChangeConnection
 	"""
 	The balance changes as a JSON array, matching the gRPC proto format.
-	
-	Only available for transactions from execution context (simulate/execute).
 	"""
 	balanceChangesJson: JSON
 	"""
