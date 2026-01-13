@@ -13,8 +13,6 @@ use anyhow::Result;
 use axum::{Extension, Router, extract::DefaultBodyLimit, middleware, routing::post};
 use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PublicKey};
 use fastcrypto::traits::{KeyPair, ToFromBytes};
-use std::fs;
-use std::io::BufReader;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -183,34 +181,22 @@ pub fn generate_self_cert(hostname: String) -> CertKeyPair {
 
 /// Load a certificate for use by the listening service
 fn load_certs(filename: &str) -> Vec<rustls::pki_types::CertificateDer<'static>> {
-    let certfile = fs::File::open(filename)
-        .unwrap_or_else(|e| panic!("cannot open certificate file: {}; {}", filename, e));
-    let mut reader = BufReader::new(certfile);
-    rustls_pemfile::certs(&mut reader)
+    use rustls_pki_types::pem::PemObject;
+    use rustls_pki_types::CertificateDer;
+
+    CertificateDer::pem_file_iter(filename)
+        .unwrap_or_else(|e| panic!("cannot open certificate file: {}; {}", filename, e))
         .collect::<Result<Vec<_>, _>>()
         .unwrap()
 }
 
 /// Load a private key
 fn load_private_key(filename: &str) -> rustls::pki_types::PrivateKeyDer<'static> {
-    let keyfile = fs::File::open(filename)
-        .unwrap_or_else(|e| panic!("cannot open private key file {}; {}", filename, e));
-    let mut reader = BufReader::new(keyfile);
+    use rustls_pki_types::pem::PemObject;
+    use rustls_pki_types::PrivateKeyDer;
 
-    loop {
-        match rustls_pemfile::read_one(&mut reader).expect("cannot parse private key .pem file") {
-            Some(rustls_pemfile::Item::Pkcs1Key(key)) => return key.into(),
-            Some(rustls_pemfile::Item::Pkcs8Key(key)) => return key.into(),
-            Some(rustls_pemfile::Item::Sec1Key(key)) => return key.into(),
-            None => break,
-            _ => {}
-        }
-    }
-
-    panic!(
-        "no keys found in {:?} (encrypted keys not supported)",
-        filename
-    );
+    PrivateKeyDer::from_pem_file(filename)
+        .unwrap_or_else(|e| panic!("cannot open/parse private key file {}; {}", filename, e))
 }
 
 /// load the static keys we'll use to allow external non-validator nodes to push metrics

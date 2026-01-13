@@ -34,9 +34,11 @@ const MAX_CERT_LENGTH: usize = 1024;
 
 /// Root certificate for AWS Nitro Attestation.
 static ROOT_CERTIFICATE: Lazy<Vec<u8>> = Lazy::new(|| {
+    use rustls_pki_types::pem::PemObject;
+    use rustls_pki_types::CertificateDer;
+
     let pem_bytes = include_bytes!("./nitro_root_certificate.pem");
-    let mut pem_cursor = std::io::Cursor::new(pem_bytes);
-    let cert = rustls_pemfile::certs(&mut pem_cursor)
+    let cert = CertificateDer::pem_slice_iter(pem_bytes)
         .next()
         .expect("should have root cert")
         .expect("root cert should be valid");

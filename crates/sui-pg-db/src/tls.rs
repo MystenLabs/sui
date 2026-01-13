@@ -116,6 +116,8 @@ pub(crate) fn build_tls_config(
 
     // Add custom CA certificate if provided
     if let Some(ca_cert_path) = &tls_ca_cert_path {
+        use rustls_pki_types::pem::PemObject;
+
         let ca_cert_bytes = std::fs::read(ca_cert_path).with_context(|| {
             format!(
                 "Failed to read CA certificate from {}",
@@ -124,7 +126,7 @@ pub(crate) fn build_tls_config(
         })?;
 
         let certs = if ca_cert_bytes.starts_with(b"-----BEGIN CERTIFICATE-----") {
-            rustls_pemfile::certs(&mut ca_cert_bytes.as_slice())
+            CertificateDer::pem_slice_iter(&ca_cert_bytes)
                 .collect::<Result<Vec<_>, _>>()
                 .with_context(|| {
                     format!(
