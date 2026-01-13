@@ -5,7 +5,6 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
     path::Path,
-    str::FromStr,
 };
 
 use fastcrypto::encoding::Base64;

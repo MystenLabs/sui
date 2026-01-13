@@ -63,7 +63,7 @@ pub enum PackagePathError {
     InvalidDirectory { path: PathBuf },
 
     #[error("Package does not have a Move.toml file at `{path}`")]
-    InvalidPackage { path: PathBuf },
+    NoMoveToml { path: PathBuf },
 
     #[error("Path `{path}` does not refer to a file")]
     InvalidFile { path: PathBuf },
@@ -137,7 +137,7 @@ impl PackagePath {
         let result = Self(OutputPath(path));
 
         if !result.manifest_path().exists() {
-            return Err(PackagePathError::InvalidPackage {
+            return Err(PackagePathError::NoMoveToml {
                 path: result.manifest_path(),
             });
         }
