@@ -324,14 +324,6 @@ fn modules(
                     state.insert(cur_id, State::Visited);
                 }
                 State::NotVisited => {
-                    if state.insert(cur_id.clone(), State::Visiting).is_some() {
-                        return Err(make_invariant_violation!(format!(
-                            "Module {} added to load queue as unvisited twice",
-                            cur_id
-                        )));
-                    }
-                    stack.push(cur_id.clone());
-
                     let input_module = input_modules.get(&cur_id).ok_or_else(|| {
                         make_invariant_violation!(format!(
                             "Module {} not found in initial modules",
@@ -339,24 +331,50 @@ fn modules(
                         ))
                     })?;
 
-                    for dep in input_module
+                    // Collect unvisited dependencies, checking for cycles.
+                    let unvisited_deps: Vec<_> = input_module
                         .compiled_module
                         .immediate_dependencies()
                         .iter()
                         .filter(|dep| pkg_module_ids.contains(dep) && *dep != &cur_id)
-                    {
-                        match state.get(dep).copied().unwrap_or(State::NotVisited) {
-                            State::Visited => { /* nothing */ }
-                            State::Visiting => {
-                                return Err(make_invariant_violation!(format!(
+                        .filter_map(|dep| {
+                            match state.get(dep).copied().unwrap_or(State::NotVisited) {
+                                State::Visited => None,
+                                State::Visiting => Some(Err(make_invariant_violation!(format!(
                                     "Cycle detected when loading module for package: {}",
                                     dep
-                                )));
+                                )))),
+                                State::NotVisited => Some(Ok(dep.clone())),
                             }
-                            State::NotVisited => {
-                                stack.push(dep.clone());
-                            }
+                        })
+                        .collect::<Result<_, _>>()?;
+
+                    if unvisited_deps.is_empty() {
+                        // Leaf node: load directly, skipping the Visiting state to avoid
+                        // redundant state lookup, interning, and stack operations.
+                        let loaded_module =
+                            module(package_context, package_context.version_id, input_module)?;
+                        if package_context
+                            .loaded_modules
+                            .insert(cur_key, loaded_module)
+                            .is_some()
+                        {
+                            return Err(make_invariant_violation!(format!(
+                                "Module {} already loaded in package context",
+                                cur_id
+                            )));
                         }
+                        state.insert(cur_id, State::Visited);
+                    } else {
+                        // Has unvisited dependencies: mark as Visiting and process deps first.
+                        if state.insert(cur_id.clone(), State::Visiting).is_some() {
+                            return Err(make_invariant_violation!(format!(
+                                "Module {} added to load queue as unvisited twice",
+                                cur_id
+                            )));
+                        }
+                        stack.push(cur_id);
+                        stack.extend(unvisited_deps);
                     }
                 }
             }
