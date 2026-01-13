@@ -23,7 +23,9 @@ use sui_sql_macro::query;
 use crate::error::RpcError;
 use crate::pagination::Page;
 
-const OVERFETCH_MULTIPLIER: usize = 2;
+// Multiplier to apply to page limit when querying for candidate checkpoints to account for
+// false positives (~15%) from bloom filters.
+const OVERFETCH_MULTIPLIER: f64 = 1.2;
 
 /// Probe that represent the block and bits that should be set for values if they exists in a checkpoint block.
 /// We pre-compute these probes to avoid repeated hashing in SQL.
@@ -78,6 +80,7 @@ pub(crate) async fn candidate_cps<C>(
     let cp_bloom_probe = cp_bloom_probe(filter_values);
     let cp_bloom_condition = cp_bloom_condition_fragment(&cp_bloom_probe);
 
+    let fpr_adjusted_limit = (page.limit_with_overhead() as f64 * OVERFETCH_MULTIPLIER) as i64;
     let query = query!(
         r#"
         -- Inline table of probes: which bloom blocks to check and what bits must be set
@@ -121,12 +124,12 @@ pub(crate) async fn candidate_cps<C>(
         "#,
         cp_bloom_blocks_condition,
         page.order_by_direction(),
-        (page.limit_with_overhead() * OVERFETCH_MULTIPLIER) as i64,
+        fpr_adjusted_limit,
         cp_lo as i64,
         cp_hi as i64,
         cp_bloom_condition,
         page.order_by_direction(),
-        (page.limit_with_overhead() * OVERFETCH_MULTIPLIER) as i64
+        fpr_adjusted_limit
     );
 
     let results: Vec<CpResult> = conn

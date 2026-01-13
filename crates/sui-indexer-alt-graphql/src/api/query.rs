@@ -550,7 +550,7 @@ impl Query {
             .map(Some);
     }
 
-    /// The transactions that exist in the network, optionally filtered by transaction filters.
+    /// The transactions that exist in the network, with support for multiple filters (AND).
     async fn transactions_scan(
         &self,
         ctx: &Context<'_>,
