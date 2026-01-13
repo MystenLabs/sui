@@ -25,6 +25,7 @@ use operations::{InitRequirement, Operation, OperationResources, ResourceRequest
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng, thread_rng};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
@@ -179,6 +180,7 @@ pub struct CompositeWorkloadConfig {
     pub num_shared_counters: u64,
     pub shared_counter_hotness: f32,
     pub address_balance_amount: u64,
+    pub address_balance_gas_probability: f32,
     pub metrics: Option<Arc<Mutex<CompositionMetrics>>>,
 }
 
@@ -195,7 +197,7 @@ impl CompositeWorkloadConfig {
     pub fn sample_operations(&self, rng: &mut impl Rng) -> Vec<Box<dyn Operation>> {
         let mut ops: Vec<Box<dyn Operation>> = ALL_OPERATIONS
             .iter()
-            .filter(|desc| rng.gen_range(0.0..1.0) < self.probability_for(desc))
+            .filter(|desc| rng.gen_bool(self.probability_for(desc) as f64))
             .map(|desc| (desc.factory)())
             .collect();
 
@@ -210,11 +212,17 @@ impl CompositeWorkloadConfig {
     }
 
     pub fn collect_init_requirements(&self) -> std::collections::HashSet<InitRequirement> {
-        ALL_OPERATIONS
+        let mut requirements: std::collections::HashSet<InitRequirement> = ALL_OPERATIONS
             .iter()
             .filter(|desc| self.probability_for(desc) > 0.0)
             .flat_map(|desc| (desc.factory)().init_requirements())
-            .collect()
+            .collect();
+
+        if self.address_balance_gas_probability > 0.0 {
+            requirements.insert(InitRequirement::SeedAddressBalance);
+        }
+
+        requirements
     }
 }
 
@@ -225,6 +233,7 @@ impl Default for CompositeWorkloadConfig {
             num_shared_counters: 10,
             shared_counter_hotness: 0.5,
             address_balance_amount: 1000,
+            address_balance_gas_probability: 0.0,
             metrics: None,
         }
     }
@@ -239,6 +248,7 @@ pub struct OperationPool {
     pub balance_pool: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_cap: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_type: Option<TypeTag>,
+    pub chain_identifier: sui_types::digests::ChainIdentifier,
 }
 
 impl OperationPool {
@@ -263,6 +273,7 @@ pub struct CompositePayload {
     system_state_observer: Arc<SystemStateObserver>,
     metrics: Arc<Mutex<CompositionMetrics>>,
     current_op_set: OperationSet,
+    nonce_counter: AtomicU32,
 }
 
 impl std::fmt::Debug for CompositePayload {
@@ -342,11 +353,9 @@ impl Payload for CompositePayload {
     }
 
     fn make_transaction(&mut self) -> Transaction {
-        let rgp = self
-            .system_state_observer
-            .state
-            .borrow()
-            .reference_gas_price;
+        let system_state = self.system_state_observer.state.borrow().clone();
+        let rgp = system_state.reference_gas_price;
+        let current_epoch = system_state.epoch;
 
         let ops = self.sample_operations();
 
@@ -363,6 +372,10 @@ impl Payload for CompositePayload {
 
         let pool = self.pool.blocking_read();
 
+        let use_address_balance_gas = self
+            .rng
+            .gen_bool(self.config.address_balance_gas_probability as f64);
+
         let mut tx_builder = TestTransactionBuilder::new(self.gas.1, self.gas.0, rgp);
         {
             let builder = tx_builder.ptb_builder_mut();
@@ -373,6 +386,11 @@ impl Payload for CompositePayload {
             }
         }
 
+        if use_address_balance_gas {
+            let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
+            tx_builder =
+                tx_builder.with_address_balance_gas(pool.chain_identifier, current_epoch, nonce);
+        }
         tx_builder.build_and_sign(self.gas.2.as_ref())
     }
 }
@@ -519,6 +537,7 @@ impl WorkloadBuilder<dyn Payload> for CompositeWorkloadBuilder {
             init_gas,
             payload_gas,
             metrics: self.metrics.clone(),
+            chain_identifier: None,
         }))
     }
 }
@@ -534,6 +553,7 @@ pub struct CompositeWorkload {
     init_gas: Vec<Gas>,
     payload_gas: Vec<Gas>,
     metrics: Arc<Mutex<CompositionMetrics>>,
+    chain_identifier: Option<sui_types::digests::ChainIdentifier>,
 }
 
 impl CompositeWorkload {
@@ -552,6 +572,9 @@ impl Workload<dyn Payload> for CompositeWorkload {
         if self.package_id.is_some() {
             return;
         }
+
+        self.chain_identifier = Some(proxy.get_chain_identifier());
+        info!("Chain identifier: {:?}", self.chain_identifier);
 
         let gas_price = system_state_observer.state.borrow().reference_gas_price;
         let (head, tail) = self
@@ -879,6 +902,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             balance_pool: self.balance_pool,
             test_coin_cap: self.test_coin_cap,
             test_coin_type,
+            chain_identifier: self.chain_identifier.unwrap(),
         }));
 
         let config = Arc::new(self.config.clone());
@@ -894,6 +918,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 system_state_observer: system_state_observer.clone(),
                 metrics: self.metrics.clone(),
                 current_op_set: OperationSet::new(),
+                nonce_counter: AtomicU32::new(0),
             }));
         }
 

@@ -245,7 +245,7 @@ impl Workload<dyn Payload> for PartyWorkload {
         path.push("src/workloads/data/party");
         let SystemState {
             reference_gas_price,
-            protocol_config: _,
+            ..
         } = system_state_observer.state.borrow().clone();
         let transaction =
             TestTransactionBuilder::new(first_gas.1, first_gas.0, reference_gas_price)
@@ -271,7 +271,7 @@ impl Workload<dyn Payload> for PartyWorkload {
     ) -> Vec<Box<dyn Payload>> {
         let SystemState {
             reference_gas_price,
-            protocol_config: _,
+            ..
         } = system_state_observer.state.borrow().clone();
 
         let state = Arc::new(Mutex::new(InMemoryWallet::new_empty()));

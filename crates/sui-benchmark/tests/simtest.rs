@@ -1515,6 +1515,11 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_composite_workload() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let _guard =
+            sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+                cfg.enable_address_balance_gas_payments_for_testing();
+                cfg
+            });
         let test_cluster = build_test_cluster(4, 10000, 1).await;
 
         let metrics = Arc::new(Mutex::new(
@@ -1526,6 +1531,7 @@ mod test {
             num_shared_counters: 2,
             shared_counter_hotness: 0.95,
             address_balance_amount: 1000,
+            address_balance_gas_probability: 0.2,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
