@@ -2108,7 +2108,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
-                if parsed.transaction.is_mfp_transaction()
+                if parsed.transaction.is_user_transaction()
                     && !self.epoch_store.protocol_config().mysticeti_fastpath()
                 {
                     debug!(
@@ -2596,15 +2596,6 @@ impl MysticetiConsensusHandler {
                 commit_consumer_monitor.set_highest_handled_commit(commit_index);
             }
         }));
-        if consensus_block_handler.enabled() {
-            tasks.spawn(monitored_future!(async move {
-                while let Some(blocks) = block_receiver.recv().await {
-                    consensus_block_handler
-                        .handle_certified_blocks(blocks)
-                        .await;
-                }
-            }));
-        }
         Self { tasks }
     }
 
@@ -2902,160 +2893,6 @@ impl SequencedConsensusTransaction {
             consensus_index: Default::default(),
             transaction: SequencedConsensusTransactionKind::External(transaction),
         }
-    }
-}
-
-/// Handles certified and rejected transactions output by consensus.
-pub(crate) struct ConsensusBlockHandler {
-    /// Whether to enable handling certified transactions.
-    enabled: bool,
-    /// Per-epoch store.
-    epoch_store: Arc<AuthorityPerEpochStore>,
-    /// Enqueues transactions to the execution scheduler via a separate task.
-    execution_scheduler_sender: ExecutionSchedulerSender,
-    /// Backpressure subscriber to wait for backpressure to be resolved.
-    backpressure_subscriber: BackpressureSubscriber,
-    /// Metrics for consensus transaction handling.
-    metrics: Arc<AuthorityMetrics>,
-}
-
-impl ConsensusBlockHandler {
-    pub fn new(
-        epoch_store: Arc<AuthorityPerEpochStore>,
-        execution_scheduler_sender: ExecutionSchedulerSender,
-        backpressure_subscriber: BackpressureSubscriber,
-        metrics: Arc<AuthorityMetrics>,
-    ) -> Self {
-        Self {
-            // Disable mysticeti fastpath execution when preconsensus locking is disabled,
-            // ensuring all transactions go through normal consensus commit path
-            // where post-consensus conflict detection runs.
-            enabled: epoch_store.protocol_config().mysticeti_fastpath()
-                && !epoch_store.protocol_config().disable_preconsensus_locking(),
-            epoch_store,
-            execution_scheduler_sender,
-            backpressure_subscriber,
-            metrics,
-        }
-    }
-
-    pub fn enabled(&self) -> bool {
-        self.enabled
-    }
-
-    #[instrument(level = "debug", skip_all)]
-    async fn handle_certified_blocks(&self, blocks_output: CertifiedBlocksOutput) {
-        self.backpressure_subscriber.await_no_backpressure().await;
-
-        let _scope = monitored_scope("ConsensusBlockHandler::handle_certified_blocks");
-
-        // Avoid triggering fastpath execution or setting transaction status to fastpath certified, during reconfiguration.
-        let reconfiguration_lock = self.epoch_store.get_reconfig_state_read_lock_guard();
-        if !reconfiguration_lock.should_accept_user_certs() {
-            debug!(
-                "Skipping fastpath execution because epoch {} is closing user transactions: {}",
-                self.epoch_store.epoch(),
-                blocks_output
-                    .blocks
-                    .iter()
-                    .map(|b| b.block.reference().to_string())
-                    .join(", "),
-            );
-            return;
-        }
-
-        self.metrics.consensus_block_handler_block_processed.inc();
-        let epoch = self.epoch_store.epoch();
-        let parsed_transactions = blocks_output
-            .blocks
-            .into_iter()
-            .map(|certified_block| {
-                let block_ref = certified_block.block.reference();
-                let transactions =
-                    parse_block_transactions(&certified_block.block, &certified_block.rejected);
-                (block_ref, transactions)
-            })
-            .collect::<Vec<_>>();
-        let mut executable_transactions = vec![];
-        for (block, transactions) in parsed_transactions.into_iter() {
-            // Set the "ping" transaction status for this block. This is ncecessary as there might be some ping requests waiting for the ping transaction to be certified.
-            self.epoch_store.set_consensus_tx_status(
-                ConsensusPosition::ping(epoch, block),
-                ConsensusTxStatus::FastpathCertified,
-            );
-
-            for (txn_idx, parsed) in transactions.into_iter().enumerate() {
-                let position = ConsensusPosition {
-                    epoch,
-                    block,
-                    index: txn_idx as TransactionIndex,
-                };
-
-                let status_str = if parsed.rejected {
-                    "rejected"
-                } else {
-                    "certified"
-                };
-                if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
-                    debug!(
-                        "User Transaction in position: {:} with digest {:} is {:}",
-                        position,
-                        tx.digest(),
-                        status_str
-                    );
-                } else {
-                    debug!(
-                        "System Transaction in position: {:} is {:}",
-                        position, status_str
-                    );
-                }
-
-                if parsed.rejected {
-                    // TODO(fastpath): avoid parsing blocks twice between handling commit and fastpath transactions?
-                    self.epoch_store
-                        .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
-                    self.metrics
-                        .consensus_block_handler_txn_processed
-                        .with_label_values(&["rejected"])
-                        .inc();
-                    continue;
-                }
-
-                self.metrics
-                    .consensus_block_handler_txn_processed
-                    .with_label_values(&["certified"])
-                    .inc();
-
-                if let Some(tx) = parsed.transaction.kind.into_user_transaction() {
-                    if tx.is_consensus_tx() {
-                        continue;
-                    }
-                    // Only set fastpath certified status on transactions intended for fastpath execution.
-                    self.epoch_store
-                        .set_consensus_tx_status(position, ConsensusTxStatus::FastpathCertified);
-                    let tx = VerifiedTransaction::new_unchecked(tx);
-                    executable_transactions.push(Schedulable::Transaction(
-                        VerifiedExecutableTransaction::new_from_consensus(
-                            tx,
-                            self.epoch_store.epoch(),
-                        ),
-                    ));
-                }
-            }
-        }
-
-        if executable_transactions.is_empty() {
-            return;
-        }
-        self.metrics
-            .consensus_block_handler_fastpath_executions
-            .inc_by(executable_transactions.len() as u64);
-
-        self.execution_scheduler_sender.send(
-            executable_transactions,
-            Default::default(),
-            SchedulingSource::MysticetiFastPath,
-        );
     }
 }
 

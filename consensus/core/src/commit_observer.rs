@@ -240,6 +240,7 @@ impl CommitObserver {
                 };
 
                 let committed_sub_dag = load_committed_subdag_from_store(
+                    &self.context,
                     self.store.as_ref(),
                     commit,
                     reputation_scores,

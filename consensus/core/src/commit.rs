@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{BlockAPI, Slot, VerifiedBlock},
+    context::Context,
     leader_scoring::ReputationScores,
     storage::Store,
 };
@@ -379,6 +380,8 @@ pub struct CommittedSubDag {
     ///
     /// Indices of rejected transactions in each block.
     pub rejected_transactions_by_block: BTreeMap<BlockRef, Vec<TransactionIndex>>,
+    /// Used by consensus to communicate whether to always accept system transactions in this commit.
+    pub always_accept_system_transactions: bool,
 }
 
 impl CommittedSubDag {
@@ -388,6 +391,7 @@ impl CommittedSubDag {
         blocks: Vec<VerifiedBlock>,
         timestamp_ms: BlockTimestampMs,
         commit_ref: CommitRef,
+        always_accept_system_transactions: bool,
     ) -> Self {
         Self {
             leader,
@@ -398,6 +402,7 @@ impl CommittedSubDag {
             recovered_rejected_transactions: false,
             reputation_scores_desc: vec![],
             rejected_transactions_by_block: BTreeMap::new(),
+            always_accept_system_transactions,
         }
     }
 }
@@ -459,6 +464,7 @@ impl fmt::Debug for CommittedSubDag {
 
 // Recovers the full CommittedSubDag from block store, based on Commit.
 pub(crate) fn load_committed_subdag_from_store(
+    context: &Arc<Context>,
     store: &dyn Store,
     commit: TrustedCommit,
     reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
@@ -487,6 +493,9 @@ pub(crate) fn load_committed_subdag_from_store(
         blocks,
         commit.timestamp_ms(),
         commit.reference(),
+        context
+            .protocol_config
+            .consensus_always_accept_system_transactions(),
     );
 
     subdag.reputation_scores_desc = reputation_scores_desc;
@@ -772,7 +781,8 @@ mod tests {
             leader_ref,
             blocks.clone(),
         );
-        let subdag = load_committed_subdag_from_store(store.as_ref(), commit.clone(), vec![]);
+        let subdag =
+            load_committed_subdag_from_store(&context, store.as_ref(), commit.clone(), vec![]);
         assert_eq!(subdag.leader, leader_ref);
         assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
         assert_eq!(

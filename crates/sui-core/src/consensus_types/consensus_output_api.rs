@@ -89,7 +89,11 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
                     .unwrap_or(&no_transaction);
                 (
                     block.reference(),
-                    parse_block_transactions(block, rejected_transactions),
+                    parse_block_transactions(
+                        block,
+                        rejected_transactions,
+                        self.always_accept_system_transactions,
+                    ),
                 )
             })
             .collect()
@@ -124,6 +128,7 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
 pub(crate) fn parse_block_transactions(
     block: &VerifiedBlock,
     rejected_transactions: &[TransactionIndex],
+    always_accept_system_transactions: bool,
 ) -> Vec<ParsedTransaction> {
     let round = block.round();
     let authority = block.author().value() as AuthorityIndex;
@@ -139,7 +144,9 @@ pub(crate) fn parse_block_transactions(
                     panic!("Failed to deserialize sequenced consensus transaction(this should not happen) {err} from {authority} at {round}");
                 },
             };
-            let rejected = if rejected_idx < rejected_transactions.len() {
+            let rejected = if always_accept_system_transactions && !transaction.is_user_transaction() {
+                false
+            } else if rejected_idx < rejected_transactions.len() {
                 match (index as TransactionIndex).cmp(&rejected_transactions[rejected_idx]) {
                     Ordering::Less => {
                         false

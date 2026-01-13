@@ -951,6 +951,10 @@ struct FeatureFlags {
     // If true, disable entry point signature check.
     #[serde(skip_serializing_if = "is_false")]
     disable_entry_point_signature_check: bool,
+
+    // If true, always accept committed system transactions.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_always_accept_system_transactions: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2518,6 +2522,11 @@ impl ProtocolConfig {
     pub fn consensus_skip_gced_blocks_in_direct_finalization(&self) -> bool {
         self.feature_flags
             .consensus_skip_gced_blocks_in_direct_finalization
+    }
+
+    pub fn consensus_always_accept_system_transactions(&self) -> bool {
+        self.feature_flags
+            .consensus_always_accept_system_transactions
     }
 }
 
@@ -4441,6 +4450,9 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.address_aliases = true;
                     }
+
+                    cfg.feature_flags
+                        .consensus_always_accept_system_transactions = true;
                 }
                 // Use this template when making changes:
                 //
