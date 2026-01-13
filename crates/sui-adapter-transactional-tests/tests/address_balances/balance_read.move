@@ -47,19 +47,19 @@ public fun send_max(holder: &mut SupplyHolder, key: u64, recipient: address) {
   sui::dynamic_field::add(&mut holder.id, key, supply);
 }
 
-// Send some SUI from A to B
 //# programmable --sender A --inputs 1042 @B
+// Send some SUI from A to B
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui::coin::send_funds<sui::sui::SUI>(Result(0), Input(1));
 
 //# create-checkpoint
 
-// Check that we can read the balance of B
 //# programmable --sender A --inputs immshared(2764) @B 1042
+// Check that we can read the balance of B
 //> 0: test::balance_read::balance_check(Input(0), Input(1), Input(2));
 
-// Check that C has a zero balance
 //# programmable --sender A --inputs immshared(2764) @C 0
+// Check that C has a zero balance
 //> 0: test::balance_read::balance_check(Input(0), Input(1), Input(2));
 
 // Overflow D's balance (requires two transactions, since an individual transaction
@@ -74,6 +74,6 @@ public fun send_max(holder: &mut SupplyHolder, key: u64, recipient: address) {
 
 //# create-checkpoint
 
-// Check that D's balance is clamped to u64::MAX
 //# programmable --sender A --inputs immshared(2764) @D 18446744073709551615
+// Check that D's balance is clamped to u64::MAX
 //> 0: test::balance_read::balance_check_fake(Input(0), Input(1), Input(2));

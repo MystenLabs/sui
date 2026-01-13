@@ -114,8 +114,8 @@ public fun withdraw_funds_from_object<T>(obj: &mut UID, value: u64): Withdrawal<
     sui::funds_accumulator::withdraw_from_object(obj, value as u256)
 }
 
-/// Read the balance of an address as of the beginning of the current consensus commit.
-/// Can read either address-owned or object-owned balances.
+/// Read the value of the funds of type T owned by `address` as of the beginning of
+/// the current consensus commit. Can read either address-owned or object-owned balances.
 public fun settled_funds_value<T>(root: &sui::accumulator::AccumulatorRoot, address: address): u64 {
     if (!root.u128_exists<Balance<T>>(address)) {
         return 0

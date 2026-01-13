@@ -515,8 +515,8 @@ Create a <code>Withdrawal&lt;<a href="../sui/balance.md#sui_balance_Balance">Bal
 
 ## Function `settled_funds_value`
 
-Read the balance of an address as of the beginning of the current consensus commit.
-Can read either address-owned or object-owned balances.
+Read the value of the funds of type T owned by <code><b>address</b></code> as of the beginning of
+the current consensus commit. Can read either address-owned or object-owned balances.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_settled_funds_value">settled_funds_value</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, <b>address</b>: <b>address</b>): u64
