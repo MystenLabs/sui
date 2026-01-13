@@ -69,15 +69,15 @@ impl CommitterConfig {
         Duration::from_millis(self.watermark_interval_ms)
     }
 
-    /// Returns the watermark interval with a random jitter added. The jitter is a random value
-    /// between 0 and `watermark_interval_jitter_ms`.
-    pub fn watermark_interval_with_jitter(&self) -> Duration {
+    /// Returns the next watermark update instant with a random jitter added. The jitter is a
+    /// random value between 0 and `watermark_interval_jitter_ms`.
+    pub fn watermark_interval_with_jitter(&self) -> tokio::time::Instant {
         let jitter = if self.watermark_interval_jitter_ms == 0 {
             0
         } else {
             rand::thread_rng().gen_range(0..=self.watermark_interval_jitter_ms)
         };
-        Duration::from_millis(self.watermark_interval_ms + jitter)
+        tokio::time::Instant::now() + Duration::from_millis(self.watermark_interval_ms + jitter)
     }
 }
 

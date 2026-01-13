@@ -75,15 +75,14 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             next_checkpoint, "Starting commit watermark task"
         );
 
-        let mut next_wake =
-            tokio::time::Instant::now() + config.watermark_interval_with_jitter();
+        let mut next_wake = config.watermark_interval_with_jitter();
 
         loop {
             tokio::select! {
                 () = tokio::time::sleep_until(next_wake) => {
                     // Schedule next wake immediately, so the timer effectively runs in parallel
                     // with the commit logic below.
-                    next_wake = tokio::time::Instant::now() + config.watermark_interval_with_jitter();
+                    next_wake = config.watermark_interval_with_jitter();
                 }
                 Some(parts) = rx.recv() => {
                     for part in parts {
