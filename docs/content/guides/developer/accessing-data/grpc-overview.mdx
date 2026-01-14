@@ -132,7 +132,7 @@ Streaming APIs are useful for building indexers, dashboards, or bots that need t
 
 ## Handling pruned data
 
-If a full node doesn't return a specific object, transaction, or event, it's likely that the data has been pruned based on the node's retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store and Service](/concepts/data-access/archival-store.mdx). The Archival Store retains historical data for the network.
+If a full node doesn't return a specific object, transaction, or event, it's likely that the data has been pruned based on the node's retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store and Service](/guides/developer/accessing-data/archival-store.mdx). The Archival Store retains historical data for the network.
 
 You can reuse the same gRPC `LedgerService` methods for this lookup. Simply change the endpoint in your client from the full node's address to the archival service endpoint. This ensures that your application can access both recent and historical data reliably, regardless of a full node's pruning settings.
 

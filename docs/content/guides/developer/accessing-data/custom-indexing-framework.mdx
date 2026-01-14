@@ -41,7 +41,7 @@ The indexing framework supports multiple data sources to give developers flexibi
 
 - **gRPC streaming** pushes new checkpoints from full nodes as soon as they are available, providing lower latency than polling. Because streaming only emits the latest checkpoints, you must configure a polling-based fallback source to fetch historical data and ensure reliability.
 
-For configuration examples and guidance on when to use each source, see [Checkpoint Data Sources](/guides/developer/advanced/custom-indexer/indexer-data-integration.mdx#checkpoint-data-sources).
+For configuration examples and guidance on when to use each source, see [Checkpoint Data Sources](/guides/developer/accessing-data/custom-indexer/indexer-data-integration.mdx#checkpoint-data-sources).
 
 ### Ingestion layer
 
@@ -65,7 +65,7 @@ The framework then exposes specific interfaces that you implement to define your
 
 - `prune()`: Clean up old data based on your retention policies (optional). Useful for managing database size by removing outdated records while preserving recent data.
 
-Sequential and concurrent pipeline types and their trade-offs are detailed in [Pipeline Architecture](/concepts/data-access/pipeline-architecture.mdx).
+Sequential and concurrent pipeline types and their trade-offs are detailed in [Pipeline Architecture](/guides/developer/accessing-data/pipeline-architecture.mdx).
 
 <details>
 
@@ -89,6 +89,6 @@ Your indexer runs as one executable program with multiple coordinated background
 
 ## Related links
 
-<RelatedLink to="/concepts/data-access/pipeline-architecture.mdx" />
+<RelatedLink to="/guides/developer/accessing-data/pipeline-architecture.mdx" />
 <RelatedLink to="/concepts/transactions/transaction-lifecycle.mdx" />
-<RelatedLink to="/guides/developer/advanced/custom-indexer.mdx" />
+<RelatedLink to="/guides/developer/accessing-data/custom-indexer.mdx" />

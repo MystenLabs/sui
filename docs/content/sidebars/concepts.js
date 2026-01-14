@@ -76,6 +76,7 @@ const concepts = [
 	},
 	'concepts/data-access/data-serving',
 	'concepts/data-access/graphql-indexer',
+	'concepts/data-access/graphql-rpc',
 	{
 		type: 'category',
 		label: 'Cryptography',

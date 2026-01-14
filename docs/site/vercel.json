@@ -203,7 +203,7 @@
       { "source": "/guides/developer/sui-101/working-with-ptbs", "destination": "/guides/developer/transactions/working-with-ptbs" },
       { "source": "/concepts/data-access/archival-store", "destination": "/guides/developer/accessing-data/archival-store" },
       { "source": "/concepts/data-access/custom-indexing-framework", "destination": "/guides/developer/accessing-data/custom-indexing-framework" },
-      { "source": "/concepts/data-access/grpc-overview", "destination": "/guides/developer/accessing-data/grpc-overview" },
+      { "source": "/concepts/data-access/grpc-overview", "destination": "/concepts/data-access/graphql-rpc" },
       { "source": "/concepts/data-access/pipeline-architecture", "destination": "/guides/developer/accessing-data/pipeline-architecture" }
     ]
 }

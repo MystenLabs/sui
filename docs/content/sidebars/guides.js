@@ -118,8 +118,7 @@ const guides = [
           id: 'guides/developer/accessing-data/grpc-overview',
         },
         items: [
-          'guides/developer/accessing-data/graphql-rpc1',
-          'guides/developer/accessing-data/graphql-rpc',
+          'guides/developer/accessing-data/query-with-graphql',
         ],
       },
       {

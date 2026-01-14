@@ -6,7 +6,7 @@ keywords: [ indexer, custom indexer, indexer framework, indexer pipeline ]
 
 :::info
 
-Refer to [Custom Indexing Framework](/concepts/data-access/custom-indexing-framework.mdx) and [Indexer Pipeline Architecture](/concepts/data-access/pipeline-architecture.mdx) for a conceptual overview of the indexer framework.
+Refer to [Custom Indexing Framework](/guides/developer/accessing-data/custom-indexing-framework.mdx) and [Indexer Pipeline Architecture](/guides/developer/accessing-data/pipeline-architecture.mdx) for a conceptual overview of the indexer framework.
 
 <ImportContent source="data-serving-msg.mdx" mode="snippet" />
 
@@ -44,7 +44,7 @@ $ diesel --version
 
 </details>
 
-- [x] Read the [Custom Indexing Framework](/concepts/data-access/custom-indexing-framework.mdx) and [Indexer Pipeline Architecture](/concepts/data-access/pipeline-architecture.mdx) topics first to understand the overall architecture and concurrent pipeline concepts.
+- [x] Read the [Custom Indexing Framework](/guides/developer/accessing-data/custom-indexing-framework.mdx) and [Indexer Pipeline Architecture](/guides/developer/accessing-data/pipeline-architecture.mdx) topics first to understand the overall architecture and concurrent pipeline concepts.
 
 </TabItem>
 </Tabs>
@@ -393,7 +393,7 @@ Your indexer is now complete. The next steps walk you through running the indexe
 
 ##step Run your indexer
 
-Use the `cargo run` command to run your indexer against Testnet. You can choose from multiple checkpoint data sources (see [Checkpoint Data Sources](/guides/developer/advanced/custom-indexer/indexer-data-integration.mdx#checkpoint-data-sources) for details):
+Use the `cargo run` command to run your indexer against Testnet. You can choose from multiple checkpoint data sources (see [Checkpoint Data Sources](/guides/developer/accessing-data/custom-indexer/indexer-data-integration.mdx#checkpoint-data-sources) for details):
 
 **Using remote checkpoint storage:**
 
@@ -448,5 +448,5 @@ The key concepts covered here apply to any custom indexer: define your data stru
 <RelatedLink href="https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt" label="Sui Indexer Alt" desc="The `sui-indexer-alt` crate in the Sui repo." />
 <RelatedLink href="https://github.com/MystenLabs/mvr/tree/main/crates/mvr-indexer" label="Move Registry" desc="The indexer that the Move Registry (MVR) implements." />
 <RelatedLink href="https://github.com/MystenLabs/deepbookv3/tree/main/crates/indexer" label="DeepBook Indexer" desc="The indexer that DeepBook implements." />
-<RelatedLink to="/concepts/data-access/custom-indexing-framework.mdx" />
-<RelatedLink to="/concepts/data-access/pipeline-architecture.mdx" />
+<RelatedLink to="/guides/developer/accessing-data/custom-indexing-framework.mdx" />
+<RelatedLink to="/guides/developer/accessing-data/pipeline-architecture.mdx" />
