@@ -184,7 +184,6 @@ impl<'env> CodeUnitVerifier<'env, '_> {
                 verifier_config,
                 self.module,
                 &self.function_context,
-                self.name_def_map,
                 meter,
             )
         } else {
