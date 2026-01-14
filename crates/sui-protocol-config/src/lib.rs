@@ -952,6 +952,10 @@ struct FeatureFlags {
     // If true, disable entry point signature check.
     #[serde(skip_serializing_if = "is_false")]
     disable_entry_point_signature_check: bool,
+
+    // If true, convert withdrawal compatibility PTB arguments to coins at the start of the PTB.
+    #[serde(skip_serializing_if = "is_false")]
+    convert_withdrawal_compatibility_ptb_arguments: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2519,6 +2523,11 @@ impl ProtocolConfig {
     pub fn consensus_skip_gced_blocks_in_direct_finalization(&self) -> bool {
         self.feature_flags
             .consensus_skip_gced_blocks_in_direct_finalization
+    }
+
+    pub fn convert_withdrawal_compatibility_ptb_arguments(&self) -> bool {
+        self.feature_flags
+            .convert_withdrawal_compatibility_ptb_arguments
     }
 }
 

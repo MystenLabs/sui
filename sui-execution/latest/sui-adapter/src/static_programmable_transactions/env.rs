@@ -28,6 +28,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     annotated_value,
+    identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
     runtime_value::{self, MoveTypeLayout},
     vm_status::StatusCode,
@@ -37,9 +38,10 @@ use move_vm_types::{data_store::DataStore, loaded_data::runtime_types as vm_runt
 use std::{cell::OnceCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    Identifier, TypeTag,
+    Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectID, TxContext},
+    coin::RESOLVED_COIN_STRUCT,
     error::{ExecutionError, ExecutionErrorKind},
     execution_status::TypeArgumentError,
     funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
@@ -161,6 +163,24 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
             .get_runtime()
             .type_to_type_layout(&ty)
             .map_err(|e| self.convert_vm_error(e))
+    }
+
+    pub fn load_framework_function(
+        &self,
+        module: &IdentStr,
+        function: &IdentStr,
+        type_arguments: Vec<Type>,
+    ) -> Result<LoadedFunction, ExecutionError> {
+        let call_linkage = self
+            .linkage_analysis
+            .framework_call_linkage(&type_arguments, self.linkable_store)?;
+        self.load_function(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            module.to_string(),
+            function.to_string(),
+            type_arguments,
+            call_linkage,
+        )
     }
 
     pub fn load_function(
@@ -300,14 +320,25 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
         get_or_init_ty!(self, tx_context_type, TxContext::type_())
     }
 
+    pub fn coin_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
+        const COIN_ABILITIES: AbilitySet =
+            AbilitySet::singleton(Ability::Key).union(AbilitySet::singleton(Ability::Store));
+        let (a, m, n) = RESOLVED_COIN_STRUCT;
+        let module = ModuleId::new(*a, m.to_owned());
+        Ok(Type::Datatype(Rc::new(Datatype {
+            abilities: COIN_ABILITIES,
+            module,
+            name: n.to_owned(),
+            type_arguments: vec![inner_type],
+        })))
+    }
+
     pub fn balance_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
-        let Some(abilities) = AbilitySet::from_u8(Ability::Store as u8) else {
-            invariant_violation!("Unable to create balance abilities");
-        };
+        const BALANCE_ABILITIES: AbilitySet = AbilitySet::singleton(Ability::Store);
         let (a, m, n) = RESOLVED_BALANCE_STRUCT;
         let module = ModuleId::new(*a, m.to_owned());
         Ok(Type::Datatype(Rc::new(Datatype {
-            abilities,
+            abilities: BALANCE_ABILITIES,
             module,
             name: n.to_owned(),
             type_arguments: vec![inner_type],
@@ -315,13 +346,11 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
     }
 
     pub fn withdrawal_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
-        let Some(abilities) = AbilitySet::from_u8(Ability::Drop as u8) else {
-            invariant_violation!("Unable to create withdrawal abilities");
-        };
+        const WITHDRAWAL_ABILITIES: AbilitySet = AbilitySet::singleton(Ability::Drop);
         let (a, m, n) = RESOLVED_WITHDRAWAL_STRUCT;
         let module = ModuleId::new(*a, m.to_owned());
         Ok(Type::Datatype(Rc::new(Datatype {
-            abilities,
+            abilities: WITHDRAWAL_ABILITIES,
             module,
             name: n.to_owned(),
             type_arguments: vec![inner_type],
