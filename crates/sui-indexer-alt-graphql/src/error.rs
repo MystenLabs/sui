@@ -31,7 +31,7 @@ pub(crate) mod code {
     pub const RESOURCE_EXHAUSTED: &str = "RESOURCE_EXHAUSTED";
 }
 
-#[derive(thiserror::Error, Debug, Clone)]
+#[derive(thiserror::Error, Debug)]
 pub(crate) enum RpcError<E: std::error::Error = Infallible> {
     /// An error that is the user's fault.
     BadUserInput(Arc<E>),
@@ -124,6 +124,20 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
                     }
                 })
             }
+        }
+    }
+}
+
+impl<E: std::error::Error> Clone for RpcError<E> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::BadUserInput(e) => Self::BadUserInput(e.clone()),
+            &Self::FeatureUnavailable { what } => Self::FeatureUnavailable { what },
+            Self::GraphQlError(e) => Self::GraphQlError(e.clone()),
+            Self::InternalError(e) => Self::InternalError(e.clone()),
+            Self::Pagination(e) => Self::Pagination(e.clone()),
+            &Self::RequestTimeout { kind, limit } => Self::RequestTimeout { kind, limit },
+            Self::ResourceExhausted(e) => Self::ResourceExhausted(e.clone()),
         }
     }
 }

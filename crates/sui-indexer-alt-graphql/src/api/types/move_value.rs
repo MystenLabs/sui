@@ -97,40 +97,33 @@ impl MoveValue {
     /// If the value is of type `0x2::object::UID`, it is interpreted as a wrapped object whose version is bounded by the root version of the current value. Such values do not support nested owned object queries, but `Address.addressAt` can be used to re-scope it to a checkpoint (defaults to the current checkpoint), instead of a root version, allowing owned object queries.
     ///
     /// Values of other types cannot be interpreted as addresses, and `null` is returned.
-    async fn as_address(&self) -> Result<Option<Address>, RpcError> {
+    async fn as_address(&self) -> Option<Result<Address, RpcError>> {
         use TypeTag as T;
+        let tag = self.type_.to_type_tag()?;
 
-        let Some(tag) = self.type_.to_type_tag() else {
-            return Ok(None);
-        };
-
-        match tag {
-            T::Address => {
-                let address = bcs::from_bytes(&self.native)?;
-                Ok(Some(Address::with_address(
+        async {
+            let address = match tag {
+                T::Address => Address::with_address(
                     self.type_.scope.without_root_bound(),
-                    address,
-                )))
-            }
+                    bcs::from_bytes(&self.native)?,
+                ),
 
-            T::Struct(s) if *s == ID::type_() => {
-                let address = bcs::from_bytes(&self.native)?;
-                Ok(Some(Address::with_address(
+                T::Struct(s) if *s == ID::type_() => Address::with_address(
                     self.type_.scope.without_root_bound(),
-                    address,
-                )))
-            }
+                    bcs::from_bytes(&self.native)?,
+                ),
 
-            T::Struct(s) if *s == UID::type_() => {
-                let address = bcs::from_bytes(&self.native)?;
-                Ok(Some(Address::with_address(
-                    self.type_.scope.clone(),
-                    address,
-                )))
-            }
+                T::Struct(s) if *s == UID::type_() => {
+                    Address::with_address(self.type_.scope.clone(), bcs::from_bytes(&self.native)?)
+                }
 
-            _ => Ok(None),
+                _ => return Ok(None),
+            };
+
+            Ok(Some(address))
         }
+        .await
+        .transpose()
     }
 
     /// The BCS representation of this value, Base64-encoded.
@@ -201,44 +194,48 @@ impl MoveValue {
         &self,
         ctx: &Context<'_>,
         path: String,
-    ) -> Result<Option<MoveValue>, RpcError<Error>> {
-        let limits: &Limits = ctx.data()?;
-        let extract = sui_display::v2::Extract::parse(limits.display(), &path)
-            .map_err(|e| format_error(Error::Path, e))?;
+    ) -> Option<Result<MoveValue, RpcError<Error>>> {
+        async {
+            let limits: &Limits = ctx.data()?;
+            let extract = sui_display::v2::Extract::parse(limits.display(), &path)
+                .map_err(|e| format_error(Error::Path, e))?;
 
-        let Some(layout) = self.type_.layout_impl().await.map_err(upcast)? else {
-            return Ok(None);
-        };
+            let Some(layout) = self.type_.layout_impl().await.map_err(upcast)? else {
+                return Ok(None);
+            };
 
-        // Create a store for dynamic field resolution
-        let store = DisplayStore::new(ctx, &self.type_.scope);
+            // Create a store for dynamic field resolution
+            let store = DisplayStore::new(ctx, &self.type_.scope);
 
-        // Create an interpreter that combines the root value with the store
-        let root = sui_display::v2::OwnedSlice {
-            bytes: self.native.clone(),
-            layout,
-        };
+            // Create an interpreter that combines the root value with the store
+            let root = sui_display::v2::OwnedSlice {
+                bytes: self.native.clone(),
+                layout,
+            };
 
-        // Evaluate the extraction and convert to an owned slice
-        let interpreter = sui_display::v2::Interpreter::new(root, store);
-        let Some(value) = extract
-            .extract(&interpreter)
-            .await
-            .map_err(|e| format_error(Error::Path, e))?
-        else {
-            return Ok(None);
-        };
+            // Evaluate the extraction and convert to an owned slice
+            let interpreter = sui_display::v2::Interpreter::new(root, store);
+            let Some(value) = extract
+                .extract(&interpreter)
+                .await
+                .map_err(|e| format_error(Error::Path, e))?
+            else {
+                return Ok(None);
+            };
 
-        let Some(sui_display::v2::OwnedSlice {
-            layout,
-            bytes: native,
-        }) = value.into_owned_slice()
-        else {
-            return Err(bad_user_input(Error::NotASlice));
-        };
+            let Some(sui_display::v2::OwnedSlice {
+                layout,
+                bytes: native,
+            }) = value.into_owned_slice()
+            else {
+                return Err(bad_user_input(Error::NotASlice));
+            };
 
-        let type_ = MoveType::from_layout(layout, self.type_.scope.clone());
-        Ok(Some(MoveValue { type_, native }))
+            let type_ = MoveType::from_layout(layout, self.type_.scope.clone());
+            Ok(Some(MoveValue { type_, native }))
+        }
+        .await
+        .transpose()
     }
 
     /// Render a single Display v2 format string against this value.
@@ -248,32 +245,36 @@ impl MoveValue {
         &self,
         ctx: &Context<'_>,
         format: String,
-    ) -> Result<Option<Json>, RpcError<Error>> {
-        let limits: &Limits = ctx.data()?;
-        let parsed = sui_display::v2::Format::parse(limits.display(), &format)
-            .map_err(|e| format_error(Error::Format, e))?;
+    ) -> Option<Result<Json, RpcError<Error>>> {
+        async {
+            let limits: &Limits = ctx.data()?;
+            let parsed = sui_display::v2::Format::parse(limits.display(), &format)
+                .map_err(|e| format_error(Error::Format, e))?;
 
-        let Some(layout) = self.type_.layout_impl().await.map_err(upcast)? else {
-            return Ok(None);
-        };
+            let Some(layout) = self.type_.layout_impl().await.map_err(upcast)? else {
+                return Ok(None);
+            };
 
-        let store = DisplayStore::new(ctx, &self.type_.scope);
-        let root = sui_display::v2::OwnedSlice {
-            bytes: self.native.clone(),
-            layout,
-        };
+            let store = DisplayStore::new(ctx, &self.type_.scope);
+            let root = sui_display::v2::OwnedSlice {
+                bytes: self.native.clone(),
+                layout,
+            };
 
-        let interpreter = sui_display::v2::Interpreter::new(root, store);
-        let value = parsed
-            .format(
-                &interpreter,
-                limits.max_move_value_depth,
-                limits.max_display_output_size,
-            )
-            .await
-            .map_err(|e| format_error(Error::Format, e))?;
+            let interpreter = sui_display::v2::Interpreter::new(root, store);
+            let value = parsed
+                .format(
+                    &interpreter,
+                    limits.max_move_value_depth,
+                    limits.max_display_output_size,
+                )
+                .await
+                .map_err(|e| format_error(Error::Format, e))?;
 
-        Ok(Some(Json::try_from(value).map_err(upcast)?))
+            Ok(Some(Json::try_from(value).map_err(upcast)?))
+        }
+        .await
+        .transpose()
     }
 
     /// Representation of a Move value in JSON, where:

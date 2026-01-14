@@ -304,8 +304,8 @@ impl Epoch {
     }
 
     /// The contents of the system state inner object at the start of this epoch.
-    async fn system_state(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
-        self.system_state_impl(ctx).await
+    async fn system_state(&self, ctx: &Context<'_>) -> Option<Result<MoveValue, RpcError>> {
+        self.system_state_impl(ctx).await.transpose()
     }
 
     /// The total number of checkpoints in this epoch.

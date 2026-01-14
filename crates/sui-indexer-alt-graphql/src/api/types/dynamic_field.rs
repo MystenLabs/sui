@@ -156,8 +156,11 @@ impl DynamicField {
         ctx: &Context<'_>,
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
-    ) -> Result<Option<Address>, RpcError<address::Error>> {
-        self.super_.address_at(ctx, root_version, checkpoint).await
+    ) -> Option<Result<Address, RpcError<address::Error>>> {
+        self.super_
+            .address_at(ctx, root_version, checkpoint)
+            .await
+            .ok()?
     }
 
     /// The version of this object that this content comes from.

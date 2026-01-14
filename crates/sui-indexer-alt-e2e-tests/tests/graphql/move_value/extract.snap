@@ -267,7 +267,9 @@ Response: {
   "data": {
     "object": {
       "asMoveObject": {
-        "contents": null
+        "contents": {
+          "parseError": null
+        }
       }
     }
   },
@@ -299,7 +301,9 @@ Response: {
   "data": {
     "object": {
       "asMoveObject": {
-        "contents": null
+        "contents": {
+          "tooDeep": null
+        }
       }
     }
   },
@@ -331,7 +335,9 @@ Response: {
   "data": {
     "object": {
       "asMoveObject": {
-        "contents": null
+        "contents": {
+          "tooManyLoads": null
+        }
       }
     }
   },
@@ -363,7 +369,9 @@ Response: {
   "data": {
     "object": {
       "asMoveObject": {
-        "contents": null
+        "contents": {
+          "notASlice": null
+        }
       }
     }
   },
