@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -24,10 +23,10 @@ use sui_indexer_alt_framework::types::object::Owner;
 use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
 use sui_indexer_alt_schema::blooms::bloom::BloomFilter;
 use sui_indexer_alt_schema::cp_blooms::BLOOM_FILTER_SEED;
-use sui_indexer_alt_schema::cp_blooms::CP_BLOOM_NUM_BITS;
+use sui_indexer_alt_schema::cp_blooms::CP_BLOOM_NUM_BYTES;
 use sui_indexer_alt_schema::cp_blooms::CP_BLOOM_NUM_HASHES;
 use sui_indexer_alt_schema::cp_blooms::MAX_FOLD_DENSITY;
-use sui_indexer_alt_schema::cp_blooms::MIN_FOLD_BITS;
+use sui_indexer_alt_schema::cp_blooms::MIN_FOLD_BYTES;
 use sui_indexer_alt_schema::cp_blooms::StoredCpBlooms;
 use sui_indexer_alt_schema::schema::cp_blooms;
 
@@ -49,33 +48,25 @@ impl Processor for CpBlooms {
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
         let cp_num = checkpoint.summary.sequence_number;
 
-        let mut items = HashSet::new();
+        let mut bloom =
+            BloomFilter::new(CP_BLOOM_NUM_BYTES, CP_BLOOM_NUM_HASHES, BLOOM_FILTER_SEED);
         for tx in checkpoint.transactions.iter() {
-            items.extend(extract_filter_keys(tx));
+            insert_tx_values(tx, &mut bloom);
         }
 
-        if items.is_empty() {
+        if bloom.popcount() == 0 {
             return Ok(vec![]);
-        }
-
-        let mut bloom = BloomFilter::new(CP_BLOOM_NUM_BITS, CP_BLOOM_NUM_HASHES, BLOOM_FILTER_SEED);
-        for item in &items {
-            bloom.insert(item);
         }
 
         Ok(vec![StoredCpBlooms {
             cp_sequence_number: cp_num as i64,
-            bloom_filter: bloom.fold(MIN_FOLD_BITS, MAX_FOLD_DENSITY),
-            num_items: Some(items.len() as i64),
+            bloom_filter: bloom.fold(MIN_FOLD_BYTES, MAX_FOLD_DENSITY),
         }])
     }
 }
 
 #[async_trait]
 impl Handler for CpBlooms {
-    const MIN_EAGER_ROWS: usize = 100;
-    const MAX_PENDING_ROWS: usize = 500;
-
     async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         if values.is_empty() {
             return Ok(0);
@@ -88,13 +79,10 @@ impl Handler for CpBlooms {
             .values(values)
             .on_conflict(cp_blooms::cp_sequence_number)
             .do_update()
-            .set((
-                cp_blooms::bloom_filter.eq(bytea_or(
-                    cp_blooms::bloom_filter,
-                    excluded(cp_blooms::bloom_filter),
-                )),
-                cp_blooms::num_items.eq(excluded(cp_blooms::num_items)),
-            ))
+            .set(cp_blooms::bloom_filter.eq(bytea_or(
+                cp_blooms::bloom_filter,
+                excluded(cp_blooms::bloom_filter),
+            )))
             .execute(conn)
             .await?;
 
@@ -102,50 +90,53 @@ impl Handler for CpBlooms {
     }
 }
 
-/// Extract keys from a transaction for bloom filter indexing.
+/// Inserts values from a transaction into bloom filter.
 ///
-/// Keys include:
+/// Values include:
 /// - Transaction sender (excluding system addresses)
 /// - Recipient addresses of changed objects
 /// - Object IDs of all changed objects (excluding clock)
 /// - Package IDs from Move calls
 /// - Addresses from emitted events (package, type address, type params)
-pub(crate) fn extract_filter_keys(tx: &ExecutedTransaction) -> HashSet<Vec<u8>> {
-    let mut keys = HashSet::new();
-
+pub(crate) fn insert_tx_values(tx: &ExecutedTransaction, bloom: &mut impl Extend<Vec<u8>>) {
     if tx.transaction.sender() != SUI_SYSTEM_ADDRESS.into()
         && tx.transaction.sender() != SuiAddress::ZERO
     {
-        keys.insert(tx.transaction.sender().to_vec());
+        bloom.extend([tx.transaction.sender().to_vec()]);
     }
 
-    for ((_obj_id, _version, _digest), owner, _write_kind) in tx.effects.all_changed_objects() {
-        if let Owner::AddressOwner(address) = owner {
-            keys.insert(address.to_vec());
-        }
-    }
+    bloom.extend(tx.effects.all_changed_objects().into_iter().filter_map(
+        |(_, owner, _)| match owner {
+            Owner::AddressOwner(address) => Some(address.to_vec()),
+            _ => None,
+        },
+    ));
 
-    for object_change in tx.effects.object_changes() {
-        if object_change.id != SUI_CLOCK_ADDRESS.into() {
-            keys.insert(object_change.id.to_vec());
-        }
-    }
+    bloom.extend(
+        tx.effects
+            .object_changes()
+            .into_iter()
+            .filter(|change| change.id != SUI_CLOCK_ADDRESS.into())
+            .map(|change| change.id.to_vec()),
+    );
 
-    for (_, package_id, _, _) in tx.transaction.move_calls() {
-        keys.insert(package_id.to_vec());
-    }
+    bloom.extend(
+        tx.transaction
+            .move_calls()
+            .into_iter()
+            .map(|(_, package_id, _, _)| package_id.to_vec()),
+    );
 
     for ev in tx.events.iter().flat_map(|evs| evs.data.iter()) {
-        keys.insert(ev.type_.address.to_vec());
-        keys.insert(ev.package_id.to_vec());
-        for type_param in ev.type_.type_params.as_slice() {
-            for addr in type_param.all_addresses() {
-                keys.insert(addr.to_vec());
-            }
-        }
+        bloom.extend([ev.type_.address.to_vec(), ev.package_id.to_vec()]);
+        bloom.extend(
+            ev.type_
+                .type_params
+                .iter()
+                .flat_map(|tp| tp.all_addresses())
+                .map(|addr| addr.to_vec()),
+        );
     }
-
-    keys
 }
 
 #[cfg(test)]
@@ -156,6 +147,7 @@ mod tests {
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::Indexer;
     use sui_indexer_alt_schema::blooms::hash;
+    use sui_indexer_alt_schema::cp_blooms::CP_BLOOM_NUM_BITS;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;

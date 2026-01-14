@@ -23,7 +23,6 @@ use sui_types::transaction::TransactionDataAPI;
 use tracing::info;
 
 use crate::Indexer;
-use crate::handlers::cp_bloom_blocks::cleanup_orphaned_pending_partitions;
 
 pub struct BootstrapGenesis {
     pub stored_genesis: StoredGenesis,

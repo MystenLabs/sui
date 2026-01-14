@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS cp_bloom_blocks
     cp_sequence_number_lo BIGINT NOT NULL,
     cp_sequence_number_hi BIGINT NOT NULL,
     bloom_filter BYTEA NOT NULL,
-    num_items BIGINT DEFAULT NULL,
     PRIMARY KEY (cp_block_id, bloom_block_index)
 );
 
