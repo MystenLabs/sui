@@ -15,5 +15,5 @@ public fun t1() {
     let s: String = "hello\r";
     let s: String = "hello\t";
     let s: String = "hello\0";
-    let s: String = "hello\1";
+    let s: String = "hello\xA0";
 }
