@@ -180,7 +180,7 @@ impl<'env> CodeUnitVerifier<'env, '_> {
         )?;
         locals_safety::verify(self.module, &self.function_context, ability_cache, meter)?;
         if verifier_config.switch_to_regex_reference_safety {
-            reference_safety::verify(
+            regex_reference_safety::verify(
                 verifier_config,
                 self.module,
                 &self.function_context,
