@@ -1,8 +1,8 @@
 # modern package that depends on a legacy package
 
 [package]
-name = "c"
+name = "modern"
 edition = "2024"
 
 [dependencies]
-a = { local = "../legacy_dep" }
+legacy_dep = { local = "../legacy_dep" }
