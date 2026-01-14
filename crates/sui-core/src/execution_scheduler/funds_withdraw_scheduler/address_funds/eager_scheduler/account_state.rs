@@ -3,6 +3,7 @@
 
 use std::{collections::VecDeque, sync::Arc};
 
+use mysten_common::assert_reachable;
 use sui_types::{accumulator_root::AccumulatorObjId, base_types::SequenceNumber};
 use tracing::debug;
 
@@ -110,6 +111,7 @@ impl AccountState {
             return true;
         }
         // Failed to reserve, put the pending withdraw back to the front of the queue.
+        assert_reachable!("withdraw must wait for settlement to be scheduled");
         self.pending_reservations.push_front(pending_withdraw);
         false
     }
