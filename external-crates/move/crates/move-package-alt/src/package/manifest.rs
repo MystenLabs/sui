@@ -2,10 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use codespan_reporting::diagnostic::Diagnostic;
 
@@ -13,7 +10,7 @@ use thiserror::Error;
 
 use crate::{
     errors::FileHandle,
-    schema::{DefaultDependency, PackageName, ParsedManifest, ReplacementDependency},
+    schema::{PackageName, ParsedManifest},
 };
 
 use super::{
@@ -22,7 +19,6 @@ use super::{
     *,
 };
 use indexmap::IndexMap;
-use serde_spanned::Spanned;
 
 // TODO: replace this with something more strongly typed
 pub type Digest = String;
@@ -83,21 +79,6 @@ impl Manifest {
         self.inner.package.name.get_ref().to_string()
     }
 
-    pub fn dep_replacements(
-        &self,
-    ) -> &BTreeMap<EnvironmentName, BTreeMap<PackageName, Spanned<ReplacementDependency>>> {
-        &self.inner.dep_replacements
-    }
-
-    pub fn dependencies(&self) -> BTreeMap<PackageName, DefaultDependency> {
-        self.inner
-            .dependencies
-            .clone()
-            .into_iter()
-            .map(|(k, v)| (k.as_ref().clone(), v.clone()))
-            .collect()
-    }
-
     /// The entries from the `[environments]` section
     pub fn environments(&self) -> IndexMap<EnvironmentName, EnvironmentID> {
         self.inner
@@ -151,9 +132,7 @@ mod tests {
     use tempfile::TempDir;
     use test_log::test;
 
-    use crate::{
-        flavor::vanilla::default_environment, package::paths::PackagePath, schema::PackageName,
-    };
+    use crate::package::paths::PackagePath;
 
     use super::Manifest;
 
@@ -192,6 +171,8 @@ mod tests {
     #[test(tokio::test)]
     #[ignore] // TODO: this tests new behavior that isn't implemented yet
     async fn dep_replacement_envs_are_declared() {
+        todo!()
+        /*
         let manifest = load_manifest(
             r#"
             [package]
@@ -207,7 +188,8 @@ mod tests {
 
         let name = PackageName::new("foo").unwrap();
         assert!(manifest.dependencies().contains_key(&name));
-        let default_env = default_environment();
+        let default_env = Vanilla::default_environment();
         assert!(!manifest.dep_replacements()[default_env.name()].contains_key(&name));
+            */
     }
 }

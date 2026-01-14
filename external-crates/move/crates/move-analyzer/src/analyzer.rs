@@ -34,7 +34,7 @@ use crate::{
     },
     vfs::on_text_document_sync_notification,
 };
-use move_package_alt::flavor::MoveFlavor;
+use move_package_alt::MoveFlavor;
 use url::Url;
 use vfs::{VfsPath, impls::memory::MemoryFS};
 

@@ -6,7 +6,7 @@ use anyhow::Result;
 use move_command_line_common::files::{extension_equals, find_filenames};
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
 use move_model_2::source_model;
-use move_package_alt::package::layout::SourcePackageLayout;
+use move_package_alt::SourcePackageLayout;
 use move_symbol_pool::Symbol;
 use std::path::{Path, PathBuf};
 

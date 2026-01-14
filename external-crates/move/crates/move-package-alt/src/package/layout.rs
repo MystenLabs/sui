@@ -6,9 +6,6 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail};
 
-/// References file for documentation generation
-pub const REFERENCE_TEMPLATE_FILENAME: &str = "references.md";
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum SourcePackageLayout {
     Sources,

@@ -9,7 +9,7 @@ use move_symbol_pool::Symbol;
 
 use tempfile::TempDir;
 
-use move_package_alt::{flavor::Vanilla, package::RootPackage};
+use move_package_alt::{RootPackage, Vanilla};
 use std::{collections::BTreeSet, io::BufRead, path::Path};
 
 fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
@@ -25,7 +25,7 @@ fn run_test(file_path: &Path) -> datatest_stable::Result<()> {
 
     let mut writer = Vec::new();
 
-    let env = move_package_alt::flavor::vanilla::default_environment();
+    let env = Vanilla::default_environment();
     let root_pkg: RootPackage<Vanilla> = config.package_loader(pkg_dir, &env).load_sync()?;
 
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)

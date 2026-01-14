@@ -14,7 +14,7 @@ use move_compiler::{
     unit_test::{TestPlan, plan_builder::construct_test_plan},
 };
 use move_coverage::coverage_map::{CoverageMap, output_map_to_file};
-use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
+use move_package_alt::{MoveFlavor, RootPackage};
 use move_package_alt_compilation::{
     build_config::BuildConfig, build_plan::BuildPlan, compiled_package::BuildNamedAddresses,
     find_env,

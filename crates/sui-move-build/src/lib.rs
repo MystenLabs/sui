@@ -5,7 +5,6 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     io::Write,
     path::Path,
-    str::FromStr,
 };
 
 use fastcrypto::encoding::Base64;
@@ -26,12 +25,7 @@ use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag},
 };
-use move_package_alt::{
-    compatibility::{legacy_parser::LegacyPackageMetadata, parse_legacy_package_info},
-    flavor::MoveFlavor,
-    package::RootPackage,
-    schema::Environment,
-};
+use move_package_alt::{MoveFlavor, RootPackage, schema::Environment};
 use move_package_alt_compilation::compiled_package::CompiledPackage as MoveCompiledPackage;
 use move_package_alt_compilation::{
     build_config::BuildConfig as MoveBuildConfig, build_plan::BuildPlan,
@@ -630,20 +624,4 @@ impl PackageDependencies {
             conflicting: BTreeMap::new(),
         })
     }
-}
-
-pub fn parse_legacy_pkg_info(package_path: &Path) -> Result<LegacyPackageMetadata, anyhow::Error> {
-    parse_legacy_package_info(package_path)
-}
-
-pub fn published_at_property(package_path: &Path) -> Result<ObjectID, PublishedAtError> {
-    let parsed_manifest =
-        parse_legacy_package_info(package_path).expect("should read the manifest");
-
-    let Some(value) = parsed_manifest.published_at else {
-        return Err(PublishedAtError::NotPresent);
-    };
-
-    ObjectID::from_str(value.as_str())
-        .map_err(|_| PublishedAtError::Invalid(value.as_str().to_owned()))
 }

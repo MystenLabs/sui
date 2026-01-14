@@ -6,7 +6,7 @@ use clap::*;
 use move_bytecode_source_map::utils::serialize_to_json_string;
 use move_compiler::compiled_unit::NamedCompiledModule;
 use move_disassembler::disassembler::Disassembler;
-use move_package_alt::flavor::MoveFlavor;
+use move_package_alt::MoveFlavor;
 use move_package_alt_compilation::{
     build_config::BuildConfig, compiled_package::CompiledUnitWithSource, find_env,
 };
