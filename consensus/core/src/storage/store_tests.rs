@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef};
 use rstest::rstest;
@@ -9,7 +11,7 @@ use tempfile::TempDir;
 use super::{Store, WriteBatch, mem_store::MemStore, rocksdb_store::RocksDBStore};
 use crate::{
     block::{TestBlock, VerifiedBlock},
-    commit::{CommitDigest, TrustedCommit},
+    commit::{CommitDigest, CommitRef, TrustedCommit},
 };
 
 /// Test fixture for store tests. Wraps around various store implementations.
@@ -284,4 +286,72 @@ async fn read_and_scan_commits(
         assert_eq!(scanned_commits.len(), 4, "{:?}", scanned_commits);
         assert_eq!(scanned_commits, written_commits,);
     }
+}
+
+#[rstest]
+#[tokio::test]
+async fn truncate_finalized_commits(
+    #[values(new_rocksdb_teststore(), new_mem_teststore())] test_store: TestStore,
+) {
+    let store = test_store.store();
+
+    // Write finalized commits with indices 1, 2, 3, 4, 5
+    let finalized_commits: Vec<_> = (1..=5)
+        .map(|i| {
+            let commit_ref = CommitRef::new(i, CommitDigest::MIN);
+            let rejected_transactions = BTreeMap::new();
+            (commit_ref, rejected_transactions)
+        })
+        .collect();
+
+    store
+        .write(WriteBatch::new(
+            vec![],
+            vec![],
+            vec![],
+            finalized_commits.clone(),
+        ))
+        .unwrap();
+
+    // Verify all finalized commits exist
+    let last_finalized = store
+        .read_last_finalized_commit()
+        .expect("Read should not fail");
+    assert_eq!(last_finalized.unwrap().index, 5);
+
+    for (commit_ref, _) in &finalized_commits {
+        let result = store
+            .read_rejected_transactions(*commit_ref)
+            .expect("Read should not fail");
+        assert!(result.is_some(), "Commit {} should exist", commit_ref.index);
+    }
+
+    // Truncate from index 3 (inclusive)
+    store
+        .truncate_finalized_commits(3)
+        .expect("Truncate should not fail");
+
+    // Verify commits 1 and 2 still exist
+    for i in 1..=2 {
+        let commit_ref = CommitRef::new(i, CommitDigest::MIN);
+        let result = store
+            .read_rejected_transactions(commit_ref)
+            .expect("Read should not fail");
+        assert!(result.is_some(), "Commit {} should still exist", i);
+    }
+
+    // Verify commits 3, 4, 5 are deleted
+    for i in 3..=5 {
+        let commit_ref = CommitRef::new(i, CommitDigest::MIN);
+        let result = store
+            .read_rejected_transactions(commit_ref)
+            .expect("Read should not fail");
+        assert!(result.is_none(), "Commit {} should be deleted", i);
+    }
+
+    // Verify last finalized commit is now 2
+    let last_finalized = store
+        .read_last_finalized_commit()
+        .expect("Read should not fail");
+    assert_eq!(last_finalized.unwrap().index, 2);
 }
