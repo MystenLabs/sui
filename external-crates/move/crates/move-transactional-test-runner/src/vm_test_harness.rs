@@ -11,7 +11,9 @@ use move_binary_format::{
     CompiledModule,
     errors::{Location, VMError, VMResult},
 };
-use move_command_line_common::files::verify_and_create_named_address_mapping;
+use move_command_line_common::{
+    files::verify_and_create_named_address_mapping, testing::InstaOptions,
+};
 use move_compiler::{PreCompiledProgramInfo, editions::Edition, shared::PackagePaths};
 use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
@@ -38,6 +40,8 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+pub static SWITCH_TO_REGEX_REFERENCE_SAFETY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
 const STD_ADDR: AccountAddress = AccountAddress::ONE;
 
 struct SimpleVMTestAdapter {
@@ -51,7 +55,6 @@ struct SimpleVMTestAdapter {
 pub struct AdapterInitArgs {
     #[arg(long = "edition")]
     pub edition: Option<Edition>,
-    pub switch_to_regex_reference_safety: bool,
 }
 
 #[async_trait]
@@ -76,26 +79,16 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
-        let (additional_mapping, compiler_edition, switch_to_regex_reference_safety) =
-            match task_opt.map(|t| t.command) {
-                Some((
-                    InitCommand { named_addresses },
-                    AdapterInitArgs {
-                        edition,
-                        switch_to_regex_reference_safety,
-                    },
-                )) => {
-                    let addresses =
-                        verify_and_create_named_address_mapping(named_addresses).unwrap();
-                    let compiler_edition = edition.unwrap_or(Edition::LEGACY);
-                    (
-                        addresses,
-                        compiler_edition,
-                        switch_to_regex_reference_safety,
-                    )
-                }
-                None => (BTreeMap::new(), Edition::LEGACY, false),
-            };
+        let (additional_mapping, compiler_edition) = match task_opt.map(|t| t.command) {
+            Some((InitCommand { named_addresses }, AdapterInitArgs { edition })) => {
+                let addresses = verify_and_create_named_address_mapping(named_addresses).unwrap();
+                let compiler_edition = edition.unwrap_or(Edition::LEGACY);
+                (addresses, compiler_edition)
+            }
+            None => (BTreeMap::new(), Edition::LEGACY),
+        };
+        let switch_to_regex_reference_safety =
+            SWITCH_TO_REGEX_REFERENCE_SAFETY.get().copied().unwrap();
 
         let mut named_address_mapping = move_stdlib_named_addresses();
         for (name, addr) in additional_mapping {
@@ -373,10 +366,26 @@ static MOVE_STDLIB_COMPILED: LazyLock<Vec<CompiledModule>> = LazyLock::new(|| {
 
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    SWITCH_TO_REGEX_REFERENCE_SAFETY.set(false).unwrap();
     run_test_impl::<SimpleVMTestAdapter>(
         path,
         Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
         None,
+    )
+    .await
+}
+
+#[tokio::main]
+pub async fn run_test_with_regex_reference_safety(
+    path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    SWITCH_TO_REGEX_REFERENCE_SAFETY.set(true).unwrap();
+    let mut options = InstaOptions::new();
+    options.suffix("regex");
+    run_test_impl::<SimpleVMTestAdapter>(
+        path,
+        Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
+        Some(options),
     )
     .await
 }
