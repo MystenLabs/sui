@@ -237,7 +237,7 @@ jobs:
   build-intel-macos-with-suiup:
       needs: [diff]
       if: needs.diff.outputs.isRust == 'true'
-      runs-on: macos-15-intel
+      runs-on: macos-latest-large
       defaults:
           run:
               working-directory: crates/sui/tests/shell_tests/rename_same_package_and_module
