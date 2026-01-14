@@ -1,0 +1,9 @@
+[package]
+name = "use_math"
+edition = "2024"
+implicit-dependencies = false
+
+[dependencies]
+std = { local = "../move-stdlib"}
+math_a = { local = "../math_a", rename-from = "math" }
+math_b = { local = "../math_b", rename-from = "math" }
