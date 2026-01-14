@@ -72,36 +72,6 @@ impl BlockedBloomFilter {
     }
 }
 
-#[cfg(test)]
-impl BlockedBloomFilter {
-    /// Get a specific block by index.
-    pub fn get_block(&self, block_idx: usize) -> Option<&[u8]> {
-        self.blocks.get(block_idx).map(|b| b.as_slice())
-    }
-
-    /// Check if a block contains any set bits.
-    pub fn is_block_nonzero(&self, block_idx: usize) -> bool {
-        self.blocks
-            .get(block_idx)
-            .is_some_and(|b| b.iter().any(|&x| x != 0))
-    }
-
-    /// Check if a key might be in the bloom filter.
-    pub fn contains(&self, key: &[u8]) -> bool {
-        use crate::blooms::hash::check_bit;
-        let (block_idx, bit_idxs) = Self::hash(
-            key,
-            self.seed,
-            self.num_blocks,
-            self.num_hashes,
-            self.bytes_per_block,
-        );
-        bit_idxs
-            .iter()
-            .all(|&bit_idx| check_bit(&self.blocks[block_idx], bit_idx))
-    }
-}
-
 impl<T: AsRef<[u8]>> Extend<T> for BlockedBloomFilter {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for key in iter {
@@ -114,6 +84,35 @@ impl<T: AsRef<[u8]>> Extend<T> for BlockedBloomFilter {
 mod tests {
     use super::*;
     use crate::cp_bloom_blocks::{BLOOM_BLOCK_BYTES, NUM_BLOOM_BLOCKS, NUM_HASHES};
+
+    impl BlockedBloomFilter {
+        /// Get a specific block by index.
+        pub fn get_block(&self, block_idx: usize) -> Option<&[u8]> {
+            self.blocks.get(block_idx).map(|b| b.as_slice())
+        }
+
+        /// Check if a block contains any set bits.
+        pub fn is_block_nonzero(&self, block_idx: usize) -> bool {
+            self.blocks
+                .get(block_idx)
+                .is_some_and(|b| b.iter().any(|&x| x != 0))
+        }
+
+        /// Check if a key might be in the bloom filter.
+        pub fn contains(&self, key: &[u8]) -> bool {
+            use crate::blooms::hash::check_bit;
+            let (block_idx, bit_idxs) = Self::hash(
+                key,
+                self.seed,
+                self.num_blocks,
+                self.num_hashes,
+                self.bytes_per_block,
+            );
+            bit_idxs
+                .iter()
+                .all(|&bit_idx| check_bit(&self.blocks[block_idx], bit_idx))
+        }
+    }
 
     fn new_test_filter(seed: u128) -> BlockedBloomFilter {
         BlockedBloomFilter::new(seed, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BYTES, NUM_HASHES)
