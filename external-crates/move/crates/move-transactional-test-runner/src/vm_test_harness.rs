@@ -289,7 +289,7 @@ impl SimpleVMTestAdapter {
     fn vm_config(&self) -> VMConfig {
         VMConfig {
             enable_invariant_violation_check_in_swap_loc: false,
-            deprecate_global_storage_ops_during_deserialization: false,
+            deprecate_global_storage_ops_during_deserialization: true,
             binary_config: move_binary_format::binary_config::BinaryConfig::legacy_with_flags(
                 /* check_no_extraneous_bytes */ true,
                 /* deprecate_global_storage_ops */ true,
