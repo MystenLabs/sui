@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use object_store::ClientOptions;
-use object_store::aws::AmazonS3Builder;
+use object_store::aws::{AmazonS3Builder, S3ConditionalPut};
 use object_store::azure::MicrosoftAzureBuilder;
 use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::http::HttpBuilder;
@@ -105,6 +105,7 @@ async fn main() -> anyhow::Result<()> {
             .with_client_options(client_options)
             .with_imdsv1_fallback()
             .with_bucket_name(bucket)
+            .with_conditional_put(S3ConditionalPut::ETagMatch)
             .build()
             .map(Arc::new)?
     } else if let Some(bucket) = args.gcs {
