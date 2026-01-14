@@ -218,50 +218,50 @@ jobs:
   #         # We have temporarily disabled the network tests on windows, until we triage + fix the performance issues.
   #         cargo nextest run -p sui --no-fail-fast --profile ci --filter-expr "not test(shell_tests::with_network)"
 
-  # build-intel-macos:
-  #   needs: [diff]
-  #   if: needs.diff.outputs.isRust == 'true'
-  #   runs-on: macos-15-intel
-  #   steps:
-  #     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-  #       with:
-  #         ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+  build-intel-macos:
+    needs: [diff]
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: macos-latest-large
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
 
-  #     - run: uname -m   # should print x86_64
+      - run: uname -m   # should print x86_64
 
-  #     - uses: taiki-e/install-action@nextest
+      - uses: taiki-e/install-action@nextest
 
-  #     - run: |
-  #         RUST_LOG=debug cargo nextest run -p sui --profile ci use_math_build
+      - run: |
+          RUST_LOG=debug cargo run --bin sui --release move build -p use_math
 
-  build-intel-macos-with-suiup:
-      needs: [diff]
-      if: needs.diff.outputs.isRust == 'true'
-      runs-on: macos-latest-large
-      defaults:
-          run:
-              working-directory: crates/sui/tests/shell_tests/rename_same_package_and_module
-      steps:
-          - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
-            with:
-              ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
-          - run: uname -m   # should print x86_64
-          - uses: taiki-e/install-action@nextest
-          - run: curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh
-          - run: echo "/Users/runner/.local/bin" >> $GITHUB_PATH
-          - run: suiup install sui@testnet -y
-          - run: sui --version
-          - run: sui client -y envs
-          - run: |
-              # RUST_LOG=debug sui move build -e testnet -p use_math
-              lldb --batch \
-                -o "settings set target.process.stop-on-exec false" \
-                -o "run" \
-                -o "thread backtrace all" \
-                -o "register read" \
-                -o "image list" \
-                -- \
-                "$(which sui)" move build -e testnet -p use_math
+  # build-intel-macos-with-suiup:
+  #     needs: [diff]
+  #     if: needs.diff.outputs.isRust == 'true'
+  #     runs-on: macos-latest-large
+  #     defaults:
+  #         run:
+  #             working-directory: crates/sui/tests/shell_tests/rename_same_package_and_module
+  #     steps:
+  #         - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
+  #           with:
+  #             ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+  #         - run: uname -m   # should print x86_64
+  #         - uses: taiki-e/install-action@nextest
+  #         - run: curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh
+  #         - run: echo "/Users/runner/.local/bin" >> $GITHUB_PATH
+  #         - run: suiup install sui@testnet -y
+  #         - run: sui --version
+  #         - run: sui client -y envs
+  #         - run: |
+  #             # RUST_LOG=debug sui move build -e testnet -p use_math
+  #             lldb --batch \
+  #               -o "settings set target.process.stop-on-exec false" \
+  #               -o "run" \
+  #               -o "thread backtrace all" \
+  #               -o "register read" \
+  #               -o "image list" \
+  #               -- \
+  #               "$(which sui)" move build -e testnet -p use_math
 
   # simtest:
   #   needs: [diff, rustfmt, clippy]
