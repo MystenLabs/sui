@@ -8,8 +8,6 @@ use std::sync::Arc;
 
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
-use tokio::time::MissedTickBehavior;
-use tokio::time::interval;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -55,9 +53,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     // SAFETY: on indexer instantiation, we've checked that the pipeline name is valid.
     let pipeline_task = pipeline_task::<H::Store>(H::NAME, task.as_deref()).unwrap();
     Service::new().spawn_aborting(async move {
-        let mut poll = interval(config.watermark_interval());
-        poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
-
         // To correctly update the watermark, the task tracks the watermark it last tried to write
         // and the watermark parts for any checkpoints that have been written since then
         // ("pre-committed"). After each batch is written, the task will try to progress the
@@ -80,9 +75,15 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             next_checkpoint, "Starting commit watermark task"
         );
 
+        let mut next_wake = tokio::time::Instant::now();
+
         loop {
             tokio::select! {
-                _ = poll.tick() => {}
+                () = tokio::time::sleep_until(next_wake) => {
+                    // Schedule next wake immediately, so the timer effectively runs in parallel
+                    // with the commit logic below.
+                    next_wake = config.watermark_interval_with_jitter();
+                }
                 Some(parts) = rx.recv() => {
                     for part in parts {
                         match precommitted.entry(part.checkpoint()) {
