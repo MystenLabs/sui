@@ -1,0 +1,8 @@
+# modern package that depends on a legacy package
+
+[package]
+name = "c"
+edition = "2024"
+
+[dependencies]
+a = { local = "../legacy_dep" }
