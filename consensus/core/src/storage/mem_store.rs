@@ -233,4 +233,23 @@ impl Store for MemStore {
             .get(&(commit_ref.index, commit_ref.digest))
             .cloned())
     }
+
+    fn truncate_finalized_commits(&self, from_index: CommitIndex) -> ConsensusResult<()> {
+        let mut inner = self.inner.write();
+
+        let keys_to_remove: Vec<_> = inner
+            .finalized_commits
+            .range((
+                Included((from_index, CommitDigest::MIN)),
+                Included((CommitIndex::MAX, CommitDigest::MAX)),
+            ))
+            .map(|(k, _)| *k)
+            .collect();
+
+        for key in keys_to_remove {
+            inner.finalized_commits.remove(&key);
+        }
+
+        Ok(())
+    }
 }

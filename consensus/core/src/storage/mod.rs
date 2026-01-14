@@ -67,6 +67,10 @@ pub trait Store: Send + Sync {
         &self,
         commit_ref: CommitRef,
     ) -> ConsensusResult<Option<BTreeMap<BlockRef, Vec<TransactionIndex>>>>;
+
+    /// Truncates finalized commits from the given commit index (inclusive).
+    /// All finalized commits with index >= from_index will be deleted.
+    fn truncate_finalized_commits(&self, from_index: CommitIndex) -> ConsensusResult<()>;
 }
 
 /// Represents data to be written to the store together atomically.
