@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -18,8 +17,7 @@ use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::postgres::Connection;
 use sui_indexer_alt_framework::postgres::Db;
 use sui_indexer_alt_schema::blooms::blocked::BlockedBloomFilter;
-use sui_indexer_alt_schema::cp_bloom_blocks::BLOOM_BLOCK_BITS;
-use sui_indexer_alt_schema::cp_bloom_blocks::CheckpointBloom;
+use sui_indexer_alt_schema::cp_bloom_blocks::BLOOM_BLOCK_BYTES;
 use sui_indexer_alt_schema::cp_bloom_blocks::NUM_BLOOM_BLOCKS;
 use sui_indexer_alt_schema::cp_bloom_blocks::NUM_HASHES;
 use sui_indexer_alt_schema::cp_bloom_blocks::StoredCpBloomBlock;
@@ -28,7 +26,7 @@ use sui_indexer_alt_schema::cp_bloom_blocks::cp_block_seed;
 use sui_indexer_alt_schema::schema::cp_bloom_blocks;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-use crate::handlers::cp_blooms::extract_filter_keys;
+use crate::handlers::cp_blooms::insert_tx_values;
 
 // Define the bytea_or SQL function for merging bloom filters
 define_sql_function! {
@@ -45,6 +43,16 @@ define_sql_function! {
 /// - etc.
 pub(crate) struct CpBloomBlocks;
 
+/// Bloom filter blocks from a single checkpoint.
+#[derive(Debug, Clone)]
+pub(crate) struct CheckpointBloom {
+    /// The checkpoint sequence number.
+    pub cp_sequence_number: i64,
+    /// Sparse bloom blocks (bloom_block_index -> bloom bytes).
+    /// Only non-zero blocks are included.
+    pub blocks: BTreeMap<u16, Vec<u8>>,
+}
+
 #[async_trait]
 impl Processor for CpBloomBlocks {
     const NAME: &'static str = "cp_bloom_blocks";
@@ -56,15 +64,10 @@ impl Processor for CpBloomBlocks {
         let block_id = cp_block_id(cp_num);
         let seed = cp_block_seed(block_id);
 
-        let mut items = HashSet::new();
-        for tx in checkpoint.transactions.iter() {
-            items.extend(extract_filter_keys(tx));
-        }
-
         let mut bloom =
-            BlockedBloomFilter::new(seed, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BITS, NUM_HASHES);
-        for item in &items {
-            bloom.insert(item);
+            BlockedBloomFilter::new(seed, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BYTES, NUM_HASHES);
+        for tx in checkpoint.transactions.iter() {
+            insert_tx_values(tx, &mut bloom);
         }
 
         let blocks: BTreeMap<u16, Vec<u8>> = bloom
@@ -150,7 +153,6 @@ impl Handler for CpBloomBlocks {
                         cp_sequence_number_lo: cp_block.cp_lo,
                         cp_sequence_number_hi: cp_block.cp_hi,
                         bloom_filter: bloom_bytes.clone(),
-                        num_items: None,
                     })
             })
             .collect();
@@ -195,7 +197,7 @@ mod tests {
         let block_id = cp_block_id(cp_num as u64);
         let seed = cp_block_seed(block_id);
         let mut bloom =
-            BlockedBloomFilter::new(seed, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BITS, NUM_HASHES);
+            BlockedBloomFilter::new(seed, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BYTES, NUM_HASHES);
         for key in keys {
             bloom.insert(key);
         }
@@ -212,7 +214,7 @@ mod tests {
     /// Check if a key is present in a bloom filter block.
     fn block_contains_key(block_data: &[u8], key: &[u8], seed: u128) -> bool {
         let (_, positions) =
-            BlockedBloomFilter::hash(key, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BITS);
+            BlockedBloomFilter::hash(key, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BYTES);
         positions
             .iter()
             .all(|&pos| (block_data[pos / 8] & (1 << (pos % 8))) != 0)
@@ -277,7 +279,7 @@ mod tests {
         // (cp_block_id, bloom_block_index).
         let key1 = b"key_0";
         let (target_block_idx, _) =
-            BlockedBloomFilter::hash(key1, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BITS);
+            BlockedBloomFilter::hash(key1, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BYTES);
 
         // key_104 hashes to the same bloom_block_index as key_0 with seed 0
         let key2 = b"key_104";
@@ -359,7 +361,7 @@ mod tests {
             seed,
             NUM_BLOOM_BLOCKS,
             NUM_HASHES,
-            BLOOM_BLOCK_BITS,
+            BLOOM_BLOCK_BYTES,
         );
         let block = blocks
             .iter()
@@ -451,8 +453,13 @@ mod tests {
 
         // Verify every key can be found (no false negatives)
         for (i, key) in test_keys.iter().enumerate() {
-            let (block_idx, _) =
-                BlockedBloomFilter::hash(key, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BITS);
+            let (block_idx, _) = BlockedBloomFilter::hash(
+                key,
+                seed,
+                NUM_BLOOM_BLOCKS,
+                NUM_HASHES,
+                BLOOM_BLOCK_BYTES,
+            );
 
             let block = blocks
                 .iter()
@@ -503,8 +510,13 @@ mod tests {
         // Check batch 1 keys are in DB before merge
         let blocks_before = get_bloom_blocks(&mut conn, 0).await;
         for (i, key) in batch1_keys.iter().enumerate() {
-            let (block_idx, _) =
-                BlockedBloomFilter::hash(key, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BITS);
+            let (block_idx, _) = BlockedBloomFilter::hash(
+                key,
+                seed,
+                NUM_BLOOM_BLOCKS,
+                NUM_HASHES,
+                BLOOM_BLOCK_BYTES,
+            );
             let block = blocks_before
                 .iter()
                 .find(|b| b.bloom_block_index == block_idx as i16)
@@ -526,8 +538,13 @@ mod tests {
 
         // Check ALL keys from batch 1 survive the bytea_or merge
         for (i, key) in batch1_keys.iter().enumerate() {
-            let (block_idx, _) =
-                BlockedBloomFilter::hash(key, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BITS);
+            let (block_idx, _) = BlockedBloomFilter::hash(
+                key,
+                seed,
+                NUM_BLOOM_BLOCKS,
+                NUM_HASHES,
+                BLOOM_BLOCK_BYTES,
+            );
 
             let block = blocks_after
                 .iter()
@@ -543,8 +560,13 @@ mod tests {
 
         // Check batch 2 keys are also present
         for (i, key) in batch2_keys.iter().enumerate() {
-            let (block_idx, _) =
-                BlockedBloomFilter::hash(key, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BITS);
+            let (block_idx, _) = BlockedBloomFilter::hash(
+                key,
+                seed,
+                NUM_BLOOM_BLOCKS,
+                NUM_HASHES,
+                BLOOM_BLOCK_BYTES,
+            );
 
             let block = blocks_after
                 .iter()

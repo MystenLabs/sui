@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-
 use diesel::prelude::*;
 use sui_field_count::FieldCount;
 
@@ -50,16 +48,4 @@ pub struct StoredCpBloomBlock {
     pub cp_sequence_number_hi: i64,
     /// Bloom filter bytes for this block.
     pub bloom_filter: Vec<u8>,
-    /// Approximate count of items (may overcount due to merges).
-    pub num_items: Option<i64>,
-}
-
-/// Bloom filter blocks from a single checkpoint.
-#[derive(Debug, Clone)]
-pub struct CheckpointBloom {
-    /// The checkpoint sequence number.
-    pub cp_sequence_number: i64,
-    /// Sparse bloom blocks (bloom_block_index -> bloom bytes).
-    /// Only non-zero blocks are included.
-    pub blocks: BTreeMap<u16, Vec<u8>>,
 }

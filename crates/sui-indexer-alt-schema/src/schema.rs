@@ -27,7 +27,6 @@ diesel::table! {
         cp_sequence_number_lo -> Int8,
         cp_sequence_number_hi -> Int8,
         bloom_filter -> Bytea,
-        num_items -> Nullable<Int8>,
     }
 }
 
@@ -35,7 +34,6 @@ diesel::table! {
     cp_blooms (cp_sequence_number) {
         cp_sequence_number -> Int8,
         bloom_filter -> Bytea,
-        num_items -> Nullable<Int8>,
     }
 }
 
