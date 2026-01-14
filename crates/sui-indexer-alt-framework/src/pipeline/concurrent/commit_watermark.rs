@@ -75,7 +75,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             next_checkpoint, "Starting commit watermark task"
         );
 
-        let mut next_wake = config.watermark_interval_with_jitter();
+        let mut next_wake = tokio::time::Instant::now();
 
         loop {
             tokio::select! {
