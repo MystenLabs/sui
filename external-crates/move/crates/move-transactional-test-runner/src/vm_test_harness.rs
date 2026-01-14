@@ -41,7 +41,6 @@ use std::{
 const STD_ADDR: AccountAddress = AccountAddress::ONE;
 
 struct SimpleVMTestAdapter {
-    disable_invariant_violation_check_in_swap_loc: bool,
     compiled_state: CompiledState,
     storage: InMemoryStorage,
     default_syntax: SyntaxChoice,
@@ -51,7 +50,6 @@ struct SimpleVMTestAdapter {
 pub struct AdapterInitArgs {
     #[arg(long = "edition")]
     pub edition: Option<Edition>,
-    pub disable_invariant_violation_check_in_swap_loc: bool,
 }
 
 #[async_trait]
@@ -76,26 +74,14 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
-        let (additional_mapping, compiler_edition, disable_invariant_violation_check_in_swap_loc) =
-            match task_opt.map(|t| t.command) {
-                Some((
-                    InitCommand { named_addresses },
-                    AdapterInitArgs {
-                        edition,
-                        disable_invariant_violation_check_in_swap_loc,
-                    },
-                )) => {
-                    let addresses =
-                        verify_and_create_named_address_mapping(named_addresses).unwrap();
-                    let compiler_edition = edition.unwrap_or(Edition::LEGACY);
-                    (
-                        addresses,
-                        compiler_edition,
-                        disable_invariant_violation_check_in_swap_loc,
-                    )
-                }
-                None => (BTreeMap::new(), Edition::LEGACY, false),
-            };
+        let (additional_mapping, compiler_edition) = match task_opt.map(|t| t.command) {
+            Some((InitCommand { named_addresses }, AdapterInitArgs { edition })) => {
+                let addresses = verify_and_create_named_address_mapping(named_addresses).unwrap();
+                let compiler_edition = edition.unwrap_or(Edition::LEGACY);
+                (addresses, compiler_edition)
+            }
+            None => (BTreeMap::new(), Edition::LEGACY),
+        };
 
         let mut named_address_mapping = move_stdlib_named_addresses();
         for (name, addr) in additional_mapping {
@@ -108,7 +94,6 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
             named_address_mapping.insert(name, addr);
         }
         let mut adapter = Self {
-            disable_invariant_violation_check_in_swap_loc,
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -303,14 +288,9 @@ impl SimpleVMTestAdapter {
 
     fn vm_config(&self) -> VMConfig {
         let mut vm_config = VMConfig::default();
-        if self.disable_invariant_violation_check_in_swap_loc {
-            assert!(
-                !vm_config.enable_invariant_violation_check_in_swap_loc,
-                "enable_invariant_violation_check_in_swap_loc should be false by default.\
-                        If this changes, this flag should be removed."
-            );
-            vm_config.enable_invariant_violation_check_in_swap_loc = false;
-        }
+        vm_config.enable_invariant_violation_check_in_swap_loc = false;
+        vm_config.deprecate_global_storage_ops_during_deserialization = true;
+        vm_config.binary_config.deprecate_global_storage_ops = true;
         vm_config
     }
 }
