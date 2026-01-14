@@ -13,7 +13,7 @@ use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 use crate::{
-    CommitConsumerArgs,
+    CommitConsumerArgs, CommitIndex,
     authority_service::AuthorityService,
     block_manager::BlockManager,
     block_verifier::SignedBlockVerifier,
@@ -31,7 +31,7 @@ use crate::{
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::PeerRoundTracker,
-    storage::rocksdb_store::RocksDBStore,
+    storage::{Store as _, rocksdb_store::RocksDBStore},
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
@@ -206,6 +206,44 @@ where
 
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
         let store = Arc::new(RocksDBStore::new(store_path));
+
+        // FIX for split brain fork
+        if context.committee.epoch() == 1007 {
+            let start_index: CommitIndex = 968178;
+
+            match store.read_finalized_commit(start_index) {
+                Ok(Some(rejected_transactions)) => {
+                    if rejected_transactions.is_empty() {
+                        info!(
+                            "Commit at index {} has no rejected transactions. Truncating finalized commits after index {}",
+                            start_index, start_index
+                        );
+                        store
+                            .truncate_finalized_commits(start_index)
+                            .expect("Failed to truncate finalized commits");
+                        info!("Truncated finalized commits after index {}", start_index);
+                    } else {
+                        info!(
+                            "Commit at index {} has rejected transactions. Skipping truncation.",
+                            start_index
+                        );
+                    }
+                }
+                Ok(None) => {
+                    info!(
+                        "No finalized commit found at index {}. Skipping truncation.",
+                        start_index
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to read finalized commit at index {}: {:?}. Skipping truncation.",
+                        start_index, e
+                    );
+                }
+            }
+        }
+
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let block_verifier = Arc::new(SignedBlockVerifier::new(

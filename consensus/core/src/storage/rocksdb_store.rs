@@ -11,6 +11,7 @@ use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, Round, TransactionIndex};
 use sui_macros::fail_point;
+use tracing::debug;
 use typed_store::{
     DBMapUtils, Map as _,
     metrics::SamplingInterval,
@@ -382,6 +383,22 @@ impl Store for RocksDBStore {
         Ok(result)
     }
 
+    fn read_finalized_commit(
+        &self,
+        commit_index: CommitIndex,
+    ) -> ConsensusResult<Option<BTreeMap<BlockRef, Vec<TransactionIndex>>>> {
+        for result in self.finalized_commits.safe_range_iter((
+            Included((commit_index, CommitDigest::MIN)),
+            Included((commit_index, CommitDigest::MAX)),
+        )) {
+            let ((index, _digest), rejected_transactions) = result?;
+            if index == commit_index {
+                return Ok(Some(rejected_transactions));
+            }
+        }
+        Ok(None)
+    }
+
     fn truncate_finalized_commits(&self, from_index: CommitIndex) -> ConsensusResult<()> {
         let mut batch = self.finalized_commits.batch();
 
@@ -393,6 +410,7 @@ impl Store for RocksDBStore {
             batch
                 .delete_batch(&self.finalized_commits, [key])
                 .map_err(ConsensusError::RocksDBFailure)?;
+            debug!("Delete finalised commit {:?}", key);
         }
 
         batch.write()?;

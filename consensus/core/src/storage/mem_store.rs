@@ -234,6 +234,22 @@ impl Store for MemStore {
             .cloned())
     }
 
+    fn read_finalized_commit(
+        &self,
+        commit_index: CommitIndex,
+    ) -> ConsensusResult<Option<BTreeMap<BlockRef, Vec<TransactionIndex>>>> {
+        let inner = self.inner.read();
+        for ((index, _digest), rejected_transactions) in inner.finalized_commits.range((
+            Included((commit_index, CommitDigest::MIN)),
+            Included((commit_index, CommitDigest::MAX)),
+        )) {
+            if *index == commit_index {
+                return Ok(Some(rejected_transactions.clone()));
+            }
+        }
+        Ok(None)
+    }
+
     fn truncate_finalized_commits(&self, from_index: CommitIndex) -> ConsensusResult<()> {
         let mut inner = self.inner.write();
 
