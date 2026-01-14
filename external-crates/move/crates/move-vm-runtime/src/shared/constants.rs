@@ -40,3 +40,13 @@ pub const VIRTUAL_DISPATCH_TABLE_CACHE_SIZE: usize = 1_000_000;
 /// Maximum number of identifiers we can ever intern.
 /// TODO Set to 10 billion, but should be experimentally determined based on actual run data.
 pub const IDENTIFIER_INTERNER_SIZE_LIMIT: usize = 10_000_000_000;
+
+// -------------------------------------------------------------------------------------------------
+// Profiling Constants
+// -------------------------------------------------------------------------------------------------
+
+/// Environment variable name for the profile output file path.
+pub const SUI_PROFILE_FILE_ENV: &str = "SUI_PROFILE_FILE";
+
+/// Default profile output file name.
+pub const DEFAULT_PROFILE_FILE: &str = "sui-profile.profraw";
