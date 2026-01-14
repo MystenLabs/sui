@@ -41,6 +41,7 @@ use std::{
 const STD_ADDR: AccountAddress = AccountAddress::ONE;
 
 struct SimpleVMTestAdapter {
+    switch_to_regex_reference_safety: bool,
     compiled_state: CompiledState,
     storage: InMemoryStorage,
     default_syntax: SyntaxChoice,
@@ -50,6 +51,7 @@ struct SimpleVMTestAdapter {
 pub struct AdapterInitArgs {
     #[arg(long = "edition")]
     pub edition: Option<Edition>,
+    pub switch_to_regex_reference_safety: bool,
 }
 
 #[async_trait]
@@ -74,14 +76,26 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
-        let (additional_mapping, compiler_edition) = match task_opt.map(|t| t.command) {
-            Some((InitCommand { named_addresses }, AdapterInitArgs { edition })) => {
-                let addresses = verify_and_create_named_address_mapping(named_addresses).unwrap();
-                let compiler_edition = edition.unwrap_or(Edition::LEGACY);
-                (addresses, compiler_edition)
-            }
-            None => (BTreeMap::new(), Edition::LEGACY),
-        };
+        let (additional_mapping, compiler_edition, switch_to_regex_reference_safety) =
+            match task_opt.map(|t| t.command) {
+                Some((
+                    InitCommand { named_addresses },
+                    AdapterInitArgs {
+                        edition,
+                        switch_to_regex_reference_safety,
+                    },
+                )) => {
+                    let addresses =
+                        verify_and_create_named_address_mapping(named_addresses).unwrap();
+                    let compiler_edition = edition.unwrap_or(Edition::LEGACY);
+                    (
+                        addresses,
+                        compiler_edition,
+                        switch_to_regex_reference_safety,
+                    )
+                }
+                None => (BTreeMap::new(), Edition::LEGACY, false),
+            };
 
         let mut named_address_mapping = move_stdlib_named_addresses();
         for (name, addr) in additional_mapping {
@@ -94,6 +108,7 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
             named_address_mapping.insert(name, addr);
         }
         let mut adapter = Self {
+            switch_to_regex_reference_safety,
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -287,7 +302,7 @@ impl SimpleVMTestAdapter {
     }
 
     fn vm_config(&self) -> VMConfig {
-        VMConfig {
+        let mut vm_config = VMConfig {
             enable_invariant_violation_check_in_swap_loc: false,
             deprecate_global_storage_ops_during_deserialization: true,
             binary_config: move_binary_format::binary_config::BinaryConfig::legacy_with_flags(
@@ -295,7 +310,16 @@ impl SimpleVMTestAdapter {
                 /* deprecate_global_storage_ops */ true,
             ),
             ..VMConfig::default()
+        };
+        if self.switch_to_regex_reference_safety {
+            assert!(
+                !vm_config.verifier.switch_to_regex_reference_safety,
+                "switch_to_regex_reference_safety should be false by default. \
+                If this is no longer the case, the flag should be removed from tests"
+            );
+            vm_config.verifier.switch_to_regex_reference_safety = true;
         }
+        vm_config
     }
 }
 
