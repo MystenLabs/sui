@@ -62,6 +62,16 @@ impl<'m> Verifier<'m> {
 }
 
 impl executor::Executor for Executor {
+    fn find_live_inputs(
+        &self,
+        _: &ProtocolConfig,
+        _: &dyn BackingStore,
+        _: &TransactionKind,
+        _: u64,
+    ) -> Option<Vec<bool>> {
+        unimplemented!("find_live_inputs is not implemented for v2");
+    }
+
     fn execute_transaction_to_effects(
         &self,
         store: &dyn BackingStore,

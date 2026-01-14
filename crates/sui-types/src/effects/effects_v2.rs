@@ -482,6 +482,16 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .collect()
     }
 
+    fn rewrite_failure_command_index(&mut self, command_offset: usize) {
+        if let ExecutionStatus::Failure {
+            command: Some(command),
+            ..
+        } = &mut self.status
+        {
+            *command = command.saturating_sub(command_offset);
+        }
+    }
+
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
         &mut self.status
     }

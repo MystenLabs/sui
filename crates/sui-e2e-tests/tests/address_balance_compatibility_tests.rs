@@ -2,20 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_macros::*;
-use sui_test_transaction_builder::FundSource;
+use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     base_types::{FullObjectRef, ObjectID, SequenceNumber, SuiAddress},
     coin_reservation::ParsedObjectRefWithdrawal,
+    effects::TransactionEffectsAPI,
 };
-
 use test_cluster::addr_balance_test_env::TestEnvBuilder;
 
 #[sim_test]
 async fn test_coin_reservation_validation() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_accumulators_for_testing();
             cfg.enable_coin_reservation_for_testing();
             cfg
         }))
@@ -29,7 +27,7 @@ async fn test_coin_reservation_validation() {
     test_env.fund_one_address_balance(sender1, 1000).await;
 
     // refresh the gas object
-    let sender1 = test_env.get_sender(0);
+    let (sender1, gas1) = test_env.get_sender_and_gas(0);
 
     // Verify transaction is rejected if it reserves more than the available balance
     {
@@ -99,38 +97,65 @@ async fn test_coin_reservation_validation() {
         );
     }
 
-    // Verify coin reservations cannot (yet) be used to pay gas.
+    // Verify that invalid epoch for coin reservation in gas is rejected.
     {
-        let coin_reservation = test_env.encode_coin_reservation(sender1, 0, 10000000);
+        let coin_reservation_gas = test_env.encode_coin_reservation(sender1, 3, 10000000);
 
         let tx = test_env
-            .tx_builder_with_gas(sender1, coin_reservation)
-            .transfer_sui_to_address_balance(
-                FundSource::address_fund_with_reservation(1),
-                vec![(1, sender1)],
-            )
+            .tx_builder_with_gas(sender1, coin_reservation_gas)
+            .transfer_sui_to_address_balance(FundSource::coin(gas1), vec![(1, sender1)])
             .build();
+        let err = test_env.exec_tx_directly(tx).await.unwrap_err();
 
+        assert!(err.to_string().contains("Transaction Expired"));
+    }
+
+    // Verify that zero amount for coin reservation in gas is rejected.
+    {
+        let coin_reservation_gas = test_env.encode_coin_reservation(sender1, 0, 0);
+
+        let tx = test_env
+            .tx_builder_with_gas(sender1, coin_reservation_gas)
+            .transfer_sui_to_address_balance(FundSource::coin(gas1), vec![(1, sender1)])
+            .build();
         let err = test_env.exec_tx_directly(tx).await.unwrap_err();
 
         assert!(
             err.to_string()
-                .contains("Gas object is not an owned object")
+                .contains("reservation amount must be non-zero")
         );
     }
 
-    // Verify that total reservation limit is enforced for coin reservations.
+    // Verify gas budget is enforced with coin reservations.
     {
-        // 1 regular reservation
-        let mut tx_builder = test_env
-            .tx_builder(sender1)
+        let coin_reservation_gas = test_env.encode_coin_reservation(sender1, 0, 100);
+
+        let tx = test_env
+            .tx_builder_with_gas(sender1, coin_reservation_gas)
+            .transfer_sui_to_address_balance(FundSource::coin(gas1), vec![(1, sender1)])
+            .build();
+        let err = test_env.exec_tx_directly(tx).await.unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Balance of gas object 100 is lower than the needed amount")
+        );
+    }
+
+    // Verify that total reservation limit is enforced for coin reservations, including gas reservations.
+    {
+        // 1 gas reservation
+        let gas_reservation = test_env.encode_coin_reservation(sender1, 0, 10000000);
+
+        // plus 1 regular reservation
+        let mut tx_builder = TestTransactionBuilder::new(sender1, gas_reservation, test_env.rgp)
             .transfer_sui_to_address_balance(
                 FundSource::address_fund_with_reservation(1),
                 vec![(1, sender1)],
             );
 
-        // plus 10 coin reservations
-        for _ in 0..10 {
+        // plus 9 coin reservations
+        for _ in 0..9 {
             let random_object_id = ObjectID::random();
 
             let coin = ParsedObjectRefWithdrawal::new(random_object_id, 0, 100)
@@ -152,10 +177,68 @@ async fn test_coin_reservation_validation() {
 
 #[sim_test]
 async fn test_coin_reservation_gating() {
+    let mut test_env = TestEnvBuilder::new().build().await;
+
+    let sender = test_env.get_sender(0);
+
+    // Verify transaction is rejected if coin reservation is not enabled.
+    {
+        let coin_reservation = test_env.encode_coin_reservation(sender, 0, 1);
+
+        let err = test_env
+            .transfer_from_coin_to_address_balance(sender, coin_reservation, vec![(1, sender)])
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("coin reservation backward compatibility layer is not enabled")
+        );
+    }
+}
+
+#[sim_test]
+async fn test_valid_coin_reservation_transfers() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_accumulators_for_testing();
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, _) = test_env.get_sender_and_gas(0);
+
+    test_env.fund_one_address_balance(sender, 1000).await;
+
+    let coin_reservation = test_env.encode_coin_reservation(sender, 0, 100);
+
+    let recipient = SuiAddress::random_for_testing_only();
+
+    // Transfer the entire "coin" to the recipient
+    let (_, effects) = test_env
+        .transfer_coin_to_address_balance(sender, coin_reservation, recipient)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
+
+    // Transfer a portion of the coin reservation to the recipient
+    let (_, effects) = test_env
+        .transfer_from_coin_to_address_balance(sender, coin_reservation, vec![(1, recipient)])
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok());
+
+    // ensure both balances arrived at the recipient
+    let recipient_balance = test_env.get_sui_balance(recipient);
+    // 100 from coin transfer, 1 from coin reservation
+    assert_eq!(recipient_balance, 100 + 1);
+}
+
+#[sim_test]
+async fn test_valid_coin_reservation_gas_payments() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
             cfg
         }))
         .build()
@@ -163,15 +246,37 @@ async fn test_coin_reservation_gating() {
 
     let sender = test_env.get_sender(0);
 
-    // Verify transaction is rejected if coin reservation is not enabled.
-    let coin_reservation = test_env.encode_coin_reservation(sender, 0, 1);
+    let budget = 5000000000;
 
-    let err = test_env
-        .transfer_from_coin_to_address_balance(sender, coin_reservation, vec![(1, sender)])
-        .await
-        .unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("coin reservation backward compatibility layer is not enabled")
+    test_env
+        .fund_one_address_balance(sender, budget + 100)
+        .await;
+
+    let transfer_payment = test_env.encode_coin_reservation(sender, 0, 1);
+    let gas_payment = test_env.encode_coin_reservation(sender, 0, budget);
+
+    let recipient = SuiAddress::random_for_testing_only();
+
+    let initial_sender_balance = test_env.get_sui_balance(sender);
+
+    let tx = TestTransactionBuilder::new(sender, gas_payment, test_env.rgp)
+        .transfer_sui_to_address_balance(FundSource::coin(transfer_payment), vec![(1, recipient)])
+        .build();
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+
+    assert!(effects.status().is_ok());
+    let gas_charge = effects.gas_cost_summary().gas_used() as u128;
+
+    // ensure both balances arrived at the recipient
+    let recipient_balance = test_env.get_sui_balance(recipient);
+
+    // 1 MIST transferred.
+    assert_eq!(recipient_balance, 1);
+
+    // Sender should have lost the gas charge and the 1 MIST transferred.
+    let final_sender_balance = test_env.get_sui_balance(sender);
+    assert_eq!(
+        final_sender_balance,
+        initial_sender_balance as u64 - gas_charge as u64 - 1
     );
 }

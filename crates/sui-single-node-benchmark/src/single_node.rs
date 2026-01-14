@@ -240,6 +240,7 @@ impl SingleValidator {
                 gas_data,
                 gas_status,
                 kind,
+                None, // compat_args
                 signer,
                 *executable.digest(),
                 &mut None,

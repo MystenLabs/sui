@@ -308,6 +308,17 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         vec![]
     }
 
+    fn rewrite_failure_command_index(&mut self, command_offset: usize) {
+        // should never be used, but easy to support anyway
+        if let ExecutionStatus::Failure {
+            command: Some(command),
+            ..
+        } = &mut self.status
+        {
+            *command += command_offset;
+        }
+    }
+
     fn gas_object(&self) -> (ObjectRef, Owner) {
         self.gas_object.clone()
     }

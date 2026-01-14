@@ -20,6 +20,7 @@ mod checked {
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
     };
+    use sui_types::coin_reservation::ParsedDigest;
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
@@ -145,7 +146,29 @@ mod checked {
         } else if is_gas_paid_from_address_balance(&gas_data, &transaction_kind) {
             PaymentMethod::AddressBalance(gas_data.owner)
         } else {
-            PaymentMethod::Coins(gas_data.payment)
+            let (real_gas_coins, available_address_balance_gas) = {
+                let mut real_gas_coins = Vec::new();
+                let mut available_address_balance_gas: u64 = 0;
+                for gas_coin in gas_data.payment {
+                    if let Ok(parsed) = ParsedDigest::try_from(gas_coin.2) {
+                        available_address_balance_gas += parsed.reservation_amount();
+                    } else {
+                        real_gas_coins.push(gas_coin);
+                    }
+                }
+                (real_gas_coins, available_address_balance_gas)
+            };
+
+            if real_gas_coins.is_empty() {
+                PaymentMethod::AddressBalance(gas_data.owner)
+            } else if available_address_balance_gas > 0 {
+                PaymentMethod::Mixed {
+                    address_balance_gas_payer: gas_data.owner,
+                    gas_coins: real_gas_coins,
+                }
+            } else {
+                PaymentMethod::Coins(real_gas_coins)
+            }
         };
 
         let mut gas_charger = GasCharger::new(
