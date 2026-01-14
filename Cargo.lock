@@ -13551,6 +13551,7 @@ dependencies = [
  "either",
  "indexmap 2.8.0",
  "leb128",
+ "lru 0.10.0",
  "move-binary-format",
  "move-bytecode-utils",
  "move-bytecode-verifier",
