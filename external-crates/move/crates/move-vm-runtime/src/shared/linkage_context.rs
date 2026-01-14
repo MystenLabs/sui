@@ -28,7 +28,7 @@ pub struct LinkageContext {
 /// A hashable representation of a linkage context, for caching purposes.
 /// This is a vector of (key, value) pairs representing the linkage table.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct LinkageHash(Vec<(AccountAddress, AccountAddress)>);
+pub struct LinkageHash(Vec<(AccountAddress, AccountAddress)>);
 
 impl LinkageContext {
     pub fn new(linkage_table: BTreeMap<OriginalId, VersionId>) -> Self {
@@ -116,12 +116,12 @@ impl LinkageContext {
             .collect::<BTreeSet<_>>())
     }
 
-    pub(crate) fn to_linkage_hash(&self) -> PartialVMResult<LinkageHash> {
-        Ok(LinkageHash(
+    pub fn to_linkage_hash(&self) -> LinkageHash {
+        LinkageHash(
             self.linkage_table
                 .iter()
                 .map(|(k, v)| (*k, *v))
                 .collect::<Vec<_>>(),
-        ))
+        )
     }
 }

@@ -35,15 +35,11 @@ impl LayoutResolver for TypeLayoutResolver<'_, '_> {
         &mut self,
         struct_tag: &StructTag,
     ) -> Result<A::MoveDatatypeLayout, SuiError> {
-        let ids = struct_tag
-            .all_addresses()
-            .into_iter()
-            .map(|a| a.into())
-            .collect::<Vec<_>>();
+        let ids = struct_tag.all_addresses().into_iter().map(ObjectID::from);
         let null_resolver = NullSuiResolver(&self.state_view);
         let resolver =
             CachedPackageStore::new(self.vm, TransactionPackageStore::new(&null_resolver));
-        let tag_linkage = ExecutableLinkage::type_linkage(&ids, &resolver)?;
+        let tag_linkage = ExecutableLinkage::type_linkage(ids, &resolver)?;
         let link_context = tag_linkage.linkage_context();
         let data_store = TransactionPackageStore::new(&null_resolver);
         let Ok(vm) = self.vm.make_vm(data_store, link_context) else {
