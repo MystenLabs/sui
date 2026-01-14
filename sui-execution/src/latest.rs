@@ -36,7 +36,7 @@ use sui_verifier_latest::meter::SuiVerifierMeter;
 
 use crate::executor;
 use crate::verifier;
-use sui_adapter_latest::execution_mode;
+use sui_adapter_latest::{execution_mode, static_programmable_transactions};
 
 pub(crate) struct Executor(Arc<MoveVM>);
 
@@ -61,6 +61,25 @@ impl<'m> Verifier<'m> {
 }
 
 impl executor::Executor for Executor {
+    fn find_live_inputs(
+        &self,
+        protocol_config: &ProtocolConfig,
+        store: &dyn BackingStore,
+        kind: &TransactionKind,
+        epoch_id: u64,
+    ) -> Option<Vec<bool>> {
+        let TransactionKind::ProgrammableTransaction(pt) = kind else {
+            return None;
+        };
+        static_programmable_transactions::find_live_inputs::<execution_mode::Normal>(
+            protocol_config,
+            &self.0,
+            store,
+            pt,
+            epoch_id,
+        )
+    }
+
     fn execute_transaction_to_effects(
         &self,
         store: &dyn BackingStore,

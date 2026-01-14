@@ -385,6 +385,9 @@ pub trait TransactionEffectsAPI {
     /// Returns all accumulator updates in the transaction.
     fn accumulator_updates(&self) -> Vec<(ObjectID, AccumulatorWriteV1)>;
 
+    /// Adjusts the command index of the failure status (in case the transaction was rewritten).
+    fn rewrite_failure_command_index(&mut self, command_offset: usize);
+
     // All of these should be #[cfg(test)], but they are used by tests in other crates, and
     // dependencies don't get built with cfg(test) set as far as I can tell.
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus;
