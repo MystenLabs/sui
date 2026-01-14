@@ -393,10 +393,9 @@ impl Database {
                 Ok(())
             }
             #[cfg(tidehunter)]
-            (Storage::TideHunter(db), StorageWriteBatch::TideHunter(batch)) => {
+            (Storage::TideHunter(_db), StorageWriteBatch::TideHunter(batch)) => {
                 // TideHunter doesn't support write options
-                db.write_batch(batch)
-                    .map_err(typed_store_error_from_th_error)
+                batch.commit().map_err(typed_store_error_from_th_error)
             }
             _ => Err(TypedStoreError::RocksDBError(
                 "using invalid batch type for the database".to_string(),
@@ -661,8 +660,8 @@ impl<K, V> DBMap<K, V> {
             Storage::Rocks(_) => StorageWriteBatch::Rocks(WriteBatch::default()),
             Storage::InMemory(_) => StorageWriteBatch::InMemory(InMemoryBatch::default()),
             #[cfg(tidehunter)]
-            Storage::TideHunter(_) => {
-                StorageWriteBatch::TideHunter(tidehunter::batch::WriteBatch::new())
+            Storage::TideHunter(db) => {
+                StorageWriteBatch::TideHunter(db.write_batch())
             }
         };
         DBBatch::new(
