@@ -381,4 +381,21 @@ impl Store for RocksDBStore {
             .get(&(commit_ref.index, commit_ref.digest))?;
         Ok(result)
     }
+
+    fn truncate_finalized_commits(&self, from_index: CommitIndex) -> ConsensusResult<()> {
+        let mut batch = self.finalized_commits.batch();
+
+        for result in self.finalized_commits.safe_range_iter((
+            Included((from_index, CommitDigest::MIN)),
+            Included((CommitIndex::MAX, CommitDigest::MAX)),
+        )) {
+            let (key, _) = result?;
+            batch
+                .delete_batch(&self.finalized_commits, [key])
+                .map_err(ConsensusError::RocksDBFailure)?;
+        }
+
+        batch.write()?;
+        Ok(())
+    }
 }

@@ -8,7 +8,7 @@ use tokio::time::Instant;
 use tracing::info;
 
 use crate::{
-    CommitConsumerArgs, CommittedSubDag,
+    CommitConsumerArgs, CommitIndex, CommittedSubDag,
     block::{BlockAPI, VerifiedBlock},
     commit::{CommitAPI, load_committed_subdag_from_store},
     commit_finalizer::{CommitFinalizer, CommitFinalizerHandle},
@@ -149,6 +149,8 @@ impl CommitObserver {
     }
 
     async fn recover_and_send_commits(&mut self, commit_consumer: &CommitConsumerArgs) {
+        self.truncate_bad_finalized_commits();
+
         let now = Instant::now();
 
         let replay_after_commit_index = commit_consumer.replay_after_commit_index;
@@ -293,6 +295,54 @@ impl CommitObserver {
             last_commit_index,
             now.elapsed()
         );
+    }
+
+    fn truncate_bad_finalized_commits(&mut self) {
+        const BAD_COMMIT: CommitIndex = 968178;
+        if self.context.committee.epoch() != 1007 {
+            info!(
+                "Skipping truncation. Current epoch {}",
+                self.context.committee.epoch(),
+            );
+            return;
+        }
+        let Some(last_commit) = self
+            .store
+            .read_last_commit()
+            .expect("Reading the last commit should not fail")
+        else {
+            info!("Skipping truncation. No last commit");
+            return;
+        };
+        if last_commit.index() < BAD_COMMIT {
+            info!(
+                "Skipping truncation. Last commit index {}",
+                last_commit.index(),
+            );
+            return;
+        }
+        let interested_commits = self
+            .store
+            .scan_commits((BAD_COMMIT..=BAD_COMMIT).into())
+            .expect("Scanning commits should not fail");
+        if interested_commits.len() == 1 {
+            let target_commit = interested_commits.last().unwrap();
+            let rejected = self
+                .store
+                .read_rejected_transactions(target_commit.reference())
+                .expect("Reading rejected transactions should not fail");
+            if let Some(rejected) = rejected
+                && !rejected.is_empty()
+            {
+                info!("Skipping truncation. Rejected transactions: {:?}", rejected);
+                return;
+            }
+        }
+
+        info!("Truncating finalized commits from {}", BAD_COMMIT);
+        self.store
+            .truncate_finalized_commits(BAD_COMMIT)
+            .expect("Truncation should not fail");
     }
 
     fn report_metrics(&self, committed: &[CommittedSubDag]) {
