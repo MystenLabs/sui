@@ -14,7 +14,7 @@ use crate::{
         vm_arguments::ValueFrame,
         vm_test_adapter::VMTestAdapter,
     },
-    profiling::{dump_profile_info_to_file, BYTECODE_COUNTERS},
+    profiling::{BYTECODE_COUNTERS, dump_profile_info_to_file},
     shared::gas::UnmeteredGasMeter,
 };
 use move_binary_format::file_format_common::Opcodes;
@@ -89,7 +89,11 @@ fn test_profiling_counts_instructions() {
     let module = (module_id, code);
 
     // Execute the function
-    let _result = run_function(&module, "add_numbers", vec![MoveValue::U64(5), MoveValue::U64(3)]);
+    let _result = run_function(
+        &module,
+        "add_numbers",
+        vec![MoveValue::U64(5), MoveValue::U64(3)],
+    );
 
     // Take a snapshot of the counters
     let snapshot = BYTECODE_COUNTERS.snapshot();
@@ -200,7 +204,7 @@ fn test_profiling_reset_works() {
 }
 
 #[test]
-fn test_profiling_sorted_by_frequency() {
+fn test_profiling_iter() {
     // Reset counters before test
     BYTECODE_COUNTERS.reset();
 
@@ -220,11 +224,22 @@ fn test_profiling_sorted_by_frequency() {
     );
     let module_id = ModuleId::new(TEST_ADDR, Identifier::new("test").unwrap());
     let module = (module_id, code);
-    let _result = run_function(&module, "mixed_ops", vec![MoveValue::U64(10), MoveValue::U64(3)]);
+    let _result = run_function(
+        &module,
+        "mixed_ops",
+        vec![MoveValue::U64(10), MoveValue::U64(3)],
+    );
 
-    // Take a snapshot and get sorted results
+    // Take a snapshot and iterate
     let snapshot = BYTECODE_COUNTERS.snapshot();
-    let sorted = snapshot.sorted_by_frequency();
+    let entries: Vec<_> = snapshot.iter().collect();
+
+    // Verify we got some entries
+    assert!(!entries.is_empty(), "Expected at least one opcode entry");
+
+    // Verify we can sort by frequency (callers can do this)
+    let mut sorted: Vec<_> = snapshot.iter().collect();
+    sorted.sort_by(|a, b| b.1.cmp(&a.1));
 
     // Verify sorted results are in descending order
     for window in sorted.windows(2) {

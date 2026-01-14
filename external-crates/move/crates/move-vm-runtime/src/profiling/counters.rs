@@ -6,6 +6,7 @@
 //! This module provides atomic counters for tracking bytecode execution frequency.
 //! The counters are designed for minimal overhead when profiling is enabled.
 
+use crate::shared::constants::{DEFAULT_PROFILE_FILE, SUI_PROFILE_FILE_ENV};
 use move_binary_format::file_format_common::Opcodes;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -183,23 +184,16 @@ impl BytecodeSnapshot {
         self.counts.iter().sum()
     }
 
-    /// Return opcodes sorted by frequency (highest first).
-    pub fn sorted_by_frequency(&self) -> Vec<(Opcodes, u64)> {
-        let mut entries: Vec<(Opcodes, u64)> = self
-            .counts
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, &count)| {
-                if count > 0 {
-                    opcode_from_u8(idx as u8).map(|op| (op, count))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        entries.sort_by(|a, b| b.1.cmp(&a.1));
-        entries
+    /// Returns an iterator over all opcodes with non-zero counts.
+    /// Yields `(Opcodes, count)` pairs in opcode order (not sorted by frequency).
+    pub fn iter(&self) -> impl Iterator<Item = (Opcodes, u64)> {
+        self.counts.iter().enumerate().filter_map(|(idx, &count)| {
+            if count > 0 {
+                opcode_from_u8(idx as u8).map(|op| (op, count))
+            } else {
+                None
+            }
+        })
     }
 
     /// Format as a human-readable report.
@@ -209,14 +203,22 @@ impl BytecodeSnapshot {
             return "No bytecode executions recorded.".to_string();
         }
 
+        let mut entries: Vec<_> = self.iter().collect();
+        entries.sort_by(|a, b| b.1.cmp(&a.1));
+
         let mut report = String::new();
         report.push_str(&format!("Total instructions: {}\n\n", total));
         report.push_str("Opcode                          Count         %\n");
         report.push_str("------------------------------------------------\n");
 
-        for (opcode, count) in self.sorted_by_frequency() {
+        for (opcode, count) in entries {
             let pct = (count as f64 / total as f64) * 100.0;
-            report.push_str(&format!("{:<30} {:>12} {:>8.2}%\n", format!("{:?}", opcode), count, pct));
+            report.push_str(&format!(
+                "{:<30} {:>12} {:>8.2}%\n",
+                format!("{:?}", opcode),
+                count,
+                pct
+            ));
         }
 
         report
@@ -231,21 +233,18 @@ impl Default for BytecodeSnapshot {
     }
 }
 
-/// Environment variable name for the profile output file path.
-pub const SUI_PROFILE_FILE_ENV: &str = "SUI_PROFILE_FILE";
-
-/// Default profile output file name.
-pub const DEFAULT_PROFILE_FILE: &str = "sui-profile.profraw";
-
 impl BytecodeSnapshot {
     /// Format as CSV with header row.
     /// Format: opcode,count,percentage
     pub fn format_csv(&self) -> String {
         let total = self.total();
+        let mut entries: Vec<_> = self.iter().collect();
+        entries.sort_by(|a, b| b.1.cmp(&a.1));
+
         let mut csv = String::new();
         csv.push_str("opcode,count,percentage\n");
 
-        for (opcode, count) in self.sorted_by_frequency() {
+        for (opcode, count) in entries {
             let pct = if total > 0 {
                 (count as f64 / total as f64) * 100.0
             } else {
@@ -329,7 +328,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sorted_by_frequency() {
+    fn test_iter() {
         let counters = BytecodeCounters::new();
         counters.increment(Opcodes::ADD);
         counters.increment(Opcodes::SUB);
@@ -339,7 +338,40 @@ mod tests {
         counters.increment(Opcodes::MUL);
 
         let snapshot = counters.snapshot();
-        let sorted = snapshot.sorted_by_frequency();
+        let entries: Vec<_> = snapshot.iter().collect();
+
+        // Verify all three opcodes are present
+        assert_eq!(entries.len(), 3);
+
+        // Find each opcode and verify count
+        let add_entry = entries
+            .iter()
+            .find(|(op, _)| *op as u8 == Opcodes::ADD as u8);
+        let sub_entry = entries
+            .iter()
+            .find(|(op, _)| *op as u8 == Opcodes::SUB as u8);
+        let mul_entry = entries
+            .iter()
+            .find(|(op, _)| *op as u8 == Opcodes::MUL as u8);
+
+        assert_eq!(add_entry.unwrap().1, 1);
+        assert_eq!(sub_entry.unwrap().1, 2);
+        assert_eq!(mul_entry.unwrap().1, 3);
+    }
+
+    #[test]
+    fn test_iter_sorted_by_frequency() {
+        let counters = BytecodeCounters::new();
+        counters.increment(Opcodes::ADD);
+        counters.increment(Opcodes::SUB);
+        counters.increment(Opcodes::SUB);
+        counters.increment(Opcodes::MUL);
+        counters.increment(Opcodes::MUL);
+        counters.increment(Opcodes::MUL);
+
+        let snapshot = counters.snapshot();
+        let mut sorted: Vec<_> = snapshot.iter().collect();
+        sorted.sort_by(|a, b| b.1.cmp(&a.1));
 
         // Compare using `as u8` since Opcodes doesn't implement PartialEq
         assert_eq!(sorted[0].0 as u8, Opcodes::MUL as u8);
@@ -411,7 +443,11 @@ mod tests {
 
         // Dump to file using the explicit path function
         let result = dump_profile_info_to_file(test_file);
-        assert!(result.is_ok(), "dump_profile_info_to_file failed: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "dump_profile_info_to_file failed: {:?}",
+            result
+        );
 
         // Read and verify file contents
         let contents = fs::read_to_string(test_file).expect("Failed to read profile file");

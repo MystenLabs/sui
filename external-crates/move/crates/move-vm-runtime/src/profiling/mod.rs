@@ -16,7 +16,8 @@
 
 pub mod counters;
 
+pub use crate::shared::constants::{DEFAULT_PROFILE_FILE, SUI_PROFILE_FILE_ENV};
 pub use counters::{
-    dump_profile_info, dump_profile_info_to_file, BytecodeCounters, BytecodeSnapshot,
-    DEFAULT_PROFILE_FILE, SUI_PROFILE_FILE_ENV, BYTECODE_COUNTERS,
+    BYTECODE_COUNTERS, BytecodeCounters, BytecodeSnapshot, dump_profile_info,
+    dump_profile_info_to_file,
 };
