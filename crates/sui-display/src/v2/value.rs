@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(unused)]
 
 use std::borrow::Cow;
 use std::fmt::Write as _;
@@ -8,12 +7,7 @@ use std::str;
 
 use async_trait::async_trait;
 use base64::engine::Engine;
-use base64::engine::general_purpose::STANDARD;
-use base64::engine::general_purpose::STANDARD_NO_PAD;
-use base64::engine::general_purpose::URL_SAFE;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::DateTime;
-use chrono::Utc;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::annotated_value::MoveTypeLayout;
@@ -24,10 +18,7 @@ use serde::Serialize;
 use serde::ser::SerializeSeq as _;
 use serde::ser::SerializeTuple as _;
 use serde::ser::SerializeTupleVariant;
-use sui_types::MOVE_STDLIB_ADDRESS;
 use sui_types::base_types::RESOLVED_UTF8_STR;
-use sui_types::base_types::STD_OPTION_MODULE_NAME;
-use sui_types::base_types::STD_OPTION_STRUCT_NAME;
 use sui_types::base_types::move_ascii_str_layout;
 use sui_types::base_types::move_utf8_str_layout;
 use sui_types::base_types::url_layout;
@@ -411,7 +402,6 @@ impl<'s> Accessor<'s> {
     /// as long as their numeric values fit into a `u64`.
     pub(crate) fn as_numeric_index(&self) -> Option<u64> {
         use Accessor as A;
-        use MoveTypeLayout as L;
 
         match self {
             A::Index(value) => value.as_u64(),
@@ -443,6 +433,45 @@ impl OwnedSlice {
 impl Slice<'_> {
     fn format_json(self, w: JsonWriter<'_>) -> Result<serde_json::Value, FormatError> {
         A::MoveValue::visit_deserialize(self.bytes, self.layout, &mut RV::RpcVisitor::new(w))
+    }
+}
+
+impl Value<'_> {
+    /// Convert this value into an owned slice.
+    ///
+    /// This operation returns `None` if the value contains compound literals (struct, enum, vector
+    /// literals), since their layouts are not guaranteed to be valid.
+    pub fn into_owned_slice(self) -> Option<OwnedSlice> {
+        let layout = self.layout()?;
+        let bytes = bcs::to_bytes(&self).ok()?;
+        Some(OwnedSlice { layout, bytes })
+    }
+
+    /// Compute the type layout for this value, if possible.
+    ///
+    /// Returns `None` for compound literals (Struct, Enum, Vector) since we cannot reliably
+    /// compute their layouts without access to the full type information.
+    fn layout(&self) -> Option<MoveTypeLayout> {
+        use MoveTypeLayout as L;
+
+        match self {
+            Value::Slice(s) => Some(s.layout.clone()),
+
+            Value::Address(_) => Some(L::Address),
+            Value::Bool(_) => Some(L::Bool),
+            Value::U8(_) => Some(L::U8),
+            Value::U16(_) => Some(L::U16),
+            Value::U32(_) => Some(L::U32),
+            Value::U64(_) => Some(L::U64),
+            Value::U128(_) => Some(L::U128),
+            Value::U256(_) => Some(L::U256),
+
+            Value::Bytes(_) => Some(L::Vector(Box::new(L::U8))),
+            Value::String(_) => Some(L::Struct(Box::new(move_utf8_str_layout()))),
+
+            // Compound literals: cannot compute layout
+            Value::Enum(_) | Value::Struct(_) | Value::Vector(_) => None,
+        }
     }
 }
 
@@ -760,6 +789,7 @@ pub(crate) mod tests {
     use move_core_types::annotated_value::MoveTypeLayout as L;
     use move_core_types::identifier::Identifier;
     use serde_json::json;
+    use sui_types::MOVE_STDLIB_ADDRESS;
     use sui_types::base_types::STD_ASCII_MODULE_NAME;
     use sui_types::base_types::STD_ASCII_STRUCT_NAME;
     use sui_types::dynamic_field::DynamicFieldInfo;
@@ -792,7 +822,6 @@ pub(crate) mod tests {
             use Identifier as I;
             use MoveFieldLayout as F;
             use MoveStructLayout as S;
-            use MoveTypeLayout as T;
 
             let name_bytes = bcs::to_bytes(&name).unwrap();
             let name_type = TypeTag::from(&name_layout);
@@ -836,7 +865,6 @@ pub(crate) mod tests {
             use Identifier as I;
             use MoveFieldLayout as F;
             use MoveStructLayout as S;
-            use MoveTypeLayout as T;
 
             let name_bytes = bcs::to_bytes(&name).unwrap();
             let value_bytes = bcs::to_bytes(&value).unwrap();
