@@ -179,63 +179,74 @@ impl<'env> CodeUnitVerifier<'env, '_> {
             meter,
         )?;
         locals_safety::verify(self.module, &self.function_context, ability_cache, meter)?;
-        let reference_safety_res = reference_safety::verify(
-            verifier_config,
-            self.module,
-            &self.function_context,
-            self.name_def_map,
-            meter,
-        );
-        if reference_safety_res.as_ref().is_err_and(|e| {
-            e.major_status() == StatusCode::CONSTRAINT_NOT_SATISFIED
-                || e.major_status() == StatusCode::PROGRAM_TOO_COMPLEX
-        }) {
-            // skip consistency check on timeout/complexity errors
-            return reference_safety_res;
-        }
-        if verifier_config
-            .sanity_check_with_regex_reference_safety
-            .is_some()
-        {
-            let regex_res = regex_reference_safety::verify(
+        if verifier_config.switch_to_regex_reference_safety {
+            reference_safety::verify(
                 verifier_config,
                 self.module,
                 &self.function_context,
-                regex_reference_safety_meter,
+                self.name_def_map,
+                meter,
+            )
+        } else {
+            let reference_safety_res = reference_safety::verify(
+                verifier_config,
+                self.module,
+                &self.function_context,
+                self.name_def_map,
+                meter,
             );
-            if regex_res.as_ref().is_err_and(|e| {
+            if reference_safety_res.as_ref().is_err_and(|e| {
                 e.major_status() == StatusCode::CONSTRAINT_NOT_SATISFIED
                     || e.major_status() == StatusCode::PROGRAM_TOO_COMPLEX
             }) {
-                // If the regex based checker fails due to complexity,
-                // we reject it for being too complex and skip the consistency check.
-                return Err(
-                    PartialVMError::new(StatusCode::PROGRAM_TOO_COMPLEX).with_message(
-                        regex_res
-                            .unwrap_err()
-                            .finish(Location::Undefined)
-                            .message()
-                            .cloned()
-                            .unwrap_or_default(),
-                    ),
-                );
+                // skip consistency check on timeout/complexity errors
+                return reference_safety_res;
             }
-            // The regular expression based reference safety check should be strictly more
-            // permissive. So if it errors, the current one should also error.
-            // As such, we assert: regex err ==> reference safety err
-            // which is equivalent to: !regex_res.is_err() || reference_safety_res.is_err()
-            // which is equivalent to: regex_res.is_ok() || reference_safety_res.is_err()
-            let is_consistent = regex_res.is_ok() || reference_safety_res.is_err();
-            if !is_consistent {
-                return Err(
-                    PartialVMError::new(StatusCode::REFERENCE_SAFETY_INCONSISTENT).with_message(
-                        "regex reference safety should be strictly more permissive \
+            if verifier_config
+                .sanity_check_with_regex_reference_safety
+                .is_some()
+            {
+                let regex_res = regex_reference_safety::verify(
+                    verifier_config,
+                    self.module,
+                    &self.function_context,
+                    regex_reference_safety_meter,
+                );
+                if regex_res.as_ref().is_err_and(|e| {
+                    e.major_status() == StatusCode::CONSTRAINT_NOT_SATISFIED
+                        || e.major_status() == StatusCode::PROGRAM_TOO_COMPLEX
+                }) {
+                    // If the regex based checker fails due to complexity,
+                    // we reject it for being too complex and skip the consistency check.
+                    return Err(
+                        PartialVMError::new(StatusCode::PROGRAM_TOO_COMPLEX).with_message(
+                            regex_res
+                                .unwrap_err()
+                                .finish(Location::Undefined)
+                                .message()
+                                .cloned()
+                                .unwrap_or_default(),
+                        ),
+                    );
+                }
+                // The regular expression based reference safety check should be strictly more
+                // permissive. So if it errors, the current one should also error.
+                // As such, we assert: regex err ==> reference safety err
+                // which is equivalent to: !regex_res.is_err() || reference_safety_res.is_err()
+                // which is equivalent to: regex_res.is_ok() || reference_safety_res.is_err()
+                let is_consistent = regex_res.is_ok() || reference_safety_res.is_err();
+                if !is_consistent {
+                    return Err(
+                        PartialVMError::new(StatusCode::REFERENCE_SAFETY_INCONSISTENT)
+                            .with_message(
+                                "regex reference safety should be strictly more permissive \
                          than the current"
-                            .to_string(),
-                    ),
-                );
+                                    .to_string(),
+                            ),
+                    );
+                }
             }
+            reference_safety_res
         }
-        reference_safety_res
     }
 }
