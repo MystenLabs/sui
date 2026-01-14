@@ -41,6 +41,7 @@ use std::{
 const STD_ADDR: AccountAddress = AccountAddress::ONE;
 
 struct SimpleVMTestAdapter {
+    disable_invariant_violation_check_in_swap_loc: bool,
     compiled_state: CompiledState,
     storage: InMemoryStorage,
     default_syntax: SyntaxChoice,
@@ -50,6 +51,7 @@ struct SimpleVMTestAdapter {
 pub struct AdapterInitArgs {
     #[arg(long = "edition")]
     pub edition: Option<Edition>,
+    pub disable_invariant_violation_check_in_swap_loc: bool,
 }
 
 #[async_trait]
@@ -74,14 +76,26 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
         task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
         _path: &Path,
     ) -> (Self, Option<String>) {
-        let (additional_mapping, compiler_edition) = match task_opt.map(|t| t.command) {
-            Some((InitCommand { named_addresses }, AdapterInitArgs { edition })) => {
-                let addresses = verify_and_create_named_address_mapping(named_addresses).unwrap();
-                let compiler_edition = edition.unwrap_or(Edition::LEGACY);
-                (addresses, compiler_edition)
-            }
-            None => (BTreeMap::new(), Edition::LEGACY),
-        };
+        let (additional_mapping, compiler_edition, disable_invariant_violation_check_in_swap_loc) =
+            match task_opt.map(|t| t.command) {
+                Some((
+                    InitCommand { named_addresses },
+                    AdapterInitArgs {
+                        edition,
+                        disable_invariant_violation_check_in_swap_loc,
+                    },
+                )) => {
+                    let addresses =
+                        verify_and_create_named_address_mapping(named_addresses).unwrap();
+                    let compiler_edition = edition.unwrap_or(Edition::LEGACY);
+                    (
+                        addresses,
+                        compiler_edition,
+                        disable_invariant_violation_check_in_swap_loc,
+                    )
+                }
+                None => (BTreeMap::new(), Edition::LEGACY, false),
+            };
 
         let mut named_address_mapping = move_stdlib_named_addresses();
         for (name, addr) in additional_mapping {
@@ -94,6 +108,7 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
             named_address_mapping.insert(name, addr);
         }
         let mut adapter = Self {
+            disable_invariant_violation_check_in_swap_loc,
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -106,25 +121,21 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
         };
 
         adapter
-            .perform_session_action(
-                None,
-                |session, gas_status| {
-                    for module in &*MOVE_STDLIB_COMPILED {
-                        let mut module_bytes = vec![];
-                        module
-                            .serialize_with_version(module.version, &mut module_bytes)
-                            .unwrap();
+            .perform_session_action(None, |session, gas_status| {
+                for module in &*MOVE_STDLIB_COMPILED {
+                    let mut module_bytes = vec![];
+                    module
+                        .serialize_with_version(module.version, &mut module_bytes)
+                        .unwrap();
 
-                        let id = module.self_id();
-                        let sender = *id.address();
-                        session
-                            .publish_module(module_bytes, sender, gas_status)
-                            .unwrap();
-                    }
-                    Ok(())
-                },
-                VMConfig::default(),
-            )
+                    let id = module.self_id();
+                    let sender = *id.address();
+                    session
+                        .publish_module(module_bytes, sender, gas_status)
+                        .unwrap();
+                }
+                Ok(())
+            })
             .unwrap();
         let mut addr_to_name_mapping = BTreeMap::new();
         for (name, addr) in move_stdlib_named_addresses() {
@@ -161,11 +172,9 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
 
         let id = modules.first().unwrap().module.self_id();
         let sender = *id.address();
-        match self.perform_session_action(
-            gas_budget,
-            |session, gas_status| session.publish_module_bundle(all_bytes, sender, gas_status),
-            VMConfig::default(),
-        ) {
+        match self.perform_session_action(gas_budget, |session, gas_status| {
+            session.publish_module_bundle(all_bytes, sender, gas_status)
+        }) {
             Ok(()) => Ok((None, modules)),
             Err(e) => Err(anyhow!(
                 "Unable to publish module '{}'. Got VMError: {}",
@@ -201,20 +210,16 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
             .chain(args)
             .collect();
         let serialized_return_values = self
-            .perform_session_action(
-                gas_budget,
-                |session, gas_status| {
-                    let type_args: Vec<_> = type_arg_tags
-                        .into_iter()
-                        .map(|tag| session.load_type(&tag))
-                        .collect::<VMResult<_>>()?;
+            .perform_session_action(gas_budget, |session, gas_status| {
+                let type_args: Vec<_> = type_arg_tags
+                    .into_iter()
+                    .map(|tag| session.load_type(&tag))
+                    .collect::<VMResult<_>>()?;
 
-                    session.execute_function_bypass_visibility(
-                        module, function, type_args, args, gas_status, None,
-                    )
-                },
-                test_vm_config(),
-            )
+                session.execute_function_bypass_visibility(
+                    module, function, type_args, args, gas_status, None,
+                )
+            })
             .map_err(|e| {
                 anyhow!(
                     "Function execution failed with VMError: {}",
@@ -264,7 +269,6 @@ impl SimpleVMTestAdapter {
         &mut self,
         gas_budget: Option<u64>,
         f: impl FnOnce(&mut Session<&InMemoryStorage>, &mut GasStatus) -> VMResult<Ret>,
-        vm_config: VMConfig,
     ) -> VMResult<Ret> {
         // start session
         let vm = MoveVM::new_with_config(
@@ -274,7 +278,7 @@ impl SimpleVMTestAdapter {
                 move_stdlib_natives::GasParameters::zeros(),
                 /* silent */ false,
             ),
-            vm_config,
+            self.vm_config(),
         )
         .unwrap();
         let (mut session, mut gas_status) = {
@@ -295,6 +299,19 @@ impl SimpleVMTestAdapter {
         let changeset = session.finish().0?;
         self.storage.apply(changeset).unwrap();
         Ok(res)
+    }
+
+    fn vm_config(&self) -> VMConfig {
+        let mut vm_config = VMConfig::default();
+        if self.disable_invariant_violation_check_in_swap_loc {
+            assert!(
+                !vm_config.enable_invariant_violation_check_in_swap_loc,
+                "enable_invariant_violation_check_in_swap_loc should be false by default.\
+                        If this changes, this flag should be removed."
+            );
+            vm_config.enable_invariant_violation_check_in_swap_loc = false;
+        }
+        vm_config
     }
 }
 
@@ -345,13 +362,6 @@ static MOVE_STDLIB_COMPILED: LazyLock<Vec<CompiledModule>> = LazyLock::new(|| {
             .collect(),
     }
 });
-
-fn test_vm_config() -> VMConfig {
-    VMConfig {
-        enable_invariant_violation_check_in_swap_loc: false,
-        ..Default::default()
-    }
-}
 
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
