@@ -29,7 +29,7 @@ pub struct LinkageContext {
 // This actually just holds the linkage for now, but in the future other implementations may
 // replace it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct LinkageHash(BTreeMap<OriginalId, VersionId>);
+pub struct LinkageHash(BTreeMap<OriginalId, VersionId>);
 
 impl LinkageContext {
     pub fn new(linkage_table: BTreeMap<OriginalId, VersionId>) -> Self {
@@ -114,7 +114,7 @@ impl LinkageContext {
             .collect::<BTreeSet<_>>())
     }
 
-    pub(crate) fn to_linkage_hash(&self) -> LinkageHash {
+    pub fn to_linkage_hash(&self) -> LinkageHash {
         LinkageHash(self.linkage_table.clone())
     }
 }

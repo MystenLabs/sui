@@ -3,12 +3,10 @@
 
 use crate::{
     data_store::PackageStore,
-    static_programmable_transactions::linkage::resolution::{
-        ResolutionTable, VersionConstraint, add_and_unify, get_package,
-    },
+    static_programmable_transactions::linkage::resolution::{ResolutionTable, VersionConstraint},
 };
 use move_vm_runtime::shared::linkage_context::LinkageContext;
-use std::{collections::BTreeMap, rc::Rc};
+use std::{borrow::Borrow, collections::BTreeMap, rc::Rc};
 use sui_types::{base_types::ObjectID, error::ExecutionError};
 
 #[derive(Clone, Debug)]
@@ -22,35 +20,13 @@ impl ExecutableLinkage {
     /// Given a list of object IDs, generate a `ResolvedLinkage` for them.
     /// Since this linkage analysis should only be used for types, all packages are resolved
     /// "upwards" (i.e., later versions of the package are preferred).
-    pub fn type_linkage(
-        ids: &[ObjectID],
-        store: &dyn PackageStore,
-    ) -> Result<Self, ExecutionError> {
+    pub fn type_linkage<I>(ids: I, store: &dyn PackageStore) -> Result<Self, ExecutionError>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<ObjectID>,
+    {
         let mut resolution_table = ResolutionTable::empty();
-        for id in ids {
-            let pkg = get_package(id, store)?;
-            let transitive_deps = pkg
-                .linkage_table()
-                .values()
-                .map(|version_id| ObjectID::from(*version_id))
-                .collect::<Vec<_>>();
-            let package_id = pkg.version_id().into();
-            add_and_unify(
-                &package_id,
-                store,
-                &mut resolution_table,
-                VersionConstraint::at_least,
-            )?;
-            for object_id in transitive_deps.iter() {
-                add_and_unify(
-                    object_id,
-                    store,
-                    &mut resolution_table,
-                    VersionConstraint::at_least,
-                )?;
-            }
-        }
-
+        resolution_table.add_type_linkages_to_table(ids, store)?;
         Ok(Self::new(ResolvedLinkage::from_resolution_table(
             resolution_table,
         )))
