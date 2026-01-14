@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module c::c;
+module legacy_dep::legacy_dep;
 
-public fun c() {
-  a::a::a();
+public fun legacy_dep() {
 }

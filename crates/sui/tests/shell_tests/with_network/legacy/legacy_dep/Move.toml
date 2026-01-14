@@ -1,6 +1,6 @@
 # Legacy package with only framework dependency
 [package]
-name = "A"
+name = "LegacyDep"
 edition = "2024"
 implicit-dependencies = false
 
@@ -8,4 +8,4 @@ implicit-dependencies = false
 Sui = { local = "../sui-framework" }
 
 [addresses]
-a = "0x0"
+legacy_dep = "0x0"

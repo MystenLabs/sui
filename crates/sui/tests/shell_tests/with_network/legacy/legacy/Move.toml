@@ -1,11 +1,11 @@
 # legacy package that depends on a legacy package
 [package]
-name = "B"
+name = "Legacy"
 edition = "2024"
 implicit-dependencies = false
 
 [dependencies]
-A = { local = "../legacy_dep" }
+LegacyDep = { local = "../legacy_dep" }
 
 [addresses]
-b = "0x0"
+legacy = "0x0"
