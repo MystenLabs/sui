@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    Discovery, DiscoveryEventLoop, DiscoveryServer, State, metrics::Metrics, server::Server,
+    Discovery, DiscoveryEventLoop, DiscoveryMessage, DiscoveryServer, Handle, State,
+    metrics::Metrics, server::Server,
 };
-use crate::discovery::TrustedPeerChangeEvent;
 use anemo::codegen::InboundRequestLayer;
 use anemo::types::PeerAffinity;
 use anemo::{PeerId, types::PeerInfo};
@@ -18,7 +18,7 @@ use sui_config::p2p::P2pConfig;
 use sui_types::crypto::NetworkKeyPair;
 use tap::{Pipe, TapFallible};
 use tokio::{
-    sync::{oneshot, watch},
+    sync::{mpsc, oneshot},
     task::JoinSet,
 };
 use tracing::warn;
@@ -27,16 +27,14 @@ use tracing::warn;
 pub struct Builder {
     config: Option<P2pConfig>,
     metrics: Option<Metrics>,
-    trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
 }
 
 impl Builder {
     #[allow(clippy::new_without_default)]
-    pub fn new(trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>) -> Self {
+    pub fn new() -> Self {
         Self {
             config: None,
             metrics: None,
-            trusted_peer_change_rx,
         }
     }
 
@@ -72,17 +70,16 @@ impl Builder {
     }
 
     pub(super) fn build_internal(self) -> (UnstartedDiscovery, Server) {
-        let Builder {
-            config,
-            metrics,
-            trusted_peer_change_rx,
-        } = self;
+        let Builder { config, metrics } = self;
         let config = config.unwrap();
+        let discovery_config = config.discovery.clone().unwrap_or_default();
         let metrics = metrics.unwrap_or_else(Metrics::disabled);
-        let (sender, receiver) = oneshot::channel();
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let (mailbox_tx, mailbox_rx) = mpsc::channel(discovery_config.mailbox_capacity());
 
         let handle = Handle {
-            _shutdown_handle: Arc::new(sender),
+            _shutdown_handle: Arc::new(shutdown_tx),
+            sender: mailbox_tx,
         };
 
         let state = State {
@@ -101,9 +98,9 @@ impl Builder {
             UnstartedDiscovery {
                 handle,
                 config,
-                shutdown_handle: receiver,
+                shutdown_handle: shutdown_rx,
                 state,
-                trusted_peer_change_rx,
+                mailbox: mailbox_rx,
                 metrics,
             },
             server,
@@ -117,7 +114,7 @@ pub struct UnstartedDiscovery {
     pub(super) config: P2pConfig,
     pub(super) shutdown_handle: oneshot::Receiver<()>,
     pub(super) state: Arc<RwLock<State>>,
-    pub(super) trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
+    pub(super) mailbox: mpsc::Receiver<DiscoveryMessage>,
     pub(super) metrics: Metrics,
 }
 
@@ -132,7 +129,7 @@ impl UnstartedDiscovery {
             config,
             shutdown_handle,
             state,
-            trusted_peer_change_rx,
+            mailbox,
             metrics,
         } = self;
 
@@ -152,7 +149,7 @@ impl UnstartedDiscovery {
                 dial_seed_peers_task: None,
                 shutdown_handle,
                 state,
-                trusted_peer_change_rx,
+                mailbox,
                 metrics,
             },
             handle,
@@ -166,12 +163,6 @@ impl UnstartedDiscovery {
 
         handle
     }
-}
-
-/// A Handle to the Discovery subsystem. The Discovery system will be shutdown once its Handle has
-/// been dropped.
-pub struct Handle {
-    _shutdown_handle: Arc<oneshot::Sender<()>>,
 }
 
 /// Returns (configured_peers, unidentified_seed_peers).
