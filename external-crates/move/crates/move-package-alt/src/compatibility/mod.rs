@@ -6,15 +6,12 @@ pub mod legacy_lockfile;
 pub mod legacy_parser;
 
 use crate::{
-    compatibility::legacy_parser::{LegacyPackageMetadata, parse_package_info},
-    package::layout::SourcePackageLayout,
-    package::paths::PackagePath,
-    schema::PackageName,
+    package::layout::SourcePackageLayout, package::paths::PackagePath, schema::PackageName,
 };
 
 use move_core_types::account_address::{AccountAddress, AccountAddressParseError};
 
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use regex::Regex;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -22,7 +19,6 @@ use std::{
     path::{Path, PathBuf},
     sync::LazyLock,
 };
-use toml::value::Value as TV;
 use tracing::debug;
 
 pub type LegacyVersion = (u64, u64, u64);
@@ -196,28 +192,6 @@ fn strip_comments(source: &str) -> String {
     }
 
     result
-}
-
-/// Return legacy package metadata; this is needed for tests in sui side
-pub fn parse_legacy_package_info(
-    package_path: &Path,
-) -> Result<LegacyPackageMetadata, anyhow::Error> {
-    let manifest_string = std::fs::read_to_string(package_path.join("Move.toml"))?;
-    let tv =
-        toml::from_str::<TV>(&manifest_string).context("Unable to parse Move package manifest")?;
-
-    match tv {
-        TV::Table(mut table) => {
-            let metadata = table
-                .remove("package")
-                .map(parse_package_info)
-                .transpose()
-                .context("Error parsing '[package]' section of manifest")?
-                .unwrap();
-            Ok(metadata)
-        }
-        _ => bail!("Expected a table from the manifest file"),
-    }
 }
 
 #[cfg(test)]

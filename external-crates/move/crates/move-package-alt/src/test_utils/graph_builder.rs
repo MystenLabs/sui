@@ -54,7 +54,7 @@ use crate::{
     errors::PackageResult,
     flavor::{
         Vanilla,
-        vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME, default_environment},
+        vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME},
     },
     package::{
         EnvironmentID, EnvironmentName, RootPackage,
@@ -778,7 +778,7 @@ impl Scenario {
     ) -> PackageResult<PackageGraph<Vanilla>> {
         let path = PackagePath::new(self.path_for(&package)).unwrap();
 
-        let config = PackageLoader::new(self.path_for(&package), default_environment())
+        let config = PackageLoader::new(self.path_for(&package), Vanilla::default_environment())
             .config()
             .clone();
 
@@ -786,7 +786,7 @@ impl Scenario {
 
         PackageGraph::<Vanilla>::load_from_manifests(
             &path,
-            &vanilla::default_environment(),
+            &Vanilla::default_environment(),
             &mtx,
             &config,
         )
@@ -831,7 +831,7 @@ impl Scenario {
     ) -> PackageResult<RootPackage<Vanilla>> {
         config(PackageLoader::new(
             self.path_for(package),
-            default_environment(),
+            Vanilla::default_environment(),
         ))
         .load()
         .await

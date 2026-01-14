@@ -10,9 +10,6 @@ use codespan_reporting::term::Config;
 use codespan_reporting::term::termcolor::ColorChoice;
 use codespan_reporting::term::termcolor::StandardStream;
 
-mod located;
-pub use located::Location;
-
 mod files;
 pub use files::FileHandle;
 pub use files::Files;

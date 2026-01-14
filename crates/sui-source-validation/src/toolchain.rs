@@ -35,7 +35,7 @@ use move_compiler::{
     shared::{NumericalAddress, files::FileName},
 };
 use move_package_alt::{
-    package::layout::SourcePackageLayout,
+    SourcePackageLayout,
     schema::{Environment, ParsedPublishedFile},
 };
 use move_package_alt_compilation::compiled_package::CompiledUnitWithSource;

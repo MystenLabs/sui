@@ -102,7 +102,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
         mtx: &PackageSystemLock,
     ) -> PackageResult<Option<PackageGraph<F>>> {
         // TODO: this function is too long
-        let Some(lockfile) = Lockfiles::read_from_dir::<F>(path, mtx)? else {
+        let Some(lockfile) = Lockfiles::read_from_dir(path, mtx)? else {
             return Ok(None);
         };
 

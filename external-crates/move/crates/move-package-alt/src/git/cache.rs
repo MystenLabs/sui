@@ -271,7 +271,7 @@ impl GitTree {
     /// The path to the folder containing the cached repo (without the addition of the path within
     /// the repo)
     #[cfg(test)]
-    pub fn repo_fs_path(&self) -> &Path {
+    fn repo_fs_path(&self) -> &Path {
         &self.path_to_repo
     }
 }

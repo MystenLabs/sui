@@ -57,10 +57,6 @@ impl PackageSystemLock {
         })
     }
 
-    pub fn file_mut(&mut self) -> &mut File {
-        &mut self.file
-    }
-
     fn new_for_path(path: &Path, should_truncate: bool) -> std::io::Result<Self> {
         debug!("acquiring lock for {path:?}");
         let lock = OpenOptions::new()

@@ -5,8 +5,7 @@ use anyhow::{self, Context};
 use clap::*;
 use indoc::formatdoc;
 
-use move_package_alt::package::layout::SourcePackageLayout;
-use move_package_alt::schema::PackageName;
+use move_package_alt::{SourcePackageLayout, schema::PackageName};
 
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;

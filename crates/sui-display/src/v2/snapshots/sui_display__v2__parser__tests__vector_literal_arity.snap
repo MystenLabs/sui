@@ -2,4 +2,4 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(r#\"{vector<u8, u64>[1u8, 2u8, 3u8]}\"#)"
 ---
-Error: Vector at offset 1 requires 1 type parameter, found 2
+Error: Vector at byte offset 1 requires 1 type parameter, found 2

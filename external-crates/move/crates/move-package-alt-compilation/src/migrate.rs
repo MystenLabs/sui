@@ -5,7 +5,7 @@ use crate::build_plan::BuildPlan;
 
 use move_command_line_common::interactive::Terminal;
 use move_compiler::{diagnostics::Migration, editions::Edition};
-use move_package_alt::flavor::MoveFlavor;
+use move_package_alt::MoveFlavor;
 
 use std::{collections::BTreeMap, io::BufRead, io::Write, sync::LazyLock};
 

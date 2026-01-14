@@ -72,7 +72,7 @@ impl PinnedDependencyInfo {
         let (non_system_deps, mut result) = Self::replace_system_deps::<F>(deps, environment_id)?;
 
         // resolution - replace all externally resolved dependencies with internal dependencies
-        let deps = ResolvedDependency::resolve::<F>(non_system_deps, environment_id).await?;
+        let deps = ResolvedDependency::resolve(non_system_deps, environment_id).await?;
 
         // pinning - fix git shas and normalize local deps
         for dep in deps.into_iter() {

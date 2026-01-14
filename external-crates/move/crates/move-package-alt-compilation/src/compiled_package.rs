@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_package_alt::{graph::NamedAddress, schema::PackageName};
+use move_package_alt::{NamedAddress, schema::PackageName};
 
 use crate::build_config::BuildConfig;
 

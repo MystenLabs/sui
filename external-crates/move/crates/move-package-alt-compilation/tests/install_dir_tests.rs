@@ -7,8 +7,7 @@ use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
 
-use move_package_alt::flavor::vanilla::{Vanilla, default_environment};
-use move_package_alt::package::layout::SourcePackageLayout;
+use move_package_alt::{SourcePackageLayout, Vanilla};
 use move_package_alt_compilation::{build_config::BuildConfig, compile_package};
 
 fn create_test_package(dir: &Path) -> std::io::Result<()> {
@@ -57,7 +56,7 @@ async fn test_install_dir_creates_directory() {
         "Package directory contents before build: {}",
         String::from_utf8_lossy(&cmd.stdout)
     );
-    let env = default_environment();
+    let env = Vanilla::default_environment();
 
     let result =
         compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut Vec::new()).await;
@@ -101,7 +100,7 @@ async fn test_install_dir_relative_path() {
         ..Default::default()
     };
 
-    let env = default_environment();
+    let env = Vanilla::default_environment();
     let mut output = Cursor::new(Vec::new());
 
     let result =
@@ -141,7 +140,7 @@ async fn test_install_dir_absolute_path() {
         ..Default::default()
     };
 
-    let env = default_environment();
+    let env = Vanilla::default_environment();
     let mut output = Cursor::new(Vec::new());
 
     compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut output)
@@ -178,7 +177,7 @@ async fn test_no_install_dir_uses_default() {
         ..Default::default()
     };
 
-    let env = default_environment();
+    let env = Vanilla::default_environment();
     let mut output = Cursor::new(Vec::new());
 
     let result =
@@ -216,7 +215,7 @@ async fn test_install_dir_existing_directory() {
         ..Default::default()
     };
 
-    let env = default_environment();
+    let env = Vanilla::default_environment();
     let mut output = Cursor::new(Vec::new());
 
     let result =

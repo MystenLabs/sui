@@ -19,13 +19,10 @@ use move_compiler::{
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_model_2::source_model;
 use move_package_alt::{
-    graph::NamedAddress,
-    package::package_loader::PackageLoader,
-    schema::{EnvironmentName, ModeName, OriginalID},
+    MoveFlavor, NamedAddress, PackageLoader, RootPackage,
+    schema::{Environment, EnvironmentName, ModeName, OriginalID},
 };
 use move_symbol_pool::Symbol;
-
-use move_package_alt::{flavor::MoveFlavor, package::RootPackage, schema::Environment};
 
 use crate::{
     build_plan::BuildPlan,
