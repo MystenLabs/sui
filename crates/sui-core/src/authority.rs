@@ -1988,6 +1988,7 @@ impl AuthorityState {
                 gas_data,
                 gas_status,
                 kind,
+                compat_args,
                 signer,
                 tx_digest,
                 &mut None,
@@ -2626,6 +2627,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             kind,
+            None, // compat_args - not needed for dev_inspect
             signer,
             transaction.digest(),
             checks.disabled(),
@@ -2861,6 +2863,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             transaction_kind,
+            None, // compat_args - not needed for dev_inspect
             sender,
             transaction_digest,
             skip_checks,

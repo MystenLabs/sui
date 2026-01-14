@@ -11,17 +11,17 @@ pub fn rewrite_transaction_for_coin_reservations(
     coin_reservation_resolver: &dyn CoinReservationResolverTrait,
     sender: SuiAddress,
     transaction_kind: &mut TransactionKind,
-) -> Vec<bool> {
+) -> Option<Vec<bool>> {
     match transaction_kind {
         TransactionKind::ProgrammableTransaction(pt) => {
-            rewrite_programmable_transaction_for_coin_reservations(
+            Some(rewrite_programmable_transaction_for_coin_reservations(
                 chain_identifier,
                 coin_reservation_resolver,
                 sender,
                 pt,
-            )
+            ))
         }
-        _ => vec![],
+        _ => None,
     }
 }
 

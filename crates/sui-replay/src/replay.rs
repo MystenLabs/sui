@@ -802,6 +802,7 @@ impl LocalExec {
                 gas_data,
                 gas_status,
                 transaction_kind.clone(),
+                None, // compat_args
                 tx_info.sender,
                 *tx_digest,
                 &mut None,
@@ -892,6 +893,7 @@ impl LocalExec {
                                 protocol_config,
                             )?,
                             transaction_kind.clone(),
+                            None, // compat_args
                             tx_info.sender,
                             tx_info.sender_signed_data.digest(),
                             skip_checks,
@@ -994,6 +996,7 @@ impl LocalExec {
             gas_data,
             gas_status,
             kind,
+            None, // compat_args
             signer,
             *executable.digest(),
             &mut None,

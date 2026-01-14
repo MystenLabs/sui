@@ -50,6 +50,7 @@ pub trait Executor {
         gas_status: SuiGasStatus,
         // Transaction
         transaction_kind: TransactionKind,
+        compat_args: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -79,6 +80,7 @@ pub trait Executor {
         gas_status: SuiGasStatus,
         // Transaction
         transaction_kind: TransactionKind,
+        compat_args: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         skip_all_checks: bool,

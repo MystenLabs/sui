@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_core_types::{identifier::Identifier, u256::U256};
-use rand::{seq::SliceRandom, Rng};
+use rand::{Rng, seq::SliceRandom};
 use shared_crypto::intent::Intent;
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc,
+        atomic::{AtomicU64, Ordering},
     },
 };
 use sui_core::accumulators::balances::get_all_balances_for_owner;
@@ -17,9 +17,10 @@ use sui_macros::*;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     accumulator_root::AccumulatorValue,
     balance::Balance,
-    base_types::{dbg_addr, ObjectID, ObjectRef, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr},
     digests::{ChainIdentifier, CheckpointDigest},
     effects::{InputConsensusObject, TransactionEffectsAPI},
     gas::GasCostSummary,
@@ -31,11 +32,10 @@ use sui_types::{
         TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration,
         TransactionKind, VerifiedTransaction,
     },
-    TypeTag, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use test_cluster::{
-    addr_balance_test_env::{TestEnv, TestEnvBuilder},
     TestClusterBuilder,
+    addr_balance_test_env::{TestEnv, TestEnvBuilder},
 };
 
 fn create_transaction_with_expiration(
@@ -117,9 +117,11 @@ async fn test_accumulators_root_created() {
     // accumulator root is not created yet.
     test_env.cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        assert!(!state
-            .load_epoch_store_one_call_per_task()
-            .accumulator_root_exists());
+        assert!(
+            !state
+                .load_epoch_store_one_call_per_task()
+                .accumulator_root_exists()
+        );
     });
 
     test_env.trigger_reconfiguration().await;
@@ -128,9 +130,11 @@ async fn test_accumulators_root_created() {
     // but we didn't upgrade to the next protocol version yet.
     test_env.cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
-        assert!(state
-            .load_epoch_store_one_call_per_task()
-            .accumulator_root_exists());
+        assert!(
+            state
+                .load_epoch_store_one_call_per_task()
+                .accumulator_root_exists()
+        );
         assert_eq!(
             state
                 .load_epoch_store_one_call_per_task()
@@ -2365,7 +2369,7 @@ async fn test_address_balance_large_rebate() {
     let created_object_ref = effects
         .created()
         .iter()
-        .find(|(obj_ref, _)| obj_ref.0 != effects.gas_object().0 .0)
+        .find(|(obj_ref, _)| obj_ref.0 != effects.gas_object().0.0)
         .map(|(obj_ref, _)| *obj_ref)
         .expect("Should have created an object");
 
@@ -2582,9 +2586,11 @@ async fn test_get_all_balances() {
         let balances = get_all_balances_for_owner(sender, child_object_resolver, &indexes).unwrap();
 
         assert_eq!(balances.len(), 2);
-        assert!(balances
-            .iter()
-            .any(|(t, _)| t.to_canonical_string(true).contains("::sui::SUI")));
+        assert!(
+            balances
+                .iter()
+                .any(|(t, _)| t.to_canonical_string(true).contains("::sui::SUI"))
+        );
         assert!(balances.iter().any(|(t, _)| {
             t.to_canonical_string(true)
                 .contains("::trusted_coin::TRUSTED_COIN")

@@ -20,14 +20,17 @@ use std::{
     collections::{BTreeMap, HashSet},
     sync::Arc,
 };
+use sui_core::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use sui_data_store::{EpochStore, ObjectKey, ObjectStore, VersionQuery};
 use sui_execution::Executor;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
+    accumulator_root::{AccumulatorKey, AccumulatorValue},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
+    coin_reservation::{CoinReservationResolverTrait, ParsedObjectRefWithdrawal},
     committee::EpochId,
-    digests::TransactionDigest,
+    digests::{TransactionDigest, get_mainnet_chain_identifier},
     effects::{TransactionEffects, TransactionEffectsAPI},
-    error::{ExecutionError, SuiErrorKind, SuiResult},
+    error::{ExecutionError, SuiErrorKind, SuiResult, UserInputError, UserInputResult},
     execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
@@ -35,7 +38,7 @@ use sui_types::{
     object::Object,
     storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
     supported_protocol_versions::ProtocolConfig,
-    transaction::{CheckedInputObjects, TransactionData, TransactionDataAPI},
+    transaction::{CheckedInputObjects, FundsWithdrawalArg, TransactionData, TransactionDataAPI},
 };
 use tracing::{debug, debug_span, trace};
 
@@ -129,6 +132,19 @@ pub fn execute_transaction_to_effects(
         Some(error) => ExecutionOrEarlyError::Err(error),
         None => ExecutionOrEarlyError::Ok(()),
     };
+    let mut kind = txn_data.kind().clone();
+    let sender = txn_data.sender();
+
+    // TODO: Support non-mainnet chain identifiers for replay
+    let chain_identifier = get_mainnet_chain_identifier();
+    let coin_reservation_resolver = ReplayCoinReservationResolver { store: &store };
+    let compat_args = rewrite_transaction_for_coin_reservations(
+        chain_identifier,
+        &coin_reservation_resolver,
+        sender,
+        &mut kind,
+    );
+
     let (inner_store, gas_status, effects, _execution_timing, result) =
         executor.executor.execute_transaction_to_effects(
             &store,
@@ -141,8 +157,9 @@ pub fn execute_transaction_to_effects(
             input_objects,
             txn_data.gas_data().clone(),
             gas_status,
-            txn_data.kind().clone(),
-            txn_data.sender(),
+            kind,
+            compat_args,
+            sender,
             digest,
             trace_builder_opt,
         );
@@ -212,6 +229,65 @@ struct ReplayStore<'a> {
     store: &'a dyn ObjectStore,
     object_cache: RefCell<BTreeMap<ObjectID, BTreeMap<u64, Object>>>,
     checkpoint: u64,
+}
+
+/// Coin reservation resolver for replay that uses the ReplayStore.
+struct ReplayCoinReservationResolver<'a> {
+    store: &'a ReplayStore<'a>,
+}
+
+impl CoinReservationResolverTrait for ReplayCoinReservationResolver<'_> {
+    fn resolve_funds_withdrawal(
+        &self,
+        sender: SuiAddress,
+        coin_reservation: ParsedObjectRefWithdrawal,
+    ) -> UserInputResult<FundsWithdrawalArg> {
+        let object_id = coin_reservation.unmasked_object_id;
+
+        // Load accumulator field object
+        let object = AccumulatorValue::load_object_by_id(self.store, None, object_id)
+            .map_err(|e| UserInputError::InvalidWithdrawReservation {
+                error: format!("could not load coin reservation object id {}", e),
+            })?
+            .ok_or_else(|| UserInputError::InvalidWithdrawReservation {
+                error: format!("coin reservation object id {} not found", object_id),
+            })?;
+
+        let move_object = object.data.try_as_move().unwrap();
+
+        // Get the balance type
+        let type_tag = move_object
+            .type_()
+            .balance_accumulator_field_type_maybe()
+            .ok_or_else(|| UserInputError::InvalidWithdrawReservation {
+                error: format!(
+                    "coin reservation object id {} is not a balance accumulator field",
+                    object_id
+                ),
+            })?;
+
+        // Get the owner from the key
+        let (key, _): (AccumulatorKey, AccumulatorValue) =
+            move_object
+                .try_into()
+                .map_err(|e| UserInputError::InvalidWithdrawReservation {
+                    error: format!("could not load coin reservation object id {}", e),
+                })?;
+
+        if sender != key.owner {
+            return Err(UserInputError::InvalidWithdrawReservation {
+                error: format!(
+                    "coin reservation object id {} is owned by {}, not sender {}",
+                    object_id, key.owner, sender
+                ),
+            });
+        }
+
+        Ok(FundsWithdrawalArg::balance_from_sender(
+            coin_reservation.reservation_amount(),
+            type_tag,
+        ))
+    }
 }
 
 impl ReplayStore<'_> {
