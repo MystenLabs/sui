@@ -1,0 +1,181 @@
+---
+title: Contract Information
+sidebar_position: 2
+description: DeepBook Margin contract addresses, supported coins, margin pools, and risk parameters on Sui Mainnet.
+keywords:
+  [
+    deepbook margin,
+    contract address,
+    package id,
+    margin pool id,
+    coins,
+    mainnet,
+    registry,
+    risk parameters,
+    leverage,
+    liquidation,
+  ]
+---
+
+This page contains the contract addresses, supported coins, margin pools, and risk parameters for DeepBook Margin on Sui Mainnet.
+
+## Contract versions
+
+DeepBook Margin uses upgradeable contracts. When a contract is upgraded, only `MARGIN_PACKAGE_ID` needs to be updated - previous versions remain compatible unless noted.
+
+### Current version
+
+| Parameter | Value |
+|-----------|-------|
+| Version | 1 |
+| Package ID | `0x97d9473771b01f77b0940c589484184b49f6444627ec121314fae6a6d36fb86b` |
+| Registry ID | `0x0e40998b359a9ccbab22a98ed21bd4346abf19158bc7980c8291908086b3a742` |
+
+### Version history
+
+| Version | Date | Package ID | Changes |
+|---------|------|------------|---------|
+| 1 | Jan 13, 2026 | `0x97d9473771b01f77b0940c589484184b49f6444627ec121314fae6a6d36fb86b` | Original deployment |
+
+## Supported coins
+
+<details>
+<summary>SUI Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI` |
+| Decimals | 9 |
+
+</details>
+
+<details>
+<summary>Native USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC` |
+| Decimals | 6 |
+
+</details>
+
+<details>
+<summary>DEEP Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP` |
+| Decimals | 6 |
+
+</details>
+
+<details>
+<summary>WAL Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL` |
+| Decimals | 9 |
+
+</details>
+
+## Margin pools
+
+Margin pools provide the liquidity for margin traders to borrow. Suppliers can deposit assets to earn interest from borrowers.
+
+<details>
+<summary>SUI Margin Pool</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x53041c6f86c4782aabbfc1d4fe234a6d37160310c7ee740c915f0a01b7127344` |
+| Supply Cap | 500,000 SUI |
+| Max Utilization Rate | 80% |
+| Referral Spread | 20% |
+| Min Borrow | 0.1 SUI |
+
+</details>
+
+<details>
+<summary>USDC Margin Pool</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0xba473d9ae278f10af75c50a8fa341e9c6a1c087dc91a3f23e8048baf67d0754f` |
+| Supply Cap | 1,000,000 USDC |
+| Max Utilization Rate | 80% |
+| Referral Spread | 20% |
+| Min Borrow | 0.1 USDC |
+
+</details>
+
+<details>
+<summary>DEEP Margin Pool</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x1d723c5cd113296868b55208f2ab5a905184950dd59c48eb7345607d6b5e6af7` |
+| Supply Cap | 20,000,000 DEEP |
+| Max Utilization Rate | 80% |
+| Referral Spread | 20% |
+| Min Borrow | 0.1 DEEP |
+
+</details>
+
+<details>
+<summary>WAL Margin Pool</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x38decd3dbb62bd4723144349bf57bc403b393aee86a51596846a824a1e0c2c01` |
+| Supply Cap | 7,000,000 WAL |
+| Max Utilization Rate | 80% |
+| Referral Spread | 20% |
+| Min Borrow | 0.1 WAL |
+
+</details>
+
+## Risk parameters
+
+Risk parameters determine the leverage limits and liquidation thresholds for each trading pair. Lower risk ratios indicate higher risk tolerance and thus higher leverage.
+
+### SUI/USDC (5x leverage)
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| Min Withdraw Risk Ratio | 2.0 | Minimum ratio required to withdraw collateral |
+| Min Borrow Risk Ratio | 1.25 | Minimum ratio required to borrow |
+| Liquidation Risk Ratio | 1.1 | Ratio at which position becomes liquidatable |
+| Target Liquidation Risk Ratio | 1.25 | Target ratio after liquidation |
+| User Liquidation Reward | 2% | Reward to liquidator |
+| Pool Liquidation Reward | 3% | Reward to the pool |
+
+### WAL/USDC (3x leverage)
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| Min Withdraw Risk Ratio | 2.0 | Minimum ratio required to withdraw collateral |
+| Min Borrow Risk Ratio | 1.5 | Minimum ratio required to borrow |
+| Liquidation Risk Ratio | 1.2 | Ratio at which position becomes liquidatable |
+| Target Liquidation Risk Ratio | 1.5 | Target ratio after liquidation |
+| User Liquidation Reward | 2% | Reward to liquidator |
+| Pool Liquidation Reward | 3% | Reward to the pool |
+
+### DEEP/USDC (3x leverage)
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| Min Withdraw Risk Ratio | 2.0 | Minimum ratio required to withdraw collateral |
+| Min Borrow Risk Ratio | 1.5 | Minimum ratio required to borrow |
+| Liquidation Risk Ratio | 1.2 | Ratio at which position becomes liquidatable |
+| Target Liquidation Risk Ratio | 1.5 | Target ratio after liquidation |
+| User Liquidation Reward | 2% | Reward to liquidator |
+| Pool Liquidation Reward | 3% | Reward to the pool |
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3/tree/main/packages/deepbook_margin"
+	label="DeepBook Margin repository"
+	desc="The DeepBook Margin package in the DeepBookV3 repository on GitHub."
+/>
