@@ -962,12 +962,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     None => panic!("Unbound account {}", recipient),
                 };
                 let gas_price: u64 = gas_price.unwrap_or(self.gas_price);
-                let (gas_budget, use_address_balance_gas) =
-                    if let Some(budget) = gas_budget_from_address_balance {
-                        (budget, true)
-                    } else {
-                        (gas_budget.unwrap_or(DEFAULT_GAS_BUDGET), false)
-                    };
+                let gas_budget = gas_budget_from_address_balance
+                    .or(gas_budget)
+                    .unwrap_or(DEFAULT_GAS_BUDGET);
+                let use_address_balance_gas = gas_budget_from_address_balance.is_some();
                 let transaction = self.sign_txn(sender, |sender, gas| {
                     let rec_arg = builder.pure(recipient).unwrap();
                     builder.command(sui_types::transaction::Command::TransferObjects(
@@ -1059,12 +1057,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     );
                 }
 
-                let (gas_budget, use_address_balance_gas) =
-                    if let Some(budget) = gas_budget_from_address_balance {
-                        (budget, true)
-                    } else {
-                        (gas_budget.unwrap_or(DEFAULT_GAS_BUDGET), false)
-                    };
+                let gas_budget = gas_budget_from_address_balance
+                    .or(gas_budget)
+                    .unwrap_or(DEFAULT_GAS_BUDGET);
+                let use_address_balance_gas = gas_budget_from_address_balance.is_some();
 
                 let summary = if !dev_inspect && !dry_run {
                     let gas_price = gas_price.unwrap_or(self.gas_price);
@@ -1075,10 +1071,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         sender,
                         sponsor,
                         gas_payment.unwrap_or_default(),
-                        |sender, sponsor, mut gas| {
-                            if use_address_balance_gas {
-                                gas.clear();
-                            }
+                        |sender, sponsor, gas| {
+                            let gas = if use_address_balance_gas { vec![] } else { gas };
                             let mut tx_data = TransactionData::new_programmable_allow_sponsor(
                                 sender,
                                 gas,
@@ -1179,12 +1173,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     original_package_addrs.push((*dep, dep_address));
                 }
                 let gas_price = gas_price.unwrap_or(self.gas_price);
-                let (gas_budget, use_address_balance_gas) =
-                    if let Some(budget) = gas_budget_from_address_balance {
-                        (budget, true)
-                    } else {
-                        (gas_budget.unwrap_or(DEFAULT_GAS_BUDGET), false)
-                    };
+                let gas_budget = gas_budget_from_address_balance
+                    .or(gas_budget)
+                    .unwrap_or(DEFAULT_GAS_BUDGET);
+                let use_address_balance_gas = gas_budget_from_address_balance.is_some();
 
                 let result = compile_any(
                     self,
@@ -1664,10 +1656,8 @@ impl SuiTestAdapter {
             return Ok(self.object_summary_output(&summary, false));
         }
 
-        let data = |sender, mut gas: Vec<ObjectRef>| {
-            if use_address_balance_gas {
-                gas.clear();
-            }
+        let data = |sender, gas: Vec<ObjectRef>| {
+            let gas = if use_address_balance_gas { vec![] } else { gas };
             TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price)
         };
         let transaction = self.sign_txn(Some(sender), data);

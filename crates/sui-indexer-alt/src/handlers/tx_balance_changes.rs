@@ -142,15 +142,11 @@ fn balance_changes(
     Ok(changes
         .into_iter()
         .filter_map(|((owner, coin_type), amount)| {
-            if amount == 0 {
-                None
-            } else {
-                Some(BalanceChange::V1 {
-                    owner,
-                    coin_type: coin_type.to_canonical_string(/* with_prefix */ true),
-                    amount,
-                })
-            }
+            (amount != 0).then(|| BalanceChange::V1 {
+                owner,
+                coin_type: coin_type.to_canonical_string(/* with_prefix */ true),
+                amount,
+            })
         })
         .collect())
 }
