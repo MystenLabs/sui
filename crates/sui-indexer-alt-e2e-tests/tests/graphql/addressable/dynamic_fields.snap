@@ -223,7 +223,9 @@ task 12, lines 127-137:
 //# run-graphql
 Response: {
   "data": {
-    "address": null
+    "address": {
+      "dynamicFields": null
+    }
   },
   "errors": [
     {

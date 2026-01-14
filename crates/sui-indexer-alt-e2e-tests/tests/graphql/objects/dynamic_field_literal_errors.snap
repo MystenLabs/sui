@@ -10,7 +10,9 @@ task 1, lines 8-15:
 //# run-graphql --cursors bcs(42u64)
 Response: {
   "data": {
-    "address": null
+    "address": {
+      "dynamicField": null
+    }
   },
   "errors": [
     {
@@ -36,7 +38,9 @@ task 2, lines 17-24:
 //# run-graphql --cursors bcs(42u64)
 Response: {
   "data": {
-    "address": null
+    "address": {
+      "dynamicField": null
+    }
   },
   "errors": [
     {
@@ -62,7 +66,9 @@ task 3, lines 26-33:
 //# run-graphql --cursors bcs(42u64)
 Response: {
   "data": {
-    "address": null
+    "address": {
+      "dynamicField": null
+    }
   },
   "errors": [
     {
@@ -88,7 +94,9 @@ task 4, lines 35-42:
 //# run-graphql
 Response: {
   "data": {
-    "address": null
+    "address": {
+      "dynamicField": null
+    }
   },
   "errors": [
     {
@@ -114,7 +122,9 @@ task 5, lines 44-51:
 //# run-graphql
 Response: {
   "data": {
-    "address": null
+    "address": {
+      "dynamicField": null
+    }
   },
   "errors": [
     {

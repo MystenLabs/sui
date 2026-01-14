@@ -67,7 +67,7 @@ pub(crate) enum AddressTransactionRelationship {
         name = "address_at",
         arg(name = "root_version", ty = "Option<UInt53>"),
         arg(name = "checkpoint", ty = "Option<UInt53>"),
-        ty = "Result<Option<Address>, RpcError<Error>>",
+        ty = "Option<Result<Address, RpcError<Error>>>",
         desc = "Fetch the address as it was at a different root version, or checkpoint.\n\nIf no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.",
     ),
     field(
@@ -179,18 +179,19 @@ impl Address {
         ctx: &Context<'_>,
         root_version: Option<UInt53>,
         checkpoint: Option<UInt53>,
-    ) -> Result<Option<Address>, RpcError<Error>> {
-        Address::by_key(
-            ctx,
-            Scope::new(ctx)?,
-            AddressKey {
+    ) -> Option<Result<Address, RpcError<Error>>> {
+        async {
+            let key = AddressKey {
                 address: Some(self.address.into()),
                 name: None,
                 root_version,
                 at_checkpoint: checkpoint,
-            },
-        )
+            };
+
+            Address::by_key(ctx, Scope::new(ctx)?, key).await
+        }
         .await
+        .transpose()
     }
 
     /// Attempts to fetch the object at this address.
@@ -198,16 +199,16 @@ impl Address {
         &self,
         ctx: &Context<'_>,
     ) -> Option<Result<Object, RpcError<object::Error>>> {
-        Object::by_key(
-            ctx,
-            self.scope.clone(),
-            ObjectKey {
+        async {
+            let key = ObjectKey {
                 address: self.address.into(),
                 version: None,
                 root_version: self.scope.root_version().map(Into::into),
                 at_checkpoint: None,
-            },
-        )
+            };
+
+            Object::by_key(ctx, self.scope.clone(), key).await
+        }
         .await
         .transpose()
     }
@@ -263,7 +264,7 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
+    ) -> Option<Result<DynamicField, RpcError<dynamic_field::Error>>> {
         DynamicField::by_name(
             ctx,
             self.scope.clone(),
@@ -272,6 +273,7 @@ impl Address {
             name,
         )
         .await
+        .transpose()
     }
 
     /// Dynamic fields owned by this address.
@@ -284,15 +286,17 @@ impl Address {
         after: Option<object::CLive>,
         last: Option<u64>,
         before: Option<object::CLive>,
-    ) -> Result<Option<Connection<String, DynamicField>>, RpcError<object::Error>> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Address", "dynamicFields");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, DynamicField>, RpcError<object::Error>>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Address", "dynamicFields");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        let dynamic_fields =
-            DynamicField::paginate(ctx, self.scope.clone(), self.address.into(), page).await?;
-
-        Ok(Some(dynamic_fields))
+                DynamicField::paginate(ctx, self.scope.clone(), self.address.into(), page).await
+            }
+            .await,
+        )
     }
 
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
@@ -302,7 +306,7 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
+    ) -> Option<Result<DynamicField, RpcError<dynamic_field::Error>>> {
         DynamicField::by_name(
             ctx,
             self.scope.clone(),
@@ -311,6 +315,7 @@ impl Address {
             name,
         )
         .await
+        .transpose()
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
