@@ -25,6 +25,7 @@ use operations::{InitRequirement, Operation, OperationResources, ResourceRequest
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng, thread_rng};
 use std::collections::HashMap;
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -36,7 +37,6 @@ use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
 use sui_types::transaction::{Argument, Command, ObjectArg, SharedObjectMutability, Transaction};
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
-use tokio::sync::RwLock;
 use tracing::{error, info};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -389,7 +389,7 @@ impl Payload for CompositePayload {
             op_names
         );
 
-        let pool = self.pool.blocking_read();
+        let pool = self.pool.read().unwrap();
 
         let use_address_balance_gas = self
             .rng
