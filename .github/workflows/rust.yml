@@ -222,6 +222,9 @@ jobs:
     needs: [diff]
     if: needs.diff.outputs.isRust == 'true'
     runs-on: macos-latest-large
+    defaults:
+        run:
+            working-directory: crates/sui/tests/shell_tests/rename_same_package_and_module
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
