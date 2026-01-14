@@ -245,6 +245,7 @@ jobs:
           - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
             with:
               ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+          - run: uname -m   # should print x86_64
           - uses: taiki-e/install-action@nextest
           - run: curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh
           - run: echo "/Users/runner/.local/bin" >> $GITHUB_PATH
