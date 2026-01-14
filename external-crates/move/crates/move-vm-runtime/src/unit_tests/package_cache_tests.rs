@@ -340,7 +340,7 @@ fn cache_and_evict_packages() {
     let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result.is_ok());
 
-    assert!(adapter.runtime().cache().package_cache().read().len() == 3);
+    assert!(adapter.runtime().cache().package_cache().len() == 3);
     assert!(
         adapter
             .runtime()
@@ -367,13 +367,13 @@ fn cache_and_evict_packages() {
         adapter.runtime().cache().remove_package(&package2_address),
         "Package 2 not found"
     );
-    assert!(adapter.runtime().cache().package_cache().read().len() == 2);
+    assert!(adapter.runtime().cache().package_cache().len() == 2);
 
     assert!(
         !adapter.runtime().cache().remove_package(&package2_address),
         "Package 2 double-evicted"
     );
-    assert!(adapter.runtime().cache().package_cache().read().len() == 2);
+    assert!(adapter.runtime().cache().package_cache().len() == 2);
     assert!(
         adapter
             .runtime()
@@ -399,7 +399,7 @@ fn cache_and_evict_packages() {
     // This should re-load package 2, but not packages 1 or 3.
     let result = load_linkage_packages_into_runtime(&mut adapter, &link_context);
     assert!(result.is_ok());
-    assert!(adapter.runtime().cache().package_cache().read().len() == 3);
+    assert!(adapter.runtime().cache().package_cache().len() == 3);
     assert!(
         adapter
             .runtime()
@@ -427,7 +427,7 @@ fn cache_and_evict_packages() {
         adapter.runtime().cache().remove_package(&package2_address),
         "Package 2 not found"
     );
-    assert!(adapter.runtime().cache().package_cache().read().len() == 2);
+    assert!(adapter.runtime().cache().package_cache().len() == 2);
     assert!(
         adapter
             .runtime()
@@ -658,7 +658,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.runtime()cache().package_cache().read().len(), 0);
+    assert_eq!(adapter.runtime()cache().package_cache().len(), 0);
 
     // publish c v1
     let packages = compile_modules_in_file("rt_c_v1.move", &[]);
@@ -682,7 +682,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.cache.package_cache().read().len(), 1);
+    assert_eq!(adapter.cache.package_cache().len(), 1);
 
     // publish b_v0 <- c_v0
     let packages = compile_modules_in_file("rt_b_v0.move", &["rt_c_v0.move"]);
@@ -698,7 +698,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.cache.package_cache().read().len(), 2);
+    assert_eq!(adapter.cache.package_cache().len(), 2);
 
     // publish b_v0 <- c_v1
     let packages = compile_modules_in_file("rt_b_v0.move", &["rt_c_v1.move"]);
@@ -731,7 +731,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.cache.package_cache().read().len(), 4);
+    assert_eq!(adapter.cache.package_cache().len(), 4);
 
     // publish a_v0 <- c_v1 && b_v0
     let packages = compile_modules_in_file("rt_a_v0.move", &["rt_c_v1.move", "rt_b_v0.move"]);
@@ -764,7 +764,7 @@ fn relink() {
         )
         .unwrap();
 
-    assert_eq!(adapter.cache.package_cache().read().len(), 5);
+    assert_eq!(adapter.cache.package_cache().len(), 5);
 
     // publish a_v0 <- c_v0 && b_v0 -- ERROR since a_v0 requires c_v1+
     let packages = compile_modules_in_file("rt_a_v0.move", &["rt_c_v1.move", "rt_b_v0.move"]);
@@ -789,6 +789,6 @@ fn relink() {
         .unwrap_err();
 
     // cache stays the same since the publish failed
-    assert_eq!(adapter.cache.package_cache().read().len(), 5);
+    assert_eq!(adapter.cache.package_cache().len(), 5);
     */
 }

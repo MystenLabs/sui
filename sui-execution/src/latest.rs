@@ -11,6 +11,7 @@ use std::io::{Seek, Write};
 use std::path::Path;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
+use std::time::Instant;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::effects::TransactionEffectsAPI;
@@ -49,9 +50,10 @@ use sui_adapter_latest::execution_mode;
 const GAS_USAGE_DELTA_THRESHOLD: u64 = 50;
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 static OLD_VAL: AtomicUsize = AtomicUsize::new(0);
+static TELEM_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-const FILE_PREFIX: &str = "/opt/sui/";
 // const FILE_PREFIX: &str = "";
+const FILE_PREFIX: &str = "/opt/sui/";
 
 static COUNTER_FILE: Lazy<Mutex<File>> = Lazy::new(|| {
     let file_name = format!("{FILE_PREFIX}counter.txt");
@@ -64,6 +66,22 @@ static COUNTER_FILE: Lazy<Mutex<File>> = Lazy::new(|| {
         .unwrap();
     Mutex::new(file)
 });
+
+static TIMINGS_FILE: Lazy<Mutex<File>> = Lazy::new(|| {
+    let file_name = format!("{FILE_PREFIX}timings.txt");
+    let path = Path::new(&file_name);
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(path)
+        .unwrap();
+    file.write_all("digest,new_vm_micros,old_vm_micros\n".as_bytes())
+        .expect("failed to write timings header");
+    Mutex::new(file)
+});
+
+static TIMINGS: Lazy<Mutex<Vec<(String, u128, u128)>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 fn write_number(file: &mut File, n: usize) -> std::io::Result<()> {
     // Convert to bytes (with newline optional but nice for humans)
@@ -78,6 +96,19 @@ fn write_number(file: &mut File, n: usize) -> std::io::Result<()> {
 
     // If previous number had more digits, remove trailing old bytes
     file.set_len(bytes.len() as u64)?;
+
+    // Push to OS buffers (optional)
+    file.flush()?;
+
+    Ok(())
+}
+
+fn write_timings(file: &mut File, timings: &mut Vec<(String, u128, u128)>) -> std::io::Result<()> {
+    for (t_digest, new_vm_micros, old_vm_micros) in timings.drain(..) {
+        let s = format!("{},{},{}\n", t_digest, new_vm_micros, old_vm_micros);
+        let bytes = s.as_bytes();
+        file.write_all(bytes)?;
+    }
 
     // Push to OS buffers (optional)
     file.flush()?;
@@ -161,7 +192,7 @@ impl executor::Executor for Executor {
             metrics.clone(),
             enable_expensive_checks,
             execution_params.clone(),
-            trace_builder_opt,
+            &mut None,
         );
 
         let mut ptb_v2_protocol_config = protocol_config.clone();
@@ -171,6 +202,7 @@ impl executor::Executor for Executor {
         new_gas_status.set_gas_model_version(ptb_v2_protocol_config.gas_model_version());
 
         // old vm + new adapter
+        let start = Instant::now();
         let (m_inner_temporary_store, m_sui_gas_status, m_transaction_effects, _, _) =
             replay_cut::execution_engine::execute_transaction_to_effects::<
                 replay_cut::execution_mode::Normal,
@@ -189,9 +221,12 @@ impl executor::Executor for Executor {
                 metrics.clone(),
                 enable_expensive_checks,
                 execution_params.clone(),
-                trace_builder_opt,
+                // trace_builder_opt,
+                &mut None,
             );
+        let old_vm_micros = start.elapsed().as_micros();
 
+        let start = Instant::now();
         let (b_inner_temporary_store, b_sui_gas_status, b_transaction_effects, _, _) =
             execute_transaction_to_effects::<execution_mode::Normal>(
                 store,
@@ -209,7 +244,9 @@ impl executor::Executor for Executor {
                 enable_expensive_checks,
                 execution_params,
                 trace_builder_opt,
+                // &mut None,
             );
+        let new_vm_micros = start.elapsed().as_micros();
 
         tracing::debug!("Executed transaction in three configurations");
 
@@ -218,6 +255,24 @@ impl executor::Executor for Executor {
             OLD_VAL.store(count, std::sync::atomic::Ordering::Relaxed);
             let mut file = COUNTER_FILE.lock().unwrap();
             write_number(&mut *file, count).expect("failed to write counter");
+            if TELEM_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % 10 == 0 {
+                TELEM_COUNTER.store(0, std::sync::atomic::Ordering::Relaxed);
+                let telem = self.bella_ciao_vm.get_telemetry_report();
+                let telem_string = format!("{}", serde_json::to_string_pretty(&telem).unwrap());
+                let telem_file_name =
+                    format!("{FILE_PREFIX}telemetry/telemetry_at_{transaction_digest}.json",);
+                std::fs::write(&telem_file_name, &telem_string)
+                    .expect("Failed to write telemetry file");
+            }
+        }
+
+        {
+            let mut timings = TIMINGS.lock().unwrap();
+            timings.push((transaction_digest.to_string(), new_vm_micros, old_vm_micros));
+            if timings.len() >= 500 {
+                let mut file = TIMINGS_FILE.lock().unwrap();
+                write_timings(&mut *file, &mut *timings).expect("failed to write timings");
+            }
         }
 
         compare_effects(
@@ -376,14 +431,14 @@ fn compare_effects(
     normal_effects: &(InnerTemporaryStore, SuiGasStatus, TransactionEffects),
     new_effects: &(InnerTemporaryStore, SuiGasStatus, TransactionEffects),
 ) {
-    if normal_effects.1.gas_used() != new_effects.1.gas_used() {
-        tracing::warn!(
-            "{} Gas used differ: normal={} new={}",
-            normal_effects.2.transaction_digest(),
-            normal_effects.1.gas_used(),
-            new_effects.1.gas_used()
-        );
-    }
+    // if normal_effects.1.gas_used() != new_effects.1.gas_used() {
+    //     tracing::warn!(
+    //         "{} Gas used differ: normal={} new={}",
+    //         normal_effects.2.transaction_digest(),
+    //         normal_effects.1.gas_used(),
+    //         new_effects.1.gas_used()
+    //     );
+    // }
 
     // |current - new| <= threshold
     // n - k <= L <= n + k

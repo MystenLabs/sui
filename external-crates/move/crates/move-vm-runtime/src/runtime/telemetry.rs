@@ -6,6 +6,8 @@ use std::{
     time::Duration,
 };
 
+use serde::{Deserialize, Serialize};
+
 use crate::cache::move_cache::MoveCache;
 
 // -------------------------------------------------------------------------------------------------
@@ -17,7 +19,7 @@ use crate::cache::move_cache::MoveCache;
 // -----------------------------------------------
 
 /// Runtime Telemetry Information for reporting
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MoveRuntimeTelemetry {
     // -------------------------------------------
     // Telemetry Derived from Cache over Execution
@@ -33,6 +35,12 @@ pub struct MoveRuntimeTelemetry {
     pub type_count: u64,
     /// Total size of all string interner
     pub interner_size: u64,
+    /// Total number of VTables in the LRU
+    pub vtable_cache_count: u64,
+    ///  Total number of VTable cache hits
+    pub vtable_cache_hits: u64,
+    ///  Total number of VTable cache misses
+    pub vtable_cache_misses: u64,
 
     // -------------------------------------------
     // Telemetry Tracked over Execution
@@ -141,6 +149,12 @@ pub(crate) struct MoveCacheTelemetry {
     pub type_count: u64,
     /// Total identifiers interned
     pub interner_size: u64,
+    /// Total number of VTables in the VTable cache
+    pub vtable_cache_count: u64,
+    ///  Total number of VTable cache hits
+    pub vtable_cache_hits: u64,
+    ///  Total number of VTable cache misses
+    pub vtable_cache_misses: u64,
 }
 
 /// Timer Kinds
@@ -277,6 +291,9 @@ impl TelemetryContext {
             function_count,
             type_count,
             interner_size,
+            vtable_cache_count,
+            vtable_cache_hits,
+            vtable_cache_misses,
         } = package_cache.to_cache_telemetry();
 
         MoveRuntimeTelemetry {
@@ -287,6 +304,9 @@ impl TelemetryContext {
             function_count,
             type_count,
             interner_size,
+            vtable_cache_count,
+            vtable_cache_hits,
+            vtable_cache_misses,
 
             // Telemetry metrics.
             total_load_time,
