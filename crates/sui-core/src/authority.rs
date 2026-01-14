@@ -4431,7 +4431,7 @@ impl AuthorityState {
         Ok(Some((object, layout)))
     }
 
-    fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
+    pub fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
         let layout = object
             .data
             .try_as_move()
@@ -4478,6 +4478,65 @@ impl AuthorityState {
         } else {
             Err(SuiErrorKind::IndexStoreNotAvailable.into())
         }
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    pub fn get_address_balance_coin_info(
+        &self,
+        owner: SuiAddress,
+        balance_type: TypeTag,
+    ) -> SuiResult<Option<(ObjectRef, u64, TransactionDigest)>> {
+        if !Balance::is_balance_type(&balance_type) {
+            return Err(SuiErrorKind::TypeError {
+                error: "only Balance<T> is supported".to_string(),
+            }
+            .into());
+        }
+        // get address balance
+        let accumulator_id = AccumulatorValue::get_field_id(owner, &balance_type)?;
+        tracing::info!(
+            "accumulator_id: {:?} {} {:?}",
+            owner,
+            balance_type.to_canonical_display(true),
+            accumulator_id
+        );
+        let accumulator_obj = AccumulatorValue::load_object_by_id(
+            self.get_child_object_resolver().as_ref(),
+            None,
+            *accumulator_id.inner(),
+        )?;
+
+        let Some(accumulator_obj) = accumulator_obj else {
+            return Ok(None);
+        };
+
+        let Some(move_object) = accumulator_obj.data.try_as_move() else {
+            // It should be impossible for anyone to find a owner/type pair that
+            // maps to an existing object that is not an accumulator object.
+            debug_fatal!("Accumulator object is not a Move object");
+            return Ok(None);
+        };
+
+        let AccumulatorValue::U128(balance) = AccumulatorValue::try_from(move_object)?;
+
+        let balance = std::cmp::min(balance.value, u64::MAX as u128) as u64;
+
+        if balance == 0 {
+            return Ok(None);
+        };
+
+        let object_ref = ParsedObjectRefWithdrawal::new(
+            accumulator_obj.id(),
+            self.load_epoch_store_one_call_per_task().epoch(),
+            balance,
+        )
+        .encode(accumulator_obj.version(), self.get_chain_identifier());
+
+        Ok(Some((
+            object_ref,
+            balance,
+            accumulator_obj.previous_transaction,
+        )))
     }
 
     #[instrument(level = "trace", skip_all)]
