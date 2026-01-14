@@ -250,7 +250,7 @@ jobs:
           - run: echo "/Users/runner/.local/bin" >> $GITHUB_PATH
           - run: suiup install sui@testnet -y
           - run: sui --version
-          - run: sui client -y
+          - run: sui client -y envs
           - run: |
               # RUST_LOG=debug sui move build -e testnet -p use_math
               lldb --batch \
