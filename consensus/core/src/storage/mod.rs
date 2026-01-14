@@ -69,7 +69,10 @@ pub trait Store: Send + Sync {
     ) -> ConsensusResult<Option<BTreeMap<BlockRef, Vec<TransactionIndex>>>>;
 
     /// Reads rejected transactions by block for a given commit.
-    fn read_finalized_commit(&self, commit_index: CommitIndex) -> ConsensusResult<Option<BTreeMap<BlockRef, Vec<TransactionIndex>>>>;
+    fn read_finalized_commit(
+        &self,
+        commit_index: CommitIndex,
+    ) -> ConsensusResult<Option<BTreeMap<BlockRef, Vec<TransactionIndex>>>>;
 
     /// Truncates finalized commits from the given commit index (inclusive).
     /// All finalized commits with index >= from_index will be deleted.
