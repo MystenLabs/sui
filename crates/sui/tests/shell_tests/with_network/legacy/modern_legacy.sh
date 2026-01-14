@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# We publish a modern package that depends on a legacy package
+#
+# legacy_dep <-- modern
+#
+# We have to use test-publish because you can't real-publish a legacy package on localnet
+
+echo "=== publish legacy_dep ==="
+sui client --client.config $CONFIG \
+    test-publish --build-env testnet --pubfile-path Pub.local.toml legacy_dep \
+    > output.log && echo "success" || cat output.log
+
+echo "=== publish modern ==="
+sui client --client.config $CONFIG \
+    test-publish --build-env testnet --pubfile-path Pub.local.toml modern \
+    > output.log && echo "success" || cat output.log
