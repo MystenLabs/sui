@@ -29,6 +29,11 @@ use crate::package::manifest::ManifestError;
 use crate::package::paths::FileError;
 use crate::package::paths::PackagePathError;
 
+/// Wrapper around a [PackageError] that indicates it has already been emitted.
+#[derive(Error, Debug)]
+#[error("Failed to load package")]
+pub struct PrintedPackageError(pub PackageError);
+
 /// Result type for package operations
 pub type PackageResult<T> = Result<T, PackageError>;
 
@@ -147,9 +152,10 @@ impl PackageError {
         }
     }
 
-    pub fn emit(&self) {
+    pub fn emit(self) -> PrintedPackageError {
         let diagnostic = self.to_diagnostic();
         let mut writer = StandardStream::stderr(ColorChoice::Auto);
         term::emit(&mut writer, &Config::default(), &Files, &diagnostic).unwrap();
+        PrintedPackageError(self)
     }
 }
