@@ -250,8 +250,9 @@ jobs:
           - run: echo "/Users/runner/.local/bin" >> $GITHUB_PATH
           - run: suiup install sui@testnet -y
           - run: sui --version
+          - run: sui client -y
           - run: |
-              # RUST_LOG=debug sui move build -e testnet -p use_math | tee build.log
+              # RUST_LOG=debug sui move build -e testnet -p use_math
               lldb --batch \
                 -o "settings set target.process.stop-on-exec false" \
                 -o "run" \
