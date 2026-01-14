@@ -9,18 +9,17 @@ pub struct BlockedBloomFilter {
     seed: u128,
     num_hashes: u32,
     num_blocks: usize,
-    bits_per_block: usize,
+    bytes_per_block: usize,
 }
 
 impl BlockedBloomFilter {
     /// Create a new blocked bloom filter with the given configuration.
-    pub fn new(seed: u128, num_blocks: usize, bits_per_block: usize, num_hashes: u32) -> Self {
-        let bytes_per_block = bits_per_block / 8;
+    pub fn new(seed: u128, num_blocks: usize, bytes_per_block: usize, num_hashes: u32) -> Self {
         Self {
             blocks: vec![vec![0u8; bytes_per_block]; num_blocks],
             seed,
             num_blocks,
-            bits_per_block,
+            bytes_per_block,
             num_hashes,
         }
     }
@@ -28,16 +27,16 @@ impl BlockedBloomFilter {
     /// Insert a value into the bloom filter by setting the bits in the block that the
     /// hash function produces.
     pub fn insert(&mut self, value: &[u8]) {
-        let (block_idx, bit_idxs) = Self::hash(
-            value,
-            self.seed,
-            self.num_blocks,
-            self.num_hashes,
-            self.bits_per_block,
-        );
-        let block: &mut Vec<u8> = &mut self.blocks[block_idx];
-        for idx in bit_idxs {
-            set_bit(block, idx);
+        let bits_per_block = self.bytes_per_block * 8;
+        let block_idx = {
+            let mut hasher = DoubleHasher::with_value(value, self.seed);
+            (hasher.next_hash() as usize) % self.num_blocks
+        };
+        let block = &mut self.blocks[block_idx];
+        for h in DoubleHasher::with_value(value, self.seed.wrapping_add(1))
+            .take(self.num_hashes as usize)
+        {
+            set_bit(block, (h as usize) % bits_per_block);
         }
     }
 
@@ -49,8 +48,9 @@ impl BlockedBloomFilter {
         seed: u128,
         num_blocks: usize,
         num_hashes: u32,
-        bits_per_block: usize,
+        bytes_per_block: usize,
     ) -> (usize, Vec<usize>) {
+        let bits_per_block = bytes_per_block * 8;
         let block_idx = {
             let mut hasher = DoubleHasher::with_value(key, seed);
             (hasher.next_hash() as usize) % num_blocks
@@ -94,7 +94,7 @@ impl BlockedBloomFilter {
             self.seed,
             self.num_blocks,
             self.num_hashes,
-            self.bits_per_block,
+            self.bytes_per_block,
         );
         bit_idxs
             .iter()
@@ -102,13 +102,21 @@ impl BlockedBloomFilter {
     }
 }
 
+impl<T: AsRef<[u8]>> Extend<T> for BlockedBloomFilter {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        for key in iter {
+            self.insert(key.as_ref());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cp_bloom_blocks::{BLOOM_BLOCK_BITS, NUM_BLOOM_BLOCKS, NUM_HASHES};
+    use crate::cp_bloom_blocks::{BLOOM_BLOCK_BYTES, NUM_BLOOM_BLOCKS, NUM_HASHES};
 
     fn new_test_filter(seed: u128) -> BlockedBloomFilter {
-        BlockedBloomFilter::new(seed, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BITS, NUM_HASHES)
+        BlockedBloomFilter::new(seed, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BYTES, NUM_HASHES)
     }
 
     #[test]
@@ -148,7 +156,7 @@ mod tests {
         let sparse = bloom.into_sparse_blocks();
 
         // Should have far fewer than 128 blocks
-        assert!(sparse.len() < NUM_BLOOM_BLOCKS);
+        assert!(sparse.len() <= 3);
         assert!(!sparse.is_empty());
 
         // All sparse blocks should be non-zero
