@@ -1,0 +1,5 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/dependencies/non_internal_function_valid_call.mvir
+---
+processed 2 tasks

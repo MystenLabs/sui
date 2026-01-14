@@ -1,0 +1,15 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/friends/friend_decl_different_address.mvir
+---
+processed 2 tasks
+
+task 1, lines 5-9:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000044::N'. Got VMError: {
+    major_status: INVALID_FRIEND_DECL_WITH_MODULES_OUTSIDE_ACCOUNT_ADDRESS,
+    sub_status: None,
+    location: 0x44::N,
+    indices: [],
+    offsets: [],
+}

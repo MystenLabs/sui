@@ -1,0 +1,5 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/enum_defs/module_enum_shared_name.mvir
+---
+processed 2 tasks

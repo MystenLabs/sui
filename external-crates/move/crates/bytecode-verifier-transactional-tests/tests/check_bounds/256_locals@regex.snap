@@ -1,0 +1,9 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/check_bounds/256_locals.mvir
+---
+processed 1 task
+
+task 0, lines 1-263:
+//# publish
+Error: value (256) cannot exceed (255)

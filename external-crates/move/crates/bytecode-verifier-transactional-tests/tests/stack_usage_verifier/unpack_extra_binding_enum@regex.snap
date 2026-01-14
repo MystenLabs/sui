@@ -1,0 +1,45 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/stack_usage_verifier/unpack_extra_binding_enum.mvir
+---
+processed 4 tasks
+
+task 0, lines 1-23:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::Test'. Got VMError: {
+    major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
+    sub_status: None,
+    location: 0x6::Test,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 0)],
+}
+
+task 1, lines 25-46:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000007::Test'. Got VMError: {
+    major_status: GENERIC_MEMBER_OPCODE_MISMATCH,
+    sub_status: None,
+    location: 0x7::Test,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(1), 1)],
+}
+
+task 2, lines 48-69:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000008::Test'. Got VMError: {
+    major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
+    sub_status: None,
+    location: 0x8::Test,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 0)],
+}
+
+task 3, lines 71-92:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000009::Test'. Got VMError: {
+    major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
+    sub_status: None,
+    location: 0x9::Test,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 0)],
+}

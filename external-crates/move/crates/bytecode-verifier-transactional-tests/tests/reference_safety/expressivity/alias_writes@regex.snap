@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 1, lines 22-39:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::borrow_local_twice_reverse'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::borrow_local_twice_reverse,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}
+
+task 2, lines 41-58:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::borrow_local_and_copy_ref'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::borrow_local_and_copy_ref,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 8)],
+}

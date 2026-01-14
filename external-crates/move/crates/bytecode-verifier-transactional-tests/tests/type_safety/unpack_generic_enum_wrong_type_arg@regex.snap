@@ -1,0 +1,95 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/unpack_generic_enum_wrong_type_arg.mvir
+---
+processed 9 tasks
+
+task 0, lines 1-12:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByValue'. Got VMError: {
+    major_status: UNPACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::ByValue,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 1, lines 14-25:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByImmRef'. Got VMError: {
+    major_status: UNPACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::ByImmRef,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 2, lines 27-38:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByMutRef'. Got VMError: {
+    major_status: UNPACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::ByMutRef,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 3, lines 40-51:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByValue'. Got VMError: {
+    major_status: UNPACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::ByValue,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 4, lines 53-64:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByImmRef'. Got VMError: {
+    major_status: UNPACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::ByImmRef,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 5, lines 66-77:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByMutRef'. Got VMError: {
+    major_status: UNPACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::ByMutRef,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 6, lines 79-90:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByValue'. Got VMError: {
+    major_status: UNPACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::ByValue,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 7, lines 92-103:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByImmRef'. Got VMError: {
+    major_status: UNPACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::ByImmRef,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}
+
+task 8, lines 105-116:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::ByMutRef'. Got VMError: {
+    major_status: UNPACK_TYPE_MISMATCH_ERROR,
+    sub_status: None,
+    location: 0x2::ByMutRef,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}

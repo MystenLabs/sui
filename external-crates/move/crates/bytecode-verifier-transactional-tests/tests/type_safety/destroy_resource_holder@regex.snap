@@ -1,0 +1,9 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/destroy_resource_holder.mvir
+---
+processed 2 tasks
+
+task 1, lines 22-35:
+//# run
+Error: Unbound module alias Diem

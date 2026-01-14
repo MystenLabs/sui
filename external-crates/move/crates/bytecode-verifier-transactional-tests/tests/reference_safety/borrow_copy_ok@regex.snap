@@ -1,0 +1,5 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/reference_safety/borrow_copy_ok.mvir
+---
+processed 2 tasks

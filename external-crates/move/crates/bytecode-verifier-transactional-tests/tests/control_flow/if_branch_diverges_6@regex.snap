@@ -1,0 +1,15 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/control_flow/if_branch_diverges_6.mvir
+---
+processed 1 task
+
+task 0, lines 1-21:
+//# run
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
+    major_status: INDEX_OUT_OF_BOUNDS,
+    sub_status: None,
+    location: undefined,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 12)],
+}

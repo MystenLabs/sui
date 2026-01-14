@@ -1,0 +1,125 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/phantom_params/struct_definition_bad.mvir
+---
+processed 12 tasks
+
+task 0, lines 1-11:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M1'. Got VMError: {
+    major_status: INVALID_PHANTOM_TYPE_PARAM_POSITION,
+    sub_status: None,
+    location: 0x1::M1,
+    indices: [(FieldDefinition, 0), (StructDefinition, 0)],
+    offsets: [],
+}
+
+task 1, lines 13-19:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
+    major_status: INVALID_PHANTOM_TYPE_PARAM_POSITION,
+    sub_status: None,
+    location: 0x1::M2,
+    indices: [(FieldDefinition, 0), (StructDefinition, 0)],
+    offsets: [],
+}
+
+task 2, lines 21-28:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
+    major_status: INVALID_PHANTOM_TYPE_PARAM_POSITION,
+    sub_status: None,
+    location: 0x1::M3,
+    indices: [(FieldDefinition, 0), (StructDefinition, 1)],
+    offsets: [],
+}
+
+task 3, lines 30-39:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M4'. Got VMError: {
+    major_status: INVALID_PHANTOM_TYPE_PARAM_POSITION,
+    sub_status: None,
+    location: 0x1::M4,
+    indices: [(FieldDefinition, 0), (StructDefinition, 2)],
+    offsets: [],
+}
+
+task 4, lines 41-47:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M5'. Got VMError: {
+    major_status: INVALID_PHANTOM_TYPE_PARAM_POSITION,
+    sub_status: None,
+    location: 0x1::M5,
+    indices: [(FieldDefinition, 0), (StructDefinition, 0)],
+    offsets: [],
+}
+
+task 5, lines 49-56:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M6'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x1::M6,
+    indices: [(FieldDefinition, 0), (StructDefinition, 1)],
+    offsets: [],
+}
+
+task 6, lines 58-68:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M1'. Got VMError: {
+    major_status: INVALID_PHANTOM_TYPE_PARAM_POSITION,
+    sub_status: None,
+    location: 0x2::M1,
+    indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
+    offsets: [],
+}
+
+task 7, lines 70-76:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M2'. Got VMError: {
+    major_status: INVALID_PHANTOM_TYPE_PARAM_POSITION,
+    sub_status: None,
+    location: 0x2::M2,
+    indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
+    offsets: [],
+}
+
+task 8, lines 78-85:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M3'. Got VMError: {
+    major_status: INVALID_PHANTOM_TYPE_PARAM_POSITION,
+    sub_status: None,
+    location: 0x2::M3,
+    indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 1)],
+    offsets: [],
+}
+
+task 9, lines 87-96:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M4'. Got VMError: {
+    major_status: INVALID_PHANTOM_TYPE_PARAM_POSITION,
+    sub_status: None,
+    location: 0x2::M4,
+    indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 2)],
+    offsets: [],
+}
+
+task 10, lines 98-104:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M5'. Got VMError: {
+    major_status: INVALID_PHANTOM_TYPE_PARAM_POSITION,
+    sub_status: None,
+    location: 0x2::M5,
+    indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
+    offsets: [],
+}
+
+task 11, lines 106-113:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::M6'. Got VMError: {
+    major_status: CONSTRAINT_NOT_SATISFIED,
+    sub_status: None,
+    location: 0x2::M6,
+    indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 1)],
+    offsets: [],
+}

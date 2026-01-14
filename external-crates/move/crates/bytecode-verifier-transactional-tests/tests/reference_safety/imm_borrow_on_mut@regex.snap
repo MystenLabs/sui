@@ -1,0 +1,5 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/reference_safety/imm_borrow_on_mut.mvir
+---
+processed 1 task
