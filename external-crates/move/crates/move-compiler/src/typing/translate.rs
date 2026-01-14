@@ -107,7 +107,7 @@ fn extract_macros(
             implicit_candidates,
         } = module_use_funs;
         for (tn, module_methods) in resolved {
-            let macro_methods = macro_use_funs.resolved.entry(*tn).or_default();
+            let macro_methods = macro_use_funs.resolved.entry(tn.clone()).or_default();
             for (name, method) in module_methods.key_cloned_iter() {
                 if !macro_methods.contains_key(&name) {
                     macro_methods.add(name, method.clone()).unwrap();
@@ -2755,14 +2755,14 @@ fn lvalue_expected_types(_context: &mut Context, sp!(loc, b_): &T::LValue) -> Op
         L::Ignore => None,
         L::Var { ty, .. } => Some(*ty.clone()),
         L::BorrowUnpack(mut_, m, s, tys, _) => {
-            let tn = sp(loc, N::TypeName_::ModuleType(*m, *s));
+            let tn = sp(loc, N::TypeName_::ModuleType((*m).into(), *s));
             Some(sp(
                 loc,
                 TI::Ref(*mut_, sp(loc, TI::Apply(None, tn, tys.clone()).into())).into(),
             ))
         }
         L::Unpack(m, s, tys, _) => {
-            let tn = sp(loc, N::TypeName_::ModuleType(*m, *s));
+            let tn = sp(loc, N::TypeName_::ModuleType((*m).into(), *s));
             Some(sp(loc, TI::Apply(None, tn, tys.clone()).into()))
         }
         L::BorrowUnpackVariant(..) | L::UnpackVariant(..) => {
@@ -4031,7 +4031,7 @@ fn type_to_type_name_(
 ) -> Option<TypeName> {
     use TypeName_ as TN;
     match &ty.value.inner() {
-        TI::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => Some(*tn),
+        TI::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => Some(tn.clone()),
         t => {
             let msg = match t {
                 TI::Anything | TI::Void => {

@@ -419,11 +419,8 @@ impl TypingAnalysisContext<'_> {
         let sp!(_, typ) = field_type;
         match typ.inner() {
             N::TypeInner::Ref(_, t) => self.add_struct_field_type_use_def(t, use_name, use_pos),
-            N::TypeInner::Apply(
-                _,
-                sp!(_, N::TypeName_::ModuleType(sp!(_, mod_ident), struct_name)),
-                _,
-            ) => {
+            N::TypeInner::Apply(_, sp!(_, N::TypeName_::ModuleType(mod_ident, struct_name)), _) => {
+                let mod_ident = &mod_ident.value;
                 self.add_field_use_def(
                     mod_ident,
                     &struct_name.value(),
@@ -1273,8 +1270,8 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
 
         for uses in resolved.values() {
             for (use_loc, use_name, u) in uses {
-                if let N::TypeName_::ModuleType(mod_ident, struct_name) = u.tname.value {
-                    self.add_datatype_use_def(&mod_ident, &struct_name);
+                if let N::TypeName_::ModuleType(mod_ident, struct_name) = &u.tname.value {
+                    self.add_datatype_use_def(mod_ident.as_ref(), struct_name);
                 } // otherwise nothing to be done for other type names
                 let (module_ident, fun_def) = u.target_function;
                 let fun_def_name = fun_def.value();
