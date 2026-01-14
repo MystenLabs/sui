@@ -1140,35 +1140,33 @@ impl AuthorityPerEpochStore {
             .execution_time_observations
             .safe_iter()
             .collect::<Result<Vec<_>, _>>()?;
-        let execution_time_estimator =
-            if let PerObjectCongestionControlMode::ExecutionTimeEstimate(protocol_params) =
-                protocol_config.per_object_congestion_control_mode()
-            {
-                ExecutionTimeEstimator::new(
-                    committee.clone(),
-                    protocol_params,
-                    // Load observations stored at end of previous epoch.
-                    Self::get_stored_execution_time_observations(
-                        &protocol_config,
-                        committee.clone(),
-                        &*object_store,
-                        &metrics,
-                        protocol_params.default_none_duration_for_new_keys,
-                    )
-                    // Load observations stored during the current epoch.
-                    .chain(execution_time_observations.into_iter().flat_map(
-                        |((generation, source), observations)| {
-                            observations.into_iter().map(move |(key, duration)| {
-                                (source, Some(generation), key, duration)
-                            })
-                        },
-                    )),
-                )
-            } else {
-                fatal!(
-                    "support for congestion control modes other than PerObjectCongestionControlMode::ExecutionTimeEstimate has been removed"
-                );
-            };
+
+        let protocol_params = match protocol_config.per_object_congestion_control_mode() {
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(params) => params,
+            // Note: if this a validator, we will panic when constructing the ConsensusHandler.
+            _ => Default::default(),
+        };
+
+        let execution_time_estimator = ExecutionTimeEstimator::new(
+            committee.clone(),
+            protocol_params,
+            // Load observations stored at end of previous epoch.
+            Self::get_stored_execution_time_observations(
+                &protocol_config,
+                committee.clone(),
+                &*object_store,
+                &metrics,
+                protocol_params.default_none_duration_for_new_keys,
+            )
+            // Load observations stored during the current epoch.
+            .chain(execution_time_observations.into_iter().flat_map(
+                |((generation, source), observations)| {
+                    observations
+                        .into_iter()
+                        .map(move |(key, duration)| (source, Some(generation), key, duration))
+                },
+            )),
+        );
 
         let consensus_tx_status_cache = if protocol_config.mysticeti_fastpath() {
             Some(ConsensusTxStatusCache::new(protocol_config.gc_depth()))
