@@ -290,7 +290,7 @@ impl CommitFinalizer {
 
         let curr_commit_index = commit_state.commit.commit_ref.index;
         let skip_gced_blocks = (self.context.committee.epoch() == 1007
-            && curr_commit_index >= 968678)
+            && curr_commit_index >= 968178)
             || self.context.committee.epoch() > 1007
             || self
                 .context
