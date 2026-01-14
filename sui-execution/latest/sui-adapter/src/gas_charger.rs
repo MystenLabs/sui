@@ -52,6 +52,12 @@ pub mod checked {
         Unmetered,
         Coins(Vec<ObjectRef>),
         AddressBalance(SuiAddress),
+        // Used by the compatibility layer, which unavoidably allows users to specify both
+        // real and fake coins at the same time.
+        Mixed {
+            address_balance_gas_payer: SuiAddress,
+            gas_coins: Vec<ObjectRef>,
+        },
     }
 
     impl PaymentMethod {
@@ -97,7 +103,9 @@ pub mod checked {
         //       Explore way to remove it.
         pub(crate) fn gas_coins(&self) -> impl Iterator<Item = &'_ ObjectRef> {
             match &self.payment_method {
-                PaymentMethod::Coins(gas_coins) => Either::Left(gas_coins.iter()),
+                PaymentMethod::Coins(gas_coins) | PaymentMethod::Mixed { gas_coins, .. } => {
+                    Either::Left(gas_coins.iter())
+                }
                 PaymentMethod::AddressBalance(_) | PaymentMethod::Unmetered => {
                     Either::Right(std::iter::empty())
                 }
@@ -405,6 +413,51 @@ pub mod checked {
                     trace!(net_change, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
 
                     temporary_store.mutate_input_object(gas_object);
+                    cost_summary
+                }
+                PaymentMethod::Mixed {
+                    address_balance_gas_payer,
+                    ..
+                } => {
+                    let gas_object_id = self.smashed_gas_coin.unwrap();
+                    let mut gas_object =
+                        temporary_store.read_object(&gas_object_id).unwrap().clone();
+
+                    let gas_balance = gas_object
+                        .data
+                        .try_as_move()
+                        .unwrap()
+                        .get_coin_value_unsafe();
+
+                    let (coin_charge, address_balance_charge) = if net_change > 0 {
+                        assert!(
+                            gas_balance <= i64::MAX as u64,
+                            "SUI supply cap should prevent this from happening"
+                        );
+                        let coin_charge = std::cmp::min(net_change, gas_balance as i64);
+                        let address_balance_charge = net_change - coin_charge;
+                        (coin_charge, address_balance_charge)
+                    } else {
+                        (net_change, 0)
+                    };
+
+                    assert!(address_balance_charge >= 0);
+
+                    deduct_gas(&mut gas_object, coin_charge);
+                    if address_balance_charge > 0 {
+                        let balance_type = sui_types::balance::Balance::type_tag(
+                            sui_types::gas_coin::GAS::type_tag(),
+                        );
+                        let accumulator_event = AccumulatorEvent::from_balance_change(
+                            address_balance_gas_payer,
+                            balance_type,
+                            address_balance_charge,
+                        )
+                        .expect("Failed to create accumulator event for gas balance");
+
+                        temporary_store.add_accumulator_event(accumulator_event);
+                    }
+
                     cost_summary
                 }
                 PaymentMethod::Unmetered => unreachable!(),
