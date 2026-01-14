@@ -250,13 +250,12 @@ jobs:
           - run: echo "/Users/runner/.local/bin" >> $GITHUB_PATH
           - run: suiup install sui@testnet -y
           - run: sui --version
-          - run:
+          - run: |
               # RUST_LOG=debug sui move build -e testnet -p use_math | tee build.log
-              #     # lldb exits non-zero if the program crashes; that's fine for debugging.
               lldb --batch \
                 -o "settings set target.process.stop-on-exec false" \
                 -o "run" \
-                -o "bt all" \
+                -o "thread backtrace all" \
                 -o "register read" \
                 -o "image list" \
                 -- \
