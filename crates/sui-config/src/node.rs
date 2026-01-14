@@ -714,7 +714,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Threedos".to_string(),
         "Onefc".to_string(),
         "FanTV".to_string(),
-        "Arden".to_string(),                                                    // Arden partner
+        "Arden".to_string(), // Arden partner
         "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
         "EveFrontier".to_string(),
         "TestEveFrontier".to_string(),
