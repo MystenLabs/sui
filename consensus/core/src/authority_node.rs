@@ -224,8 +224,8 @@ where
                         info!("Truncated finalized commits after index {}", start_index);
                     } else {
                         info!(
-                            "Commit at index {} has rejected transactions. Skipping truncation.",
-                            start_index
+                            "Commit at index {} has rejected transactions {:?}. Skipping truncation.",
+                            start_index, rejected_transactions
                         );
                     }
                 }
