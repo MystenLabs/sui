@@ -1184,7 +1184,6 @@ impl KeyToolCommand {
                 println!("Visit URL (Microsoft): {url_10}");
                 println!("Visit URL (KarrierOne): {url_11}");
                 println!("Visit URL (Credenza3): {url_12}");
-                println!("Visit URL (AWS - Ambrus): {url_13}");
                 println!("Visit URL (Arden): {url_14}");
                 println!("Visit URL (AWS - Trace): {url_15}");
                 println!("Visit URL (EveFrontier): {url_16}");
