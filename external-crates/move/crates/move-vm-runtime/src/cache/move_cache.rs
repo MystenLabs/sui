@@ -10,7 +10,9 @@ use crate::{
     execution::dispatch_tables::VMDispatchTables,
     jit,
     runtime::telemetry::MoveCacheTelemetry,
-    shared::{linkage_context::LinkageHash, types::VersionId},
+    shared::{
+        constants::VIRTUAL_DISPATCH_TABLE_LRU_SIZE, linkage_context::LinkageHash, types::VersionId,
+    },
     validation::verification,
 };
 
@@ -60,7 +62,9 @@ impl MoveCache {
             vm_config,
             package_cache: Arc::new(RwLock::new(HashMap::new())),
             interner: Arc::new(IdentifierInterner::new()),
-            linkage_vtables: Arc::new(RwLock::new(LruCache::new(NonZero::new(1024).unwrap()))),
+            linkage_vtables: Arc::new(RwLock::new(LruCache::new(
+                NonZero::new(VIRTUAL_DISPATCH_TABLE_LRU_SIZE).unwrap(),
+            ))),
         }
     }
 

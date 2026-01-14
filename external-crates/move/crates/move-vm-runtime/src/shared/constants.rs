@@ -36,4 +36,4 @@ pub const TYPE_DEPTH_LRU_SIZE: usize = 16_384;
 /// TODO(vm-rewrite): find a good bound for this
 /// This number is currently 1 GB / 128 bytes (size of VMDispatchTables), giving approximately
 /// a gigabytes of storage to VTables (though this disregards key and LRU overhead).
-pub const VIRTUAL_DISPATCH_TABLE_LRU_SIZE: usize = 7_812_500;
+pub const VIRTUAL_DISPATCH_TABLE_LRU_SIZE: usize = 1_000_000;

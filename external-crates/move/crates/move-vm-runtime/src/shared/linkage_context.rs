@@ -4,12 +4,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMResult};
-use move_core_types::language_storage::{ModuleId, TypeTag};
-
-use crate::{
-    cache::{self, identifier_interner::IdentifierKey},
-    shared::types::{OriginalId, VersionId},
+use move_core_types::{
+    account_address::AccountAddress,
+    language_storage::{ModuleId, TypeTag},
 };
+
+use crate::shared::types::{OriginalId, VersionId};
 
 /// An execution context that remaps the modules referred to at runtime according to a linkage
 /// table, allowing the same module in storage to be run against different dependencies.
@@ -28,7 +28,7 @@ pub struct LinkageContext {
 /// A hashable representation of a linkage context, for caching purposes.
 /// This is a vector of (key, value) pairs representing the linkage table.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct LinkageHash(Vec<(IdentifierKey, IdentifierKey)>);
+pub(crate) struct LinkageHash(Vec<(AccountAddress, AccountAddress)>);
 
 impl LinkageContext {
     pub fn new(linkage_table: BTreeMap<OriginalId, VersionId>) -> Self {
@@ -116,16 +116,12 @@ impl LinkageContext {
             .collect::<BTreeSet<_>>())
     }
 
-    pub(crate) fn to_linkage_hash(
-        &self,
-        interner: &cache::identifier_interner::IdentifierInterner,
-    ) -> PartialVMResult<LinkageHash> {
-        let mut hash = vec![];
-        for (key, value) in &self.linkage_table {
-            let key_key = interner.intern_address(key)?;
-            let value_key = interner.intern_address(value)?;
-            hash.push((key_key, value_key));
-        }
-        Ok(LinkageHash(hash))
+    pub(crate) fn to_linkage_hash(&self) -> PartialVMResult<LinkageHash> {
+        Ok(LinkageHash(
+            self.linkage_table
+                .iter()
+                .map(|(k, v)| (*k, *v))
+                .collect::<Vec<_>>(),
+        ))
     }
 }

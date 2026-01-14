@@ -17,7 +17,7 @@ use crate::{
     validation::{validate_for_publish, validate_for_vm_execution, verification::ast as verif_ast},
 };
 
-use move_binary_format::errors::{Location, VMResult};
+use move_binary_format::errors::{Location, PartialVMError, VMResult};
 use move_core_types::{
     resolver::{ModuleResolver, SerializedPackage},
     vm_status::StatusCode,
@@ -129,10 +129,9 @@ impl MoveRuntime {
             let total_timer = txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Total);
 
             let instance = try_block! {
-                let linkage_hash = match link_context.to_linkage_hash(&self.cache.interner) {
+                let linkage_hash = match link_context.to_linkage_hash() {
                     Ok(hash) => hash,
                     Err(err) => {
-                        // Anything better to do here?
                         return Err(err.finish(Location::Undefined));
                     }
                 };
@@ -150,16 +149,16 @@ impl MoveRuntime {
                 // never have precomputed type depths, as those are computed on-demand.
                 if !virtual_tables.type_depths.is_empty() {
                     return Err(
-                        move_binary_format::errors::PartialVMError::new(
+                        PartialVMError::new(
                             StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("VMDispatchTables has precomputed type depths".to_string())
                         .finish(Location::Undefined)
                     );
                 }
 
-                if !(link_context == *virtual_tables.link_context) {
+                if link_context != *virtual_tables.link_context {
                     return Err(
-                        move_binary_format::errors::PartialVMError::new(
+                        PartialVMError::new(
                             StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                         .with_message("Cached VMDispatchTables linkage did not match hashed linkage".to_string())
                         .finish(Location::Undefined)
