@@ -42,19 +42,21 @@ Commands:
                                   no extra gas coin is required
   ptb                         
   publish                     Publish Move modules
+  test-publish                Publish a package using ephemeral addresses for dependencies
+  upgrade                     Upgrade Move modules
+  test-upgrade                Arguments related to what to do to a transaction after it has been
+                                  built
   serialized-tx               Execute, dry-run, dev-inspect or otherwise inspect an already
                                   serialized transaction
   serialized-tx-kind          Execute, dry-run, dev-inspect or otherwise inspect an already
                                   serialized transaction kind
   split-coin                  Split a coin object into multiple coins
   switch                      Switch active address and network(e.g., devnet, local rpc server)
-  test-publish                Publish a package using ephemeral addresses for dependencies
   tx-block                    Get the effects of executing the given transaction block
   transfer                    Transfer object
   transfer-sui                Transfer SUI, and pay gas with the same SUI coin object. If amount
                                   is specified, only the amount is transferred; otherwise the entire
                                   object is transferred
-  upgrade                     Upgrade Move modules
   verify-bytecode-meter       Run the bytecode verifier on the package
   verify-source               Verify local Move packages against on-chain packages, and
                                   optionally their dependencies

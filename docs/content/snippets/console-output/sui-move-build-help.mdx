@@ -8,7 +8,13 @@ Options:
           Include the contents of packages in dependencies that haven't been published (only
           relevant when dumping bytecode as base64)
       --dump-bytecode-as-base64
-          Whether we are printing in base64
+          Dump the compiled bytecode as base64-encoded strings in a JSON object, together with the
+          digest and list of dependencies
+      --no-tree-shaking
+          By default, the CLI will drop any unused dependencies from the output and makes calls to
+          the RPC. This flag disables that behavior and avoids any RPC calls, keeping all
+          dependencies in the output (the dependency list). This is useful for offline compilation.
+          Only to be used with `--dump-bytecode-as-base64`
       --generate-struct-layouts
           If true, generate struct layout schemas for all struct types passed into `entry` functions
           declared by modules in this package These layout schemas can be consumed by clients (e.g.,
