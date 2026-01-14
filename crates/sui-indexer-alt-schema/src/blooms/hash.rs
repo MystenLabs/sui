@@ -35,7 +35,6 @@ pub struct DoubleHasher {
 impl DoubleHasher {
     /// Creates a DoubleHasher with two 64-bit hashes (h1, h2) from h1. Derives h2 by taking the upper 32 bits of h1 and multiplying it with
     ///  H2_MULTIPLIER, a large number with mixed bits, to distribute the bits across h2.
-    #[inline]
     pub fn new(h1: u64) -> Self {
         let h2 = h1.wrapping_shr(32).wrapping_mul(H2_MULTIPLIER);
         Self { h1, h2 }
@@ -46,8 +45,6 @@ impl DoubleHasher {
     /// Entry point for bloom filter operations. Iterate through the DoubleHasher to produce the index of the block and the bit positions set in that block for a value and seed so we can
     /// - set bit positions in a bloom filter for a value
     /// - check if a value is in the bloom filter
-    ///
-    #[inline]
     pub fn with_value(value: &[u8], seed: u128) -> Self {
         let mut hasher = SipHasher13::new_with_keys(seed as u64, (seed >> 64) as u64);
         hasher.write(value);
@@ -57,7 +54,6 @@ impl DoubleHasher {
     /// Generate a new hash value from the current h1 and h2 with:
     /// - modulo addition of two independent hashes with well distributed bits to ensure inputs diverge into uncorrelated bits.
     /// - circular left shift by 5 (coprime to 64) to avoid evenly spaced distributions by mixing high and low bits after the addition.
-    #[inline]
     pub fn next_hash(&mut self) -> u64 {
         self.h1 = self.h1.wrapping_add(self.h2).rotate_left(5);
         self.h1
