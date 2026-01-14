@@ -181,7 +181,6 @@
       { "source": "/concepts/sui-move-concepts/packages/automated-address-management", "destination": "/guides/developer/packages/automated-address-management"},
       { "source": "/concepts/dynamic-fields", "destination": "/guides/developer/objects/dynamic-fields"},
       { "source": "/concepts/dynamic-fields/tables-bags", "destination": "/guides/developer/objects/tables-bags"},
-      { "source": "/concepts/cryptography/nautilus", "destination": "/guides/developer/nautilus/index"},
       { "source": "/concepts/cryptography/nautilus", "destination": "/guides/developer/nautilus/"},
       { "source": "/concepts/cryptography/nautilus/using-nautilus", "destination": "/guides/developer/nautilus/using-nautilus"}
     ]
