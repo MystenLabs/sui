@@ -129,12 +129,7 @@ impl MoveRuntime {
             let total_timer = txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Total);
 
             let instance = try_block! {
-                let linkage_hash = match link_context.to_linkage_hash() {
-                    Ok(hash) => hash,
-                    Err(err) => {
-                        return Err(err.finish(Location::Undefined));
-                    }
-                };
+                let linkage_hash = link_context.to_linkage_hash();
 
                 let virtual_tables = if let Some(vtables) =
                     self.cache.cached_linkage_tables_at(&linkage_hash)  {

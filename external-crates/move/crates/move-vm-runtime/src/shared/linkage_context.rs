@@ -4,10 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMResult};
-use move_core_types::{
-    account_address::AccountAddress,
-    language_storage::{ModuleId, TypeTag},
-};
+use move_core_types::language_storage::{ModuleId, TypeTag};
 
 use crate::shared::types::{OriginalId, VersionId};
 
@@ -26,9 +23,10 @@ pub struct LinkageContext {
 }
 
 /// A hashable representation of a linkage context, for caching purposes.
-/// This is a vector of (key, value) pairs representing the linkage table.
+// This actually just holds the linkage for now, but in the future other implementations may
+// replace it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct LinkageHash(Vec<(AccountAddress, AccountAddress)>);
+pub(crate) struct LinkageHash(BTreeMap<OriginalId, VersionId>);
 
 impl LinkageContext {
     pub fn new(linkage_table: BTreeMap<OriginalId, VersionId>) -> Self {
@@ -116,12 +114,7 @@ impl LinkageContext {
             .collect::<BTreeSet<_>>())
     }
 
-    pub(crate) fn to_linkage_hash(&self) -> PartialVMResult<LinkageHash> {
-        Ok(LinkageHash(
-            self.linkage_table
-                .iter()
-                .map(|(k, v)| (*k, *v))
-                .collect::<Vec<_>>(),
-        ))
+    pub(crate) fn to_linkage_hash(&self) -> LinkageHash {
+        LinkageHash(self.linkage_table.clone())
     }
 }
