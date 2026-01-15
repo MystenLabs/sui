@@ -4553,6 +4553,7 @@ impl ProtocolConfig {
                 .map(|limit| limit as u128),
             deprecate_global_storage_ops,
             disable_entry_point_signature_check: self.disable_entry_point_signature_check(),
+            switch_to_regex_reference_safety: false,
         }
     }
 
