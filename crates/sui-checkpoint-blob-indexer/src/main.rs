@@ -71,6 +71,14 @@ struct Args {
     #[arg(long)]
     compression_level: Option<i32>,
 
+    /// Maximum number of checkpoints to fetch concurrently
+    #[arg(long, default_value = "200")]
+    ingest_concurrency: usize,
+
+    /// Maximum size of checkpoint backlog across all workers
+    #[arg(long, default_value = "5000")]
+    checkpoint_buffer_size: usize,
+
     #[command(flatten)]
     metrics_args: MetricsArgs,
 
@@ -152,11 +160,17 @@ async fn main() -> anyhow::Result<()> {
         ..Default::default()
     };
 
+    let ingestion_config = IngestionConfig {
+        ingest_concurrency: args.ingest_concurrency,
+        checkpoint_buffer_size: args.checkpoint_buffer_size,
+        ..Default::default()
+    };
+
     let mut indexer = Indexer::new(
         store.clone(),
         args.indexer_args,
         args.client_args,
-        IngestionConfig::default(),
+        ingestion_config,
         None,
         &registry,
     )
