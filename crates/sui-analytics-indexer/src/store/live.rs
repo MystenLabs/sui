@@ -179,7 +179,7 @@ mod tests {
             client_metric_host: "127.0.0.1".to_string(),
             client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(object_store),
-            remote_store_url: "https://checkpoints.mainnet.sui.io".to_string(),
+            remote_store_url: None,
             streaming_url: None,
             rpc_api_url: None,
             rpc_username: None,
