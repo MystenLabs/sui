@@ -33,6 +33,8 @@ use prometheus::HistogramTimer;
 use serde_json::json;
 use tracing::debug;
 use tracing::info;
+use tracing::log::Level;
+use tracing::log::log_enabled;
 use tracing::warn;
 use uuid::Uuid;
 
@@ -210,19 +212,23 @@ where
         resp.http_headers.insert(REQUEST_ID_HEADER, request_id);
 
         if resp.is_ok() {
-            info!(%uuid, %addr, elapsed_ms, "Request succeeded");
+            if log_enabled!(Level::Debug) {
+                debug!(%uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request succeeded");
+            } else {
+                info!(%uuid, %addr, elapsed_ms, "Request succeeded");
+            }
             ext.metrics.queries_succeeded.inc();
         } else {
             let codes = error_codes(&resp);
 
             // Log internal errors, timeouts, and unknown errors at a higher log level than other errors.
             if is_loud_query(&codes) {
-                warn!(%uuid, %addr, query = ext.query.get().unwrap(), "Query");
+                warn!(%uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
+            } else if log_enabled!(Level::Debug) {
+                debug!(%uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
             } else {
-                debug!(%uuid, %addr, query = ext.query.get().unwrap(), "Query");
+                info!(%uuid, %addr, elapsed_ms, ?codes, "Request failed");
             }
-
-            info!(%uuid, %addr, elapsed_ms, ?codes, "Request failed");
 
             if codes.is_empty() {
                 ext.metrics
@@ -236,7 +242,6 @@ where
             }
         }
 
-        debug!(%uuid, %addr, response = %json!(resp), "Response");
         Poll::Ready(resp)
     }
 }
@@ -245,9 +250,10 @@ where
 impl<F> PinnedDrop for MetricsFuture<F> {
     fn drop(self: Pin<&mut Self>) {
         if let Some(RequestMetrics { timer, ext }) = self.project().metrics.take() {
+            let Session { uuid, addr } = ext.session.get().unwrap();
             let elapsed_ms = timer.stop_and_record() * 1000.0;
             ext.metrics.queries_cancelled.inc();
-            info!(elapsed_ms, "Request cancelled");
+            info!(%uuid, %addr, elapsed_ms, "Request cancelled");
         }
     }
 }

@@ -12,7 +12,6 @@ use diesel::migration::Migration;
 use diesel::migration::MigrationSource;
 use diesel::migration::MigrationVersion;
 use diesel::pg::Pg;
-use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
@@ -25,6 +24,7 @@ use futures::FutureExt;
 use tracing::info;
 use url::Url;
 
+use crate::tls::AsyncPgConnectionWithId;
 use crate::tls::build_tls_config;
 use crate::tls::establish_tls_connection;
 
@@ -65,10 +65,10 @@ pub struct DbArgs {
 }
 
 #[derive(Clone)]
-pub struct Db(Pool<AsyncPgConnection>);
+pub struct Db(Pool<AsyncPgConnectionWithId>);
 
 /// Wrapper struct over the remote `PooledConnection` type for dealing with the `Store` trait.
-pub struct Connection<'a>(PooledConnection<'a, AsyncPgConnection>);
+pub struct Connection<'a>(PooledConnection<'a, AsyncPgConnectionWithId>);
 
 impl DbArgs {
     pub fn connection_timeout(&self) -> Duration {
@@ -168,8 +168,8 @@ impl Db {
 
         info!("Running migrations ...");
         let conn = self.0.dedicated_connection().await?;
-        let mut wrapper: AsyncConnectionWrapper<AsyncPgConnection> =
-            diesel_async::async_connection_wrapper::AsyncConnectionWrapper::from(conn);
+        let mut wrapper: AsyncConnectionWrapper<AsyncPgConnectionWithId> =
+            AsyncConnectionWrapper::from(conn);
 
         let finished_migrations = tokio::task::spawn_blocking(move || {
             wrapper
@@ -212,7 +212,7 @@ pub async fn reset_database(
 }
 
 impl<'a> Deref for Connection<'a> {
-    type Target = PooledConnection<'a, AsyncPgConnection>;
+    type Target = PooledConnection<'a, AsyncPgConnectionWithId>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -229,7 +229,7 @@ async fn pool(
     database_url: Url,
     args: DbArgs,
     read_only: bool,
-) -> anyhow::Result<Pool<AsyncPgConnection>> {
+) -> anyhow::Result<Pool<AsyncPgConnectionWithId>> {
     let statement_timeout = args.statement_timeout();
 
     // Build TLS configuration once
