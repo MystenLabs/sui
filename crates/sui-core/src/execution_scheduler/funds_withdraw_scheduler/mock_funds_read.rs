@@ -113,11 +113,35 @@ impl MockFundsReadInner {
             None => (0, self.cur_version),
         }
     }
+
+    fn get_account_amount_at_version(
+        &self,
+        account_id: &AccumulatorObjId,
+        version: SequenceNumber,
+    ) -> u128 {
+        let account_amounts = self.amounts.get(account_id);
+        match account_amounts {
+            Some(amounts) => {
+                let (_, amount) = amounts.range(..=version).last().unwrap();
+                amount.unwrap_or(0)
+            }
+            None => 0,
+        }
+    }
 }
 
 impl AccountFundsRead for MockFundsRead {
     fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> (u128, SequenceNumber) {
         let inner = self.inner.read();
         inner.get_latest_account_amount(account_id)
+    }
+
+    fn get_account_amount_at_version(
+        &self,
+        account_id: &AccumulatorObjId,
+        version: SequenceNumber,
+    ) -> u128 {
+        let inner = self.inner.read();
+        inner.get_account_amount_at_version(account_id, version)
     }
 }
