@@ -25,7 +25,7 @@ use self::verification::linkage::verify_linkage_and_cyclic_checks;
 
 /// Verify a package for publication, including ensuring it is valid against its dependencies for
 /// linkage.
-pub fn validate_for_publish(
+pub(crate) fn validate_for_publish(
     natives: &NativeFunctions,
     vm_config: &VMConfig,
     original_id: OriginalId,
@@ -58,7 +58,7 @@ pub fn validate_for_publish(
 }
 
 /// Verify a set of packages for VM execution, ensuring linkage is correct and there are no cycles.
-pub fn validate_for_vm_execution(
+pub(crate) fn validate_for_vm_execution(
     packages: BTreeMap<VersionId, &verification::ast::Package>,
 ) -> VMResult<()> {
     verify_linkage_and_cyclic_checks(&packages)
