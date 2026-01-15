@@ -438,8 +438,8 @@ moka = { version = "0.12", default-features = false, features = [
   "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9d787303d855f6cec92eb94933717d4ee1963548", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9d787303d855f6cec92eb94933717d4ee1963548", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9590ccec46377f049f47fd64e5142d383ebec7d9", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9590ccec46377f049f47fd64e5142d383ebec7d9", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
@@ -543,15 +543,14 @@ tempfile = "3.20.0"
 test-fuzz = "3.0.4"
 thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
-# TODO: Remove the `=` symbol once msim supports 1.48 too.
-tokio = "=1.47.1"
+tokio = "=1.49.0"
 tokio-retry = "0.3"
 tokio-rustls = { version = "0.26", default-features = false, features = [
   "tls12",
   "ring",
 ] }
 tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
-tokio-util = "0.7.10"
+tokio-util = "0.7.18"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
 tonic = { version = "0.14.2", features = [
