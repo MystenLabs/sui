@@ -381,7 +381,12 @@ pub async fn run_test_with_regex_reference_safety(
 ) -> Result<(), Box<dyn std::error::Error>> {
     SWITCH_TO_REGEX_REFERENCE_SAFETY.set(true).unwrap();
     let mut options = InstaOptions::new();
-    options.suffix("regex");
+    if path
+        .components()
+        .any(|c| c.as_os_str() == "reference_safety")
+    {
+        options.suffix("regex");
+    }
     run_test_impl::<SimpleVMTestAdapter>(
         path,
         Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
