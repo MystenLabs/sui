@@ -213,7 +213,7 @@ impl<S: Store> Indexer<S> {
         let metrics = IndexerMetrics::new(metrics_prefix, registry);
 
         let ingestion_service =
-            IngestionService::new(client_args, ingestion_config, metrics_prefix, registry)?;
+            IngestionService::new(client_args, ingestion_config, metrics_prefix, registry).await?;
 
         Ok(Self {
             store,

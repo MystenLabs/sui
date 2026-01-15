@@ -107,10 +107,13 @@ pub struct IngestionClient {
 
 impl IngestionClient {
     /// Construct a new ingestion client. Its source is determined by `args`.
-    pub fn new(args: IngestionClientArgs, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
+    pub async fn new(
+        args: IngestionClientArgs,
+        metrics: Arc<IngestionMetrics>,
+    ) -> IngestionResult<Self> {
         // TODO: Support stacking multiple ingestion clients for redundancy/failover.
         let client = if let Some(url) = args.remote_store_url.as_ref() {
-            IngestionClient::new_remote(url.clone(), metrics.clone())?
+            IngestionClient::new_remote(url.clone(), metrics.clone()).await?
         } else if let Some(path) = args.local_ingestion_path.as_ref() {
             IngestionClient::new_local(path.clone(), metrics.clone())
         } else if let Some(rpc_api_url) = args.rpc_api_url.as_ref() {
@@ -129,19 +132,19 @@ impl IngestionClient {
 
     /// An ingestion client that fetches checkpoints from a remote store (an object store, over
     /// HTTP).
-    pub fn new_remote(url: Url, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
-        let client = Arc::new(RemoteIngestionClient::new(url)?);
+    pub async fn new_remote(url: Url, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
+        let client = Arc::new(RemoteIngestionClient::new(url).await?);
         Ok(Self::new_impl(client, metrics))
     }
 
     /// An ingestion client that fetches checkpoints from a remote store (an object store, over
     /// HTTP), with a configured request timeout.
-    pub fn new_remote_with_timeout(
+    pub async fn new_remote_with_timeout(
         url: Url,
         timeout: std::time::Duration,
         metrics: Arc<IngestionMetrics>,
     ) -> IngestionResult<Self> {
-        let client = Arc::new(RemoteIngestionClient::new_with_timeout(url, timeout)?);
+        let client = Arc::new(RemoteIngestionClient::new_with_timeout(url, timeout).await?);
         Ok(Self::new_impl(client, metrics))
     }
 

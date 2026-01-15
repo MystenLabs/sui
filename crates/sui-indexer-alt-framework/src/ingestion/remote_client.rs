@@ -1,10 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use reqwest::Client;
 use reqwest::StatusCode;
+use reqwest::header::AUTHORIZATION;
+use serde::Deserialize;
+use tokio::sync::RwLock;
 use tracing::debug;
 use tracing::error;
 use url::Url;
@@ -20,6 +25,106 @@ use crate::ingestion::ingestion_client::IngestionClientTrait;
 /// unresponsive servers, or other connection problems.
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 
+/// Timeout for fetching GKE metadata token. Short timeout since this should be fast
+/// when running in GKE, and we don't want to block startup when not in GKE.
+const GKE_METADATA_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Refresh the token this long before it expires to avoid request failures.
+const TOKEN_REFRESH_BUFFER: Duration = Duration::from_secs(300);
+
+/// GKE metadata server URL for fetching access tokens.
+const GKE_METADATA_TOKEN_URL: &str =
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token";
+
+#[derive(Deserialize)]
+struct GkeTokenResponse {
+    access_token: String,
+    expires_in: u64,
+}
+
+struct CachedToken {
+    access_token: String,
+    expires_at: Instant,
+}
+
+/// Cache for GKE access tokens. Automatically refreshes tokens before expiry.
+pub(crate) struct GkeTokenCache {
+    token: RwLock<Option<CachedToken>>,
+    client: Client,
+}
+
+impl GkeTokenCache {
+    /// Create a new token cache and attempt to fetch an initial token.
+    /// Returns None if not running in GKE or if token fetch fails.
+    pub async fn new() -> Option<Arc<Self>> {
+        let client = Client::builder()
+            .timeout(GKE_METADATA_TIMEOUT)
+            .build()
+            .ok()?;
+
+        let cache = Arc::new(Self {
+            token: RwLock::new(None),
+            client,
+        });
+
+        // Try to fetch initial token
+        if cache.refresh_token().await.is_some() {
+            debug!("GKE auth token acquired, will authenticate GCS requests");
+            Some(cache)
+        } else {
+            debug!("Not running in GKE or token fetch failed, continuing without GCS auth");
+            None
+        }
+    }
+
+    /// Get a valid access token, refreshing if necessary.
+    pub async fn get_token(&self) -> Option<String> {
+        // Check if we have a valid cached token
+        {
+            let token = self.token.read().await;
+            if let Some(cached) = token.as_ref()
+                && Instant::now() < cached.expires_at
+            {
+                return Some(cached.access_token.clone());
+            }
+        }
+
+        // Token expired or missing, refresh it
+        self.refresh_token().await
+    }
+
+    async fn refresh_token(&self) -> Option<String> {
+        let response = self
+            .client
+            .get(GKE_METADATA_TOKEN_URL)
+            .header("Metadata-Flavor", "Google")
+            .send()
+            .await
+            .ok()?;
+
+        if !response.status().is_success() {
+            return None;
+        }
+
+        let token_response: GkeTokenResponse = response.json().await.ok()?;
+
+        let expires_at =
+            Instant::now() + Duration::from_secs(token_response.expires_in) - TOKEN_REFRESH_BUFFER;
+
+        let access_token = token_response.access_token;
+
+        {
+            let mut token = self.token.write().await;
+            *token = Some(CachedToken {
+                access_token: access_token.clone(),
+                expires_at,
+            });
+        }
+
+        Some(access_token)
+    }
+}
+
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum HttpError {
     #[error("HTTP error with status code: {0}")]
@@ -33,20 +138,25 @@ fn status_code_to_error(code: StatusCode) -> anyhow::Error {
 pub struct RemoteIngestionClient {
     url: Url,
     client: Client,
+    gke_token_cache: Option<Arc<GkeTokenCache>>,
 }
 
 impl RemoteIngestionClient {
-    pub fn new(url: Url) -> IngestionResult<Self> {
+    pub async fn new(url: Url) -> IngestionResult<Self> {
+        let gke_token_cache = GkeTokenCache::new().await;
         Ok(Self {
             url,
             client: Client::builder().timeout(DEFAULT_REQUEST_TIMEOUT).build()?,
+            gke_token_cache,
         })
     }
 
-    pub fn new_with_timeout(url: Url, timeout: Duration) -> IngestionResult<Self> {
+    pub async fn new_with_timeout(url: Url, timeout: Duration) -> IngestionResult<Self> {
+        let gke_token_cache = GkeTokenCache::new().await;
         Ok(Self {
             url,
             client: Client::builder().timeout(timeout).build()?,
+            gke_token_cache,
         })
     }
 
@@ -59,7 +169,11 @@ impl RemoteIngestionClient {
             .join("epochs.json")
             .expect("Unexpected invalid URL");
 
-        self.client.get(url).send().await
+        let mut request = self.client.get(url);
+        if let Some(token) = self.get_auth_token().await {
+            request = request.header(AUTHORIZATION, format!("Bearer {token}"));
+        }
+        request.send().await
     }
 
     /// Fetch the bytes for a checkpoint by its sequence number.
@@ -71,7 +185,18 @@ impl RemoteIngestionClient {
             .join(&format!("{checkpoint}.chk"))
             .expect("Unexpected invalid URL");
 
-        self.client.get(url).send().await
+        let mut request = self.client.get(url);
+        if let Some(token) = self.get_auth_token().await {
+            request = request.header(AUTHORIZATION, format!("Bearer {token}"));
+        }
+        request.send().await
+    }
+
+    async fn get_auth_token(&self) -> Option<String> {
+        match &self.gke_token_cache {
+            Some(cache) => cache.get_token().await,
+            None => None,
+        }
     }
 }
 
@@ -176,8 +301,10 @@ pub(crate) mod tests {
         ResponseTemplate::new(code.as_u16())
     }
 
-    fn remote_test_client(uri: String) -> IngestionClient {
-        IngestionClient::new_remote(Url::parse(&uri).unwrap(), test_ingestion_metrics()).unwrap()
+    async fn remote_test_client(uri: String) -> IngestionClient {
+        IngestionClient::new_remote(Url::parse(&uri).unwrap(), test_ingestion_metrics())
+            .await
+            .unwrap()
     }
 
     #[tokio::test]
@@ -185,7 +312,7 @@ pub(crate) mod tests {
         let server = MockServer::start().await;
         respond_with(&server, status(StatusCode::NOT_FOUND)).await;
 
-        let client = remote_test_client(server.uri());
+        let client = remote_test_client(server.uri()).await;
         let error = client.fetch(42).await.unwrap_err();
 
         assert!(matches!(error, Error::NotFound(42)));
@@ -217,7 +344,7 @@ pub(crate) mod tests {
         })
         .await;
 
-        let client = remote_test_client(server.uri());
+        let client = remote_test_client(server.uri()).await;
         let checkpoint = client.fetch(42).await.unwrap();
 
         assert_eq!(42, checkpoint.summary.sequence_number)
@@ -242,7 +369,7 @@ pub(crate) mod tests {
         })
         .await;
 
-        let client = remote_test_client(server.uri());
+        let client = remote_test_client(server.uri()).await;
         let checkpoint = client.fetch(42).await.unwrap();
 
         assert_eq!(42, checkpoint.summary.sequence_number)
@@ -265,7 +392,7 @@ pub(crate) mod tests {
         })
         .await;
 
-        let client = remote_test_client(server.uri());
+        let client = remote_test_client(server.uri()).await;
         let checkpoint = client.fetch(42).await.unwrap();
 
         assert_eq!(42, checkpoint.summary.sequence_number)
@@ -303,6 +430,7 @@ pub(crate) mod tests {
             Duration::from_secs(2),
             test_ingestion_metrics(),
         )
+        .await
         .unwrap();
 
         // This should timeout once, then succeed on retry

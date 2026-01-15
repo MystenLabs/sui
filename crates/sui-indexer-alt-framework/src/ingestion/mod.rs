@@ -106,14 +106,14 @@ impl IngestionService {
     ///
     /// After initialization, subscribers can be added using [Self::subscribe], and the service is
     /// started with [Self::run], given a range of checkpoints to fetch (potentially unbounded).
-    pub fn new(
+    pub async fn new(
         args: ClientArgs,
         config: IngestionConfig,
         metrics_prefix: Option<&str>,
         registry: &Registry,
     ) -> Result<Self> {
         let metrics = IngestionMetrics::new(metrics_prefix, registry);
-        let ingestion_client = IngestionClient::new(args.ingestion, metrics.clone())?;
+        let ingestion_client = IngestionClient::new(args.ingestion, metrics.clone()).await?;
         let streaming_client = args
             .streaming
             .streaming_url
@@ -259,6 +259,7 @@ mod tests {
             None,
             &registry,
         )
+        .await
         .unwrap()
     }
 

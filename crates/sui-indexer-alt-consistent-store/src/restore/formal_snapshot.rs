@@ -147,6 +147,7 @@ impl FormalSnapshot {
         // Use the remote store to associate the epoch with a watermark pointing to its last
         // transaction.
         let client = RemoteIngestionClient::new(snapshot_args.remote_store_url)
+            .await
             .context("Failed to connect to remote checkpoint store")?;
 
         let end_of_epoch_checkpoints: Vec<_> = client
