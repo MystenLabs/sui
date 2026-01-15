@@ -11,7 +11,9 @@ use move_binary_format::{
     CompiledModule,
     errors::{Location, VMError, VMResult},
 };
-use move_command_line_common::files::verify_and_create_named_address_mapping;
+use move_command_line_common::{
+    files::verify_and_create_named_address_mapping, testing::InstaOptions,
+};
 use move_compiler::{PreCompiledProgramInfo, editions::Edition, shared::PackagePaths};
 use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
@@ -38,9 +40,12 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
+pub static SWITCH_TO_REGEX_REFERENCE_SAFETY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
 const STD_ADDR: AccountAddress = AccountAddress::ONE;
 
 struct SimpleVMTestAdapter {
+    switch_to_regex_reference_safety: bool,
     compiled_state: CompiledState,
     storage: InMemoryStorage,
     default_syntax: SyntaxChoice,
@@ -82,6 +87,8 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
             }
             None => (BTreeMap::new(), Edition::LEGACY),
         };
+        let switch_to_regex_reference_safety =
+            SWITCH_TO_REGEX_REFERENCE_SAFETY.get().copied().unwrap();
 
         let mut named_address_mapping = move_stdlib_named_addresses();
         for (name, addr) in additional_mapping {
@@ -94,6 +101,7 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
             named_address_mapping.insert(name, addr);
         }
         let mut adapter = Self {
+            switch_to_regex_reference_safety,
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -287,7 +295,7 @@ impl SimpleVMTestAdapter {
     }
 
     fn vm_config(&self) -> VMConfig {
-        VMConfig {
+        let mut vm_config = VMConfig {
             enable_invariant_violation_check_in_swap_loc: false,
             deprecate_global_storage_ops_during_deserialization: true,
             binary_config: move_binary_format::binary_config::BinaryConfig::legacy_with_flags(
@@ -295,7 +303,16 @@ impl SimpleVMTestAdapter {
                 /* deprecate_global_storage_ops */ true,
             ),
             ..VMConfig::default()
+        };
+        if self.switch_to_regex_reference_safety {
+            assert!(
+                !vm_config.verifier.switch_to_regex_reference_safety,
+                "switch_to_regex_reference_safety should be false by default. \
+                If this is no longer the case, the flag should be removed from tests"
+            );
+            vm_config.verifier.switch_to_regex_reference_safety = true;
         }
+        vm_config
     }
 }
 
@@ -349,10 +366,31 @@ static MOVE_STDLIB_COMPILED: LazyLock<Vec<CompiledModule>> = LazyLock::new(|| {
 
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    SWITCH_TO_REGEX_REFERENCE_SAFETY.set(false).unwrap();
     run_test_impl::<SimpleVMTestAdapter>(
         path,
         Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
         None,
+    )
+    .await
+}
+
+#[tokio::main]
+pub async fn run_test_with_regex_reference_safety(
+    path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    SWITCH_TO_REGEX_REFERENCE_SAFETY.set(true).unwrap();
+    let mut options = InstaOptions::new();
+    if path
+        .components()
+        .any(|c| c.as_os_str() == "reference_safety")
+    {
+        options.suffix("regex");
+    }
+    run_test_impl::<SimpleVMTestAdapter>(
+        path,
+        Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
+        Some(options),
     )
     .await
 }

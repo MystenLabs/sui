@@ -59,6 +59,7 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             sanity_check_with_regex_reference_safety: Some(2_200_000),
             deprecate_global_storage_ops: true,
             disable_entry_point_signature_check: true,
+            switch_to_regex_reference_safety: false,
         },
         MeterConfig::old_default(),
     )
