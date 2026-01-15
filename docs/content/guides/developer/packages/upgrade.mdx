@@ -4,7 +4,7 @@ description: Sui provides a method of upgrading your packages while still retain
 keywords: [ upgrading packages, upgrade considerations, how to upgrade a package, how to upgrade, update package, update, how to update ]
 ---
 
-Sui smart contracts are immutable package objects consisting of a collection of Move modules. Since packages are immutable, transactions can safely access their contents without full consensus (fastpath transactions). If packages were mutable, they would become [shared objects](/guides/developer/objects/object-ownership/shared.mdx#shared), which would require full consensus before completing a transaction.
+Sui smart contracts are immutable package objects consisting of a collection of Move modules. Since packages are immutable, transactions can safely access their contents without full consensus (fastpath transactions). If packages were mutable, they would become [shared objects](/guides/developer/objects/object-ownership/shared.mdx), which would require full consensus before completing a transaction.
 
 The inability to change packages, however, becomes a problem when considering the iterative nature of code development. Builders require the ability to update their code and pull changes from other developers while still being able to benefit from fastpath transactions. Fortunately, the Sui network provides a method for upgrading your packages while still retaining their immutable properties.
 
@@ -462,7 +462,7 @@ You can identify the different objects using the `Object.objectType` value in th
 
 Beginning with the Sui `v1.29.0` release, published addresses are automatically managed in the `Move.lock` file and you do not need to take further action.
 
-If the package was published or upgraded with a Sui version prior to `v1.29.0`, you can follow [the guide for adopting automated address management](/guides/developer/packages/automated-address-management#adopting-automated-address-management-for-published-packages). Alternatively, refer to the `Manual Addresses` tab for further steps.
+If the package was published or upgraded with a Sui version prior to `v1.29.0`, you can follow [the guide for adopting automated address management](/guides/developer/packages/automated-address-management). Alternatively, refer to the `Manual Addresses` tab for further steps.
 
 :::
 
@@ -472,7 +472,7 @@ After a while, you decide to upgrade your `sui_package` to include some requeste
 
 <TabItem value="manual-address-management" label="Manual Addresses">
 
-If your package has not [adopted automated address management](/guides/developer/packages/automated-address-management#adopting-automated-address-management-for-published-packages) you need to take the following manual steps.
+If your package has not [adopted automated address management](/guides/developer/packages/automated-address-management) you need to take the following manual steps.
 
 To make sure your other packages can use this package as a dependency, you must update the `Move.toml` manifest file for your package to include published information.
 
@@ -514,7 +514,7 @@ Run `sui client upgrade` command to upgrade your package. Pass the `UpgradeCap` 
 $ sui client upgrade --upgrade-capability <UPGRADE-CAP-ID>
 ```
 
-The console alerts you if the new package doesn't satisfy the  [requirements](#requirements), otherwise the compiler publishes the upgraded package to the network and returns its result.
+The console alerts you if the new package doesn't satisfy the requirements, otherwise the compiler publishes the upgraded package to the network and returns its result.
 
 <details>
 <summary>Output</summary>
@@ -680,7 +680,7 @@ The result provides a new ID for the upgraded package.
 
 Beginning with the Sui `v1.29.0` release, upgraded addresses are automatically managed in the `Move.lock` file and you do not need to take further action.
 
-If the package was published or upgraded with a Sui version prior to `v1.29.0`, you might follow [the guide for adopting automated address management](/guides/developer/packages/automated-address-management#adopting-automated-address-management-for-published-packages). Alternatively, refer to the `Manual Addresses` tab above for further steps.
+If the package was published or upgraded with a Sui version prior to `v1.29.0`, you might follow [the guide for adopting automated address management](/guides/developer/packages/automated-address-management). Alternatively, refer to the `Manual Addresses` tab above for further steps.
 
 :::
 

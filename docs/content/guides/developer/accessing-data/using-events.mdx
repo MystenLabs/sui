@@ -6,7 +6,7 @@ keywords: [ using events, notify events, notify assets, notify on-chain assets, 
 
 The Sui network stores countless objects on chain where Move code can perform actions using those objects. Tracking this activity is often desired, for example, to discover how many times a module mints an NFT or to tally the amount of SUI in transactions that a smart contract generates.
 
-To support activity monitoring, Move provides a structure to emit events on the Sui network. You can then leverage a custom indexer to process checkpoint data that includes events that have been emitted. See the [custom indexer](../advanced/custom-indexer.mdx) topic in the Advanced section to learn how to stream checkpoints and filter events continuously.
+To support activity monitoring, Move provides a structure to emit events on the Sui network. You can then leverage a custom indexer to process checkpoint data that includes events that have been emitted. See the [custom indexer](/guides/developer/accessing-data/custom-indexer.mdx) topic in the Advanced section to learn how to stream checkpoints and filter events continuously.
 
 If you don't want to run a custom indexer, you can poll the Sui network to query for emitted events instead. This approach typically includes a database to store the data retrieved from these calls. The [Poll events](#poll-events) section provides an example of using this method.
 
@@ -391,7 +391,7 @@ The [TypeScript SDK](https://sdk.mystenlabs.com/typedoc/modules/_mysten_sui.grap
 ## Monitoring events
 
 Firing events is not very useful in a vacuum. You also need the ability to respond to those events. There are 2 methods from which to choose when you need to monitor on-chain events:
-- Incorporate a [custom indexer](/guides/developer/advanced/custom-indexer.mdx) to take advantage of Sui's micro-data ingestion framework.
+- Incorporate a [custom indexer](/guides/developer/accessing-data/custom-indexer.mdx) to take advantage of Sui's micro-data ingestion framework.
 - Poll the Sui network on a schedule to query events.
 
 Using a custom indexer provides a near-real time monitoring of events, so is most useful when your project requires immediate reaction to the firing of events. Polling the network is most useful when the events you're monitoring don't fire often or the need to act on those events are not immediate. The following section provides a polling example.
@@ -428,6 +428,6 @@ Trustless Swap incorporates handlers to process each event type that triggers. F
 
 ## Related links
 
-<RelatedLink to="/guides/developer/advanced/custom-indexer.mdx" />
+<RelatedLink to="/guides/developer/accessing-data/custom-indexer.mdx" />
 <RelatedLink href="https://move-book.com/programmability/events.html" label="Events" desc="The Move Book shows how to emit events in Move." />
 <RelatedLink to="/guides/developer/app-examples/trustless-swap.mdx" />

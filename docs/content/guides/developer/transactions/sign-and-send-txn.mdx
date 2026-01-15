@@ -6,7 +6,7 @@ keywords: [ transactions, transaction inputs, smart contract functions, signatur
 
 Transactions in Sui represent calls to specific functionality (like calling a smart contract function) that execute on inputs to define the result of the transaction.
 
-Inputs can either be an object reference (either to an owned object, an immutable object, or a shared object) or an encoded value (for example, a vector of bytes used as an argument to a Move call). After a transaction is constructed, usually through using [programmable transaction blocks](/guides/developer/sui-101/building-ptb.mdx) (PTBs), the user signs the transaction and submits it to be executed on chain.
+Inputs can either be an object reference (either to an owned object, an immutable object, or a shared object) or an encoded value (for example, a vector of bytes used as an argument to a Move call). After a transaction is constructed, usually through using [programmable transaction blocks](/guides/developer/transactions/building-ptb.mdx) (PTBs), the user signs the transaction and submits it to be executed on chain.
 
 The signature is provided with the private key owned by the wallet, and its public key must be consistent with the transaction sender's Sui address.
 
@@ -20,7 +20,7 @@ With a signature and the transaction bytes, a transaction can be submitted to be
 
 The following high-level process describes the overall workflow for constructing, signing, and executing an on-chain transaction:
 
-- Construct the transaction data by creating a `Transaction` where multiple transactions are chained. See [Building Programmable Transaction Blocks](/guides/developer/sui-101/building-ptb.mdx) for more information.
+- Construct the transaction data by creating a `Transaction` where multiple transactions are chained. See [Building Programmable Transaction Blocks](/guides/developer/transactions/building-ptb.mdx) for more information.
 - The SDK's built-in gas estimation and coin selection picks the gas coin.
 - Sign the transaction to generate a [signature](/concepts/transactions/transaction-auth.mdx).
 - Submit the `Transaction` and its signature for on-chain execution.

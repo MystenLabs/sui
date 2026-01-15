@@ -4,7 +4,7 @@ description: Overview of the types of data access mechanisms available in Sui.
 keywords: [ data types, data access, data access interfaces, json RPC, custom indexers, indexers, gRPC, graphql RPC, general purpose indexer ]
 ---
 
-Access Sui network data, like [transactions](/concepts/transactions.mdx), [checkpoints](/concepts/cryptography/system/checkpoint-verification.mdx), [objects](/guides/developer/objects/object-model.mdx), and [events](/guides/developer/sui-101/using-events.mdx), through different interfaces to build applications, analyze network behavior, or audit network activity.
+Access Sui network data, like [transactions](/concepts/transactions.mdx), [checkpoints](/concepts/cryptography/system/checkpoint-verification.mdx), [objects](/guides/developer/objects/object-model.mdx), and [events](/guides/developer/accessing-data/using-events.mdx), through different interfaces to build applications, analyze network behavior, or audit network activity.
 
 This document outlines the interfaces that are currently available to access the Sui network data, along with an overview of how that is gradually evolving. Refer to the following definitions for release stages mentioned in this document:
 
@@ -24,7 +24,7 @@ Primary interfaces to access Sui data include:
 
 - [gRPC API](#grpc-api) replaces JSON-RPC on full nodes. If you already use JSON-RPC or are starting to utilize it as a dependency for your use case, JSON-RPC is **deprecated** and you need to migrate to gRPC or GraphQL RPC.
 
-- [General-purpose Indexer](#general-purpose-indexer) is a performant and scalable implementation of the [custom indexing framework](/concepts/data-access/custom-indexing-framework.mdx). It is currently available in beta. Use it to load network data at scale into a Postgres relational database.
+- [General-purpose Indexer](#general-purpose-indexer) is a performant and scalable implementation of the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework.mdx). It is currently available in beta. Use it to load network data at scale into a Postgres relational database.
 
 - [GraphQL RPC](#graphql-rpc) includes a lightweight GraphQL RPC service that you can use to read data from the General-purpose Indexer's relational database. It is currently available in beta. You can use it as an alternative to gRPC, including for migration from JSON-RPC for an existing application. Refer to the [high-level timeline for GraphQL and General-purpose Indexer availability](#graphql-rpc).
 
@@ -37,13 +37,12 @@ View the video below for a comparison of the latest and legacy Sui data stacks.
 
 ### gRPC API
 
-[gRPC API](/concepts/data-access/grpc-overview.mdx) replaces the JSON-RPC on full nodes. JSON-RPC is **deprecated** and gRPC API is generally available. Apart from the message and request format changes between the two, the gRPC API comes with a couple of key functional differences:
+[gRPC API](/concepts/data-access/graphql-rpc.mdx) replaces the JSON-RPC on full nodes. JSON-RPC is **deprecated** and gRPC API is generally available. Apart from the message and request format changes between the two, the gRPC API comes with a couple of key functional differences:
 
 - Use streaming or subscription API endpoints to consume real-time streaming data in your application without having to poll for those records. This support replaces the deprecated WebSocket support in JSON-RPC.
 
 - There is no implicit fallback on the [Sui Foundation-managed archival store for historical data](#archival-store-and-service). Full node operators, RPC providers, and data indexer operators are encouraged to run their own instance of a similar archival store that can be an explicit dependency to fetch historical data.
 
-See [When to use gRPC vs GraphQL with General-purpose Indexer](#when-to-use-grpc-vs-graphql-with-general-purpose-indexer) for a comparison with GraphQL RPC.
 
 **High-level timeline**
 
@@ -63,7 +62,7 @@ The gRPC and GraphQL RPC APIs have replaced JSON-RPC. View the video below to le
 
 ### General-purpose Indexer
 
-The [General-purpose Indexer](/concepts/data-access/graphql-indexer.mdx) includes a performant and scalable implementation of the [custom indexing framework](/concepts/data-access/custom-indexing-framework.mdx). The underlying framework uses the remote checkpoint store and full node RPCs to ingest data.
+The [General-purpose Indexer](/concepts/data-access/graphql-indexer.mdx) includes a performant and scalable implementation of the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework.mdx). The underlying framework uses the remote checkpoint store and full node RPCs to ingest data.
 
 General-purpose Indexer is declarative in the sense that you can seamlessly configure it to load different kinds of Sui network data into Postgres relational tables in parallel. This improves the performance of the data ingestion into the Postgres-compatible database. In addition, you can configure pruning for different tables in the Postgres-compatible database, allowing you to tune it for the desired combination of performance and cost characteristics.
 
@@ -79,7 +78,6 @@ The [GraphQL RPC Service](/concepts/data-access/graphql-indexer.mdx) is a perfor
 
 GraphQL RPC Service is a lightweight server component that allows you to combine data from multiple tables in the Postgres-compatible database using GraphQL's expressive querying system, which is appealing to frontend developers.
 
-See [When to use gRPC vs GraphQL with General-purpose Indexer](#when-to-use-grpc-vs-graphql-with-general-purpose-indexer) for a comparison with the gRPC API.
 
 :::info
 
@@ -100,17 +98,17 @@ The target times indicated are tentative and subject to updates based on project
 
 ### Archival Store and Service
 
-Long-term access to historical on-chain data is essential for developers, although full nodes enforce limited retention for scalability and performance. Use the [Archival Store and Service](/concepts/data-access/archival-store.mdx) to access historical on-chain data through a pluggable storage backend (like [Bigtable](https://cloud.google.com/bigtable)) and a [gRPC interface compatible with the `LedgerService` endpoint](/concepts/data-access/grpc-overview.mdx).
+Long-term access to historical on-chain data is essential for developers, although full nodes enforce limited retention for scalability and performance. Use the [Archival Store and Service](/guides/developer/accessing-data/archival-store.mdx) to access historical on-chain data through a pluggable storage backend (like [Bigtable](https://cloud.google.com/bigtable)) and a [gRPC interface compatible with the `LedgerService` endpoint](/concepts/data-access/graphql-rpc.mdx).
 
 This infrastructure serves as the historical backbone for GraphQL RPC, gRPC-based apps, and data platforms, providing efficient point-lookups for old transactions, checkpoints, and object states, even after full nodes have pruned them.
 
 You can query the archival store through gRPC-based archival service for missing data when using a full node and power GraphQL RPC queries that span unretained data. You can host the service yourself, use a provider, or rely on the public-good version (with rate limits).
 
-Learn more about [Archival Store and Service](/concepts/data-access/archival-store.mdx).
+Learn more about [Archival Store and Service](/guides/developer/accessing-data/archival-store.mdx).
 
 ## Custom indexer
 
-If you need more control over the types, granularity, and retention period of the data that you need in your application, or if you have specific query patterns that are not served with gRPC or GraphQL RPC, then you can set up your own [custom indexer](/guides/developer/advanced/custom-indexer/build.mdx) or reach out to a [data indexer operator](/references/awesome-sui.mdx#indexers--data-services) that might already have set one up.
+If you need more control over the types, granularity, and retention period of the data that you need in your application, or if you have specific query patterns that are not served with gRPC or GraphQL RPC, then you can set up your own [custom indexer](/guides/developer/accessing-data/custom-indexer/build.mdx) or reach out to a [data indexer operator](/references/awesome-sui.mdx#indexers--data-services) that might already have set one up.
 
 If you set up your own indexer, you are responsible for its ongoing maintenance and the related infrastructure and operational costs. You can reduce your costs by implementing a pruning strategy for the relational database by taking into account the retention needs of your application.
 
@@ -150,10 +148,10 @@ You can get real-time or historical data using JSON-RPC. Retention period for hi
 ## Related links
 
 <RelatedLink to="/concepts/data-access/graphql-rpc" />
-<RelatedLink to="/concepts/data-access/custom-indexing-framework" />
-<RelatedLink to="/concepts/data-access/pipeline-architecture" />
-<RelatedLink to="/concepts/data-access/archival-store" />
-<RelatedLink to="/guides/developer/advanced/custom-indexer" />
+<RelatedLink to="/guides/developer/accessing-data/custom-indexing-framework" />
+<RelatedLink to="/guides/developer/accessing-data/pipeline-architecture" />
+<RelatedLink to="/guides/developer/accessing-data/archival-store" />
+<RelatedLink to="/guides/developer/accessing-data/custom-indexer" />
 <RelatedLink to="/concepts/data-access/graphql-indexer" />
 <RelatedLink href="/references/fullnode-protocol" label="Sui Full Node gRPC" desc="Generated documentation from the Sui gRPC schema." />
 <RelatedLink href="/references/sui-api/sui-graphql/beta/reference" label="GraphQL Beta schema" desc="Schema documentation for GraphQL Beta." />
