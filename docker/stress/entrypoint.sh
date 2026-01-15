@@ -36,5 +36,6 @@ echo 'Setup Complete'
     --batch-payment "${BATCH_PAYMENT}" \
     --batch-payment-size "${BATCH_PAYMENT_SIZE}" \
     --adversarial "${STRESS_ADVERSARIAL}" \
+    --composite "${STRESS_COMPOSITE}" \
     --client-metric-host 0.0.0.0 \
     --num-workers 24

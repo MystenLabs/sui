@@ -10,7 +10,7 @@ mod to_lockfile;
 
 pub use builder::LockfileError;
 use derive_where::derive_where;
-pub use linkage::{LinkageError, LinkageTable};
+pub use linkage::LinkageError;
 pub use package_info::{NamedAddress, PackageInfo};
 use petgraph::visit::EdgeRef;
 pub use rename_from::RenameError;

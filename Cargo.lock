@@ -14423,6 +14423,7 @@ dependencies = [
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-object-store",
  "sui-rpc",
+ "sui-storage",
  "sui-types",
  "tokio",
  "tracing",
@@ -14631,7 +14632,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.2.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8c76dfd0261479523a6283049129981838676b0b#8c76dfd0261479523a6283049129981838676b0b"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=57b6cb6a17198d291637b64ef7cb8807796a3af9#57b6cb6a17198d291637b64ef7cb8807796a3af9"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -14751,6 +14752,7 @@ dependencies = [
  "base64 0.21.7",
  "bcs",
  "chrono",
+ "dashmap 5.5.3",
  "futures",
  "indexmap 2.8.0",
  "insta",
@@ -14964,10 +14966,11 @@ dependencies = [
  "anyhow",
  "bcs",
  "bin-version",
+ "move-package-alt",
  "serde",
  "serde_json",
  "sui-framework",
- "sui-move-build",
+ "sui-package-alt",
  "sui-protocol-config",
  "sui-types",
  "tokio",
@@ -15183,6 +15186,7 @@ dependencies = [
  "shared-crypto",
  "simulacrum",
  "sui-field-count",
+ "sui-framework",
  "sui-futures",
  "sui-indexer-alt",
  "sui-indexer-alt-consistent-api",
@@ -16544,8 +16548,8 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc"
-version = "0.2.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8c76dfd0261479523a6283049129981838676b0b#8c76dfd0261479523a6283049129981838676b0b"
+version = "0.2.1"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=57b6cb6a17198d291637b64ef7cb8807796a3af9#57b6cb6a17198d291637b64ef7cb8807796a3af9"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16729,8 +16733,8 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk-types"
-version = "0.2.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=8c76dfd0261479523a6283049129981838676b0b#8c76dfd0261479523a6283049129981838676b0b"
+version = "0.2.1"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=57b6cb6a17198d291637b64ef7cb8807796a3af9#57b6cb6a17198d291637b64ef7cb8807796a3af9"
 dependencies = [
  "base64ct",
  "bcs",

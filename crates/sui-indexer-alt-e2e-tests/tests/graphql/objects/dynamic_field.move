@@ -45,9 +45,11 @@
 { # Successfully fetch a dynamic field with primitive value
   object(address: "@{obj_1_0}") {
     address
-    dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+    ser: dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+    lit: dynamicField(name: { literal: "42u64" }) { ...DF }
     asMoveObject {
-      dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+      ser: dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+      lit: dynamicField(name: { literal: "42u64" }) { ...DF }
     }
   }
 }
@@ -69,9 +71,11 @@ fragment DF on DynamicField {
 { # Successfully fetch a dynamic field with object value (wrapped)
   object(address: "@{obj_1_0}") {
     address
-      dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+    ser: dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+    lit: dynamicField(name: { literal: "43u64" }) { ...DF }
     asMoveObject {
-      dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+      ser: dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+      lit: dynamicField(name: { literal: "43u64" }) { ...DF }
     }
   }
 }
@@ -93,9 +97,11 @@ fragment DF on DynamicField {
 { # Successfully fetch a dynamic object field
   object(address: "@{obj_2_0}") {
     address
-    dynamicObjectField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DOF }
+    ser: dynamicObjectField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DOF }
+    lit: dynamicObjectField(name: { literal: "44u64" }) { ...DOF }
     asMoveObject {
-      dynamicObjectField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DOF }
+      ser: dynamicObjectField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DOF }
+      lit: dynamicObjectField(name: { literal: "44u64" }) { ...DOF }
     }
   }
 }
@@ -201,14 +207,22 @@ fragment asDF on Object {
     nodes {
       version
 
-      df42: dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
-      df43: dynamicField(name: { type: "u64", bcs: "@{cursor_1}" }) { ...DF }
-      df45: dynamicField(name: { type: "u64", bcs: "@{cursor_2}" }) { ...DF }
+      ser42: dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+      ser43: dynamicField(name: { type: "u64", bcs: "@{cursor_1}" }) { ...DF }
+      ser45: dynamicField(name: { type: "u64", bcs: "@{cursor_2}" }) { ...DF }
+
+      lit42: dynamicField(name: { literal: "42u64" }) { ...DF }
+      lit43: dynamicField(name: { literal: "43u64" }) { ...DF }
+      lit45: dynamicField(name: { literal: "45u64" }) { ...DF }
 
       asMoveObject {
-        df42: dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
-        df43: dynamicField(name: { type: "u64", bcs: "@{cursor_1}" }) { ...DF }
-        df45: dynamicField(name: { type: "u64", bcs: "@{cursor_2}" }) { ...DF }
+        ser42: dynamicField(name: { type: "u64", bcs: "@{cursor_0}" }) { ...DF }
+        ser43: dynamicField(name: { type: "u64", bcs: "@{cursor_1}" }) { ...DF }
+        ser45: dynamicField(name: { type: "u64", bcs: "@{cursor_2}" }) { ...DF }
+
+        lit42: dynamicField(name: { literal: "42u64" }) { ...DF }
+        lit43: dynamicField(name: { literal: "43u64" }) { ...DF }
+        lit45: dynamicField(name: { literal: "45u64" }) { ...DF }
       }
     }
   }

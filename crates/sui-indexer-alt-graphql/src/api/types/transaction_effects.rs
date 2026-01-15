@@ -267,6 +267,51 @@ impl EffectsContents {
         )
     }
 
+    /// The balance changes as a JSON array, matching the gRPC proto format.
+    async fn balance_changes_json(&self, ctx: &Context<'_>) -> Option<Result<Json, RpcError>> {
+        let content = self.contents.as_ref()?;
+
+        Some(
+            async {
+                // First try to get balance changes from execution context
+                if let Some(grpc_balance_changes) = content.balance_changes() {
+                    let json_value = serde_json::to_value(grpc_balance_changes)
+                        .context("Failed to serialize balance changes to JSON")?;
+                    return json_value.try_into();
+                }
+
+                // Fall back to loading from database
+                let transaction_digest = content.digest()?;
+                let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+                let key = TxBalanceChangeKey(transaction_digest);
+
+                let Some(stored_balance_changes) = pg_loader
+                    .load_one(key)
+                    .await
+                    .context("Failed to load balance changes")?
+                else {
+                    // No balance changes found, return empty array
+                    return serde_json::json!([]).try_into();
+                };
+
+                // Deserialize and convert to gRPC format
+                let balance_changes: Vec<StoredBalanceChange> =
+                    bcs::from_bytes(&stored_balance_changes.balance_changes)
+                        .context("Failed to deserialize balance changes")?;
+
+                let grpc_balance_changes: Vec<_> = balance_changes
+                    .into_iter()
+                    .map(BalanceChange::stored_to_grpc)
+                    .collect();
+
+                let json_value = serde_json::to_value(&grpc_balance_changes)
+                    .context("Failed to serialize balance changes to JSON")?;
+                json_value.try_into()
+            }
+            .await,
+        )
+    }
+
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
     async fn effects_bcs(&self) -> Option<Result<Base64, RpcError>> {
         let content = self.contents.as_ref()?;

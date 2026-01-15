@@ -22,13 +22,33 @@ pub fn transaction<Mode: ExecutionMode>(
     meter: &mut TranslationMeter<'_, '_>,
     env: &Env,
     tx_context: &TxContext,
+    // which inputs are withdrawals that need to be converted to coins, must
+    // be the same length as the inputs
+    withdrawal_compatibility_inputs: Option<Vec<bool>>,
     pt: P::ProgrammableTransaction,
 ) -> Result<L::Transaction, ExecutionError> {
     metering::pre_translation::meter(meter, &pt)?;
     let P::ProgrammableTransaction { inputs, commands } = pt;
-    let inputs = inputs
+    // withdrawal_compatibility_inputs specified ==> the protocol config flag is set
+    assert_invariant!(
+        withdrawal_compatibility_inputs.is_none()
+            || env
+                .protocol_config
+                .convert_withdrawal_compatibility_ptb_arguments(),
+        "if withdrawal compatibility must be specified, then the flag is set in the protocol config"
+    );
+    let withdrawal_compatibility_inputs =
+        withdrawal_compatibility_inputs.unwrap_or_else(|| vec![false; inputs.len()]);
+    assert_invariant!(
+        inputs.len() == withdrawal_compatibility_inputs.len(),
+        "withdrawal compatibility inputs must be the same length as the inputs"
+    );
+    let inputs = withdrawal_compatibility_inputs
         .into_iter()
-        .map(|arg| input::<Mode>(env, tx_context, arg))
+        .zip(inputs)
+        .map(|(is_withdrawal_compatibility_input, arg)| {
+            input::<Mode>(env, tx_context, is_withdrawal_compatibility_input, arg)
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let commands = commands
         .into_iter()
@@ -43,8 +63,15 @@ pub fn transaction<Mode: ExecutionMode>(
 fn input<Mode: ExecutionMode>(
     env: &Env,
     tx_context: &TxContext,
+    // True iff this is a withdrawal that needs to be converted to a coin
+    is_withdrawal_compatibility_input: bool,
     arg: CallArg,
 ) -> Result<(L::InputArg, L::InputType), ExecutionError> {
+    // is_withdrawal_compatibility_input ==> FundsWithdrawal
+    assert_invariant!(
+        !is_withdrawal_compatibility_input || matches!(arg, CallArg::FundsWithdrawal(_)),
+        "withdrawal compatibility inputs must be FundsWithdrawal"
+    );
     Ok(match arg {
         CallArg::Pure(bytes) => (L::InputArg::Pure(bytes), L::InputType::Bytes),
         CallArg::Object(ObjectArg::Receiving(oref)) => {
@@ -108,6 +135,10 @@ fn input<Mode: ExecutionMode>(
             )
         }
         CallArg::FundsWithdrawal(f) => {
+            assert_invariant!(
+                env.protocol_config.enable_accumulators(),
+                "Withdrawals should be rejected at signing if accumulators are not enabled"
+            );
             let FundsWithdrawalArg {
                 reservation,
                 type_arg,
@@ -139,6 +170,7 @@ fn input<Mode: ExecutionMode>(
             };
             (
                 L::InputArg::FundsWithdrawal(L::FundsWithdrawalArg {
+                    from_compatibility_object: is_withdrawal_compatibility_input,
                     amount,
                     ty: ty.clone(),
                     owner,

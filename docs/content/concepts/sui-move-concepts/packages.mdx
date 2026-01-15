@@ -19,9 +19,12 @@ See [Upgrading packages](/guides/developer/packages/upgrade.mdx) for details on 
 
 ## Using the Sui Client CLI
 
-The [Sui Client CLI](/references/cli/client.mdx) provides an approachable way to upgrade packages. If the CLI's active address owns the `UpgradeCap` for a package, you can use the `upgrade` command to perform an upgrade.
+The [Sui Client CLI](/references/cli/client.mdx) provides an approachable way
+to publish and upgrade packages. See [the package management
+guide](/guides/developer/packages/move-package-management.mdx) for information
+on creating and working with Move packages.
 
-This workflow is convenient when you're starting development or iterating quickly. However, protecting package upgrades with a single private key poses security risks:
+If the CLI's active address owns the `UpgradeCap` for a package, you can use the `upgrade` command to perform an upgrade. This workflow is convenient when you're starting development or iterating quickly. However, protecting package upgrades with a single private key poses security risks:
 
 <ImportContent source="upgrade-single-key-risk.mdx" mode="snippet" />
 

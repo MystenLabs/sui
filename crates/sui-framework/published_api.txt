@@ -1531,6 +1531,12 @@ root_id
 root_id_mut
 	public(package) fun
 	0x2::accumulator
+accumulator_u128_exists
+	public(package) fun
+	0x2::accumulator
+accumulator_u128_read
+	public(package) fun
+	0x2::accumulator
 create_u128
 	public(package) fun
 	0x2::accumulator
@@ -1556,6 +1562,9 @@ root_add_accumulator
 	public(package) fun
 	0x2::accumulator
 root_borrow_accumulator_mut
+	public(package) fun
+	0x2::accumulator
+root_borrow_accumulator
 	public(package) fun
 	0x2::accumulator
 root_remove_accumulator
@@ -1988,6 +1997,9 @@ redeem_funds
 	public fun
 	0x2::balance
 withdraw_funds_from_object
+	public fun
+	0x2::balance
+settled_funds_value
 	public fun
 	0x2::balance
 create_supply_internal

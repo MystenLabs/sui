@@ -193,6 +193,18 @@ impl ServiceConfig {
         Ok(Some(limits.max_display_field_depth))
     }
 
+    /// Maximum number of components in a Display v2 format string.
+    async fn max_display_format_nodes(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_display_format_nodes))
+    }
+
+    /// Maximum number of objects that can be loaded while evaluating a display.
+    async fn max_display_object_loads(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_display_object_loads))
+    }
+
     /// Maximum output size of a display output.
     async fn max_display_output_size(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
         let limits: &Limits = ctx.data()?;

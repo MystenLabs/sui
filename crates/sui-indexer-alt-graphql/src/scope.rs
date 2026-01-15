@@ -29,6 +29,25 @@ use crate::task::watermark::Watermarks;
 /// None values indicate tombstones for deleted/wrapped objects.
 type ExecutionObjectMap = Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>>;
 
+/// Root object bound for consistent dynamic field reads.
+///
+/// This enables consistent dynamic field reads in the case of chained dynamic object fields,
+/// e.g., `Parent -> DOF1 -> DOF2`. In such cases, the object versions may end up like
+/// `Parent >= DOF1, DOF2` but `DOF1 < DOF2`.
+///
+/// Lamport timestamps of objects are updated for all top-level mutable objects provided as
+/// inputs to a transaction as well as any mutated dynamic child objects. However, any dynamic
+/// child objects that were loaded but not actually mutated don't end up having their versions
+/// updated. So, database queries for nested dynamic fields must be bounded by the version of
+/// the root object, and not the immediate parent.
+///
+/// The bound can be expressed either in terms of a specific object version or a checkpoint.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum RootBound {
+    Version(u64),
+    Checkpoint(u64),
+}
+
 /// A way to share information between fields in a request, similar to [Context].
 ///
 /// Unlike [Context], [Scope] is not referenced by every field resolver. Instead, fields must
@@ -42,18 +61,10 @@ pub(crate) struct Scope {
     /// None indicates execution context where we're viewing fresh transaction effects not yet indexed.
     checkpoint_viewed_at: Option<u64>,
 
-    /// Root parent object version for dynamic fields.
+    /// Root object bound for dynamic fields.
     ///
-    /// This enables consistent dynamic field reads in the case of chained dynamic object fields,
-    /// e.g., `Parent -> DOF1 -> DOF2`. In such cases, the object versions may end up like
-    /// `Parent >= DOF1, DOF2` but `DOF1 < DOF2`.
-    ///
-    /// Lamport timestamps of objects are updated for all top-level mutable objects provided as
-    /// inputs to a transaction as well as any mutated dynamic child objects. However, any dynamic
-    /// child objects that were loaded but not actually mutated don't end up having their versions
-    /// updated. So, database queries for nested dynamic fields must be bounded by the version of
-    /// the root object, and not the immediate parent.
-    root_version: Option<u64>,
+    /// This can be expressed either in terms of a specific object version or a checkpoint.
+    root_bound: Option<RootBound>,
 
     /// Cache of objects available in execution context (freshly executed transaction).
     /// Maps (ObjectID, SequenceNumber) to optional object data.
@@ -78,42 +89,83 @@ impl Scope {
 
         Ok(Self {
             checkpoint_viewed_at: Some(watermark.high_watermark().checkpoint()),
-            root_version: None,
+            root_bound: None,
             execution_objects: Arc::new(BTreeMap::new()),
             package_store: package_store.clone(),
             resolver_limits: limits.package_resolver(),
         })
     }
 
-    /// Create a nested scope pinned to a past checkpoint. Returns `None` if the checkpoint is in
+    /// Create a scope instance for tests with no package data.
+    #[cfg(test)]
+    pub(crate) fn for_tests() -> Self {
+        #[derive(Clone)]
+        struct EmptyPackageStore;
+
+        #[async_trait]
+        impl PackageStore for EmptyPackageStore {
+            async fn fetch(
+                &self,
+                id: AccountAddress,
+            ) -> Result<Arc<Package>, PackageResolverError> {
+                Err(PackageResolverError::PackageNotFound(id))
+            }
+        }
+
+        Self {
+            checkpoint_viewed_at: Some(0),
+            root_bound: None,
+            execution_objects: Arc::new(BTreeMap::new()),
+            package_store: Arc::new(EmptyPackageStore),
+            resolver_limits: Limits::default().package_resolver(),
+        }
+    }
+
+    /// Create a nested scope pinned to a checkpoint. Returns `None` if the checkpoint is in
     /// the future, or if the current scope is in execution context (no checkpoint is set).
-    pub(crate) fn with_checkpoint_viewed_at(&self, checkpoint_viewed_at: u64) -> Option<Self> {
-        let current_cp = self.checkpoint_viewed_at?;
-        (checkpoint_viewed_at <= current_cp).then(|| Self {
+    pub(crate) fn with_checkpoint_viewed_at(
+        &self,
+        ctx: &Context<'_>,
+        checkpoint_viewed_at: u64,
+    ) -> Option<Self> {
+        let watermark: &Arc<Watermarks> = ctx.data().ok()?;
+        let cp_hi_inclusive = watermark.high_watermark().checkpoint();
+        (checkpoint_viewed_at <= cp_hi_inclusive).then(|| Self {
             checkpoint_viewed_at: Some(checkpoint_viewed_at),
-            root_version: self.root_version,
+            root_bound: self.root_bound,
             execution_objects: Arc::clone(&self.execution_objects),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
     }
 
-    /// Create a nested scope with a root version set.
+    /// Create a nested scope with a root version bound.
     pub(crate) fn with_root_version(&self, root_version: u64) -> Self {
         Self {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
-            root_version: Some(root_version),
+            root_bound: Some(RootBound::Version(root_version)),
             execution_objects: Arc::clone(&self.execution_objects),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
     }
 
-    /// Reset the root version.
-    pub(crate) fn without_root_version(&self) -> Self {
+    /// Create a nested scope with a root checkpoint bound.
+    pub(crate) fn with_root_checkpoint(&self, root_checkpoint: u64) -> Self {
         Self {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
-            root_version: None,
+            root_bound: Some(RootBound::Checkpoint(root_checkpoint)),
+            execution_objects: Arc::clone(&self.execution_objects),
+            package_store: self.package_store.clone(),
+            resolver_limits: self.resolver_limits.clone(),
+        }
+    }
+
+    /// Reset the root bound.
+    pub(crate) fn without_root_bound(&self) -> Self {
+        Self {
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
+            root_bound: None,
             execution_objects: Arc::clone(&self.execution_objects),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
@@ -130,8 +182,23 @@ impl Scope {
     }
 
     /// Root parent object version for dynamic fields.
+    /// Returns `Some(v)` only if the root bound is version-based.
     pub(crate) fn root_version(&self) -> Option<u64> {
-        self.root_version
+        if let Some(RootBound::Version(v)) = self.root_bound {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    /// Root checkpoint bound for dynamic fields.
+    /// Returns the checkpoint bound if set, otherwise falls back to `checkpoint_viewed_at`.
+    pub(crate) fn root_checkpoint(&self) -> Option<u64> {
+        if let Some(RootBound::Checkpoint(cp)) = self.root_bound {
+            Some(cp)
+        } else {
+            self.checkpoint_viewed_at
+        }
     }
 
     /// Get the exclusive checkpoint bound, if any.
@@ -175,7 +242,7 @@ impl Scope {
 
         Ok(Self {
             checkpoint_viewed_at: None,
-            root_version: self.root_version,
+            root_bound: self.root_bound,
             execution_objects,
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
@@ -243,7 +310,7 @@ impl Debug for Scope {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Scope")
             .field("checkpoint_viewed_at", &self.checkpoint_viewed_at)
-            .field("root_version", &self.root_version)
+            .field("root_bound", &self.root_bound)
             .field("resolver_limits", &self.resolver_limits)
             .finish()
     }

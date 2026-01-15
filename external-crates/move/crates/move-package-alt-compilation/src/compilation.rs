@@ -32,9 +32,7 @@ use move_compiler::{
 };
 use move_docgen::DocgenFlags;
 use move_package_alt::{
-    flavor::MoveFlavor,
-    graph::PackageInfo,
-    package::RootPackage,
+    MoveFlavor, PackageInfo, RootPackage,
     schema::{Environment, PackageID},
 };
 use move_symbol_pool::Symbol;

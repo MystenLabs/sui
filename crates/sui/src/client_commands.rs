@@ -32,7 +32,7 @@ use move_bytecode_verifier_meter::Scope;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
 };
-use move_package_alt::{package::package_loader::PackageLoader, schema::ModeName};
+use move_package_alt::{PackageLoader, schema::ModeName};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
@@ -95,7 +95,7 @@ use tabled::{
 };
 
 use move_package_alt::{
-    package::RootPackage,
+    RootPackage,
     schema::{OriginalID, Publication, PublishAddresses, PublishedID},
 };
 use move_symbol_pool::Symbol;

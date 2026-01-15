@@ -4,19 +4,27 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use anyhow::Context as _;
+use anyhow::anyhow;
 use async_graphql::Context;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
-use async_graphql::indexmap::IndexMap;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::annotated_extractor as AE;
+use move_core_types::annotated_value as A;
+use move_core_types::annotated_visitor as AV;
+use move_core_types::language_storage::StructTag;
+use move_core_types::u256::U256;
+use move_core_types::visitor_default;
+use sui_types::SUI_SYSTEM_ADDRESS;
+use sui_types::TypeTag;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
-use sui_types::collection_types::Entry;
-use sui_types::collection_types::VecMap;
-use sui_types::collection_types::VecSet;
-use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorSetV1;
+use sui_types::sui_system_state::VALIDATOR_MODULE_NAME;
+use sui_types::sui_system_state::VALIDATOR_STRUCT_NAME;
 
-use crate::api::scalars::big_int::BigInt;
 use crate::api::scalars::cursor::JsonCursor;
-use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::types::move_type::MoveType;
+use crate::api::types::move_value::MoveValue;
 use crate::api::types::validator::Validator;
 use crate::error::RpcError;
 use crate::pagination::Page;
@@ -26,22 +34,26 @@ use crate::scope::Scope;
 pub(crate) type CValidator = JsonCursor<usize>;
 
 /// Representation of `0x3::validator_set::ValidatorSet`.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct ValidatorSet {
     pub(crate) contents: Arc<ValidatorSetContents>,
 }
 
-#[derive(Clone, Debug)]
 pub(crate) struct ValidatorSetContents {
-    pub(crate) scope: Scope,
-    pub(crate) native: ValidatorSetV1,
-    pub(crate) report_records: IndexMap<NativeSuiAddress, Vec<usize>>,
+    pub(crate) value: MoveValue,
+    pub(crate) active_validators: Vec<ValidatorContents>,
+}
+
+pub(crate) struct ValidatorContents {
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) reports: Vec<usize>,
+    pub(crate) at_risk: u64,
 }
 
 /// Representation of `0x3::validator_set::ValidatorSet`.
 #[Object]
 impl ValidatorSet {
-    /// The current list of active validators.
+    /// The validators currently in the committee for this validator set.
     async fn active_validators(
         &self,
         ctx: &Context<'_>,
@@ -56,7 +68,7 @@ impl ValidatorSet {
                 let limits = pagination.limits("ValidatorSet", "activeValidators");
                 let page = Page::from_params(limits, first, after, last, before)?;
 
-                page.paginate_indices(self.contents.native.active_validators.len(), |idx| {
+                page.paginate_indices(self.contents.active_validators.len(), |idx| {
                     Ok(Validator {
                         contents: Arc::clone(&self.contents),
                         idx,
@@ -67,98 +79,230 @@ impl ValidatorSet {
         )
     }
 
-    /// Object ID of the `Table` storing the inactive staking pools.
-    async fn inactive_pools_id(&self) -> Option<SuiAddress> {
-        Some(self.contents.native.inactive_validators.id.into())
-    }
-
-    /// Size of the inactive pools `Table`.
-    async fn inactive_pools_size(&self) -> Option<u64> {
-        Some(self.contents.native.inactive_validators.size)
-    }
-
-    // TODO: instead of returning the id and size of the table, potentially return the table itself, paginated.
-    /// Object ID of the wrapped object `TableVec` storing the pending active validators.
-    async fn pending_active_validators_id(&self) -> Option<SuiAddress> {
-        Some(
-            self.contents
-                .native
-                .pending_active_validators
-                .contents
-                .id
-                .into(),
-        )
-    }
-
-    /// Size of the pending active validators table.
-    async fn pending_active_validators_size(&self) -> Option<u64> {
-        Some(self.contents.native.pending_active_validators.contents.size)
-    }
-
-    /// Validators that are pending removal from the active validator set, expressed as indices in to `activeValidators`.
-    async fn pending_removals(&self) -> Option<Vec<u64>> {
-        Some(self.contents.native.pending_removals.clone())
-    }
-
-    /// Object ID of the `Table` storing the mapping from staking pool ids to the addresses of the corresponding validators.
-    /// This is needed because a validator's address can potentially change but the object ID of its pool will not.
-    async fn staking_pool_mappings_id(&self) -> Option<SuiAddress> {
-        Some(self.contents.native.staking_pool_mappings.id.into())
-    }
-
-    /// Size of the stake pool mappings `Table`.
-    async fn staking_pool_mappings_size(&self) -> Option<u64> {
-        Some(self.contents.native.staking_pool_mappings.size)
-    }
-
-    /// Total amount of stake for all active validators at the beginning of the epoch.
-    async fn total_stake(&self) -> Option<BigInt> {
-        Some(self.contents.native.total_stake.into())
-    }
-
-    /// Object ID of the `Table` storing the validator candidates.
-    async fn validator_candidates_id(&self) -> Option<SuiAddress> {
-        Some(self.contents.native.validator_candidates.id.into())
-    }
-
-    /// Size of the validator candidates `Table`.
-    async fn validator_candidates_size(&self) -> Option<u64> {
-        Some(self.contents.native.validator_candidates.size)
+    /// On-chain representation of the underlying `0x3::validator_set::ValidatorSet` value.
+    async fn contents(&self) -> Option<&MoveValue> {
+        Some(&self.contents.value)
     }
 }
 
 impl ValidatorSet {
-    pub(crate) fn from_validator_set_v1(
+    /// Construct a `ValidatorSet` by deserializing the relevant parts from a system state inner
+    /// object.
+    pub(crate) fn from_system_state(
         scope: Scope,
-        native: ValidatorSetV1,
-        report_records: VecMap<NativeSuiAddress, VecSet<NativeSuiAddress>>,
-    ) -> Self {
-        let address_to_index: BTreeMap<_, _> = native
-            .active_validators
+        bytes: &[u8],
+        layout: &A::MoveTypeLayout,
+    ) -> Result<Self, RpcError> {
+        Ok(Self {
+            contents: Arc::new(ValidatorSetContents::deserialize(scope, bytes, layout)?),
+        })
+    }
+}
+
+impl ValidatorSetContents {
+    /// Extract the parts of a system state inner object that are relevant to its validator set:
+    ///
+    /// - `validators: ValidatorSet` raw bytes and layout,
+    /// - `validators.active_validators: vector<Validator>` as individual raw bytes,
+    /// - `validator_report_records: map<address, vector<address>>`.
+    fn deserialize(
+        scope: Scope,
+        bytes: &[u8],
+        layout: &A::MoveTypeLayout,
+    ) -> Result<Self, RpcError> {
+        type ReportRecords = BTreeMap<NativeSuiAddress, Vec<NativeSuiAddress>>;
+        type AtRiskValidators = BTreeMap<NativeSuiAddress, u64>;
+
+        #[derive(Default)]
+        struct Contents<'b, 'l> {
+            native: Option<(&'b [u8], &'l A::MoveTypeLayout)>,
+            active_validators: Vec<(NativeSuiAddress, &'b [u8])>,
+            report_records: Option<ReportRecords>,
+            at_risk_validators: Option<AtRiskValidators>,
+        }
+
+        // Visitor to traverse a system state inner value looking for information related to the
+        // validator set.
+        enum Traversal<'c, 'b, 'l> {
+            SystemState(&'c mut Contents<'b, 'l>),
+            ValidatorSet(&'c mut Contents<'b, 'l>),
+            ActiveValidators(&'c mut Contents<'b, 'l>),
+        }
+
+        // Simple visitor to extract the value of an `address`.
+        struct AddressVisitor;
+
+        #[derive(thiserror::Error, Debug)]
+        enum Error {
+            #[error(transparent)]
+            Bcs(#[from] bcs::Error),
+
+            #[error("Expected to find a 0x3::validator::Validator")]
+            NotAValidator,
+
+            #[error(transparent)]
+            Visitor(#[from] AV::Error),
+        }
+
+        impl<'b, 'l> AV::Traversal<'b, 'l> for Traversal<'_, 'b, 'l> {
+            type Error = Error;
+
+            fn traverse_struct(
+                &mut self,
+                driver: &mut AV::StructDriver<'_, 'b, 'l>,
+            ) -> Result<(), Error> {
+                // When traversing a struct while under `ActiveValidators`, we are visiting a
+                // particular validator.
+                if let Traversal::ActiveValidators(c) = self {
+                    if !driver.struct_layout().is_type(&ValidatorContents::tag()) {
+                        return Err(Error::NotAValidator);
+                    }
+
+                    let lo = driver.position();
+                    while driver.skip_field()?.is_some() {}
+                    let hi = driver.position();
+
+                    let path = vec![
+                        AE::Element::Field("metadata"),
+                        AE::Element::Field("sui_address"),
+                        AE::Element::Type(&TypeTag::Address),
+                    ];
+
+                    let bytes = &driver.bytes()[lo..hi];
+                    let layout = driver.struct_layout();
+                    if let Some(address) =
+                        AE::Extractor::deserialize_struct(bytes, layout, &mut AddressVisitor, path)?
+                            .flatten()
+                    {
+                        c.active_validators.push((address, bytes));
+                    }
+
+                    return Ok(());
+                }
+
+                while let Some(field) = driver.peek_field() {
+                    let name = field.name.as_str();
+                    match self {
+                        Traversal::SystemState(c) if name == "validators" => {
+                            let lo = driver.position();
+                            driver.next_field(&mut Traversal::ValidatorSet(c))?;
+                            let hi = driver.position();
+
+                            let bytes = &driver.bytes()[lo..hi];
+                            c.native = Some((bytes, &field.layout));
+                        }
+
+                        Traversal::SystemState(c) if name == "validator_report_records" => {
+                            let lo = driver.position();
+                            driver.skip_field()?;
+                            let hi = driver.position();
+
+                            let bytes = &driver.bytes()[lo..hi];
+                            let records: ReportRecords = bcs::from_bytes(bytes)?;
+                            c.report_records = Some(records);
+                        }
+
+                        Traversal::ValidatorSet(c) if name == "active_validators" => {
+                            let _ = driver.next_field(&mut Traversal::ActiveValidators(c))?;
+                        }
+
+                        Traversal::ValidatorSet(c) if name == "at_risk_validators" => {
+                            let lo = driver.position();
+                            driver.skip_field()?;
+                            let hi = driver.position();
+
+                            let bytes = &driver.bytes()[lo..hi];
+                            let at_risk: AtRiskValidators = bcs::from_bytes(bytes)?;
+                            c.at_risk_validators = Some(at_risk);
+                        }
+
+                        _ => {
+                            let _ = driver.skip_field()?;
+                        }
+                    }
+                }
+
+                Ok(())
+            }
+        }
+
+        impl AV::Visitor<'_, '_> for AddressVisitor {
+            type Value = Option<NativeSuiAddress>;
+            type Error = Error;
+
+            visitor_default! { <'_, '_> u8, u16, u32, u64, u128, u256 = Ok(None) }
+            visitor_default! { <'_, '_> bool, signer, vector, struct, variant = Ok(None) }
+
+            fn visit_address(
+                &mut self,
+                _: &AV::ValueDriver<'_, '_, '_>,
+                value: AccountAddress,
+            ) -> Result<Self::Value, Error> {
+                Ok(Some(value.into()))
+            }
+        }
+
+        let mut contents = Contents::default();
+        let mut traversal = Traversal::SystemState(&mut contents);
+        A::MoveValue::visit_deserialize(bytes, layout, &mut traversal)
+            .context("Failed to deserialize ValidatorSet")?;
+
+        let Contents {
+            native: Some((bytes, layout)),
+            active_validators,
+            report_records: Some(mut reports),
+            at_risk_validators: Some(mut at_risk),
+        } = contents
+        else {
+            return Err(anyhow!("ValidatorSet deserialization incomplete").into());
+        };
+
+        let address_to_index: BTreeMap<_, _> = active_validators
             .iter()
             .enumerate()
-            .map(|(i, v)| (v.metadata.sui_address, i))
+            .map(|(i, (addr, _))| (*addr, i))
             .collect();
-        let report_records = report_records
-            .contents
+
+        let active_validators = active_validators
             .into_iter()
-            .map(|Entry { key, value }| {
-                (
-                    key,
-                    value
-                        .contents
-                        .into_iter()
-                        .map(|v| address_to_index[&v])
-                        .collect(),
-                )
+            .map(|(addr, bytes)| {
+                let reports = reports
+                    .remove(&addr)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|v| address_to_index.get(&v).copied())
+                    .collect();
+
+                ValidatorContents {
+                    bytes: bytes.to_owned(),
+                    reports,
+                    at_risk: at_risk.remove(&addr).unwrap_or_default(),
+                }
             })
             .collect();
-        Self {
-            contents: Arc::new(ValidatorSetContents {
-                scope,
-                native,
-                report_records,
-            }),
+
+        Ok(Self {
+            value: MoveValue {
+                type_: MoveType::from_layout(layout.clone(), scope),
+                native: bytes.to_owned(),
+            },
+
+            active_validators,
+        })
+    }
+
+    pub(crate) fn scope(&self) -> &Scope {
+        &self.value.type_.scope
+    }
+}
+
+impl ValidatorContents {
+    pub(crate) fn tag() -> StructTag {
+        StructTag {
+            address: SUI_SYSTEM_ADDRESS,
+            module: VALIDATOR_MODULE_NAME.to_owned(),
+            name: VALIDATOR_STRUCT_NAME.to_owned(),
+            type_params: vec![],
         }
     }
 }

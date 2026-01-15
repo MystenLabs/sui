@@ -4,4 +4,4 @@ expression: "strands(r#\"{b | x}\"#)"
 ---
 { b
 | x
-}
+}@0

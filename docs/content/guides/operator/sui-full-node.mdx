@@ -6,7 +6,7 @@ keywords: [ fullnode configuration, full node configuration, sui full nodes, sta
 
 :::info
 
-These instructions are for advanced users. If you just need a local development environment, you should instead follow the instructions in [Create a Local Sui Network](/guides/developer/sui-101/local-network.mdx) to create a local full node, validators, and faucet.
+These instructions are for advanced users. If you just need a local development environment, you should instead follow the instructions in [Create a Local Sui Network](/guides/developer/getting-started/local-network.mdx) to create a local full node, validators, and faucet.
 
 :::
 
@@ -84,7 +84,7 @@ cmake
 
 You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. Refer to [Sui's data serving roadmap](/concepts/data-access/data-serving.mdx#grpc-api) for guidance on the overall transition plan.
 
-To serve the [gRPC API](/concepts/data-access/grpc-overview.mdx), you must enable it on your full node by indexing gRPC-specific data. During the initial gRPC indexing phase, your full node may not be able to handle other traffic, including the [**deprecated** JSON-RPC](/references/sui-api.mdx) requests. Plan your rollout carefully (such as using the `rolling upgrade` mechanism), and communicate any downtime to your customers and partners in advance. The time required to sync gRPC indexes depends on your full node's hardware and software configuration.
+To serve the [gRPC API](/concepts/data-access/graphql-rpc.mdx), you must enable it on your full node by indexing gRPC-specific data. During the initial gRPC indexing phase, your full node may not be able to handle other traffic, including the [**deprecated** JSON-RPC](/references/sui-api.mdx) requests. Plan your rollout carefully (such as using the `rolling upgrade` mechanism), and communicate any downtime to your customers and partners in advance. The time required to sync gRPC indexes depends on your full node's hardware and software configuration.
 
 Enable gRPC indexing on your full node by adding the following entry to the `fullnode.yaml` configuration:
 

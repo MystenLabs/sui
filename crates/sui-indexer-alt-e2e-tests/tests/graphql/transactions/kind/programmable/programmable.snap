@@ -42,12 +42,12 @@ Response: {
               "__typename": "SharedInput"
             },
             {
-              "__typename": "Pure",
-              "bytes": "KgAAAAAAAAA="
+              "__typename": "MoveValue",
+              "json": "42"
             },
             {
-              "__typename": "Pure",
-              "bytes": "p7AycDh4qnTDEmk1eJ/R1NfhEdWRGwkkfWljBhwxK1o="
+              "__typename": "MoveValue",
+              "json": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
             }
           ]
         },
@@ -109,8 +109,8 @@ Response: {
               "__typename": "SharedInput"
             },
             {
-              "__typename": "Pure",
-              "bytes": "KgAAAAAAAAA="
+              "__typename": "MoveValue",
+              "json": "42"
             }
           ]
         },

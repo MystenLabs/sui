@@ -248,10 +248,14 @@ pub struct Balance {
     /// `0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI`.
     #[prost(string, optional, tag = "2")]
     pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
-    /// / The total balance for coins of this type, owned by one address,
+    /// The total balance for coins of this type, owned by one address,
     /// denominated in its smallest unit.
     #[prost(uint64, optional, tag = "3")]
-    pub balance: ::core::option::Option<u64>,
+    pub total_balance: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "4")]
+    pub address_balance: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "5")]
+    pub coin_balance: ::core::option::Option<u64>,
     /// Pagination cursor pointing to this balance entry, if this Balance is part
     /// of a paginated response.
     #[prost(bytes = "bytes", optional, tag = "100")]

@@ -96,6 +96,9 @@ pub struct SuiInitArgs {
     /// Enable non-exclusive write objects for testing
     #[clap(long = "enable-non-exclusive-write-objects")]
     pub enable_non_exclusive_writes: bool,
+    /// Enable using address balance as gas payments feature for testing
+    #[clap(long = "enable-address-balance-gas-payments")]
+    pub enable_address_balance_gas_payments: bool,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -116,6 +119,8 @@ pub struct TransferObjectCommand {
     pub sender: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "gas-budget-from-address-balance")]
+    pub gas_budget_from_address_balance: Option<u64>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
 }
@@ -134,6 +139,8 @@ pub struct ProgrammableTransactionCommand {
     pub sponsor: Option<String>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "gas-budget-from-address-balance")]
+    pub gas_budget_from_address_balance: Option<u64>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
     #[clap(long = "gas-payment", value_parser = parse_fake_id)]
@@ -165,6 +172,8 @@ pub struct UpgradePackageCommand {
     pub sender: String,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "gas-budget-from-address-balance")]
+    pub gas_budget_from_address_balance: Option<u64>,
     #[clap(long = "dry-run")]
     pub dry_run: bool,
     #[clap(long = "syntax")]

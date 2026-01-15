@@ -12,61 +12,89 @@ To perform trades, you pass a `BalanceManager` and `TradeProof` into the relevan
 
 DeepBookV3 exposes a set of endpoints that can be used to query any pool.
 
-### Check whitelist status
+<details>
+<summary>Check whitelist status</summary>
 
 Accessor to check whether the pool is whitelisted.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="whitelisted" noComments />
 
-### Check quote quantity against base (DEEP fees)
+</details>
+
+<details>
+<summary>Check quote quantity against base (DEEP fees)</summary>
 
 Dry run to determine the quote quantity out for a given base quantity. Uses DEEP as fee.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="get_quote_quantity_out" noComments />
 
-### Check base quantity against quote (DEEP fees)
+</details>
+
+<details>
+<summary>Check base quantity against quote (DEEP fees)</summary>
 
 Dry run to determine the base quantity out for a given quote quantity. Uses DEEP as fee.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="get_base_quantity_out" noComments />
 
-### Check quote quantity against base (input token fees)
+</details>
+
+<details>
+<summary>Check quote quantity against base (input token fees)</summary>
 
 Dry run to determine the quote quantity out for a given base quantity. Uses input token as fee.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="get_quote_quantity_out_input_fee" noComments />
 
-### Check base quantity against quote (input token fees)
+</details>
+
+<details>
+<summary>Check base quantity against quote (input token fees)</summary>
 
 Dry run to determine the base quantity out for a given quote quantity. Uses input token as fee.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="get_base_quantity_out_input_fee" noComments />
 
-### Check quote quantity against quote or base
+</details>
+
+<details>
+<summary>Check quote quantity against quote or base</summary>
 
 Dry run to determine the quantity out for a given base or quote quantity. Only one out of base or quote quantity should be non-zero. Returns the (`base_quantity_out`, `quote_quantity_out`, `deep_quantity_required`).
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="get_quantity_out" noComments />
 
-### Check fee required
+</details>
+
+<details>
+<summary>Check fee required</summary>
 
 Returns the DEEP required for an order if it's a taker or maker given quantity and price (`deep_required_taker`, `deep_required_maker`).
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="get_order_deep_required" noComments />
 
-### Retrieve mid price for a pool
+</details>
+
+<details>
+<summary>Retrieve mid price for a pool</summary>
 
 Returns the mid price of the pool.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="mid_price" noComments />
 
-### Retrieve order IDs
+</details>
+
+<details>
+<summary>Retrieve order IDs</summary>
 
 Returns the `order_id` for all open orders for the `balance_manager` in the pool.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="account_open_orders" noComments />
 
-### Retrieve prices and quantities for an order book
+</details>
+
+<details>
+<summary>Retrieve prices and quantities for an order book</summary>
 
 Returns vectors holding the prices (`price_vec`) and quantities (`quantity_vec`) for the level2 order book. The `price_low` and `price_high` are inclusive, all orders within the range are returned. `is_bid` is `true` for bids and `false` for asks.
 
@@ -76,19 +104,28 @@ Returns vectors holding the prices (`price_vec`) and quantities (`quantity_vec`)
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="get_level2_ticks_from_mid" noComments />
 
-### Retrieve balances
+</details>
+
+<details>
+<summary>Retrieve balances</summary>
 
 Get all balances held in this pool.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="vault_balances" noComments />
 
-### Retrieve pool ID
+</details>
+
+<details>
+<summary>Retrieve pool ID</summary>
 
 Get the ID of the pool given the asset types.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="get_pool_id_by_asset" noComments />
 
-### Retrieve order information
+</details>
+
+<details>
+<summary>Retrieve order information</summary>
 
 Returns the `Order` struct using the order ID.
 
@@ -102,13 +139,19 @@ Returns a vector of `Order` structs for all orders that belong to a `BalanceMana
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="get_account_order_details" noComments />
 
-### Retrieve locked balance
+</details>
+
+<details>
+<summary>Retrieve locked balance</summary>
 
 Returns the locked balance for a `BalanceManager` in the pool (`base_quantity`, `quote_quantity`, `deep_quantity`).
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="locked_balance" noComments />
 
-### Retrieve pool parameters
+</details>
+
+<details>
+<summary>Retrieve pool parameters</summary>
 
 Returns the trade parameters for the pool (`taker_fee`, `maker_fee`, `stake_required`).
 
@@ -129,6 +172,68 @@ Returns the book parameters for the pool (`tick_size`, `lot_size`, `min_size`).
 Returns the `OrderDeepPrice` struct for the pool, which determines the conversion for DEEP fees.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="get_order_deep_price" noComments />
+
+</details>
+
+<details>
+<summary>Retrieve reverse quantity calculations</summary>
+
+Dry run to determine the base quantity needed to receive a given quote quantity out.
+
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="get_base_quantity_in" noComments />
+
+Dry run to determine the quote quantity needed to receive a given base quantity out.
+
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="get_quote_quantity_in" noComments />
+
+</details>
+
+<details>
+<summary>Pre-trade validation</summary>
+
+Check if a limit order can be placed with the given parameters. Returns `true` if the order can be placed, `false` otherwise.
+
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="can_place_limit_order" noComments />
+
+Check if a market order can be placed with the given parameters. Returns `true` if the order can be placed, `false` otherwise.
+
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="can_place_market_order" noComments />
+
+Validate limit order parameters and return detailed error information if invalid.
+
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="check_limit_order_params" noComments />
+
+Validate market order parameters and return detailed error information if invalid.
+
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="check_market_order_params" noComments />
+
+</details>
+
+<details>
+<summary>Pool status</summary>
+
+Check if the pool is a stable pool (uses stable curve pricing).
+
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="stable_pool" noComments />
+
+Check if the pool is registered in the registry.
+
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="registered_pool" noComments />
+
+</details>
+
+<details>
+<summary>Account queries</summary>
+
+Check if an account exists for a `BalanceManager` in the pool.
+
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="account_exists" noComments />
+
+Get the `Account` struct for a `BalanceManager` in the pool.
+
+<ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="account" noComments />
+
+</details>
 
 ## Related links
 

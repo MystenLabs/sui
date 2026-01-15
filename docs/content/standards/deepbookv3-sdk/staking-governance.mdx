@@ -64,6 +64,17 @@ Use `vote` to vote on a proposal. The call returns a `Transaction` object.
 vote(poolKey: string, balanceManagerKey: string, proposal_id: string)
 ```
 
+### `claimRebates`
+
+Use `claimRebates` to claim maker/taker rebates for a balance manager in a specific pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `balanceManagerKey`: String that identifies the balance manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="claimRebates" signatureOnly/>
+
 ## Examples
 
 The following examples demonstrate custom staking and governance functions that you can place into the `DeepBookMarketMaker` class. 

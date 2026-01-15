@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 16 tasks
+processed 17 tasks
 
 init:
 A: object(0,0)
@@ -322,7 +322,166 @@ Response: {
   }
 }
 
-task 15, lines 135-140:
+task 15, lines 135-183:
+//# run-graphql
+Response: {
+  "data": {
+    "atCp0": {
+      "balance": {
+        "totalBalance": "300000000000000"
+      },
+      "objects": {
+        "nodes": [
+          {
+            "address": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+              },
+              "json": {
+                "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                "balance": "300000000000000"
+              }
+            }
+          }
+        ]
+      },
+      "transactions": {
+        "nodes": [
+          {
+            "digest": "98E8sr1r5TLTs2ctXkBpHV7ygNRzUmE5xkhQsqjy6cbW"
+          },
+          {
+            "digest": "74SssRy4KjhySw5vLLQSsENnG2ek7sibgdLN2BRaE9Hc"
+          },
+          {
+            "digest": "GMsCUWr66jQnNTuPuuikemh9QCKswEsdt9w3vQHX3TcG"
+          },
+          {
+            "digest": "eTubNid7hd6QotqRiy9LUASWjxoJVYch3TEXRSLmHnr"
+          },
+          {
+            "digest": "cRB4xX8ffcr14BB6jNc1WpcM5RjwDS3jux9jx1HJUXy"
+          },
+          {
+            "digest": "F23rwjYZQZwwk2LWNXmdg3f7VWNkrTDfo1vpF1og14BH"
+          },
+          {
+            "digest": "BNjTN1Umjq4M7m4TiHLviuFFmhQbAiDnvyhvVBGeGNs6"
+          }
+        ]
+      }
+    },
+    "atCp1": {
+      "balance": {
+        "totalBalance": "299999987375680"
+      },
+      "objects": {
+        "nodes": [
+          {
+            "address": "0x2d258a843438e1572a5d174eb7ce3ab8a83cfdd7114bee0aa1196f23eb71a0fe",
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::bag::Bag"
+              },
+              "json": {
+                "id": "0x2d258a843438e1572a5d174eb7ce3ab8a83cfdd7114bee0aa1196f23eb71a0fe",
+                "size": "0"
+              }
+            }
+          },
+          {
+            "address": "0x662c6e9804a6c6e19a24701069d4a222dd5549bbbb782453a7f45b2202f463c9",
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::bag::Bag"
+              },
+              "json": {
+                "id": "0x662c6e9804a6c6e19a24701069d4a222dd5549bbbb782453a7f45b2202f463c9",
+                "size": "0"
+              }
+            }
+          },
+          {
+            "address": "0x6685f1d1bf765c6cd4b37f28269997c85ea5d9ac9993872ea0a83f04c91fb1fa",
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::bag::Bag"
+              },
+              "json": {
+                "id": "0x6685f1d1bf765c6cd4b37f28269997c85ea5d9ac9993872ea0a83f04c91fb1fa",
+                "size": "0"
+              }
+            }
+          },
+          {
+            "address": "0xdd806f262555a167b932495c24765daccc1ba6ebee5e8a696155818e6b5e93ad",
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::bag::Bag"
+              },
+              "json": {
+                "id": "0xdd806f262555a167b932495c24765daccc1ba6ebee5e8a696155818e6b5e93ad",
+                "size": "0"
+              }
+            }
+          },
+          {
+            "address": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+              },
+              "json": {
+                "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                "balance": "299999987375680"
+              }
+            }
+          },
+          {
+            "address": "0x5063bc846e2b5f34bb27bfc845fbb9776190cfc754be0314f5d2e1c45e892c02",
+            "contents": {
+              "type": {
+                "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object_bag::ObjectBag"
+              },
+              "json": {
+                "id": "0x5063bc846e2b5f34bb27bfc845fbb9776190cfc754be0314f5d2e1c45e892c02",
+                "size": "0"
+              }
+            }
+          }
+        ]
+      },
+      "transactions": {
+        "nodes": [
+          {
+            "digest": "98E8sr1r5TLTs2ctXkBpHV7ygNRzUmE5xkhQsqjy6cbW"
+          },
+          {
+            "digest": "74SssRy4KjhySw5vLLQSsENnG2ek7sibgdLN2BRaE9Hc"
+          },
+          {
+            "digest": "GMsCUWr66jQnNTuPuuikemh9QCKswEsdt9w3vQHX3TcG"
+          },
+          {
+            "digest": "eTubNid7hd6QotqRiy9LUASWjxoJVYch3TEXRSLmHnr"
+          },
+          {
+            "digest": "cRB4xX8ffcr14BB6jNc1WpcM5RjwDS3jux9jx1HJUXy"
+          },
+          {
+            "digest": "F23rwjYZQZwwk2LWNXmdg3f7VWNkrTDfo1vpF1og14BH"
+          },
+          {
+            "digest": "BNjTN1Umjq4M7m4TiHLviuFFmhQbAiDnvyhvVBGeGNs6"
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 16, lines 185-190:
 //# run-graphql
 Response: {
   "data": {

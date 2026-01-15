@@ -21,10 +21,6 @@ fn default_client_metric_port() -> u16 {
     8081
 }
 
-fn default_remote_store_url() -> String {
-    "https://checkpoints.mainnet.sui.io".to_string()
-}
-
 fn default_file_format() -> FileFormat {
     FileFormat::Parquet
 }
@@ -109,8 +105,7 @@ pub struct IndexerConfig {
     /// Output object store configuration
     pub output_store: OutputStoreConfig,
     /// Remote store URL.
-    #[serde(default = "default_remote_store_url")]
-    pub remote_store_url: String,
+    pub remote_store_url: Option<String>,
     /// Optional streaming URL for real-time indexing
     pub streaming_url: Option<String>,
     /// Optional RPC API URL for request/reply from full node

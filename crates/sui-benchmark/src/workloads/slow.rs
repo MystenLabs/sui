@@ -211,7 +211,7 @@ impl Workload<dyn Payload> for SlowWorkload {
         path.push("src/workloads/data/slow");
         let SystemState {
             reference_gas_price,
-            protocol_config: _,
+            ..
         } = system_state_observer.state.borrow().clone();
         let transaction = TestTransactionBuilder::new(gas.1, gas.0, reference_gas_price)
             .publish_async(path)

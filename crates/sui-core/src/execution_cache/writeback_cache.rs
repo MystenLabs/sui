@@ -1418,6 +1418,21 @@ impl AccountFundsRead for WritebackCache {
             }
         }
     }
+
+    fn get_account_amount_at_version(
+        &self,
+        account_id: &AccumulatorObjId,
+        version: SequenceNumber,
+    ) -> u128 {
+        let account_obj = self.find_object_lt_or_eq_version(*account_id.inner(), version);
+        if let Some(account_obj) = account_obj {
+            let (_, AccumulatorValue::U128(value)) =
+                account_obj.data.try_as_move().unwrap().try_into().unwrap();
+            value.value
+        } else {
+            0
+        }
+    }
 }
 
 impl ExecutionCacheAPI for WritebackCache {}

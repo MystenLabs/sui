@@ -1,0 +1,229 @@
+---
+title: Take Profit Stop Loss
+description: Learn about conditional orders for automated trading strategies on DeepBook Margin.
+keywords:
+  [
+    take profit,
+    stop loss,
+    tpsl,
+    conditional orders,
+    automated trading,
+    trigger orders,
+    margin trading,
+    deepbook margin,
+  ]
+---
+
+The Take Profit Stop Loss (TPSL) module enables conditional orders that automatically execute when certain price conditions are met. This allows traders to set up automated trading strategies that protect against losses (stop loss) or lock in profits (take profit) without requiring constant monitoring.
+
+## How TPSL works
+
+1. **Create a condition:** Define whether the order should trigger when the price goes above or below a specified trigger price.
+2. **Create a pending order:** Specify the order details (limit or market order) that will be placed when the condition is met.
+3. **Add conditional order:** Combine the condition and pending order, and add them to your margin manager.
+4. **Execution:** Anyone can call the permissionless `execute_conditional_orders` function to execute orders whose conditions are met. This is typically handled by keepers or bots monitoring the market.
+
+Conditional orders are stored in sorted vectors for efficient execution:
+- `trigger_below`: Orders that trigger when price falls below the trigger price (sorted high to low)
+- `trigger_above`: Orders that trigger when price rises above the trigger price (sorted low to high)
+
+## API
+
+### Helper functions
+
+Use these functions to create conditions and pending orders for conditional orders.
+
+<details>
+<summary>Create a condition</summary>
+
+Create a new condition that specifies when the order should trigger.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/tpsl.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="new_condition"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Create a pending limit order</summary>
+
+Create a pending limit order that will be placed when the condition is met. Order type must be `no_restriction` or `immediate_or_cancel`.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/tpsl.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="new_pending_limit_order"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Create a pending market order</summary>
+
+Create a pending market order that will be placed when the condition is met.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/tpsl.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="new_pending_market_order"
+	noComments
+/>
+
+</details>
+
+### Manage conditional orders
+
+These functions are exposed on the `MarginManager` to manage conditional orders.
+
+<details>
+<summary>Add conditional order</summary>
+
+Add a conditional order to the margin manager. The order will be placed when the condition is met. Validates that the trigger condition is valid relative to the current price.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="add_conditional_order"
+/>
+
+</details>
+
+<details>
+<summary>Cancel conditional order</summary>
+
+Cancel a specific conditional order by ID.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="cancel_conditional_order"
+/>
+
+</details>
+
+<details>
+<summary>Cancel all conditional orders</summary>
+
+Cancel all conditional orders for the margin manager.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="cancel_all_conditional_orders"
+/>
+
+</details>
+
+<details>
+<summary>Execute conditional orders</summary>
+
+Execute conditional orders that have been triggered. This is a permissionless function that can be called by anyone (typically keepers or bots).
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="execute_conditional_orders"
+/>
+
+</details>
+
+<details>
+<summary>Read endpoints</summary>
+
+<ImportContent
+	source="packages/deepbook_margin/sources/tpsl.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="trigger_below_orders,trigger_above_orders,num_conditional_orders,get_conditional_order,conditional_order_id,condition,pending_order,trigger_below_price,trigger_price,client_order_id,order_type,self_matching_option,price,quantity,is_bid,pay_with_deep,expire_timestamp,is_limit_order"
+/>
+
+</details>
+
+## Events
+
+<details>
+<summary>`ConditionalOrderAdded`</summary>
+
+Emitted when a conditional order is added to a margin manager.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/tpsl.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="ConditionalOrderAdded"
+/>
+
+</details>
+
+<details>
+<summary>`ConditionalOrderCancelled`</summary>
+
+Emitted when a conditional order is cancelled.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/tpsl.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="ConditionalOrderCancelled"
+/>
+
+</details>
+
+<details>
+<summary>`ConditionalOrderExecuted`</summary>
+
+Emitted when a conditional order is executed.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/tpsl.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="ConditionalOrderExecuted"
+/>
+
+</details>
+
+<details>
+<summary>`ConditionalOrderInsufficientFunds`</summary>
+
+Emitted when a conditional order cannot be executed due to insufficient funds.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/tpsl.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="ConditionalOrderInsufficientFunds"
+/>
+
+</details>
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3/tree/main/packages/deepbook_margin"
+	label="DeepBook Margin package"
+	desc="The DeepBook Margin package on GitHub."
+/>

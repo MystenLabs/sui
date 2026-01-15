@@ -746,7 +746,7 @@ async fn list_balances(
         .into_iter()
         .map(|b| {
             assert_eq!(b.owner(), &owner, "Owner mismatch in balance response");
-            (b.coin_type().to_owned(), b.balance())
+            (b.coin_type().to_owned(), b.total_balance())
         })
         .collect();
 
@@ -784,7 +784,7 @@ async fn get_balance(
         "Owner mismatch in balance response"
     );
 
-    Ok((response.coin_type().to_owned(), response.balance()))
+    Ok((response.coin_type().to_owned(), response.total_balance()))
 }
 
 async fn batch_get_balances(
@@ -818,6 +818,12 @@ async fn batch_get_balances(
         .into_inner()
         .balances
         .into_iter()
-        .map(|b| (b.owner().to_owned(), b.coin_type().to_owned(), b.balance()))
+        .map(|b| {
+            (
+                b.owner().to_owned(),
+                b.coin_type().to_owned(),
+                b.total_balance(),
+            )
+        })
         .collect())
 }

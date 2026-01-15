@@ -29,7 +29,6 @@ use crate::api::scalars::base64::Base64;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeInput;
 use crate::api::types::dynamic_field::DynamicField;
-use crate::api::types::dynamic_field::DynamicFieldName;
 use crate::api::types::epoch::Epoch;
 use crate::config::ZkLoginConfig;
 use crate::error::RpcError;
@@ -92,15 +91,13 @@ pub(crate) async fn verify_signature(
         return Err(bad_user_input(Error::NotZkLogin));
     };
 
-    let jwk_object = DynamicField::by_name(
+    let jwk_object = DynamicField::by_serialized_name(
         ctx,
         scope,
         SUI_AUTHENTICATOR_STATE_ADDRESS.into(),
         DynamicFieldType::DynamicField,
-        DynamicFieldName {
-            type_: TypeInput(TypeTag::U64),
-            bcs: Base64(bcs::to_bytes(&1u64).unwrap()),
-        },
+        TypeInput(TypeTag::U64),
+        Base64(bcs::to_bytes(&1u64).unwrap()),
     )
     .await
     .map_err(upcast)?

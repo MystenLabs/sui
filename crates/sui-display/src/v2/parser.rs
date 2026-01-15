@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
 
 use std::borrow::Cow;
 use std::fmt;
@@ -44,7 +43,11 @@ pub enum Strand<'s> {
 /// transform is provided, it is applied to the result to convert it to a string.
 #[derive(PartialEq, Eq)]
 pub struct Expr<'s> {
+    /// Byte offset in the source string where the expression starts.
+    pub(crate) offset: usize,
+
     pub(crate) alternates: Vec<Chain<'s>>,
+
     pub(crate) transform: Option<Transform>,
 }
 
@@ -103,8 +106,12 @@ pub enum Literal<'s> {
 /// Contents of a vector literal.
 #[derive(PartialEq, Eq)]
 pub struct Vector<'s> {
+    /// Byte offset in the source string where the vector literal starts.
+    pub(crate) offset: usize,
+
     /// Element type, optional for non-empty vectors.
     pub(crate) type_: Option<TypeTag>,
+
     pub(crate) elements: Vec<Chain<'s>>,
 }
 
@@ -280,22 +287,53 @@ macro_rules! match_token_opt {
 ///  b64mod    ::= 'url' | 'nopad'
 ///
 impl<'s> Parser<'s> {
-    /// Construct a new parser, consuming input from the `src` string.
-    pub(crate) fn new(src: &'s str) -> Self {
-        Self {
-            lexer: Lexer::new(src).peekable2(),
-        }
-    }
-
-    /// Entrypoint into the parser, parsing the root non-terminal -- `format`.
-    pub(crate) fn run<'b>(
+    /// Entrypoint into the parser, parsing the `format` non-terminal, and ensuring there is no
+    /// remaining input.
+    pub(crate) fn format<'b>(
         src: &'s str,
         meter: &mut Meter<'b>,
     ) -> Result<Vec<Strand<'s>>, FormatError> {
-        Self::new(src).parse_format(meter)
+        let mut parser = Self {
+            lexer: Lexer::new_for_text(src).peekable2(),
+        };
+
+        let strands = parser.parse_format(meter)?;
+        parser.parse_eos()?;
+        Ok(strands)
     }
 
-    fn parse_format<'b>(mut self, meter: &mut Meter<'b>) -> Result<Vec<Strand<'s>>, FormatError> {
+    /// Entrypoint into the parser, parsing the `chain` non-terminal, and ensuring there is no
+    /// remaining input.
+    pub(crate) fn chain<'b>(src: &'s str, meter: &mut Meter<'b>) -> Result<Chain<'s>, FormatError> {
+        let mut parser = Self {
+            lexer: Lexer::new_for_expr(src).peekable2(),
+        };
+
+        let chain = parser.parse_chain(meter)?;
+        parser.parse_eos()?;
+        Ok(chain)
+    }
+
+    /// Entrypoint into the parser, parsing the `literal` non-terminal, and ensuring there is no
+    /// remaining input.
+    pub(crate) fn literal<'b>(
+        src: &'s str,
+        meter: &mut Meter<'b>,
+    ) -> Result<Literal<'s>, FormatError> {
+        let mut parser = Self {
+            lexer: Lexer::new_for_expr(src).peekable2(),
+        };
+
+        match parser.try_parse_literal(meter)? {
+            Match::Tried(_, set) => Err(set.into_error(parser.lexer.peek())),
+            Match::Found(literal) => {
+                parser.parse_eos()?;
+                Ok(literal)
+            }
+        }
+    }
+
+    fn parse_format<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Vec<Strand<'s>>, FormatError> {
         let mut strands = vec![];
         while self.lexer.peek().is_some() {
             strands.push(self.parse_strand(meter)?);
@@ -331,7 +369,11 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_expr<'b>(&mut self, meter: &mut Meter<'b>) -> Result<Expr<'s>, FormatError> {
-        match_token! { self.lexer; Tok(_, T::LBrace, _, _) => self.lexer.next() };
+        let offset = match_token! { self.lexer; Tok(_, T::LBrace, off, _) => {
+            self.lexer.next();
+            off
+        }};
+
         let mut alternates = vec![self.parse_chain(meter)?];
         let mut transform = None;
 
@@ -360,6 +402,7 @@ impl<'s> Parser<'s> {
 
         meter.alloc()?;
         Ok(Expr {
+            offset,
             alternates,
             transform,
         })
@@ -422,14 +465,14 @@ impl<'s> Parser<'s> {
                 self.parse_data(meter)?
             },
 
-            Tok(_, T::NumDec, _, dec) => {
+            Tok(_, T::NumDec, off, dec) => {
                 self.lexer.next();
-                self.parse_numeric_suffix(dec, 10, meter)?
+                self.parse_numeric_suffix(off, dec, 10, meter)?
             },
 
-            Tok(_, T::NumHex, _, hex) => {
+            Tok(_, T::NumHex, off, hex) => {
                 self.lexer.next();
-                self.parse_numeric_suffix(hex, 16, meter)?
+                self.parse_numeric_suffix(off, hex, 16, meter)?
             },
 
             Tok(_, T::String, _, slice) => {
@@ -484,7 +527,7 @@ impl<'s> Parser<'s> {
                 }
 
                 meter.alloc()?;
-                Literal::Vector(Box::new(Vector { type_, elements }))
+                Literal::Vector(Box::new(Vector { offset, type_, elements }))
             },
         })
     }
@@ -505,9 +548,9 @@ impl<'s> Parser<'s> {
                         Accessor::Field(ident)
                     },
 
-                    Tok(_, T::NumDec, _, n) => {
+                    Tok(_, T::NumDec, off, n) => {
                         self.lexer.next();
-                        let index = read_u8(n, 10, "positional field index")?;
+                        let index = read_u8(off, n, 10, "positional field index")?;
 
                         meter.alloc()?;
                         Accessor::Positional(index)
@@ -622,9 +665,9 @@ impl<'s> Parser<'s> {
                 self.lexer.next();
 
                 match_token! { self.lexer; Tok(_, T::Pound, _, _) => self.lexer.next() };
-                let variant_index = match_token! { self.lexer; Tok(_, T::NumDec, _, index) => {
+                let variant_index = match_token! { self.lexer; Tok(_, T::NumDec, off, index) => {
                     self.lexer.next();
-                    read_u16(index, 10, "enum variant index")?
+                    read_u16(off, index, 10, "enum variant index")?
                 }};
 
                 meter.alloc()?;
@@ -636,10 +679,10 @@ impl<'s> Parser<'s> {
                 }))
             },
 
-            Tok(_, T::NumDec, _, index) => {
+            Tok(_, T::NumDec, off, index) => {
                 self.lexer.next();
 
-                let variant_index = read_u16(index, 10, "enum variant index")?;
+                let variant_index = read_u16(off, index, 10, "enum variant index")?;
 
                 meter.alloc()?;
                 Literal::Enum(Box::new(Enum {
@@ -863,14 +906,14 @@ impl<'s> Parser<'s> {
 
     fn parse_address(&mut self) -> Result<AccountAddress, FormatError> {
         let addr = match_token! { self.lexer;
-            Tok(_, T::NumHex, _, slice) => {
+            Tok(_, T::NumHex, off, slice) => {
                 self.lexer.next();
-                read_u256(slice, 16, "'address'")?
+                read_u256(off, slice, 16, "'address'")?
             },
 
-            Tok(_, T::NumDec, _, slice) => {
+            Tok(_, T::NumDec, off, slice) => {
                 self.lexer.next();
-                read_u256(slice, 10, "'address'")?
+                read_u256(off, slice, 10, "'address'")?
             },
         };
 
@@ -889,6 +932,7 @@ impl<'s> Parser<'s> {
 
     fn parse_numeric_suffix<'b>(
         &mut self,
+        offset: usize,
         num: &'s str,
         radix: u32,
         meter: &mut Meter<'b>,
@@ -897,37 +941,37 @@ impl<'s> Parser<'s> {
             Lit(false, T::Ident, _, "u8") => {
                 self.lexer.next();
                 meter.alloc()?;
-                Literal::U8(read_u8(num, radix, "'u8'")?)
+                Literal::U8(read_u8(offset, num, radix, "'u8'")?)
             },
 
             Lit(false, T::Ident, _, "u16") => {
                 self.lexer.next();
                 meter.alloc()?;
-                Literal::U16(read_u16(num, radix, "'u16'")?)
+                Literal::U16(read_u16(offset, num, radix, "'u16'")?)
             },
 
             Lit(false, T::Ident, _, "u32") => {
                 self.lexer.next();
                 meter.alloc()?;
-                Literal::U32(read_u32(num, radix, "'u32'")?)
+                Literal::U32(read_u32(offset, num, radix, "'u32'")?)
             },
 
             Lit(false, T::Ident, _, "u64") => {
                 self.lexer.next();
                 meter.alloc()?;
-                Literal::U64(read_u64(num, radix, "'u64'")?)
+                Literal::U64(read_u64(offset, num, radix, "'u64'")?)
             },
 
             Lit(false, T::Ident, _, "u128") => {
                 self.lexer.next();
                 meter.alloc()?;
-                Literal::U128(read_u128(num, radix, "'u128'")?)
+                Literal::U128(read_u128(offset, num, radix, "'u128'")?)
             },
 
             Lit(false, T::Ident, _, "u256") => {
                 self.lexer.next();
                 meter.alloc()?;
-                Literal::U256(read_u256(num, radix, "'u256'")?)
+                Literal::U256(read_u256(offset, num, radix, "'u256'")?)
             },
         })
     }
@@ -1004,6 +1048,15 @@ impl<'s> Parser<'s> {
 
         Ok(xmod)
     }
+
+    /// Parse end-of-string. Any remaining input is considered an error.
+    fn parse_eos(&mut self) -> Result<(), FormatError> {
+        if let Some(lex) = self.lexer.next() {
+            Err(FormatError::UnexpectedRemaining(lex.detach()))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl Base64Modifier {
@@ -1015,10 +1068,6 @@ impl Base64Modifier {
 
     /// Don't add padding characters.
     pub(crate) const NOPAD: Self = Self(1 << 2);
-
-    pub fn standard(&self) -> bool {
-        self.0 == Self::EMPTY.0
-    }
 
     pub fn url(&self) -> bool {
         self.0 & Self::URL.0 > 0
@@ -1080,7 +1129,7 @@ impl fmt::Debug for Expr<'_> {
             write!(f, ": {transform:?}")?;
         }
 
-        write!(f, "}}")
+        write!(f, "}}@{}", self.offset)
     }
 }
 
@@ -1139,7 +1188,7 @@ impl fmt::Debug for Literal<'_> {
 
 impl fmt::Debug for Vector<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "vector")?;
+        write!(f, "vector@{}", self.offset)?;
         if let Some(type_) = &self.type_ {
             write!(f, "<{}> ", type_.to_canonical_display(true))?;
         }
@@ -1243,44 +1292,75 @@ impl fmt::Debug for Base64Modifier {
     }
 }
 
-fn read_u8(slice: &str, radix: u32, what: &'static str) -> Result<u8, FormatError> {
+fn read_u8(offset: usize, slice: &str, radix: u32, what: &'static str) -> Result<u8, FormatError> {
     u8::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
+        offset,
         err: err.to_string(),
     })
 }
 
-fn read_u16(slice: &str, radix: u32, what: &'static str) -> Result<u16, FormatError> {
+fn read_u16(
+    offset: usize,
+    slice: &str,
+    radix: u32,
+    what: &'static str,
+) -> Result<u16, FormatError> {
     u16::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
+        offset,
         err: err.to_string(),
     })
 }
 
-fn read_u32(slice: &str, radix: u32, what: &'static str) -> Result<u32, FormatError> {
+fn read_u32(
+    offset: usize,
+    slice: &str,
+    radix: u32,
+    what: &'static str,
+) -> Result<u32, FormatError> {
     u32::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
+        offset,
         err: err.to_string(),
     })
 }
 
-fn read_u64(slice: &str, radix: u32, what: &'static str) -> Result<u64, FormatError> {
+fn read_u64(
+    offset: usize,
+    slice: &str,
+    radix: u32,
+    what: &'static str,
+) -> Result<u64, FormatError> {
     u64::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
+        offset,
         err: err.to_string(),
     })
 }
 
-fn read_u128(slice: &str, radix: u32, what: &'static str) -> Result<u128, FormatError> {
+fn read_u128(
+    offset: usize,
+    slice: &str,
+    radix: u32,
+    what: &'static str,
+) -> Result<u128, FormatError> {
     u128::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
+        offset,
         err: err.to_string(),
     })
 }
 
-fn read_u256(slice: &str, radix: u32, what: &'static str) -> Result<U256, FormatError> {
+fn read_u256(
+    offset: usize,
+    slice: &str,
+    radix: u32,
+    what: &'static str,
+) -> Result<U256, FormatError> {
     U256::from_str_radix(&slice.replace('_', ""), radix).map_err(|err| FormatError::InvalidNumber {
         what,
+        offset,
         err: err.to_string(),
     })
 }
@@ -1333,7 +1413,6 @@ mod tests {
     use super::Chain as C;
     use super::Expr as E;
     use super::Literal as L;
-    use super::Parser;
     use super::Strand as S;
     use super::*;
 
@@ -1342,7 +1421,7 @@ mod tests {
         let mut budget = limits.budget();
         let mut meter = Meter::new(limits.max_depth, &mut budget);
 
-        let strands = match Parser::run(src, &mut meter) {
+        let strands = match Parser::format(src, &mut meter) {
             Ok(strands) => strands,
             Err(e) => return format!("Error: {e}"),
         };
@@ -1365,7 +1444,7 @@ mod tests {
         let mut budget = limits.budget();
         let mut meter = Meter::new(limits.max_depth, &mut budget);
 
-        let strands = Parser::new(src).parse_format(&mut meter).unwrap();
+        let strands = Parser::format(src, &mut meter).unwrap();
         (
             usize::MAX - budget.nodes,
             usize::MAX - budget.loads,
@@ -1383,7 +1462,7 @@ mod tests {
         let mut budget = limits.budget();
         let mut meter = Meter::new(limits.max_depth, &mut budget);
 
-        Parser::new(src).parse_format(&mut meter)
+        Parser::format(src, &mut meter)
     }
 
     #[test]
@@ -1410,6 +1489,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![C {
                     root: None,
                     accessors: vec![A::Field(ident_str!("foo"))],
@@ -1427,6 +1507,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![C {
                     root: None,
                     accessors: vec![A::Field(ident_str!("foo"))],
@@ -1444,6 +1525,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![C {
                     root: None,
                     accessors: vec![A::Field(ident_str!("foo")), A::Field(ident_str!("bar"))],
@@ -1463,6 +1545,7 @@ mod tests {
             vec![
                 S::Text("foo ".into()),
                 S::Expr(E {
+                    offset: 4,
                     alternates: vec![C {
                         root: None,
                         accessors: vec![A::Field(ident_str!("bar"))],
@@ -1482,6 +1565,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![
                     C {
                         root: None,
@@ -1509,6 +1593,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![C {
                     root: None,
                     accessors: vec![
@@ -1536,6 +1621,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![
                     C {
                         root: None,
@@ -1578,6 +1664,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![
                     C {
                         root: Some(L::Bool(true)),
@@ -1627,9 +1714,11 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![
                     C {
                         root: Some(L::Vector(Box::new(Vector {
+                            offset: 2,
                             type_: None,
                             elements: vec![
                                 C {
@@ -1650,6 +1739,7 @@ mod tests {
                     },
                     C {
                         root: Some(L::Vector(Box::new(Vector {
+                            offset: 41,
                             type_: Some(TypeTag::U16),
                             elements: vec![
                                 C {
@@ -1666,6 +1756,7 @@ mod tests {
                     },
                     C {
                         root: Some(L::Vector(Box::new(Vector {
+                            offset: 82,
                             type_: Some(TypeTag::U32),
                             elements: vec![],
                         }))),
@@ -1673,6 +1764,7 @@ mod tests {
                     },
                     C {
                         root: Some(L::Vector(Box::new(Vector {
+                            offset: 111,
                             type_: Some(TypeTag::U64),
                             elements: vec![],
                         }))),
@@ -1680,6 +1772,7 @@ mod tests {
                     },
                     C {
                         root: Some(L::Vector(Box::new(Vector {
+                            offset: 142,
                             type_: Some(
                                 TypeTag::from_str("0x2::coin::Coin<0x2::sui::SUI>").unwrap()
                             ),
@@ -1705,6 +1798,7 @@ mod tests {
         assert_eq!(
             strands,
             vec![S::Expr(E {
+                offset: 0,
                 alternates: vec![
                     C {
                         root: Some(L::Struct(Box::new(Struct {
@@ -1720,6 +1814,7 @@ mod tests {
                                 },
                                 C {
                                     root: Some(L::Vector(Box::new(Vector {
+                                        offset: 36,
                                         type_: None,
                                         elements: vec![
                                             C {

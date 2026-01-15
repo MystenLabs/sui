@@ -5,7 +5,7 @@ use crate::build_config::BuildConfig;
 use anyhow::Result;
 use move_command_line_common::files::find_move_filenames;
 use move_compiler::shared::files::FileName;
-use move_package_alt::package::{layout::SourcePackageLayout, paths::PackagePath};
+use move_package_alt::{PackagePath, SourcePackageLayout};
 use std::path::{Path, PathBuf};
 
 // Find all the source files for a package at the given path
@@ -46,7 +46,7 @@ fn source_paths_for_config(package_path: &Path, config: &BuildConfig) -> Vec<Pat
 #[cfg(test)]
 mod tests {
     use super::*;
-    use move_package_alt::package::paths::PackagePath;
+    use move_package_alt::PackagePath;
     use std::fs;
     use tempfile::TempDir;
 

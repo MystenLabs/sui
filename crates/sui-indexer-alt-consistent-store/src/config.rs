@@ -66,6 +66,7 @@ pub struct PipelineLayer {
     pub balances: Option<CommitterLayer>,
     pub object_by_owner: Option<CommitterLayer>,
     pub object_by_type: Option<CommitterLayer>,
+    pub address_balances: Option<CommitterLayer>,
 }
 
 #[DefaultConfig]
@@ -122,6 +123,7 @@ impl PipelineLayer {
             balances: Some(CommitterLayer::default()),
             object_by_owner: Some(CommitterLayer::default()),
             object_by_type: Some(CommitterLayer::default()),
+            address_balances: Some(CommitterLayer::default()),
         }
     }
 }
@@ -134,6 +136,7 @@ impl CommitterLayer {
             watermark_interval_ms: self
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
+            ..Default::default()
         }
     }
 }

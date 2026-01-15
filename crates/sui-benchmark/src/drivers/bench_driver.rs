@@ -760,6 +760,13 @@ async fn run_bench_worker(
         match result {
             Ok(effects) => {
                 assert!(
+                    !effects.is_invalid_transaction(),
+                    "Invalid transaction error indicates a bug in benchmark code. \
+                     Payload: {}. Status: {:?}",
+                    payload,
+                    effects.status()
+                );
+                assert!(
                     payload.get_failure_type().is_none()
                         || payload.get_failure_type() == Some(ExpectedFailureType::NoFailure)
                 );
@@ -1018,7 +1025,16 @@ async fn run_bench_worker(
                                                 });
                                                 // Success requires effects for the workload to continue
                                                 match effects {
-                                                    Some(effects) => SoftBundleTransactionResult::Success { effects: Box::new(effects) },
+                                                    Some(effects) => {
+                                                        assert!(
+                                                            !effects.is_invalid_transaction(),
+                                                            "Invalid transaction error indicates a bug in benchmark code. \
+                                                             Payload: {}. Status: {:?}",
+                                                            payload,
+                                                            effects.status()
+                                                        );
+                                                        SoftBundleTransactionResult::Success { effects: Box::new(effects) }
+                                                    }
                                                     None => SoftBundleTransactionResult::PermanentFailure {
                                                         error: "Executed but no effects returned".to_string(),
                                                     },
@@ -1127,6 +1143,13 @@ async fn run_bench_worker(
                             for (_client_type, result) in results {
                                 match result {
                                     Ok(effects) => {
+                                        assert!(
+                                            !effects.is_invalid_transaction(),
+                                            "Invalid transaction error indicates a bug in benchmark code. \
+                                             Payload: {}. Status: {:?}",
+                                            payload,
+                                            effects.status()
+                                        );
                                         any_success = true;
                                         concurrent_results
                                             .push(ConcurrentTransactionResult::Success { effects: Box::new(effects) });

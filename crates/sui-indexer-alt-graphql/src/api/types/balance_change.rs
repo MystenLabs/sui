@@ -68,4 +68,29 @@ impl BalanceChange {
             amount: Some(BigInt::from(amount)),
         })
     }
+
+    /// Convert a stored BalanceChange to a gRPC BalanceChange.
+    pub(crate) fn stored_to_grpc(stored: StoredBalanceChange) -> GrpcBalanceChange {
+        let StoredBalanceChange::V1 {
+            owner,
+            coin_type,
+            amount,
+        } = stored;
+
+        // Extract address from owner
+        let address = match owner {
+            Owner::AddressOwner(addr)
+            | Owner::ObjectOwner(addr)
+            | Owner::ConsensusAddressOwner { owner: addr, .. } => Some(addr),
+            Owner::Shared { .. } | Owner::Immutable => None,
+        };
+
+        let mut grpc = GrpcBalanceChange::default();
+        if let Some(addr) = address {
+            grpc.set_address(addr.to_string());
+        }
+        grpc.set_coin_type(coin_type);
+        grpc.set_amount(amount.to_string());
+        grpc
+    }
 }

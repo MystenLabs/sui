@@ -11,10 +11,7 @@ use move_command_line_common::{
 use move_compiler::command_line::COLOR_MODE_ENV_VAR;
 use move_coverage::coverage_map::{CoverageMap, ExecCoverageMapWithModules};
 
-use move_package_alt::{
-    flavor::{Vanilla, vanilla},
-    package::{RootPackage, layout::SourcePackageLayout, package_loader::PackageLoader},
-};
+use move_package_alt::{PackageLoader, RootPackage, SourcePackageLayout, Vanilla};
 use move_package_alt_compilation::{
     layout::CompiledPackageLayout, on_disk_package::OnDiskCompiledPackage,
 };
@@ -157,7 +154,7 @@ fn copy_pkg_and_deps(tmp_dir: &Path, pkg_dir: &Path) -> anyhow::Result<PathBuf> 
 /// will need to be fixed.
 fn package_paths(pkg_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let root_pkg: RootPackage<Vanilla> =
-        PackageLoader::new(pkg_dir, vanilla::default_environment())
+        PackageLoader::new(pkg_dir, Vanilla::default_environment())
             .modes(vec!["test".into()])
             .load_sync()?;
 

@@ -6,33 +6,43 @@ use std::sync::Arc;
 use futures::future::try_join_all;
 use futures::join;
 use indexmap::IndexMap;
-use move_core_types::annotated_value::MoveTypeLayout;
-use sui_types::collection_types::Entry;
-use sui_types::collection_types::VecMap;
 
 use crate::v2::error::Error;
-use crate::v2::error::FormatError;
-use crate::v2::interpreter::Interpreter;
-use crate::v2::meter::Limits;
 use crate::v2::meter::Meter;
+use crate::v2::parser::Chain;
+use crate::v2::parser::Literal;
 use crate::v2::parser::Parser;
 use crate::v2::parser::Strand;
-use crate::v2::value::Slice;
-use crate::v2::value::Store;
+use crate::v2::writer::Writer;
 
-pub mod error;
-pub(crate) mod interpreter;
-pub mod lexer;
-pub mod meter;
-pub(crate) mod parser;
-pub(crate) mod peek;
-pub mod value;
-pub(crate) mod visitor;
+mod error;
+mod interpreter;
+mod lexer;
+mod meter;
+mod parser;
+mod peek;
+mod value;
+mod visitor;
+mod writer;
 
-pub(crate) mod writer;
+pub use crate::v2::error::FormatError;
+pub use crate::v2::interpreter::Interpreter;
+pub use crate::v2::meter::Limits;
+pub use crate::v2::value::OwnedSlice;
+pub use crate::v2::value::Store;
+pub use crate::v2::value::Value;
 
-/// Format strings extracted from a `Display` object on-chain.
-pub struct Format<'s> {
+/// A path into a Move value, to extract a sub-slice.
+pub struct Extract<'s>(Chain<'s>);
+
+/// A literal value, representing a dynamic field name.
+pub struct Name<'s>(Literal<'s>);
+
+/// A parsed format string.
+pub struct Format<'s>(Vec<Strand<'s>>);
+
+/// A collection of format strings that are evaluated to a string-to-string mapping.
+pub struct Display<'s> {
     fields: Vec<Field<'s>>,
 }
 
@@ -48,7 +58,85 @@ struct Sourced<'s, T> {
     val: Result<T, FormatError>,
 }
 
+impl<'s> Extract<'s> {
+    /// Parse a string as a sequence of nested accessors.
+    ///
+    /// `limits` bounds the dimensions (depth, number of output nodes, max number of object loads)
+    /// that the parsed accessor can consume.
+    pub fn parse(limits: Limits, src: &'s str) -> Result<Self, FormatError> {
+        let mut budget = limits.budget();
+        let mut meter = Meter::new(limits.max_depth, &mut budget);
+        let chain = Parser::chain(src, &mut meter)?;
+
+        Ok(Self(chain))
+    }
+
+    /// Pull the value located at this extractor's path out of the object provided as its `bytes`
+    /// and `layout`, and with support for dynamically fetching additional objects from `store` as
+    /// needed.
+    ///
+    /// It is only valid to extract slices from other slices (not literal values).
+    pub async fn extract<S: Store>(
+        &'s self,
+        interpreter: &'s Interpreter<S>,
+    ) -> Result<Option<Value<'s>>, FormatError> {
+        interpreter.eval_chain(&self.0).await
+    }
+}
+
+impl<'s> Name<'s> {
+    /// Parse a string as a literal value.
+    ///
+    /// `limits` bounds the dimensions (depth, number of output nodes, max number of object loads)
+    /// that the parsed literal can consume.
+    pub fn parse(limits: Limits, src: &'s str) -> Result<Self, FormatError> {
+        let mut budget = limits.budget();
+        let mut meter = Meter::new(limits.max_depth, &mut budget);
+        let literal = Parser::literal(src, &mut meter)?;
+
+        Ok(Self(literal))
+    }
+
+    /// Evaluate the literal representing the dynamic field name, returning a `Value` which can be
+    /// used to derive a dynamic field or dynamic object field ID.
+    pub async fn eval<S: Store>(
+        &'s self,
+        interpreter: &'s Interpreter<S>,
+    ) -> Result<Option<Value<'s>>, FormatError> {
+        interpreter.eval_literal(&self.0).await
+    }
+}
+
 impl<'s> Format<'s> {
+    /// Parse a string as a format.
+    ///
+    /// `limits` bounds the dimensions (depth, number of output nodes, max number of object loads)
+    /// that the parsed format string can consume.
+    pub fn parse(limits: Limits, src: &'s str) -> Result<Self, FormatError> {
+        let mut budget = limits.budget();
+        let mut meter = Meter::new(limits.max_depth, &mut budget);
+        let format = Parser::format(src, &mut meter)?;
+
+        Ok(Self(format))
+    }
+
+    /// Evaluate the format string returning a formatted JSON value.
+    pub async fn format<S: Store>(
+        &'s self,
+        interpreter: &'s Interpreter<S>,
+        max_depth: usize,
+        max_output_size: usize,
+    ) -> Result<serde_json::Value, FormatError> {
+        let writer = Writer::new(max_depth, max_output_size);
+        let Some(value) = interpreter.eval_strands(&self.0).await? else {
+            return Ok(serde_json::Value::Null);
+        };
+
+        writer.write(value)
+    }
+}
+
+impl<'s> Display<'s> {
     /// Convert the contents of a `Display` object into a `Format` by parsing each of its names and
     /// values as format strings.
     ///
@@ -59,14 +147,14 @@ impl<'s> Format<'s> {
     /// will fail completely if the display overall is detected to exceed the provided `limits`.
     pub fn parse(
         limits: Limits,
-        display_fields: &'s VecMap<String, String>,
+        display_fields: impl IntoIterator<Item = (&'s str, &'s str)>,
     ) -> Result<Self, Error> {
         let mut fields = Vec::new();
         let mut budget = limits.budget();
         let mut meter = Meter::new(limits.max_depth, &mut budget);
 
         let mut parse = |src: &'s str| {
-            let val = match Parser::run(src, &mut meter) {
+            let val = match Parser::format(src, &mut meter) {
                 Err(FormatError::TooBig) => return Err(Error::TooBig),
                 Err(FormatError::TooManyLoads) => return Err(Error::TooManyLoads),
                 Err(e) => Err(e),
@@ -76,7 +164,7 @@ impl<'s> Format<'s> {
             Ok(Sourced { src, val })
         };
 
-        for Entry { key: k, value: v } in &display_fields.contents {
+        for (k, v) in display_fields.into_iter() {
             let key = parse(k)?;
             let val = parse(v)?;
             fields.push(Field { key, val });
@@ -85,37 +173,38 @@ impl<'s> Format<'s> {
         Ok(Self { fields })
     }
 
-    /// Render the object provided as its `bytes` and `layout`, using this Display format, and with
-    /// support for dynamically fetching additional objects from `store` as needed.
+    /// Render the format with the provided `interpreter`
     ///
     /// This operation requires all field names to evaluate successfully to unique strings, and for
     /// the overall output to be bounded by `max_depth` and `max_output_size`, but otherwise
     /// supports partial failures (if one of the field values fails to parse or evaluate).
-    pub async fn display<S: Store<'s>>(
+    pub async fn display<S: Store>(
         &'s self,
+        interpreter: &'s Interpreter<S>,
         max_depth: usize,
         max_output_size: usize,
-        bytes: &'s [u8],
-        layout: &'s MoveTypeLayout,
-        store: S,
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
-        // Create the interpreter and root slice
-        let root = Slice { layout, bytes };
-        let interpreter = Arc::new(Interpreter::new(root, store, max_depth, max_output_size));
+        let writer = Arc::new(Writer::new(max_depth, max_output_size));
         let mut output = IndexMap::new();
 
         // You think you want to factor a helper out to do the evaluation and error handling, but
         // trust me, you don't.
 
         let names = try_join_all(self.fields.iter().map(|kvp| {
-            let interpreter = interpreter.clone();
+            let writer = writer.clone();
             async move {
                 let strands = match kvp.key.val.as_ref() {
                     Ok(strands) => strands,
                     Err(e) => return Ok(Err(e.clone())),
                 };
 
-                match interpreter.eval(strands).await {
+                let evaluated = match interpreter.eval_strands(strands).await {
+                    Ok(Some(v)) => v,
+                    Ok(None) => return Ok(Ok(serde_json::Value::Null)),
+                    Err(e) => return Ok(Err(e)),
+                };
+
+                match writer.write(evaluated) {
                     Err(FormatError::TooMuchOutput) => Err(Error::TooMuchOutput),
                     other => Ok(other),
                 }
@@ -123,14 +212,20 @@ impl<'s> Format<'s> {
         }));
 
         let values = try_join_all(self.fields.iter().map(|kvp| {
-            let interpreter = interpreter.clone();
+            let writer = writer.clone();
             async move {
                 let strands = match kvp.val.val.as_ref() {
                     Ok(strands) => strands,
                     Err(e) => return Ok(Err(e.clone())),
                 };
 
-                match interpreter.eval(strands).await {
+                let evaluated = match interpreter.eval_strands(strands).await {
+                    Ok(Some(v)) => v,
+                    Ok(None) => return Ok(Ok(serde_json::Value::Null)),
+                    Err(e) => return Ok(Err(e)),
+                };
+
+                match writer.write(evaluated) {
                     Err(FormatError::TooMuchOutput) => Err(Error::TooMuchOutput),
                     other => Ok(other),
                 }
@@ -155,7 +250,7 @@ impl<'s> Format<'s> {
                 Ok(JSON::String(n)) => n,
                 Ok(JSON::Null) => return Err(Error::NameEmpty(src.to_owned())),
                 Ok(_) => return Err(Error::NameInvalid(src.to_owned())),
-                Err(e) => return Err(Error::NameError(src.to_owned(), e)),
+                Err(e) => return Err(Error::NameEvaluation(src.to_owned(), e)),
             };
 
             match output.entry(n) {
@@ -173,58 +268,388 @@ impl<'s> Format<'s> {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+    use std::sync::atomic::AtomicUsize;
 
     use base64::Engine as _;
     use base64::engine::general_purpose::STANDARD;
     use insta::assert_debug_snapshot;
+    use insta::assert_json_snapshot;
     use move_core_types::account_address::AccountAddress;
-    use move_core_types::annotated_value::MoveTypeLayout as T;
+    use move_core_types::annotated_value::MoveTypeLayout;
+    use move_core_types::annotated_value::MoveTypeLayout as L;
+    use move_core_types::language_storage::TypeTag;
     use move_core_types::u256::U256;
     use serde::Serialize;
     use sui_types::base_types::move_ascii_str_layout;
     use sui_types::base_types::move_utf8_str_layout;
     use sui_types::base_types::url_layout;
+    use sui_types::dynamic_field::DynamicFieldInfo;
+    use sui_types::dynamic_field::derive_dynamic_field_id;
     use sui_types::id::ID;
     use sui_types::id::UID;
 
-    use crate::v2::error::FormatError;
     use crate::v2::value::tests::MockStore;
     use crate::v2::value::tests::enum_;
     use crate::v2::value::tests::optional_;
     use crate::v2::value::tests::struct_;
+    use crate::v2::value::tests::vec_map;
     use crate::v2::value::tests::vector_;
+    use crate::v2::writer::JsonWriter;
 
     use super::*;
 
     const ONE_MB: usize = 1024 * 1024;
 
-    /// Helper to parse display fields and render them against the provided object.
-    async fn format<'b, 'l>(
-        store: &MockStore,
-        limits: Limits,
-        bytes: &'b [u8],
-        layout: &'l MoveTypeLayout,
-        max_depth: usize,
-        max_output_size: usize,
-        fields: impl IntoIterator<Item = (&str, &str)>,
-    ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
-        let display = VecMap {
-            contents: fields
-                .into_iter()
-                .map(|(key, value)| Entry {
-                    key: key.to_owned(),
-                    value: value.to_owned(),
-                })
-                .collect(),
+    /// Helper to parse a path and extract it from the provided object.
+    async fn extract(
+        store: MockStore,
+        bytes: Vec<u8>,
+        layout: MoveTypeLayout,
+        path: &str,
+    ) -> Result<Option<serde_json::Value>, FormatError> {
+        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
+        let used = AtomicUsize::new(0);
+
+        let chain = Extract::parse(Limits::default(), path)?;
+        let Some(value) = chain.extract(&interpreter).await? else {
+            return Ok(None);
         };
 
-        Format::parse(limits, &display)?
-            .display(max_depth, max_output_size, bytes, layout, store)
+        let writer = JsonWriter::new(&used, usize::MAX, usize::MAX);
+        Ok(Some(value.format_json(writer)?))
+    }
+
+    async fn dynamic_field_id(
+        store: MockStore,
+        bytes: Vec<u8>,
+        layout: MoveTypeLayout,
+        parent: AccountAddress,
+        literal: &str,
+    ) -> Result<Option<AccountAddress>, FormatError> {
+        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
+
+        let name = Name::parse(Limits::default(), literal)?;
+        let Some(value) = name.eval(&interpreter).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(value.derive_dynamic_field_id(parent)?.into()))
+    }
+
+    async fn dynamic_object_field_id(
+        store: MockStore,
+        bytes: Vec<u8>,
+        layout: MoveTypeLayout,
+        parent: AccountAddress,
+        literal: &str,
+    ) -> Result<Option<AccountAddress>, FormatError> {
+        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
+
+        let name = Name::parse(Limits::default(), literal)?;
+        let Some(value) = name.eval(&interpreter).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(value.derive_dynamic_object_field_id(parent)?.into()))
+    }
+
+    /// Helper to parse display fields and render them against the provided object.
+    async fn format<'s>(
+        store: MockStore,
+        limits: Limits,
+        bytes: Vec<u8>,
+        layout: MoveTypeLayout,
+        max_depth: usize,
+        max_output_size: usize,
+        fields: impl IntoIterator<Item = (&'s str, &'s str)>,
+    ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
+        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
+        Display::parse(limits, fields)?
+            .display(&interpreter, max_depth, max_output_size)
             .await
     }
 
     #[tokio::test]
-    async fn test_fields_and_scalars() {
+    async fn test_extract_simple() {
+        let bytes = bcs::to_bytes(&(
+            AccountAddress::from_str("0x1234").unwrap(),
+            None::<bool>,
+            Some(true),
+            48u8,
+            vec![1u64, 2u64, 3u64],
+            vec![(4u32, 5u32), (6u32, 7u32), (8u32, 9u32)],
+        ))
+        .unwrap();
+
+        let layout = struct_(
+            "0x1::m::S",
+            vec![
+                ("addr", L::Address),
+                ("none", optional_(L::Bool)),
+                ("some", optional_(L::Bool)),
+                ("posn", struct_("0x1::m::P", vec![("pos0", L::U8)])),
+                ("nums", vector_(L::U64)),
+                ("kvps", vec_map(L::U32, L::U32)),
+            ],
+        );
+
+        let fields = [
+            "addr",
+            "none",
+            "some",
+            "posn.0",
+            "nums[1u64]",
+            "kvps[6u32]",
+            "i.dont.exist",
+        ];
+
+        let mut outputs = Vec::with_capacity(fields.len());
+        for field in fields {
+            outputs.push(
+                extract(MockStore::default(), bytes.clone(), layout.clone(), field)
+                    .await
+                    .unwrap(),
+            );
+        }
+
+        assert_json_snapshot!(outputs, @r###"
+        [
+          "0x0000000000000000000000000000000000000000000000000000000000001234",
+          null,
+          true,
+          48,
+          "2",
+          7,
+          null
+        ]
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_extract_with_dynamic_loads() {
+        let parent = AccountAddress::from_str("0x5000").unwrap();
+        let child = AccountAddress::from_str("0x5001").unwrap();
+        let bytes = bcs::to_bytes(&parent).unwrap();
+
+        let layout = struct_(
+            "0x1::m::Root",
+            vec![(
+                "parent",
+                struct_(
+                    "0x1::m::Parent",
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
+                ),
+            )],
+        );
+
+        // Add a dynamic field: parent->['df_key'] = (10, 20)
+        // Add a dynamic object field: parent=>['dof_key'] = Child { id, x: 100, y: 200 }
+        let store = MockStore::default()
+            .with_dynamic_field(
+                parent,
+                "df_key",
+                L::Struct(Box::new(move_utf8_str_layout())),
+                (10u64, 20u64),
+                struct_("0x1::m::Inner", vec![("x", L::U64), ("y", L::U64)]),
+            )
+            .with_dynamic_object_field(
+                parent,
+                "dof_key",
+                L::Struct(Box::new(move_utf8_str_layout())),
+                (child, 100u64, 200u64),
+                struct_(
+                    "0x1::m::Child",
+                    vec![
+                        ("id", L::Struct(Box::new(UID::layout()))),
+                        ("x", L::U64),
+                        ("y", L::U64),
+                    ],
+                ),
+            );
+
+        let fields = [
+            // Dynamic field access
+            "parent->['df_key'].x",
+            "parent->['df_key'].y",
+            "parent.id->['df_key'].x",
+            // Dynamic object field access
+            "parent=>['dof_key'].x",
+            "parent=>['dof_key'].y",
+            "parent.id=>['dof_key'].id",
+            // Missing dynamic field
+            "parent->['missing']",
+            "parent=>['missing']",
+        ];
+
+        let mut outputs = Vec::with_capacity(fields.len());
+        for field in fields {
+            outputs.push(
+                extract(store.clone(), bytes.clone(), layout.clone(), field)
+                    .await
+                    .unwrap(),
+            );
+        }
+
+        assert_json_snapshot!(outputs, @r###"
+        [
+          "10",
+          "20",
+          "10",
+          "100",
+          "200",
+          "0x0000000000000000000000000000000000000000000000000000000000005001",
+          null,
+          null
+        ]
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_dynamic_field_names() {
+        let parent = AccountAddress::from_str("0x4242").unwrap();
+
+        // Dummy object to interpret against (not used for literal evaluation)
+        let obj_bytes = bcs::to_bytes(&0u8).unwrap();
+        let obj_layout = L::U8;
+
+        // Test cases: (literal, expected_type_tag, expected_bcs_bytes)
+        let cases: Vec<(&str, &str, Vec<u8>)> = vec![
+            (
+                "'hello'",
+                "0x1::string::String",
+                bcs::to_bytes(&"hello").unwrap(),
+            ),
+            ("42u64", "u64", bcs::to_bytes(&42u64).unwrap()),
+            ("123u128", "u128", bcs::to_bytes(&123u128).unwrap()),
+            (
+                "@0xabc",
+                "address",
+                bcs::to_bytes(&AccountAddress::from_str("0xabc").unwrap()).unwrap(),
+            ),
+            (
+                "0x1::m::Key(99u32, 'test')",
+                "0x1::m::Key",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+            (
+                "0x1::m::Key<u32, 0x1::string::String>(99u32, 'test')",
+                "0x1::m::Key<u32, 0x1::string::String>",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+            (
+                "vector[1u8, 2u8, 3u8]",
+                "vector<u8>",
+                bcs::to_bytes(&vec![1u8, 2u8, 3u8]).unwrap(),
+            ),
+        ];
+
+        for (literal, type_, bytes) in cases {
+            let id = dynamic_field_id(
+                MockStore::default(),
+                obj_bytes.clone(),
+                obj_layout.clone(),
+                parent,
+                literal,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+            let type_: TypeTag = type_.parse().unwrap();
+            let expected = derive_dynamic_field_id(parent, &type_, &bytes).unwrap();
+            assert_eq!(id, expected.into(), "mismatch for literal: {literal}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dynamic_object_field_names() {
+        let parent = AccountAddress::from_str("0x4242").unwrap();
+
+        // Dummy object to interpret against (not used for literal evaluation)
+        let obj_bytes = bcs::to_bytes(&0u8).unwrap();
+        let obj_layout = L::U8;
+
+        // Test cases: (literal, expected_type_tag, expected_bcs_bytes)
+        let cases: Vec<(&str, &str, Vec<u8>)> = vec![
+            (
+                "'hello'",
+                "0x1::string::String",
+                bcs::to_bytes(&"hello").unwrap(),
+            ),
+            ("42u64", "u64", bcs::to_bytes(&42u64).unwrap()),
+            ("123u128", "u128", bcs::to_bytes(&123u128).unwrap()),
+            (
+                "@0xabc",
+                "address",
+                bcs::to_bytes(&AccountAddress::from_str("0xabc").unwrap()).unwrap(),
+            ),
+            (
+                "0x1::m::Key(99u32, 'test')",
+                "0x1::m::Key",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+            (
+                "0x1::m::Key<u32, 0x1::string::String>(99u32, 'test')",
+                "0x1::m::Key<u32, 0x1::string::String>",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+            (
+                "vector[1u8, 2u8, 3u8]",
+                "vector<u8>",
+                bcs::to_bytes(&vec![1u8, 2u8, 3u8]).unwrap(),
+            ),
+        ];
+
+        for (literal, type_, bytes) in cases {
+            let id = dynamic_object_field_id(
+                MockStore::default(),
+                obj_bytes.clone(),
+                obj_layout.clone(),
+                parent,
+                literal,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+            let type_: TypeTag = type_.parse().unwrap();
+            let wrapper_type = DynamicFieldInfo::dynamic_object_field_wrapper(type_);
+            let expected = derive_dynamic_field_id(parent, &wrapper_type.into(), &bytes).unwrap();
+            assert_eq!(id, expected.into(), "mismatch for literal: {literal}");
+        }
+    }
+
+    #[test]
+    fn test_dynamic_field_name_parse_errors() {
+        let cases = [
+            // Empty input
+            "",
+            // Field access (not a literal)
+            "foo",
+            "foo.bar",
+            // Missing type suffix
+            "42",
+            // Unclosed string
+            "'hello",
+            // Unclosed struct
+            "0x1::m::S(",
+            "0x1::m::S(42u64",
+            // Unclosed vector
+            "vector[1u8, 2u8",
+            // Invalid address
+            "@0xGGG",
+        ];
+
+        for literal in cases {
+            assert!(
+                Name::parse(Limits::default(), literal).is_err(),
+                "expected error for: {literal:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_format_fields_and_scalars() {
         let bytes = bcs::to_bytes(&(
             AccountAddress::from_str("0x4243").unwrap(),
             AccountAddress::from_str("0x4445").unwrap(),
@@ -243,19 +668,99 @@ mod tests {
         .unwrap();
 
         let fields = vec![
-            ("addr", T::Address),
-            ("id", T::Struct(Box::new(ID::layout()))),
-            ("uid", T::Struct(Box::new(UID::layout()))),
-            ("flag", T::Bool),
-            ("n8", T::U8),
-            ("n16", T::U16),
-            ("n32", T::U32),
-            ("n64", T::U64),
-            ("n128", T::U128),
-            ("n256", T::U256),
-            ("ascii", T::Struct(Box::new(move_ascii_str_layout()))),
-            ("utf8", T::Struct(Box::new(move_ascii_str_layout()))),
-            ("url", T::Struct(Box::new(url_layout()))),
+            ("addr", L::Address),
+            ("id", L::Struct(Box::new(ID::layout()))),
+            ("uid", L::Struct(Box::new(UID::layout()))),
+            ("flag", L::Bool),
+            ("n8", L::U8),
+            ("n16", L::U16),
+            ("n32", L::U32),
+            ("n64", L::U64),
+            ("n128", L::U128),
+            ("n256", L::U256),
+            ("ascii", L::Struct(Box::new(move_ascii_str_layout()))),
+            ("utf8", L::Struct(Box::new(move_ascii_str_layout()))),
+            ("url", L::Struct(Box::new(url_layout()))),
+        ];
+
+        let formats = [
+            "{addr}, {id}, {uid}",
+            "{flag}",
+            "{n8}, {n16}, {n32}, {n64}, {n128}, {n256}",
+            "{ascii}, {utf8}, {url}",
+            "{ascii.bytes}, {utf8.bytes}, {url.url.bytes}",
+            "{@0x5455}",
+            "{false}",
+            "{56u8}, {57u16}, {58u32}, {59u64}, {60u128}, {61u256}",
+            "{'goodbye'}",
+        ];
+
+        let store = MockStore::default();
+        let root = OwnedSlice {
+            layout: struct_("0x1::m::S", fields),
+            bytes,
+        };
+
+        let mut output = Vec::with_capacity(formats.len());
+        let interpreter = Interpreter::new(root, store);
+        for s in formats {
+            let format = Format::parse(Limits::default(), s).unwrap();
+            output.push(
+                format
+                    .format(&interpreter, usize::MAX, usize::MAX)
+                    .await
+                    .unwrap(),
+            );
+        }
+
+        assert_json_snapshot!(output, @r###"
+        [
+          "0x0000000000000000000000000000000000000000000000000000000000004243, 0x0000000000000000000000000000000000000000000000000000000000004445, 0x0000000000000000000000000000000000000000000000000000000000004647",
+          "true",
+          "48, 49, 50, 51, 52, 53",
+          "hello, world, https://example.com",
+          "hello, world, https://example.com",
+          "0x0000000000000000000000000000000000000000000000000000000000005455",
+          "false",
+          "56, 57, 58, 59, 60, 61",
+          "goodbye"
+        ]
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_display_fields_and_scalars() {
+        let bytes = bcs::to_bytes(&(
+            AccountAddress::from_str("0x4243").unwrap(),
+            AccountAddress::from_str("0x4445").unwrap(),
+            AccountAddress::from_str("0x4647").unwrap(),
+            true,
+            48u8,
+            49u16,
+            50u32,
+            51u64,
+            52u128,
+            U256::from(53u64),
+            "hello",
+            "world",
+            "https://example.com",
+        ))
+        .unwrap();
+
+        let fields = vec![
+            ("addr", L::Address),
+            ("id", L::Struct(Box::new(ID::layout()))),
+            ("uid", L::Struct(Box::new(UID::layout()))),
+            ("flag", L::Bool),
+            ("n8", L::U8),
+            ("n16", L::U16),
+            ("n32", L::U32),
+            ("n64", L::U64),
+            ("n128", L::U128),
+            ("n256", L::U256),
+            ("ascii", L::Struct(Box::new(move_ascii_str_layout()))),
+            ("utf8", L::Struct(Box::new(move_ascii_str_layout()))),
+            ("url", L::Struct(Box::new(url_layout()))),
         ];
 
         let formats = [
@@ -274,10 +779,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &struct_("0x1::m::S", fields),
+            bytes,
+            struct_("0x1::m::S", fields),
             usize::MAX,
             ONE_MB,
             formats,
@@ -319,13 +824,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_vector_access() {
+    async fn test_display_vector_access() {
         let bytes =
             bcs::to_bytes(&(vec![2u64, 1u64, 0u64], vec!["first", "second", "third"])).unwrap();
 
         let fields = vec![
-            ("ns", vector_(T::U64)),
-            ("ss", vector_(T::Struct(Box::new(move_ascii_str_layout())))),
+            ("ns", vector_(L::U64)),
+            ("ss", vector_(L::Struct(Box::new(move_ascii_str_layout())))),
         ];
 
         let formats = [
@@ -335,10 +840,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &struct_("0x1::m::S", fields),
+            bytes,
+            struct_("0x1::m::S", fields),
             usize::MAX,
             ONE_MB,
             formats,
@@ -362,7 +867,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_enums() {
+    async fn test_display_enums() {
         #[derive(serde::Serialize)]
         enum Status<'s> {
             Pending(&'s str),
@@ -375,10 +880,10 @@ mod tests {
             vec![
                 (
                     "Pending",
-                    vec![("message", T::Struct(Box::new(move_ascii_str_layout())))],
+                    vec![("message", L::Struct(Box::new(move_ascii_str_layout())))],
                 ),
-                ("Active", vec![("progress", T::U32)]),
-                ("Done", vec![("count", T::U128), ("timestamp", T::U64)]),
+                ("Active", vec![("progress", L::U32)]),
+                ("Done", vec![("count", L::U128), ("timestamp", L::U64)]),
             ],
         );
 
@@ -393,10 +898,10 @@ mod tests {
         let pending = bcs::to_bytes(&Status::Pending("waiting")).unwrap();
         outputs.push(
             format(
-                &MockStore::default(),
+                MockStore::default(),
                 Limits::default(),
-                &pending,
-                &layout,
+                pending,
+                layout.clone(),
                 usize::MAX,
                 ONE_MB,
                 formats,
@@ -408,10 +913,10 @@ mod tests {
         let active = bcs::to_bytes(&Status::Active(42)).unwrap();
         outputs.push(
             format(
-                &MockStore::default(),
+                MockStore::default(),
                 Limits::default(),
-                &active,
-                &layout,
+                active,
+                layout.clone(),
                 usize::MAX,
                 ONE_MB,
                 formats,
@@ -423,10 +928,10 @@ mod tests {
         let complete = bcs::to_bytes(&Status::Done(100, 999)).unwrap();
         outputs.push(
             format(
-                &MockStore::default(),
+                MockStore::default(),
                 Limits::default(),
-                &complete,
-                &layout,
+                complete,
+                layout,
                 usize::MAX,
                 ONE_MB,
                 formats,
@@ -475,7 +980,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_nested_access() {
+    async fn test_display_nested_access() {
         let bytes = bcs::to_bytes(&(
             (42u64, "nested"),
             vec![(1u32, "first"), (2u32, "second")],
@@ -486,22 +991,22 @@ mod tests {
         let inner = struct_(
             "0x1::m::Inner",
             vec![
-                ("value", T::U64),
-                ("label", T::Struct(Box::new(move_ascii_str_layout()))),
+                ("value", L::U64),
+                ("label", L::Struct(Box::new(move_ascii_str_layout()))),
             ],
         );
 
         let item = struct_(
             "0x1::m::Item",
             vec![
-                ("id", T::U32),
-                ("name", T::Struct(Box::new(move_ascii_str_layout()))),
+                ("id", L::U32),
+                ("name", L::Struct(Box::new(move_ascii_str_layout()))),
             ],
         );
 
         let tuple = struct_(
             "0x1::m::Tuple",
-            vec![("pos0", T::U64), ("pos1", T::U64), ("pos2", T::U64)],
+            vec![("pos0", L::U64), ("pos1", L::U64), ("pos2", L::U64)],
         );
 
         let option = enum_(
@@ -524,10 +1029,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &struct_("0x1::m::S", fields),
+            bytes,
+            struct_("0x1::m::S", fields),
             usize::MAX,
             ONE_MB,
             formats,
@@ -557,9 +1062,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_string_bytes() {
+    async fn test_display_string_bytes() {
         let bytes = bcs::to_bytes("ABC").unwrap();
-        let layout = T::Struct(Box::new(move_ascii_str_layout()));
+        let layout = L::Struct(Box::new(move_ascii_str_layout()));
 
         let formats = vec![
             ("serialized", "{bytes[0u64]}"),
@@ -568,10 +1073,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -595,9 +1100,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_missing_fields() {
+    async fn test_display_missing_fields() {
         let bytes = bcs::to_bytes(&(42u64, vec![10u64, 20u64, 30u64])).unwrap();
-        let fields = vec![("num", T::U64), ("nums", vector_(T::U64))];
+        let fields = vec![("num", L::U64), ("nums", vector_(L::U64))];
 
         let formats = [
             // Scalars produce empty responses on any field access
@@ -615,10 +1120,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &struct_("0x1::m::S", fields),
+            bytes,
+            struct_("0x1::m::S", fields),
             usize::MAX,
             ONE_MB,
             formats,
@@ -654,9 +1159,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_alternates() {
+    async fn test_display_alternates() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
-        let layout = struct_("0x1::m::S", vec![("bar", T::U64)]);
+        let layout = struct_("0x1::m::S", vec![("bar", L::U64)]);
 
         let formats = [
             ("succeeds", "{bar | baz}"),
@@ -666,10 +1171,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -696,20 +1201,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_alternate_optional() {
+    async fn test_display_alternate_optional() {
         let bytes = bcs::to_bytes(&(Some(100u64), None::<u64>)).unwrap();
         let layout = struct_(
             "0x1::m::S",
-            vec![("a", optional_(T::U64)), ("b", optional_(T::U64))],
+            vec![("a", optional_(L::U64)), ("b", optional_(L::U64))],
         );
 
         let formats = [("some", "{a | 42u64}"), ("none", "{b | 43u64}")];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -730,7 +1235,91 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_dynamic_fields() {
+    async fn test_display_optional_auto_dereference() {
+        let inner = struct_(
+            "0x1::m::Inner",
+            vec![("data", L::U64), ("optional_data", optional_(L::U64))],
+        );
+
+        let layout = struct_(
+            "0x1::m::Test",
+            vec![
+                ("some_inner", optional_(inner.clone())),
+                ("none_inner", optional_(inner.clone())),
+                ("partial_inner", optional_(inner)),
+                ("some_value", optional_(L::U64)),
+                ("none_value", optional_(L::U64)),
+            ],
+        );
+
+        let bytes = bcs::to_bytes(&(
+            Some((100u64, Some(200u64))), // some_inner
+            None::<(u64, Option<u64>)>,   // none_inner
+            Some((300u64, None::<u64>)),  // partial_inner
+            Some(42u64),                  // some_value
+            None::<u64>,                  // none_value
+        ))
+        .unwrap();
+
+        let formats = [
+            // Accessing through Some option to nested field
+            ("some_inner_data", "{some_inner.data}"),
+            ("some_inner_optional", "{some_inner.optional_data}"),
+            // Accessing through None option should return null
+            ("none_inner_data", "{none_inner.data}"),
+            ("none_inner_optional", "{none_inner.optional_data}"),
+            // Accessing through Some option to None nested optional
+            ("partial_inner_data", "{partial_inner.data}"),
+            ("partial_inner_optional", "{partial_inner.optional_data}"),
+            // Direct optional access
+            ("some_value", "{some_value}"),
+            ("none_value", "{none_value}"),
+        ];
+
+        let output = format(
+            MockStore::default(),
+            Limits::default(),
+            bytes,
+            layout,
+            usize::MAX,
+            ONE_MB,
+            formats,
+        )
+        .await
+        .unwrap();
+
+        assert_debug_snapshot!(output, @r###"
+        {
+            "some_inner_data": Ok(
+                String("100"),
+            ),
+            "some_inner_optional": Ok(
+                String("200"),
+            ),
+            "none_inner_data": Ok(
+                Null,
+            ),
+            "none_inner_optional": Ok(
+                Null,
+            ),
+            "partial_inner_data": Ok(
+                String("300"),
+            ),
+            "partial_inner_optional": Ok(
+                Null,
+            ),
+            "some_value": Ok(
+                String("42"),
+            ),
+            "none_value": Ok(
+                Null,
+            ),
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_display_dynamic_fields() {
         let parent = AccountAddress::from_str("0x1000").unwrap();
         let bytes = bcs::to_bytes(&parent).unwrap();
         let layout = struct_(
@@ -739,7 +1328,7 @@ mod tests {
                 "parent",
                 struct_(
                     "0x1::m::Parent",
-                    vec![("id", T::Struct(Box::new(UID::layout())))],
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
                 ),
             )],
         );
@@ -748,9 +1337,9 @@ mod tests {
         let store = MockStore::default().with_dynamic_field(
             parent,
             "key",
-            T::Struct(Box::new(move_utf8_str_layout())),
+            L::Struct(Box::new(move_utf8_str_layout())),
             (42u64, 43u64),
-            struct_("0x1::m::Inner", vec![("x", T::U64), ("y", T::U64)]),
+            struct_("0x1::m::Inner", vec![("x", L::U64), ("y", L::U64)]),
         );
 
         let formats = [
@@ -763,10 +1352,10 @@ mod tests {
         ];
 
         let output = format(
-            &store,
+            store,
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -799,7 +1388,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_dynamic_object_fields() {
+    async fn test_display_dynamic_object_fields() {
         let parent = AccountAddress::from_str("0x2000").unwrap();
         let child = AccountAddress::from_str("0x2001").unwrap();
         let bytes = bcs::to_bytes(&parent).unwrap();
@@ -809,7 +1398,7 @@ mod tests {
                 "parent",
                 struct_(
                     "0x1::m::Parent",
-                    vec![("id", T::Struct(Box::new(UID::layout())))],
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
                 ),
             )],
         );
@@ -817,14 +1406,14 @@ mod tests {
         let store = MockStore::default().with_dynamic_object_field(
             parent,
             "key",
-            T::Struct(Box::new(move_utf8_str_layout())),
+            L::Struct(Box::new(move_utf8_str_layout())),
             (child, 100u64, 200u64),
             struct_(
                 "0x1::m::Child",
                 vec![
-                    ("id", T::Struct(Box::new(UID::layout()))),
-                    ("x", T::U64),
-                    ("y", T::U64),
+                    ("id", L::Struct(Box::new(UID::layout()))),
+                    ("x", L::U64),
+                    ("y", L::U64),
                 ],
             ),
         );
@@ -843,7 +1432,7 @@ mod tests {
             ..Limits::default()
         };
 
-        let output = format(&store, limits, &bytes, &layout, usize::MAX, ONE_MB, formats)
+        let output = format(store, limits, bytes, layout, usize::MAX, ONE_MB, formats)
             .await
             .unwrap();
 
@@ -872,7 +1461,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_nested_dynamic_fields() {
+    async fn test_display_nested_dynamic_fields() {
         let parent = AccountAddress::from_str("0x3000").unwrap();
         let child = AccountAddress::from_str("0x3001").unwrap();
         let bytes = bcs::to_bytes(&parent).unwrap();
@@ -882,7 +1471,7 @@ mod tests {
                 "parent",
                 struct_(
                     "0x1::m::Parent",
-                    vec![("id", T::Struct(Box::new(UID::layout())))],
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
                 ),
             )],
         );
@@ -891,19 +1480,19 @@ mod tests {
             .with_dynamic_object_field(
                 parent,
                 "L1",
-                T::Struct(Box::new(move_utf8_str_layout())),
+                L::Struct(Box::new(move_utf8_str_layout())),
                 (child, 100u64),
                 struct_(
                     "0x1::m::Child",
-                    vec![("id", T::Struct(Box::new(UID::layout()))), ("data", T::U64)],
+                    vec![("id", L::Struct(Box::new(UID::layout()))), ("data", L::U64)],
                 ),
             )
             .with_dynamic_field(
                 child,
                 "L2",
-                T::Struct(Box::new(move_utf8_str_layout())),
+                L::Struct(Box::new(move_utf8_str_layout())),
                 (10u64, 20u64),
-                struct_("0x1::m::Inner", vec![("x", T::U64), ("y", T::U64)]),
+                struct_("0x1::m::Inner", vec![("x", L::U64), ("y", L::U64)]),
             );
 
         let formats = [
@@ -917,7 +1506,7 @@ mod tests {
             ..Limits::default()
         };
 
-        let output = format(&store, limits, &bytes, &layout, usize::MAX, ONE_MB, formats)
+        let output = format(store, limits, bytes, layout, usize::MAX, ONE_MB, formats)
             .await
             .unwrap();
 
@@ -937,48 +1526,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_vec_map() {
+    async fn test_display_vec_map() {
         let key = struct_(
             "0x42::m::Key",
             vec![
-                ("id", T::U64),
-                ("name", T::Struct(Box::new(move_ascii_str_layout()))),
+                ("id", L::U64),
+                ("name", L::Struct(Box::new(move_ascii_str_layout()))),
             ],
         );
 
-        let val = struct_("0x42::m::Value", vec![("data", T::U32)]);
-
-        let map = struct_(
-            "0x2::vec_map::VecMap<0x42::m::Key, 0x42::m::Value>",
-            vec![(
-                "contents",
-                vector_(struct_(
-                    "0x2::vec_map::Entry<0x42::m::Key, 0x42::m::Value>",
-                    vec![("key", key), ("value", val)],
-                )),
-            )],
-        );
+        let val = struct_("0x42::m::Value", vec![("data", L::U32)]);
 
         // Create test data: VecMap with 3 entries
-        let bytes = bcs::to_bytes(&VecMap {
-            contents: vec![
-                Entry {
-                    key: (1u64, "first"),
-                    value: 100u32,
-                },
-                Entry {
-                    key: (2u64, "second"),
-                    value: 200u32,
-                },
-                Entry {
-                    key: (3u64, "third"),
-                    value: 300u32,
-                },
-            ],
-        })
+        let bytes = bcs::to_bytes(&vec![
+            (1u64, "first", 100u32),
+            (2u64, "second", 200u32),
+            (3u64, "third", 300u32),
+        ])
         .unwrap();
 
-        let layout = struct_("0x1::m::Root", vec![("map", map)]);
+        let layout = struct_("0x1::m::Root", vec![("map", vec_map(key, val))]);
 
         let formats = [
             ("1st", "{map[0x42::m::Key(1u64, 'first')].data}"),
@@ -991,10 +1558,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1024,9 +1591,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_timestamp() {
+    async fn test_display_timestamp() {
         let bytes = bcs::to_bytes(&1681318800000u64).unwrap();
-        let layout = struct_("0x1::m::S", vec![("timestamp", T::U64)]);
+        let layout = struct_("0x1::m::S", vec![("timestamp", L::U64)]);
 
         let formats = [
             ("epoch", "{0u64:ts}"),
@@ -1037,10 +1604,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1063,16 +1630,17 @@ mod tests {
                 String("2023-04-12T17:00:00Z"),
             ),
             "toobig": Err(
-                TransformInvalid(
-                    "expected unix timestamp in milliseconds",
-                ),
+                TransformInvalid_ {
+                    offset: 0,
+                    reason: "expected unix timestamp in milliseconds",
+                },
             ),
         }
         "###);
     }
 
     #[tokio::test]
-    async fn test_hex() {
+    async fn test_display_hex() {
         let bytes = bcs::to_bytes(&(
             0x42u8,
             0x4243u16,
@@ -1096,15 +1664,15 @@ mod tests {
         let layout = struct_(
             "0x1::m::S",
             vec![
-                ("n8", T::U8),
-                ("n16", T::U16),
-                ("n32", T::U32),
-                ("n64", T::U64),
-                ("n128", T::U128),
-                ("n256", T::U256),
-                ("addr", T::Address),
-                ("bytes", vector_(T::U8)),
-                ("str", T::Struct(Box::new(move_ascii_str_layout()))),
+                ("n8", L::U8),
+                ("n16", L::U16),
+                ("n32", L::U32),
+                ("n64", L::U64),
+                ("n128", L::U128),
+                ("n256", L::U256),
+                ("addr", L::Address),
+                ("bytes", vector_(L::U8)),
+                ("str", L::Struct(Box::new(move_ascii_str_layout()))),
             ],
         );
 
@@ -1122,10 +1690,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1170,7 +1738,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_url() {
+    async fn test_display_url() {
         let bytes = bcs::to_bytes(&(
             1234u32,
             "hello/goodbye world",
@@ -1182,10 +1750,10 @@ mod tests {
         let layout = struct_(
             "0x1::m::S",
             vec![
-                ("num", T::U32),
-                ("str", T::Struct(Box::new(move_ascii_str_layout()))),
-                ("emoji", T::Struct(Box::new(move_utf8_str_layout()))),
-                ("bytes", T::Struct(Box::new(url_layout()))),
+                ("num", L::U32),
+                ("str", L::Struct(Box::new(move_ascii_str_layout()))),
+                ("emoji", L::Struct(Box::new(move_utf8_str_layout()))),
+                ("bytes", L::Struct(Box::new(url_layout()))),
             ],
         );
 
@@ -1195,10 +1763,10 @@ mod tests {
         )];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1216,9 +1784,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_base64() {
+    async fn test_display_base64() {
         let bytes = bcs::to_bytes(&00u8).unwrap();
-        let layout = struct_("0x1::m::S", vec![("dummy_field", T::Bool)]);
+        let layout = struct_("0x1::m::S", vec![("dummy_field", L::Bool)]);
 
         let formats = [
             ("byte", "{0u8:base64}"),
@@ -1252,10 +1820,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1318,7 +1886,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_bcs() {
+    async fn test_display_bcs() {
         let bytes = bcs::to_bytes(&(
             0x42u8,
             0x1234u16,
@@ -1332,12 +1900,12 @@ mod tests {
         let layout = struct_(
             "0x1::m::S",
             vec![
-                ("n8", T::U8),
-                ("n16", T::U16),
-                ("n32", T::U32),
-                ("n64", T::U64),
-                ("str", T::Struct(Box::new(move_utf8_str_layout()))),
-                ("bytes", vector_(T::U8)),
+                ("n8", L::U8),
+                ("n16", L::U16),
+                ("n32", L::U32),
+                ("n64", L::U64),
+                ("str", L::Struct(Box::new(move_utf8_str_layout()))),
+                ("bytes", vector_(L::U8)),
             ],
         );
 
@@ -1362,10 +1930,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1398,9 +1966,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_bcs_modifiers() {
+    async fn test_display_bcs_modifiers() {
         let bytes = bcs::to_bytes(&00u8).unwrap();
-        let layout = struct_("0x1::m::S", vec![("dummy_field", T::Bool)]);
+        let layout = struct_("0x1::m::S", vec![("dummy_field", L::Bool)]);
 
         let formats = [
             ("byte", "{0u8:bcs}"),
@@ -1434,10 +2002,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1500,7 +2068,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_json() {
+    async fn test_display_json() {
         let bytes = bcs::to_bytes(&(
             12u8,
             1234u16,
@@ -1518,33 +2086,33 @@ mod tests {
         let layout = struct_(
             "0x1::m::S",
             vec![
-                ("n8", T::U8),
-                ("n16", T::U16),
-                ("n32", T::U32),
-                ("n64", T::U64),
-                ("str", T::Struct(Box::new(move_utf8_str_layout()))),
-                ("bytes", vector_(T::U8)),
+                ("n8", L::U8),
+                ("n16", L::U16),
+                ("n32", L::U32),
+                ("n64", L::U64),
+                ("str", L::Struct(Box::new(move_utf8_str_layout()))),
+                ("bytes", vector_(L::U8)),
                 (
                     "none",
-                    struct_("0x1::option::Option<u8>", vec![("vec", vector_(T::U8))]),
+                    struct_("0x1::option::Option<u8>", vec![("vec", vector_(L::U8))]),
                 ),
                 (
                     "some",
                     struct_(
                         "0x1::option::Option<vector<u32>>",
-                        vec![("vec", vector_(vector_(T::U32)))],
+                        vec![("vec", vector_(vector_(L::U32)))],
                     ),
                 ),
                 (
                     "variant",
                     enum_(
                         "0x1::m::E",
-                        vec![("A", vec![("x", T::U8)]), ("B", vec![("y", T::U16)])],
+                        vec![("A", vec![("x", L::U8)]), ("B", vec![("y", L::U16)])],
                     ),
                 ),
                 (
                     "nested",
-                    struct_("0x1::m::N", vec![("a", T::U32), ("b", T::U64)]),
+                    struct_("0x1::m::N", vec![("a", L::U32), ("b", L::U64)]),
                 ),
             ],
         );
@@ -1574,10 +2142,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1679,14 +2247,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_string_hardening() {
+    async fn test_display_string_hardening() {
         let bytes = bcs::to_bytes(&("ascii", "🔥", vec![0xC3u8])).unwrap();
         let layout = struct_(
             "0x1::m::S",
             vec![
-                ("ascii", T::Struct(Box::new(move_utf8_str_layout()))),
-                ("utf8", T::Struct(Box::new(move_utf8_str_layout()))),
-                ("invalid", T::Struct(Box::new(move_utf8_str_layout()))),
+                ("ascii", L::Struct(Box::new(move_utf8_str_layout()))),
+                ("utf8", L::Struct(Box::new(move_utf8_str_layout()))),
+                ("invalid", L::Struct(Box::new(move_utf8_str_layout()))),
             ],
         );
 
@@ -1697,10 +2265,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1717,18 +2285,19 @@ mod tests {
                 String("🔥"),
             ),
             "invalid": Err(
-                TransformInvalid(
-                    "expected utf8 bytes",
-                ),
+                TransformInvalid_ {
+                    offset: 0,
+                    reason: "expected utf8 bytes",
+                },
             ),
         }
         "###);
     }
 
     #[tokio::test]
-    async fn test_field_errors() {
+    async fn test_display_field_errors() {
         let bytes = bcs::to_bytes(&0u8).unwrap();
-        let layout = struct_("0x1::m::S", vec![("byte", T::U8)]);
+        let layout = struct_("0x1::m::S", vec![("byte", L::U8)]);
 
         let formats = [
             ("parsing_error", "{42"),
@@ -1742,10 +2311,10 @@ mod tests {
         };
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             limits,
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1826,9 +2395,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_vector_literal_type_mismatch() {
+    async fn test_display_vector_literal_type_mismatch() {
         let bytes = bcs::to_bytes(&0u8).unwrap();
-        let layout = struct_("0x1::m::S", vec![("byte", T::U8)]);
+        let layout = struct_("0x1::m::S", vec![("byte", L::U8)]);
 
         let formats = [
             ("between_literals", "{vector[42u8, 42u64]:bcs}"),
@@ -1837,10 +2406,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout,
             usize::MAX,
             ONE_MB,
             formats,
@@ -1851,29 +2420,32 @@ mod tests {
         assert_debug_snapshot!(output, @r###"
         {
             "between_literals": Err(
-                VectorTypeMismatch(
-                    U8,
-                    U64,
-                ),
+                VectorTypeMismatch {
+                    offset: 1,
+                    this: U8,
+                    that: U64,
+                },
             ),
             "between_field_and_literal": Err(
-                VectorTypeMismatch(
-                    U64,
-                    U8,
-                ),
+                VectorTypeMismatch {
+                    offset: 1,
+                    this: U64,
+                    that: U8,
+                },
             ),
             "between_annotation_and_element": Err(
-                VectorTypeMismatch(
-                    U64,
-                    U8,
-                ),
+                VectorTypeMismatch {
+                    offset: 1,
+                    this: U64,
+                    that: U8,
+                },
             ),
         }
         "###);
     }
 
     #[tokio::test]
-    async fn test_output_node_limits() {
+    async fn test_display_output_node_limits() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 
         let limits = Limits {
@@ -1886,10 +2458,10 @@ mod tests {
         let two_fields = [("f", "{a | b | c | d | e}"), ("g", "{f | g | h | i | j}")];
 
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             limits.clone(),
-            &bytes,
-            &T::U64,
+            bytes.clone(),
+            L::U64,
             usize::MAX,
             ONE_MB,
             big_field,
@@ -1898,10 +2470,10 @@ mod tests {
         assert!(matches!(res, Err(Error::TooBig)));
 
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             limits,
-            &bytes,
-            &T::U64,
+            bytes,
+            L::U64,
             usize::MAX,
             ONE_MB,
             two_fields,
@@ -1911,15 +2483,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_output_size_limits() {
+    async fn test_display_output_size_limits() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
         let formats = [("x", "012345"), ("y", "67890"), ("z", "ABCDE")];
 
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &T::U64,
+            bytes,
+            L::U64,
             usize::MAX,
             10,
             formats,
@@ -1929,7 +2501,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_move_value_depth_limit() {
+    async fn test_display_move_value_depth_limit() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 
         let formats = [
@@ -1942,10 +2514,10 @@ mod tests {
         ];
 
         let output = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &T::U64,
+            bytes,
+            L::U64,
             3,
             ONE_MB,
             formats,
@@ -1971,7 +2543,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_too_many_loads() {
+    async fn test_display_too_many_loads() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 
         let limits = Limits {
@@ -1985,10 +2557,10 @@ mod tests {
         let two_fields = [("f1", "{a->[b]}"), ("f2", "{c->[d]}"), ("f3", "{e=>[f]}")];
 
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             limits.clone(),
-            &bytes,
-            &T::U64,
+            bytes.clone(),
+            L::U64,
             usize::MAX,
             ONE_MB,
             big_field,
@@ -1997,10 +2569,10 @@ mod tests {
         assert!(matches!(res, Err(Error::TooManyLoads)));
 
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             limits,
-            &bytes,
-            &T::U64,
+            bytes,
+            L::U64,
             usize::MAX,
             ONE_MB,
             two_fields,
@@ -2010,16 +2582,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_name_empty() {
+    async fn test_display_name_empty() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 
         // Name evaluates to null when the field doesn't exist
         let formats = [("name {missing}", "value")];
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &T::U64,
+            bytes,
+            L::U64,
             usize::MAX,
             ONE_MB,
             formats,
@@ -2029,17 +2601,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_duplicate_name() {
-        let layout = struct_("0x1::m::S", vec![("a", T::U64), ("b", T::U64)]);
+    async fn test_display_duplicate_name() {
+        let layout = struct_("0x1::m::S", vec![("a", L::U64), ("b", L::U64)]);
 
         // Static duplicate: same literal name
         let formats = [("field", "value1"), ("field", "value2")];
         let bytes = bcs::to_bytes(&(42u64, 43u64)).unwrap();
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout.clone(),
             usize::MAX,
             ONE_MB,
             formats,
@@ -2051,10 +2623,10 @@ mod tests {
         let formats = [("{a}", "value1"), ("{b}", "value2")];
         let bytes = bcs::to_bytes(&(42u64, 42u64)).unwrap();
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout.clone(),
             usize::MAX,
             ONE_MB,
             formats,
@@ -2066,10 +2638,10 @@ mod tests {
         let formats = [("f42", "value1"), ("f{a}", "value2")];
         let bytes = bcs::to_bytes(&(42u64, 43u64)).unwrap();
         let res = format(
-            &MockStore::default(),
+            MockStore::default(),
             Limits::default(),
-            &bytes,
-            &layout,
+            bytes,
+            layout.clone(),
             usize::MAX,
             ONE_MB,
             formats,

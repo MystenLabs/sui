@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use async_graphql::Context;
 use async_graphql::Enum;
+use async_graphql::InputObject;
 use async_graphql::Interface;
 use async_graphql::Object;
 use async_graphql::connection::Connection;
@@ -11,18 +14,21 @@ use futures::future::try_join_all;
 use sui_types::base_types::SuiAddress as NativeSuiAddress;
 use sui_types::dynamic_field::DynamicFieldType;
 
+use crate::api::scalars::domain::Domain;
 use crate::api::scalars::id::Id;
 use crate::api::scalars::owner_kind::OwnerKind;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
 use crate::api::types::balance::Balance;
 use crate::api::types::balance::{self as balance};
 use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::dynamic_field;
 use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::dynamic_field::DynamicFieldName;
 use crate::api::types::move_object::MoveObject;
 use crate::api::types::move_package::MovePackage;
-use crate::api::types::name_service::address_to_name;
+use crate::api::types::name_record::NameRecord;
 use crate::api::types::object::Object;
 use crate::api::types::object::ObjectKey;
 use crate::api::types::object::{self as object};
@@ -32,11 +38,13 @@ use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
-use crate::api::types::validator::Validator;
 use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::convert;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 /// The possible relationship types for a transaction: sent or affected.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -56,6 +64,13 @@ pub(crate) enum AddressTransactionRelationship {
     name = "IAddressable",
     field(name = "address", ty = "SuiAddress"),
     field(
+        name = "address_at",
+        arg(name = "root_version", ty = "Option<UInt53>"),
+        arg(name = "checkpoint", ty = "Option<UInt53>"),
+        ty = "Option<Result<Address, RpcError<Error>>>",
+        desc = "Fetch the address as it was at a different root version, or checkpoint.\n\nIf no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.",
+    ),
+    field(
         name = "balance",
         arg(name = "coin_type", ty = "TypeInput"),
         ty = "Option<Result<Balance, RpcError<balance::Error>>>",
@@ -71,9 +86,9 @@ pub(crate) enum AddressTransactionRelationship {
         desc = "Total balance across coins owned by this address, grouped by coin type.",
     ),
     field(
-        name = "default_suins_name",
-        ty = "Option<Result<String, RpcError>>",
-        desc = "The domain explicitly configured as the default SuiNS name for this address."
+        name = "default_name_record",
+        ty = "Option<Result<NameRecord, RpcError<object::Error>>>",
+        desc = "The domain explicitly configured as the default Name Service name for this address."
     ),
     field(
         name = "multi_get_balances",
@@ -99,13 +114,49 @@ pub(crate) enum IAddressable {
     MoveObject(MoveObject),
     MovePackage(MovePackage),
     Object(Object),
-    Validator(Validator),
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct Address {
     pub(crate) scope: Scope,
     pub(crate) address: NativeSuiAddress,
+}
+
+/// Identifies a specific version of an address.
+///
+/// Exactly one of `address` or `name` must be specified. Additionally, at most one of `rootVersion` or `atCheckpoint` can be specified. If neither bound is provided, the address is fetched at the checkpoint being viewed.
+///
+/// See `Query.address` for more details.
+#[derive(InputObject)]
+pub(crate) struct AddressKey {
+    /// The address.
+    pub(crate) address: Option<SuiAddress>,
+
+    /// A SuiNS name to resolve to an address.
+    pub(crate) name: Option<Domain>,
+
+    /// If specified, sets a root version bound for this address.
+    pub(crate) root_version: Option<UInt53>,
+
+    /// If specified, sets a checkpoint bound for this address.
+    pub(crate) at_checkpoint: Option<UInt53>,
+}
+
+#[derive(thiserror::Error, Debug, Clone)]
+pub(crate) enum Error {
+    #[error("Checkpoint {0} in the future")]
+    Future(u64),
+
+    #[error(transparent)]
+    Object(#[from] Arc<object::Error>),
+
+    #[error(
+        "At most one of a root version, or a checkpoint bound can be specified when fetching an address"
+    )]
+    OneBound,
+
+    #[error("Exactly one of `address` or `name` must be specified")]
+    OneId,
 }
 
 #[Object]
@@ -120,21 +171,44 @@ impl Address {
         Ok(self.address.into())
     }
 
+    /// Fetch the address as it was at a different root version, or checkpoint.
+    ///
+    /// If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
+    pub(crate) async fn address_at(
+        &self,
+        ctx: &Context<'_>,
+        root_version: Option<UInt53>,
+        checkpoint: Option<UInt53>,
+    ) -> Option<Result<Address, RpcError<Error>>> {
+        async {
+            let key = AddressKey {
+                address: Some(self.address.into()),
+                name: None,
+                root_version,
+                at_checkpoint: checkpoint,
+            };
+
+            Address::by_key(ctx, Scope::new(ctx)?, key).await
+        }
+        .await
+        .transpose()
+    }
+
     /// Attempts to fetch the object at this address.
     pub(crate) async fn as_object(
         &self,
         ctx: &Context<'_>,
     ) -> Option<Result<Object, RpcError<object::Error>>> {
-        Object::by_key(
-            ctx,
-            self.scope.clone(),
-            ObjectKey {
+        async {
+            let key = ObjectKey {
                 address: self.address.into(),
                 version: None,
                 root_version: self.scope.root_version().map(Into::into),
                 at_checkpoint: None,
-            },
-        )
+            };
+
+            Object::by_key(ctx, self.scope.clone(), key).await
+        }
         .await
         .transpose()
     }
@@ -173,12 +247,12 @@ impl Address {
         )
     }
 
-    /// The domain explicitly configured as the default SuiNS name for this address.
-    pub(crate) async fn default_suins_name(
+    /// The domain explicitly configured as the default Name Service name for this address.
+    pub(crate) async fn default_name_record(
         &self,
         ctx: &Context<'_>,
-    ) -> Option<Result<String, RpcError>> {
-        address_to_name(ctx, &self.scope, self.address)
+    ) -> Option<Result<NameRecord, RpcError<object::Error>>> {
+        NameRecord::by_address(ctx, self.scope.without_root_bound(), self.address)
             .await
             .transpose()
     }
@@ -190,7 +264,7 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Option<Result<DynamicField, RpcError<dynamic_field::Error>>> {
         DynamicField::by_name(
             ctx,
             self.scope.clone(),
@@ -199,6 +273,7 @@ impl Address {
             name,
         )
         .await
+        .transpose()
     }
 
     /// Dynamic fields owned by this address.
@@ -211,15 +286,17 @@ impl Address {
         after: Option<object::CLive>,
         last: Option<u64>,
         before: Option<object::CLive>,
-    ) -> Result<Option<Connection<String, DynamicField>>, RpcError<object::Error>> {
-        let pagination: &PaginationConfig = ctx.data()?;
-        let limits = pagination.limits("Address", "dynamicFields");
-        let page = Page::from_params(limits, first, after, last, before)?;
+    ) -> Option<Result<Connection<String, DynamicField>, RpcError<object::Error>>> {
+        Some(
+            async {
+                let pagination: &PaginationConfig = ctx.data()?;
+                let limits = pagination.limits("Address", "dynamicFields");
+                let page = Page::from_params(limits, first, after, last, before)?;
 
-        let dynamic_fields =
-            DynamicField::paginate(ctx, self.scope.clone(), self.address.into(), page).await?;
-
-        Ok(Some(dynamic_fields))
+                DynamicField::paginate(ctx, self.scope.clone(), self.address.into(), page).await
+            }
+            .await,
+        )
     }
 
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
@@ -229,7 +306,7 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Option<Result<DynamicField, RpcError<dynamic_field::Error>>> {
         DynamicField::by_name(
             ctx,
             self.scope.clone(),
@@ -238,6 +315,7 @@ impl Address {
             name,
         )
         .await
+        .transpose()
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
@@ -247,7 +325,7 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
                 ctx,
@@ -267,7 +345,7 @@ impl Address {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
                 ctx,
@@ -382,6 +460,59 @@ impl Address {
 }
 
 impl Address {
+    /// Fetch an address by its key. Exactly one of an address or a name must be provided.
+    /// Additionally, the key can specify a root version bound, or a checkpoint bound, or neither.
+    ///
+    /// If a name is provided, it is resolved to an address using SuiNS. If the name does not
+    /// resolve to an address (e.g. the name does not exist or has expired), `Ok(None)` is
+    /// returned.
+    pub(crate) async fn by_key(
+        ctx: &Context<'_>,
+        scope: Scope,
+        key: AddressKey,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        let bounds = key.root_version.is_some() as u8 + key.at_checkpoint.is_some() as u8;
+
+        if bounds > 1 {
+            return Err(bad_user_input(Error::OneBound));
+        }
+
+        // Determine the scope based on bounds
+        let scope = if let Some(v) = key.root_version {
+            scope.with_root_version(v.into())
+        } else if let Some(cp) = key.at_checkpoint {
+            let watermark: &Arc<Watermarks> = ctx.data()?;
+            if u64::from(cp) > watermark.high_watermark().checkpoint() {
+                return Err(bad_user_input(Error::Future(cp.into())));
+            }
+            scope.with_root_checkpoint(cp.into())
+        } else {
+            scope
+        };
+
+        // Resolve the address either directly or via name lookup.
+        let address = match (key.address, key.name) {
+            (Some(addr), None) => addr.into(),
+            (None, Some(name)) => {
+                let Some(target) = NameRecord::by_domain(ctx, scope.clone(), name.into())
+                    .await
+                    .map_err(convert)?
+                    .and_then(|r| r.record.target_address)
+                else {
+                    return Ok(None);
+                };
+
+                target
+            }
+
+            (None, None) | (Some(_), Some(_)) => {
+                return Err(bad_user_input(Error::OneId));
+            }
+        };
+
+        Ok(Some(Self::with_address(scope, address)))
+    }
+
     /// Construct an address that is represented by just its identifier (`SuiAddress`).
     /// This does not check whether the address is valid or exists in the system.
     pub(crate) fn with_address(scope: Scope, address: NativeSuiAddress) -> Self {

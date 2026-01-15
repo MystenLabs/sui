@@ -285,10 +285,11 @@ const MAX_PROTOCOL_VERSION: u64 = 108;
 //              nitro attestation native function in Devnet and Testnet.
 // Version 106: Framework update: accumulator storage fund calculations
 //              Enable address balances on devnet
-// Version 107: Enable new digit based gas rounding.
+// Version 108: Enable new digit based gas rounding.
 //              Support TxContext in all parameter positions.
 //              Disable entry point signature check.
 //              Enable address aliases on testnet.
+//              Enable poseidon_bn254 on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -951,6 +952,10 @@ struct FeatureFlags {
     // If true, disable entry point signature check.
     #[serde(skip_serializing_if = "is_false")]
     disable_entry_point_signature_check: bool,
+
+    // If true, convert withdrawal compatibility PTB arguments to coins at the start of the PTB.
+    #[serde(skip_serializing_if = "is_false")]
+    convert_withdrawal_compatibility_ptb_arguments: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2518,6 +2523,11 @@ impl ProtocolConfig {
     pub fn consensus_skip_gced_blocks_in_direct_finalization(&self) -> bool {
         self.feature_flags
             .consensus_skip_gced_blocks_in_direct_finalization
+    }
+
+    pub fn convert_withdrawal_compatibility_ptb_arguments(&self) -> bool {
+        self.feature_flags
+            .convert_withdrawal_compatibility_ptb_arguments
     }
 }
 
@@ -4447,6 +4457,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.address_aliases = true;
                     }
+
+                    cfg.feature_flags.enable_poseidon = true;
                 }
                 // Use this template when making changes:
                 //

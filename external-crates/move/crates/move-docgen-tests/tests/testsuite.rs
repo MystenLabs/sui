@@ -3,8 +3,7 @@
 
 use move_command_line_common::testing::insta_assert;
 use move_docgen::{Docgen, DocgenFlags, DocgenOptions};
-use move_package_alt::flavor::Vanilla;
-use move_package_alt::package::RootPackage;
+use move_package_alt::{RootPackage, Vanilla};
 use move_package_alt_compilation::build_config::BuildConfig;
 use move_package_alt_compilation::model_builder;
 use std::path::Path;
@@ -52,7 +51,7 @@ fn test_impl(toml_path: &Path, flags: DocgenFlags, test_case: &str) -> datatest_
     let mut w = Vec::new();
 
     // Block on the async function
-    let env = move_package_alt::flavor::vanilla::default_environment();
+    let env = Vanilla::default_environment();
     let root_pkg: RootPackage<Vanilla> = config
         .package_loader(toml_path.parent().unwrap(), &env)
         .load_sync()?;

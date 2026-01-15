@@ -1331,6 +1331,7 @@
                 "consensus_smart_ancestor_selection": false,
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
+                "convert_withdrawal_compatibility_ptb_arguments": false,
                 "correct_gas_payment_limit_check": false,
                 "create_root_accumulator_object": false,
                 "debug_fatal_on_move_invariant_violation": false,
@@ -5530,7 +5531,6 @@
         "required": [
           "coinObjectCount",
           "coinType",
-          "fundsInAddressBalance",
           "lockedBalance",
           "totalBalance"
         ],
@@ -5545,6 +5545,7 @@
           },
           "fundsInAddressBalance": {
             "description": "The portion of `total_balance` that resides in the address balance rather than in the coin objects. `total_balance` is the total amount of funds owned by the address. That is, do not add these two fields together.",
+            "default": "0",
             "allOf": [
               {
                 "$ref": "#/components/schemas/BigInt_for_uint128"

@@ -43,7 +43,7 @@ use move_compiler::{
 };
 use move_ir_types::location::Loc;
 
-use move_package_alt::{flavor::MoveFlavor, package::RootPackage};
+use move_package_alt::{MoveFlavor, RootPackage};
 use move_package_alt_compilation::{
     build_config::BuildConfig,
     build_plan::BuildPlan,

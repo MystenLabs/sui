@@ -94,7 +94,8 @@ use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID};
 use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
 use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{
-    MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
+    MOVE_STDLIB_ADDRESS, SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+    SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SUI_ADDRESS_LENGTH, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair_from_rng},
     event::Event,
@@ -132,6 +133,7 @@ const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     SUI_DENY_LIST_OBJECT_ID,
     SUI_RANDOMNESS_STATE_OBJECT_ID,
     SUI_COIN_REGISTRY_OBJECT_ID,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
 ];
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [
@@ -242,6 +244,7 @@ impl AdapterInitConfig {
             enable_authenticated_event_streams,
             allow_references_in_ptbs,
             enable_non_exclusive_writes,
+            enable_address_balance_gas_payments,
         } = sui_args;
 
         let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -279,6 +282,9 @@ impl AdapterInitConfig {
         }
         if let Some(enable) = shared_object_deletion {
             protocol_config.set_shared_object_deletion_for_testing(enable);
+        }
+        if enable_address_balance_gas_payments {
+            protocol_config.enable_address_balance_gas_payments_for_testing();
         }
         // Older protocol versions use deprecated congestion control modes. Override to use
         // ExecutionTimeEstimate mode which is the only supported mode.
@@ -946,6 +952,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 recipient,
                 sender,
                 gas_budget,
+                gas_budget_from_address_balance,
                 gas_price,
             }) => {
                 let mut builder = ProgrammableTransactionBuilder::new();
@@ -954,8 +961,11 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     Some(test_account) => test_account.address,
                     None => panic!("Unbound account {}", recipient),
                 };
-                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let gas_price: u64 = gas_price.unwrap_or(self.gas_price);
+                let gas_budget = gas_budget_from_address_balance
+                    .or(gas_budget)
+                    .unwrap_or(DEFAULT_GAS_BUDGET);
+                let use_address_balance_gas = gas_budget_from_address_balance.is_some();
                 let transaction = self.sign_txn(sender, |sender, gas| {
                     let rec_arg = builder.pure(recipient).unwrap();
                     builder.command(sui_types::transaction::Command::TransferObjects(
@@ -963,6 +973,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         rec_arg,
                     ));
                     let pt = builder.finish();
+                    let gas = if use_address_balance_gas { vec![] } else { gas };
                     TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price)
                 });
                 let summary = self.execute_txn(transaction).await?;
@@ -987,6 +998,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 sender,
                 sponsor,
                 gas_budget,
+                gas_budget_from_address_balance,
                 gas_price,
                 gas_payment,
                 dev_inspect,
@@ -1038,8 +1050,19 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     })
                     .collect::<anyhow::Result<Vec<Command>>>()?;
 
+                if dev_inspect {
+                    assert!(
+                        gas_budget.is_none(),
+                        "Meaningless to set gas budget with dev-inspect"
+                    );
+                }
+
+                let gas_budget = gas_budget_from_address_balance
+                    .or(gas_budget)
+                    .unwrap_or(DEFAULT_GAS_BUDGET);
+                let use_address_balance_gas = gas_budget_from_address_balance.is_some();
+
                 let summary = if !dev_inspect && !dry_run {
-                    let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
                     let expiration = expiration
                         .map(TransactionExpiration::Epoch)
@@ -1049,6 +1072,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                         sponsor,
                         gas_payment.unwrap_or_default(),
                         |sender, sponsor, gas| {
+                            let gas = if use_address_balance_gas { vec![] } else { gas };
                             let mut tx_data = TransactionData::new_programmable_allow_sponsor(
                                 sender,
                                 gas,
@@ -1063,7 +1087,6 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     );
                     self.execute_txn(transaction).await?
                 } else if dry_run {
-                    let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                     let gas_price = gas_price.unwrap_or(self.gas_price);
                     let expiration = expiration
                         .map(TransactionExpiration::Epoch)
@@ -1071,7 +1094,11 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     let sender = self.get_sender(sender);
                     let sponsor = sponsor.map_or(sender, |a| self.get_sender(Some(a)));
 
-                    let payments = self.get_payments(sponsor, gas_payment.unwrap_or_default());
+                    let payments = if use_address_balance_gas {
+                        vec![]
+                    } else {
+                        self.get_payments(sponsor, gas_payment.unwrap_or_default())
+                    };
 
                     let mut transaction = TransactionData::new_programmable(
                         sender.address,
@@ -1083,10 +1110,6 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     *transaction.expiration_mut_for_testing() = expiration;
                     self.dry_run(transaction).await?
                 } else {
-                    assert!(
-                        gas_budget.is_none(),
-                        "Meaningless to set gas budget with dev-inspect"
-                    );
                     let sender_address = self.get_sender(sender).address;
                     let transaction =
                         TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
@@ -1105,6 +1128,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 dependencies,
                 sender,
                 gas_budget,
+                gas_budget_from_address_balance,
                 dry_run,
                 syntax,
                 policy,
@@ -1149,6 +1173,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                     original_package_addrs.push((*dep, dep_address));
                 }
                 let gas_price = gas_price.unwrap_or(self.gas_price);
+                let gas_budget = gas_budget_from_address_balance
+                    .or(gas_budget)
+                    .unwrap_or(DEFAULT_GAS_BUDGET);
+                let use_address_balance_gas = gas_budget_from_address_balance.is_some();
 
                 let result = compile_any(
                     self,
@@ -1194,6 +1222,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                             dry_run,
                             policy,
                             gas_price,
+                            use_address_balance_gas,
                         ).await?;
                         Ok((output, modules))
                     },
@@ -1562,10 +1591,11 @@ impl SuiTestAdapter {
         upgrade_capability: FakeID,
         dependencies: Vec<String>,
         sender: String,
-        gas_budget: Option<u64>,
+        gas_budget: u64,
         dry_run: bool,
         policy: u8,
         gas_price: u64,
+        use_address_balance_gas: bool,
     ) -> anyhow::Result<Option<String>> {
         let modules_bytes = modules
             .iter()
@@ -1576,7 +1606,6 @@ impl SuiTestAdapter {
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<Vec<Vec<u8>>>>()?;
-        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
 
         let dependencies = self.get_dependency_ids(dependencies, /* include_std */ true)?;
 
@@ -1627,8 +1656,10 @@ impl SuiTestAdapter {
             return Ok(self.object_summary_output(&summary, false));
         }
 
-        let data =
-            |sender, gas| TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price);
+        let data = |sender, gas: Vec<ObjectRef>| {
+            let gas = if use_address_balance_gas { vec![] } else { gas };
+            TransactionData::new_programmable(sender, gas, pt, gas_budget, gas_price)
+        };
         let transaction = self.sign_txn(Some(sender), data);
         let summary = self.execute_txn(transaction).await?;
 

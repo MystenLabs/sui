@@ -77,7 +77,11 @@ pub async fn build_analytics_indexer(
             remote_store_url: if config.local_ingestion_path.is_some() {
                 None
             } else {
-                Some(url::Url::parse(&config.remote_store_url)?)
+                config
+                    .remote_store_url
+                    .as_ref()
+                    .map(|url| url::Url::parse(url))
+                    .transpose()?
             },
             local_ingestion_path: config.local_ingestion_path.clone(),
             rpc_api_url: config

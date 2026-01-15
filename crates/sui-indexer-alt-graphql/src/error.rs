@@ -31,7 +31,7 @@ pub(crate) mod code {
     pub const RESOURCE_EXHAUSTED: &str = "RESOURCE_EXHAUSTED";
 }
 
-#[derive(thiserror::Error, Debug, Clone)]
+#[derive(thiserror::Error, Debug)]
 pub(crate) enum RpcError<E: std::error::Error = Infallible> {
     /// An error that is the user's fault.
     BadUserInput(Arc<E>),
@@ -128,6 +128,20 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
     }
 }
 
+impl<E: std::error::Error> Clone for RpcError<E> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::BadUserInput(e) => Self::BadUserInput(e.clone()),
+            &Self::FeatureUnavailable { what } => Self::FeatureUnavailable { what },
+            Self::GraphQlError(e) => Self::GraphQlError(e.clone()),
+            Self::InternalError(e) => Self::InternalError(e.clone()),
+            Self::Pagination(e) => Self::Pagination(e.clone()),
+            &Self::RequestTimeout { kind, limit } => Self::RequestTimeout { kind, limit },
+            Self::ResourceExhausted(e) => Self::ResourceExhausted(e.clone()),
+        }
+    }
+}
+
 // Cannot use `#[from]` for this conversion because [`async_graphql::Error`] does not implement
 // `std::error::Error`, so it cannot participate in the source/chaining APIs.
 impl<E: std::error::Error> From<async_graphql::Error> for RpcError<E> {
@@ -196,6 +210,23 @@ where
 pub(crate) fn upcast<E: std::error::Error>(err: RpcError) -> RpcError<E> {
     match err {
         RpcError::BadUserInput(e) => match *e.as_ref() {},
+        RpcError::Pagination(e) => RpcError::Pagination(e),
+        RpcError::GraphQlError(e) => RpcError::GraphQlError(e),
+        RpcError::InternalError(e) => RpcError::InternalError(e),
+        RpcError::FeatureUnavailable { what } => RpcError::FeatureUnavailable { what },
+        RpcError::RequestTimeout { kind, limit } => RpcError::RequestTimeout { kind, limit },
+        RpcError::ResourceExhausted(e) => RpcError::ResourceExhausted(e),
+    }
+}
+
+/// Convert an `RpcError<A>` into an `RpcError<B>`, as long as `B` can wrap an `Arc<A>`.
+pub(crate) fn convert<A, B>(err: RpcError<A>) -> RpcError<B>
+where
+    A: std::error::Error,
+    B: std::error::Error + From<Arc<A>>,
+{
+    match err {
+        RpcError::BadUserInput(e) => RpcError::BadUserInput(Arc::new(e.into())),
         RpcError::Pagination(e) => RpcError::Pagination(e),
         RpcError::GraphQlError(e) => RpcError::GraphQlError(e),
         RpcError::InternalError(e) => RpcError::InternalError(e),
