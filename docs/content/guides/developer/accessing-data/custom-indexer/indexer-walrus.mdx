@@ -72,7 +72,7 @@ This implementation tracks the latest object state at checkpoint boundary. When 
 
 ### `Processor`
 
-All pipelines implement the same [`Processor` trait](/guides/developer/accessing-data/pipeline-architecture.mdx#seq-processor), which defines the logic to transform a checkpoint from the ingestion task into an intermediate or final form to commit to the store. Data flows into and out of the processor, potentially out of order.
+All pipelines implement the same [`Processor` trait](/guides/developer/accessing-data/pipeline-architecture.mdx), which defines the logic to transform a checkpoint from the ingestion task into an intermediate or final form to commit to the store. Data flows into and out of the processor, potentially out of order.
 
 #### `process` function
 
