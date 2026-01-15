@@ -7,18 +7,14 @@
 use std::sync::Arc;
 
 use consensus_config::{AuthorityIndex, Stake};
-#[cfg(msim)]
 use consensus_types::block::BlockRef;
 use consensus_types::block::{Round, TransactionIndex};
 use mysten_metrics::monitored_mpsc::unbounded_channel;
 use parking_lot::RwLock;
-#[cfg(msim)]
 use rand::prelude::SliceRandom;
 use rand::{Rng, rngs::StdRng};
 
-#[cfg(msim)]
 use crate::Transaction;
-#[cfg(msim)]
 use crate::block::{BlockTransactionVotes, TestBlock, genesis_blocks};
 use crate::{
     block::{BlockAPI, VerifiedBlock},
@@ -307,9 +303,9 @@ impl RandomDag {
     }
 }
 
-#[cfg(msim)]
 impl RandomDag {
     /// Creates a new RandomDag with generated blocks containing transactions and reject votes.
+    #[allow(unused)]
     pub fn new(
         context: Arc<Context>,
         rng: &mut StdRng,
@@ -320,8 +316,8 @@ impl RandomDag {
         use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
         let committee = &context.committee;
-        let quorum_threshold = committee.quorum_threshold() as usize;
-        let committee_size = committee.size();
+        let quorum_threshold = committee.quorum_threshold();
+        let total_stake = committee.total_stake();
 
         // Store all blocks for BFS lookup.
         let mut all_blocks: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
@@ -333,7 +329,7 @@ impl RandomDag {
 
         // Track included blocks per authority (simulates link_causal_history).
         let mut included_per_authority: Vec<BTreeSet<BlockRef>> =
-            vec![BTreeSet::new(); committee_size];
+            vec![BTreeSet::new(); committee.size()];
 
         // Initialize with genesis blocks.
         for block in &last_round_blocks {
@@ -342,18 +338,34 @@ impl RandomDag {
 
         for r in 1..=num_rounds {
             // Select random quorum-or-more authorities to produce blocks this round.
-            let n = rng.gen_range(quorum_threshold..=committee_size);
+            let target_stake = rng.gen_range(quorum_threshold..=total_stake);
             let mut authorities: Vec<_> = committee.authorities().map(|(a, _)| a).collect();
             authorities.shuffle(rng);
-            let selected_authorities = &authorities[..n];
+            let mut accumulated_stake: Stake = 0;
+            let selected_authorities: Vec<_> = authorities
+                .into_iter()
+                .take_while(|a| {
+                    accumulated_stake += committee.stake(*a);
+                    accumulated_stake < target_stake
+                })
+                .collect();
 
             let mut current_round_blocks = Vec::new();
 
-            for &authority in selected_authorities {
-                // First, select exactly quorum blocks from the previous round.
+            for authority in selected_authorities {
+                // First, select blocks from the previous round until quorum stake is reached.
                 let mut prev_round_blocks = last_round_blocks.clone();
                 prev_round_blocks.shuffle(rng);
-                prev_round_blocks.truncate(quorum_threshold);
+                let mut parent_stake: Stake = 0;
+                let mut quorum_count = 0;
+                for block in &prev_round_blocks {
+                    parent_stake += committee.stake(block.author());
+                    quorum_count += 1;
+                    if parent_stake >= quorum_threshold {
+                        break;
+                    }
+                }
+                prev_round_blocks.truncate(quorum_count);
                 let quorum_parents = prev_round_blocks;
 
                 // Collect authorities already included in quorum parents.
@@ -460,7 +472,7 @@ struct RoundState {
 }
 
 /// Iterator yielding blocks in constrained random order. Selects from rounds
-/// `visited_round + 1` to `quorum_round + max_step`, simulating arrival with delays.
+/// `completed_round + 1` to `quorum_round + max_step`, simulating arrival with delays.
 pub struct RandomDagIterator<'a> {
     dag: &'a RandomDag,
     rng: &'a mut StdRng,
@@ -469,7 +481,7 @@ pub struct RandomDagIterator<'a> {
     // Highest round where all prior rounds have quorum stake visited.
     quorum_round: Round,
     // Highest round where all prior rounds have all blocks visited.
-    visited_round: Round,
+    completed_round: Round,
     // State of each round.
     round_states: Vec<RoundState>,
     // Number of blocks remaining to visit.
@@ -496,7 +508,7 @@ impl<'a> RandomDagIterator<'a> {
             rng,
             max_step,
             quorum_round: 0,
-            visited_round: 0,
+            completed_round: 0,
             quorum_threshold,
             round_states,
             num_remaining,
@@ -513,7 +525,7 @@ impl Iterator for RandomDagIterator<'_> {
         }
 
         // Eligible rounds: from first unvisited to quorum_round + max_step.
-        let min_round = self.visited_round as usize + 1;
+        let min_round = self.completed_round as usize + 1;
         let max_round =
             ((self.quorum_round + self.max_step) as usize).min(self.round_states.len() - 1);
         let eligible_rounds = min_round..=max_round;
@@ -553,13 +565,13 @@ impl Iterator for RandomDagIterator<'_> {
         self.round_states[selected_round].visited_stake += stake;
         self.num_remaining -= 1;
 
-        // Advance visited_round while next round has all blocks visited.
+        // Advance completed_round while next round has all blocks visited.
         while self
             .round_states
-            .get(self.visited_round as usize + 1)
+            .get(self.completed_round as usize + 1)
             .is_some_and(|s| s.unvisited.is_empty())
         {
-            self.visited_round += 1;
+            self.completed_round += 1;
         }
 
         // Advance quorum_round while next round has quorum stake visited.
