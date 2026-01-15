@@ -97,7 +97,9 @@ impl MoveCache {
         let verified = Arc::new(verified);
         let runtime = Arc::new(runtime);
         let package = Package { verified, runtime };
-        self.package_cache.insert(package_key, Arc::new(package));
+        self.package_cache
+            .entry(package_key)
+            .or_insert(Arc::new(package));
         true
     }
 
