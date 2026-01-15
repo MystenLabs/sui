@@ -122,7 +122,9 @@ impl MoveCache {
         linkage_key: LinkageHash,
         vtables: VMDispatchTables,
     ) {
-        self.linkage_vtables.insert(linkage_key, vtables);
+        let _insert_result: Result<VMDispatchTables, ()> = self
+            .linkage_vtables
+            .get_or_insert_with::<_, ()>(&linkage_key, || Ok(vtables));
     }
 
     /// Get cached linkage tables for a given linkage context, if present, and updates the LRU
