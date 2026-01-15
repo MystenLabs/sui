@@ -186,6 +186,46 @@ impl ExecutionEffects {
         }
     }
 
+    pub fn is_invalid_transaction(&self) -> bool {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                match effects.data().status() {
+                    sui_types::execution_status::ExecutionStatus::Failure { error, .. } => {
+                        matches!(
+                            error,
+                            ExecutionFailureStatus::VMVerificationOrDeserializationError
+                                | ExecutionFailureStatus::VMInvariantViolation
+                                | ExecutionFailureStatus::FunctionNotFound
+                                | ExecutionFailureStatus::ArityMismatch
+                                | ExecutionFailureStatus::TypeArityMismatch
+                                | ExecutionFailureStatus::NonEntryFunctionInvoked
+                                | ExecutionFailureStatus::CommandArgumentError { .. }
+                                | ExecutionFailureStatus::TypeArgumentError { .. }
+                                | ExecutionFailureStatus::UnusedValueWithoutDrop { .. }
+                                | ExecutionFailureStatus::InvalidPublicFunctionReturnType { .. }
+                                | ExecutionFailureStatus::InvalidTransferObject
+                        )
+                    }
+                    _ => false,
+                }
+            }
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                let status = format!("{}", sui_tx_effects.status());
+                status.contains("VMVerificationOrDeserializationError")
+                    || status.contains("VMInvariantViolation")
+                    || status.contains("FunctionNotFound")
+                    || status.contains("ArityMismatch")
+                    || status.contains("TypeArityMismatch")
+                    || status.contains("NonEntryFunctionInvoked")
+                    || status.contains("CommandArgumentError")
+                    || status.contains("TypeArgumentError")
+                    || status.contains("UnusedValueWithoutDrop")
+                    || status.contains("InvalidPublicFunctionReturnType")
+                    || status.contains("InvalidTransferObject")
+            }
+        }
+    }
+
     pub fn status(&self) -> String {
         match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
