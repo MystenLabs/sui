@@ -32,7 +32,7 @@ pub struct CheckpointBlobPipeline {
 #[async_trait::async_trait]
 impl Processor for CheckpointBlobPipeline {
     const NAME: &'static str = "checkpoint_blob";
-    const FANOUT: usize = 1000;
+    const FANOUT: usize = 128;
 
     type Value = CheckpointBlob;
 
