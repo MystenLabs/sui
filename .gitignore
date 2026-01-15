@@ -1,10 +1,10 @@
-# IDE
+# IDE and agents
 **/.history/
 **/.vscode/
 **/.idea/
 **/CLAUDE-local.md
-**/CLAUDE.local.md
 **/.claude/
+**/.opencode/
 
 # OSX
 .DS_Store
