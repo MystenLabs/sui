@@ -36,7 +36,7 @@ pub struct VerifierConfig {
     pub sanity_check_with_regex_reference_safety: Option</* meter limit */ u128>,
     pub deprecate_global_storage_ops: bool,
     pub disable_entry_point_signature_check: bool,
-    /// If true, the very will run only the regex reference safety check.
+    /// If true, the verifier will run only the regex reference safety check.
     pub switch_to_regex_reference_safety: bool,
 }
 
