@@ -136,18 +136,18 @@ fun exhaustive_test_add() {
                 let j_u8 = j as u8;
                 let sum = i + j;
                 if (sum > max) {
-                    assert!(i_u8.checked_add(j_u8).is_none());
+                    assert_eq!(i_u8.checked_add(j_u8), option::none());
                     assert_eq!(i_u8.saturating_add(j_u8), MAX);
-                    assert!(j_u8.checked_add(i_u8).is_none());
+                    assert_eq!(j_u8.checked_add(i_u8), option::none());
                     assert_eq!(j_u8.saturating_add(i_u8), MAX);
                     if (overflown) return 'inner;
                     // iterate once more after the first overflow
                     overflown = true;
                 } else {
                     let sum_u8 = sum as u8;
-                    assert_eq!(i_u8.checked_add(j_u8).destroy_some(), sum_u8);
+                    assert_eq!(i_u8.checked_add(j_u8), option::some(sum_u8));
                     assert_eq!(i_u8.saturating_add(j_u8), sum_u8);
-                    assert_eq!(j_u8.checked_add(i_u8).destroy_some(), sum_u8);
+                    assert_eq!(j_u8.checked_add(i_u8), option::some(sum_u8));
                     assert_eq!(j_u8.saturating_add(i_u8), sum_u8);
                 }
             })
@@ -166,18 +166,18 @@ fun exhaustive_test_mul() {
                 let j_u8 = j as u8;
                 let prod = i * j;
                 if (prod > max) {
-                    assert!(i_u8.checked_mul(j_u8).is_none());
+                    assert_eq!(i_u8.checked_mul(j_u8), option::none());
                     assert_eq!(i_u8.saturating_mul(j_u8), MAX);
-                    assert!(j_u8.checked_mul(i_u8).is_none());
+                    assert_eq!(j_u8.checked_mul(i_u8), option::none());
                     assert_eq!(j_u8.saturating_mul(i_u8), MAX);
                     if (overflown) return 'inner;
                     // iterate once more after the first overflow
                     overflown = true;
                 } else {
                     let prod_u8 = prod as u8;
-                    assert_eq!(i_u8.checked_mul(j_u8).destroy_some(), prod_u8);
+                    assert_eq!(i_u8.checked_mul(j_u8), option::some(prod_u8));
                     assert_eq!(i_u8.saturating_mul(j_u8), prod_u8);
-                    assert_eq!(j_u8.checked_mul(i_u8).destroy_some(), prod_u8);
+                    assert_eq!(j_u8.checked_mul(i_u8), option::some(prod_u8));
                     assert_eq!(j_u8.saturating_mul(i_u8), prod_u8);
                 }
             })
