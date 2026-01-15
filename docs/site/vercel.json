@@ -734,6 +734,9 @@
       { "source": "/build/programming-with-objects", "destination": "/guides" },
       { "source": "/guides/developer/advanced", "destination": "/guides" },
       { "source": "/guides/developer/nautilus/index", "destination": "/guides/developer/nautilus" },
-      { "source": "/guides/developer/sui-101", "destination": "/guides" }
+      { "source": "/guides/developer/sui-101", "destination": "/guides" },
+      { "source": "/guides/developer/sui-101/client-tssdk", "destination": "/guides/developer/app-examples/client-tssdk" },
+      { "source": "/guides/developer/sui-101/common-errors", "destination": "/guides/developer/common-errors" },
+      { "source": "/guides/developer/first-app/debug", "destination": "/guides/developer/debug" }
     ]
 }
