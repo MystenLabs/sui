@@ -11,16 +11,17 @@ use crate::{
     jit,
     runtime::telemetry::MoveCacheTelemetry,
     shared::{
-        constants::VIRTUAL_DISPATCH_TABLE_LRU_SIZE, linkage_context::LinkageHash, types::VersionId,
+        constants::VIRTUAL_DISPATCH_TABLE_CACHE_SIZE, linkage_context::LinkageHash,
+        types::VersionId,
     },
     validation::verification,
 };
 
-use lru::LruCache;
+use dashmap::DashMap;
 use move_vm_config::runtime::VMConfig;
-use parking_lot::RwLock;
+use quick_cache::sync::Cache as QCache;
 
-use std::{collections::HashMap, num::NonZero, sync::Arc};
+use std::sync::Arc;
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -32,15 +33,15 @@ pub struct Package {
     pub runtime: Arc<jit::execution::ast::Package>,
 }
 
-type PackageCache = HashMap<VersionId, Arc<Package>>;
+type PackageCache = DashMap<VersionId, Arc<Package>>;
 
 /// The loader for the VM. This is the data structure is used to resolve packages and cache them
 /// and their types. This is then used to create the VTables for the VM.
 #[derive(Debug)]
 pub struct MoveCache {
     pub(crate) vm_config: Arc<VMConfig>,
-    pub(crate) package_cache: Arc<RwLock<PackageCache>>,
-    pub(crate) linkage_vtables: Arc<RwLock<LruCache<LinkageHash, VMDispatchTables>>>,
+    pub(crate) package_cache: Arc<PackageCache>,
+    pub(crate) linkage_vtables: Arc<QCache<LinkageHash, VMDispatchTables>>,
     pub(crate) interner: Arc<IdentifierInterner>,
 }
 
@@ -60,11 +61,9 @@ impl MoveCache {
     pub fn new(vm_config: Arc<VMConfig>) -> Self {
         Self {
             vm_config,
-            package_cache: Arc::new(RwLock::new(HashMap::new())),
+            package_cache: Arc::new(DashMap::new()),
             interner: Arc::new(IdentifierInterner::new()),
-            linkage_vtables: Arc::new(RwLock::new(LruCache::new(
-                NonZero::new(VIRTUAL_DISPATCH_TABLE_LRU_SIZE).unwrap(),
-            ))),
+            linkage_vtables: Arc::new(QCache::new(VIRTUAL_DISPATCH_TABLE_CACHE_SIZE)),
         }
     }
 
@@ -90,44 +89,38 @@ impl MoveCache {
         verified: verification::ast::Package,
         runtime: jit::execution::ast::Package,
     ) -> bool {
-        // NB: We grab a write lock here to ensure that we don't double-insert a package.
-        let mut package_cache = self.package_cache.write();
-
         // Check if the package is already present, and if so, return false early to avoid
         // re-inserting the already-cached package.
-        if package_cache.contains_key(&package_key) {
+        if self.package_cache.contains_key(&package_key) {
             return false;
         }
         let verified = Arc::new(verified);
         let runtime = Arc::new(runtime);
         let package = Package { verified, runtime };
-        package_cache.insert(package_key, Arc::new(package));
+        self.package_cache.insert(package_key, Arc::new(package));
         true
     }
 
     /// Get a package from the cache, if it is present.
     /// If not present, returns `None`.
     pub(crate) fn cached_package_at(&self, package_key: VersionId) -> Option<Arc<Package>> {
-        self.package_cache.read().get(&package_key).map(Arc::clone)
+        self.package_cache
+            .get(&package_key)
+            .as_deref()
+            .map(Arc::clone)
     }
 
     // -------------------------------------------
-    // Linkage Caching Operations
+    // Linkage VTable Caching Operations
     // -------------------------------------------
 
     /// Add linkage tables to the cache for a given linkage context.
-    ///
-    /// Returns `true` if the package was newly inserted, `false` if it was already present.
-    /// NB: in a parallel scenario the result of this function is not guaranteed to be
-    /// deterministic.
     pub(crate) fn add_linkage_tables_to_cache(
         &self,
         linkage_key: LinkageHash,
         vtables: VMDispatchTables,
-    ) -> bool {
-        let mut linkage_vtables = self.linkage_vtables.write();
-        let prev = linkage_vtables.put(linkage_key, vtables);
-        prev.is_none()
+    ) {
+        self.linkage_vtables.insert(linkage_key, vtables);
     }
 
     /// Get cached linkage tables for a given linkage context, if present, and updates the LRU
@@ -136,16 +129,16 @@ impl MoveCache {
         &self,
         linkage_key: &LinkageHash,
     ) -> Option<VMDispatchTables> {
-        // We have to grab this as mutable because LRU cache updates the internal state on get.
-        let mut linkage_vtables = self.linkage_vtables.write();
-        linkage_vtables.get(linkage_key).cloned()
+        // NB: QuickCache returns a cloned value. This means we perform a deep clone of the
+        // VMDispatchTables, which is mostly Arc pointers, so this is not too expensive.
+        self.linkage_vtables.get(linkage_key)
     }
 
     // -------------------------------------------
     // Getters
     // -------------------------------------------
 
-    pub fn package_cache(&self) -> &RwLock<PackageCache> {
+    pub fn package_cache(&self) -> &PackageCache {
         &self.package_cache
     }
 
@@ -156,17 +149,17 @@ impl MoveCache {
     /// For use with unit testing: remove a package, returning `true` if it was present.
     #[cfg(test)]
     pub(crate) fn remove_package(&self, version_id: &VersionId) -> bool {
-        self.package_cache.write().remove(version_id).is_some()
+        self.package_cache.remove(version_id).is_some()
     }
 
     // -------------------------------------------
     // Telemetry Reporting
     // -------------------------------------------
 
+    /// Grab telemetry information about the current state of the Move Cache.
+    /// Note this may change as it is being computed, due to concurrent access. We do not care, as
+    /// telemetry is best-effort.
     pub(crate) fn to_cache_telemetry(&self) -> MoveCacheTelemetry {
-        // Lock the package_cache for reading.
-        let package_cache = self.package_cache.read();
-
         let mut package_cache_count: u64 = 0;
         let mut total_arena_size: u64 = 0;
         let mut module_count: u64 = 0;
@@ -174,7 +167,8 @@ impl MoveCache {
         let mut type_count: u64 = 0;
 
         // Iterate over each package.
-        for (_version_id, package_arc) in package_cache.iter() {
+        for entry in self.package_cache.iter() {
+            let package_arc = entry.value();
             package_cache_count += 1;
 
             // Dereference the runtime package.
@@ -193,7 +187,9 @@ impl MoveCache {
 
         let interner_size: u64 = self.interner.size() as u64;
 
-        let vtable_lru_count = self.linkage_vtables.read().len() as u64;
+        let vtable_cache_count = self.linkage_vtables.len() as u64;
+        let vtable_cache_hits = self.linkage_vtables.hits();
+        let vtable_cache_misses = self.linkage_vtables.misses();
 
         MoveCacheTelemetry {
             package_cache_count,
@@ -202,7 +198,9 @@ impl MoveCache {
             function_count,
             type_count,
             interner_size,
-            vtable_lru_count,
+            vtable_cache_count,
+            vtable_cache_hits,
+            vtable_cache_misses,
         }
     }
 }
