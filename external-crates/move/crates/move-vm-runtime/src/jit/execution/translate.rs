@@ -350,8 +350,7 @@ fn modules(
                         .collect::<Result<_, _>>()?;
 
                     if unvisited_deps.is_empty() {
-                        // Leaf node: load directly, skipping the Visiting state to avoid
-                        // redundant state lookup, interning, and stack operations.
+                        // All dependencies are loaded, we are ready to load.
                         let loaded_module =
                             module(package_context, package_context.version_id, input_module)?;
                         if package_context
