@@ -154,23 +154,23 @@ fun test_saturating_mul() {
 #[test]
 fun test_exact_shl() {
     // valid shifts that preserve all bits
-    assert_eq!(0u256.exact_shl(0).destroy_some(), 0);
-    assert_eq!(1u256.exact_shl(0).destroy_some(), 1);
-    assert_eq!(1u256.exact_shl(1).destroy_some(), 2);
-    assert_eq!(1u256.exact_shl(255).destroy_some(), 1 << 255);
+    assert_eq!(0u256.exact_shl(0), option::some(0));
+    assert_eq!(1u256.exact_shl(0), option::some(1));
+    assert_eq!(1u256.exact_shl(1), option::some(2));
+    assert_eq!(1u256.exact_shl(255), option::some(1 << 255));
     // shifts that lose bits
-    assert!(MAX.exact_shl(1).is_none());
-    assert!((1u256 << 255).exact_shl(1).is_none());
+    assert_eq!(MAX.exact_shl(1), option::none());
+    assert_eq!((1u256 << 255).exact_shl(1), option::none());
 }
 
 #[test]
 fun test_exact_shr() {
     // valid shifts that preserve all bits
-    assert_eq!(0u256.exact_shr(0).destroy_some(), 0);
-    assert_eq!(2u256.exact_shr(1).destroy_some(), 1);
-    assert_eq!((1u256 << 255).exact_shr(255).destroy_some(), 1);
-    assert_eq!(MAX.exact_shr(0).destroy_some(), MAX);
+    assert_eq!(0u256.exact_shr(0), option::some(0));
+    assert_eq!(2u256.exact_shr(1), option::some(1));
+    assert_eq!((1u256 << 255).exact_shr(255), option::some(1));
+    assert_eq!(MAX.exact_shr(0), option::some(MAX));
     // shifts that lose bits
-    assert!(1u256.exact_shr(1).is_none());
-    assert!(MAX.exact_shr(1).is_none());
+    assert_eq!(1u256.exact_shr(1), option::none());
+    assert_eq!(MAX.exact_shr(1), option::none());
 }
