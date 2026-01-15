@@ -106,25 +106,21 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
         };
 
         adapter
-            .perform_session_action(
-                None,
-                |session, gas_status| {
-                    for module in &*MOVE_STDLIB_COMPILED {
-                        let mut module_bytes = vec![];
-                        module
-                            .serialize_with_version(module.version, &mut module_bytes)
-                            .unwrap();
+            .perform_session_action(None, |session, gas_status| {
+                for module in &*MOVE_STDLIB_COMPILED {
+                    let mut module_bytes = vec![];
+                    module
+                        .serialize_with_version(module.version, &mut module_bytes)
+                        .unwrap();
 
-                        let id = module.self_id();
-                        let sender = *id.address();
-                        session
-                            .publish_module(module_bytes, sender, gas_status)
-                            .unwrap();
-                    }
-                    Ok(())
-                },
-                VMConfig::default(),
-            )
+                    let id = module.self_id();
+                    let sender = *id.address();
+                    session
+                        .publish_module(module_bytes, sender, gas_status)
+                        .unwrap();
+                }
+                Ok(())
+            })
             .unwrap();
         let mut addr_to_name_mapping = BTreeMap::new();
         for (name, addr) in move_stdlib_named_addresses() {
@@ -161,11 +157,9 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
 
         let id = modules.first().unwrap().module.self_id();
         let sender = *id.address();
-        match self.perform_session_action(
-            gas_budget,
-            |session, gas_status| session.publish_module_bundle(all_bytes, sender, gas_status),
-            VMConfig::default(),
-        ) {
+        match self.perform_session_action(gas_budget, |session, gas_status| {
+            session.publish_module_bundle(all_bytes, sender, gas_status)
+        }) {
             Ok(()) => Ok((None, modules)),
             Err(e) => Err(anyhow!(
                 "Unable to publish module '{}'. Got VMError: {}",
@@ -201,20 +195,16 @@ impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
             .chain(args)
             .collect();
         let serialized_return_values = self
-            .perform_session_action(
-                gas_budget,
-                |session, gas_status| {
-                    let type_args: Vec<_> = type_arg_tags
-                        .into_iter()
-                        .map(|tag| session.load_type(&tag))
-                        .collect::<VMResult<_>>()?;
+            .perform_session_action(gas_budget, |session, gas_status| {
+                let type_args: Vec<_> = type_arg_tags
+                    .into_iter()
+                    .map(|tag| session.load_type(&tag))
+                    .collect::<VMResult<_>>()?;
 
-                    session.execute_function_bypass_visibility(
-                        module, function, type_args, args, gas_status, None,
-                    )
-                },
-                test_vm_config(),
-            )
+                session.execute_function_bypass_visibility(
+                    module, function, type_args, args, gas_status, None,
+                )
+            })
             .map_err(|e| {
                 anyhow!(
                     "Function execution failed with VMError: {}",
@@ -264,7 +254,6 @@ impl SimpleVMTestAdapter {
         &mut self,
         gas_budget: Option<u64>,
         f: impl FnOnce(&mut Session<&InMemoryStorage>, &mut GasStatus) -> VMResult<Ret>,
-        vm_config: VMConfig,
     ) -> VMResult<Ret> {
         // start session
         let vm = MoveVM::new_with_config(
@@ -274,7 +263,7 @@ impl SimpleVMTestAdapter {
                 move_stdlib_natives::GasParameters::zeros(),
                 /* silent */ false,
             ),
-            vm_config,
+            self.vm_config(),
         )
         .unwrap();
         let (mut session, mut gas_status) = {
@@ -295,6 +284,18 @@ impl SimpleVMTestAdapter {
         let changeset = session.finish().0?;
         self.storage.apply(changeset).unwrap();
         Ok(res)
+    }
+
+    fn vm_config(&self) -> VMConfig {
+        VMConfig {
+            enable_invariant_violation_check_in_swap_loc: false,
+            deprecate_global_storage_ops_during_deserialization: true,
+            binary_config: move_binary_format::binary_config::BinaryConfig::legacy_with_flags(
+                /* check_no_extraneous_bytes */ true,
+                /* deprecate_global_storage_ops */ true,
+            ),
+            ..VMConfig::default()
+        }
     }
 }
 
@@ -345,13 +346,6 @@ static MOVE_STDLIB_COMPILED: LazyLock<Vec<CompiledModule>> = LazyLock::new(|| {
             .collect(),
     }
 });
-
-fn test_vm_config() -> VMConfig {
-    VMConfig {
-        enable_invariant_violation_check_in_swap_loc: false,
-        ..Default::default()
-    }
-}
 
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {

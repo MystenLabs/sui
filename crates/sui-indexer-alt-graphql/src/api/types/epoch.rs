@@ -13,6 +13,7 @@ use fastcrypto::encoding::Encoding;
 use futures::future::OptionFuture;
 use futures::join;
 use futures::try_join;
+use move_core_types::language_storage::StructTag;
 use sui_indexer_alt_reader::cp_sequence_numbers::CpSequenceNumberKey;
 use sui_indexer_alt_reader::epochs::CheckpointBoundedEpochStartKey;
 use sui_indexer_alt_reader::epochs::EpochEndKey;
@@ -22,9 +23,12 @@ use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;
 use sui_indexer_alt_schema::epochs::StoredEpochEnd;
 use sui_indexer_alt_schema::epochs::StoredEpochStart;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
+use sui_types::SUI_SYSTEM_ADDRESS;
+use sui_types::TypeTag;
 use sui_types::messages_checkpoint::CheckpointCommitment;
-use sui_types::sui_system_state::SuiSystemState;
-use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::SUI_SYSTEM_STATE_INNER_MODULE_NAME;
+use sui_types::sui_system_state::SUI_SYSTEM_STATE_INNER_V1_STRUCT_NAME;
+use sui_types::sui_system_state::SUI_SYSTEM_STATE_INNER_V2_STRUCT_NAME;
 use tokio::sync::OnceCell;
 
 use crate::api::scalars::big_int::BigInt;
@@ -37,16 +41,10 @@ use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::checkpoint::filter::CheckpointFilter;
 use crate::api::types::move_package::CSysPackage;
 use crate::api::types::move_package::MovePackage;
+use crate::api::types::move_type::MoveType;
+use crate::api::types::move_value::MoveValue;
 use crate::api::types::object::Object;
 use crate::api::types::protocol_configs::ProtocolConfigs;
-use crate::api::types::safe_mode::SafeMode;
-use crate::api::types::safe_mode::from_system_state;
-use crate::api::types::stake_subsidy::StakeSubsidy;
-use crate::api::types::stake_subsidy::from_stake_subsidy_v1;
-use crate::api::types::storage_fund::StorageFund;
-use crate::api::types::system_parameters::SystemParameters;
-use crate::api::types::system_parameters::from_system_parameters_v1;
-use crate::api::types::system_parameters::from_system_parameters_v2;
 use crate::api::types::transaction::CTransaction;
 use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
@@ -138,13 +136,106 @@ impl Epoch {
                 return Ok(None);
             };
 
-            Object::checkpoint_bounded(
-                ctx,
-                self.scope.clone(),
-                SUI_DENY_LIST_OBJECT_ID.into(),
-                (start.cp_lo as u64).saturating_sub(1).into(),
-            )
-            .await
+            let cp = (start.cp_lo as u64).saturating_sub(1);
+            let scope = self.scope.with_root_checkpoint(cp);
+            Object::latest(ctx, scope, SUI_DENY_LIST_OBJECT_ID.into()).await
+        }
+        .await
+        .transpose()
+    }
+
+    /// The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
+    async fn end_timestamp(&self, ctx: &Context<'_>) -> Option<Result<DateTime, RpcError>> {
+        async {
+            let Some(end) = self.end(ctx).await? else {
+                return Ok(None);
+            };
+
+            Ok(Some(DateTime::from_ms(end.end_timestamp_ms)?))
+        }
+        .await
+        .transpose()
+    }
+
+    /// The storage fees paid for transactions executed during the epoch (or `null` if the epoch has not finished yet).
+    async fn fund_inflow(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
+        async {
+            let Some(StoredEpochEnd { storage_charge, .. }) = self.end(ctx).await? else {
+                return Ok(None);
+            };
+
+            Ok(storage_charge.map(BigInt::from))
+        }
+        .await
+        .transpose()
+    }
+
+    /// The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
+    async fn fund_outflow(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
+        async {
+            let Some(StoredEpochEnd { storage_rebate, .. }) = self.end(ctx).await? else {
+                return Ok(None);
+            };
+
+            Ok(storage_rebate.map(BigInt::from))
+        }
+        .await
+        .transpose()
+    }
+
+    /// The storage fund available in this epoch (or `null` if the epoch has not finished yet).
+    /// This fund is used to redistribute storage fees from past transactions to future validators.
+    async fn fund_size(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
+        async {
+            let Some(StoredEpochEnd {
+                storage_fund_balance,
+                ..
+            }) = self.end(ctx).await?
+            else {
+                return Ok(None);
+            };
+
+            Ok(storage_fund_balance.map(BigInt::from))
+        }
+        .await
+        .transpose()
+    }
+
+    /// A commitment by the committee at the end of epoch on the contents of the live object set at that time.
+    /// This can be used to verify state snapshots.
+    async fn live_object_set_digest(&self, ctx: &Context<'_>) -> Option<Result<String, RpcError>> {
+        async {
+            let Some(end) = self.end(ctx).await? else {
+                return Ok(None);
+            };
+
+            let commitments: Vec<CheckpointCommitment> = bcs::from_bytes(&end.epoch_commitments)
+                .context("Failed to deserialize epoch commitments")?;
+
+            for commitment in commitments {
+                if let CheckpointCommitment::ECMHLiveObjectSetDigest(digest) = commitment {
+                    return Ok(Some(Base58::encode(digest.digest.into_inner())));
+                }
+            }
+            Ok(None)
+        }
+        .await
+        .transpose()
+    }
+
+    /// The difference between the fund inflow and outflow, representing the net amount of storage fees accumulated in this epoch (or `null` if the epoch has not finished yet).
+    async fn net_inflow(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
+        async {
+            let Some(StoredEpochEnd {
+                storage_charge: Some(storage_charge),
+                storage_rebate: Some(storage_rebate),
+                ..
+            }) = self.end(ctx).await?
+            else {
+                return Ok(None);
+            };
+
+            Ok(Some(BigInt::from(storage_charge - storage_rebate)))
         }
         .await
         .transpose()
@@ -175,6 +266,149 @@ impl Epoch {
             };
 
             Ok(Some(DateTime::from_ms(contents.start_timestamp_ms)?))
+        }
+        .await
+        .transpose()
+    }
+
+    /// The system packages used by all transactions in this epoch.
+    async fn system_packages(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CSysPackage>,
+        last: Option<u64>,
+        before: Option<CSysPackage>,
+    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
+        async {
+            let pagination: &PaginationConfig = ctx.data()?;
+            let limits = pagination.limits("Epoch", "systemPackages");
+            let page = Page::from_params(limits, first, after, last, before)?;
+
+            let Some(contents) = self.start(ctx).await.map_err(upcast)? else {
+                return Ok(None);
+            };
+
+            Ok(Some(
+                MovePackage::paginate_system_packages(
+                    ctx,
+                    self.scope.clone(),
+                    page,
+                    contents.cp_lo as u64,
+                )
+                .await?,
+            ))
+        }
+        .await
+        .transpose()
+    }
+
+    /// The contents of the system state inner object at the start of this epoch.
+    async fn system_state(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
+        self.system_state_impl(ctx).await
+    }
+
+    /// The total number of checkpoints in this epoch.
+    ///
+    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
+    async fn total_checkpoints(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
+        async {
+            let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
+                return Ok(None);
+            };
+
+            let lo = start.cp_lo as u64;
+            let hi = match end.as_ref() {
+                Some(end) => end.cp_hi as u64,
+                None => {
+                    let Some(bound) = self.scope.checkpoint_viewed_at_exclusive_bound() else {
+                        return Ok(None);
+                    };
+                    bound
+                }
+            };
+
+            Ok(Some(UInt53::from(hi - lo)))
+        }
+        .await
+        .transpose()
+    }
+
+    /// The total amount of gas fees (in MIST) that were paid in this epoch (or `null` if the epoch has not finished yet).
+    async fn total_gas_fees(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
+        async {
+            let Some(StoredEpochEnd { total_gas_fees, .. }) = self.end(ctx).await? else {
+                return Ok(None);
+            };
+
+            Ok(total_gas_fees.map(BigInt::from))
+        }
+        .await
+        .transpose()
+    }
+
+    /// The total MIST rewarded as stake (or `null` if the epoch has not finished yet).
+    async fn total_stake_rewards(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
+        async {
+            let Some(StoredEpochEnd {
+                total_stake_rewards_distributed,
+                ..
+            }) = self.end(ctx).await?
+            else {
+                return Ok(None);
+            };
+
+            Ok(total_stake_rewards_distributed.map(BigInt::from))
+        }
+        .await
+        .transpose()
+    }
+
+    /// The amount added to total gas fees to make up the total stake rewards (or `null` if the epoch has not finished yet).
+    async fn total_stake_subsidies(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
+        async {
+            let Some(StoredEpochEnd {
+                stake_subsidy_amount,
+                ..
+            }) = self.end(ctx).await?
+            else {
+                return Ok(None);
+            };
+
+            Ok(stake_subsidy_amount.map(BigInt::from))
+        }
+        .await
+        .transpose()
+    }
+
+    /// The total number of transaction blocks in this epoch.
+    ///
+    /// If the epoch has not finished yet, this number is computed based on the number of transactions at the latest known checkpoint.
+    async fn total_transactions(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
+        async {
+            let watermarks: &Arc<Watermarks> = ctx.data()?;
+            let (sequence_numbers, end) = try_join!(self.sequence_numbers(ctx), self.end(ctx))?;
+
+            let Some(start) = &sequence_numbers.start else {
+                return Ok(None);
+            };
+
+            let lo = start.tx_lo as u64;
+            let hi = if let Some(end) = end {
+                // If the epoch has already ended as of the latest checkpoint, its end record
+                // stores its transaction high watermark.
+                end.tx_hi as u64
+            } else if let Some(next) = &sequence_numbers.next {
+                // Otherwise, we have attempted to fetch the transaction low watermark of the
+                // checkpoint *after* the one being viewed at.
+                next.tx_lo as u64
+            } else {
+                // If all else fails, assume that the checkpoint being viewed at is the latest one
+                // known to the service, and use its global transaction high watermark.
+                watermarks.high_watermark().transaction()
+            };
+
+            Ok(Some(UInt53::from(hi.saturating_sub(lo))))
         }
         .await
         .transpose()
@@ -228,302 +462,24 @@ impl Epoch {
         .transpose()
     }
 
-    /// The system packages used by all transactions in this epoch.
-    async fn system_packages(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<CSysPackage>,
-        last: Option<u64>,
-        before: Option<CSysPackage>,
-    ) -> Option<Result<Connection<String, MovePackage>, RpcError>> {
-        async {
-            let pagination: &PaginationConfig = ctx.data()?;
-            let limits = pagination.limits("Epoch", "systemPackages");
-            let page = Page::from_params(limits, first, after, last, before)?;
-
-            let Some(contents) = self.start(ctx).await.map_err(upcast)? else {
-                return Ok(None);
-            };
-
-            Ok(Some(
-                MovePackage::paginate_system_packages(
-                    ctx,
-                    self.scope.clone(),
-                    page,
-                    contents.cp_lo as u64,
-                )
-                .await?,
-            ))
-        }
-        .await
-        .transpose()
-    }
-
-    /// The timestamp associated with the last checkpoint in the epoch (or `null` if the epoch has not finished yet).
-    async fn end_timestamp(&self, ctx: &Context<'_>) -> Option<Result<DateTime, RpcError>> {
-        async {
-            let Some(end) = self.end(ctx).await? else {
-                return Ok(None);
-            };
-
-            Ok(Some(DateTime::from_ms(end.end_timestamp_ms)?))
-        }
-        .await
-        .transpose()
-    }
-
     /// Validator-related properties, including the active validators.
     async fn validator_set(&self, ctx: &Context<'_>) -> Option<Result<ValidatorSet, RpcError>> {
         async {
-            let Some(system_state) = self.system_state(ctx).await? else {
+            let Some(system_state) = self.system_state_impl(ctx).await? else {
                 return Ok(None);
             };
 
-            let (validator_set_v1, report_records) = match system_state {
-                SuiSystemState::V1(inner) => (inner.validators, inner.validator_report_records),
-                SuiSystemState::V2(inner) => (inner.validators, inner.validator_report_records),
-                #[cfg(msim)]
-                SuiSystemState::SimTestV1(_)
-                | SuiSystemState::SimTestShallowV2(_)
-                | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
+            let Some(layout) = system_state.type_.layout_impl().await? else {
+                return Ok(None);
             };
 
-            let validator_set = ValidatorSet::from_validator_set_v1(
-                self.scope.clone(),
-                validator_set_v1,
-                report_records,
-            );
+            let validator_set = ValidatorSet::from_system_state(
+                system_state.type_.scope,
+                &system_state.native,
+                &layout,
+            )?;
 
             Ok(Some(validator_set))
-        }
-        .await
-        .transpose()
-    }
-
-    /// The total number of checkpoints in this epoch.
-    ///
-    /// Returns `None` when no checkpoint is set in scope (e.g. execution scope).
-    async fn total_checkpoints(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
-        async {
-            let (Some(start), end) = try_join!(self.start(ctx), self.end(ctx))? else {
-                return Ok(None);
-            };
-
-            let lo = start.cp_lo as u64;
-            let hi = match end.as_ref() {
-                Some(end) => end.cp_hi as u64,
-                None => {
-                    let Some(bound) = self.scope.checkpoint_viewed_at_exclusive_bound() else {
-                        return Ok(None);
-                    };
-                    bound
-                }
-            };
-
-            Ok(Some(UInt53::from(hi - lo)))
-        }
-        .await
-        .transpose()
-    }
-
-    /// The total number of transaction blocks in this epoch.
-    ///
-    /// If the epoch has not finished yet, this number is computed based on the number of transactions at the latest known checkpoint.
-    async fn total_transactions(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
-        async {
-            let watermarks: &Arc<Watermarks> = ctx.data()?;
-            let (sequence_numbers, end) = try_join!(self.sequence_numbers(ctx), self.end(ctx))?;
-
-            let Some(start) = &sequence_numbers.start else {
-                return Ok(None);
-            };
-
-            let lo = start.tx_lo as u64;
-            let hi = if let Some(end) = end {
-                // If the epoch has already ended as of the latest checkpoint, its end record
-                // stores its transaction high watermark.
-                end.tx_hi as u64
-            } else if let Some(next) = &sequence_numbers.next {
-                // Otherwise, we have attempted to fetch the transaction low watermark of the
-                // checkpoint *after* the one being viewed at.
-                next.tx_lo as u64
-            } else {
-                // If all else fails, assume that the checkpoint being viewed at is the latest one
-                // known to the service, and use its global transaction high watermark.
-                watermarks.high_watermark().transaction()
-            };
-
-            Ok(Some(UInt53::from(hi.saturating_sub(lo))))
-        }
-        .await
-        .transpose()
-    }
-
-    /// The total amount of gas fees (in MIST) that were paid in this epoch (or `null` if the epoch has not finished yet).
-    async fn total_gas_fees(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
-        let end = self.end(ctx).await.ok()?.as_ref()?;
-        Some(Ok(BigInt::from(end.total_gas_fees?)))
-    }
-
-    /// The total MIST rewarded as stake (or `null` if the epoch has not finished yet).
-    async fn total_stake_rewards(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
-        let end = self.end(ctx).await.ok()?.as_ref()?;
-        Some(Ok(BigInt::from(end.total_stake_rewards_distributed?)))
-    }
-
-    /// The amount added to total gas fees to make up the total stake rewards (or `null` if the epoch has not finished yet).
-    async fn total_stake_subsidies(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
-        let end = self.end(ctx).await.ok()?.as_ref()?;
-        Some(Ok(BigInt::from(end.stake_subsidy_amount?)))
-    }
-
-    /// The storage fund available in this epoch (or `null` if the epoch has not finished yet).
-    /// This fund is used to redistribute storage fees from past transactions to future validators.
-    async fn fund_size(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
-        let end = self.end(ctx).await.ok()?.as_ref()?;
-        Some(Ok(BigInt::from(end.storage_fund_balance?)))
-    }
-
-    /// The difference between the fund inflow and outflow, representing the net amount of storage fees accumulated in this epoch (or `null` if the epoch has not finished yet).
-    async fn net_inflow(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
-        let end = self.end(ctx).await.ok()?.as_ref()?;
-        let storage_charge = end.storage_charge?;
-        let storage_rebate = end.storage_rebate?;
-        Some(Ok(BigInt::from(storage_charge - storage_rebate)))
-    }
-
-    /// The storage fees paid for transactions executed during the epoch (or `null` if the epoch has not finished yet).
-    async fn fund_inflow(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
-        let end = self.end(ctx).await.ok()?.as_ref()?;
-        Some(Ok(BigInt::from(end.storage_charge?)))
-    }
-
-    /// The storage fee rebates paid to users who deleted the data associated with past transactions (or `null` if the epoch has not finished yet).
-    async fn fund_outflow(&self, ctx: &Context<'_>) -> Option<Result<BigInt, RpcError>> {
-        let end = self.end(ctx).await.ok()?.as_ref()?;
-        Some(Ok(BigInt::from(end.storage_rebate?)))
-    }
-
-    /// SUI set aside to account for objects stored on-chain, at the start of the epoch.
-    /// This is also used for storage rebates.
-    async fn storage_fund(&self, ctx: &Context<'_>) -> Option<Result<StorageFund, RpcError>> {
-        async {
-            let Some(system_state) = self.system_state(ctx).await? else {
-                return Ok(None);
-            };
-
-            let storage_fund = match system_state {
-                SuiSystemState::V1(inner) => inner.storage_fund.into(),
-                SuiSystemState::V2(inner) => inner.storage_fund.into(),
-                #[cfg(msim)]
-                SuiSystemState::SimTestV1(_)
-                | SuiSystemState::SimTestShallowV2(_)
-                | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
-            };
-
-            Ok(Some(storage_fund))
-        }
-        .await
-        .transpose()
-    }
-
-    /// Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
-    async fn safe_mode(&self, ctx: &Context<'_>) -> Option<Result<SafeMode, RpcError>> {
-        async {
-            let Some(system_state) = self.system_state(ctx).await? else {
-                return Ok(None);
-            };
-
-            let safe_mode = from_system_state(&system_state);
-
-            Ok(Some(safe_mode))
-        }
-        .await
-        .transpose()
-    }
-
-    /// The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
-    /// This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
-    async fn system_state_version(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
-        async {
-            let Some(system_state) = self.system_state(ctx).await? else {
-                return Ok(None);
-            };
-
-            Ok(Some(system_state.system_state_version().into()))
-        }
-        .await
-        .transpose()
-    }
-
-    /// Details of the system that are decided during genesis.
-    async fn system_parameters(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Option<Result<SystemParameters, RpcError>> {
-        async {
-            let Some(system_state) = self.system_state(ctx).await? else {
-                return Ok(None);
-            };
-
-            let system_parameters = match system_state {
-                SuiSystemState::V1(inner) => from_system_parameters_v1(inner.parameters),
-                SuiSystemState::V2(inner) => from_system_parameters_v2(inner.parameters),
-                #[cfg(msim)]
-                SuiSystemState::SimTestV1(_)
-                | SuiSystemState::SimTestShallowV2(_)
-                | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
-            };
-
-            Ok(Some(system_parameters))
-        }
-        .await
-        .transpose()
-    }
-
-    /// Parameters related to the subsidy that supplements staking rewards
-    async fn system_stake_subsidy(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Option<Result<StakeSubsidy, RpcError>> {
-        async {
-            let Some(system_state) = self.system_state(ctx).await? else {
-                return Ok(None);
-            };
-
-            let stake_subsidy = match system_state {
-                SuiSystemState::V1(inner) => from_stake_subsidy_v1(inner.stake_subsidy),
-                SuiSystemState::V2(inner) => from_stake_subsidy_v1(inner.stake_subsidy),
-                #[cfg(msim)]
-                SuiSystemState::SimTestV1(_)
-                | SuiSystemState::SimTestShallowV2(_)
-                | SuiSystemState::SimTestDeepV2(_) => return Ok(None),
-            };
-
-            Ok(Some(stake_subsidy))
-        }
-        .await
-        .transpose()
-    }
-
-    /// A commitment by the committee at the end of epoch on the contents of the live object set at that time.
-    /// This can be used to verify state snapshots.
-    async fn live_object_set_digest(&self, ctx: &Context<'_>) -> Option<Result<String, RpcError>> {
-        async {
-            let Some(end) = self.end(ctx).await? else {
-                return Ok(None);
-            };
-
-            let commitments: Vec<CheckpointCommitment> = bcs::from_bytes(&end.epoch_commitments)
-                .context("Failed to deserialize epoch commitments")?;
-
-            for commitment in commitments {
-                if let CheckpointCommitment::ECMHLiveObjectSetDigest(digest) = commitment {
-                    return Ok(Some(Base58::encode(digest.digest.into_inner())));
-                }
-            }
-            Ok(None)
         }
         .await
         .transpose()
@@ -624,17 +580,6 @@ impl Epoch {
             .await
     }
 
-    async fn system_state(&self, ctx: &Context<'_>) -> Result<Option<SuiSystemState>, RpcError> {
-        let Some(start) = self.start(ctx).await? else {
-            return Ok(None);
-        };
-
-        let system_state = bcs::from_bytes::<SuiSystemState>(&start.system_state)
-            .context("Failed to deserialize system state")?;
-
-        Ok(Some(system_state))
-    }
-
     /// Attempt to fetch information about the end of an epoch from the store. May return an empty
     /// response if the epoch has not ended yet, as of the checkpoint being viewed, or when
     /// no checkpoint is set in scope (e.g. execution scope).
@@ -683,5 +628,33 @@ impl Epoch {
                 Ok(SequenceNumbers { start, next })
             })
             .await
+    }
+
+    /// The contents of the system state inner object at the start of this epoch.
+    async fn system_state_impl(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
+        let Some(start) = self.start(ctx).await? else {
+            return Ok(None);
+        };
+
+        let scope = self.scope.with_root_checkpoint(start.cp_lo as u64);
+        let struct_name = match start.system_state.first() {
+            Some(0) => SUI_SYSTEM_STATE_INNER_V1_STRUCT_NAME,
+            Some(1) => SUI_SYSTEM_STATE_INNER_V2_STRUCT_NAME,
+            _ => {
+                return Ok(None);
+            }
+        };
+
+        let tag = TypeTag::Struct(Box::new(StructTag {
+            address: SUI_SYSTEM_ADDRESS,
+            module: SUI_SYSTEM_STATE_INNER_MODULE_NAME.to_owned(),
+            name: struct_name.to_owned(),
+            type_params: vec![],
+        }));
+
+        let type_ = MoveType::from_native(tag, scope);
+        let native = start.system_state[1..].to_owned();
+
+        Ok(Some(MoveValue { type_, native }))
     }
 }

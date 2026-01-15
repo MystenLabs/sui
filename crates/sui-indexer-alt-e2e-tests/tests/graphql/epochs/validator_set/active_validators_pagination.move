@@ -28,6 +28,8 @@ fragment VC on ValidatorConnection {
     endCursor
   }
   nodes {
-    name
+    contents {
+      name: format(format: "{metadata.name}")
+    }
   }
 }

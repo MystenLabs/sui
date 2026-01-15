@@ -33,6 +33,9 @@ Address.id
 Address.address
   => {}
 
+Address.addressAt
+  => {}
+
 Address.asObject
   => {"obj_versions"}
 
@@ -42,7 +45,7 @@ Address.balance
 Address.balances
   => {"consistent"}
 
-Address.defaultSuinsName
+Address.defaultNameRecord
   => {"obj_versions"}
 
 Address.dynamicField
@@ -222,6 +225,9 @@ CoinDenyListStateCreateTransaction._
 CoinMetadata.address
   => {}
 
+CoinMetadata.addressAt
+  => {}
+
 CoinMetadata.version
   => {}
 
@@ -240,7 +246,7 @@ CoinMetadata.contents
 CoinMetadata.decimals
   => {}
 
-CoinMetadata.defaultSuinsName
+CoinMetadata.defaultNameRecord
   => {"obj_versions"}
 
 CoinMetadata.description
@@ -384,6 +390,9 @@ DynamicField.id
 DynamicField.address
   => {}
 
+DynamicField.addressAt
+  => {}
+
 DynamicField.version
   => {}
 
@@ -399,7 +408,7 @@ DynamicField.balances
 DynamicField.contents
   => {}
 
-DynamicField.defaultSuinsName
+DynamicField.defaultNameRecord
   => {"obj_versions"}
 
 DynamicField.dynamicField
@@ -474,6 +483,24 @@ Epoch.checkpoints
 Epoch.coinDenyList
   => {"obj_versions"}
 
+Epoch.endTimestamp
+  => {}
+
+Epoch.fundInflow
+  => {}
+
+Epoch.fundOutflow
+  => {}
+
+Epoch.fundSize
+  => {}
+
+Epoch.liveObjectSetDigest
+  => {}
+
+Epoch.netInflow
+  => {}
+
 Epoch.protocolConfigs
   => {}
 
@@ -481,6 +508,27 @@ Epoch.referenceGasPrice
   => {}
 
 Epoch.startTimestamp
+  => {}
+
+Epoch.systemPackages
+  => {}
+
+Epoch.systemState
+  => {}
+
+Epoch.totalCheckpoints
+  => {}
+
+Epoch.totalGasFees
+  => {}
+
+Epoch.totalStakeRewards
+  => {}
+
+Epoch.totalStakeSubsidies
+  => {}
+
+Epoch.totalTransactions
   => {}
 
 Epoch.transactions
@@ -501,58 +549,7 @@ Epoch.transactions (filter: affectedObject)
 Epoch.transactions (filter: sentAddress)
   => {"cp_sequence_numbers", "tx_affected_addresses", "tx_digests"}
 
-Epoch.systemPackages
-  => {}
-
-Epoch.endTimestamp
-  => {}
-
 Epoch.validatorSet
-  => {}
-
-Epoch.totalCheckpoints
-  => {}
-
-Epoch.totalTransactions
-  => {}
-
-Epoch.totalGasFees
-  => {}
-
-Epoch.totalStakeRewards
-  => {}
-
-Epoch.totalStakeSubsidies
-  => {}
-
-Epoch.fundSize
-  => {}
-
-Epoch.netInflow
-  => {}
-
-Epoch.fundInflow
-  => {}
-
-Epoch.fundOutflow
-  => {}
-
-Epoch.storageFund
-  => {}
-
-Epoch.safeMode
-  => {}
-
-Epoch.systemStateVersion
-  => {}
-
-Epoch.systemParameters
-  => {}
-
-Epoch.systemStakeSubsidy
-  => {}
-
-Epoch.liveObjectSetDigest
   => {}
 
 Event.contents
@@ -651,13 +648,16 @@ GenesisTransaction.objects
 IAddressable.address
   => {}
 
+IAddressable.addressAt
+  => {}
+
 IAddressable.balance
   => {"consistent"}
 
 IAddressable.balances
   => {"consistent"}
 
-IAddressable.defaultSuinsName
+IAddressable.defaultNameRecord
   => {"obj_versions"}
 
 IAddressable.multiGetBalances
@@ -903,6 +903,9 @@ MoveObject.id
 MoveObject.address
   => {}
 
+MoveObject.addressAt
+  => {}
+
 MoveObject.version
   => {}
 
@@ -924,7 +927,7 @@ MoveObject.balances
 MoveObject.contents
   => {}
 
-MoveObject.defaultSuinsName
+MoveObject.defaultNameRecord
   => {"obj_versions"}
 
 MoveObject.dynamicField
@@ -984,6 +987,9 @@ MovePackage.id
 MovePackage.address
   => {}
 
+MovePackage.addressAt
+  => {}
+
 MovePackage.version
   => {}
 
@@ -996,7 +1002,7 @@ MovePackage.balance
 MovePackage.balances
   => {"consistent"}
 
-MovePackage.defaultSuinsName
+MovePackage.defaultNameRecord
   => {"obj_versions"}
 
 MovePackage.module
@@ -1086,6 +1092,9 @@ MoveType.layout
 MoveType.abilities
   => {}
 
+MoveValue.asAddress
+  => {}
+
 MoveValue.bcs
   => {}
 
@@ -1093,6 +1102,9 @@ MoveValue.display
   => {}
 
 MoveValue.extract
+  => {}
+
+MoveValue.format
   => {}
 
 MoveValue.json
@@ -1110,6 +1122,18 @@ MutateConsensusStreamEnded.sequenceNumber
 Mutation.executeTransaction
   => {}
 
+NameRecord.domain
+  => {}
+
+NameRecord.contents
+  => {}
+
+NameRecord.target
+  => {}
+
+NameRecord.parent
+  => {}
+
 Node.id
   => {}
 
@@ -1117,6 +1141,9 @@ Object.id
   => {}
 
 Object.address
+  => {}
+
+Object.addressAt
   => {}
 
 Object.version
@@ -1137,7 +1164,7 @@ Object.balance
 Object.balances
   => {"consistent"}
 
-Object.defaultSuinsName
+Object.defaultNameRecord
   => {"obj_versions"}
 
 Object.dynamicField
@@ -1278,6 +1305,9 @@ Query.node
 Query.address
   => {}
 
+Query.address (filter: name)
+  => {"obj_versions"}
+
 Query.chainIdentifier
   => {}
 
@@ -1302,6 +1332,9 @@ Query.events
 Query.events (filter: module)
   => {"ev_emit_mod", "tx_digests"}
 
+Query.multiGetAddresses
+  => {}
+
 Query.multiGetCheckpoints
   => {}
 
@@ -1322,6 +1355,9 @@ Query.multiGetTransactionEffects
 
 Query.multiGetTypes
   => {}
+
+Query.nameRecord
+  => {"obj_versions"}
 
 Query.object
   => {"obj_versions"}
@@ -1348,9 +1384,6 @@ Query.protocolConfigs
   => {}
 
 Query.serviceConfig
-  => {}
-
-Query.suinsName
   => {}
 
 Query.transaction
@@ -1414,12 +1447,6 @@ ReadConsensusStreamEnded.sequenceNumber
   => {}
 
 Receiving.object
-  => {}
-
-SafeMode.enabled
-  => {}
-
-SafeMode.gasSummary
   => {}
 
 ServiceConfig.mutationTimeoutMs
@@ -1515,52 +1542,7 @@ SplitCoinsCommand.coin
 SplitCoinsCommand.amounts
   => {}
 
-StakeSubsidy.balance
-  => {}
-
-StakeSubsidy.distributionCounter
-  => {}
-
-StakeSubsidy.currentDistributionAmount
-  => {}
-
-StakeSubsidy.periodLength
-  => {}
-
-StakeSubsidy.decreaseRate
-  => {}
-
-StorageFund.totalObjectStorageRebates
-  => {}
-
-StorageFund.nonRefundableBalance
-  => {}
-
 StoreExecutionTimeObservationsTransaction._
-  => {}
-
-SystemParameters.durationMs
-  => {}
-
-SystemParameters.stakeSubsidyStartEpoch
-  => {}
-
-SystemParameters.minValidatorCount
-  => {}
-
-SystemParameters.maxValidatorCount
-  => {}
-
-SystemParameters.minValidatorJoiningStake
-  => {}
-
-SystemParameters.validatorLowStakeThreshold
-  => {}
-
-SystemParameters.validatorVeryLowStakeThreshold
-  => {}
-
-SystemParameters.validatorLowStakeGracePeriod
   => {}
 
 Transaction.id
@@ -1683,94 +1665,10 @@ UpgradeCommand.upgradeTicket
 UserSignature.signatureBytes
   => {}
 
-Validator.address
-  => {}
-
-Validator.balance
-  => {"consistent"}
-
-Validator.balances
-  => {"consistent"}
-
-Validator.defaultSuinsName
-  => {"obj_versions"}
-
-Validator.multiGetBalances
-  => {"consistent"}
-
-Validator.objects
-  => {"consistent"}
-
-Validator.credentials
-  => {}
-
-Validator.nextEpochCredentials
-  => {}
-
-Validator.name
-  => {}
-
-Validator.description
-  => {}
-
-Validator.imageUrl
-  => {}
-
-Validator.projectUrl
-  => {}
-
-Validator.operationCap
-  => {"obj_versions"}
-
-Validator.stakingPoolId
-  => {}
-
-Validator.exchangeRatesTable
-  => {}
-
-Validator.exchangeRatesSize
-  => {}
-
-Validator.stakingPoolActivationEpoch
-  => {}
-
-Validator.stakingPoolSuiBalance
-  => {}
-
-Validator.rewardsPool
-  => {}
-
-Validator.poolTokenBalance
-  => {}
-
-Validator.pendingStake
-  => {}
-
-Validator.pendingTotalSuiWithdraw
-  => {}
-
-Validator.pendingPoolTokenWithdraw
-  => {}
-
-Validator.votingPower
-  => {}
-
-Validator.gasPrice
-  => {}
-
-Validator.commissionRate
-  => {}
-
-Validator.nextEpochStake
-  => {}
-
-Validator.nextEpochGasPrice
-  => {}
-
-Validator.nextEpochCommissionRate
-  => {}
-
 Validator.atRisk
+  => {}
+
+Validator.contents
   => {}
 
 Validator.reportRecords
@@ -1785,61 +1683,10 @@ ValidatorAggregatedSignature.signature
 ValidatorAggregatedSignature.signersMap
   => {}
 
-ValidatorCredentials.protocolPubKey
-  => {}
-
-ValidatorCredentials.networkPubKey
-  => {}
-
-ValidatorCredentials.workerPubKey
-  => {}
-
-ValidatorCredentials.proofOfPossession
-  => {}
-
-ValidatorCredentials.netAddress
-  => {}
-
-ValidatorCredentials.p2PAddress
-  => {}
-
-ValidatorCredentials.primaryAddress
-  => {}
-
-ValidatorCredentials.workerAddress
-  => {}
-
 ValidatorSet.activeValidators
   => {}
 
-ValidatorSet.inactivePoolsId
-  => {}
-
-ValidatorSet.inactivePoolsSize
-  => {}
-
-ValidatorSet.pendingActiveValidatorsId
-  => {}
-
-ValidatorSet.pendingActiveValidatorsSize
-  => {}
-
-ValidatorSet.pendingRemovals
-  => {}
-
-ValidatorSet.stakingPoolMappingsId
-  => {}
-
-ValidatorSet.stakingPoolMappingsSize
-  => {}
-
-ValidatorSet.totalStake
-  => {}
-
-ValidatorSet.validatorCandidatesId
-  => {}
-
-ValidatorSet.validatorCandidatesSize
+ValidatorSet.contents
   => {}
 
 WithdrawMaxAmountU64.amount

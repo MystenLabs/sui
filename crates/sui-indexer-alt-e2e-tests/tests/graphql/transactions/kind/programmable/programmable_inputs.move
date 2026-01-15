@@ -53,7 +53,7 @@ module test::simple {
 //# create-checkpoint
 
 // Test 2: SharedInput only - demonstrates SharedInput TransactionInput type
-//# programmable --sender A --inputs object(1,0) 10  
+//# programmable --sender A --inputs object(1,0) 10
 //> 0: test::simple::add(Input(0), Input(1))
 
 //# create-checkpoint
@@ -66,7 +66,7 @@ module test::simple {
 //# create-checkpoint
 
 // Test 4: Receiving only - demonstrates Receiving TransactionInput type
-//# programmable --sender A --inputs 200u64 @A  
+//# programmable --sender A --inputs 200u64 @A
 // Setup: Create coin and transfer it to A's address for Receiving test
 //> 0: test::simple::new_coin(Input(0));
 //> TransferObjects([Result(0)], Input(1))
@@ -83,7 +83,7 @@ module test::simple {
 
 //# run-graphql
 {
-  # Test 1: Pure input only
+  # Test 1: MoveValue input (Pure with inferred type layout) only
   pureInputTest: transaction(digest: "@{digest_2}") {
     digest
     kind {
@@ -92,8 +92,8 @@ module test::simple {
         inputs(first: 10) {
           nodes {
             __typename
-            ... on Pure {
-              bytes
+            ... on MoveValue {
+              json
             }
           }
         }
@@ -102,7 +102,7 @@ module test::simple {
   }
 }
 
-//# run-graphql  
+//# run-graphql
 {
   # Test 2: SharedInput only
   sharedInputTest: transaction(digest: "@{digest_4}") {
@@ -127,7 +127,7 @@ module test::simple {
 
 //# run-graphql
 {
-  # Test 3: OwnedOrImmutable input only  
+  # Test 3: OwnedOrImmutable input only
   ownedOrImmutableTest: transaction(digest: "@{digest_6}") {
     digest
     kind {
@@ -173,4 +173,4 @@ module test::simple {
       }
     }
   }
-} 
+}

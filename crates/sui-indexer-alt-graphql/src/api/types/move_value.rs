@@ -19,12 +19,15 @@ use sui_indexer_alt_reader::displays::DisplayKey;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_types::TypeTag;
 use sui_types::display::DisplayVersionUpdatedEvent;
+use sui_types::id::ID;
+use sui_types::id::UID;
 use sui_types::object::option_visitor as OV;
 use sui_types::object::rpc_visitor as RV;
 use tokio::join;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::scalars::json::Json;
+use crate::api::types::address::Address;
 use crate::api::types::display::Display;
 use crate::api::types::move_type::MoveType;
 use crate::api::types::object::Object;
@@ -60,6 +63,9 @@ struct JsonWriter<'b> {
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
+    #[error("Format error: {0}")]
+    Format(sui_display::v2::FormatError),
+
     #[error("Path error: {0}")]
     Path(sui_display::v2::FormatError),
 
@@ -84,6 +90,49 @@ enum VisitorError {
 
 #[Object]
 impl MoveValue {
+    /// Attempts to treat this value as an `Address`.
+    ///
+    /// If the value is of type `address` or `0x2::object::ID`, it is interpreted as an address pointer, and it is scoped to the current checkpoint.
+    ///
+    /// If the value is of type `0x2::object::UID`, it is interpreted as a wrapped object whose version is bounded by the root version of the current value. Such values do not support nested owned object queries, but `Address.addressAt` can be used to re-scope it to a checkpoint (defaults to the current checkpoint), instead of a root version, allowing owned object queries.
+    ///
+    /// Values of other types cannot be interpreted as addresses, and `null` is returned.
+    async fn as_address(&self) -> Result<Option<Address>, RpcError> {
+        use TypeTag as T;
+
+        let Some(tag) = self.type_.to_type_tag() else {
+            return Ok(None);
+        };
+
+        match tag {
+            T::Address => {
+                let address = bcs::from_bytes(&self.native)?;
+                Ok(Some(Address::with_address(
+                    self.type_.scope.without_root_bound(),
+                    address,
+                )))
+            }
+
+            T::Struct(s) if *s == ID::type_() => {
+                let address = bcs::from_bytes(&self.native)?;
+                Ok(Some(Address::with_address(
+                    self.type_.scope.without_root_bound(),
+                    address,
+                )))
+            }
+
+            T::Struct(s) if *s == UID::type_() => {
+                let address = bcs::from_bytes(&self.native)?;
+                Ok(Some(Address::with_address(
+                    self.type_.scope.clone(),
+                    address,
+                )))
+            }
+
+            _ => Ok(None),
+        }
+    }
+
     /// The BCS representation of this value, Base64-encoded.
     async fn bcs(&self) -> Option<Base64> {
         Some(Base64::from(self.native.clone()))
@@ -154,8 +203,8 @@ impl MoveValue {
         path: String,
     ) -> Result<Option<MoveValue>, RpcError<Error>> {
         let limits: &Limits = ctx.data()?;
-        let extract =
-            sui_display::v2::Extract::parse(limits.display(), &path).map_err(path_error)?;
+        let extract = sui_display::v2::Extract::parse(limits.display(), &path)
+            .map_err(|e| format_error(Error::Path, e))?;
 
         let Some(layout) = self.type_.layout_impl().await.map_err(upcast)? else {
             return Ok(None);
@@ -172,7 +221,11 @@ impl MoveValue {
 
         // Evaluate the extraction and convert to an owned slice
         let interpreter = sui_display::v2::Interpreter::new(root, store);
-        let Some(value) = extract.extract(&interpreter).await.map_err(path_error)? else {
+        let Some(value) = extract
+            .extract(&interpreter)
+            .await
+            .map_err(|e| format_error(Error::Path, e))?
+        else {
             return Ok(None);
         };
 
@@ -186,6 +239,41 @@ impl MoveValue {
 
         let type_ = MoveType::from_layout(layout, self.type_.scope.clone());
         Ok(Some(MoveValue { type_, native }))
+    }
+
+    /// Render a single Display v2 format string against this value.
+    ///
+    /// Returns `null` if the value does not have a valid type, or if any of the expressions in the format string fail to evaluate (e.g. field does not exist).
+    async fn format(
+        &self,
+        ctx: &Context<'_>,
+        format: String,
+    ) -> Result<Option<Json>, RpcError<Error>> {
+        let limits: &Limits = ctx.data()?;
+        let parsed = sui_display::v2::Format::parse(limits.display(), &format)
+            .map_err(|e| format_error(Error::Format, e))?;
+
+        let Some(layout) = self.type_.layout_impl().await.map_err(upcast)? else {
+            return Ok(None);
+        };
+
+        let store = DisplayStore::new(ctx, &self.type_.scope);
+        let root = sui_display::v2::OwnedSlice {
+            bytes: self.native.clone(),
+            layout,
+        };
+
+        let interpreter = sui_display::v2::Interpreter::new(root, store);
+        let value = parsed
+            .format(
+                &interpreter,
+                limits.max_move_value_depth,
+                limits.max_display_output_size,
+            )
+            .await
+            .map_err(|e| format_error(Error::Format, e))?;
+
+        Ok(Some(Json::try_from(value).map_err(upcast)?))
     }
 
     /// Representation of a Move value in JSON, where:
@@ -281,15 +369,9 @@ impl<'f, 'r> sui_display::v2::Store for DisplayStore<'f, 'r> {
     ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
         // NOTE: We can't use `anyhow::Context` here because `RpcError` doesn't implement
         // `std::error::Error`.
-        let object = if let Some(version) = self.scope.root_version() {
-            Object::version_bounded(self.ctx, self.scope.clone(), id.into(), version.into())
-                .await
-                .map_err(|e| anyhow!("Failed to fetch object: {e:?}"))?
-        } else {
-            Object::latest(self.ctx, self.scope.clone(), id.into())
-                .await
-                .map_err(|e| anyhow!("Failed to fetch object: {e:?}"))?
-        };
+        let object = Object::latest(self.ctx, self.scope.clone(), id.into())
+            .await
+            .map_err(|e| anyhow!("Failed to fetch object: {e:?}"))?;
 
         let Some(object) = object else {
             return Ok(None);
@@ -417,7 +499,10 @@ impl From<RV::Error> for VisitorError {
     }
 }
 
-fn path_error(e: sui_display::v2::FormatError) -> RpcError<Error> {
+fn format_error(
+    wrap: impl FnOnce(sui_display::v2::FormatError) -> Error,
+    e: sui_display::v2::FormatError,
+) -> RpcError<Error> {
     use sui_display::v2::FormatError as FE;
     match &e {
         FE::InvalidHexCharacter(_)
@@ -431,7 +516,7 @@ fn path_error(e: sui_display::v2::FormatError) -> RpcError<Error> {
         | FE::UnexpectedToken { .. }
         | FE::VectorArity { .. }
         | FE::VectorNoType
-        | FE::VectorTypeMismatch { .. } => bad_user_input(Error::Path(e)),
+        | FE::VectorTypeMismatch { .. } => bad_user_input(wrap(e)),
 
         FE::TooBig | FE::TooDeep | FE::TooManyLoads | FE::TooMuchOutput => resource_exhausted(e),
         FE::Bcs(_) | FE::Visitor(_) | FE::Store(_) => anyhow!(e).into(),

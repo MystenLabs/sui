@@ -1,6 +1,5 @@
 ---
 source: crates/sui-indexer-alt-graphql/src/lib.rs
-assertion_line: 466
 expression: sdl
 ---
 """
@@ -79,6 +78,12 @@ type Address implements Node & IAddressable {
 	"""
 	address: SuiAddress!
 	"""
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
+	"""
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
+	"""
 	Attempts to fetch the object at this address.
 	"""
 	asObject: Object
@@ -94,9 +99,9 @@ type Address implements Node & IAddressable {
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default Name Service name for this address.
 	"""
-	defaultSuinsName: String
+	defaultNameRecord: NameRecord
 	"""
 	Access a dynamic field on an object using its type and BCS-encoded name.
 	
@@ -158,6 +163,32 @@ type AddressAliasStateCreateTransaction {
 	A workaround to define an empty variant of a GraphQL union.
 	"""
 	_: Boolean
+}
+
+"""
+Identifies a specific version of an address.
+
+Exactly one of `address` or `name` must be specified. Additionally, at most one of `rootVersion` or `atCheckpoint` can be specified. If neither bound is provided, the address is fetched at the checkpoint being viewed.
+
+See `Query.address` for more details.
+"""
+input AddressKey {
+	"""
+	The address.
+	"""
+	address: SuiAddress
+	"""
+	If specified, sets a checkpoint bound for this address.
+	"""
+	atCheckpoint: UInt53
+	"""
+	A SuiNS name to resolve to an address.
+	"""
+	name: String
+	"""
+	If specified, sets a root version bound for this address.
+	"""
+	rootVersion: UInt53
 }
 
 """
@@ -551,6 +582,12 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	address: SuiAddress!
 	"""
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
+	"""
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
+	"""
 	Whether the `DenyCap` can be used to enable a global pause that behaves as if all addresses were added to the deny list. `null` indicates that it is not known whether the currency can be paused or not. This field is only populated on currencies held in the Coin Registry. To determine whether a legacy currency can be paused, check the contents of its `DenyCap`, if it can be found.
 	"""
 	allowGlobalPause: Boolean
@@ -573,9 +610,9 @@ type CoinMetadata implements IAddressable & IMoveObject & IObject {
 	"""
 	decimals: Int
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default Name Service name for this address.
 	"""
-	defaultSuinsName: String
+	defaultNameRecord: NameRecord
 	"""
 	If the currency is regulated, this object represents the capability to modify the deny list. If a capability is known but wrapped, its address can be fetched but other fields will not be accessible.
 	"""
@@ -918,6 +955,12 @@ type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	address: SuiAddress!
 	"""
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
+	"""
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
+	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
 	If the address does not own any coins of that type, a balance of zero is returned.
@@ -932,9 +975,9 @@ type DynamicField implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	contents: MoveValue
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default Name Service name for this address.
 	"""
-	defaultSuinsName: String
+	defaultNameRecord: NameRecord
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
@@ -1070,16 +1113,22 @@ type DynamicFieldEdge {
 
 """
 A description of a dynamic field's name.
+
+Names can either be given as serialized `bcs` accompanied by its `type`, or as a Display v2 `literal` expression. Other combinations of inputs are not supported.
 """
 input DynamicFieldName {
 	"""
 	The Base64-encoded BCS serialization of the dynamic field's 'name'.
 	"""
-	bcs: Base64!
+	bcs: Base64
+	"""
+	The name represented as a Display v2 literal expression.
+	"""
+	literal: String
 	"""
 	The type of the dynamic field's name, like 'u64' or '0x2::kiosk::Listing'.
 	"""
-	type: String!
+	type: String
 }
 
 """
@@ -1194,35 +1243,17 @@ type Epoch implements Node {
 	"""
 	referenceGasPrice: BigInt
 	"""
-	Information about whether this epoch was started in safe mode, which happens if the full epoch change logic fails.
-	"""
-	safeMode: SafeMode
-	"""
 	The timestamp associated with the first checkpoint in the epoch.
 	"""
 	startTimestamp: DateTime
-	"""
-	SUI set aside to account for objects stored on-chain, at the start of the epoch.
-	This is also used for storage rebates.
-	"""
-	storageFund: StorageFund
 	"""
 	The system packages used by all transactions in this epoch.
 	"""
 	systemPackages(first: Int, after: String, last: Int, before: String): MovePackageConnection
 	"""
-	Details of the system that are decided during genesis.
+	The contents of the system state inner object at the start of this epoch.
 	"""
-	systemParameters: SystemParameters
-	"""
-	Parameters related to the subsidy that supplements staking rewards
-	"""
-	systemStakeSubsidy: StakeSubsidy
-	"""
-	The value of the `version` field of `0x5`, the `0x3::sui::SuiSystemState` object.
-	This version changes whenever the fields contained in the system state object (held in a dynamic field attached to `0x5`) change.
-	"""
-	systemStateVersion: UInt53
+	systemState: MoveValue
 	"""
 	The total number of checkpoints in this epoch.
 	
@@ -1560,6 +1591,12 @@ An address uniquely represents either the public key of an account, or an object
 interface IAddressable {
 	address: SuiAddress!
 	"""
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
+	"""
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
+	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
 	If the address does not own any coins of that type, a balance of zero is returned.
@@ -1570,9 +1607,9 @@ interface IAddressable {
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default Name Service name for this address.
 	"""
-	defaultSuinsName: String
+	defaultNameRecord: NameRecord
 	"""
 	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
 	
@@ -2166,6 +2203,12 @@ type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	address: SuiAddress!
 	"""
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
+	"""
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
+	"""
 	Attempts to convert the object into a CoinMetadata.
 	"""
 	asCoinMetadata: CoinMetadata
@@ -2188,9 +2231,9 @@ type MoveObject implements Node & IAddressable & IMoveObject & IObject {
 	"""
 	contents: MoveValue
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default Name Service name for this address.
 	"""
-	defaultSuinsName: String
+	defaultNameRecord: NameRecord
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
@@ -2327,6 +2370,12 @@ type MovePackage implements Node & IAddressable & IObject {
 	"""
 	address: SuiAddress!
 	"""
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
+	"""
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
+	"""
 	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
 	
 	If the address does not own any coins of that type, a balance of zero is returned.
@@ -2337,9 +2386,9 @@ type MovePackage implements Node & IAddressable & IObject {
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default Name Service name for this address.
 	"""
-	defaultSuinsName: String
+	defaultNameRecord: NameRecord
 	"""
 	32-byte hash that identifies the package's contents, encoded in Base58.
 	"""
@@ -2397,9 +2446,9 @@ type MovePackage implements Node & IAddressable & IObject {
 	"""
 	owner: Owner
 	"""
-	Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
+	Fetch the package with the same original ID, at a different version, or checkpoint.
 	
-	If no additional bound is provided, the latest version of this package is fetched at the latest checkpoint.
+	If no additional bound is provided, the package is fetched at the latest checkpoint known to the RPC.
 	"""
 	packageAt(version: UInt53, checkpoint: UInt53): MovePackage
 	"""
@@ -2597,6 +2646,16 @@ scalar MoveTypeSignature
 
 type MoveValue {
 	"""
+	Attempts to treat this value as an `Address`.
+	
+	If the value is of type `address` or `0x2::object::ID`, it is interpreted as an address pointer, and it is scoped to the current checkpoint.
+	
+	If the value is of type `0x2::object::UID`, it is interpreted as a wrapped object whose version is bounded by the root version of the current value. Such values do not support nested owned object queries, but `Address.addressAt` can be used to re-scope it to a checkpoint (defaults to the current checkpoint), instead of a root version, allowing owned object queries.
+	
+	Values of other types cannot be interpreted as addresses, and `null` is returned.
+	"""
+	asAddress: Address
+	"""
 	The BCS representation of this value, Base64-encoded.
 	"""
 	bcs: Base64
@@ -2612,6 +2671,12 @@ type MoveValue {
 	`path` is a Display v2 'chain' expression, allowing access to nested, named and positional fields, vector indices, VecMap keys, and dynamic (object) field accesses.
 	"""
 	extract(path: String!): MoveValue
+	"""
+	Render a single Display v2 format string against this value.
+	
+	Returns `null` if the value does not have a valid type, or if any of the expressions in the format string fail to evaluate (e.g. field does not exist).
+	"""
+	format(format: String!): JSON
 	"""
 	Representation of a Move value in JSON, where:
 	
@@ -2684,6 +2749,32 @@ type Mutation {
 }
 
 """
+A Name Service NameRecord representing a domain name registration.
+"""
+type NameRecord {
+	"""
+	On-chain representation of the underlying Name Service `NameRecord` Move value.
+	"""
+	contents: MoveValue!
+	"""
+	The domain name this record is for.
+	"""
+	domain: String!
+	"""
+	The Name Service Name Record of the parent domain, if this is a subdomain.
+	
+	Returns `null` if this is not a subdomain.
+	"""
+	parent: NameRecord
+	"""
+	The address this domain points to.
+	
+	`rootVersion` and `atCheckpoint` control how the target `Address` is scoped. If neither is provided, the `Address` is scoped to the latest checkpoint known to the RPC.
+	"""
+	target(rootVersion: UInt53, atCheckpoint: UInt53): Address
+}
+
+"""
 An interface implemented by types that can be uniquely identified by a globally unique `ID`, following the GraphQL Global Object Identification specification.
 """
 interface Node {
@@ -2704,6 +2795,12 @@ type Object implements Node & IAddressable & IObject {
 	"""
 	address: SuiAddress!
 	"""
+	Fetch the address as it was at a different root version, or checkpoint.
+	
+	If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
+	"""
+	addressAt(rootVersion: UInt53, checkpoint: UInt53): Address
+	"""
 	Attempts to convert the object into a MoveObject.
 	"""
 	asMoveObject: MoveObject
@@ -2722,9 +2819,9 @@ type Object implements Node & IAddressable & IObject {
 	"""
 	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
 	"""
-	The domain explicitly configured as the default SuiNS name for this address.
+	The domain explicitly configured as the default Name Service name for this address.
 	"""
-	defaultSuinsName: String
+	defaultNameRecord: NameRecord
 	"""
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
@@ -2771,7 +2868,7 @@ type Object implements Node & IAddressable & IObject {
 	"""
 	Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
 	
-	If no additional bound is provided, the latest version of this object is fetched at the latest checkpoint.
+	If no additional bound is provided, the object is fetched at the latest checkpoint known to the RPC.
 	"""
 	objectAt(version: UInt53, rootVersion: UInt53, checkpoint: UInt53): Object
 	"""
@@ -3072,7 +3169,7 @@ input PackageCheckpointFilter {
 """
 Identifies a specific version of a package.
 
-The `address` field must be specified, as well as at most one of `version`, or `atCheckpoint`. If neither is provided, the package is fetched at the current checkpoint.
+The `address` field must be specified, as well as at most one of `version`, or `atCheckpoint`. If neither is provided, the package is fetched at the checkpoint being viewed.
 
 See `Query.package` for more details.
 """
@@ -3212,15 +3309,21 @@ type Query {
 	"""
 	Look-up an account by its SuiAddress.
 	
-	If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+	If `rootVersion` is specified, nested dynamic field accesses will be fetched at or before this version. This can be used to fetch a child or descendant object bounded by its root object's version, when its immediate parent is wrapped, or a value in a dynamic object field. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
 	
 	- The root object of the object it is wrapped in, if it is wrapped.
 	- The root object of its owner, if it is owned by another object.
 	- The object itself, if it is not object-owned or wrapped.
 	
 	Specifying a `rootVersion` disables nested queries for paginating owned objects or dynamic fields (these queries are only supported at checkpoint boundaries).
+	
+	If `atCheckpoint` is specified, the address will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
+	
+	If none of the above are specified, the address is fetched at the checkpoint being viewed.
+	
+	If the address is fetched by name and the name does not resolve to an address (e.g. the name does not exist or has expired), `null` is returned.
 	"""
-	address(address: SuiAddress!, rootVersion: UInt53): Address!
+	address(address: SuiAddress, name: String, rootVersion: UInt53, atCheckpoint: UInt53): Address
 	"""
 	First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
 	"""
@@ -3255,6 +3358,12 @@ type Query {
 	Paginate events that are emitted in the network, optionally filtered by event filters.
 	"""
 	events(first: Int, after: String, last: Int, before: String, filter: EventFilter): EventConnection
+	"""
+	Fetch addresses by their keys.
+	
+	Returns a list of addresses that is guaranteed to be the same length as `keys`. If an address in `keys` is fetched by name and the name does not resolve to an address, its corresponding entry in the result will be `null`.
+	"""
+	multiGetAddresses(keys: [AddressKey!]!): [Address]!
 	"""
 	Fetch checkpoints by their sequence numbers.
 	
@@ -3300,6 +3409,12 @@ type Query {
 	"""
 	multiGetTypes(keys: [String!]!): [MoveType]!
 	"""
+	Look-up a Name Service NameRecord by its domain name.
+	
+	Returns `null` if the record does not exist or has expired.
+	"""
+	nameRecord(name: String!): NameRecord
+	"""
 	Fetch a `Node` by its globally unique `ID`. Returns `null` if the node cannot be found (e.g., the underlying data was pruned or never existed).
 	"""
 	node(id: ID!): Node
@@ -3318,7 +3433,7 @@ type Query {
 	
 	If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint. This will fail if the provided checkpoint is after the RPC's latest checkpoint.
 	
-	If none of the above are specified, the object is fetched at the latest checkpoint.
+	If none of the above are specified, the object is fetched at the checkpoint being viewed.
 	
 	It is an error to specify more than one of `version`, `rootVersion`, or `atCheckpoint`.
 	
@@ -3344,7 +3459,7 @@ type Query {
 	
 	If `atCheckpoint` is specified, the package loaded is the one with the largest version among all packages sharing an original ID with the package at `address` and was published at or before `atCheckpoint`.
 	
-	If neither are specified, the package is fetched at the latest checkpoint.
+	If neither are specified, the package is fetched at the checkpoint being viewed.
 	
 	It is an error to specify both `version` and `atCheckpoint`, and `null` will be returned if the package cannot be found as of the latest checkpoint, or the address points to an object that is not a package.
 	
@@ -3384,10 +3499,6 @@ type Query {
 	- `doGasSelection`: If true, enables automatic gas coin selection and budget estimation. Defaults to false.
 	"""
 	simulateTransaction(transaction: JSON!, checksEnabled: Boolean, doGasSelection: Boolean): SimulationResult!
-	"""
-	Look-up an account by its SuiNS name, assuming it has a valid, unexpired name registration.
-	"""
-	suinsName(address: String!, rootVersion: UInt53): Address
 	"""
 	Fetch a transaction by its digest.
 	
@@ -3490,18 +3601,6 @@ enum RegulatedState {
 	The currency was created without a deny list.
 	"""
 	UNREGULATED
-}
-
-type SafeMode {
-	"""
-	Whether safe mode was used for the last epoch change.
-	The system will retry a full epoch change on every epoch boundary and automatically reset this flag if so.
-	"""
-	enabled: Boolean
-	"""
-	Accumulated fees for computation and cost that have not been added to the various reward pools, because the full epoch change did not happen.
-	"""
-	gasSummary: GasCostSummary
 }
 
 type ServiceConfig {
@@ -3704,48 +3803,6 @@ type SplitCoinsCommand {
 }
 
 """
-Parameters that control the distribution of the stake subsidy.
-"""
-type StakeSubsidy {
-	"""
-	SUI set aside for stake subsidies -- reduces over time as stake subsidies are paid out over time.
-	"""
-	balance: BigInt
-	"""
-	Amount of stake subsidy deducted from the balance per distribution -- decays over time.
-	"""
-	currentDistributionAmount: BigInt
-	"""
-	Percentage of the current distribution amount to deduct at the end of the current subsidy period, expressed in basis points.
-	"""
-	decreaseRate: Int
-	"""
-	Number of times stake subsidies have been distributed.
-	Subsidies are distributed with other staking rewards, at the end of the epoch.
-	"""
-	distributionCounter: Int
-	"""
-	Maximum number of stake subsidy distributions that occur with the same distribution amount (before the amount is reduced).
-	"""
-	periodLength: Int
-}
-
-"""
-SUI set aside to account for objects stored on-chain.
-"""
-type StorageFund {
-	"""
-	The portion of the storage fund that will never be refunded through storage rebates.
-	The system maintains an invariant that the sum of all storage fees into the storage fund is equal to the sum of all storage rebates out, the total storage rebates remaining, and the non-refundable balance.
-	"""
-	nonRefundableBalance: BigInt
-	"""
-	Sum of storage rebates of live objects on chain.
-	"""
-	totalObjectStorageRebates: BigInt
-}
-
-"""
 System transaction for storing execution time observations.
 """
 type StoreExecutionTimeObservationsTransaction {
@@ -3773,44 +3830,6 @@ enum SupplyState {
 	The supply can neither increase nor decrease.
 	"""
 	FIXED
-}
-
-"""
-Details of the system that are decided during genesis.
-"""
-type SystemParameters {
-	"""
-	Target duration of an epoch, in milliseconds.
-	"""
-	durationMs: BigInt
-	"""
-	The maximum number of active validators that the system supports.
-	"""
-	maxValidatorCount: Int
-	"""
-	The minimum number of active validators that the system supports.
-	"""
-	minValidatorCount: Int
-	"""
-	Minimum stake needed to become a new validator.
-	"""
-	minValidatorJoiningStake: BigInt
-	"""
-	The epoch at which stake subsidies start being paid out.
-	"""
-	stakeSubsidyStartEpoch: UInt53
-	"""
-	The number of epochs that a validator has to recover from having less than `validatorLowStakeThreshold` stake.
-	"""
-	validatorLowStakeGracePeriod: BigInt
-	"""
-	Validators with stake below this threshold will enter the grace period (see `validatorLowStakeGracePeriod`), after which they are removed from the active validator set.
-	"""
-	validatorLowStakeThreshold: BigInt
-	"""
-	Validators with stake below this threshold will be removed from the active validator set at the next epoch boundary, without a grace period.
-	"""
-	validatorVeryLowStakeThreshold: BigInt
 }
 
 """
@@ -4016,7 +4035,7 @@ input TransactionFilter {
 """
 Input argument to a Programmable Transaction Block (PTB) command.
 """
-union TransactionInput = Pure | OwnedOrImmutable | SharedInput | Receiving | BalanceWithdraw
+union TransactionInput = Pure | MoveValue | OwnedOrImmutable | SharedInput | Receiving | BalanceWithdraw
 
 type TransactionInputConnection {
 	"""
@@ -4183,138 +4202,19 @@ type UserSignature {
 	signatureBytes: Base64
 }
 
-type Validator implements IAddressable {
-	"""
-	The validator's address.
-	"""
-	address: SuiAddress!
+type Validator {
 	"""
 	The number of epochs for which this validator has been below the low stake threshold.
 	"""
 	atRisk: UInt53
 	"""
-	Fetch the total balance for coins with marker type `coinType` (e.g. `0x2::sui::SUI`), owned by this address.
-	
-	If the address does not own any coins of that type, a balance of zero is returned.
+	On-chain representation of the underlying `0x3::validator::Validator` value.
 	"""
-	balance(coinType: String!): Balance
-	"""
-	Total balance across coins owned by this address, grouped by coin type.
-	"""
-	balances(first: Int, after: String, last: Int, before: String): BalanceConnection
-	"""
-	The fee charged by the validator for staking services.
-	"""
-	commissionRate: Int
-	"""
-	Validator's set of credentials such as public keys, network addresses and others.
-	"""
-	credentials: ValidatorCredentials
-	"""
-	The domain explicitly configured as the default SuiNS name for this address.
-	"""
-	defaultSuinsName: String
-	"""
-	Validator's description.
-	"""
-	description: String
-	"""
-	Number of exchange rates in the table.
-	"""
-	exchangeRatesSize: UInt53
-	"""
-	A wrapped object containing the validator's exchange rates. This is a table from epoch number to `PoolTokenExchangeRate` value.
-	The exchange rate is used to determine the amount of SUI tokens that each past SUI staker can withdraw in the future.
-	"""
-	exchangeRatesTable: Address
-	"""
-	The reference gas price for this epoch.
-	"""
-	gasPrice: BigInt
-	"""
-	Validator's url containing their custom image.
-	"""
-	imageUrl: String
-	"""
-	Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
-	
-	Returns `None` when no checkpoint is set in scope (e.g. execution scope).
-	If the address does not own any coins of a given type, a balance of zero is returned for that type.
-	"""
-	multiGetBalances(keys: [String!]!): [Balance!]
-	"""
-	Validator's name.
-	"""
-	name: String
-	"""
-	The proposed next epoch fee for the validator's staking services.
-	"""
-	nextEpochCommissionRate: Int
-	"""
-	Validator's set of credentials for the next epoch.
-	"""
-	nextEpochCredentials: ValidatorCredentials
-	"""
-	The validator's gas price quote for the next epoch.
-	"""
-	nextEpochGasPrice: BigInt
-	"""
-	The total number of SUI tokens in this pool plus the pending stake amount for this epoch.
-	"""
-	nextEpochStake: BigInt
-	"""
-	Objects owned by this object, optionally filtered by type.
-	"""
-	objects(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): MoveObjectConnection
-	"""
-	The validator's current valid `Cap` object. Validators can delegate the operation ability to another address.
-	The address holding this `Cap` object can then update the reference gas price and tallying rule on behalf of the validator.
-	"""
-	operationCap: MoveObject
-	"""
-	Pending pool token withdrawn during the current epoch, emptied at epoch boundaries.
-	"""
-	pendingPoolTokenWithdraw: BigInt
-	"""
-	Pending stake amount for this epoch.
-	"""
-	pendingStake: BigInt
-	"""
-	Pending stake withdrawn during the current epoch, emptied at epoch boundaries.
-	"""
-	pendingTotalSuiWithdraw: BigInt
-	"""
-	Total number of pool tokens issued by the pool.
-	"""
-	poolTokenBalance: BigInt
-	"""
-	Validator's homepage URL.
-	"""
-	projectUrl: String
+	contents: MoveValue
 	"""
 	Other validators this validator has reported.
 	"""
 	reportRecords(first: Int, before: String, last: Int, after: String): ValidatorConnection
-	"""
-	The epoch stake rewards will be added here at the end of each epoch.
-	"""
-	rewardsPool: BigInt
-	"""
-	The epoch at which this pool became active.
-	"""
-	stakingPoolActivationEpoch: UInt53
-	"""
-	The ID of this validator's `0x3::staking_pool::StakingPool`.
-	"""
-	stakingPoolId: SuiAddress!
-	"""
-	The total number of SUI tokens in this pool.
-	"""
-	stakingPoolSuiBalance: BigInt
-	"""
-	The voting power of this validator in basis points (e.g., 100 = 1% voting power).
-	"""
-	votingPower: Int
 }
 
 type ValidatorAggregatedSignature {
@@ -4348,20 +4248,6 @@ type ValidatorConnection {
 }
 
 """
-The credentials related fields associated with a validator.
-"""
-type ValidatorCredentials {
-	netAddress: String
-	networkPubKey: Base64
-	p2PAddress: String
-	primaryAddress: String
-	proofOfPossession: Base64
-	protocolPubKey: Base64
-	workerAddress: String
-	workerPubKey: Base64
-}
-
-"""
 An edge in a connection.
 """
 type ValidatorEdge {
@@ -4380,50 +4266,13 @@ Representation of `0x3::validator_set::ValidatorSet`.
 """
 type ValidatorSet {
 	"""
-	The current list of active validators.
+	The validators currently in the committee for this validator set.
 	"""
 	activeValidators(first: Int, after: String, last: Int, before: String): ValidatorConnection
 	"""
-	Object ID of the `Table` storing the inactive staking pools.
+	On-chain representation of the underlying `0x3::validator_set::ValidatorSet` value.
 	"""
-	inactivePoolsId: SuiAddress
-	"""
-	Size of the inactive pools `Table`.
-	"""
-	inactivePoolsSize: Int
-	"""
-	Object ID of the wrapped object `TableVec` storing the pending active validators.
-	"""
-	pendingActiveValidatorsId: SuiAddress
-	"""
-	Size of the pending active validators table.
-	"""
-	pendingActiveValidatorsSize: Int
-	"""
-	Validators that are pending removal from the active validator set, expressed as indices in to `activeValidators`.
-	"""
-	pendingRemovals: [Int!]
-	"""
-	Object ID of the `Table` storing the mapping from staking pool ids to the addresses of the corresponding validators.
-	This is needed because a validator's address can potentially change but the object ID of its pool will not.
-	"""
-	stakingPoolMappingsId: SuiAddress
-	"""
-	Size of the stake pool mappings `Table`.
-	"""
-	stakingPoolMappingsSize: Int
-	"""
-	Total amount of stake for all active validators at the beginning of the epoch.
-	"""
-	totalStake: BigInt
-	"""
-	Object ID of the `Table` storing the validator candidates.
-	"""
-	validatorCandidatesId: SuiAddress
-	"""
-	Size of the validator candidates `Table`.
-	"""
-	validatorCandidatesSize: Int
+	contents: MoveValue
 }
 
 """

@@ -10,9 +10,8 @@
 }
 
 fragment E on Epoch {
-  storageFund {
-    totalObjectStorageRebates
-    nonRefundableBalance
+  systemState {
+    storageFund: format(format: "{storage_fund:json}")
   }
 }
 
@@ -35,8 +34,7 @@ fragment E on Epoch {
 }
 
 fragment E on Epoch {
-  storageFund {
-    totalObjectStorageRebates
-    nonRefundableBalance
+  systemState {
+    storageFund: format(format: "{storage_fund:json}")
   }
 }

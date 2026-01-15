@@ -48,8 +48,8 @@ module test::simple {
           }
           nodes {
             __typename
-            ... on Pure {
-              bytes
+            ... on MoveValue {
+              json
             }
           }
         }
@@ -91,8 +91,8 @@ module test::simple {
           }
           nodes {
             __typename
-            ... on Pure {
-              bytes
+            ... on MoveValue {
+              json
             }
           }
         }

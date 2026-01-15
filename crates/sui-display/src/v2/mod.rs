@@ -6,12 +6,11 @@ use std::sync::Arc;
 use futures::future::try_join_all;
 use futures::join;
 use indexmap::IndexMap;
-use sui_types::collection_types::Entry;
-use sui_types::collection_types::VecMap;
 
 use crate::v2::error::Error;
 use crate::v2::meter::Meter;
 use crate::v2::parser::Chain;
+use crate::v2::parser::Literal;
 use crate::v2::parser::Parser;
 use crate::v2::parser::Strand;
 use crate::v2::writer::Writer;
@@ -36,8 +35,14 @@ pub use crate::v2::value::Value;
 /// A path into a Move value, to extract a sub-slice.
 pub struct Extract<'s>(Chain<'s>);
 
-/// Format strings extracted from a `Display` object on-chain.
-pub struct Format<'s> {
+/// A literal value, representing a dynamic field name.
+pub struct Name<'s>(Literal<'s>);
+
+/// A parsed format string.
+pub struct Format<'s>(Vec<Strand<'s>>);
+
+/// A collection of format strings that are evaluated to a string-to-string mapping.
+pub struct Display<'s> {
     fields: Vec<Field<'s>>,
 }
 
@@ -79,7 +84,59 @@ impl<'s> Extract<'s> {
     }
 }
 
+impl<'s> Name<'s> {
+    /// Parse a string as a literal value.
+    ///
+    /// `limits` bounds the dimensions (depth, number of output nodes, max number of object loads)
+    /// that the parsed literal can consume.
+    pub fn parse(limits: Limits, src: &'s str) -> Result<Self, FormatError> {
+        let mut budget = limits.budget();
+        let mut meter = Meter::new(limits.max_depth, &mut budget);
+        let literal = Parser::literal(src, &mut meter)?;
+
+        Ok(Self(literal))
+    }
+
+    /// Evaluate the literal representing the dynamic field name, returning a `Value` which can be
+    /// used to derive a dynamic field or dynamic object field ID.
+    pub async fn eval<S: Store>(
+        &'s self,
+        interpreter: &'s Interpreter<S>,
+    ) -> Result<Option<Value<'s>>, FormatError> {
+        interpreter.eval_literal(&self.0).await
+    }
+}
+
 impl<'s> Format<'s> {
+    /// Parse a string as a format.
+    ///
+    /// `limits` bounds the dimensions (depth, number of output nodes, max number of object loads)
+    /// that the parsed format string can consume.
+    pub fn parse(limits: Limits, src: &'s str) -> Result<Self, FormatError> {
+        let mut budget = limits.budget();
+        let mut meter = Meter::new(limits.max_depth, &mut budget);
+        let format = Parser::format(src, &mut meter)?;
+
+        Ok(Self(format))
+    }
+
+    /// Evaluate the format string returning a formatted JSON value.
+    pub async fn format<S: Store>(
+        &'s self,
+        interpreter: &'s Interpreter<S>,
+        max_depth: usize,
+        max_output_size: usize,
+    ) -> Result<serde_json::Value, FormatError> {
+        let writer = Writer::new(max_depth, max_output_size);
+        let Some(value) = interpreter.eval_strands(&self.0).await? else {
+            return Ok(serde_json::Value::Null);
+        };
+
+        writer.write(value)
+    }
+}
+
+impl<'s> Display<'s> {
     /// Convert the contents of a `Display` object into a `Format` by parsing each of its names and
     /// values as format strings.
     ///
@@ -90,7 +147,7 @@ impl<'s> Format<'s> {
     /// will fail completely if the display overall is detected to exceed the provided `limits`.
     pub fn parse(
         limits: Limits,
-        display_fields: &'s VecMap<String, String>,
+        display_fields: impl IntoIterator<Item = (&'s str, &'s str)>,
     ) -> Result<Self, Error> {
         let mut fields = Vec::new();
         let mut budget = limits.budget();
@@ -107,7 +164,7 @@ impl<'s> Format<'s> {
             Ok(Sourced { src, val })
         };
 
-        for Entry { key: k, value: v } in &display_fields.contents {
+        for (k, v) in display_fields.into_iter() {
             let key = parse(k)?;
             let val = parse(v)?;
             fields.push(Field { key, val });
@@ -220,11 +277,14 @@ mod tests {
     use move_core_types::account_address::AccountAddress;
     use move_core_types::annotated_value::MoveTypeLayout;
     use move_core_types::annotated_value::MoveTypeLayout as L;
+    use move_core_types::language_storage::TypeTag;
     use move_core_types::u256::U256;
     use serde::Serialize;
     use sui_types::base_types::move_ascii_str_layout;
     use sui_types::base_types::move_utf8_str_layout;
     use sui_types::base_types::url_layout;
+    use sui_types::dynamic_field::DynamicFieldInfo;
+    use sui_types::dynamic_field::derive_dynamic_field_id;
     use sui_types::id::ID;
     use sui_types::id::UID;
 
@@ -259,28 +319,52 @@ mod tests {
         Ok(Some(value.format_json(writer)?))
     }
 
+    async fn dynamic_field_id(
+        store: MockStore,
+        bytes: Vec<u8>,
+        layout: MoveTypeLayout,
+        parent: AccountAddress,
+        literal: &str,
+    ) -> Result<Option<AccountAddress>, FormatError> {
+        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
+
+        let name = Name::parse(Limits::default(), literal)?;
+        let Some(value) = name.eval(&interpreter).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(value.derive_dynamic_field_id(parent)?.into()))
+    }
+
+    async fn dynamic_object_field_id(
+        store: MockStore,
+        bytes: Vec<u8>,
+        layout: MoveTypeLayout,
+        parent: AccountAddress,
+        literal: &str,
+    ) -> Result<Option<AccountAddress>, FormatError> {
+        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
+
+        let name = Name::parse(Limits::default(), literal)?;
+        let Some(value) = name.eval(&interpreter).await? else {
+            return Ok(None);
+        };
+
+        Ok(Some(value.derive_dynamic_object_field_id(parent)?.into()))
+    }
+
     /// Helper to parse display fields and render them against the provided object.
-    async fn format(
+    async fn format<'s>(
         store: MockStore,
         limits: Limits,
         bytes: Vec<u8>,
         layout: MoveTypeLayout,
         max_depth: usize,
         max_output_size: usize,
-        fields: impl IntoIterator<Item = (&str, &str)>,
+        fields: impl IntoIterator<Item = (&'s str, &'s str)>,
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
-        let display = VecMap {
-            contents: fields
-                .into_iter()
-                .map(|(key, value)| Entry {
-                    key: key.to_owned(),
-                    value: value.to_owned(),
-                })
-                .collect(),
-        };
-
         let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
-        Format::parse(limits, &display)?
+        Display::parse(limits, fields)?
             .display(&interpreter, max_depth, max_output_size)
             .await
     }
@@ -293,22 +377,7 @@ mod tests {
             Some(true),
             48u8,
             vec![1u64, 2u64, 3u64],
-            VecMap {
-                contents: vec![
-                    Entry {
-                        key: 4u32,
-                        value: 5u32,
-                    },
-                    Entry {
-                        key: 6u32,
-                        value: 7u32,
-                    },
-                    Entry {
-                        key: 8u32,
-                        value: 9u32,
-                    },
-                ],
-            },
+            vec![(4u32, 5u32), (6u32, 7u32), (8u32, 9u32)],
         ))
         .unwrap();
 
@@ -436,7 +505,231 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_dynamic_field_names() {
+        let parent = AccountAddress::from_str("0x4242").unwrap();
+
+        // Dummy object to interpret against (not used for literal evaluation)
+        let obj_bytes = bcs::to_bytes(&0u8).unwrap();
+        let obj_layout = L::U8;
+
+        // Test cases: (literal, expected_type_tag, expected_bcs_bytes)
+        let cases: Vec<(&str, &str, Vec<u8>)> = vec![
+            (
+                "'hello'",
+                "0x1::string::String",
+                bcs::to_bytes(&"hello").unwrap(),
+            ),
+            ("42u64", "u64", bcs::to_bytes(&42u64).unwrap()),
+            ("123u128", "u128", bcs::to_bytes(&123u128).unwrap()),
+            (
+                "@0xabc",
+                "address",
+                bcs::to_bytes(&AccountAddress::from_str("0xabc").unwrap()).unwrap(),
+            ),
+            (
+                "0x1::m::Key(99u32, 'test')",
+                "0x1::m::Key",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+            (
+                "0x1::m::Key<u32, 0x1::string::String>(99u32, 'test')",
+                "0x1::m::Key<u32, 0x1::string::String>",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+            (
+                "vector[1u8, 2u8, 3u8]",
+                "vector<u8>",
+                bcs::to_bytes(&vec![1u8, 2u8, 3u8]).unwrap(),
+            ),
+        ];
+
+        for (literal, type_, bytes) in cases {
+            let id = dynamic_field_id(
+                MockStore::default(),
+                obj_bytes.clone(),
+                obj_layout.clone(),
+                parent,
+                literal,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+            let type_: TypeTag = type_.parse().unwrap();
+            let expected = derive_dynamic_field_id(parent, &type_, &bytes).unwrap();
+            assert_eq!(id, expected.into(), "mismatch for literal: {literal}");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dynamic_object_field_names() {
+        let parent = AccountAddress::from_str("0x4242").unwrap();
+
+        // Dummy object to interpret against (not used for literal evaluation)
+        let obj_bytes = bcs::to_bytes(&0u8).unwrap();
+        let obj_layout = L::U8;
+
+        // Test cases: (literal, expected_type_tag, expected_bcs_bytes)
+        let cases: Vec<(&str, &str, Vec<u8>)> = vec![
+            (
+                "'hello'",
+                "0x1::string::String",
+                bcs::to_bytes(&"hello").unwrap(),
+            ),
+            ("42u64", "u64", bcs::to_bytes(&42u64).unwrap()),
+            ("123u128", "u128", bcs::to_bytes(&123u128).unwrap()),
+            (
+                "@0xabc",
+                "address",
+                bcs::to_bytes(&AccountAddress::from_str("0xabc").unwrap()).unwrap(),
+            ),
+            (
+                "0x1::m::Key(99u32, 'test')",
+                "0x1::m::Key",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+            (
+                "0x1::m::Key<u32, 0x1::string::String>(99u32, 'test')",
+                "0x1::m::Key<u32, 0x1::string::String>",
+                bcs::to_bytes(&(99u32, "test")).unwrap(),
+            ),
+            (
+                "vector[1u8, 2u8, 3u8]",
+                "vector<u8>",
+                bcs::to_bytes(&vec![1u8, 2u8, 3u8]).unwrap(),
+            ),
+        ];
+
+        for (literal, type_, bytes) in cases {
+            let id = dynamic_object_field_id(
+                MockStore::default(),
+                obj_bytes.clone(),
+                obj_layout.clone(),
+                parent,
+                literal,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+
+            let type_: TypeTag = type_.parse().unwrap();
+            let wrapper_type = DynamicFieldInfo::dynamic_object_field_wrapper(type_);
+            let expected = derive_dynamic_field_id(parent, &wrapper_type.into(), &bytes).unwrap();
+            assert_eq!(id, expected.into(), "mismatch for literal: {literal}");
+        }
+    }
+
+    #[test]
+    fn test_dynamic_field_name_parse_errors() {
+        let cases = [
+            // Empty input
+            "",
+            // Field access (not a literal)
+            "foo",
+            "foo.bar",
+            // Missing type suffix
+            "42",
+            // Unclosed string
+            "'hello",
+            // Unclosed struct
+            "0x1::m::S(",
+            "0x1::m::S(42u64",
+            // Unclosed vector
+            "vector[1u8, 2u8",
+            // Invalid address
+            "@0xGGG",
+        ];
+
+        for literal in cases {
+            assert!(
+                Name::parse(Limits::default(), literal).is_err(),
+                "expected error for: {literal:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn test_format_fields_and_scalars() {
+        let bytes = bcs::to_bytes(&(
+            AccountAddress::from_str("0x4243").unwrap(),
+            AccountAddress::from_str("0x4445").unwrap(),
+            AccountAddress::from_str("0x4647").unwrap(),
+            true,
+            48u8,
+            49u16,
+            50u32,
+            51u64,
+            52u128,
+            U256::from(53u64),
+            "hello",
+            "world",
+            "https://example.com",
+        ))
+        .unwrap();
+
+        let fields = vec![
+            ("addr", L::Address),
+            ("id", L::Struct(Box::new(ID::layout()))),
+            ("uid", L::Struct(Box::new(UID::layout()))),
+            ("flag", L::Bool),
+            ("n8", L::U8),
+            ("n16", L::U16),
+            ("n32", L::U32),
+            ("n64", L::U64),
+            ("n128", L::U128),
+            ("n256", L::U256),
+            ("ascii", L::Struct(Box::new(move_ascii_str_layout()))),
+            ("utf8", L::Struct(Box::new(move_ascii_str_layout()))),
+            ("url", L::Struct(Box::new(url_layout()))),
+        ];
+
+        let formats = [
+            "{addr}, {id}, {uid}",
+            "{flag}",
+            "{n8}, {n16}, {n32}, {n64}, {n128}, {n256}",
+            "{ascii}, {utf8}, {url}",
+            "{ascii.bytes}, {utf8.bytes}, {url.url.bytes}",
+            "{@0x5455}",
+            "{false}",
+            "{56u8}, {57u16}, {58u32}, {59u64}, {60u128}, {61u256}",
+            "{'goodbye'}",
+        ];
+
+        let store = MockStore::default();
+        let root = OwnedSlice {
+            layout: struct_("0x1::m::S", fields),
+            bytes,
+        };
+
+        let mut output = Vec::with_capacity(formats.len());
+        let interpreter = Interpreter::new(root, store);
+        for s in formats {
+            let format = Format::parse(Limits::default(), s).unwrap();
+            output.push(
+                format
+                    .format(&interpreter, usize::MAX, usize::MAX)
+                    .await
+                    .unwrap(),
+            );
+        }
+
+        assert_json_snapshot!(output, @r###"
+        [
+          "0x0000000000000000000000000000000000000000000000000000000000004243, 0x0000000000000000000000000000000000000000000000000000000000004445, 0x0000000000000000000000000000000000000000000000000000000000004647",
+          "true",
+          "48, 49, 50, 51, 52, 53",
+          "hello, world, https://example.com",
+          "hello, world, https://example.com",
+          "0x0000000000000000000000000000000000000000000000000000000000005455",
+          "false",
+          "56, 57, 58, 59, 60, 61",
+          "goodbye"
+        ]
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_display_fields_and_scalars() {
         let bytes = bcs::to_bytes(&(
             AccountAddress::from_str("0x4243").unwrap(),
             AccountAddress::from_str("0x4445").unwrap(),
@@ -531,7 +824,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_vector_access() {
+    async fn test_display_vector_access() {
         let bytes =
             bcs::to_bytes(&(vec![2u64, 1u64, 0u64], vec!["first", "second", "third"])).unwrap();
 
@@ -574,7 +867,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_enums() {
+    async fn test_display_enums() {
         #[derive(serde::Serialize)]
         enum Status<'s> {
             Pending(&'s str),
@@ -687,7 +980,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_nested_access() {
+    async fn test_display_nested_access() {
         let bytes = bcs::to_bytes(&(
             (42u64, "nested"),
             vec![(1u32, "first"), (2u32, "second")],
@@ -769,7 +1062,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_string_bytes() {
+    async fn test_display_string_bytes() {
         let bytes = bcs::to_bytes("ABC").unwrap();
         let layout = L::Struct(Box::new(move_ascii_str_layout()));
 
@@ -807,7 +1100,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_missing_fields() {
+    async fn test_display_missing_fields() {
         let bytes = bcs::to_bytes(&(42u64, vec![10u64, 20u64, 30u64])).unwrap();
         let fields = vec![("num", L::U64), ("nums", vector_(L::U64))];
 
@@ -866,7 +1159,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_alternates() {
+    async fn test_display_alternates() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
         let layout = struct_("0x1::m::S", vec![("bar", L::U64)]);
 
@@ -908,7 +1201,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_alternate_optional() {
+    async fn test_display_alternate_optional() {
         let bytes = bcs::to_bytes(&(Some(100u64), None::<u64>)).unwrap();
         let layout = struct_(
             "0x1::m::S",
@@ -942,7 +1235,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_optional_auto_dereference() {
+    async fn test_display_optional_auto_dereference() {
         let inner = struct_(
             "0x1::m::Inner",
             vec![("data", L::U64), ("optional_data", optional_(L::U64))],
@@ -1026,7 +1319,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_dynamic_fields() {
+    async fn test_display_dynamic_fields() {
         let parent = AccountAddress::from_str("0x1000").unwrap();
         let bytes = bcs::to_bytes(&parent).unwrap();
         let layout = struct_(
@@ -1095,7 +1388,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_dynamic_object_fields() {
+    async fn test_display_dynamic_object_fields() {
         let parent = AccountAddress::from_str("0x2000").unwrap();
         let child = AccountAddress::from_str("0x2001").unwrap();
         let bytes = bcs::to_bytes(&parent).unwrap();
@@ -1168,7 +1461,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_nested_dynamic_fields() {
+    async fn test_display_nested_dynamic_fields() {
         let parent = AccountAddress::from_str("0x3000").unwrap();
         let child = AccountAddress::from_str("0x3001").unwrap();
         let bytes = bcs::to_bytes(&parent).unwrap();
@@ -1233,7 +1526,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_vec_map() {
+    async fn test_display_vec_map() {
         let key = struct_(
             "0x42::m::Key",
             vec![
@@ -1245,22 +1538,11 @@ mod tests {
         let val = struct_("0x42::m::Value", vec![("data", L::U32)]);
 
         // Create test data: VecMap with 3 entries
-        let bytes = bcs::to_bytes(&VecMap {
-            contents: vec![
-                Entry {
-                    key: (1u64, "first"),
-                    value: 100u32,
-                },
-                Entry {
-                    key: (2u64, "second"),
-                    value: 200u32,
-                },
-                Entry {
-                    key: (3u64, "third"),
-                    value: 300u32,
-                },
-            ],
-        })
+        let bytes = bcs::to_bytes(&vec![
+            (1u64, "first", 100u32),
+            (2u64, "second", 200u32),
+            (3u64, "third", 300u32),
+        ])
         .unwrap();
 
         let layout = struct_("0x1::m::Root", vec![("map", vec_map(key, val))]);
@@ -1309,7 +1591,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_timestamp() {
+    async fn test_display_timestamp() {
         let bytes = bcs::to_bytes(&1681318800000u64).unwrap();
         let layout = struct_("0x1::m::S", vec![("timestamp", L::U64)]);
 
@@ -1358,7 +1640,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_hex() {
+    async fn test_display_hex() {
         let bytes = bcs::to_bytes(&(
             0x42u8,
             0x4243u16,
@@ -1456,7 +1738,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_url() {
+    async fn test_display_url() {
         let bytes = bcs::to_bytes(&(
             1234u32,
             "hello/goodbye world",
@@ -1502,7 +1784,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_base64() {
+    async fn test_display_base64() {
         let bytes = bcs::to_bytes(&00u8).unwrap();
         let layout = struct_("0x1::m::S", vec![("dummy_field", L::Bool)]);
 
@@ -1604,7 +1886,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_bcs() {
+    async fn test_display_bcs() {
         let bytes = bcs::to_bytes(&(
             0x42u8,
             0x1234u16,
@@ -1684,7 +1966,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_bcs_modifiers() {
+    async fn test_display_bcs_modifiers() {
         let bytes = bcs::to_bytes(&00u8).unwrap();
         let layout = struct_("0x1::m::S", vec![("dummy_field", L::Bool)]);
 
@@ -1786,7 +2068,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_json() {
+    async fn test_display_json() {
         let bytes = bcs::to_bytes(&(
             12u8,
             1234u16,
@@ -1965,7 +2247,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_string_hardening() {
+    async fn test_display_string_hardening() {
         let bytes = bcs::to_bytes(&("ascii", "🔥", vec![0xC3u8])).unwrap();
         let layout = struct_(
             "0x1::m::S",
@@ -2013,7 +2295,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_field_errors() {
+    async fn test_display_field_errors() {
         let bytes = bcs::to_bytes(&0u8).unwrap();
         let layout = struct_("0x1::m::S", vec![("byte", L::U8)]);
 
@@ -2113,7 +2395,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_vector_literal_type_mismatch() {
+    async fn test_display_vector_literal_type_mismatch() {
         let bytes = bcs::to_bytes(&0u8).unwrap();
         let layout = struct_("0x1::m::S", vec![("byte", L::U8)]);
 
@@ -2163,7 +2445,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_output_node_limits() {
+    async fn test_display_output_node_limits() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 
         let limits = Limits {
@@ -2201,7 +2483,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_output_size_limits() {
+    async fn test_display_output_size_limits() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
         let formats = [("x", "012345"), ("y", "67890"), ("z", "ABCDE")];
 
@@ -2219,7 +2501,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_move_value_depth_limit() {
+    async fn test_display_move_value_depth_limit() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 
         let formats = [
@@ -2261,7 +2543,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_too_many_loads() {
+    async fn test_display_too_many_loads() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 
         let limits = Limits {
@@ -2300,7 +2582,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_name_empty() {
+    async fn test_display_name_empty() {
         let bytes = bcs::to_bytes(&42u64).unwrap();
 
         // Name evaluates to null when the field doesn't exist
@@ -2319,7 +2601,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_format_duplicate_name() {
+    async fn test_display_duplicate_name() {
         let layout = struct_("0x1::m::S", vec![("a", L::U64), ("b", L::U64)]);
 
         // Static duplicate: same literal name

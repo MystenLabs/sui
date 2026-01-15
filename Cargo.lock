@@ -15186,6 +15186,7 @@ dependencies = [
  "shared-crypto",
  "simulacrum",
  "sui-field-count",
+ "sui-framework",
  "sui-futures",
  "sui-indexer-alt",
  "sui-indexer-alt-consistent-api",

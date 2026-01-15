@@ -15,6 +15,14 @@ pub trait AccountFundsRead: Send + Sync {
     /// It guarantees no data race between the read of the account object and the root accumulator version.
     fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> (u128, SequenceNumber);
 
+    /// Read the amount at a precise version. Care must be taken to only call this function if we
+    /// can guarantee that objects behind this version have not yet been pruned.
+    fn get_account_amount_at_version(
+        &self,
+        account_id: &AccumulatorObjId,
+        version: SequenceNumber,
+    ) -> u128;
+
     /// Checks if given amounts are available in the latest versions of the referenced acccumulator
     /// objects. This does un-sequenced reads and can only be used on the signing/voting path
     /// where deterministic results are not required.

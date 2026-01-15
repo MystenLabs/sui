@@ -31,16 +31,14 @@ fragment E on Epoch {
   startTimestamp
   endTimestamp
   validatorSet {
-    totalStake
-    pendingRemovals
-    pendingActiveValidatorsId
-    pendingActiveValidatorsSize
-    stakingPoolMappingsId
-    stakingPoolMappingsSize
-    inactivePoolsId
-    inactivePoolsSize
-    validatorCandidatesId
-    validatorCandidatesSize
+    contents {
+      totalStake: format(format: "{total_stake:json}")
+      pendingRemovals: format(format: "{pending_removals:json}")
+      pendingActiveValidators: format(format: "{pending_active_validators:json}")
+      stakingPoolMappings: format(format: "{staking_pool_mappings:json}")
+      inactiveValidators: format(format: "{inactive_validators:json}")
+      validatorCandidates: format(format: "{validator_candidates:json}")
+    }
   }
   totalCheckpoints
   totalTransactions
@@ -51,36 +49,17 @@ fragment E on Epoch {
   netInflow
   fundInflow
   fundOutflow
-  storageFund {
-    totalObjectStorageRebates
-    nonRefundableBalance
-  }
-  safeMode {
-    enabled
-    gasSummary {
-      computationCost
-      storageCost
-      storageRebate
-      nonRefundableStorageFee
-    }
-  }
-  systemStateVersion
-  systemParameters {
-    durationMs
-    stakeSubsidyStartEpoch
-    minValidatorCount
-    maxValidatorCount
-    minValidatorJoiningStake
-    validatorLowStakeThreshold
-    validatorVeryLowStakeThreshold
-    validatorLowStakeGracePeriod
-  }
-  systemStakeSubsidy {
-      balance
-      distributionCounter
-      currentDistributionAmount
-      periodLength
-      decreaseRate
+  systemState {
+    protocolVersion: format(format: "{protocol_version:json}")
+    systemStateVersion: format(format: "{system_state_version:json}")
+    storageFund: format(format: "{storage_fund:json}")
+    parameters: format(format: "{parameters:json}")
+    stakeSubsidy: format(format: "{stake_subsidy:json}")
+    safeMode: format(format: "{safe_mode:json}")
+    safeModeComputationRewards: format(format: "{safe_mode_computation_rewards:json}")
+    safeModeStorageRewards: format(format: "{safe_mode_storage_rewards:json}")
+    safeModeStorageRebates: format(format: "{safe_mode_storage_rebates:json}")
+    safeModeNonRefundableStorageFee: format(format: "{safe_mode_non_refundable_storage_fee:json}")
   }
   liveObjectSetDigest
 }
@@ -104,16 +83,14 @@ fragment E on Epoch {
   startTimestamp
   endTimestamp
   validatorSet {
-    totalStake
-    pendingRemovals
-    pendingActiveValidatorsId
-    pendingActiveValidatorsSize
-    stakingPoolMappingsId
-    stakingPoolMappingsSize
-    inactivePoolsId
-    inactivePoolsSize
-    validatorCandidatesId
-    validatorCandidatesSize
+    contents {
+      totalStake: format(format: "{total_stake:json}")
+      pendingRemovals: format(format: "{pending_removals:json}")
+      pendingActiveValidators: format(format: "{pending_active_validators:json}")
+      stakingPoolMappings: format(format: "{staking_pool_mappings:json}")
+      inactiveValidators: format(format: "{inactive_validators:json}")
+      validatorCandidates: format(format: "{validator_candidates:json}")
+    }
   }
   totalCheckpoints
   totalTransactions
@@ -124,36 +101,17 @@ fragment E on Epoch {
   netInflow
   fundInflow
   fundOutflow
-  storageFund {
-    totalObjectStorageRebates
-    nonRefundableBalance
-  }
-  safeMode {
-    enabled
-    gasSummary {
-      computationCost
-      storageCost
-      storageRebate
-      nonRefundableStorageFee
-    }
-  }
-  systemStateVersion
-  systemParameters {
-    durationMs
-    stakeSubsidyStartEpoch
-    minValidatorCount
-    maxValidatorCount
-    minValidatorJoiningStake
-    validatorLowStakeThreshold
-    validatorVeryLowStakeThreshold
-    validatorLowStakeGracePeriod
-  }
-  systemStakeSubsidy {
-      balance
-      distributionCounter
-      currentDistributionAmount
-      periodLength
-      decreaseRate
+  systemState {
+    protocolVersion: format(format: "{protocol_version:json}")
+    systemStateVersion: format(format: "{system_state_version:json}")
+    storageFund: format(format: "{storage_fund:json}")
+    parameters: format(format: "{parameters:json}")
+    stakeSubsidy: format(format: "{stake_subsidy:json}")
+    safeMode: format(format: "{safe_mode:json}")
+    safeModeComputationRewards: format(format: "{safe_mode_computation_rewards:json}")
+    safeModeStorageRewards: format(format: "{safe_mode_storage_rewards:json}")
+    safeModeStorageRebates: format(format: "{safe_mode_storage_rebates:json}")
+    safeModeNonRefundableStorageFee: format(format: "{safe_mode_non_refundable_storage_fee:json}")
   }
   liveObjectSetDigest
 }

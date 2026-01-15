@@ -14,22 +14,25 @@ fragment E on Epoch {
   validatorSet {
     activeValidators {
       nodes {
-        name
-        exchangeRatesTable {
-          dynamicFields {
-            nodes {
-              name {
-                json
-              }
-              value {
-                ... on MoveValue {
-                  json
+        contents {
+          name: format(format: "{metadata.name}")
+          exchangeRates: extract(path: "staking_pool.exchange_rates.id") {
+            asAddress {
+              dynamicFields {
+                nodes {
+                  name {
+                    json
+                  }
+                  value {
+                    ... on MoveValue {
+                      json
+                    }
+                  }
                 }
               }
             }
           }
         }
-        exchangeRatesSize
       }
     }
   }
@@ -50,22 +53,50 @@ fragment E on Epoch {
   validatorSet {
     activeValidators {
       nodes {
-        name
-        exchangeRatesTable {
-          dynamicFields {
-            nodes {
-              name {
-                json
-              }
-              value {
-                ... on MoveValue {
-                  json
+        contents {
+          name: format(format: "{metadata.name}")
+          exchangeRates: extract(path: "staking_pool.exchange_rates.id") {
+            asAddress {
+              dynamicFields {
+                nodes {
+                  name {
+                    json
+                  }
+                  value {
+                    ... on MoveValue {
+                      json
+                    }
+                  }
                 }
               }
             }
           }
         }
-        exchangeRatesSize
+      }
+    }
+  }
+}
+
+//# run-graphql
+{ # addressAt can be used to view a wrapped object at the latest checkpoint.
+  epoch(epochId: 0) {
+    validatorSet {
+      activeValidators {
+        nodes {
+          contents {
+            exchangeRates: extract(path: "staking_pool.exchange_rates.id") {
+              asAddress {
+                addressAt {
+                  dynamicFields {
+                    nodes {
+                      name { json }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

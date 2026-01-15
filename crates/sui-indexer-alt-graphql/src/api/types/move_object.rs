@@ -19,13 +19,17 @@ use crate::api::scalars::id::Id;
 use crate::api::scalars::sui_address::SuiAddress;
 use crate::api::scalars::type_filter::TypeInput;
 use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address;
+use crate::api::types::address::Address;
 use crate::api::types::balance::Balance;
 use crate::api::types::balance::{self as balance};
 use crate::api::types::coin_metadata::CoinMetadata;
+use crate::api::types::dynamic_field;
 use crate::api::types::dynamic_field::DynamicField;
 use crate::api::types::dynamic_field::DynamicFieldName;
 use crate::api::types::move_type::MoveType;
 use crate::api::types::move_value::MoveValue;
+use crate::api::types::name_record::NameRecord;
 use crate::api::types::object::CLive;
 use crate::api::types::object::CVersion;
 use crate::api::types::object::Object;
@@ -128,6 +132,18 @@ impl MoveObject {
         self.super_.address(ctx).await
     }
 
+    /// Fetch the address as it was at a different root version, or checkpoint.
+    ///
+    /// If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
+    pub(crate) async fn address_at(
+        &self,
+        ctx: &Context<'_>,
+        root_version: Option<UInt53>,
+        checkpoint: Option<UInt53>,
+    ) -> Result<Option<Address>, RpcError<address::Error>> {
+        self.super_.address_at(ctx, root_version, checkpoint).await
+    }
+
     /// The version of this object that this content comes from.
     pub(crate) async fn version(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
         self.super_.version(ctx).await.ok()?
@@ -186,20 +202,22 @@ impl MoveObject {
             return Ok(None);
         };
 
-        let type_ = MoveType::from_native(
-            native.type_().clone().into(),
-            self.super_.super_.scope.clone(),
-        );
+        let scope = self
+            .super_
+            .super_
+            .scope
+            .with_root_version(native.version().value());
 
+        let type_ = MoveType::from_native(native.type_().clone().into(), scope);
         Ok(Some(MoveValue::new(type_, native.contents().to_owned())))
     }
 
-    /// The domain explicitly configured as the default SuiNS name for this address.
-    pub(crate) async fn default_suins_name(
+    /// The domain explicitly configured as the default Name Service name for this address.
+    pub(crate) async fn default_name_record(
         &self,
         ctx: &Context<'_>,
-    ) -> Option<Result<String, RpcError>> {
-        self.super_.default_suins_name(ctx).await.ok()?
+    ) -> Option<Result<NameRecord, RpcError<object::Error>>> {
+        self.super_.default_name_record(ctx).await.ok()?
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
@@ -209,7 +227,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
         let scope = &self.super_.super_.scope;
         DynamicField::by_name(
             ctx,
@@ -254,7 +272,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
         let scope = &self.super_.super_.scope;
         DynamicField::by_name(
             ctx,
@@ -295,7 +313,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         let scope = &self.super_.super_.scope;
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(
@@ -327,7 +345,7 @@ impl MoveObject {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         let scope = &self.super_.super_.scope;
         try_join_all(keys.into_iter().map(|key| {
             DynamicField::by_name(

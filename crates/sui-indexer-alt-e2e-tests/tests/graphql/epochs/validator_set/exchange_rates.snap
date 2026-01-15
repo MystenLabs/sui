@@ -1,12 +1,12 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 5 tasks
+processed 6 tasks
 
 init:
 A: object(0,0)
 
-task 1, lines 6-36:
+task 1, lines 6-39:
 //# run-graphql
 Response: {
   "data": {
@@ -16,25 +16,28 @@ Response: {
         "activeValidators": {
           "nodes": [
             {
-              "name": "validator-0",
-              "exchangeRatesTable": {
-                "dynamicFields": {
-                  "nodes": [
-                    {
-                      "name": {
-                        "json": "0"
-                      },
-                      "value": {
-                        "json": {
-                          "sui_amount": "0",
-                          "pool_token_amount": "0"
+              "contents": {
+                "name": "validator-0",
+                "exchangeRates": {
+                  "asAddress": {
+                    "dynamicFields": {
+                      "nodes": [
+                        {
+                          "name": {
+                            "json": "0"
+                          },
+                          "value": {
+                            "json": {
+                              "sui_amount": "0",
+                              "pool_token_amount": "0"
+                            }
+                          }
                         }
-                      }
+                      ]
                     }
-                  ]
+                  }
                 }
-              },
-              "exchangeRatesSize": 1
+              }
             }
           ]
         }
@@ -44,15 +47,15 @@ Response: {
   }
 }
 
-task 2, line 38:
+task 2, line 41:
 //# advance-epoch
 Epoch advanced: 1
 
-task 3, line 40:
+task 3, line 43:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 4, lines 42-72:
+task 4, lines 45-78:
 //# run-graphql
 Response: {
   "data": {
@@ -62,36 +65,28 @@ Response: {
         "activeValidators": {
           "nodes": [
             {
-              "name": "validator-0",
-              "exchangeRatesTable": {
-                "dynamicFields": {
-                  "nodes": [
-                    {
-                      "name": {
-                        "json": "0"
-                      },
-                      "value": {
-                        "json": {
-                          "sui_amount": "0",
-                          "pool_token_amount": "0"
+              "contents": {
+                "name": "validator-0",
+                "exchangeRates": {
+                  "asAddress": {
+                    "dynamicFields": {
+                      "nodes": [
+                        {
+                          "name": {
+                            "json": "0"
+                          },
+                          "value": {
+                            "json": {
+                              "sui_amount": "0",
+                              "pool_token_amount": "0"
+                            }
+                          }
                         }
-                      }
-                    },
-                    {
-                      "name": {
-                        "json": "1"
-                      },
-                      "value": {
-                        "json": {
-                          "sui_amount": "20000000000000000",
-                          "pool_token_amount": "20000000000000000"
-                        }
-                      }
+                      ]
                     }
-                  ]
+                  }
                 }
-              },
-              "exchangeRatesSize": 1
+              }
             }
           ]
         }
@@ -103,36 +98,78 @@ Response: {
         "activeValidators": {
           "nodes": [
             {
-              "name": "validator-0",
-              "exchangeRatesTable": {
-                "dynamicFields": {
-                  "nodes": [
-                    {
-                      "name": {
-                        "json": "0"
-                      },
-                      "value": {
-                        "json": {
-                          "sui_amount": "0",
-                          "pool_token_amount": "0"
+              "contents": {
+                "name": "validator-0",
+                "exchangeRates": {
+                  "asAddress": {
+                    "dynamicFields": {
+                      "nodes": [
+                        {
+                          "name": {
+                            "json": "0"
+                          },
+                          "value": {
+                            "json": {
+                              "sui_amount": "0",
+                              "pool_token_amount": "0"
+                            }
+                          }
+                        },
+                        {
+                          "name": {
+                            "json": "1"
+                          },
+                          "value": {
+                            "json": {
+                              "sui_amount": "20000000000000000",
+                              "pool_token_amount": "20000000000000000"
+                            }
+                          }
                         }
-                      }
-                    },
-                    {
-                      "name": {
-                        "json": "1"
-                      },
-                      "value": {
-                        "json": {
-                          "sui_amount": "20000000000000000",
-                          "pool_token_amount": "20000000000000000"
-                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 5, lines 80-103:
+//# run-graphql
+Response: {
+  "data": {
+    "epoch": {
+      "validatorSet": {
+        "activeValidators": {
+          "nodes": [
+            {
+              "contents": {
+                "exchangeRates": {
+                  "asAddress": {
+                    "addressAt": {
+                      "dynamicFields": {
+                        "nodes": [
+                          {
+                            "name": {
+                              "json": "0"
+                            }
+                          },
+                          {
+                            "name": {
+                              "json": "1"
+                            }
+                          }
+                        ]
                       }
                     }
-                  ]
+                  }
                 }
-              },
-              "exchangeRatesSize": 2
+              }
             }
           ]
         }

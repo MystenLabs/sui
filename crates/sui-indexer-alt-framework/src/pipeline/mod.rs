@@ -4,6 +4,7 @@
 use std::time::Duration;
 
 pub use processor::Processor;
+use rand::Rng;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -34,6 +35,9 @@ pub struct CommitterConfig {
 
     /// Watermark task will check for pending watermarks this often, in milliseconds.
     pub watermark_interval_ms: u64,
+
+    /// Maximum random jitter to add to the watermark interval, in milliseconds.
+    pub watermark_interval_jitter_ms: u64,
 }
 
 /// Processed values associated with a single checkpoint. This is an internal type used to
@@ -63,6 +67,17 @@ impl CommitterConfig {
 
     pub fn watermark_interval(&self) -> Duration {
         Duration::from_millis(self.watermark_interval_ms)
+    }
+
+    /// Returns the next watermark update instant with a random jitter added. The jitter is a
+    /// random value between 0 and `watermark_interval_jitter_ms`.
+    pub fn watermark_interval_with_jitter(&self) -> tokio::time::Instant {
+        let jitter = if self.watermark_interval_jitter_ms == 0 {
+            0
+        } else {
+            rand::thread_rng().gen_range(0..=self.watermark_interval_jitter_ms)
+        };
+        tokio::time::Instant::now() + Duration::from_millis(self.watermark_interval_ms + jitter)
     }
 }
 
@@ -138,6 +153,7 @@ impl Default for CommitterConfig {
             write_concurrency: 5,
             collect_interval_ms: 500,
             watermark_interval_ms: 500,
+            watermark_interval_jitter_ms: 0,
         }
     }
 }
