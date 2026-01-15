@@ -109,16 +109,14 @@ public fun saturating_mul(x: u256, y: u256): u256 {
 /// Returns `None` if the shift would lose any bits (if the operation is not reversible).
 public fun lossless_shl(x: u256, shift: u8): Option<u256> {
     let result = x << shift;
-    if (result >> shift == x) option::some(result)
-    else option::none()
+    if (result >> shift == x) option::some(result) else option::none()
 }
 
 /// Shifts `x` right by `shift` bits.
 /// Returns `None` if the shift would lose any bits (if the operation is not reversible).
 public fun lossless_shr(x: u256, shift: u8): Option<u256> {
     let result = x >> shift;
-    if (result << shift == x) option::some(result)
-    else option::none()
+    if (result << shift == x) option::some(result) else option::none()
 }
 
 /// Maximum value for a `u256`

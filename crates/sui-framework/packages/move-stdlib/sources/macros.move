@@ -134,16 +134,14 @@ public macro fun num_checked_shl<$T>($x: $T, $shift: u8, $bit_size: u8): Option<
     let x = $x;
     let shift = $shift;
     let bit_size = $bit_size;
-    if (shift >= bit_size) option::none()
-    else option::some(x << shift)
+    if (shift >= bit_size) option::none() else option::some(x << shift)
 }
 
 public macro fun num_checked_shr<$T>($x: $T, $shift: u8, $bit_size: u8): Option<$T> {
     let x = $x;
     let shift = $shift;
     let bit_size = $bit_size;
-    if (shift >= bit_size) option::none()
-    else option::some(x >> shift)
+    if (shift >= bit_size) option::none() else option::some(x >> shift)
 }
 
 public macro fun num_lossless_shl<$T>($x: $T, $shift: u8, $bit_size: u8): Option<$T> {
@@ -153,8 +151,7 @@ public macro fun num_lossless_shl<$T>($x: $T, $shift: u8, $bit_size: u8): Option
     if (shift >= bit_size) option::none()
     else {
         let result = x << shift;
-        if (result >> shift == x) option::some(result)
-        else option::none()
+        if (result >> shift == x) option::some(result) else option::none()
     }
 }
 
@@ -165,8 +162,7 @@ public macro fun num_lossless_shr<$T>($x: $T, $shift: u8, $bit_size: u8): Option
     if (shift >= bit_size) option::none()
     else {
         let result = x >> shift;
-        if (result << shift == x) option::some(result)
-        else option::none()
+        if (result << shift == x) option::some(result) else option::none()
     }
 }
 
