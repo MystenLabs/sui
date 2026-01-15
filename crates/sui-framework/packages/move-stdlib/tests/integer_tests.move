@@ -548,38 +548,38 @@ public(package) macro fun test_checked_shr<$T>($max: $T, $bit_size: u8) {
     assert_eq!((1: $T).checked_shr(bit_size + 1), option::none());
 }
 
-public(package) macro fun test_exact_shl<$T>($max: $T, $bit_size: u8) {
+public(package) macro fun test_lossless_shl<$T>($max: $T, $bit_size: u8) {
     let max = $max;
     let bit_size = $bit_size;
     // exact shifts (no bits lost)
-    assert_eq!((0: $T).exact_shl(0), option::some(0));
-    assert_eq!((0: $T).exact_shl(bit_size - 1), option::some(0));
-    assert_eq!((1: $T).exact_shl(0), option::some(1));
-    assert_eq!((1: $T).exact_shl(1), option::some(2));
-    assert_eq!((1: $T).exact_shl(bit_size - 1), option::some(1 << (bit_size - 1)));
+    assert_eq!((0: $T).lossless_shl(0), option::some(0));
+    assert_eq!((0: $T).lossless_shl(bit_size - 1), option::some(0));
+    assert_eq!((1: $T).lossless_shl(0), option::some(1));
+    assert_eq!((1: $T).lossless_shl(1), option::some(2));
+    assert_eq!((1: $T).lossless_shl(bit_size - 1), option::some(1 << (bit_size - 1)));
     // inexact shifts (bits lost)
-    assert_eq!((1: $T).exact_shl(bit_size), option::none());
-    assert_eq!(max.exact_shl(1), option::none());
-    assert_eq!((1 << (bit_size - 1): $T).exact_shl(1), option::none());
+    assert_eq!((1: $T).lossless_shl(bit_size), option::none());
+    assert_eq!(max.lossless_shl(1), option::none());
+    assert_eq!((1 << (bit_size - 1): $T).lossless_shl(1), option::none());
     // high bit set, any shift loses it
     let high_bit = (1: $T) << (bit_size - 1);
-    assert_eq!(high_bit.exact_shl(1), option::none());
+    assert_eq!(high_bit.lossless_shl(1), option::none());
 }
 
-public(package) macro fun test_exact_shr<$T>($max: $T, $bit_size: u8) {
+public(package) macro fun test_lossless_shr<$T>($max: $T, $bit_size: u8) {
     let max = $max;
     let bit_size = $bit_size;
     // exact shifts (no bits lost)
-    assert_eq!((0: $T).exact_shr(0), option::some(0));
-    assert_eq!((0: $T).exact_shr(bit_size - 1), option::some(0));
-    assert_eq!((1: $T).exact_shr(0), option::some(1));
-    assert_eq!((2: $T).exact_shr(1), option::some(1));
-    assert_eq!((4: $T).exact_shr(2), option::some(1));
+    assert_eq!((0: $T).lossless_shr(0), option::some(0));
+    assert_eq!((0: $T).lossless_shr(bit_size - 1), option::some(0));
+    assert_eq!((1: $T).lossless_shr(0), option::some(1));
+    assert_eq!((2: $T).lossless_shr(1), option::some(1));
+    assert_eq!((4: $T).lossless_shr(2), option::some(1));
     let high_bit = (1: $T) << (bit_size - 1);
-    assert_eq!(high_bit.exact_shr(bit_size - 1), option::some(1));
+    assert_eq!(high_bit.lossless_shr(bit_size - 1), option::some(1));
     // inexact shifts (bits lost)
-    assert_eq!((1: $T).exact_shr(bit_size), option::none());
-    assert_eq!((1: $T).exact_shr(1), option::none());
-    assert_eq!((3: $T).exact_shr(1), option::none());
-    assert_eq!(max.exact_shr(1), option::none());
+    assert_eq!((1: $T).lossless_shr(bit_size), option::none());
+    assert_eq!((1: $T).lossless_shr(1), option::none());
+    assert_eq!((3: $T).lossless_shr(1), option::none());
+    assert_eq!(max.lossless_shr(1), option::none());
 }

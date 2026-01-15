@@ -146,7 +146,7 @@ public macro fun num_checked_shr<$T>($x: $T, $shift: u8, $bit_size: u8): Option<
     else option::some(x >> shift)
 }
 
-public macro fun num_exact_shl<$T>($x: $T, $shift: u8, $bit_size: u8): Option<$T> {
+public macro fun num_lossless_shl<$T>($x: $T, $shift: u8, $bit_size: u8): Option<$T> {
     let x = $x;
     let shift = $shift;
     let bit_size = $bit_size;
@@ -158,7 +158,7 @@ public macro fun num_exact_shl<$T>($x: $T, $shift: u8, $bit_size: u8): Option<$T
     }
 }
 
-public macro fun num_exact_shr<$T>($x: $T, $shift: u8, $bit_size: u8): Option<$T> {
+public macro fun num_lossless_shr<$T>($x: $T, $shift: u8, $bit_size: u8): Option<$T> {
     let x = $x;
     let shift = $shift;
     let bit_size = $bit_size;

@@ -124,15 +124,15 @@ public fun checked_shr(x: u8, shift: u8): Option<u8> {
 /// Shifts `x` left by `shift` bits.
 /// Returns `None` if the shift is larger than or equal to the bit size of 8, or if the shift would
 /// lose any bits (if the operation is not reversible).
-public fun exact_shl(x: u8, shift: u8): Option<u8> {
-    std::macros::num_exact_shl!(x, shift, 8)
+public fun lossless_shl(x: u8, shift: u8): Option<u8> {
+    std::macros::num_lossless_shl!(x, shift, 8)
 }
 
 /// Shifts `x` right by `shift` bits.
 /// Returns `None` if the shift is larger than or equal to the bit size of 8, or if the shift would
 /// lose any bits (if the operation is not reversible).
-public fun exact_shr(x: u8, shift: u8): Option<u8> {
-    std::macros::num_exact_shr!(x, shift, 8)
+public fun lossless_shr(x: u8, shift: u8): Option<u8> {
+    std::macros::num_lossless_shr!(x, shift, 8)
 }
 
 /// Maximum value for a `u8`

@@ -143,11 +143,11 @@ fun test_checked_shr() {
 }
 
 #[test]
-fun test_exact_shl() {
-    integer_tests::test_exact_shl!(MAX, BIT_SIZE);
+fun test_lossless_shl() {
+    integer_tests::test_lossless_shl!(MAX, BIT_SIZE);
 }
 
 #[test]
-fun test_exact_shr() {
-    integer_tests::test_exact_shr!(MAX, BIT_SIZE);
+fun test_lossless_shr() {
+    integer_tests::test_lossless_shr!(MAX, BIT_SIZE);
 }
