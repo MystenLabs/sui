@@ -63,18 +63,15 @@ impl DoubleHasher {
 impl Iterator for DoubleHasher {
     type Item = u64;
 
-    #[inline]
     fn next(&mut self) -> Option<u64> {
         Some(self.next_hash())
     }
 }
 
-#[inline]
 pub fn set_bit(bits: &mut [u8], pos: usize) {
     bits[pos / 8] |= 1 << (pos % 8);
 }
 
-#[inline]
 pub fn check_bit(bits: &[u8], pos: usize) -> bool {
     bits[pos / 8] & (1 << (pos % 8)) != 0
 }

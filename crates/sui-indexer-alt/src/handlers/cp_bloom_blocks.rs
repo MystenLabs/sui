@@ -83,15 +83,11 @@ impl Processor for CpBloomBlocks {
     }
 }
 
-/// Batch for a single cp_block_id, containing bloom blocks and checkpoint range.
+/// Batch for a single cp_block_id, containing bloom blocks.
 #[derive(Default)]
 pub(crate) struct CpBlockBatch {
     /// Bloom blocks keyed by bloom_block_index.
     blocks: BTreeMap<u16, Vec<u8>>,
-    /// Lowest checkpoint number in this batch.
-    cp_lo: i64,
-    /// Highest checkpoint number in this batch.
-    cp_hi: i64,
 }
 
 #[async_trait]
@@ -109,16 +105,8 @@ impl Handler for CpBloomBlocks {
     ) -> BatchStatus {
         for cp_bloom in values {
             let block_id = cp_block_id(cp_bloom.cp_sequence_number as u64);
-            let cp_num = cp_bloom.cp_sequence_number;
 
-            let cp_block = batch.entry(block_id).or_insert_with(|| CpBlockBatch {
-                blocks: BTreeMap::new(),
-                cp_lo: cp_num,
-                cp_hi: cp_num,
-            });
-
-            cp_block.cp_lo = cp_block.cp_lo.min(cp_num);
-            cp_block.cp_hi = cp_block.cp_hi.max(cp_num);
+            let cp_block = batch.entry(block_id).or_default();
 
             for (bloom_idx, bloom_bytes) in cp_bloom.blocks {
                 cp_block
@@ -150,8 +138,6 @@ impl Handler for CpBloomBlocks {
                     .map(move |(bloom_block_index, bloom_bytes)| StoredCpBloomBlock {
                         cp_block_id: *cp_block_id,
                         bloom_block_index: *bloom_block_index as i16,
-                        cp_sequence_number_lo: cp_block.cp_lo,
-                        cp_sequence_number_hi: cp_block.cp_hi,
                         bloom_filter: bloom_bytes.clone(),
                     })
             })
@@ -159,22 +145,15 @@ impl Handler for CpBloomBlocks {
 
         let count = diesel::insert_into(cp_bloom_blocks::table)
             .values(&rows)
-            .on_conflict((cp_bloom_blocks::cp_block_id, cp_bloom_blocks::bloom_block_index))
-            .do_update()
-            .set((
-                cp_bloom_blocks::bloom_filter.eq(bytea_or(
-                    cp_bloom_blocks::bloom_filter,
-                    excluded(cp_bloom_blocks::bloom_filter),
-                )),
-                cp_bloom_blocks::cp_sequence_number_lo
-                    .eq(diesel::dsl::sql::<diesel::sql_types::BigInt>(
-                        "LEAST(cp_bloom_blocks.cp_sequence_number_lo, EXCLUDED.cp_sequence_number_lo)",
-                    )),
-                cp_bloom_blocks::cp_sequence_number_hi
-                    .eq(diesel::dsl::sql::<diesel::sql_types::BigInt>(
-                        "GREATEST(cp_bloom_blocks.cp_sequence_number_hi, EXCLUDED.cp_sequence_number_hi)",
-                    )),
+            .on_conflict((
+                cp_bloom_blocks::cp_block_id,
+                cp_bloom_blocks::bloom_block_index,
             ))
+            .do_update()
+            .set(cp_bloom_blocks::bloom_filter.eq(bytea_or(
+                cp_bloom_blocks::bloom_filter,
+                excluded(cp_bloom_blocks::bloom_filter),
+            )))
             .execute(conn)
             .await?;
 
@@ -260,11 +239,6 @@ mod tests {
             !blocks.is_empty(),
             "Should have bloom blocks for cp_block 0"
         );
-
-        // Check checkpoint range
-        let first = &blocks[0];
-        assert_eq!(first.cp_sequence_number_lo, 0);
-        assert_eq!(first.cp_sequence_number_hi, 2);
     }
 
     #[tokio::test]
@@ -297,8 +271,10 @@ mod tests {
             .iter()
             .find(|b| b.bloom_block_index == target_block_idx as i16)
             .expect("Block should exist for key1");
-        assert_eq!(first_block.cp_sequence_number_lo, 0);
-        assert_eq!(first_block.cp_sequence_number_hi, 1);
+        assert!(
+            block_contains_key(&first_block.bloom_filter, key1, seed),
+            "First batch should contain key1"
+        );
 
         // Second batch: checkpoints 2-3 with key2 (same bloom_block_index as key1, triggers merge)
         let blooms2 = vec![
@@ -315,16 +291,6 @@ mod tests {
             .iter()
             .find(|b| b.bloom_block_index == target_block_idx as i16)
             .expect("Merged block should exist");
-
-        // The merge should have expanded the checkpoint range
-        assert_eq!(
-            merged_block.cp_sequence_number_lo, 0,
-            "Lo should be min of both batches"
-        );
-        assert_eq!(
-            merged_block.cp_sequence_number_hi, 3,
-            "Hi should be max of both batches"
-        );
 
         // Verify both keys are present in the merged bloom filter (OR'd together)
         assert!(
@@ -388,9 +354,6 @@ mod tests {
         let blocks = get_bloom_blocks(&mut conn, 0).await;
         let block = &blocks[0];
 
-        assert_eq!(block.cp_sequence_number_lo, 0);
-        assert_eq!(block.cp_sequence_number_hi, 0);
-
         // Verify the key is still present
         let seed = cp_block_seed(0);
         assert!(
@@ -419,11 +382,21 @@ mod tests {
         assert!(!blocks0.is_empty(), "cp_block 0 should have data");
         assert!(!blocks1.is_empty(), "cp_block 1 should have data");
 
-        // Verify they have different checkpoint ranges
-        assert_eq!(blocks0[0].cp_sequence_number_lo, 500);
-        assert_eq!(blocks0[0].cp_sequence_number_hi, 500);
-        assert_eq!(blocks1[0].cp_sequence_number_lo, 1500);
-        assert_eq!(blocks1[0].cp_sequence_number_hi, 1500);
+        // Verify they have different cp_block_ids
+        assert_eq!(blocks0[0].cp_block_id, 0);
+        assert_eq!(blocks1[0].cp_block_id, 1);
+
+        // Verify each block contains its respective key
+        let seed0 = cp_block_seed(0);
+        let seed1 = cp_block_seed(1);
+        assert!(
+            block_contains_key(&blocks0[0].bloom_filter, b"block0_key", seed0),
+            "Block 0 should contain block0_key"
+        );
+        assert!(
+            block_contains_key(&blocks1[0].bloom_filter, b"block1_key", seed1),
+            "Block 1 should contain block1_key"
+        );
     }
 
     /// Verify no false negatives: all inserted keys must be found in the bloom filter.

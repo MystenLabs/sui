@@ -42,10 +42,6 @@ pub struct StoredCpBloomBlock {
     pub cp_block_id: i64,
     /// Index of this bloom block within the 128-block filter (0-127).
     pub bloom_block_index: i16,
-    /// Lowest checkpoint number included in this block's bloom filter.
-    pub cp_sequence_number_lo: i64,
-    /// Highest checkpoint number included in this block's bloom filter.
-    pub cp_sequence_number_hi: i64,
     /// Bloom filter bytes for this block.
     pub bloom_filter: Vec<u8>,
 }
