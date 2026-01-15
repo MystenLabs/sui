@@ -3,6 +3,7 @@
 
 use std::collections::HashSet;
 
+use mysten_common::assert_reachable;
 use once_cell::sync::Lazy;
 
 use crate::{
@@ -64,6 +65,7 @@ pub fn get_early_execution_error(
     }
 
     if matches!(funds_withdraw_status, FundsWithdrawStatus::Insufficient) {
+        assert_reachable!("insufficient funds for withdraw");
         return Some(ExecutionErrorKind::InsufficientFundsForWithdraw);
     }
 
