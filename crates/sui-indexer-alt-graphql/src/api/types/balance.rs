@@ -6,6 +6,7 @@ use async_graphql::SimpleObject;
 use async_graphql::connection::Connection;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
+use sui_indexer_alt_reader::consistent_reader::Balance as StoredBalance;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::consistent_reader::{self};
 use sui_types::TypeTag;
@@ -27,8 +28,14 @@ pub(crate) struct Balance {
     /// Coin type for the balance, such as `0x2::sui::SUI`.
     pub(crate) coin_type: Option<MoveType>,
 
-    /// The total balance across all coin objects of this coin type.
+    /// The sum total of the accumulator balance and individual coin balances owned by the address.
     pub(crate) total_balance: Option<BigInt>,
+
+    /// Total balance across all owned coin objects of the coin type.
+    pub(crate) coin_balance: Option<BigInt>,
+
+    /// The balance as tracked by the accumulator object for the address.
+    pub(crate) address_balance: Option<BigInt>,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -51,6 +58,15 @@ pub(crate) enum Error {
 pub(crate) type Cursor = cursor::BcsCursor<(u64, Vec<u8>)>;
 
 impl Balance {
+    fn from_stored(stored: StoredBalance, scope: Scope) -> Self {
+        Balance {
+            coin_type: Some(MoveType::from_native(stored.coin_type, scope)),
+            total_balance: Some(BigInt::from(stored.total_balance)),
+            coin_balance: Some(BigInt::from(stored.coin_balance)),
+            address_balance: Some(BigInt::from(stored.address_balance)),
+        }
+    }
+
     /// Fetch the balance for a single coin type owned by the given address, live at the current
     /// checkpoint.
     ///
@@ -71,7 +87,7 @@ impl Balance {
 
         query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
-        let (coin_type, total_balance) = consistent_reader
+        let balance = consistent_reader
             .get_balance(
                 checkpoint,
                 address.to_string(),
@@ -80,10 +96,7 @@ impl Balance {
             .await
             .map_err(|e| consistent_error(checkpoint, e))?;
 
-        Ok(Some(Balance {
-            coin_type: Some(MoveType::from_native(coin_type, scope.clone())),
-            total_balance: Some(BigInt::from(total_balance)),
-        }))
+        Ok(Some(Balance::from_stored(balance, scope.clone())))
     }
 
     /// Fetch balances for multiple coin types owned by the given address, live at the current
@@ -119,10 +132,7 @@ impl Balance {
         Ok(Some(
             balances
                 .into_iter()
-                .map(|(coin_type, total_balance)| Balance {
-                    coin_type: Some(MoveType::from_native(coin_type, scope.clone())),
-                    total_balance: Some(BigInt::from(total_balance)),
-                })
+                .map(|balance| Balance::from_stored(balance, scope.clone()))
                 .collect(),
         ))
     }
@@ -183,13 +193,10 @@ impl Balance {
         conn.has_next_page = balances.has_next_page;
 
         for edge in balances.results {
-            let (coin_type, total_balance) = edge.value;
+            let balance = edge.value;
 
             let cursor = Cursor::new((checkpoint, edge.token));
-            let balance = Balance {
-                coin_type: Some(MoveType::from_native(coin_type, scope.clone())),
-                total_balance: Some(BigInt::from(total_balance)),
-            };
+            let balance = Balance::from_stored(balance, scope.clone());
 
             conn.edges.push(Edge::new(cursor.encode_cursor(), balance));
         }

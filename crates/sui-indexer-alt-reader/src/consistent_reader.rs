@@ -55,6 +55,13 @@ pub struct Edge<T> {
     pub value: T,
 }
 
+pub struct Balance {
+    pub coin_type: TypeTag,
+    pub total_balance: u64,
+    pub coin_balance: u64,
+    pub address_balance: u64,
+}
+
 type Client = ConsistentServiceClient<Channel>;
 
 #[derive(thiserror::Error, Debug)]
@@ -129,7 +136,7 @@ impl ConsistentReader {
         checkpoint: u64,
         address: String,
         coin_types: Vec<String>,
-    ) -> Result<Vec<(TypeTag, u64)>, Error> {
+    ) -> Result<Vec<Balance>, Error> {
         let response = self
             .request(
                 "batch_get_balances",
@@ -149,7 +156,7 @@ impl ConsistentReader {
 
         let mut results = vec![];
         for balance in response.balances {
-            let edge: Edge<(TypeTag, u64)> = balance.try_into()?;
+            let edge: Edge<Balance> = balance.try_into()?;
             results.push(edge.value);
         }
 
@@ -163,7 +170,7 @@ impl ConsistentReader {
         checkpoint: u64,
         address: String,
         coin_type: String,
-    ) -> Result<(TypeTag, u64), Error> {
+    ) -> Result<Balance, Error> {
         let response = self
             .request(
                 "get_balance",
@@ -176,7 +183,7 @@ impl ConsistentReader {
             )
             .await?;
 
-        let edge: Edge<(TypeTag, u64)> = response.try_into()?;
+        let edge: Edge<Balance> = response.try_into()?;
         Ok(edge.value)
     }
 
@@ -190,7 +197,7 @@ impl ConsistentReader {
         after_token: Option<Vec<u8>>,
         before_token: Option<Vec<u8>>,
         is_from_front: bool,
-    ) -> Result<Page<(TypeTag, u64)>, Error> {
+    ) -> Result<Page<Balance>, Error> {
         let response = self
             .request(
                 "list_balances",
@@ -388,7 +395,7 @@ impl ConsistentReader {
     }
 }
 
-impl TryFrom<proto::Balance> for Edge<(TypeTag, u64)> {
+impl TryFrom<proto::Balance> for Edge<Balance> {
     type Error = Error;
 
     fn try_from(proto: proto::Balance) -> Result<Self, Error> {
@@ -398,13 +405,16 @@ impl TryFrom<proto::Balance> for Edge<(TypeTag, u64)> {
             .parse()
             .context("invalid coin type")?;
 
-        let balance: u64 = proto.total_balance.unwrap_or(0);
-
         let token: Vec<u8> = proto.page_token.unwrap_or_default().into();
 
         Ok(Edge {
             token,
-            value: (coin_type, balance),
+            value: Balance {
+                coin_type,
+                total_balance: proto.total_balance.unwrap_or(0),
+                coin_balance: proto.coin_balance.unwrap_or(0),
+                address_balance: proto.address_balance.unwrap_or(0),
+            },
         })
     }
 }
