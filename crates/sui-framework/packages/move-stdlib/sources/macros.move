@@ -6,31 +6,31 @@ module std::macros;
 
 use std::string::String;
 
-public macro fun num_max<$T>($x: $T, $y: $T): $T {
+public(package) macro fun num_max<$T>($x: $T, $y: $T): $T {
     let x = $x;
     let y = $y;
     if (x > y) x else y
 }
 
-public macro fun num_min<$T>($x: $T, $y: $T): $T {
+public(package) macro fun num_min<$T>($x: $T, $y: $T): $T {
     let x = $x;
     let y = $y;
     if (x < y) x else y
 }
 
-public macro fun num_diff<$T>($x: $T, $y: $T): $T {
+public(package) macro fun num_diff<$T>($x: $T, $y: $T): $T {
     let x = $x;
     let y = $y;
     if (x > y) x - y else y - x
 }
 
-public macro fun num_divide_and_round_up<$T>($x: $T, $y: $T): $T {
+public(package) macro fun num_divide_and_round_up<$T>($x: $T, $y: $T): $T {
     let x = $x;
     let y = $y;
     if (x % y == 0) x / y else x / y + 1
 }
 
-public macro fun num_pow($base: _, $exponent: u8): _ {
+public(package) macro fun num_pow($base: _, $exponent: u8): _ {
     let mut base = $base;
     let mut exponent = $exponent;
     let mut res = 1;
@@ -47,7 +47,7 @@ public macro fun num_pow($base: _, $exponent: u8): _ {
     res
 }
 
-public macro fun num_sqrt<$T, $U>($x: $T, $bitsize: u8): $T {
+public(package) macro fun num_sqrt<$T, $U>($x: $T, $bitsize: u8): $T {
     let x = $x;
     let mut bit = (1: $U) << $bitsize;
     let mut res = (0: $U);
@@ -66,7 +66,7 @@ public macro fun num_sqrt<$T, $U>($x: $T, $bitsize: u8): $T {
     res as $T
 }
 
-public macro fun num_to_string($x: _): String {
+public(package) macro fun num_to_string($x: _): String {
     let mut x = $x;
     if (x == 0) {
         return b"0".to_string()
@@ -80,20 +80,20 @@ public macro fun num_to_string($x: _): String {
     buffer.to_string()
 }
 
-public macro fun num_checked_add<$T>($x: $T, $y: $T, $max_t: $T): Option<$T> {
+public(package) macro fun num_checked_add<$T>($x: $T, $y: $T, $max_t: $T): Option<$T> {
     let x = $x;
     let y = $y;
     let max_t = $max_t;
     if (y > max_t - x) option::none() else option::some(x + y)
 }
 
-public macro fun num_checked_sub<$T>($x: $T, $y: $T): Option<$T> {
+public(package) macro fun num_checked_sub<$T>($x: $T, $y: $T): Option<$T> {
     let x = $x;
     let y = $y;
     if (x < y) option::none() else option::some(x - y)
 }
 
-public macro fun num_checked_mul<$T>($x: $T, $y: $T, $max_t: $T): Option<$T> {
+public(package) macro fun num_checked_mul<$T>($x: $T, $y: $T, $max_t: $T): Option<$T> {
     let x = $x;
     let y = $y;
     let max_t = $max_t;
@@ -102,26 +102,26 @@ public macro fun num_checked_mul<$T>($x: $T, $y: $T, $max_t: $T): Option<$T> {
     else option::some(x * y)
 }
 
-public macro fun num_checked_div<$T>($x: $T, $y: $T): Option<$T> {
+public(package) macro fun num_checked_div<$T>($x: $T, $y: $T): Option<$T> {
     let x = $x;
     let y = $y;
     if (y == 0) option::none() else option::some(x / y)
 }
 
-public macro fun num_saturating_add<$T>($x: $T, $y: $T, $max_t: $T): $T {
+public(package) macro fun num_saturating_add<$T>($x: $T, $y: $T, $max_t: $T): $T {
     let x = $x;
     let y = $y;
     let max_t = $max_t;
     if (y > max_t - x) max_t else x + y
 }
 
-public macro fun num_saturating_sub<$T>($x: $T, $y: $T): $T {
+public(package) macro fun num_saturating_sub<$T>($x: $T, $y: $T): $T {
     let x = $x;
     let y = $y;
     if (x < y) 0 else x - y
 }
 
-public macro fun num_saturating_mul<$T>($x: $T, $y: $T, $max_t: $T): $T {
+public(package) macro fun num_saturating_mul<$T>($x: $T, $y: $T, $max_t: $T): $T {
     let x = $x;
     let y = $y;
     let max_t = $max_t;
@@ -162,27 +162,27 @@ public macro fun do_eq<$T, $R: drop>($stop: $T, $f: |$T| -> $R) {
     range_do_eq!(0, $stop, $f)
 }
 
-public macro fun try_as_u8($x: _): Option<u8> {
+public(package) macro fun try_as_u8($x: _): Option<u8> {
     let x = $x;
     if (x > 0xFF) option::none() else option::some(x as u8)
 }
 
-public macro fun try_as_u16($x: _): Option<u16> {
+public(package) macro fun try_as_u16($x: _): Option<u16> {
     let x = $x;
     if (x > 0xFFFF) option::none() else option::some(x as u16)
 }
 
-public macro fun try_as_u32($x: _): Option<u32> {
+public(package) macro fun try_as_u32($x: _): Option<u32> {
     let x = $x;
     if (x > 0xFFFF_FFFF) option::none() else option::some(x as u32)
 }
 
-public macro fun try_as_u64($x: _): Option<u64> {
+public(package) macro fun try_as_u64($x: _): Option<u64> {
     let x = $x;
     if (x > 0xFFFF_FFFF_FFFF_FFFF) option::none() else option::some(x as u64)
 }
 
-public macro fun try_as_u128($x: _): Option<u128> {
+public(package) macro fun try_as_u128($x: _): Option<u128> {
     let x = $x;
     if (x > 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF) option::none() else option::some(x as u128)
 }
@@ -194,7 +194,7 @@ public macro fun try_as_u128($x: _): Option<u128> {
 /// `$t_bits` (as mentioned above) is the total number of bits in the fixed-point value (integer
 /// plus fractional).
 /// `$fractional_bits` is the number of fractional bits in the fixed-point value.
-public macro fun uq_from_quotient<$T, $U>(
+public(package) macro fun uq_from_quotient<$T, $U>(
     $numerator: $T,
     $denominator: $T,
     $max_t: $T,
@@ -224,28 +224,28 @@ public macro fun uq_from_quotient<$T, $U>(
     quotient as $T
 }
 
-public macro fun uq_from_int<$T, $U>($integer: $T, $fractional_bits: u8): $U {
+public(package) macro fun uq_from_int<$T, $U>($integer: $T, $fractional_bits: u8): $U {
     ($integer as $U) << $fractional_bits
 }
 
-public macro fun uq_add<$T, $U>($a: $T, $b: $T, $max_t: $T, $abort_overflow: _): $T {
+public(package) macro fun uq_add<$T, $U>($a: $T, $b: $T, $max_t: $T, $abort_overflow: _): $T {
     let sum = $a as $U + ($b as $U);
     if (sum > $max_t as $U) $abort_overflow;
     sum as $T
 }
 
-public macro fun uq_sub<$T>($a: $T, $b: $T, $abort_overflow: _): $T {
+public(package) macro fun uq_sub<$T>($a: $T, $b: $T, $abort_overflow: _): $T {
     let a = $a;
     let b = $b;
     if (a < b) $abort_overflow;
     a - b
 }
 
-public macro fun uq_to_int<$T, $U>($a: $U, $fractional_bits: u8): $T {
+public(package) macro fun uq_to_int<$T, $U>($a: $U, $fractional_bits: u8): $T {
     ($a >> $fractional_bits) as $T
 }
 
-public macro fun uq_int_mul<$T, $U>(
+public(package) macro fun uq_int_mul<$T, $U>(
     $val: $T,
     $multiplier: $T,
     $max_t: $T,
@@ -264,7 +264,7 @@ public macro fun uq_int_mul<$T, $U>(
     product as $T
 }
 
-public macro fun uq_int_div<$T, $U>(
+public(package) macro fun uq_int_div<$T, $U>(
     $val: $T,
     $divisor: $T,
     $max_t: $T,
