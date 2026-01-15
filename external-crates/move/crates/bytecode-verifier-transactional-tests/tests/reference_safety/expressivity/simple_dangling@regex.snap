@@ -1,0 +1,54 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 0, lines 3-13:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::field'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x2::field,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 1, lines 15-28:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000003::nested_field'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x3::nested_field,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}
+
+task 2, lines 30-39:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000004::vector'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x4::vector,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 3, lines 41-59:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::simple_call'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x5::simple_call,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 9)],
+}
+
+task 4, lines 63-79:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000005::field_call'. Got VMError: {
+    major_status: WRITEREF_EXISTS_BORROW_ERROR,
+    sub_status: None,
+    location: 0x5::field_call,
+    indices: [(FunctionDefinition, 1)],
+    offsets: [(FunctionDefinitionIndex(1), 6)],
+}
