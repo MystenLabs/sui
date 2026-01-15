@@ -103,7 +103,8 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
         )
         .replace(sandbox.to_string_lossy().as_ref(), "<SANDBOX_DIR>")
         // Convert windows path outputs on the snapshot to regular linux ones.
-        .replace(r"\\", "/");
+        .replace(r"\\", "/")
+        .replace(r"\", "/");
 
     insta_assert! {
         input_path: path,
