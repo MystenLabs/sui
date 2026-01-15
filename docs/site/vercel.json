@@ -693,7 +693,6 @@
       { "source": "/quick-start", "destination": "/guides" },
       { "source": "/references/cli/suiup", "destination": "/guides" },
       { "source": "/references/dapp-kit", "destination": "/guides" },
-      { "source": "/references/framework/sui::package", "destination": "/guides" },
       { "source": "/references/sdk/typescript", "destination": "/guides" },
       { "source": "/references/sui-dapp-toolkit", "destination": "/guides" },
       { "source": "/references/sui-framework/staking-pool", "destination": "/guides" },
