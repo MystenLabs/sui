@@ -37,10 +37,12 @@ impl Package {
         }
     }
 
+    #[allow(dead_code)]
     pub fn into_modules(self) -> Vec<CompiledModule> {
         self.modules.into_values().collect()
     }
 
+    #[allow(dead_code)]
     pub fn as_modules(&self) -> impl IntoIterator<Item = &CompiledModule> {
         self.modules.values()
     }

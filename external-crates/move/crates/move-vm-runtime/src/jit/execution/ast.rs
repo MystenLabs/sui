@@ -106,6 +106,7 @@ pub struct Module {
 
     /// a map from signatures in instantiations to the `ArenaVec<ArenaType>` that represents it.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
+    #[allow(dead_code)]
     pub(crate) instantiation_signatures: ArenaVec<ArenaVec<ArenaType>>,
 
     /// constant references carry an index into a global vector of values.
