@@ -14,4 +14,8 @@ move-transactional-test-runner.workspace = true
 name = "tests"
 harness = false
 
+[[test]]
+name = "regex_reference_tests"
+harness = false
+
 [dependencies]

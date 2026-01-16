@@ -1,5 +1,11 @@
 # @mysten/prettier-plugin-move
 
+## 0.3.5
+
+### Patch Changes
+
+- adds support for string literals
+
 ## 0.3.4
 
 ### Patch Changes

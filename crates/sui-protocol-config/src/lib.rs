@@ -4456,6 +4456,9 @@ impl ProtocolConfig {
 
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.address_aliases = true;
+
+                        cfg.feature_flags.enable_accumulators = true;
+                        cfg.feature_flags.enable_address_balance_gas_payments = true;
                     }
 
                     cfg.feature_flags.enable_poseidon = true;
@@ -4553,6 +4556,7 @@ impl ProtocolConfig {
                 .map(|limit| limit as u128),
             deprecate_global_storage_ops,
             disable_entry_point_signature_check: self.disable_entry_point_signature_check(),
+            switch_to_regex_reference_safety: false,
         }
     }
 
