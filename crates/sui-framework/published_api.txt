@@ -1624,33 +1624,6 @@ Metadata
 AccumulatorObjectCountKey
 	public struct
 	0x2::accumulator_metadata
-accumulator_root_owner_exists
-	fun
-	0x2::accumulator_metadata
-accumulator_root_borrow_owner_mut
-	fun
-	0x2::accumulator_metadata
-accumulator_root_attach_owner
-	fun
-	0x2::accumulator_metadata
-accumulator_root_detach_owner
-	fun
-	0x2::accumulator_metadata
-create_accumulator_metadata
-	public(package) fun
-	0x2::accumulator_metadata
-remove_accumulator_metadata
-	public(package) fun
-	0x2::accumulator_metadata
-accumulator_owner_attach_metadata
-	fun
-	0x2::accumulator_metadata
-accumulator_owner_detach_metadata
-	fun
-	0x2::accumulator_metadata
-accumulator_owner_destroy
-	fun
-	0x2::accumulator_metadata
 record_accumulator_object_changes
 	fun
 	0x2::accumulator_metadata
