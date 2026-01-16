@@ -39,7 +39,7 @@ use std::{
     marker::PhantomData,
     ops::RangeBounds,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, OnceLock},
     time::Duration,
 };
 use std::{collections::HashSet, ffi::CStr};
@@ -53,6 +53,13 @@ use tracing::{debug, error, instrument, warn};
 // From https://github.com/facebook/rocksdb/blob/bd80433c73691031ba7baa65c16c63a83aef201a/include/rocksdb/db.h#L1169
 const ROCKSDB_PROPERTY_TOTAL_BLOB_FILES_SIZE: &CStr =
     unsafe { CStr::from_bytes_with_nul_unchecked("rocksdb.total-blob-file-size\0".as_bytes()) };
+
+static WRITE_SYNC_ENABLED: OnceLock<bool> = OnceLock::new();
+
+fn write_sync_enabled() -> bool {
+    *WRITE_SYNC_ENABLED
+        .get_or_init(|| std::env::var("SUI_WRITE_SYNC").is_ok_and(|v| v == "1" || v == "true"))
+}
 
 #[cfg(test)]
 mod tests;
@@ -1201,7 +1208,11 @@ impl DBBatch {
     #[instrument(level = "trace", skip_all, err)]
     pub fn write(self) -> Result<(), TypedStoreError> {
         let mut write_options = rocksdb::WriteOptions::default();
-        write_options.set_sync(true);
+
+        if write_sync_enabled() {
+            write_options.set_sync(true);
+        }
+
         self.write_opt(write_options)
     }
 
