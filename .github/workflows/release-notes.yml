@@ -33,7 +33,7 @@ jobs:
     runs-on: [ ubuntu-latest ]
     outputs:
       isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
-      isReleaseNotesScript: ${{ steps.script-diff.outputs.isReleaseNotesScript }}
+      isReleaseNotesScript: ${{ steps.diff.outputs.isReleaseNotesScript }}
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
         with:
@@ -41,14 +41,6 @@ jobs:
       - name: Detect Changes
         uses: './.github/actions/diffs'
         id: diff
-      - name: Detect release_notes.py changes
-        uses: dorny/paths-filter@v3
-        id: script-diff
-        with:
-          filters: |
-            isReleaseNotesScript:
-              - 'scripts/release_notes.py'
-              - 'scripts/release_notes_test.py'
 
   release-notes-script-test:
     name: Test release_notes.py
