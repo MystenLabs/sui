@@ -290,6 +290,7 @@ const MAX_PROTOCOL_VERSION: u64 = 109;
 //              Disable entry point signature check.
 //              Enable address aliases on testnet.
 //              Enable poseidon_bn254 on mainnet.
+// Version 109: New framework.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
