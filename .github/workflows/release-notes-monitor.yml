@@ -15,7 +15,7 @@ jobs:
       new_tag: ${{ steps.get-pr-list.outputs.new_tag }}
       sui_version: ${{ steps.get-pr-list.outputs.sui_version }}
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout sui repo main branch
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
@@ -33,52 +33,19 @@ jobs:
         export existing_commit_tag=$(git tag --points-at ${new_commit_hash} | grep -E 'sui_v(.*)_rel_notes' | head -n 1)
 
         export previous_tag=$(git tag -l 'sui_v1*_rel_notes' --sort=-version:refname | head -n1 || true)
-        export previous_commit_hash=$(git rev-list -n 1 ${previous_tag})
 
-        # Get all commits in range that touch relevant paths
-        commits=$(git log --pretty=format:"%H" \
-            ${previous_commit_hash}...${new_commit_hash} \
-            -- consensus crates dashboards doc docker external-crates \
-            kiosk nre sui-execution)
-
-        # For each commit, find the associated PR using GitHub API
-        # This works for all merge strategies (squash, merge, rebase)
-        pr_list=""
-        for commit in $commits; do
-          # Get PR number associated with this commit
-          pr_num=$(gh api "/repos/MystenLabs/sui/commits/${commit}/pulls" \
-            -H "Accept: application/vnd.github+json" \
-            --jq '.[0].number // empty' 2>/dev/null || true)
-
-          if [ -n "$pr_num" ]; then
-            # Check if PR body contains release notes checkbox marked (- [x] Category:)
-            has_release_notes=$(gh api "/repos/MystenLabs/sui/pulls/${pr_num}" \
-              -H "Accept: application/vnd.github+json" \
-              --jq '.body // ""' 2>/dev/null | grep -cE '^\- \[x\] ' || true)
-
-            if [ "$has_release_notes" -gt 0 ]; then
-              pr_list="${pr_list}${pr_num}"$'\n'
-            fi
-          fi
-        done
-
-        # Deduplicate and format as JSON array
-        # Handle empty list case - ensure we get [] not [""]
-        if [ -z "$pr_list" ]; then
-          export list_of_prs="[]"
-        else
-          export list_of_prs=$(echo "$pr_list" | sort -u | grep -v '^$' | jq -R -s -c 'split("\n") | map(select(length > 0))')
-        fi
+        # Use the release_notes.py script to get the list of PRs with release notes
+        export list_of_prs=$(python3 ./scripts/release_notes.py list-prs "${previous_tag}" "${new_commit_hash}")
 
         echo "matrix=${list_of_prs}" >> $GITHUB_OUTPUT
         echo "new_commit_hash=${new_commit_hash}" >> $GITHUB_OUTPUT
         echo "existing_commit_tag=${existing_commit_tag}" >> $GITHUB_OUTPUT
-        
+
         export sui_crate_version=$(cat Cargo.toml | grep "^version =" | tr -d '"' | awk '{ print $3 }')
         export new_tag=$(echo "sui_v${sui_crate_version}_$(date +%s)_rel_notes")
         echo "new_tag=${new_tag}" >> $GITHUB_OUTPUT
         echo "sui_version=${sui_crate_version}" >> $GITHUB_OUTPUT
-        
+
   process-prs:
     name: Processing PR
     needs: [ get-list-of-prs ]
@@ -89,6 +56,15 @@ jobs:
          pr: ${{ fromJson(needs.get-list-of-prs.outputs.matrix) }}
 
     steps:
+    - name: Checkout sui repo main branch
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      with:
+        ref: main
+
+    - name: Setup Python
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # pin@v5.6.0
+      with:
+        python-version: 3.10.10
 
     - name: Reading Release notes
       id: read-notes
@@ -97,22 +73,8 @@ jobs:
       run: |
         echo "Processing PR#${{ matrix.pr }}"
 
-        # Fetch PR body to temp file to prevent injection
-        temp_file=$(mktemp)
-        trap 'rm -f "$temp_file"' EXIT
-
-        gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
-            "/repos/MystenLabs/sui/pulls/${{ matrix.pr }}" --jq ".body" > "$temp_file"
-
-        # Extract release notes from checked boxes only (ignore unchecked "- [ ]")
-        # Format: "- [x] Category: notes here"
-        # Output: "Category: notes here"
-        rel_notes=$(grep -E '^\- \[x\] ' "$temp_file" | sed 's/^- \[x\] //')
-
-        # Fallback to old format if no checked boxes found
-        if [[ -z "$rel_notes" ]]; then
-          rel_notes=$(awk '/### Release notes/{p=1; next} p' "$temp_file" | sed '/^[[:space:]]*$/d')
-        fi
+        # Use the release_notes.py script to get formatted release notes
+        rel_notes=$(python ./scripts/release_notes.py get-notes "${{ matrix.pr }}")
 
         # make text json payload friendly
         rel_notes=$(sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\r//g' <<<"$rel_notes")

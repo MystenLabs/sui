@@ -36,6 +36,7 @@ RE_NOTE = re.compile(
 # Only commits that affect changes in these directories will be
 # considered when generating release notes.
 INTERESTING_DIRECTORIES = [
+    "consensus",
     "crates",
     "dashboards",
     "doc",
@@ -72,7 +73,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description=(
             "Extract release notes from git commits. Check help for the "
-            "`generate` and `check` subcommands for more information."
+            "`generate`, `check`, and `list-prs` subcommands for more information."
         ),
     )
 
@@ -109,12 +110,55 @@ def parse_args():
         help="The PR to check.",
     )
 
+    list_prs_p = sub_parser.add_parser(
+        "list-prs",
+        description=(
+            "List PRs with release notes between two commits. "
+            "Outputs JSON with PR numbers and metadata for CI workflows."
+        ),
+    )
+
+    list_prs_p.add_argument(
+        "from",
+        help="The commit to start from (exclusive)",
+    )
+
+    list_prs_p.add_argument(
+        "to",
+        nargs="?",
+        default="HEAD",
+        help="The commit to end at (inclusive), defaults to HEAD.",
+    )
+
+    get_notes_p = sub_parser.add_parser(
+        "get-notes",
+        description="Get release notes for a specific PR, formatted for display.",
+    )
+
+    get_notes_p.add_argument(
+        "pr",
+        help="The PR number to get release notes for.",
+    )
+
     return vars(parser.parse_args())
 
 
 def git(*args):
     """Run a git command and return the output as a string."""
     return subprocess.check_output(["git"] + list(args)).decode().strip()
+
+
+def gh_api(endpoint):
+    """Call GitHub API using gh CLI and return JSON response."""
+    result = subprocess.run(
+        ["gh", "api", "-H", "Accept: application/vnd.github+json", endpoint],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return json.loads(result.stdout)
 
 
 def parse_notes(pr, notes):
@@ -162,19 +206,10 @@ def extract_notes_for_pr(pr):
     whether it has a note and whether it was checked (ticked).
 
     """
-
-    url = f"https://api.github.com/repos/MystenLabs/sui/pulls/{pr}"
-    curl_command = [
-        "curl", "-s",
-        "-H", "Accept: application/vnd.github.groot-preview+json",
-        url
-    ]
-
-    # Execute the curl command
-    result = subprocess.run(
-        curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    json_data = json.loads(result.stdout)
-    notes = json_data.get("body")
+    data = gh_api(f"/repos/MystenLabs/sui/pulls/{pr}")
+    if not data:
+        return pr, {}
+    notes = data.get("body") or ""
     return parse_notes(pr, notes)
 
 
@@ -258,6 +293,69 @@ def do_check(pr):
     sys.exit(1)
 
 
+def get_pr_for_commit(commit):
+    """Get the PR number associated with a commit using GitHub API."""
+    data = gh_api(f"/repos/MystenLabs/sui/commits/{commit}/pulls")
+    if data and len(data) > 0:
+        return data[0].get("number")
+    return None
+
+
+def pr_has_release_notes(pr):
+    """Check if a PR has any checked release notes boxes."""
+    data = gh_api(f"/repos/MystenLabs/sui/pulls/{pr}")
+    if not data:
+        return False
+    body = data.get("body", "") or ""
+    return bool(re.search(r"^\s*-\s*\[x\]\s*", body, re.MULTILINE | re.IGNORECASE))
+
+
+def do_list_prs(from_, to):
+    """List PRs with release notes between two commits.
+
+    Outputs JSON with PR numbers that have checked release notes,
+    suitable for use in CI workflows.
+    """
+    root = git("rev-parse", "--show-toplevel")
+    os.chdir(root)
+
+    commits = git(
+        "log",
+        "--pretty=format:%H",
+        f"{from_}..{to}",
+        "--",
+        *INTERESTING_DIRECTORIES,
+    ).strip()
+
+    if not commits:
+        print("[]")
+        return
+
+    seen_prs = set()
+    prs_with_notes = []
+
+    for commit in commits.split("\n"):
+        pr = get_pr_for_commit(commit)
+        if pr and pr not in seen_prs:
+            seen_prs.add(pr)
+            if pr_has_release_notes(pr):
+                prs_with_notes.append(pr)
+
+    print(json.dumps(prs_with_notes))
+
+
+def do_get_notes(pr):
+    """Get formatted release notes for a specific PR."""
+    _, notes = extract_notes_for_pr(pr)
+
+    output_lines = []
+    for impacted, note in notes.items():
+        if note.checked and note.note:
+            output_lines.append(f"{impacted}: {note.note}")
+
+    print("\n".join(output_lines))
+
+
 def do_generate(from_, to):
     """Generate release notes from git commits.
 
@@ -320,8 +418,17 @@ def do_generate(from_, to):
             print()
 
 
-args = parse_args()
-if args["command"] == "generate":
-    do_generate(args["from"], args["to"])
-elif args["command"] == "check":
-    do_check(args["pr"])
+if __name__ == "__main__":
+    args = parse_args()
+    if args["command"] is None:
+        print("Error: No command provided.\n", file=sys.stderr)
+        subprocess.run([sys.executable, __file__, "--help"])
+        sys.exit(1)
+    elif args["command"] == "generate":
+        do_generate(args["from"], args["to"])
+    elif args["command"] == "check":
+        do_check(args["pr"])
+    elif args["command"] == "list-prs":
+        do_list_prs(args["from"], args["to"])
+    elif args["command"] == "get-notes":
+        do_get_notes(args["pr"])
