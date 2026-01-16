@@ -842,7 +842,6 @@ impl Function {
         &self.name
     }
 
-    #[allow(unused)]
     pub fn file_format_version(&self) -> u32 {
         self.file_format_version
     }
