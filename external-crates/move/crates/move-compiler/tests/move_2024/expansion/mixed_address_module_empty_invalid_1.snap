@@ -6,7 +6,7 @@ info:
   lint: false
 ---
 error[E13002]: feature is deprecated in specified edition
-  ┌─ tests/move_2024/expansion/mixed_address_module_empty_1.move:1:1
+  ┌─ tests/move_2024/expansion/mixed_address_module_empty_invalid_1.move:1:1
   │
 1 │ address panic {
   │ ^^^^^^^ 'address' blocks are deprecated. Use addresses directly in module definitions instead.
@@ -14,13 +14,13 @@ error[E13002]: feature is deprecated in specified edition
   │                   ----- Replace with 'panic::panic'
 
 error[E03001]: address with no value
-  ┌─ tests/move_2024/expansion/mixed_address_module_empty_1.move:1:9
+  ┌─ tests/move_2024/expansion/mixed_address_module_empty_invalid_1.move:1:9
   │
 1 │ address panic {
   │         ^^^^^ address 'panic' is not assigned a value
 
 error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/move_2024/expansion/mixed_address_module_empty_1.move:2:12
+  ┌─ tests/move_2024/expansion/mixed_address_module_empty_invalid_1.move:2:12
   │
 1 │ address panic {
   │         ----- Address previously specified here
@@ -28,13 +28,13 @@ error[E02001]: duplicate declaration, item, or annotation
   │            ^^^^^ Redundant address specification
 
 error[E03001]: address with no value
-  ┌─ tests/move_2024/expansion/mixed_address_module_empty_1.move:2:12
+  ┌─ tests/move_2024/expansion/mixed_address_module_empty_invalid_1.move:2:12
   │
 2 │     module panic::panic;
   │            ^^^^^ address 'panic' is not assigned a value. Try assigning it a value when calling the compiler
 
 error[E02004]: invalid 'module' declaration
-  ┌─ tests/move_2024/expansion/mixed_address_module_empty_1.move:2:19
+  ┌─ tests/move_2024/expansion/mixed_address_module_empty_invalid_1.move:2:19
   │
 2 │     module panic::panic;
   │                   ^^^^^ Cannot define 'module' label in address block
