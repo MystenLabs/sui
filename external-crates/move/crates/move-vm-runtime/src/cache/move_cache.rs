@@ -89,18 +89,24 @@ impl MoveCache {
         verified: verification::ast::Package,
         runtime: jit::execution::ast::Package,
     ) -> bool {
-        // Check if the package is already present, and if so, return false early to avoid
-        // re-inserting the already-cached package.
-        if self.package_cache.contains_key(&package_key) {
-            return false;
+        use dashmap::mapref::entry::Entry;
+        // Grab the entry at the top, so we can figure out which flag to return while holding the
+        // lock on the shard of dashmap we are modifying (so this does not change out from under us
+        // mid-write).
+        let entry = self.package_cache.entry(package_key);
+        match entry {
+            Entry::Occupied(_) => {
+                // Package is already present.
+                false
+            }
+            Entry::Vacant(vacant_entry) => {
+                let verified = Arc::new(verified);
+                let runtime = Arc::new(runtime);
+                let package = Package { verified, runtime };
+                vacant_entry.insert(Arc::new(package));
+                true
+            }
         }
-        let verified = Arc::new(verified);
-        let runtime = Arc::new(runtime);
-        let package = Package { verified, runtime };
-        self.package_cache
-            .entry(package_key)
-            .or_insert(Arc::new(package));
-        true
     }
 
     /// Get a package from the cache, if it is present.
@@ -117,14 +123,21 @@ impl MoveCache {
     // -------------------------------------------
 
     /// Add linkage tables to the cache for a given linkage context.
+    ///
+    /// Returns `true` if the tables were newly inserted, `false` if they were already present.
     pub(crate) fn add_linkage_tables_to_cache(
         &self,
         linkage_key: LinkageHash,
         vtables: VMDispatchTables,
-    ) {
+    ) -> bool {
+        let mut inserted = false;
         let _insert_result: Result<VMDispatchTables, ()> = self
             .linkage_vtables
-            .get_or_insert_with::<_, ()>(&linkage_key, || Ok(vtables));
+            .get_or_insert_with::<_, ()>(&linkage_key, || {
+                inserted = true;
+                Ok(vtables)
+            });
+        inserted
     }
 
     /// Get cached linkage tables for a given linkage context, if present, and updates the LRU
