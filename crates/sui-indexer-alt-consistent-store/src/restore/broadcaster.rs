@@ -1,29 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-    time::Duration,
-};
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use anyhow::Context as _;
-use backoff::{Error as BE, ExponentialBackoff};
-use futures::{future::try_join_all, stream};
-use sui_futures::stream::{Break, TrySpawnStreamExt};
-use sui_futures::{future::with_slow_future_monitor, service::Service};
+use backoff::Error as BE;
+use backoff::ExponentialBackoff;
+use futures::future::try_join_all;
+use futures::stream;
+use sui_futures::future::with_slow_future_monitor;
+use sui_futures::service::Service;
+use sui_futures::stream::Break;
+use sui_futures::stream::TrySpawnStreamExt;
 use tokio::sync::mpsc;
-use tracing::{error, info, warn};
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 use crate::db::Db;
-
-use super::{
-    FormalSnapshot, LiveObjects, RestorerMetrics,
-    format::{EpochManifest, FileMetadata, FileType},
-};
+use crate::restore::FormalSnapshot;
+use crate::restore::LiveObjects;
+use crate::restore::RestorerMetrics;
+use crate::restore::format::EpochManifest;
+use crate::restore::format::FileMetadata;
+use crate::restore::format::FileType;
 
 /// Wait at most this long between retries while fetching files from the snapshot.
 const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(60);

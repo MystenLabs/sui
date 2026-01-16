@@ -3,9 +3,10 @@
 
 //! Snowflake-based checkpoint progress reader.
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use anyhow::anyhow;
 
-use super::MaxCheckpointReader;
+use crate::progress_monitoring::MaxCheckpointReader;
 
 /// Reads the maximum checkpoint from a Snowflake table.
 pub struct SnowflakeMaxCheckpointReader {

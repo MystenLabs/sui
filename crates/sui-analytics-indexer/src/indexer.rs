@@ -6,22 +6,27 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::package_store::PackageCache;
-use crate::progress_monitoring::spawn_snowflake_monitors;
-use anyhow::{Context, Result};
-use object_store::{
-    ClientOptions, aws::AmazonS3Builder, azure::MicrosoftAzureBuilder,
-    gcp::GoogleCloudStorageBuilder, local::LocalFileSystem,
-};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use anyhow::Context;
+use anyhow::Result;
+use object_store::ClientOptions;
+use object_store::aws::AmazonS3Builder;
+use object_store::azure::MicrosoftAzureBuilder;
+use object_store::gcp::GoogleCloudStorageBuilder;
+use object_store::local::LocalFileSystem;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderName;
+use reqwest::header::HeaderValue;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::service::Service;
 
-use crate::config::{IndexerConfig, OutputStoreConfig};
+use crate::config::IndexerConfig;
+use crate::config::OutputStoreConfig;
 use crate::metrics::Metrics;
+use crate::package_store::PackageCache;
+use crate::progress_monitoring::spawn_snowflake_monitors;
 use crate::store::AnalyticsStore;
 
 /// Build and run an analytics indexer, returning a Service handle.
@@ -72,7 +77,11 @@ pub async fn build_analytics_indexer(
             remote_store_url: if config.local_ingestion_path.is_some() {
                 None
             } else {
-                Some(url::Url::parse(&config.remote_store_url)?)
+                config
+                    .remote_store_url
+                    .as_ref()
+                    .map(|url| url::Url::parse(url))
+                    .transpose()?
             },
             local_ingestion_path: config.local_ingestion_path.clone(),
             rpc_api_url: config

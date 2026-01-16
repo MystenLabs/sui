@@ -1,15 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Context, Object, connection::Connection};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
 use sui_types::transaction::GenesisTransaction as NativeGenesisTransaction;
 
-use crate::{
-    api::{scalars::cursor::JsonCursor, types::object::Object},
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::types::object::Object;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
 
 type CObject = JsonCursor<usize>;
 

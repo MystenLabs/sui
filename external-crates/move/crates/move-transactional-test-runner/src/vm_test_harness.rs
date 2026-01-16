@@ -6,6 +6,7 @@ use crate::{
     framework::{CompiledState, MaybeNamedCompiledModule, MoveTestAdapter, run_test_impl},
     tasks::{EmptyCommand, InitCommand, SyntaxChoice, TaskInput},
 };
+
 use anyhow::{Error, Result, anyhow};
 use async_trait::async_trait;
 use clap::Parser;
@@ -13,7 +14,9 @@ use move_binary_format::{
     CompiledModule,
     errors::{Location, VMError, VMResult},
 };
-use move_command_line_common::files::verify_and_create_named_address_mapping;
+use move_command_line_common::{
+    files::verify_and_create_named_address_mapping, testing::InstaOptions,
+};
 use move_compiler::{PreCompiledProgramInfo, editions::Edition, shared::PackagePaths};
 use move_core_types::parsing::address::ParsedAddress;
 use move_core_types::{
@@ -24,7 +27,7 @@ use move_core_types::{
 };
 use move_stdlib::named_addresses as move_stdlib_named_addresses;
 use move_symbol_pool::Symbol;
-use move_vm_config::runtime::VMConfig;
+use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
 use move_vm_runtime::{
     dev_utils::{
         gas_schedule::{self, GasStatus},
@@ -38,9 +41,13 @@ use move_vm_runtime::{
     runtime::MoveRuntime,
     shared::{gas::GasMeter, linkage_context::LinkageContext},
 };
-use once_cell::sync::Lazy;
+use std::{
+    collections::BTreeMap,
+    path::Path,
+    sync::{Arc, LazyLock},
+};
 
-use std::{collections::BTreeMap, path::Path, sync::Arc};
+pub static SWITCH_TO_REGEX_REFERENCE_SAFETY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
 
 const STD_ADDR: AccountAddress = AccountAddress::ONE;
 
@@ -177,6 +184,8 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
             }
             None => (BTreeMap::new(), Edition::LEGACY),
         };
+        let switch_to_regex_reference_safety =
+            SWITCH_TO_REGEX_REFERENCE_SAFETY.get().copied().unwrap();
 
         println!("generating named address map");
         let mut named_address_mapping = move_stdlib_named_addresses();
@@ -194,7 +203,7 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
             stdlib_native_functions(STD_ADDR, GasParameters::zeros(), /* silent */ false)
                 .map_err(|e| e.finish(Location::Undefined))
                 .expect("Failed to initialize natives");
-        let vm_config = test_vm_config();
+        let vm_config = test_vm_config(switch_to_regex_reference_safety);
         let runtime = MoveRuntime::new(native_functions, vm_config);
         println!("creating adapter");
         let mut adapter = Self {
@@ -497,6 +506,22 @@ impl SimpleRuntimeTestAdapter {
     }
 }
 
+fn test_vm_config(switch_to_regex_reference_safety: bool) -> VMConfig {
+    VMConfig {
+        enable_invariant_violation_check_in_swap_loc: false,
+        deprecate_global_storage_ops_during_deserialization: true,
+        binary_config: move_binary_format::binary_config::BinaryConfig::legacy_with_flags(
+            /* check_no_extraneous_bytes */ true, /* deprecate_global_storage_ops */ true,
+        ),
+        verifier: VerifierConfig {
+            switch_to_regex_reference_safety,
+            ..VerifierConfig::default()
+        },
+
+        ..VMConfig::default()
+    }
+}
+
 fn call_vm_function(
     vm_instance: &mut MoveVM<'_>,
     module: &ModuleId,
@@ -536,7 +561,7 @@ fn call_vm_function(
     result
 }
 
-pub static PRECOMPILED_MOVE_STDLIB: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
+pub static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,
@@ -559,7 +584,7 @@ pub static PRECOMPILED_MOVE_STDLIB: Lazy<PreCompiledProgramInfo> = Lazy::new(|| 
     }
 });
 
-static MOVE_STDLIB_COMPILED: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
+static MOVE_STDLIB_COMPILED: LazyLock<Vec<CompiledModule>> = LazyLock::new(|| {
     let (files, units_res) = move_compiler::Compiler::from_files(
         None,
         move_stdlib::source_files(),
@@ -584,19 +609,33 @@ static MOVE_STDLIB_COMPILED: Lazy<Vec<CompiledModule>> = Lazy::new(|| {
     }
 });
 
-fn test_vm_config() -> VMConfig {
-    VMConfig {
-        enable_invariant_violation_check_in_swap_loc: false,
-        ..Default::default()
-    }
-}
-
 #[tokio::main]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    SWITCH_TO_REGEX_REFERENCE_SAFETY.set(false).unwrap();
     run_test_impl::<SimpleRuntimeTestAdapter>(
         path,
         Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
         None,
+    )
+    .await
+}
+
+#[tokio::main]
+pub async fn run_test_with_regex_reference_safety(
+    path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    SWITCH_TO_REGEX_REFERENCE_SAFETY.set(true).unwrap();
+    let mut options = InstaOptions::new();
+    if path
+        .components()
+        .any(|c| c.as_os_str() == "reference_safety")
+    {
+        options.suffix("regex");
+    }
+    run_test_impl::<SimpleRuntimeTestAdapter>(
+        path,
+        Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())),
+        Some(options),
     )
     .await
 }

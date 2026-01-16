@@ -7,12 +7,13 @@ use std::str::FromStr;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha as grpc;
 use sui_indexer_alt_framework::types::base_types::SuiAddress;
 
-use crate::rpc::error::{RpcError, StatusCode};
+use crate::rpc::consistent_service::State;
+use crate::rpc::error::RpcError;
+use crate::rpc::error::StatusCode;
 use crate::rpc::pagination::Page;
-use crate::rpc::type_filter::{self, TypeFilter};
+use crate::rpc::type_filter::TypeFilter;
+use crate::rpc::type_filter::{self};
 use crate::schema;
-
-use super::State;
 
 #[derive(thiserror::Error, Debug)]
 pub(super) enum Error {

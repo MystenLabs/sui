@@ -11,7 +11,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_package_alt::{
-    package::RootPackage,
+    RootPackage,
     schema::{Environment, EnvironmentName},
 };
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;

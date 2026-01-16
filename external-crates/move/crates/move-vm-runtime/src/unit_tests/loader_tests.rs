@@ -42,8 +42,8 @@ use move_core_types::{
     resolver::IntraPackageName,
 };
 use move_vm_config::{runtime::VMConfig, verifier::VerifierConfig};
-use once_cell::sync::Lazy;
 use parking_lot::RwLock;
+use std::sync::LazyLock;
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc, thread};
 
 const ADDR2: AccountAddress = {
@@ -72,7 +72,7 @@ const ADDR6: AccountAddress = {
     AccountAddress::new(address)
 };
 
-static ADDR2_FUNCTIONS: Lazy<Vec<(ModuleId, Identifier)>> = Lazy::new(|| {
+static ADDR2_FUNCTIONS: LazyLock<Vec<(ModuleId, Identifier)>> = LazyLock::new(|| {
     vec![
         (
             ModuleId::new(ADDR2, Identifier::new("A").unwrap()),

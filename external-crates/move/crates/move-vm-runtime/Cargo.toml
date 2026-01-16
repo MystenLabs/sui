@@ -21,7 +21,6 @@ hex.workspace = true
 indexmap.workspace = true
 lasso.workspace = true
 lru.workspace = true
-once_cell.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 sha2.workspace = true

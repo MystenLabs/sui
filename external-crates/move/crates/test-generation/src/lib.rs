@@ -14,6 +14,7 @@ pub mod summaries;
 pub mod transitions;
 
 use crate::config::{Args, EXECUTE_UNVERIFIED_MODULE, RUN_ON_VM};
+
 use bytecode_generator::BytecodeGenerator;
 use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
 use getrandom::getrandom;
@@ -38,10 +39,10 @@ use move_vm_runtime::{
     dev_utils::{storage::InMemoryStorage, vm_test_adapter::VMTestAdapter},
     shared::gas::UnmeteredGasMeter,
 };
-use once_cell::sync::Lazy;
 use rand::{Rng, SeedableRng, rngs::StdRng};
-use std::{fs, io::Write, panic, thread};
 use tracing::{debug, error, info};
+
+use std::{fs, io::Write, panic, sync::LazyLock, thread};
 
 /// This function calls the Bytecode verifier to test it
 fn run_verifier(module: CompiledModule) -> Result<CompiledModule, String> {
@@ -51,7 +52,7 @@ fn run_verifier(module: CompiledModule) -> Result<CompiledModule, String> {
     }
 }
 
-static STORAGE_WITH_MOVE_STDLIB: Lazy<InMemoryStorage> = Lazy::new(|| {
+static STORAGE_WITH_MOVE_STDLIB: LazyLock<InMemoryStorage> = LazyLock::new(|| {
     let mut storage = InMemoryStorage::new();
     let (_, compiled_units) = Compiler::from_files(
         None,

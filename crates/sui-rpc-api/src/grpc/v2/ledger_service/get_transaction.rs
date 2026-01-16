@@ -4,6 +4,7 @@
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
+use crate::TransactionNotFoundError;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
@@ -55,6 +56,24 @@ pub fn get_transaction(
         FieldMaskTree::from(read_mask)
     };
 
+    let Some(transaction_checkpoint) = service
+        .reader
+        .inner()
+        .get_transaction_checkpoint(&transaction_digest.into())
+    else {
+        return Err(TransactionNotFoundError(transaction_digest).into());
+    };
+
+    let latest_checkpoint = service
+        .reader
+        .inner()
+        .get_latest_checkpoint()?
+        .sequence_number;
+
+    if transaction_checkpoint > latest_checkpoint {
+        return Err(TransactionNotFoundError(transaction_digest).into());
+    }
+
     let transaction_read = service.reader.get_transaction_read(transaction_digest)?;
 
     let transaction = transaction_to_response(service, transaction_read, &read_mask);
@@ -81,22 +100,41 @@ pub fn batch_get_transactions(
         FieldMaskTree::from(read_mask)
     };
 
+    let latest_checkpoint = service
+        .reader
+        .inner()
+        .get_latest_checkpoint()?
+        .sequence_number;
+
     let transactions = digests
         .into_iter()
         .enumerate()
-        .map(|(idx, digest)| {
-            let digest = digest.parse().map_err(|e| {
+        .map(|(idx, digest)| -> Result<ExecutedTransaction, RpcError> {
+            let digest: Digest = digest.parse().map_err(|e| {
                 FieldViolation::new_at("digests", idx)
                     .with_description(format!("invalid digest: {e}"))
                     .with_reason(ErrorReason::FieldInvalid)
             })?;
 
-            service
+            let Some(transaction_checkpoint) = service
                 .reader
-                .get_transaction_read(digest)
-                .map(|transaction_read| {
-                    transaction_to_response(service, transaction_read, &read_mask)
-                })
+                .inner()
+                .get_transaction_checkpoint(&digest.into())
+            else {
+                return Err(TransactionNotFoundError(digest).into());
+            };
+
+            if transaction_checkpoint > latest_checkpoint {
+                return Err(TransactionNotFoundError(digest).into());
+            }
+
+            let transaction_read = service.reader.get_transaction_read(digest)?;
+
+            Ok(transaction_to_response(
+                service,
+                transaction_read,
+                &read_mask,
+            ))
         })
         .map(|result| match result {
             Ok(transaction) => GetTransactionResult::new_transaction(transaction),

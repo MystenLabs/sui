@@ -27,6 +27,7 @@ const guides = [
         items: [
           'guides/developer/getting-started/install-source',
           'guides/developer/getting-started/install-binaries',
+          'guides/developer/getting-started/local-network',
         ],
       },
       'guides/developer/getting-started/configure-sui-client',
@@ -35,38 +36,6 @@ const guides = [
       'guides/developer/getting-started/hello-world',
       'guides/developer/getting-started/app-frontends',
       'guides/developer/getting-started/next-steps',
-    ],
-  },
-  {
-    type: 'category',
-    label: 'Sui Essentials',
-    link: {
-      type: 'doc',
-      id: 'guides/developer/sui-101',
-    },
-    items: [
-      'guides/developer/sui-101/using-events',
-      'guides/developer/sui-101/local-network',
-      'guides/developer/sui-101/connect',
-      'guides/developer/sui-101/move-package-management',
-      'guides/developer/sui-101/access-time',
-      'guides/developer/sui-101/sign-and-send-txn',
-      'guides/developer/sui-101/sponsor-txn',
-      'guides/developer/sui-101/common-errors',
-
-      {
-        type: 'category',
-        label: 'Working with PTBs',
-        link: {
-          type: 'doc',
-          id: 'guides/developer/sui-101/working-with-ptbs',
-        },
-        items: [
-          'guides/developer/sui-101/building-ptb',
-          'guides/developer/sui-101/coin-mgt',
-          'guides/developer/sui-101/simulating-refs',
-        ],
-      },
     ],
   },
   {
@@ -102,7 +71,74 @@ const guides = [
           'guides/developer/objects/transfers/transfer-to-object',
         ],
       },
+      'guides/developer/objects/derived-objects',
+      {
+				type: 'category',
+				label: 'Dynamic Fields',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/objects/dynamic-fields',
+				},
+				items: ['guides/developer/objects/tables-bags'],
+			},
       'guides/developer/objects/versioning',
+      'guides/developer/objects/local-fee-markets',
+      'guides/developer/objects/simulating-refs',
+
+    ],
+    },
+    {
+        type: 'category',
+        label: 'Packages',
+  				items: [
+          'guides/developer/packages/move-package-management',
+					'guides/developer/packages/upgrade',
+					'guides/developer/packages/custom-policies',
+					'guides/developer/packages/automated-address-management',
+				],
+			},
+  {
+    type: 'category',
+    label: 'Transactions',
+    items: [
+          'guides/developer/transactions/sign-and-send-txn',
+          'guides/developer/transactions/building-ptb',
+          'guides/developer/transactions/sponsor-txn',
+        ],
+  },
+  {
+    type: 'category',
+    label: 'Accessing Data',
+    items: [
+      {
+        type: 'category',
+        label: 'gRPC',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/accessing-data/grpc-overview',
+        },
+        items: [
+          'guides/developer/accessing-data/query-with-graphql',
+        ],
+      },
+      {
+        type: 'category',
+        label: 'Custom Indexer Framework',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/accessing-data/custom-indexing-framework',
+        },
+        items: [
+          'guides/developer/accessing-data/pipeline-architecture',
+          'guides/developer/accessing-data/custom-indexer/indexer-data-integration',
+          'guides/developer/accessing-data/custom-indexer/build',
+          'guides/developer/accessing-data/custom-indexer/indexer-runtime-perf',
+          'guides/developer/accessing-data/custom-indexer/indexer-walrus',
+
+        ],
+      },
+      'guides/developer/accessing-data/archival-store',
+      'guides/developer/accessing-data/using-events',
     ],
   },
   {
@@ -137,6 +173,14 @@ const guides = [
   },
   {
     type: 'category',
+    label: 'On-Chain Primitives',
+    items: [
+      'guides/developer/on-chain-primitives/access-time',
+      'guides/developer/on-chain-primitives/randomness-onchain',
+    ],
+  },
+  {
+    type: 'category',
     label: 'Cryptography',
     link: {
       type: 'doc',
@@ -162,32 +206,16 @@ const guides = [
       },
     ],
   },
-  {
+    {
     type: 'category',
-    label: 'Advanced',
+    label: 'Nautilus',
     link: {
       type: 'doc',
-      id: 'guides/developer/advanced',
+      id: 'guides/developer/nautilus/index',
     },
     items: [
-      'guides/developer/advanced/move-2024-migration',
-      {
-        type: 'category',
-        label: 'Custom Indexer',
-        link: {
-          type: 'doc',
-          id: 'guides/developer/advanced/custom-indexer',
-        },
-        items: [
-          'guides/developer/advanced/custom-indexer/build',
-          'guides/developer/advanced/custom-indexer/indexer-walrus',
-          'guides/developer/advanced/custom-indexer/indexer-data-integration',
-          'guides/developer/advanced/custom-indexer/indexer-runtime-perf',
-        ],
-      },
-      'guides/developer/advanced/randomness-onchain',
-      'guides/developer/advanced/graphql-rpc',
-      'guides/developer/advanced/local-fee-markets',
+      'guides/developer/nautilus/using-nautilus',
+      'guides/developer/nautilus/customize-nautilus',
     ],
   },
   {
@@ -199,6 +227,7 @@ const guides = [
     },
     items: [
       'guides/developer/app-examples/e2e-counter',
+      'guides/developer/app-examples/client-tssdk',
       'guides/developer/app-examples/trustless-swap',
       'guides/developer/app-examples/coin-flip',
       'guides/developer/app-examples/reviews-rating',
@@ -219,9 +248,8 @@ const guides = [
       },
     ],
   },
-  'guides/developer/starter-templates',
-  'guides/developer/zklogin-onboarding',
   'guides/developer/dev-cheat-sheet',
+  'guides/developer/common-errors',
   {
     type: 'category',
     label: 'Operator Guides',

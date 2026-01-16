@@ -33,6 +33,7 @@ module P::M {
 
 fragment F on MoveFunction {
   name
+  fullyQualifiedName
   isEntry
   parameters { repr signature }
   return { repr signature }
@@ -66,5 +67,6 @@ fragment F on MoveFunctionConnection {
   }
   nodes {
     name
+    fullyQualifiedName
   }
 }

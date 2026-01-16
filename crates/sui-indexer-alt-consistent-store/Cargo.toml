@@ -23,6 +23,7 @@ http.workspace = true
 integer-encoding.workspace = true
 object_store.workspace = true
 ouroboros.workspace = true
+pin-project.workspace = true
 prometheus.workspace = true
 reqwest.workspace = true
 rocksdb = { version = "0.22.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }

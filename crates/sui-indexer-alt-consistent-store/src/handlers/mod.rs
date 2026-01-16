@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashSet, btree_map::Entry};
+use std::collections::BTreeMap;
+use std::collections::HashSet;
+use std::collections::btree_map::Entry;
 
 use anyhow::Context;
-use sui_indexer_alt_framework::types::{
-    base_types::ObjectID, digests::ObjectDigest, effects::TransactionEffectsAPI,
-    full_checkpoint_content::Checkpoint, object::Object,
-};
+use sui_indexer_alt_framework::types::base_types::ObjectID;
+use sui_indexer_alt_framework::types::digests::ObjectDigest;
+use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_framework::types::object::Object;
 
+pub(crate) mod address_balances;
 pub(crate) mod balances;
 pub(crate) mod object_by_owner;
 pub(crate) mod object_by_type;

@@ -6,8 +6,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
-
+use serde::Deserialize;
+use serde::Serialize;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 
@@ -19,10 +19,6 @@ fn default_client_metric_host() -> String {
 
 fn default_client_metric_port() -> u16 {
     8081
-}
-
-fn default_remote_store_url() -> String {
-    "https://checkpoints.mainnet.sui.io".to_string()
 }
 
 fn default_file_format() -> FileFormat {
@@ -109,8 +105,7 @@ pub struct IndexerConfig {
     /// Output object store configuration
     pub output_store: OutputStoreConfig,
     /// Remote store URL.
-    #[serde(default = "default_remote_store_url")]
-    pub remote_store_url: String,
+    pub remote_store_url: Option<String>,
     /// Optional streaming URL for real-time indexing
     pub streaming_url: Option<String>,
     /// Optional RPC API URL for request/reply from full node

@@ -53,7 +53,7 @@ pub enum BridgeError {
     MismatchedAction,
     // Action is not a governance action
     ActionIsNotGovernanceAction(Box<BridgeAction>),
-    // Client requested a non-approved governace action
+    // Client requested a non-approved governance action
     GovernanceActionIsNotApproved,
     // Authority has invalid url
     AuthoirtyUrlInvalid,

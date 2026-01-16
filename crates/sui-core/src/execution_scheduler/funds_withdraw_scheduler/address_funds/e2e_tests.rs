@@ -69,7 +69,7 @@ async fn create_test_env(init_balances: BTreeMap<TypeTag, u64>) -> TestEnv {
         .await;
     let scheduler = Arc::new(ExecutionScheduler::new(
         state.get_object_cache_reader().clone(),
-        state.get_child_object_resolver().clone(),
+        state.get_account_funds_read().clone(),
         state.get_transaction_cache_reader().clone(),
         tx_ready_certificates,
         &state.epoch_store_for_testing(),
@@ -92,8 +92,7 @@ impl TestEnv {
             .into_iter()
             .enumerate()
             .map(|(idx, amount)| {
-                let withdraw =
-                    FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag().into());
+                let withdraw = FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag());
                 let mut tx_builder = TestTransactionBuilder::new(
                     self.sender,
                     self.gas_object.compute_object_reference(),

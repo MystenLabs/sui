@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use move_core_types::account_address::AccountAddress;
-use move_package_alt::flavor::Vanilla;
+use move_package_alt::Vanilla;
 use move_vm_runtime::natives::move_stdlib::{GasParameters, stdlib_native_function_table};
 use tracing_subscriber::EnvFilter;
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    accumulators::funds_read::AccountFundsRead,
     authority::{
         AuthorityMetrics, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
         shared_object_version_manager::Schedulable,
@@ -33,7 +34,7 @@ use sui_types::{
     error::SuiResult,
     executable_transaction::VerifiedExecutableTransaction,
     execution_params::FundsWithdrawStatus,
-    storage::{ChildObjectResolver, InputKey},
+    storage::InputKey,
     transaction::{
         SenderSignedData, SharedInputObject, SharedObjectMutability, TransactionData,
         TransactionDataAPI, TransactionKey,
@@ -131,7 +132,7 @@ impl Drop for PendingGuard<'_> {
 impl ExecutionScheduler {
     pub fn new(
         object_cache_read: Arc<dyn ObjectCacheRead>,
-        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+        account_funds_read: Arc<dyn AccountFundsRead>,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -142,7 +143,7 @@ impl ExecutionScheduler {
             Self::initialize_funds_withdraw_scheduler(
                 epoch_store,
                 &object_cache_read,
-                child_object_resolver,
+                account_funds_read,
             );
         Self {
             object_cache_read,
@@ -160,7 +161,7 @@ impl ExecutionScheduler {
     fn initialize_funds_withdraw_scheduler(
         epoch_store: &Arc<AuthorityPerEpochStore>,
         object_cache_read: &Arc<dyn ObjectCacheRead>,
-        child_object_resolver: Arc<dyn ChildObjectResolver + Send + Sync>,
+        account_funds_read: Arc<dyn AccountFundsRead>,
     ) -> (
         Option<FundsWithdrawScheduler>,
         Option<Box<dyn ObjectFundsWithdrawSchedulerTrait>>,
@@ -174,15 +175,13 @@ impl ExecutionScheduler {
             .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
             .expect("Accumulator root object must be present if funds accumulator is enabled")
             .version();
-        let address_funds_withdraw_scheduler = FundsWithdrawScheduler::new(
-            Arc::new(child_object_resolver.clone()),
-            starting_accumulator_version,
-        );
+        let address_funds_withdraw_scheduler =
+            FundsWithdrawScheduler::new(account_funds_read.clone(), starting_accumulator_version);
         let object_funds_withdraw_scheduler =
             if epoch_store.protocol_config().enable_object_funds_withdraw() {
                 let scheduler: Box<dyn ObjectFundsWithdrawSchedulerTrait> =
                     Box::new(NaiveObjectFundsWithdrawScheduler::new(
-                        Arc::new(child_object_resolver),
+                        account_funds_read,
                         starting_accumulator_version,
                     ));
                 Some(scheduler)
@@ -654,13 +653,13 @@ impl ExecutionScheduler {
     pub fn reconfigure(
         &self,
         new_epoch_store: &Arc<AuthorityPerEpochStore>,
-        child_object_resolver: &Arc<dyn ChildObjectResolver + Send + Sync>,
+        account_funds_read: &Arc<dyn AccountFundsRead>,
     ) {
         let (address_funds_withdraw_scheduler, object_funds_withdraw_scheduler) =
             Self::initialize_funds_withdraw_scheduler(
                 new_epoch_store,
                 &self.object_cache_read,
-                child_object_resolver.clone(),
+                account_funds_read.clone(),
             );
         let mut guard = self.address_funds_withdraw_scheduler.lock();
         if let Some(old_scheduler) = guard.as_ref() {
@@ -697,6 +696,7 @@ impl ExecutionScheduler {
                 .get()) as usize
     }
 
+    #[instrument(level = "debug", skip_all, fields(tx_digest = ?certificate.digest()))]
     pub fn should_commit_object_funds_withdraws(
         &self,
         certificate: &VerifiedExecutableTransaction,
@@ -712,6 +712,7 @@ impl ExecutionScheduler {
         if effects.status().is_err() {
             // This transaction already failed. It does not matter any more
             // whether it has sufficient object funds or not.
+            debug!("Transaction failed, committing effects");
             return true;
         }
         let address_funds_reservations: BTreeSet<_> = certificate
@@ -741,6 +742,7 @@ impl ExecutionScheduler {
             .collect();
         // If there are no object withdraws, we can skip checking object funds.
         if object_withdraws.is_empty() {
+            debug!("No object withdraws, committing effects");
             return true;
         }
         let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version else {
@@ -761,7 +763,10 @@ impl ExecutionScheduler {
             .schedule(object_withdraws, accumulator_version)
         {
             // Sufficient funds, we can go ahead and commit the execution results as it is.
-            ObjectFundsWithdrawStatus::SufficientFunds => true,
+            ObjectFundsWithdrawStatus::SufficientFunds => {
+                debug!("Object funds sufficient, committing effects");
+                true
+            }
             // Currently insufficient funds. We need to wait until it reach a deterministic state
             // before we can determine if it is really insufficient (to include potential deposits)
             // At that time we will have to re-enqueue the transaction for execution again.
@@ -777,12 +782,14 @@ impl ExecutionScheduler {
                     // while this is still waiting.
                     let _ = epoch_store
                         .within_alive_epoch(async move {
+                            let tx_digest = cert.digest();
                             match receiver.await {
                                 Ok(FundsWithdrawStatus::MaybeSufficient) => {
                                     // The withdraw state is now deterministically known,
                                     // so we can enqueue the transaction again and it will check again
                                     // whether it is sufficient or not in the next execution.
                                     // TODO: We should be able to optimize this by avoiding re-execution.
+                                    debug!(?tx_digest, "Object funds possibly sufficient");
                                 }
                                 Ok(FundsWithdrawStatus::Insufficient) => {
                                     // Re-enqueue with insufficient funds status, so it will be executed
@@ -791,6 +798,7 @@ impl ExecutionScheduler {
                                     // so that we could charge properly in the next execution when we
                                     // go through early error. Otherwise we would undercharge.
                                     execution_env = execution_env.with_insufficient_funds();
+                                    debug!(?tx_digest, "Object funds insufficient");
                                 }
                                 Err(e) => {
                                     error!("Error receiving funds withdraw status: {:?}", e);
@@ -856,7 +864,7 @@ mod test {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = ExecutionScheduler::new(
             state.get_object_cache_reader().clone(),
-            state.get_child_object_resolver().clone(),
+            state.get_account_funds_read().clone(),
             state.get_transaction_cache_reader().clone(),
             tx_ready_certificates,
             &state.epoch_store_for_testing(),

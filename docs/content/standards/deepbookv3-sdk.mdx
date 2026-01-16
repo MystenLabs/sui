@@ -364,6 +364,66 @@ import { DeepBookMarketMaker } from './deepbookMarketMaker.js';
 })();
 ```
 
+## Referral functions
+
+The SDK provides functions for managing pool-specific referrals. Referrals allow users to earn a portion of trading fees from traders they refer.
+
+### Pool referral functions
+
+These functions are available on the `deepbook` contract for managing referrals at the pool level.
+
+:::info Multiplier constraints
+
+The referral multiplier must be a multiple of 0.1 (e.g., 0.1, 0.2, 0.3, ...) and cannot exceed 2.0.
+
+:::
+
+```tsx
+// Mint a new referral for a specific pool
+// multiplier determines the portion of fees allocated to the referrer
+// Valid values: 0.1, 0.2, 0.3, ... up to 2.0
+dbClient.deepbook.mintReferral('SUI_DBUSDC', 0.1)(tx);
+
+// Update the multiplier for an existing referral
+dbClient.deepbook.updatePoolReferralMultiplier('SUI_DBUSDC', referralId, 0.2)(tx);
+
+// Claim accumulated referral rewards (returns base, quote, and DEEP coins)
+const { baseRewards, quoteRewards, deepRewards } = tx.add(
+	dbClient.deepbook.claimPoolReferralRewards('SUI_DBUSDC', referralId)
+);
+
+// Get the current balances for a referral
+dbClient.deepbook.getPoolReferralBalances('SUI_DBUSDC', referralId)(tx);
+
+// Get the multiplier for a referral
+dbClient.deepbook.poolReferralMultiplier('SUI_DBUSDC', referralId)(tx);
+```
+
+### Balance manager referral functions
+
+These functions are available on the `balanceManager` contract for associating referrals with balance managers.
+
+```tsx
+// Generate a trade cap first (needed for setting referrals)
+const tradeCap = tx.add(dbClient.balanceManager.mintTradeCap('MANAGER_1'));
+
+// Set a referral for a balance manager (pool-specific)
+// Each balance manager can have different referrals for different pools
+dbClient.balanceManager.setBalanceManagerReferral('MANAGER_1', referralId, tradeCap)(tx);
+
+// Unset the referral for a specific pool
+dbClient.balanceManager.unsetBalanceManagerReferral('MANAGER_1', 'SUI_DBUSDC', tradeCap)(tx);
+
+// Get the referral ID associated with a balance manager for a specific pool
+dbClient.balanceManager.getBalanceManagerReferralId('MANAGER_1', 'SUI_DBUSDC')(tx);
+
+// Get the owner of a referral
+dbClient.balanceManager.balanceManagerReferralOwner(referralId)(tx);
+
+// Get the pool ID associated with a referral
+dbClient.balanceManager.balanceManagerReferralPoolId(referralId)(tx);
+```
+
 ## Related links
 
 <RelatedLink href="https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook-v3" label="DeepBookV3 Indexer repository" desc="The DeepBookV3 SDK repository on GitHub." />

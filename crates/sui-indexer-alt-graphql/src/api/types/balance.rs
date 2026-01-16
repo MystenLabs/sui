@@ -1,21 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{
-    Context, SimpleObject,
-    connection::{Connection, CursorType, Edge},
-};
-use sui_indexer_alt_reader::consistent_reader::{self, ConsistentReader};
-use sui_types::{TypeTag, base_types::SuiAddress};
+use async_graphql::Context;
+use async_graphql::SimpleObject;
+use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
+use sui_indexer_alt_reader::consistent_reader::{self};
+use sui_types::TypeTag;
+use sui_types::base_types::SuiAddress;
 
-use crate::{
-    api::scalars::{big_int::BigInt, cursor},
-    error::{RpcError, bad_user_input, feature_unavailable},
-    pagination::Page,
-    scope::Scope,
-};
-
-use super::move_type::MoveType;
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::cursor;
+use crate::api::types::move_type::MoveType;
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::feature_unavailable;
+use crate::extensions::query_limits;
+use crate::pagination::Page;
+use crate::scope::Scope;
 
 /// The total balance for a particular coin type.
 #[derive(SimpleObject)]
@@ -60,10 +64,12 @@ impl Balance {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
-        let Some(checkpoint) = scope.checkpoint_viewed_at() else {
+
+        let Some(checkpoint) = scope.root_checkpoint() else {
             return Ok(None);
         };
 
+        query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
         let (coin_type, total_balance) = consistent_reader
             .get_balance(
@@ -91,10 +97,12 @@ impl Balance {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
-        let Some(checkpoint) = scope.checkpoint_viewed_at() else {
+
+        let Some(checkpoint) = scope.root_checkpoint() else {
             return Ok(None);
         };
 
+        query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
         let balances = consistent_reader
             .batch_get_balances(
@@ -130,10 +138,12 @@ impl Balance {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
-        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+
+        let Some(root_checkpoint) = scope.root_checkpoint() else {
             return Ok(Connection::new(false, false));
         };
 
+        query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
 
         // Figure out which checkpoint to pin results to, based on the pagination cursors and
@@ -144,11 +154,11 @@ impl Balance {
             (Some(a), Some(b)) if a.0 != b.0 => {
                 return Err(bad_user_input(Error::CursorInconsistency(a.0, b.0)));
             }
-            (None, None) => checkpoint_viewed_at,
+            (None, None) => root_checkpoint,
             (Some(c), _) | (_, Some(c)) => c.0,
         };
 
-        let Some(scope) = scope.with_checkpoint_viewed_at(checkpoint) else {
+        let Some(scope) = scope.with_checkpoint_viewed_at(ctx, checkpoint) else {
             return Err(bad_user_input(Error::Future(checkpoint)));
         };
 

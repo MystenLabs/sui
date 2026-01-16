@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::schema::{
-    Environment, EnvironmentID, EnvironmentName, LockfileDependencyInfo, PackageName,
+    Environment, EnvironmentID, EnvironmentName, LockfileDependencyInfo, OriginalID, PackageName,
     ParsedManifest, ReplacementDependency,
 };
 
@@ -19,10 +19,6 @@ use indexmap::IndexMap;
 
 pub const DEFAULT_ENV_NAME: &str = "_test_env";
 pub const DEFAULT_ENV_ID: &str = "_test_env_id";
-
-pub fn default_environment() -> Environment {
-    Environment::new(DEFAULT_ENV_NAME.to_string(), DEFAULT_ENV_ID.to_string())
-}
 
 /// The [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
 /// flavor-specific resolvers and stores no additional metadata in the lockfile.
@@ -69,5 +65,15 @@ impl MoveFlavor for Vanilla {
 
     fn validate_manifest(_: &ParsedManifest) -> Result<(), String> {
         Ok(())
+    }
+
+    fn is_system_address(address: &crate::schema::OriginalID) -> bool {
+        address == &OriginalID::from(0xBEEF)
+    }
+}
+
+impl Vanilla {
+    pub fn default_environment() -> Environment {
+        Environment::new(DEFAULT_ENV_NAME.to_string(), DEFAULT_ENV_ID.to_string())
     }
 }

@@ -1821,6 +1821,7 @@ async fn test_object_lock_conflict() {
     // errors which only happen with preconsensus locking.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
         config
     });
 

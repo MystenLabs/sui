@@ -1531,6 +1531,12 @@ root_id
 root_id_mut
 	public(package) fun
 	0x2::accumulator
+accumulator_u128_exists
+	public(package) fun
+	0x2::accumulator
+accumulator_u128_read
+	public(package) fun
+	0x2::accumulator
 create_u128
 	public(package) fun
 	0x2::accumulator
@@ -1556,6 +1562,9 @@ root_add_accumulator
 	public(package) fun
 	0x2::accumulator
 root_borrow_accumulator_mut
+	public(package) fun
+	0x2::accumulator
+root_borrow_accumulator
 	public(package) fun
 	0x2::accumulator
 root_remove_accumulator
@@ -1988,6 +1997,9 @@ redeem_funds
 	public fun
 	0x2::balance
 withdraw_funds_from_object
+	public fun
+	0x2::balance
+settled_funds_value
 	public fun
 	0x2::balance
 create_supply_internal
@@ -5335,6 +5347,18 @@ try_as_u64
 to_string
 	public fun
 	0x1::u128
+checked_add
+	public fun
+	0x1::u128
+checked_sub
+	public fun
+	0x1::u128
+checked_mul
+	public fun
+	0x1::u128
+checked_div
+	public fun
+	0x1::u128
 bitwise_not
 	public fun
 	0x1::u16
@@ -5360,6 +5384,18 @@ try_as_u8
 	public fun
 	0x1::u16
 to_string
+	public fun
+	0x1::u16
+checked_add
+	public fun
+	0x1::u16
+checked_sub
+	public fun
+	0x1::u16
+checked_mul
+	public fun
+	0x1::u16
+checked_div
 	public fun
 	0x1::u16
 bitwise_not
@@ -5398,6 +5434,18 @@ try_as_u128
 to_string
 	public fun
 	0x1::u256
+checked_add
+	public fun
+	0x1::u256
+checked_sub
+	public fun
+	0x1::u256
+checked_mul
+	public fun
+	0x1::u256
+checked_div
+	public fun
+	0x1::u256
 bitwise_not
 	public fun
 	0x1::u32
@@ -5426,6 +5474,18 @@ try_as_u16
 	public fun
 	0x1::u32
 to_string
+	public fun
+	0x1::u32
+checked_add
+	public fun
+	0x1::u32
+checked_sub
+	public fun
+	0x1::u32
+checked_mul
+	public fun
+	0x1::u32
+checked_div
 	public fun
 	0x1::u32
 bitwise_not
@@ -5461,6 +5521,18 @@ try_as_u32
 to_string
 	public fun
 	0x1::u64
+checked_add
+	public fun
+	0x1::u64
+checked_sub
+	public fun
+	0x1::u64
+checked_mul
+	public fun
+	0x1::u64
+checked_div
+	public fun
+	0x1::u64
 bitwise_not
 	public fun
 	0x1::u8
@@ -5483,5 +5555,17 @@ sqrt
 	public fun
 	0x1::u8
 to_string
+	public fun
+	0x1::u8
+checked_add
+	public fun
+	0x1::u8
+checked_sub
+	public fun
+	0x1::u8
+checked_mul
+	public fun
+	0x1::u8
+checked_div
 	public fun
 	0x1::u8

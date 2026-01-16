@@ -1130,14 +1130,6 @@ impl KeyToolCommand {
                     "https://example.com/callback",
                     &jwt_randomness,
                 )?;
-                let url_13 = get_oidc_url(
-                    OIDCProvider::AwsTenant(("us-east-1".to_string(), "ambrus".to_string())),
-                    &eph_pk_bytes,
-                    max_epoch,
-                    "t1eouauaitlirg57nove8kvj8",
-                    "https://api.ambrus.studio/callback",
-                    &jwt_randomness,
-                )?;
                 let url_14 = get_oidc_url(
                     OIDCProvider::Arden,
                     &eph_pk_bytes,
@@ -1192,7 +1184,6 @@ impl KeyToolCommand {
                 println!("Visit URL (Microsoft): {url_10}");
                 println!("Visit URL (KarrierOne): {url_11}");
                 println!("Visit URL (Credenza3): {url_12}");
-                println!("Visit URL (AWS - Ambrus): {url_13}");
                 println!("Visit URL (Arden): {url_14}");
                 println!("Visit URL (AWS - Trace): {url_15}");
                 println!("Visit URL (EveFrontier): {url_16}");

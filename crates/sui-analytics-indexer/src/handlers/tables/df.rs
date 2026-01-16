@@ -4,19 +4,22 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use anyhow::Context as _;
 use anyhow::Result;
 use async_trait::async_trait;
-use fastcrypto::encoding::{Base64, Encoding};
-use sui_indexer::errors::IndexerError;
-use sui_indexer::types::owner_to_owner_info;
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_json_rpc_types::SuiMoveValue;
 use sui_types::TypeTag;
-use sui_types::base_types::{EpochId, ObjectID};
+use sui_types::base_types::EpochId;
+use sui_types::base_types::ObjectID;
+use sui_types::dynamic_field::DynamicFieldName;
+use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::dynamic_field::visitor as DFV;
-use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::object::Object;
+use sui_types::object::Owner;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use tap::tap::TapFallible;
 use tracing::warn;
@@ -75,7 +78,13 @@ impl DynamicFieldProcessor {
             value: SuiMoveValue::from(name_value).to_json_value(),
         };
         let name_json = serde_json::to_string(&name)?;
-        let (_owner_type, owner_id) = owner_to_owner_info(&object.owner);
+        let owner_id = match &object.owner {
+            Owner::AddressOwner(address) => Some(*address),
+            Owner::ObjectOwner(address) => Some(*address),
+            Owner::Shared { .. } => None,
+            Owner::Immutable => None,
+            Owner::ConsensusAddressOwner { owner, .. } => Some(*owner),
+        };
         let Some(parent_id) = owner_id else {
             return Ok(None);
         };
@@ -96,12 +105,8 @@ impl DynamicFieldProcessor {
                     .to_canonical_string(/* with_prefix */ true),
             },
             DynamicFieldType::DynamicObject => {
-                let object = all_written_objects.get(&object_id).ok_or(
-                    IndexerError::UncategorizedError(anyhow::anyhow!(
-                        "Failed to find object_id {:?} when trying to create dynamic field info",
-                        object_id
-                    )),
-                )?;
+                let object = all_written_objects.get(&object_id)
+                    .with_context(|| format!("Failed to find object_id {object_id:?} when trying to create dynamic field info"))?;
                 let version = object.version().value();
                 let digest = object.digest().to_string();
                 let object_type = object.data.type_().unwrap().clone();

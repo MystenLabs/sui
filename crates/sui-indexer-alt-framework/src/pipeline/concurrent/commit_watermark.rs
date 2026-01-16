@@ -1,26 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, btree_map::Entry},
-    sync::Arc,
-};
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
+use std::sync::Arc;
 
 use sui_futures::service::Service;
-use tokio::{
-    sync::mpsc,
-    time::{MissedTickBehavior, interval},
-};
-use tracing::{debug, error, info, warn};
+use tokio::sync::mpsc;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use crate::{
-    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
-    pipeline::{CommitterConfig, WARN_PENDING_WATERMARKS, WatermarkPart, logging::WatermarkLogger},
-    store::{Connection, Store, pipeline_task},
-};
-
-use super::Handler;
+use crate::metrics::CheckpointLagMetricReporter;
+use crate::metrics::IndexerMetrics;
+use crate::pipeline::CommitterConfig;
+use crate::pipeline::WARN_PENDING_WATERMARKS;
+use crate::pipeline::WatermarkPart;
+use crate::pipeline::concurrent::Handler;
+use crate::pipeline::logging::WatermarkLogger;
+use crate::store::Connection;
+use crate::store::Store;
+use crate::store::pipeline_task;
 
 /// The watermark task is responsible for keeping track of a pipeline's out-of-order commits and
 /// updating its row in the `watermarks` table when a continuous run of checkpoints have landed
@@ -51,9 +53,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     // SAFETY: on indexer instantiation, we've checked that the pipeline name is valid.
     let pipeline_task = pipeline_task::<H::Store>(H::NAME, task.as_deref()).unwrap();
     Service::new().spawn_aborting(async move {
-        let mut poll = interval(config.watermark_interval());
-        poll.set_missed_tick_behavior(MissedTickBehavior::Delay);
-
         // To correctly update the watermark, the task tracks the watermark it last tried to write
         // and the watermark parts for any checkpoints that have been written since then
         // ("pre-committed"). After each batch is written, the task will try to progress the
@@ -76,9 +75,15 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             next_checkpoint, "Starting commit watermark task"
         );
 
+        let mut next_wake = tokio::time::Instant::now();
+
         loop {
             tokio::select! {
-                _ = poll.tick() => {}
+                () = tokio::time::sleep_until(next_wake) => {
+                    // Schedule next wake immediately, so the timer effectively runs in parallel
+                    // with the commit logic below.
+                    next_wake = config.watermark_interval_with_jitter();
+                }
                 Some(parts) = rx.recv() => {
                     for part in parts {
                         match precommitted.entry(part.checkpoint()) {
@@ -253,19 +258,21 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, time::Duration};
+    use std::sync::Arc;
+    use std::time::Duration;
 
     use async_trait::async_trait;
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::sync::mpsc;
 
-    use crate::{
-        FieldCount,
-        metrics::IndexerMetrics,
-        mocks::store::*,
-        pipeline::{CommitterConfig, Processor, WatermarkPart, concurrent::BatchStatus},
-        store::CommitterWatermark,
-    };
+    use crate::FieldCount;
+    use crate::metrics::IndexerMetrics;
+    use crate::mocks::store::*;
+    use crate::pipeline::CommitterConfig;
+    use crate::pipeline::Processor;
+    use crate::pipeline::WatermarkPart;
+    use crate::pipeline::concurrent::BatchStatus;
+    use crate::store::CommitterWatermark;
 
     use super::*;
 

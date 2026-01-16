@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_default_config::DefaultConfig;
-use sui_indexer_alt_framework::{self as framework, pipeline::CommitterConfig};
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::{self as framework};
 
-use crate::{DbConfig, rpc::pagination::PaginationConfig};
+use crate::DbConfig;
+use crate::rpc::pagination::PaginationConfig;
 
 #[DefaultConfig]
 #[derive(Default)]
@@ -64,6 +66,7 @@ pub struct PipelineLayer {
     pub balances: Option<CommitterLayer>,
     pub object_by_owner: Option<CommitterLayer>,
     pub object_by_type: Option<CommitterLayer>,
+    pub address_balances: Option<CommitterLayer>,
 }
 
 #[DefaultConfig]
@@ -120,6 +123,7 @@ impl PipelineLayer {
             balances: Some(CommitterLayer::default()),
             object_by_owner: Some(CommitterLayer::default()),
             object_by_type: Some(CommitterLayer::default()),
+            address_balances: Some(CommitterLayer::default()),
         }
     }
 }
@@ -132,6 +136,7 @@ impl CommitterLayer {
             watermark_interval_ms: self
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
+            ..Default::default()
         }
     }
 }

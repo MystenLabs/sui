@@ -8,7 +8,8 @@ The `Pool` shared object represents a market, such as a SUI/USDC market. That `P
 
 ## API
 
-### Create a `Pool`
+<details>
+<summary>Create a `Pool`</summary>
 
 The `create_permissionless_pool()` function creates a `Pool`
 
@@ -30,7 +31,10 @@ Pools can only be created if the asset pair has not already been created before.
 
 :::
 
-### Add DEEP price point
+</details>
+
+<details>
+<summary>Add DEEP price point</summary>
 
 The `add_deep_price_point()` function allows for the calculation of DEEP price and correct collection of fees in DEEP.
 
@@ -45,12 +49,17 @@ For a pool with `USDC` as an asset, use the `DEEP/USDC` pool at `0xf948981b80605
 
 For a pool with `SUI` as an asset, use the `DEEP/SUI` pool at `0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22` as the reference pool.
 
-### Update allowed versions
+</details>
+
+<details>
+<summary>Update allowed versions</summary>
 
 The `update_allowed_versions()` function takes a pool and the registry, and updates the allowed contract versions within the pool.
 This is very important after contract upgrades to ensure the newest contract can be used on the pool.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="update_allowed_versions" noComments />
+
+</details>
 
 ## Related links
 

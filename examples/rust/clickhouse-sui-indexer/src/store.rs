@@ -8,7 +8,7 @@ use clickhouse::{Client, Row};
 use scoped_futures::ScopedBoxFuture;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use sui_indexer_alt_framework_store_traits::{
+use sui_indexer_alt_framework::store::{
     CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
 };
 use url::Url;
@@ -25,7 +25,7 @@ pub struct ClickHouseConnection {
 /// Row structure for watermark table operations
 #[derive(Row, Serialize, Deserialize, Debug, Default)]
 struct WatermarkRow {
-    pipeline: String,
+    pipeline_task: String,
     epoch_hi_inclusive: u64,
     checkpoint_hi_inclusive: u64,
     tx_hi: u64,
@@ -117,17 +117,45 @@ impl TransactionalStore for ClickHouseStore {
 
 #[async_trait]
 impl Connection for ClickHouseConnection {
-    async fn committer_watermark(
+    async fn init_watermark(
         &mut self,
-        pipeline: &'static str,
-    ) -> Result<Option<CommitterWatermark>> {
+        pipeline_task: &str,
+        default_next_checkpoint: u64,
+    ) -> anyhow::Result<Option<u64>> {
+        let existing = self.committer_watermark(pipeline_task).await?;
+
+        let Some(checkpoint_hi_inclusive) = default_next_checkpoint.checked_sub(1) else {
+            return Ok(existing.map(|w| w.checkpoint_hi_inclusive));
+        };
+
+        if let Some(existing) = existing {
+            return Ok(Some(existing.checkpoint_hi_inclusive));
+        }
+
+        let mut inserter = self.client.inserter("watermarks")?;
+        inserter.write(&WatermarkRow {
+            pipeline_task: pipeline_task.to_string(),
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive,
+            tx_hi: 0,
+            timestamp_ms_hi_inclusive: 0,
+            reader_lo: default_next_checkpoint,
+            pruner_hi: default_next_checkpoint,
+            pruner_timestamp: 0,
+        })?;
+
+        inserter.end().await?;
+        Ok(Some(checkpoint_hi_inclusive))
+    }
+
+    async fn committer_watermark(&mut self, pipeline: &str) -> Result<Option<CommitterWatermark>> {
         let mut cursor = self
             .client
             .query(
-                "SELECT epoch_hi_inclusive, checkpoint_hi_inclusive, tx_hi, timestamp_ms_hi_inclusive 
-                 FROM watermarks 
-                 WHERE pipeline = ? 
-                 ORDER BY pruner_timestamp DESC 
+                "SELECT epoch_hi_inclusive, checkpoint_hi_inclusive, tx_hi, timestamp_ms_hi_inclusive
+                 FROM watermarks
+                 WHERE pipeline = ?
+                 ORDER BY pruner_timestamp DESC
                  LIMIT 1"
             )
             .bind(pipeline)
@@ -151,10 +179,10 @@ impl Connection for ClickHouseConnection {
         let mut cursor = self
             .client
             .query(
-                "SELECT checkpoint_hi_inclusive, reader_lo 
-                 FROM watermarks 
-                 WHERE pipeline = ? 
-                 ORDER BY pruner_timestamp DESC 
+                "SELECT checkpoint_hi_inclusive, reader_lo
+                 FROM watermarks
+                 WHERE pipeline = ?
+                 ORDER BY pruner_timestamp DESC
                  LIMIT 1",
             )
             .bind(pipeline)
@@ -179,11 +207,11 @@ impl Connection for ClickHouseConnection {
         let mut cursor = self
             .client
             .query(
-                "SELECT reader_lo, pruner_hi, 
+                "SELECT reader_lo, pruner_hi,
                         toInt64(? + (pruner_timestamp - toUnixTimestamp64Milli(now64()))) as wait_for_ms
-                 FROM watermarks 
-                 WHERE pipeline = ? 
-                 ORDER BY pruner_timestamp DESC 
+                 FROM watermarks
+                 WHERE pipeline = ?
+                 ORDER BY pruner_timestamp DESC
                  LIMIT 1"
             )
             .bind(delay_ms)
@@ -202,7 +230,7 @@ impl Connection for ClickHouseConnection {
 
     async fn set_committer_watermark(
         &mut self,
-        pipeline: &'static str,
+        pipeline: &str,
         watermark: CommitterWatermark,
     ) -> Result<bool> {
         // Follow PostgreSQL pattern: check if row exists, then UPDATE or INSERT accordingly
@@ -221,8 +249,8 @@ impl Connection for ClickHouseConnection {
             if existing_checkpoint < watermark.checkpoint_hi_inclusive {
                 self.client
                     .query(
-                        "ALTER TABLE watermarks 
-                         UPDATE 
+                        "ALTER TABLE watermarks
+                         UPDATE
                              epoch_hi_inclusive = ?,
                              checkpoint_hi_inclusive = ?,
                              tx_hi = ?,
@@ -241,7 +269,7 @@ impl Connection for ClickHouseConnection {
             // No existing row - insert new one
             let mut inserter = self.client.inserter("watermarks")?;
             inserter.write(&WatermarkRow {
-                pipeline: pipeline.to_string(),
+                pipeline_task: pipeline.to_string(),
                 epoch_hi_inclusive: watermark.epoch_hi_inclusive,
                 checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
                 tx_hi: watermark.tx_hi,
@@ -264,7 +292,7 @@ impl Connection for ClickHouseConnection {
         // Follow PostgreSQL pattern: simple UPDATE with timestamp update and advancement check
         self.client
             .query(
-                "ALTER TABLE watermarks 
+                "ALTER TABLE watermarks
                  UPDATE reader_lo = ?, pruner_timestamp = toUnixTimestamp64Milli(now64())
                  WHERE pipeline = ? AND reader_lo < ?",
             )
@@ -285,8 +313,8 @@ impl Connection for ClickHouseConnection {
         // Follow PostgreSQL pattern: simple UPDATE statement
         self.client
             .query(
-                "ALTER TABLE watermarks 
-                 UPDATE pruner_hi = ? 
+                "ALTER TABLE watermarks
+                 UPDATE pruner_hi = ?
                  WHERE pipeline = ?",
             )
             .bind(pruner_hi)

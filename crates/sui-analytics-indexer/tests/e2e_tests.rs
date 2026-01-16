@@ -1,35 +1,50 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod mock_store;
+use std::fs;
+use std::sync::Arc;
+use std::sync::RwLock;
+use std::time::Duration;
 
 use mock_store::MockStore;
 use object_store::ObjectStore;
 use object_store::memory::InMemory;
 use parquet::file::reader::FileReader;
-use std::fs;
-use std::sync::Arc;
-use std::sync::RwLock;
-use std::time::Duration;
-use sui_analytics_indexer::RowSchema;
-use sui_analytics_indexer::config::{
-    BatchSizeConfig, FileFormat, IndexerConfig, OutputStoreConfig, PipelineConfig,
-};
-use sui_analytics_indexer::metrics::Metrics;
-use sui_analytics_indexer::pipeline::Pipeline;
-use sui_analytics_indexer::store::AnalyticsStore;
-use sui_analytics_indexer::tables::{
-    CheckpointRow, DynamicFieldRow, EventRow, MoveCallRow, MovePackageRow, ObjectRow,
-    PackageBCSRow, TransactionBCSRow, TransactionObjectRow, TransactionRow, WrappedObjectRow,
-};
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_framework_store_traits::{CommitterWatermark, Connection};
-use sui_storage::blob::{Blob, BlobEncoding};
-use sui_types::full_checkpoint_content::{Checkpoint, CheckpointData};
-use sui_types::test_checkpoint_data_builder::{AdvanceEpochConfig, TestCheckpointBuilder};
+use sui_indexer_alt_framework_store_traits::CommitterWatermark;
+use sui_indexer_alt_framework_store_traits::Connection;
+use sui_storage::blob::Blob;
+use sui_storage::blob::BlobEncoding;
+use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::test_checkpoint_data_builder::AdvanceEpochConfig;
+use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 use tempfile::TempDir;
+
+use sui_analytics_indexer::RowSchema;
+use sui_analytics_indexer::config::BatchSizeConfig;
+use sui_analytics_indexer::config::FileFormat;
+use sui_analytics_indexer::config::IndexerConfig;
+use sui_analytics_indexer::config::OutputStoreConfig;
+use sui_analytics_indexer::config::PipelineConfig;
+use sui_analytics_indexer::metrics::Metrics;
+use sui_analytics_indexer::pipeline::Pipeline;
+use sui_analytics_indexer::store::AnalyticsStore;
+use sui_analytics_indexer::tables::CheckpointRow;
+use sui_analytics_indexer::tables::DynamicFieldRow;
+use sui_analytics_indexer::tables::EventRow;
+use sui_analytics_indexer::tables::MoveCallRow;
+use sui_analytics_indexer::tables::MovePackageRow;
+use sui_analytics_indexer::tables::ObjectRow;
+use sui_analytics_indexer::tables::PackageBCSRow;
+use sui_analytics_indexer::tables::TransactionBCSRow;
+use sui_analytics_indexer::tables::TransactionObjectRow;
+use sui_analytics_indexer::tables::TransactionRow;
+use sui_analytics_indexer::tables::WrappedObjectRow;
+
+mod mock_store;
 
 /// Helper to get schema for a pipeline (used in tests to verify output).
 fn pipeline_schema(pipeline: &Pipeline) -> &'static [&'static str] {
@@ -139,7 +154,7 @@ impl TestHarness {
             client_metric_host: "127.0.0.1".to_string(),
             client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(self.object_store.clone()),
-            remote_store_url: "https://checkpoints.testnet.sui.io".to_string(),
+            remote_store_url: None,
             streaming_url: None,
             rpc_api_url: None,
             rpc_username: None,
@@ -269,7 +284,7 @@ impl TestHarness {
             client_metric_host: "127.0.0.1".to_string(),
             client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(self.object_store.clone()),
-            remote_store_url: "https://checkpoints.testnet.sui.io".to_string(),
+            remote_store_url: None,
             streaming_url: None,
             rpc_api_url: None,
             rpc_username: None,
@@ -378,7 +393,7 @@ impl MockTestHarness {
             client_metric_host: "127.0.0.1".to_string(),
             client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(self.mock_store.clone()),
-            remote_store_url: "https://checkpoints.testnet.sui.io".to_string(),
+            remote_store_url: None,
             streaming_url: None,
             rpc_api_url: None,
             rpc_username: None,
@@ -483,7 +498,7 @@ impl MockTestHarness {
             client_metric_host: "127.0.0.1".to_string(),
             client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(self.inner_store.clone()),
-            remote_store_url: "https://checkpoints.testnet.sui.io".to_string(),
+            remote_store_url: None,
             streaming_url: None,
             rpc_api_url: None,
             rpc_username: None,

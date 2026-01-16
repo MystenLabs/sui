@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    ops::Deref,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicUsize, Ordering},
-    },
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::ops::Deref;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use anyhow::ensure;
 use async_trait::async_trait;
@@ -16,9 +15,12 @@ use dashmap::DashMap;
 use scoped_futures::ScopedBoxFuture;
 use tokio::time::Duration;
 
-use crate::store::{
-    CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
-};
+use crate::store::CommitterWatermark;
+use crate::store::Connection;
+use crate::store::PrunerWatermark;
+use crate::store::ReaderWatermark;
+use crate::store::Store;
+use crate::store::TransactionalStore;
 
 #[derive(Default, Clone)]
 pub struct MockWatermark {

@@ -377,6 +377,25 @@ import { DeepBookMarginTrader } from './deepbookMarginTrader.js';
 })();
 ```
 
+## Margin manager referral functions
+
+The SDK provides functions for managing referrals with margin managers. Referrals are pool-specific and must first be minted using the core DeepBook SDK before they can be associated with a margin manager.
+
+```tsx
+// Set a referral for a margin manager (pool-specific)
+// The referral must be a DeepBookPoolReferral minted for the pool the margin manager is associated with
+traderClient.marginManager.setMarginManagerReferral('MARGIN_MANAGER_1', referralId)(tx);
+
+// Unset the referral for a margin manager for a specific pool
+traderClient.marginManager.unsetMarginManagerReferral('MARGIN_MANAGER_1', 'SUI_DBUSDC')(tx);
+```
+
+:::info
+
+To mint a referral, use the core DeepBook SDK's `mintReferral` function. See the [DeepBookV3 SDK documentation](./deepbookv3-sdk.mdx#referral-functions) for more details on minting and managing referrals.
+
+:::
+
 ## Related links
 
 <RelatedLink

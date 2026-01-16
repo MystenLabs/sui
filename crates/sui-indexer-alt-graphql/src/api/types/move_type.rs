@@ -4,17 +4,22 @@
 use std::fmt;
 
 use anyhow::anyhow;
-use async_graphql::{Enum, Object, scalar};
-use move_binary_format::file_format::{Ability, AbilitySet};
+use async_graphql::Enum;
+use async_graphql::Object;
+use async_graphql::scalar;
+use move_binary_format::file_format::Ability;
+use move_binary_format::file_format::AbilitySet;
 use move_core_types::annotated_value as A;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use sui_package_resolver::error::Error as ResolverError;
-use sui_types::{TypeTag, type_input::TypeInput};
+use sui_types::TypeTag;
+use sui_types::type_input::TypeInput;
 
-use crate::{
-    error::{RpcError, bad_user_input, resource_exhausted},
-    scope::Scope,
-};
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::resource_exhausted;
+use crate::scope::Scope;
 
 /// Abilities are keywords in Sui Move that define how types behave at the compiler level.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -31,8 +36,17 @@ pub(crate) enum MoveAbility {
 
 #[derive(Clone)]
 pub(crate) struct MoveType {
-    native: TypeInput,
-    scope: Scope,
+    native: Native,
+    pub(crate) scope: Scope,
+}
+
+/// Native representation of the MoveType. It can either be a shallow `TypeInput`, or a full type
+/// layout, depending on the information that was available when the type was constructed. The
+/// shallow representation requires further resolution to get the layout.
+#[derive(Clone)]
+enum Native {
+    Input(TypeInput),
+    Layout(A::MoveTypeLayout),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -111,12 +125,12 @@ pub(crate) enum Error {
 impl MoveType {
     /// Flat representation of the type signature, as a displayable string.
     async fn repr(&self) -> String {
-        self.native.to_canonical_string(/* with_prefix */ true)
+        self.to_type_input().to_canonical_string(true)
     }
 
     /// Structured representation of the type signature.
     async fn signature(&self) -> Result<MoveTypeSignature, RpcError> {
-        MoveTypeSignature::try_from(self.native.clone())
+        MoveTypeSignature::try_from(self.to_type_input())
     }
 
     /// Structured representation of the "shape" of values that match this type. May return no
@@ -241,7 +255,7 @@ impl MoveType {
         };
 
         Ok(Some(Self {
-            native: canonical.into(),
+            native: Native::Input(canonical.into()),
             scope,
         }))
     }
@@ -249,29 +263,53 @@ impl MoveType {
     /// Construct a `MoveType` from a native `TypeTag`. Use this when surfacing a stored type i.e.
     /// not user input.
     pub(crate) fn from_native(tag: TypeTag, scope: Scope) -> Self {
+        Self::from_input(tag.into(), scope)
+    }
+
+    /// Construct a `MoveType` directly from a `TypeInput`. Use this when you already have a
+    /// `TypeInput` (which is one of MoveType's internal representation) and don't want conversion
+    /// to fail.
+    pub(crate) fn from_input(input: TypeInput, scope: Scope) -> Self {
         Self {
-            native: tag.into(),
+            native: Native::Input(input),
             scope,
         }
     }
 
-    /// Construct a `MoveType` directly from a `TypeInput`. Use this when you already have a
-    /// `TypeInput` (which is MoveType's internal representation) and don't want conversion to fail.
-    pub(crate) fn from_input(input: TypeInput, scope: Scope) -> Self {
+    /// Construct a `MoveType` directly from a `A::MoveTypeLayout`. Use this when you already have
+    /// a type layout, to avoid further type resolution requests from having to call out to the
+    /// package resolver.
+    pub(crate) fn from_layout(layout: A::MoveTypeLayout, scope: Scope) -> Self {
         Self {
-            native: input,
+            native: Native::Layout(layout),
             scope,
         }
     }
 
     /// Get the native `TypeTag` for this type, if it is valid.
     pub(crate) fn to_type_tag(&self) -> Option<TypeTag> {
-        self.native.to_type_tag().ok()
+        match &self.native {
+            Native::Input(input) => input.to_type_tag().ok(),
+            Native::Layout(layout) => Some(layout.into()),
+        }
+    }
+
+    /// Convert the native representation into a `TypeInput`.
+    pub(crate) fn to_type_input(&self) -> TypeInput {
+        match &self.native {
+            Native::Input(input) => input.clone(),
+            Native::Layout(layout) => TypeInput::from(TypeTag::from(layout)),
+        }
     }
 
     /// Get the annotated type layout for this type, if it is valid.
     pub(crate) async fn layout_impl(&self) -> Result<Option<A::MoveTypeLayout>, RpcError> {
-        let Some(tag) = self.to_type_tag() else {
+        let input = match &self.native {
+            Native::Layout(layout) => return Ok(Some(layout.clone())),
+            Native::Input(input) => input,
+        };
+
+        let Some(tag) = input.to_type_tag().ok() else {
             return Ok(None);
         };
 
@@ -284,7 +322,7 @@ impl MoveType {
                 internal_resolution_error(err, || {
                     format!(
                         "Error calculating layout for {}",
-                        self.native.to_canonical_display(/* with_prefix */ true)
+                        input.to_canonical_display(/* with_prefix */ true)
                     )
                 })
             })?;
@@ -301,13 +339,13 @@ impl MoveType {
         let set = self
             .scope
             .package_resolver()
-            .abilities(tag)
+            .abilities(tag.clone())
             .await
             .map_err(|err| {
                 internal_resolution_error(err, || {
                     format!(
                         "Error calculating abilities for {}",
-                        self.native.to_canonical_display(/* with_prefix */ true)
+                        tag.to_canonical_display(/* with_prefix */ true)
                     )
                 })
             })?;

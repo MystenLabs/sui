@@ -537,6 +537,8 @@ pub struct AuthorityEpochTables {
     #[rename = "running_root_accumulators"]
     pub running_root_state_hash: DBMap<CheckpointSequenceNumber, GlobalStateHash>,
 
+    #[cfg(tidehunter)] // tidehunter does not support table deletion yet
+    authority_capabilities: DBMap<AuthorityName, AuthorityCapabilitiesV1>,
     /// Record of the capabilities advertised by each authority.
     authority_capabilities_v2: DBMap<AuthorityName, AuthorityCapabilitiesV2>,
 
@@ -559,8 +561,6 @@ pub struct AuthorityEpochTables {
 
     /// Transactions that are being deferred until some future time
     deferred_transactions_v2: DBMap<DeferralKey, Vec<TrustedExecutableTransaction>>,
-    deferred_transactions_with_aliases_v2:
-        DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
 
     // Tables for recording state for RandomnessManager.
     /// Records messages processed from other nodes. Updated when receiving a new dkg::Message
@@ -591,6 +591,8 @@ pub struct AuthorityEpochTables {
     /// Execution time observations for congestion control.
     pub(crate) execution_time_observations:
         DBMap<(u64, AuthorityIndex), Vec<(ExecutionTimeObservationKey, Duration)>>,
+    deferred_transactions_with_aliases_v2:
+        DBMap<DeferralKey, Vec<TrustedExecutableTransactionWithAliases>>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -1138,35 +1140,33 @@ impl AuthorityPerEpochStore {
             .execution_time_observations
             .safe_iter()
             .collect::<Result<Vec<_>, _>>()?;
-        let execution_time_estimator =
-            if let PerObjectCongestionControlMode::ExecutionTimeEstimate(protocol_params) =
-                protocol_config.per_object_congestion_control_mode()
-            {
-                ExecutionTimeEstimator::new(
-                    committee.clone(),
-                    protocol_params,
-                    // Load observations stored at end of previous epoch.
-                    Self::get_stored_execution_time_observations(
-                        &protocol_config,
-                        committee.clone(),
-                        &*object_store,
-                        &metrics,
-                        protocol_params.default_none_duration_for_new_keys,
-                    )
-                    // Load observations stored during the current epoch.
-                    .chain(execution_time_observations.into_iter().flat_map(
-                        |((generation, source), observations)| {
-                            observations.into_iter().map(move |(key, duration)| {
-                                (source, Some(generation), key, duration)
-                            })
-                        },
-                    )),
-                )
-            } else {
-                fatal!(
-                    "support for congestion control modes other than PerObjectCongestionControlMode::ExecutionTimeEstimate has been removed"
-                );
-            };
+
+        let protocol_params = match protocol_config.per_object_congestion_control_mode() {
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(params) => params,
+            // Note: if this a validator, we will panic when constructing the ConsensusHandler.
+            _ => Default::default(),
+        };
+
+        let execution_time_estimator = ExecutionTimeEstimator::new(
+            committee.clone(),
+            protocol_params,
+            // Load observations stored at end of previous epoch.
+            Self::get_stored_execution_time_observations(
+                &protocol_config,
+                committee.clone(),
+                &*object_store,
+                &metrics,
+                protocol_params.default_none_duration_for_new_keys,
+            )
+            // Load observations stored during the current epoch.
+            .chain(execution_time_observations.into_iter().flat_map(
+                |((generation, source), observations)| {
+                    observations
+                        .into_iter()
+                        .map(move |(key, duration)| (source, Some(generation), key, duration))
+                },
+            )),
+        );
 
         let consensus_tx_status_cache = if protocol_config.mysticeti_fastpath() {
             Some(ConsensusTxStatusCache::new(protocol_config.gc_depth()))

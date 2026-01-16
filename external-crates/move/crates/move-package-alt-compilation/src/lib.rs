@@ -91,9 +91,7 @@ use anyhow::bail;
 use build_config::BuildConfig;
 pub use compilation::compile_from_root_package;
 pub use compilation::compile_package;
-use move_package_alt::flavor::MoveFlavor;
-use move_package_alt::package::RootPackage;
-use move_package_alt::schema::Environment;
+use move_package_alt::{MoveFlavor, RootPackage, schema::Environment};
 use std::path::Path;
 
 /// If no environment is passed, it will use the default implicit environment. If an environment

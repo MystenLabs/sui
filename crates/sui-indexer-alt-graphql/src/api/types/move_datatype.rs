@@ -4,17 +4,21 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Interface, Object, SimpleObject};
-use sui_package_resolver::{DataDef, MoveData, OpenSignatureBody, VariantDef};
+use async_graphql::Context;
+use async_graphql::Interface;
+use async_graphql::Object;
+use async_graphql::SimpleObject;
+use sui_package_resolver::DataDef;
+use sui_package_resolver::MoveData;
+use sui_package_resolver::OpenSignatureBody;
+use sui_package_resolver::VariantDef;
 use tokio::sync::OnceCell;
 
+use crate::api::types::move_module::MoveModule;
+use crate::api::types::move_type::MoveAbility;
+use crate::api::types::move_type::abilities;
+use crate::api::types::open_move_type::OpenMoveType;
 use crate::error::RpcError;
-
-use super::{
-    move_module::MoveModule,
-    move_type::{MoveAbility, abilities},
-    open_move_type::OpenMoveType,
-};
 
 /// Interface implemented by all GraphQL types that represent a Move datatype definition (either a struct or an enum definition).
 ///
@@ -33,6 +37,11 @@ use super::{
         name = "name",
         ty = "Result<&str, RpcError>",
         desc = "The datatype's unqualified name",
+    ),
+    field(
+        name = "fully_qualified_name",
+        ty = "Result<String, RpcError>",
+        desc = "The datatype's fully-qualified name, including package address, module name, and datatype name.",
     ),
     field(
         name = "abilities",
@@ -103,6 +112,16 @@ impl MoveDatatype {
         Ok(&self.name)
     }
 
+    /// The datatype's fully-qualified name, including package address, module name, and datatype name.
+    async fn fully_qualified_name(&self, _ctx: &Context<'_>) -> Result<String, RpcError> {
+        Ok(format!(
+            "{}::{}::{}",
+            self.module.package.address_impl(),
+            self.module.name,
+            self.name
+        ))
+    }
+
     /// Abilities on this datatype definition.
     async fn abilities(&self, ctx: &Context<'_>) -> Option<Result<Vec<MoveAbility>, RpcError>> {
         let def = self.contents(ctx).await.ok()?.as_ref()?;
@@ -161,6 +180,11 @@ impl MoveEnum {
         self.super_.name(ctx).await
     }
 
+    /// The enum's fully-qualified name, including package address, module name, and datatype name.
+    async fn fully_qualified_name(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
+        self.super_.fully_qualified_name(ctx).await
+    }
+
     /// Abilities on this enum definition.
     async fn abilities(&self, ctx: &Context<'_>) -> Option<Result<Vec<MoveAbility>, RpcError>> {
         self.super_.abilities(ctx).await.ok()?
@@ -202,6 +226,11 @@ impl MoveStruct {
     /// The struct's unqualified name.
     async fn name(&self, ctx: &Context<'_>) -> Result<&str, RpcError> {
         self.super_.name(ctx).await
+    }
+
+    /// The struct's fully-qualified name, including package address, module name, and datatype name.
+    async fn fully_qualified_name(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
+        self.super_.fully_qualified_name(ctx).await
     }
 
     /// Abilities on this struct definition.

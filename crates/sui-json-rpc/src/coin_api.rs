@@ -219,6 +219,7 @@ impl CoinReadApiServer for CoinReadApi {
                 total_balance: balance.balance as u128,
                 // note: LockedCoin is deprecated
                 locked_balance: Default::default(),
+                funds_in_address_balance: balance.address_balance as u128,
             })
         })
     }
@@ -238,6 +239,7 @@ impl CoinReadApiServer for CoinReadApi {
                         total_balance: balance.balance as u128,
                         // note: LockedCoin is deprecated
                         locked_balance: Default::default(),
+                        funds_in_address_balance: balance.address_balance as u128,
                     }
                 })
                 .collect())
@@ -1199,6 +1201,7 @@ mod tests {
                     Ok(TotalBalance {
                         balance: 7,
                         num_coins: 9,
+                        address_balance: 0,
                     })
                 });
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
@@ -1212,7 +1215,8 @@ mod tests {
                     coin_type: gas_coin.coin_type,
                     coin_object_count: 9,
                     total_balance: 7,
-                    locked_balance: Default::default()
+                    locked_balance: Default::default(),
+                    funds_in_address_balance: 0,
                 }
             );
         }
@@ -1233,6 +1237,7 @@ mod tests {
                     Ok(TotalBalance {
                         balance: 10,
                         num_coins: 11,
+                        address_balance: 0,
                     })
                 });
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
@@ -1248,7 +1253,8 @@ mod tests {
                     coin_type: coin.coin_type,
                     coin_object_count: 11,
                     total_balance: 10,
-                    locked_balance: Default::default()
+                    locked_balance: Default::default(),
+                    funds_in_address_balance: 0,
                 }
             );
         }
@@ -1351,6 +1357,7 @@ mod tests {
                         TotalBalance {
                             balance: 7,
                             num_coins: 9,
+                            address_balance: 0,
                         },
                     );
                     hash_map.insert(
@@ -1358,6 +1365,7 @@ mod tests {
                         TotalBalance {
                             balance: 10,
                             num_coins: 11,
+                            address_balance: 0,
                         },
                     );
                     Ok(Arc::new(hash_map))
@@ -1372,12 +1380,14 @@ mod tests {
                     coin_object_count: 9,
                     total_balance: 7,
                     locked_balance: Default::default(),
+                    funds_in_address_balance: 0,
                 },
                 Balance {
                     coin_type: usdc_coin.coin_type,
                     coin_object_count: 11,
                     total_balance: 10,
                     locked_balance: Default::default(),
+                    funds_in_address_balance: 0,
                 },
             ];
             // This is because the underlying result is a hashmap, so order is not guaranteed

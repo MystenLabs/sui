@@ -6,16 +6,15 @@ use std::{collections::BTreeMap, path::Path};
 use anyhow::bail;
 use indexmap::IndexMap;
 use move_package_alt::{
-    package::RootPackage,
+    RootPackage,
     schema::{Environment, EnvironmentID, EnvironmentName},
 };
-use sui_sdk::{SuiClient, wallet_context::WalletContext};
+use sui_sdk::wallet_context::WalletContext;
 
 use crate::SuiFlavor;
 
 /// Binds together the context for `find_environment` for helper functions
 struct EnvFinder<'a> {
-    package_path: &'a Path,
     explicit_env: Option<EnvironmentName>,
     wallet: &'a WalletContext,
     manifest_envs: IndexMap<EnvironmentName, EnvironmentID>,
@@ -30,9 +29,8 @@ pub async fn find_environment(
     explicit_env: Option<EnvironmentName>,
     wallet: &WalletContext,
 ) -> anyhow::Result<Environment> {
-    let mut manifest_envs = RootPackage::<SuiFlavor>::environments(package_path)?;
+    let manifest_envs = RootPackage::<SuiFlavor>::environments(package_path)?;
     let finder = EnvFinder {
-        package_path,
         explicit_env,
         wallet,
         manifest_envs,
@@ -73,7 +71,7 @@ impl EnvFinder<'_> {
     /// Find the active environment. Checks the cache first and fails if the chain ID cannot be
     /// determined (either from the cache or from the network or the manifest)
     async fn active_environment(&self) -> anyhow::Result<Environment> {
-        let mut active_env = self.wallet.get_active_env()?.clone();
+        let active_env = self.wallet.get_active_env()?.clone();
         let chain_id = if let Some(chain_id) = active_env.chain_id {
             // cached
             chain_id
@@ -132,7 +130,7 @@ impl EnvFinder<'_> {
         let candidates: BTreeMap<&EnvironmentName, &EnvironmentID> = self
             .manifest_envs
             .iter()
-            .filter(|(k, v)| v == &&chain_id)
+            .filter(|(_, v)| v == &&chain_id)
             .collect();
 
         if candidates.is_empty() {

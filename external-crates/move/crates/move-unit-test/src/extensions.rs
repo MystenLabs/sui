@@ -7,12 +7,11 @@
 //! to be usable.
 
 use move_vm_runtime::natives::extensions::{NativeContextExtensions, NativeExtensions};
-use once_cell::sync::Lazy;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
-static EXTENSION_HOOK: Lazy<
+static EXTENSION_HOOK: LazyLock<
     Mutex<Option<Box<dyn Fn(&mut NativeContextExtensions<'_>) + Send + Sync>>>,
-> = Lazy::new(|| Mutex::new(None));
+> = LazyLock::new(|| Mutex::new(None));
 
 /// Sets a hook which is called to populate additional native extensions. This can be used to
 /// get extensions living outside of the Move repo into the unit testing environment.

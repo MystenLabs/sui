@@ -1,0 +1,57 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+#!/usr/bin/env bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Test publication failures
+# B --> A
+# C --> B
+# C --> A
+#
+# D --> B
+# D --> A
+#
+# E --> C
+# E --> D
+#
+# We publish A, B, C, D, E in order
+
+chain_id=$(sui client --client.config $CONFIG chain-identifier)
+
+add_env_to_toml() {
+  echo "[environments]" >> $1/Move.toml
+  echo "localnet = \"$chain_id\"" >> $1/Move.toml
+}
+
+echo "=== Should fail to publish because dependencies are not published. ==="
+
+add_env_to_toml a
+add_env_to_toml b
+
+sui client --client.config $CONFIG publish b
+
+# Publish A, so we can try to publish twice
+sui client --client.config $CONFIG publish a > /dev/null || echo "failed to publish a"
+
+# Try to publish A again.
+sui client --client.config $CONFIG publish a
+
+----- results -----
+success: false
+exit_code: 1
+----- stdout -----
+=== Should fail to publish because dependencies are not published. ===
+The package has unpublished dependencies. If you want to publish with unpublished dependencies, please publish them one by one, or (not recommended) pass the `--with-unpublished-dependencies` flag.
+ Unpublished dependencies: a
+        
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING a
+Failed to publish the Move module(s), reason: Your package is already published. You have to manually remove the publication entry to publish again.
+ - If you are doing a regular publish, you can remove the entry for your environment from `Published.toml`.
+ - If you are doing a test publish, you can either specify a new file with `--pubfile-path`, or remove the entry from your existing ephemeral publication file.
+
+----- stderr -----

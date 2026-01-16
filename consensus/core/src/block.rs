@@ -288,7 +288,6 @@ impl Slot {
         Self { round, authority }
     }
 
-    #[cfg(test)]
     pub fn new_for_test(round: Round, authority: u32) -> Self {
         Self {
             round,

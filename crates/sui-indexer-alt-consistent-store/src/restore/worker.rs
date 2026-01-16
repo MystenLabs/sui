@@ -4,14 +4,18 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use sui_futures::{service::Service, stream::TrySpawnStreamExt as _};
+use sui_futures::service::Service;
+use sui_futures::stream::TrySpawnStreamExt as _;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{error, info};
+use tracing::error;
+use tracing::info;
 
-use crate::{db::Db, store::Schema};
-
-use super::{LiveObjects, Restore, RestorerMetrics};
+use crate::db::Db;
+use crate::restore::LiveObjects;
+use crate::restore::Restore;
+use crate::restore::RestorerMetrics;
+use crate::store::Schema;
 
 /// A worker that processes live objects from a single bucket and partition, for a given pipeline.
 pub(super) fn worker<S: Schema + Send + Sync + 'static, R: Restore<S>>(

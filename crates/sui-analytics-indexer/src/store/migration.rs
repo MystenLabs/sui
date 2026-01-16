@@ -6,25 +6,31 @@
 //! In migration mode, we rewrite existing files (e.g., adding new columns to parquet files).
 //! This module provides the store implementation and utilities to track existing file ranges.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::anyhow;
+use object_store::Error as ObjectStoreError;
+use object_store::ObjectStore;
+use object_store::PutMode;
+use object_store::PutOptions;
+use object_store::PutPayload;
+use object_store::UpdateVersion;
 use object_store::path::Path as ObjectPath;
-use object_store::{
-    Error as ObjectStoreError, ObjectStore, PutMode, PutOptions, PutPayload, UpdateVersion,
-};
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_storage::object_store::util::find_all_dirs_with_epoch_prefix;
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::debug;
+use tracing::info;
 
 use crate::config::PipelineConfig;
 use crate::handlers::CheckpointRows;
-
-use super::Batch;
+use crate::store::Batch;
 
 /// Error type for watermark updates.
 #[derive(Error, Debug)]

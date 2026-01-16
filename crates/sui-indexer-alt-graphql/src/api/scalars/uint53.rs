@@ -3,7 +3,11 @@
 
 use std::fmt;
 
-use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
+use async_graphql::InputValueError;
+use async_graphql::InputValueResult;
+use async_graphql::Scalar;
+use async_graphql::ScalarType;
+use async_graphql::Value;
 use sui_types::base_types::SequenceNumber;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]

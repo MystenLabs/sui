@@ -10,15 +10,21 @@
     validatorSet {
       activeValidators {
         nodes {
-          name
+          ...V
           # todo DVX-1697 populate reportRecords
           reportRecords {
             nodes {
-              name
+              ...V
             }
           }
         }
       }
     }
+  }
+}
+
+fragment V on Validator {
+  contents {
+    name: format(format: "{metadata.name}")
   }
 }

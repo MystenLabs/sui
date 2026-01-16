@@ -19,8 +19,8 @@ use sui_core::{
     validator_client_monitor::ValidatorClientMetrics,
 };
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
+    CheckpointId, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -186,6 +186,46 @@ impl ExecutionEffects {
         }
     }
 
+    pub fn is_invalid_transaction(&self) -> bool {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                match effects.data().status() {
+                    sui_types::execution_status::ExecutionStatus::Failure { error, .. } => {
+                        matches!(
+                            error,
+                            ExecutionFailureStatus::VMVerificationOrDeserializationError
+                                | ExecutionFailureStatus::VMInvariantViolation
+                                | ExecutionFailureStatus::FunctionNotFound
+                                | ExecutionFailureStatus::ArityMismatch
+                                | ExecutionFailureStatus::TypeArityMismatch
+                                | ExecutionFailureStatus::NonEntryFunctionInvoked
+                                | ExecutionFailureStatus::CommandArgumentError { .. }
+                                | ExecutionFailureStatus::TypeArgumentError { .. }
+                                | ExecutionFailureStatus::UnusedValueWithoutDrop { .. }
+                                | ExecutionFailureStatus::InvalidPublicFunctionReturnType { .. }
+                                | ExecutionFailureStatus::InvalidTransferObject
+                        )
+                    }
+                    _ => false,
+                }
+            }
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                let status = format!("{}", sui_tx_effects.status());
+                status.contains("VMVerificationOrDeserializationError")
+                    || status.contains("VMInvariantViolation")
+                    || status.contains("FunctionNotFound")
+                    || status.contains("ArityMismatch")
+                    || status.contains("TypeArityMismatch")
+                    || status.contains("NonEntryFunctionInvoked")
+                    || status.contains("CommandArgumentError")
+                    || status.contains("TypeArgumentError")
+                    || status.contains("UnusedValueWithoutDrop")
+                    || status.contains("InvalidPublicFunctionReturnType")
+                    || status.contains("InvalidTransferObject")
+            }
+        }
+    }
+
     pub fn status(&self) -> String {
         match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
@@ -268,6 +308,8 @@ pub trait ValidatorProxy {
         &self,
         txs: Vec<Transaction>,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>>;
+
+    fn get_chain_identifier(&self) -> ChainIdentifier;
 }
 
 // TODO: Eventually remove this proxy because we shouldn't rely on validators to read objects.
@@ -275,6 +317,7 @@ pub struct LocalValidatorAggregatorProxy {
     td: Arc<TransactionDriver<NetworkAuthorityClient>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
+    chain_identifier: ChainIdentifier,
 }
 
 impl LocalValidatorAggregatorProxy {
@@ -287,12 +330,14 @@ impl LocalValidatorAggregatorProxy {
             .with_registry(registry)
             .build_network_clients();
         let committee = genesis.committee().unwrap();
+        let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
         Self::new_impl(
             aggregator,
             registry,
             reconfig_fullnode_rpc_url,
             clients,
             committee,
+            chain_identifier,
         )
         .await
     }
@@ -303,6 +348,7 @@ impl LocalValidatorAggregatorProxy {
         reconfig_fullnode_rpc_url: &str,
         clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
         committee: Committee,
+        chain_identifier: ChainIdentifier,
     ) -> Self {
         let transaction_driver_metrics = Arc::new(TransactionDriverMetrics::new(registry));
         let (aggregator, reconfig_observer): (
@@ -339,6 +385,7 @@ impl LocalValidatorAggregatorProxy {
             td,
             clients,
             committee,
+            chain_identifier,
         }
     }
 
@@ -408,6 +455,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             td: self.td.clone(),
             clients: self.clients.clone(),
             committee: self.committee.clone(),
+            chain_identifier: self.chain_identifier,
         })
     }
 
@@ -480,7 +528,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 let request = WaitForEffectsRequest {
                     transaction_digest: Some(*digest),
                     consensus_position: Some(*position),
-                    include_details: false,
+                    include_details: true,
                     ping_type: None,
                 };
                 safe_client.wait_for_effects(request, None)
@@ -496,6 +544,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 
         Ok(results)
     }
+
+    fn get_chain_identifier(&self) -> ChainIdentifier {
+        self.chain_identifier
+    }
 }
 
 pub struct FullNodeProxy {
@@ -504,6 +556,7 @@ pub struct FullNodeProxy {
     // Committee and protocol config are initialized on startup and not updated on epoch changes.
     committee: Arc<Committee>,
     protocol_config: Arc<ProtocolConfig>,
+    chain_identifier: ChainIdentifier,
 }
 
 impl FullNodeProxy {
@@ -527,10 +580,17 @@ impl FullNodeProxy {
             Committee::new(epoch, committee_map)
         };
 
+        let chain_identifier = {
+            let genesis = sui_client
+                .read_api()
+                .get_checkpoint(CheckpointId::SequenceNumber(0))
+                .await?;
+            ChainIdentifier::from(genesis.digest)
+        };
+
         let protocol_config = {
             let resp = sui_client.read_api().get_protocol_config(None).await?;
-            // Basically set by the SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE env var.
-            let chain = ChainIdentifier::default().chain();
+            let chain = chain_identifier.chain();
             ProtocolConfig::get_for_version(resp.protocol_version, chain)
         };
 
@@ -538,6 +598,7 @@ impl FullNodeProxy {
             sui_client,
             committee: Arc::new(committee),
             protocol_config: Arc::new(protocol_config),
+            chain_identifier,
         })
     }
 }
@@ -677,6 +738,7 @@ impl ValidatorProxy for FullNodeProxy {
             sui_client: self.sui_client.clone(),
             committee: self.clone_committee(),
             protocol_config: self.protocol_config.clone(),
+            chain_identifier: self.chain_identifier,
         })
     }
 
@@ -695,6 +757,10 @@ impl ValidatorProxy for FullNodeProxy {
         _txs: Vec<Transaction>,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
         unimplemented!("Soft bundle execution not supported via FullNodeProxy")
+    }
+
+    fn get_chain_identifier(&self) -> ChainIdentifier {
+        self.chain_identifier
     }
 }
 

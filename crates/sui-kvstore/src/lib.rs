@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 mod bigtable;
+mod handlers;
+
 use anyhow::Result;
 use async_trait::async_trait;
 pub use bigtable::client::BigTableClient;
 pub use bigtable::progress_store::BigTableProgressStore;
+pub use bigtable::store::{BigTableConnection, BigTableStore};
 pub use bigtable::worker::KvWorker;
+pub use handlers::KvStorePipeline;
 use serde::{Deserialize, Serialize};
 use sui_types::base_types::ObjectID;
 use sui_types::committee::EpochId;

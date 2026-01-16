@@ -2,4 +2,4 @@
 source: crates/sui-display/src/v2/parser.rs
 expression: "strands(r#\"{0x____}\"#)"
 ---
-Error: Unexpected '}' at offset 7, expected one of 'u128', 'u16', 'u256', 'u32', 'u64', or 'u8'
+Error: Unexpected '}' at byte offset 7, expected one of 'u128', 'u16', 'u256', 'u32', 'u64', or 'u8'

@@ -1,16 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, sync::Arc, time::Duration};
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::{Context, bail, ensure};
-use ingestion::{ClientArgs, IngestionConfig, IngestionService, ingestion_client::IngestionClient};
+use anyhow::Context;
+use anyhow::bail;
+use anyhow::ensure;
+use ingestion::ClientArgs;
+use ingestion::IngestionConfig;
+use ingestion::IngestionService;
+use ingestion::ingestion_client::IngestionClient;
 use metrics::IndexerMetrics;
 use prometheus::Registry;
-use sui_indexer_alt_framework_store_traits::{
-    Connection, Store, TransactionalStore, pipeline_task,
-};
+use sui_indexer_alt_framework_store_traits::Connection;
+use sui_indexer_alt_framework_store_traits::Store;
+use sui_indexer_alt_framework_store_traits::TransactionalStore;
+use sui_indexer_alt_framework_store_traits::pipeline_task;
 use tracing::info;
+
+use crate::metrics::IngestionMetrics;
+use crate::pipeline::Processor;
+use crate::pipeline::concurrent::ConcurrentConfig;
+use crate::pipeline::concurrent::{self};
+use crate::pipeline::sequential::Handler;
+use crate::pipeline::sequential::SequentialConfig;
+use crate::pipeline::sequential::{self};
+use crate::service::Service;
 
 pub use anyhow::Result;
 pub use sui_field_count::FieldCount;
@@ -18,14 +35,6 @@ pub use sui_futures::service;
 /// External users access the store trait through framework::store
 pub use sui_indexer_alt_framework_store_traits as store;
 pub use sui_types as types;
-
-use crate::metrics::IngestionMetrics;
-use crate::pipeline::{
-    Processor,
-    concurrent::{self, ConcurrentConfig},
-    sequential::{self, Handler, SequentialConfig},
-};
-use crate::service::Service;
 
 #[cfg(feature = "cluster")]
 pub mod cluster;
@@ -438,7 +447,8 @@ mod tests {
     use crate::ingestion::ingestion_client::IngestionClientArgs;
     use crate::mocks::store::MockStore;
     use crate::pipeline::CommitterConfig;
-    use crate::pipeline::{Processor, concurrent::ConcurrentConfig};
+    use crate::pipeline::Processor;
+    use crate::pipeline::concurrent::ConcurrentConfig;
     use crate::store::CommitterWatermark;
 
     use super::*;

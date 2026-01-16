@@ -9,7 +9,11 @@ use crate::{
     static_programmable_transactions::{
         env::Env,
         loading::ast as L,
-        typing::{ast as T, verify::input_arguments},
+        typing::{
+            ast as T,
+            translate::{balance_inner_type, coin_inner_type, withdrawal_inner_type},
+            verify::input_arguments,
+        },
     },
 };
 use sui_types::{
@@ -59,6 +63,7 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
         withdrawals,
         pure,
         receiving,
+        withdrawal_compatibility_conversions,
         commands,
     } = txn;
     for obj in objects {
@@ -75,6 +80,9 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
     }
     for c in commands {
         command::<Mode>(env, &context, c)?;
+    }
+    for (withdrawal, conversion) in withdrawal_compatibility_conversions {
+        withdrawal_compatibility_conversion(env, &context, *withdrawal, conversion)?;
     }
     Ok(())
 }
@@ -399,4 +407,48 @@ fn location(env: &Env, context: &Context, l: T::Location) -> anyhow::Result<T::T
             .ok_or_else(|| anyhow::anyhow!("result ({i}, {j}) out of bounds",))?
             .clone(),
     })
+}
+
+fn withdrawal_compatibility_conversion(
+    env: &Env,
+    context: &Context,
+    withdrawal_location: T::Location,
+    conv: &T::WithdrawalCompatibilityConversion,
+) -> anyhow::Result<()> {
+    let T::WithdrawalCompatibilityConversion {
+        owner,
+        conversion_result,
+    } = conv;
+    // checker owner is a pure input of type address
+    anyhow::ensure!(
+        matches!(owner, T::Location::PureInput(_)),
+        "withdrawal compatibility conversion owner should be a pure input"
+    );
+    anyhow::ensure!(
+        location(env, context, *owner)? == T::Type::Address,
+        "withdrawal compatibility conversion owner type should be address"
+    );
+    // check the conversion result type is coin
+    let conversion_location = T::Location::Result(*conversion_result, 0);
+    let conversion_ty = location(env, context, conversion_location)?;
+    let Some(coin_inner) = coin_inner_type(&conversion_ty) else {
+        anyhow::bail!("conversion result should be a coin type");
+    };
+    // check the withdrawal location is a withdrawal input of Withdarawal<Balance<coin_inner>>
+    anyhow::ensure!(
+        matches!(withdrawal_location, T::Location::WithdrawalInput(_)),
+        "withdrawal should be a withdrawal input"
+    );
+    let withdrawal_ty = location(env, context, withdrawal_location)?;
+    let Some(withdrawal_inner_ty) = withdrawal_inner_type(&withdrawal_ty) else {
+        anyhow::bail!("withdrawal input should be a withdrawal type");
+    };
+    let Some(withdrawal_balance_inner) = balance_inner_type(withdrawal_inner_ty) else {
+        anyhow::bail!("withdrawal inner type should be a balance type");
+    };
+    anyhow::ensure!(
+        withdrawal_balance_inner == coin_inner,
+        "withdrawal balance inner type should match conversion coin inner type"
+    );
+    Ok(())
 }

@@ -23,7 +23,8 @@ Each `MarginManager` is associated with a specific DeepBook pool and can borrow 
 
 Following are the different public functions that the `MarginManager` exposes.
 
-### Create a `MarginManager`
+<details>
+<summary>Create a `MarginManager`</summary>
 
 The `new()` function creates and shares a `MarginManager` in one transaction. It validates that margin trading is enabled for the specified pool.
 
@@ -36,7 +37,10 @@ The `new()` function creates and shares a `MarginManager` in one transaction. It
 	noComments
 />
 
-### Create a `MarginManager` with initializer
+</details>
+
+<details>
+<summary>Create a `MarginManager` with initializer</summary>
 
 The `new_with_initializer()` function creates a `MarginManager` and returns it along with an initializer hot potato. The initializer ensures the margin manager is properly shared after creation using the `share()` function.
 
@@ -49,19 +53,25 @@ The `new_with_initializer()` function creates a `MarginManager` and returns it a
 	noComments
 />
 
-### Set or unset referral
+</details>
 
-The owner of a `MarginManager` can set or unset a referral for trading fee benefits.
+<details>
+<summary>Set or unset referral</summary>
+
+The owner of a `MarginManager` can set or unset a pool-specific referral for trading fee benefits. The referral must be a `DeepBookPoolReferral` minted for the pool associated with the margin manager. Each margin manager can have different referrals for different pools.
 
 <ImportContent
 	source="packages/deepbook_margin/sources/margin_manager.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="set_referral,unset_referral"
+	fun="set_margin_manager_referral,unset_margin_manager_referral"
 />
 
-### Deposit funds
+</details>
+
+<details>
+<summary>Deposit funds</summary>
 
 Only the owner can deposit funds into the `MarginManager`. The deposited asset must be either the base asset, quote asset, or DEEP token.
 
@@ -73,7 +83,10 @@ Only the owner can deposit funds into the `MarginManager`. The deposited asset m
 	fun="deposit"
 />
 
-### Withdraw funds
+</details>
+
+<details>
+<summary>Withdraw funds</summary>
 
 Only the owner can withdraw funds from the `MarginManager`. Withdrawals are subject to risk ratio limits when the manager has active loans.
 
@@ -85,7 +98,10 @@ Only the owner can withdraw funds from the `MarginManager`. Withdrawals are subj
 	fun="withdraw"
 />
 
-### Borrow assets
+</details>
+
+<details>
+<summary>Borrow assets</summary>
 
 Borrow base or quote assets from margin pools to increase position sizes. Borrowing is subject to risk ratio limits and the margin pool must allow trading on the manager's DeepBook pool.
 
@@ -97,7 +113,10 @@ Borrow base or quote assets from margin pools to increase position sizes. Borrow
 	fun="borrow_base,borrow_quote"
 />
 
-### Repay loans
+</details>
+
+<details>
+<summary>Repay loans</summary>
 
 Repay borrowed assets to reduce debt. You can specify an exact amount or repay all available balance up to the total debt.
 
@@ -109,7 +128,10 @@ Repay borrowed assets to reduce debt. You can specify an exact amount or repay a
 	fun="repay_base,repay_quote"
 />
 
-### Liquidate position
+</details>
+
+<details>
+<summary>Liquidate position</summary>
 
 Liquidate an undercollateralized margin manager. The liquidator provides repayment and receives collateral assets plus a liquidation reward. The margin pool might also receive a reward or incur bad debt depending on the position's health.
 
@@ -121,7 +143,10 @@ Liquidate an undercollateralized margin manager. The liquidator provides repayme
 	fun="liquidate"
 />
 
-### Calculate risk ratio
+</details>
+
+<details>
+<summary>Calculate risk ratio</summary>
 
 Returns the risk ratio of the margin manager, which represents the ratio of assets to debt. Higher ratios indicate healthier positions.
 
@@ -133,7 +158,10 @@ Returns the risk ratio of the margin manager, which represents the ratio of asse
 	fun="risk_ratio"
 />
 
-### Read endpoints
+</details>
+
+<details>
+<summary>Read endpoints</summary>
 
 <ImportContent
 	source="packages/deepbook_margin/sources/margin_manager.move"
@@ -142,6 +170,100 @@ Returns the risk ratio of the margin manager, which represents the ratio of asse
 	repo="deepbookv3"
 	fun="balance_manager,calculate_assets,calculate_debts,owner,deepbook_pool,margin_pool_id,borrowed_shares,borrowed_base_shares,borrowed_quote_shares,has_base_debt"
 />
+
+</details>
+
+## Events
+
+<details>
+<summary>`MarginManagerCreatedEvent`</summary>
+
+Emitted when a new margin manager is created.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="MarginManagerCreatedEvent"
+/>
+
+</details>
+
+<details>
+<summary>`DepositCollateralEvent`</summary>
+
+Emitted when collateral is deposited into a margin manager.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="DepositCollateralEvent"
+/>
+
+</details>
+
+<details>
+<summary>`WithdrawCollateralEvent`</summary>
+
+Emitted when collateral is withdrawn from a margin manager.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="WithdrawCollateralEvent"
+/>
+
+</details>
+
+<details>
+<summary>`LoanBorrowedEvent`</summary>
+
+Emitted when assets are borrowed from a margin pool.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="LoanBorrowedEvent"
+/>
+
+</details>
+
+<details>
+<summary>`LoanRepaidEvent`</summary>
+
+Emitted when borrowed assets are repaid.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="LoanRepaidEvent"
+/>
+
+</details>
+
+<details>
+<summary>`LiquidationEvent`</summary>
+
+Emitted when a margin manager is liquidated.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="LiquidationEvent"
+/>
+
+</details>
 
 ## Related links
 

@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(unused)]
 
 use std::borrow::Cow;
 use std::fmt::Write as _;
@@ -8,12 +7,7 @@ use std::str;
 
 use async_trait::async_trait;
 use base64::engine::Engine;
-use base64::engine::general_purpose::STANDARD;
-use base64::engine::general_purpose::STANDARD_NO_PAD;
-use base64::engine::general_purpose::URL_SAFE;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::DateTime;
-use chrono::Utc;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::annotated_value::MoveTypeLayout;
@@ -24,13 +18,14 @@ use serde::Serialize;
 use serde::ser::SerializeSeq as _;
 use serde::ser::SerializeTuple as _;
 use serde::ser::SerializeTupleVariant;
-use sui_types::MOVE_STDLIB_ADDRESS;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::RESOLVED_UTF8_STR;
-use sui_types::base_types::STD_OPTION_MODULE_NAME;
-use sui_types::base_types::STD_OPTION_STRUCT_NAME;
+use sui_types::base_types::SuiAddress;
 use sui_types::base_types::move_ascii_str_layout;
 use sui_types::base_types::move_utf8_str_layout;
 use sui_types::base_types::url_layout;
+use sui_types::dynamic_field::DynamicFieldInfo;
+use sui_types::dynamic_field::derive_dynamic_field_id;
 use sui_types::id::ID;
 use sui_types::id::UID;
 use sui_types::object::rpc_visitor as RV;
@@ -42,12 +37,24 @@ use crate::v2::parser::Transform;
 use crate::v2::writer::JsonWriter;
 use crate::v2::writer::StringWriter;
 
-/// Dynamically load objects by their ID. The output should be a `Slice` containing references to
-/// the raw BCS bytes and the corresponding `MoveTypeLayout` for the object. This implies the
-/// `Store` acts as a pool of cached objects.
+/// Dynamically load objects by their ID, returning the object's owned data.
+///
+/// The `Store` trait is responsible only for fetching object data -- lifetime management
+/// and caching are handled by the `Interpreter`.
 #[async_trait]
-pub trait Store<'s> {
-    async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<Slice<'s>>>;
+pub trait Store {
+    async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<OwnedSlice>>;
+}
+
+/// Result of evaluating a single strand of a Display v2 format string.
+#[derive(Clone)]
+pub enum Strand<'s> {
+    Text(&'s str),
+    Value {
+        offset: usize,
+        value: Value<'s>,
+        transform: Transform,
+    },
 }
 
 /// Value representation used during evaluation by the Display v2 interpreter.
@@ -99,6 +106,13 @@ pub struct Slice<'s> {
     pub(crate) bytes: &'s [u8],
 }
 
+/// An owned version of `Slice`.
+#[derive(Clone)]
+pub struct OwnedSlice {
+    pub layout: MoveTypeLayout,
+    pub bytes: Vec<u8>,
+}
+
 /// An evaluated vector literal.
 #[derive(Clone)]
 pub struct Vector<'s> {
@@ -130,6 +144,30 @@ pub enum Fields<'s> {
 }
 
 impl Value<'_> {
+    /// Treat this value as a dynamic field name, and derive the ID of its `Field<K, V>` object,
+    /// under the given `parent` address.
+    pub fn derive_dynamic_field_id(
+        &self,
+        parent: impl Into<SuiAddress>,
+    ) -> Result<ObjectID, FormatError> {
+        let bytes = bcs::to_bytes(self)?;
+        let type_ = self.type_();
+
+        Ok(derive_dynamic_field_id(parent, &type_, &bytes)?)
+    }
+
+    /// Treat this value as a dynamic object field name, and derive the ID of its `Field<K, V>`
+    /// object, under the given `parent` address.
+    pub fn derive_dynamic_object_field_id(
+        &self,
+        parent: impl Into<SuiAddress>,
+    ) -> Result<ObjectID, FormatError> {
+        let bytes = bcs::to_bytes(self)?;
+        let type_ = DynamicFieldInfo::dynamic_object_field_wrapper(self.type_()).into();
+
+        Ok(derive_dynamic_field_id(parent, &type_, &bytes)?)
+    }
+
     /// Write out a formatted representation of this value, transformed by `transform`, to the
     /// provided writer.
     ///
@@ -392,7 +430,6 @@ impl<'s> Accessor<'s> {
     /// as long as their numeric values fit into a `u64`.
     pub(crate) fn as_numeric_index(&self) -> Option<u64> {
         use Accessor as A;
-        use MoveTypeLayout as L;
 
         match self {
             A::Index(value) => value.as_u64(),
@@ -412,9 +449,57 @@ impl<'s> Accessor<'s> {
     }
 }
 
+impl OwnedSlice {
+    pub(crate) fn as_slice(&self) -> Slice<'_> {
+        Slice {
+            layout: &self.layout,
+            bytes: &self.bytes,
+        }
+    }
+}
+
 impl Slice<'_> {
     fn format_json(self, w: JsonWriter<'_>) -> Result<serde_json::Value, FormatError> {
         A::MoveValue::visit_deserialize(self.bytes, self.layout, &mut RV::RpcVisitor::new(w))
+    }
+}
+
+impl Value<'_> {
+    /// Convert this value into an owned slice.
+    ///
+    /// This operation returns `None` if the value contains compound literals (struct, enum, vector
+    /// literals), since their layouts are not guaranteed to be valid.
+    pub fn into_owned_slice(self) -> Option<OwnedSlice> {
+        let layout = self.layout()?;
+        let bytes = bcs::to_bytes(&self).ok()?;
+        Some(OwnedSlice { layout, bytes })
+    }
+
+    /// Compute the type layout for this value, if possible.
+    ///
+    /// Returns `None` for compound literals (Struct, Enum, Vector) since we cannot reliably
+    /// compute their layouts without access to the full type information.
+    fn layout(&self) -> Option<MoveTypeLayout> {
+        use MoveTypeLayout as L;
+
+        match self {
+            Value::Slice(s) => Some(s.layout.clone()),
+
+            Value::Address(_) => Some(L::Address),
+            Value::Bool(_) => Some(L::Bool),
+            Value::U8(_) => Some(L::U8),
+            Value::U16(_) => Some(L::U16),
+            Value::U32(_) => Some(L::U32),
+            Value::U64(_) => Some(L::U64),
+            Value::U128(_) => Some(L::U128),
+            Value::U256(_) => Some(L::U256),
+
+            Value::Bytes(_) => Some(L::Vector(Box::new(L::U8))),
+            Value::String(_) => Some(L::Struct(Box::new(move_utf8_str_layout()))),
+
+            // Compound literals: cannot compute layout
+            Value::Enum(_) | Value::Struct(_) | Value::Vector(_) => None,
+        }
     }
 }
 
@@ -732,6 +817,7 @@ pub(crate) mod tests {
     use move_core_types::annotated_value::MoveTypeLayout as L;
     use move_core_types::identifier::Identifier;
     use serde_json::json;
+    use sui_types::MOVE_STDLIB_ADDRESS;
     use sui_types::base_types::STD_ASCII_MODULE_NAME;
     use sui_types::base_types::STD_ASCII_STRUCT_NAME;
     use sui_types::dynamic_field::DynamicFieldInfo;
@@ -743,9 +829,9 @@ pub(crate) mod tests {
     use super::*;
 
     /// Mock Store implementation for testing.
-    #[derive(Default)]
+    #[derive(Default, Clone)]
     pub struct MockStore {
-        data: BTreeMap<AccountAddress, (Vec<u8>, MoveTypeLayout)>,
+        data: BTreeMap<AccountAddress, OwnedSlice>,
     }
 
     impl MockStore {
@@ -764,21 +850,20 @@ pub(crate) mod tests {
             use Identifier as I;
             use MoveFieldLayout as F;
             use MoveStructLayout as S;
-            use MoveTypeLayout as T;
 
             let name_bytes = bcs::to_bytes(&name).unwrap();
             let name_type = TypeTag::from(&name_layout);
             let value_type = TypeTag::from(&value_layout);
             let df_id = derive_dynamic_field_id(parent, &name_type, &name_bytes).unwrap();
 
-            let field_bytes = bcs::to_bytes(&Field {
+            let bytes = bcs::to_bytes(&Field {
                 id: UID::new(df_id),
                 name,
                 value,
             })
             .unwrap();
 
-            let field_layout = L::Struct(Box::new(S {
+            let layout = L::Struct(Box::new(S {
                 type_: DynamicFieldInfo::dynamic_field_type(name_type, value_type),
                 fields: vec![
                     F::new(I::new("id").unwrap(), L::Struct(Box::new(UID::layout()))),
@@ -787,7 +872,7 @@ pub(crate) mod tests {
                 ],
             }));
 
-            self.data.insert(df_id.into(), (field_bytes, field_layout));
+            self.data.insert(df_id.into(), OwnedSlice { layout, bytes });
             self
         }
 
@@ -808,7 +893,6 @@ pub(crate) mod tests {
             use Identifier as I;
             use MoveFieldLayout as F;
             use MoveStructLayout as S;
-            use MoveTypeLayout as T;
 
             let name_bytes = bcs::to_bytes(&name).unwrap();
             let value_bytes = bcs::to_bytes(&value).unwrap();
@@ -839,23 +923,26 @@ pub(crate) mod tests {
                 ],
             }));
 
-            self.data.insert(dof_id.into(), (field_bytes, field_layout));
-            self.data.insert(val_id, (value_bytes, value_layout));
+            let field = OwnedSlice {
+                layout: field_layout,
+                bytes: field_bytes,
+            };
+
+            let value = OwnedSlice {
+                layout: value_layout,
+                bytes: value_bytes,
+            };
+
+            self.data.insert(dof_id.into(), field);
+            self.data.insert(val_id, value);
             self
         }
     }
 
     #[async_trait]
-    impl<'s> Store<'s> for &'s MockStore {
-        async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<Slice<'s>>> {
-            let Some((bytes, layout)) = self.data.get(&id) else {
-                return Ok(None);
-            };
-
-            Ok(Some(Slice {
-                layout,
-                bytes: bytes.as_slice(),
-            }))
+    impl Store for MockStore {
+        async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<OwnedSlice>> {
+            Ok(self.data.get(&id).cloned())
         }
     }
 
@@ -901,6 +988,22 @@ pub(crate) mod tests {
         struct_(
             &format!("0x1::option::Option<{type_}>"),
             vec![("vec", vector_(layout))],
+        )
+    }
+
+    pub fn vec_map(key: MoveTypeLayout, value: MoveTypeLayout) -> MoveTypeLayout {
+        let key_type = TypeTag::from(&key);
+        let value_type = TypeTag::from(&value);
+
+        struct_(
+            &format!("0x2::vec_map::VecMap<{key_type}, {value_type}>"),
+            vec![(
+                "contents",
+                vector_(struct_(
+                    &format!("0x2::vec_map::Entry<{key_type}, {value_type}>"),
+                    vec![("key", key), ("value", value)],
+                )),
+            )],
         )
     }
 

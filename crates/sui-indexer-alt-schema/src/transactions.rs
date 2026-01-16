@@ -1,21 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::schema::{
-    kv_transactions, tx_affected_addresses, tx_affected_objects, tx_balance_changes, tx_calls,
-    tx_digests, tx_kinds,
-};
-use diesel::{
-    backend::Backend,
-    deserialize::{self, FromSqlRow},
-    expression::AsExpression,
-    prelude::*,
-    serialize,
-    sql_types::SmallInt,
-};
-use serde::{Deserialize, Serialize};
+use diesel::backend::Backend;
+use diesel::deserialize::FromSqlRow;
+use diesel::deserialize::{self};
+use diesel::expression::AsExpression;
+use diesel::prelude::*;
+use diesel::serialize;
+use diesel::sql_types::SmallInt;
+use serde::Deserialize;
+use serde::Serialize;
 use sui_field_count::FieldCount;
 use sui_types::object::Owner;
+
+use crate::schema::kv_transactions;
+use crate::schema::tx_affected_addresses;
+use crate::schema::tx_affected_objects;
+use crate::schema::tx_balance_changes;
+use crate::schema::tx_calls;
+use crate::schema::tx_digests;
+use crate::schema::tx_kinds;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BalanceChange {

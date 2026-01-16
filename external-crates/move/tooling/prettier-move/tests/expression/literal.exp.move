@@ -22,6 +22,12 @@ fun hexstring() {
     x"10af";
 }
 
+fun string() {
+    "hello";
+    "hello\"";
+    "hello\a\t";
+}
+
 fun bool() {
     true;
     false;

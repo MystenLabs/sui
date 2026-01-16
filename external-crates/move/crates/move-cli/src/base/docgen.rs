@@ -10,7 +10,7 @@ use clap::*;
 
 use crate::base::reroot_path;
 use move_docgen::{DocgenFlags, DocgenOptions};
-use move_package_alt::flavor::MoveFlavor;
+use move_package_alt::MoveFlavor;
 use move_package_alt_compilation::{build_config::BuildConfig, find_env};
 
 /// Generate Rust style documentation for Move packages

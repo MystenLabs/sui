@@ -1,26 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::error::{BridgeError, BridgeResult};
+use crate::types::{BridgeAction, VerifiedCertifiedBridgeAction};
 use fastcrypto::traits::ToFromBytes;
 use move_core_types::ident_str;
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
+use std::str::FromStr;
+use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::bridge::{
     BRIDGE_CREATE_ADD_TOKEN_ON_SUI_MESSAGE_FUNCTION_NAME,
     BRIDGE_EXECUTE_SYSTEM_MESSAGE_FUNCTION_NAME, BRIDGE_MESSAGE_MODULE_NAME, BRIDGE_MODULE_NAME,
 };
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::CallArg;
-use sui_types::{BRIDGE_PACKAGE_ID, Identifier};
-use sui_types::{
-    TypeTag,
-    base_types::{ObjectRef, SuiAddress},
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{ObjectArg, TransactionData},
-};
-
-use crate::{
-    error::{BridgeError, BridgeResult},
-    types::{BridgeAction, VerifiedCertifiedBridgeAction},
-};
+use sui_types::transaction::{ObjectArg, TransactionData};
+use sui_types::{BRIDGE_PACKAGE_ID, Identifier, TypeTag};
 
 pub fn build_sui_transaction(
     client_address: SuiAddress,
@@ -138,7 +133,7 @@ fn build_token_bridge_approve_transaction(
                 bridge_event.nonce,
                 bridge_event.sui_address.to_vec(),
                 bridge_event.eth_chain_id,
-                bridge_event.eth_address.to_fixed_bytes().to_vec(),
+                bridge_event.eth_address.to_vec(),
                 bridge_event.token_id,
                 bridge_event.amount_sui_adjusted,
                 None,
@@ -149,7 +144,7 @@ fn build_token_bridge_approve_transaction(
             a.nonce,
             a.sui_address.to_vec(),
             a.eth_chain_id,
-            a.eth_address.to_fixed_bytes().to_vec(),
+            a.eth_address.to_vec(),
             a.token_id,
             a.amount_adjusted,
             None,
@@ -159,7 +154,7 @@ fn build_token_bridge_approve_transaction(
             a.nonce,
             a.sui_address.to_vec(),
             a.eth_chain_id,
-            a.eth_address.to_fixed_bytes().to_vec(),
+            a.eth_address.to_vec(),
             a.token_id,
             a.amount_adjusted,
             Some(a.timestamp_ms),
@@ -169,7 +164,7 @@ fn build_token_bridge_approve_transaction(
             (
                 bridge_event.eth_chain_id,
                 bridge_event.nonce,
-                bridge_event.eth_address.to_fixed_bytes().to_vec(),
+                bridge_event.eth_address.to_vec(),
                 bridge_event.sui_chain_id,
                 bridge_event.sui_address.to_vec(),
                 bridge_event.token_id,
@@ -184,7 +179,7 @@ fn build_token_bridge_approve_transaction(
             (
                 bridge_event.eth_chain_id,
                 bridge_event.nonce,
-                bridge_event.eth_address.to_fixed_bytes().to_vec(),
+                bridge_event.eth_address.to_vec(),
                 bridge_event.sui_chain_id,
                 bridge_event.sui_address.to_vec(),
                 bridge_event.token_id,
@@ -382,7 +377,7 @@ fn build_committee_blocklist_approve_transaction(
     let blocklist_type = builder.pure(blocklist_type as u8).unwrap();
     let members_to_update = members_to_update
         .into_iter()
-        .map(|m| m.to_eth_address().as_bytes().to_vec())
+        .map(|m| m.to_eth_address().to_vec())
         .collect::<Vec<_>>();
     let members_to_update = builder.pure(members_to_update).unwrap();
     let arg_bridge = builder.obj(bridge_object_arg).unwrap();
@@ -711,7 +706,7 @@ mod tests {
             get_test_sui_to_eth_bridge_action,
         },
     };
-    use ethers::types::Address as EthAddress;
+    use alloy::primitives::Address as EthAddress;
     use std::collections::HashMap;
     use std::sync::Arc;
     use sui_types::bridge::{BridgeChainId, TOKEN_ID_BTC, TOKEN_ID_USDC};

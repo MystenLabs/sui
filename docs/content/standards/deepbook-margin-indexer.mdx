@@ -1,0 +1,803 @@
+---
+title: DeepBook Margin Indexer
+sidebar_label: Indexer
+description: DeepBook Margin Indexer provides access to margin trading events including loans, liquidations, and margin pool operations.
+keywords: [DeepBook Margin Indexer, margin manager, margin pool, liquidation, loan, borrow, repay, supply, withdraw]
+---
+
+The DeepBook Margin Indexer extends the DeepBookV3 Indexer with endpoints for margin trading data. These endpoints provide access to margin manager events, margin pool operations, and liquidation monitoring.
+
+## Public endpoints
+
+The margin endpoints are available through the same public indexer as DeepBookV3.
+
+- **Mainnet**: `https://deepbook-indexer.mainnet.mystenlabs.com/`
+
+- **Testnet**: `https://deepbook-indexer.testnet.mystenlabs.com/`
+
+## Common query parameters
+
+All margin endpoints support the following common query parameters:
+
+- `start_time`: Start of time range in Unix timestamp seconds (defaults to 24 hours ago)
+- `end_time`: End of time range in Unix timestamp seconds (defaults to current time)
+- `limit`: Maximum number of results to return (defaults to 1)
+
+## Margin manager endpoints
+
+<details>
+<summary>Get margin manager creation events</summary>
+
+```http
+/margin_manager_created?margin_manager_id=<ID>
+```
+
+Returns events for when margin managers are created.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_manager_id": "0x1234...",
+        "balance_manager_id": "0x5678...",
+        "deepbook_pool_id": "0x9abc...",
+        "owner": "0xabcd...",
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get loan borrowed events</summary>
+
+```http
+/loan_borrowed?margin_manager_id=<ID>&margin_pool_id=<ID>
+```
+
+Returns events for when assets are borrowed from margin pools.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_manager_id": "0x1234...",
+        "margin_pool_id": "0x5678...",
+        "loan_amount": 1000000000,
+        "loan_shares": 1000000000,
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get loan repaid events</summary>
+
+```http
+/loan_repaid?margin_manager_id=<ID>&margin_pool_id=<ID>
+```
+
+Returns events for when borrowed assets are repaid.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_manager_id": "0x1234...",
+        "margin_pool_id": "0x5678...",
+        "repay_amount": 1000000000,
+        "repay_shares": 1000000000,
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get liquidation events</summary>
+
+```http
+/liquidation?margin_manager_id=<ID>&margin_pool_id=<ID>
+```
+
+Returns events for when margin managers are liquidated.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_manager_id": "0x1234...",
+        "margin_pool_id": "0x5678...",
+        "liquidation_amount": 1000000000,
+        "pool_reward": 10000000,
+        "pool_default": 0,
+        "risk_ratio": 800000000,
+        "onchain_timestamp": 1738000000000,
+        "remaining_base_asset": "500000000",
+        "remaining_quote_asset": "2000000000",
+        "remaining_base_debt": "0",
+        "remaining_quote_debt": "0",
+        "base_pyth_price": 100000000,
+        "base_pyth_decimals": 8,
+        "quote_pyth_price": 100000000,
+        "quote_pyth_decimals": 8
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get margin managers information</summary>
+
+```http
+/margin_managers_info
+```
+
+Returns an aggregate view of all margin managers with their associated pool and asset information.
+
+#### Response
+
+```json
+[
+    {
+        "margin_manager_id": "0x1234...",
+        "deepbook_pool_id": "0x5678...",
+        "base_asset_id": "0xabcd...",
+        "base_asset_symbol": "SUI",
+        "quote_asset_id": "0xefgh...",
+        "quote_asset_symbol": "USDC",
+        "base_margin_pool_id": "0x1111...",
+        "quote_margin_pool_id": "0x2222..."
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get margin manager states</summary>
+
+```http
+/margin_manager_states?max_risk_ratio=<FLOAT>&deepbook_pool_id=<ID>
+```
+
+Returns the current state of margin managers. This endpoint is useful for monitoring positions that may be at risk of liquidation.
+
+- `max_risk_ratio`: Filter to return only margin managers with a risk ratio below this threshold; useful for finding liquidation opportunities
+- `deepbook_pool_id`: Filter by specific DeepBook pool
+
+#### Response
+
+```json
+[
+    {
+        "id": 1,
+        "margin_manager_id": "0x1234...",
+        "deepbook_pool_id": "0x5678...",
+        "base_margin_pool_id": "0x1111...",
+        "quote_margin_pool_id": "0x2222...",
+        "base_asset_id": "0xabcd...",
+        "base_asset_symbol": "SUI",
+        "quote_asset_id": "0xefgh...",
+        "quote_asset_symbol": "USDC",
+        "risk_ratio": "1.5",
+        "base_asset": "1000000000",
+        "quote_asset": "5000000000",
+        "base_debt": "500000000",
+        "quote_debt": "2000000000",
+        "base_pyth_price": 100000000,
+        "base_pyth_decimals": 8,
+        "quote_pyth_price": 100000000,
+        "quote_pyth_decimals": 8,
+        "created_at": "2025-01-01 00:00:00",
+        "updated_at": "2025-01-01 12:00:00",
+        "current_price": "2.5",
+        "lowest_trigger_above_price": null,
+        "highest_trigger_below_price": null
+    }
+]
+```
+
+</details>
+
+## Margin pool endpoints
+
+<details>
+<summary>Get asset supplied events</summary>
+
+```http
+/asset_supplied?margin_pool_id=<ID>&supplier=<ADDRESS>
+```
+
+Returns events for when assets are supplied to margin pools.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_pool_id": "0x1234...",
+        "asset_type": "0x2::sui::SUI",
+        "supplier": "0xabcd...",
+        "amount": 1000000000,
+        "shares": 1000000000,
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get asset withdrawn events</summary>
+
+```http
+/asset_withdrawn?margin_pool_id=<ID>&supplier=<ADDRESS>
+```
+
+Returns events for when assets are withdrawn from margin pools.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_pool_id": "0x1234...",
+        "asset_type": "0x2::sui::SUI",
+        "supplier": "0xabcd...",
+        "amount": 1000000000,
+        "shares": 1000000000,
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get margin pool creation events</summary>
+
+```http
+/margin_pool_created?margin_pool_id=<ID>
+```
+
+Returns events for when margin pools are created.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_pool_id": "0x1234...",
+        "maintainer_cap_id": "0x5678...",
+        "asset_type": "0x2::sui::SUI",
+        "config_json": {
+            "margin_pool_config": {
+                "supply_cap": 10000000000000,
+                "max_utilization_rate": 950000000,
+                "protocol_spread": 50000000,
+                "min_borrow": 1000000
+            },
+            "interest_config": {
+                "base_rate": 100000,
+                "base_slope": 200000,
+                "optimal_utilization": 800000000,
+                "excess_slope": 500000
+            }
+        },
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get DeepBook pool updated events</summary>
+
+```http
+/deepbook_pool_updated?margin_pool_id=<ID>&deepbook_pool_id=<ID>
+```
+
+Returns events for when DeepBook pools are enabled or disabled for a margin pool.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_pool_id": "0x1234...",
+        "deepbook_pool_id": "0x5678...",
+        "pool_cap_id": "0x9abc...",
+        "enabled": true,
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get interest parameter update events</summary>
+
+```http
+/interest_params_updated?margin_pool_id=<ID>
+```
+
+Returns events for when interest rate parameters are updated.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_pool_id": "0x1234...",
+        "pool_cap_id": "0x5678...",
+        "config_json": {
+            "base_rate": 100000,
+            "base_slope": 200000,
+            "optimal_utilization": 800000000,
+            "excess_slope": 500000
+        },
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get margin pool configuration update events</summary>
+
+```http
+/margin_pool_config_updated?margin_pool_id=<ID>
+```
+
+Returns events for when margin pool configuration is updated.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_pool_id": "0x1234...",
+        "pool_cap_id": "0x5678...",
+        "config_json": {
+            "supply_cap": 10000000000000,
+            "max_utilization_rate": 950000000,
+            "protocol_spread": 50000000,
+            "min_borrow": 1000000
+        },
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get supplier cap minted events</summary>
+
+```http
+/supplier_cap_minted?supplier_cap_id=<ID>
+```
+
+Returns events for when supplier capabilities are minted.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "supplier_cap_id": "0x1234...",
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get supply referral minted events</summary>
+
+```http
+/supply_referral_minted?margin_pool_id=<ID>&owner=<ADDRESS>
+```
+
+Returns events for when supply referrals are minted.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_pool_id": "0x5678...",
+        "supply_referral_id": "0x1234...",
+        "owner": "0xabcd...",
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get protocol fees increased events</summary>
+
+```http
+/protocol_fees_increased?margin_pool_id=<ID>
+```
+
+Returns events for when protocol fees are increased.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_pool_id": "0x1234...",
+        "total_shares": 1000000000,
+        "referral_fees": 100000,
+        "maintainer_fees": 200000,
+        "protocol_fees": 300000,
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get referral fees claimed events</summary>
+
+```http
+/referral_fees_claimed?referral_id=<ID>&owner=<ADDRESS>
+```
+
+Returns events for when referral fees are claimed.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "referral_id": "0x1234...",
+        "owner": "0xabcd...",
+        "fees": 1000000,
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+## Admin and registry endpoints
+
+<details>
+<summary>Get maintainer cap updated events</summary>
+
+```http
+/maintainer_cap_updated?maintainer_cap_id=<ID>
+```
+
+Returns events for when maintainer capabilities are updated.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "maintainer_cap_id": "0x1234...",
+        "allowed": true,
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get maintainer fees withdrawn events</summary>
+
+```http
+/maintainer_fees_withdrawn?margin_pool_id=<ID>
+```
+
+Returns events for when maintainer fees are withdrawn.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_pool_id": "0x1234...",
+        "margin_pool_cap_id": "0x5678...",
+        "maintainer_fees": 1000000,
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get protocol fees withdrawn events</summary>
+
+```http
+/protocol_fees_withdrawn?margin_pool_id=<ID>
+```
+
+Returns events for when protocol fees are withdrawn.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "margin_pool_id": "0x1234...",
+        "protocol_fees": 1000000,
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get pause cap updated events</summary>
+
+```http
+/pause_cap_updated?pause_cap_id=<ID>
+```
+
+Returns events for when pause capabilities are updated.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "pause_cap_id": "0x1234...",
+        "allowed": true,
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get DeepBook pool registered events</summary>
+
+```http
+/deepbook_pool_registered?pool_id=<ID>
+```
+
+Returns events for when DeepBook pools are registered in the margin registry.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "pool_id": "0x1234...",
+        "config_json": {
+            "base_margin_pool_id": "0x5678...",
+            "quote_margin_pool_id": "0x9abc...",
+            "risk_ratios": {
+                "min_withdraw_risk_ratio": 1200000000,
+                "min_borrow_risk_ratio": 1100000000,
+                "liquidation_risk_ratio": 1000000000,
+                "target_liquidation_risk_ratio": 1050000000
+            },
+            "user_liquidation_reward": 50000000,
+            "pool_liquidation_reward": 10000000,
+            "enabled": true
+        },
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get DeepBook pool registry updated events</summary>
+
+```http
+/deepbook_pool_updated_registry?pool_id=<ID>
+```
+
+Returns events for when DeepBook pool registry entries are updated.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "pool_id": "0x1234...",
+        "enabled": true,
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get DeepBook pool config updated events</summary>
+
+```http
+/deepbook_pool_config_updated?pool_id=<ID>
+```
+
+Returns events for when DeepBook pool configurations are updated.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "pool_id": "0x1234...",
+        "config_json": {
+            "base_margin_pool_id": "0x5678...",
+            "quote_margin_pool_id": "0x9abc...",
+            "risk_ratios": {
+                "min_withdraw_risk_ratio": 1200000000,
+                "min_borrow_risk_ratio": 1100000000,
+                "liquidation_risk_ratio": 1000000000,
+                "target_liquidation_risk_ratio": 1050000000
+            },
+            "user_liquidation_reward": 50000000,
+            "pool_liquidation_reward": 10000000,
+            "enabled": true
+        },
+        "onchain_timestamp": 1738000000000
+    }
+]
+```
+
+</details>
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3"
+	label="DeepBookV3 repository"
+	desc="The DeepBookV3 repository on GitHub."
+/>

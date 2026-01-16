@@ -1,21 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::ops::Range;
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Result;
-use diesel::{ExpressionMethods, QueryDsl};
+use async_trait::async_trait;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    pipeline::Processor,
-    postgres::{Connection, handler::Handler},
-    types::full_checkpoint_content::Checkpoint,
-};
-use sui_indexer_alt_schema::{events::StoredEvEmitMod, schema::ev_emit_mod};
+use sui_indexer_alt_framework::pipeline::Processor;
+use sui_indexer_alt_framework::postgres::Connection;
+use sui_indexer_alt_framework::postgres::handler::Handler;
+use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
+use sui_indexer_alt_schema::events::StoredEvEmitMod;
+use sui_indexer_alt_schema::schema::ev_emit_mod;
 
 use crate::handlers::cp_sequence_numbers::tx_interval;
-use async_trait::async_trait;
 
 pub(crate) struct EvEmitMod;
 
@@ -88,10 +90,9 @@ impl Handler for EvEmitMod {
 mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
-    use sui_indexer_alt_framework::{
-        Indexer,
-        types::{event::Event, test_checkpoint_data_builder::TestCheckpointBuilder},
-    };
+    use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_framework::types::event::Event;
+    use sui_indexer_alt_framework::types::test_checkpoint_data_builder::TestCheckpointBuilder;
     use sui_indexer_alt_schema::MIGRATIONS;
 
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;

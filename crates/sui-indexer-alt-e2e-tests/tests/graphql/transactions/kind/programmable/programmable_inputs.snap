@@ -25,7 +25,7 @@ task 3, lines 53-55:
 Checkpoint created: 1
 
 task 4, lines 56-57:
-//# programmable --sender A --inputs object(1,0) 10  
+//# programmable --sender A --inputs object(1,0) 10
 //> 0: test::simple::add(Input(0), Input(1))
 mutated: object(0,0), object(1,0)
 gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 2317392, non_refundable_storage_fee: 23408
@@ -45,7 +45,7 @@ task 7, lines 66-68:
 Checkpoint created: 3
 
 task 8, lines 69-72:
-//# programmable --sender A --inputs 200u64 @A  
+//# programmable --sender A --inputs 200u64 @A
 // Setup: Create coin and transfer it to A's address for Receiving test
 //> 0: test::simple::new_coin(Input(0));
 //> TransferObjects([Result(0)], Input(1))
@@ -82,12 +82,12 @@ Response: {
         "inputs": {
           "nodes": [
             {
-              "__typename": "Pure",
-              "bytes": "KgAAAAAAAAA="
+              "__typename": "MoveValue",
+              "json": "42"
             },
             {
-              "__typename": "Pure",
-              "bytes": "/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4="
+              "__typename": "MoveValue",
+              "json": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ]
         }
@@ -97,7 +97,7 @@ Response: {
 }
 
 task 13, lines 105-126:
-//# run-graphql  
+//# run-graphql
 Response: {
   "data": {
     "sharedInputTest": {
@@ -113,7 +113,7 @@ Response: {
               "mutable": true
             },
             {
-              "__typename": "Pure"
+              "__typename": "MoveValue"
             }
           ]
         }
@@ -169,7 +169,7 @@ Response: {
               }
             },
             {
-              "__typename": "Pure"
+              "__typename": "MoveValue"
             }
           ]
         }

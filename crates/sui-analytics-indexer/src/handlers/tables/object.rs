@@ -8,19 +8,23 @@ use async_trait::async_trait;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_json_rpc_types::SuiMoveStruct;
 use sui_types::TypeTag;
-use sui_types::base_types::{EpochId, ObjectID};
+use sui_types::base_types::EpochId;
+use sui_types::base_types::ObjectID;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::object::Object;
 
-use super::{
-    ObjectStatusTracker, get_is_consensus, get_move_struct, get_owner_address, get_owner_type,
-    initial_shared_version,
-};
 use crate::Row;
+use crate::handlers::tables::ObjectStatusTracker;
+use crate::handlers::tables::get_is_consensus;
+use crate::handlers::tables::get_move_struct;
+use crate::handlers::tables::get_owner_address;
+use crate::handlers::tables::get_owner_type;
+use crate::handlers::tables::initial_shared_version;
 use crate::metrics::Metrics;
 use crate::package_store::PackageCache;
 use crate::pipeline::Pipeline;
-use crate::tables::{ObjectRow, ObjectStatus};
+use crate::tables::ObjectRow;
+use crate::tables::ObjectStatus;
 
 pub struct ObjectProcessor {
     package_cache: Arc<PackageCache>,

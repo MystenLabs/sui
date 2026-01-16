@@ -3,11 +3,16 @@
 
 use std::ops::Deref;
 
-use async_graphql::{
-    InputValueError, InputValueResult, Scalar, ScalarType, Value, connection::CursorType,
-};
-use fastcrypto::encoding::{Base64, Encoding};
-use serde::{Serialize, de::DeserializeOwned};
+use async_graphql::InputValueError;
+use async_graphql::InputValueResult;
+use async_graphql::Scalar;
+use async_graphql::ScalarType;
+use async_graphql::Value;
+use async_graphql::connection::CursorType;
+use fastcrypto::encoding::Base64;
+use fastcrypto::encoding::Encoding;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 /// Cursor that hides its value by encoding it as JSON and then Base64.
 ///

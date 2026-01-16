@@ -18,24 +18,32 @@
 
 use std::collections::HashMap;
 use std::ops::Range;
-use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::sync::RwLock;
+use std::time::Duration;
+use std::time::Instant;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
+use anyhow::bail;
 use async_trait::async_trait;
 use object_store::PutPayload;
 use object_store::path::Path as ObjectPath;
 use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_framework::pipeline::Processor;
-use sui_indexer_alt_framework::store::{Connection, Store, TransactionalStore};
-use sui_indexer_alt_framework_store_traits::{
-    CommitterWatermark, PrunerWatermark, ReaderWatermark,
-};
+use sui_indexer_alt_framework::store::Connection;
+use sui_indexer_alt_framework::store::Store;
+use sui_indexer_alt_framework::store::TransactionalStore;
+use sui_indexer_alt_framework_store_traits::CommitterWatermark;
+use sui_indexer_alt_framework_store_traits::PrunerWatermark;
+use sui_indexer_alt_framework_store_traits::ReaderWatermark;
 use sui_types::base_types::EpochId;
 use tokio::sync::mpsc;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
-use crate::config::{FileFormat, IndexerConfig};
+use crate::config::FileFormat;
+use crate::config::IndexerConfig;
 use crate::handlers::CheckpointRows;
 use crate::metrics::Metrics;
 use crate::schema::RowSchema;
@@ -111,7 +119,10 @@ mod migration;
 mod uploader;
 
 pub use live::LiveStore;
-pub use migration::{FileRangeEntry, FileRangeIndex, MigrationStore, WatermarkUpdateError};
+pub use migration::FileRangeEntry;
+pub use migration::FileRangeIndex;
+pub use migration::MigrationStore;
+pub use migration::WatermarkUpdateError;
 
 use uploader::PendingFileUpload;
 

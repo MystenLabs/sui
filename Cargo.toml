@@ -5,7 +5,9 @@ exclude = [
     "examples/tic-tac-toe/cli",
   "examples/regulated-coin/rust-client",
   "examples/custom-indexer/rust",
+  "examples/rust/basic-sui-indexer",
   "examples/rust/clickhouse-sui-indexer",
+  "examples/rust/walrus-attributes-indexer",
   "external-crates/move/crates/jsonrpc",
     "external-crates/move/crates/bytecode-interpreter-crypto",
     "external-crates/move/crates/bytecode-verifier-libfuzzer",
@@ -108,7 +110,6 @@ members = [
   "crates/sui-data-ingestion",
   "crates/sui-data-ingestion-core",
   "crates/sui-data-store",
-  "crates/sui-deepbook-indexer",
   "crates/sui-default-config",
   "crates/sui-display",
   "crates/sui-e2e-tests",
@@ -121,12 +122,7 @@ members = [
   "crates/sui-framework-tests",
   "crates/sui-futures",
   "crates/sui-genesis-builder",
-  "crates/sui-graphql-e2e-tests",
-  "crates/sui-graphql-rpc",
-  "crates/sui-graphql-rpc-client",
-  "crates/sui-graphql-rpc-headers",
   "crates/sui-http",
-  "crates/sui-indexer",
   "crates/sui-indexer-alt",
   "crates/sui-indexer-alt-consistent-api",
   "crates/sui-indexer-alt-consistent-store",
@@ -201,7 +197,6 @@ members = [
   "crates/sui-types",
   "crates/sui-upgrade-compatibility-transactional-tests",
   "crates/sui-verifier-transactional-tests",
-  "crates/suins-indexer",
   "crates/telemetry-subscribers",
   "crates/test-cluster",
   "crates/transaction-fuzzer",
@@ -228,7 +223,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.64.0"
+version = "1.65.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -239,6 +234,11 @@ split-debuginfo = 'packed'
 strip = 'debuginfo'
 # Exit process with SIGABRT when any thread panics
 panic = 'abort'
+
+# Same as release, but unwind on panic.
+[profile.release-unwind]
+inherits = "release"
+panic = 'unwind'
 
 # Same as release, but build with lto (~50min build time).
 [profile.release-lto]
@@ -669,9 +669,9 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "4b5f0f1d06
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "4b5f0f1d06a31c8ef78ec2e5b446bc633e4e2f77" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "339c2272fd5b8fb4e1fa6662cfa9acdbb0d05704", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "339c2272fd5b8fb4e1fa6662cfa9acdbb0d05704", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "339c2272fd5b8fb4e1fa6662cfa9acdbb0d05704" }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "57b6cb6a17198d291637b64ef7cb8807796a3af9", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "57b6cb6a17198d291637b64ef7cb8807796a3af9", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "57b6cb6a17198d291637b64ef7cb8807796a3af9" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -709,12 +709,8 @@ sui-futures = { path = "crates/sui-futures" }
 sui-framework = { path = "crates/sui-framework" }
 sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
 sui-framework-tests = { path = "crates/sui-framework-tests" }
-sui-graphql-rpc = { path = "crates/sui-graphql-rpc" }
-sui-graphql-rpc-client = { path = "crates/sui-graphql-rpc-client" }
-sui-graphql-rpc-headers = { path = "crates/sui-graphql-rpc-headers" }
 sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-http = { path = "crates/sui-http" }
-sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt = { path = "crates/sui-indexer-alt" }
 sui-indexer-alt-consistent-api = { path = "crates/sui-indexer-alt-consistent-api" }
 sui-indexer-alt-consistent-store = { path = "crates/sui-indexer-alt-consistent-store" }

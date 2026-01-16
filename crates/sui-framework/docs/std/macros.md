@@ -12,6 +12,10 @@ This module holds shared implementation of macros used in <code>std</code>
 -  [Macro function `num_pow`](#std_macros_num_pow)
 -  [Macro function `num_sqrt`](#std_macros_num_sqrt)
 -  [Macro function `num_to_string`](#std_macros_num_to_string)
+-  [Macro function `num_checked_add`](#std_macros_num_checked_add)
+-  [Macro function `num_checked_sub`](#std_macros_num_checked_sub)
+-  [Macro function `num_checked_mul`](#std_macros_num_checked_mul)
+-  [Macro function `num_checked_div`](#std_macros_num_checked_div)
 -  [Macro function `range_do`](#std_macros_range_do)
 -  [Macro function `range_do_eq`](#std_macros_range_do_eq)
 -  [Macro function `do`](#std_macros_do)
@@ -238,6 +242,114 @@ This module holds shared implementation of macros used in <code>std</code>
     };
     buffer.reverse();
     buffer.to_string()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_checked_add"></a>
+
+## Macro function `num_checked_add`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_add">num_checked_add</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_add">num_checked_add</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> y = $y;
+    <b>let</b> max_t = $max_t;
+    <b>if</b> (y &gt; max_t - x) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x + y)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_checked_sub"></a>
+
+## Macro function `num_checked_sub`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_sub">num_checked_sub</a>&lt;$T&gt;($x: $T, $y: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_sub">num_checked_sub</a>&lt;$T&gt;($x: $T, $y: $T): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> y = $y;
+    <b>if</b> (x &lt; y) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x - y)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_checked_mul"></a>
+
+## Macro function `num_checked_mul`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_mul">num_checked_mul</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_mul">num_checked_mul</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> y = $y;
+    <b>let</b> max_t = $max_t;
+    <b>if</b> (x == 0 || y == 0) <a href="../std/option.md#std_option_some">option::some</a>(0)
+    <b>else</b> <b>if</b> (y &gt; max_t / x) <a href="../std/option.md#std_option_none">option::none</a>()
+    <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x * y)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_checked_div"></a>
+
+## Macro function `num_checked_div`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_div">num_checked_div</a>&lt;$T&gt;($x: $T, $y: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_div">num_checked_div</a>&lt;$T&gt;($x: $T, $y: $T): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> y = $y;
+    <b>if</b> (y == 0) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x / y)
 }
 </code></pre>
 

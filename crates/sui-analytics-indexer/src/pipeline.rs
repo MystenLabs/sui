@@ -8,19 +8,27 @@ use std::sync::Arc;
 use anyhow::Result;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use strum_macros::EnumIter;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 
 use crate::config::PipelineConfig;
-use crate::handlers::tables::{
-    CheckpointProcessor, DynamicFieldProcessor, EventProcessor, MoveCallProcessor, ObjectProcessor,
-    PackageBCSProcessor, PackageProcessor, TransactionBCSProcessor, TransactionObjectsProcessor,
-    TransactionProcessor, WrappedObjectProcessor,
-};
-use crate::handlers::{AnalyticsHandler, Row};
+use crate::handlers::AnalyticsHandler;
+use crate::handlers::Row;
+use crate::handlers::tables::CheckpointProcessor;
+use crate::handlers::tables::DynamicFieldProcessor;
+use crate::handlers::tables::EventProcessor;
+use crate::handlers::tables::MoveCallProcessor;
+use crate::handlers::tables::ObjectProcessor;
+use crate::handlers::tables::PackageBCSProcessor;
+use crate::handlers::tables::PackageProcessor;
+use crate::handlers::tables::TransactionBCSProcessor;
+use crate::handlers::tables::TransactionObjectsProcessor;
+use crate::handlers::tables::TransactionProcessor;
+use crate::handlers::tables::WrappedObjectProcessor;
 use crate::metrics::Metrics;
 use crate::package_store::PackageCache;
 use crate::store::AnalyticsStore;

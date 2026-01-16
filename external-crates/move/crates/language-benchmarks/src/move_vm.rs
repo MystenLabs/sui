@@ -22,8 +22,10 @@ use move_vm_runtime::{
     natives::move_stdlib::stdlib_native_functions,
 };
 use move_vm_runtime::{runtime::MoveRuntime, shared::gas::UnmeteredGasMeter};
-use once_cell::sync::Lazy;
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{Arc, LazyLock},
+};
 
 use anyhow::Result;
 use move_package::BuildConfig;
@@ -31,7 +33,7 @@ use move_package::compilation::compiled_package::CompiledPackage;
 
 const BENCH_FUNCTION_PREFIX: &str = "bench_";
 
-static PRECOMPILED_MOVE_STDLIB: Lazy<PreCompiledProgramInfo> = Lazy::new(|| {
+static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: None,

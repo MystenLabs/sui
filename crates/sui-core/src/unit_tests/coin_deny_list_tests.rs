@@ -25,7 +25,6 @@ use sui_types::transaction::{
     CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
     Transaction, TransactionData,
 };
-use sui_types::type_input::TypeInput;
 use sui_types::{SUI_DENY_LIST_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID};
 
 // Test that a regulated coin can be created and all the necessary objects are created with the right types.
@@ -284,8 +283,7 @@ async fn test_regulated_coin_v2_funds_withdraw_deny() {
 
     // Build the programmable transaction with a funds withdrawal argument for the denied coin.
     let mut builder = ProgrammableTransactionBuilder::new();
-    let withdraw_arg =
-        FundsWithdrawalArg::balance_from_sender(1, TypeInput::from(regulated_coin_type.clone()));
+    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(1, regulated_coin_type.clone());
     builder.funds_withdrawal(withdraw_arg).unwrap();
     let amount = builder.pure(1u64).unwrap();
     builder.programmable_move_call(
