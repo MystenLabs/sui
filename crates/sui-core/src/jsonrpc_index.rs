@@ -19,6 +19,7 @@ use prometheus::{
     register_int_counter_with_registry,
 };
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use sui_types::accumulator_event::AccumulatorEvent;
 use typed_store::TypedStoreError;
 use typed_store::rocksdb::compaction_filter::Decision;
 
@@ -240,6 +241,8 @@ pub struct IndexStoreTables {
     owner_index: DBMap<OwnerIndexKey, ObjectInfo>,
 
     coin_index_2: DBMap<CoinIndexKey2, CoinInfo>,
+    // Simple index that just tracks the existance of an address balance for an address.
+    address_balances: DBMap<(SuiAddress, TypeTag), ()>,
 
     /// This is an index of object references to currently existing dynamic field object, indexed by the
     /// composite key of the object ID of their parent and the object ID of the dynamic field object.
@@ -736,6 +739,7 @@ impl IndexStore {
         digest: &TransactionDigest,
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
+        accumulator_events: Vec<AccumulatorEvent>,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
         let mut batch = self.tables.transactions_from_addr.batch();
@@ -788,6 +792,15 @@ impl IndexStore {
 
         // Coin Index
         let cache_updates = self.index_coin(digest, &mut batch, &object_index_changes, tx_coins)?;
+
+        // update address balances index
+        let address_balance_updates = accumulator_events.into_iter().filter_map(|event| {
+            let ty = &event.write.address.ty;
+            // Only process events with Balance<T> types
+            let coin_type = sui_types::balance::Balance::maybe_get_balance_type_param(ty)?;
+            Some(((event.write.address.address, coin_type), ()))
+        });
+        batch.insert_batch(&self.tables.address_balances, address_balance_updates)?;
 
         // Owner index
         batch.delete_batch(
@@ -1540,6 +1553,19 @@ impl IndexStore {
             .collect())
     }
 
+    pub fn get_address_balance_coin_types_iter(
+        &self,
+        owner: SuiAddress,
+    ) -> impl Iterator<Item = TypeTag> {
+        let start_key = (owner, TypeTag::Bool);
+        self.tables()
+            .address_balances
+            .safe_iter_with_bounds(Some(start_key), None)
+            .map(|result| result.expect("iterator db error"))
+            .take_while(move |(key, _)| key.0 == owner)
+            .map(|(key, _)| key.1)
+    }
+
     pub fn get_owned_coins_iterator(
         coin_index: &DBMap<CoinIndexKey2, CoinInfo>,
         owner: SuiAddress,
@@ -1966,6 +1992,7 @@ mod tests {
             &TransactionDigest::random(),
             1234,
             Some(tx_coins),
+            vec![],
         )?;
 
         let balance_from_db = IndexStore::get_balance_from_db(
@@ -2008,6 +2035,7 @@ mod tests {
             &TransactionDigest::random(),
             1234,
             Some(tx_coins),
+            vec![],
         )?;
         let balance_from_db = IndexStore::get_balance_from_db(
             index_store.metrics.clone(),

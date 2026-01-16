@@ -485,13 +485,8 @@ impl StateRead for AuthorityState {
                 let indexes = indexes
                     .as_ref()
                     .ok_or(SuiErrorKind::IndexStoreNotAvailable)?;
-                let address_balances = get_all_balances_for_owner(
-                    owner,
-                    child_object_resolver.as_ref(),
-                    indexes.tables(),
-                    usize::MAX,
-                    None,
-                )?;
+                let address_balances =
+                    get_all_balances_for_owner(owner, child_object_resolver.as_ref(), indexes)?;
                 let coin_balances = (*indexes.get_all_coin_object_balances(owner)?).clone();
                 let mut all_balances = coin_balances;
                 for (coin_type, balance) in address_balances {
