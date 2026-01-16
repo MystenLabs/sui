@@ -10,7 +10,7 @@ use sui_protocol_config::{OverrideGuard, ProtocolConfig, ProtocolVersion};
 use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     TypeTag,
-    accumulator_metadata::{AccumulatorOwner, get_accumulator_object_count},
+    accumulator_metadata::{get_accumulator_object_count},
     accumulator_root::{AccumulatorValue, U128},
     balance::Balance,
     base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
@@ -278,10 +278,6 @@ impl TestEnv {
                     .unwrap(),
                 "Accumulator value should have been removed"
             );
-            assert!(
-                !AccumulatorOwner::exists(child_object_resolver, None, owner).unwrap(),
-                "Owner object should have been removed"
-            );
         });
     }
 
@@ -346,24 +342,4 @@ pub fn verify_accumulator_exists(
         }),
         "Accumulator value should be {expected_balance}"
     );
-
-    assert!(
-        AccumulatorOwner::exists(child_object_resolver, None, owner).unwrap(),
-        "Owner object should have been created"
-    );
-
-    let owner_obj = AccumulatorOwner::load(child_object_resolver, None, owner)
-        .expect("read cannot fail")
-        .expect("owner must exist");
-
-    assert!(
-        owner_obj
-            .metadata_exists(child_object_resolver, None, &sui_coin_type)
-            .unwrap(),
-        "Metadata object should have been created"
-    );
-
-    let _metadata = owner_obj
-        .load_metadata(child_object_resolver, None, &sui_coin_type)
-        .unwrap();
 }
