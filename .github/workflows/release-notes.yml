@@ -54,6 +54,8 @@ jobs:
       - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # pin@v5.0.0
         with:
           python-version: 3.10.10
+      - name: Install pytest
+        run: pip install pytest
       - name: Run release_notes.py tests
         run: |
           cd scripts
