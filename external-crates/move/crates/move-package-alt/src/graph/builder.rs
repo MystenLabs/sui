@@ -264,6 +264,49 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
         node_to_id
     }
 
+    /// Load the entire subgraph rooted at `package` into `graph` and `visited` from the lockfile
+    /// of `package`. Returns the node for `package` or `None` if there is no lockfile or if the
+    /// lockfile is out-of-date
+    ///
+    /// precondition: package is loaded but its deps might not be
+    fn add_subgraph_from_lockfile(&self) -> PackageResult<Option<NodeIndex>> {
+        // for dep in package.transitive_deps_from_lockfile
+        //   load dep
+        //   if dep.digest doesn't match lockfile digest
+        //      return None
+        //   add_subgraph(dep)
+        //
+        // for dep in package.direct_deps
+        //   add edge from package to dep
+        //
+        // return dep
+        todo!()
+    }
+
+    /// Load the entire subgraph rooted at `package` into `graph` and `visited` by first pinning
+    /// the dependencies of `package` and then recursively loading the dependencies (from their
+    /// lockfiles or manifests)
+    fn add_subgraph_from_manifest(&self) -> PackageResult<NodeIndex> {
+        // pin direct deps of package
+        // for dep in direct deps
+        //   direct_dep = add_subgraph(dep)
+        //   add edge from package to direct_dep
+        todo!()
+    }
+
+    /// Load the subgraph rooted at `package` into `graph` and `visited` by first trying to load
+    /// from the lockfile of `package` and then repinning if that fails
+    ///
+    /// precondition: package is loaded but its deps might not be
+    fn add_subgraph(&self) -> PackageResult<NodeIndex> {
+        // if `package` is in `visited`, return early
+        // add package to graph
+        // add_subgraph_from_lockfile(package).or_else(add_subgraph_from_manifest(package))
+        // return `package`
+
+        todo!()
+    }
+
     /// Adds nodes and edges for the graph rooted at `package` to `graph` and returns the node ID for
     /// `package`. Nodes are constructed by fetching the dependencies. If this function returns successfully,
     /// all nodes that it adds to `graph` will be set to `Some`.
@@ -271,7 +314,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
     /// `visited` is used to short-circuit refetching - if a node is in `visited` then neither it nor its
     /// dependencies will be readded.
     #[allow(clippy::type_complexity)] // TODO
-    pub async fn add_transitive_manifest_deps(
+    pub async fn add_transitive_deps(
         &self,
         package: Arc<Package<F>>,
         env: &Environment,
@@ -279,6 +322,19 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
         visited: Arc<Mutex<BTreeMap<(EnvironmentName, PackagePath), NodeIndex>>>,
         mtx: &PackageSystemLock,
     ) -> PackageResult<NodeIndex> {
+        // Postcondition: graph rooted at package is correctly built
+        // 1. Check visited & return early
+        // 2. Get transitive deps from package
+        //  - Recursively load them and add them to the graph
+        //  - Check digests & add edges and return if OK
+        // 3. If we don't have (valid) transitive deps
+        //  - Get direct deps from package manifest
+        //  - Pin
+        //  - Recursively load them  and add them to the graph
+        //  - Add edges to deps
+        //
+        //
+
         // return early if node is cached; add empty node to graph and visited list otherwise
         let index = match visited
             .lock()
@@ -288,6 +344,8 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
             Entry::Occupied(entry) => return Ok(*entry.get()),
             Entry::Vacant(entry) => *entry.insert(graph.lock().expect("unpoisoned").add_node(None)),
         };
+
+        // try to load from lockfile
 
         // pin dependencies
         let pinned = PinnedDependencyInfo::pin::<F>(

@@ -11,6 +11,7 @@ mod dependency;
 mod errors;
 mod flavor;
 mod graph;
+mod graph2;
 mod logging;
 mod package;
 
