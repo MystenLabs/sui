@@ -30,6 +30,9 @@ pub(crate) struct NaiveObjectFundsWithdrawScheduler {
 }
 
 struct Inner {
+    /// The accumulator version of the most recent object funds withdraw transaction that was scheduled.
+    /// We use this to track whether we have moved on to a new consensus commit.
+    last_scheduled_accumulator_version: SequenceNumber,
     /// Unsettled withdraws in the current consensus commit (identified by the accumulator version).
     /// This is cleared whenever we settle a new version.
     /// We must track these because when we execute a transaction, the witdhraws are not immediately settled,
@@ -47,6 +50,7 @@ impl NaiveObjectFundsWithdrawScheduler {
         Self {
             funds_read,
             inner: Arc::new(RwLock::new(Inner {
+                last_scheduled_accumulator_version: starting_accumulator_version,
                 unsettled_withdraws: BTreeMap::new(),
             })),
             accumulator_version_sender: Arc::new(accumulator_version_sender),
@@ -112,20 +116,25 @@ impl ObjectFundsWithdrawSchedulerTrait for NaiveObjectFundsWithdrawScheduler {
         accumulator_version: SequenceNumber,
     ) -> ObjectFundsWithdrawStatus {
         let last_settled_version = *self.accumulator_version_receiver.borrow();
-        debug!(
-            ?last_settled_version,
-            ?accumulator_version,
-            "Scheduling object funds withdraws"
-        );
-        // This function is called during execution, which means this transaction is not committed yet,
-        // so the settlement transaction at the end of the same consensus commit cannot have settled yet.
-        assert!(
-            accumulator_version >= last_settled_version,
-            "accumulator_version: {}, last_settled_version: {}",
-            accumulator_version,
-            last_settled_version
-        );
-        if accumulator_version == last_settled_version {
+        {
+            let mut inner = self.inner.write();
+            let last_scheduled_version = inner.last_scheduled_accumulator_version;
+            assert!(accumulator_version >= last_scheduled_version);
+            if accumulator_version > last_scheduled_version {
+                inner.last_scheduled_accumulator_version = accumulator_version;
+                inner.unsettled_withdraws.clear();
+            }
+            debug!(
+                last_settled_version =? last_settled_version.value(),
+                last_scheduled_version =? last_scheduled_version.value(),
+                withdraw_accumulator_version =? accumulator_version.value(),
+                "Scheduling object funds withdraws"
+            );
+        }
+        // It is possible for the settled version to be ahead of the last scheduled version,
+        // because settlement transactions that come from checkpoint executor do not depend
+        // on the object funds withdraws, and can execute in parallel or in advance.
+        if accumulator_version <= last_settled_version {
             if self.try_withdraw(&object_withdraws, accumulator_version) {
                 return ObjectFundsWithdrawStatus::SufficientFunds;
             } else {
@@ -159,12 +168,10 @@ impl ObjectFundsWithdrawSchedulerTrait for NaiveObjectFundsWithdrawScheduler {
     }
 
     fn settle_accumulator_version(&self, next_accumulator_version: SequenceNumber) {
-        let mut inner = self.inner.write();
         // unwrap is safe because the scheduler always holds a reference to the receiver.
         self.accumulator_version_sender
             .send(next_accumulator_version)
             .unwrap();
-        inner.unsettled_withdraws.clear();
     }
 
     fn close_epoch(&self) {

@@ -35,9 +35,9 @@ use crate::signature_verification::{
 };
 use crate::type_input::TypeInput;
 use crate::{
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
-    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+    SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
@@ -1538,6 +1538,14 @@ impl TransactionKind {
             self,
             TransactionKind::EndOfEpochTransaction(_) | TransactionKind::ChangeEpoch(_)
         )
+    }
+
+    pub fn is_accumulator_barrier_settle_tx(&self) -> bool {
+        matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
+            && self.shared_input_objects().any(|obj| {
+                obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
+                    && obj.mutability == SharedObjectMutability::Mutable
+            })
     }
 
     /// If this is advance epoch transaction, returns (total gas charged, total gas rebated).
