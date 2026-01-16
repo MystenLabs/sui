@@ -210,3 +210,54 @@ async fn test_settle_accumulator_version() {
         SequenceNumber::from_u64(1)
     );
 }
+
+#[tokio::test]
+async fn test_account_version_ahead_of_schedule() {
+    let account = ObjectID::random();
+    let funds_read = Arc::new(MockFundsRead::new(
+        SequenceNumber::from_u64(0),
+        BTreeMap::from([(account, 100)]),
+    ));
+    funds_read.settle_funds_changes(
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 1)]),
+        SequenceNumber::from_u64(1),
+    );
+    let scheduler =
+        NaiveObjectFundsWithdrawScheduler::new(funds_read.clone(), SequenceNumber::from_u64(0));
+    let result = scheduler.schedule(
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
+        SequenceNumber::from_u64(0),
+    );
+    let ObjectFundsWithdrawStatus::Pending(receiver) = result else {
+        panic!("Expected pending status");
+    };
+    let result = receiver.await.unwrap();
+    assert_eq!(result, FundsWithdrawStatus::Insufficient);
+
+    let result = scheduler.schedule(
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 100)]),
+        SequenceNumber::from_u64(0),
+    );
+    assert!(matches!(result, ObjectFundsWithdrawStatus::SufficientFunds));
+}
+
+#[tokio::test]
+async fn test_settle_ahead_of_schedule() {
+    let account = ObjectID::random();
+    let funds_read = Arc::new(MockFundsRead::new(
+        SequenceNumber::from_u64(0),
+        BTreeMap::from([(account, 100)]),
+    ));
+    let scheduler =
+        NaiveObjectFundsWithdrawScheduler::new(funds_read.clone(), SequenceNumber::from_u64(0));
+    scheduler.settle_accumulator_version(SequenceNumber::from_u64(1));
+    let result = scheduler.schedule(
+        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
+        SequenceNumber::from_u64(0),
+    );
+    let ObjectFundsWithdrawStatus::Pending(receiver) = result else {
+        panic!("Expected pending status");
+    };
+    let result = receiver.await.unwrap();
+    assert_eq!(result, FundsWithdrawStatus::Insufficient);
+}

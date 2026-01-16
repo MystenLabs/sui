@@ -172,7 +172,7 @@ impl TestEnv {
             .collect();
         let mut accumulator_object = self.get_accumulator_object();
         let next_version = accumulator_object.version().next();
-        self.scheduler.settle_funds(FundsSettlement {
+        self.scheduler.settle_address_funds(FundsSettlement {
             next_accumulator_version: next_version,
             funds_changes: funds_changes.clone(),
         });
