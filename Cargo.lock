@@ -1986,29 +1986,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-sdk-dynamodb"
-version = "1.65.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "873144cfb097fc75555f2b2728fa4d5f705a17a4613a0f017baff2f7cfea2b09"
-dependencies = [
- "aws-credential-types",
- "aws-runtime",
- "aws-smithy-async",
- "aws-smithy-http",
- "aws-smithy-json",
- "aws-smithy-runtime",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "aws-types",
- "bytes",
- "fastrand 2.3.0",
- "http 0.2.9",
- "once_cell",
- "regex-lite",
- "tracing",
-]
-
-[[package]]
 name = "aws-sdk-ec2"
 version = "1.110.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14652,38 +14629,6 @@ dependencies = [
  "sha2 0.10.9",
  "signature 2.2.0",
  "sui-sdk-types",
-]
-
-[[package]]
-name = "sui-data-ingestion"
-version = "1.65.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "aws-config",
- "aws-sdk-dynamodb",
- "backoff",
- "base64-url",
- "bcs",
- "byteorder",
- "bytes",
- "futures",
- "mysten-metrics",
- "object_store",
- "prometheus",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "serde_yaml 0.8.26",
- "sui-data-ingestion-core",
- "sui-kvstore",
- "sui-storage",
- "sui-types",
- "telemetry-subscribers",
- "tempfile",
- "tokio",
- "tracing",
- "url",
 ]
 
 [[package]]

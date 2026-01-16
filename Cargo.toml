@@ -111,7 +111,6 @@ members = [
   "crates/sui-config",
   "crates/sui-core",
   "crates/sui-cost",
-  "crates/sui-data-ingestion",
   "crates/sui-data-ingestion-core",
   "crates/sui-data-store",
   "crates/sui-default-config",
@@ -698,7 +697,6 @@ sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
-sui-data-ingestion = { path = "crates/sui-data-ingestion" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
 sui-data-store = { path = "crates/sui-data-store" }
 sui-default-config = { path = "crates/sui-default-config" }
