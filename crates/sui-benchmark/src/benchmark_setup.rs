@@ -55,7 +55,9 @@ impl BenchmarkSetup {
             let mut fullnodes: Vec<Arc<dyn ValidatorProxy + Send + Sync>> = vec![];
             for fullnode_rpc_url in fullnode_rpc_urls.iter() {
                 info!("Using FullNodeProxy: {:?}", fullnode_rpc_url);
-                fullnodes.push(Arc::new(FullNodeProxy::from_url(fullnode_rpc_url).await?));
+                fullnodes.push(Arc::new(
+                    FullNodeProxy::from_url(fullnode_rpc_url, registry).await?,
+                ));
             }
             fullnodes
         } else {
