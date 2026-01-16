@@ -13,12 +13,14 @@ const EInvariantViolation: u64 = 0;
 ///
 /// Metadata system has been removed, but structs must remain for backwards compatibility.
 
+#[allow(unused_field)]
 public struct OwnerKey has copy, drop, store {
     owner: address,
 }
 
 /// An owner field, to which all AccumulatorMetadata fields for the owner are
 /// attached.
+#[allow(unused_field)]
 public struct Owner has store {
     /// The individual balances owned by the owner.
     balances: bag::Bag,
@@ -28,6 +30,7 @@ public struct Owner has store {
 public struct MetadataKey<phantom T>() has copy, drop, store;
 
 /// A metadata field for a balance field with type T.
+#[allow(unused_field)]
 public struct Metadata<phantom T> has store {
     /// Any per-balance fields we wish to add in the future.
     fields: bag::Bag,
