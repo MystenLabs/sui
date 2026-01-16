@@ -6271,13 +6271,8 @@ impl RandomnessRoundReceiver {
             let mut effects = match result {
                 Ok(result) => result,
                 Err(_) => {
-                    if cfg!(debug_assertions) {
-                        // Crash on randomness update execution timeout in debug builds.
-                        panic!(
-                            "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
-                        );
-                    }
-                    warn!(
+                    // Crash on randomness update execution timeout in debug builds.
+                    debug_fatal!(
                         "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
                     );
                     // Continue waiting as long as necessary in non-debug builds.
