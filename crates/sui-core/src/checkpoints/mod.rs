@@ -1589,7 +1589,9 @@ impl CheckpointBuilder {
             funds_changes,
         };
 
-        self.state.execution_scheduler().settle_funds(settlements);
+        self.state
+            .execution_scheduler()
+            .settle_address_funds(settlements);
 
         (tx_key, settlement_effects)
     }

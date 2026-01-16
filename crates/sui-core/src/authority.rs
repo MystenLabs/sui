@@ -1607,6 +1607,7 @@ impl AuthorityState {
         }
 
         let scheduling_source = execution_env.scheduling_source;
+        let accumulator_version = execution_env.assigned_versions.accumulator_version;
         let mysticeti_fp_outputs = if epoch_store.protocol_config().mysticeti_fastpath() {
             tx_cache_reader.get_mysticeti_fastpath_outputs(tx_digest)
         } else {
@@ -1700,6 +1701,21 @@ impl AuthorityState {
 
                 assert_eq!(sys_jwks, active_jwks);
             }
+        }
+
+        // TODO: We should also settle address funds during execution,
+        // instead of from checkpoint builder. It will improve performance
+        // since we will be settling as soon as we can.
+        if certificate
+            .transaction_data()
+            .kind()
+            .is_accumulator_barrier_settle_tx()
+        {
+            // unwrap safe because we assign accumulator version for every transaction
+            // when accumulator is enabled.
+            let next_accumulator_version = accumulator_version.unwrap().next();
+            self.execution_scheduler
+                .settle_object_funds(next_accumulator_version);
         }
 
         tx_guard.commit_tx();
@@ -4055,10 +4071,12 @@ impl AuthorityState {
         assert!(effects.status().is_ok());
 
         let next_accumulator_version = accumulator_version.next();
-        self.execution_scheduler.settle_funds(FundsSettlement {
-            funds_changes: balance_changes,
-            next_accumulator_version,
-        });
+        self.execution_scheduler
+            .settle_address_funds(FundsSettlement {
+                funds_changes: balance_changes,
+                next_accumulator_version,
+            });
+        // object funds are settled while executing the barrier transaction
     }
 
     /// Advance the epoch store to the next epoch for testing only.
