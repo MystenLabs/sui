@@ -32,24 +32,24 @@ add_env_to_toml b
 
 echo "=== test-publish a, then test-publish b, then add a module to b & upgrade b ==="
 
-sui client --client.config $CONFIG publish a > /dev/null || echo "failed to publish a"
+sui client --client.config $CONFIG publish a > output.log 2>&1 || cat output.log
 
 echo "=== published a ==="
 extract_published a/Published.toml
 
-sui client --client.config $CONFIG publish b > /dev/null || echo "failed to publish b"
+sui client --client.config $CONFIG publish b > output.log 2>&1 || cat output.log
 
 echo "=== published b ==="
 extract_published b/Published.toml
 
 echo "module b::new_module; public fun b() { a::a::a() }" >> b/sources/new_module.move
 
-sui client --client.config $CONFIG upgrade b > /dev/null || echo "failed to upgrade b"
+sui client --client.config $CONFIG upgrade b > output.log 2>&1 || cat output.log >&2
 
 echo "=== upgraded b ==="
 extract_published b/Published.toml
 
-sui client --client.config $CONFIG upgrade a > /dev/null || echo "failed to upgrade a"
+sui client --client.config $CONFIG upgrade a > output.log 2>&1 || cat output.log >&2
 
 echo "=== upgraded a ==="
 extract_published a/Published.toml

@@ -9,4 +9,4 @@ sui client --client.config $CONFIG \
   > output.json
 
 # Make sure the output is a valid json
-jq -e . output.json >/dev/null || cat output.json >&2;
+jq -e . output.json >/dev/null || cat output.json;

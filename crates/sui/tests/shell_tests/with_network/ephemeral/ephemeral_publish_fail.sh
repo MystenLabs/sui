@@ -18,13 +18,17 @@
 echo "=== expect to fail when publishing e because prereqs aren't published ==="
 sui client --client.config $CONFIG \
   test-publish --build-env testnet --pubfile-path Pub.local.toml e \
-  > /dev/null || echo "failed to build e"
+  > output.log 2>&1 || cat output.log
 
 
 # publish a
+echo ""
+echo "=== this should be succesful ==="
 sui client --client.config $CONFIG \
   test-publish --build-env testnet --pubfile-path Pub.local.toml a \
-  > /dev/null || echo "failed to publish a"
+  > output.log 2>&1 || cat output.log
 
 # trying to republish should fail now.
+echo ""
+echo "=== this should fail ==="
 sui client --client.config $CONFIG test-publish --build-env testnet --pubfile-path Pub.local.toml a
