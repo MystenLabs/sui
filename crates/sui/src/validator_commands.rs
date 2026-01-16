@@ -48,7 +48,7 @@ use sui_json_rpc_types::{
 use sui_keys::{
     key_derive::generate_new_key,
     keypair_file::{
-        read_authority_keypair_from_file, read_keypair_from_file, read_network_keypair_from_file,
+        read_authority_keypair_from_file, read_network_keypair_from_file,
         write_authority_keypair_to_file, write_keypair_to_file,
     },
 };
@@ -91,6 +91,10 @@ pub enum SuiValidatorCommand {
         project_url: String,
         host_name: String,
         gas_price: u64,
+        /// Optional account address. If provided, it will be used as the validator account address
+        /// and the account key file will not be generated. This is useful for multisig accounts.
+        #[clap(name = "account-address", long)]
+        account_address: Option<SuiAddress>,
     },
     #[clap(name = "become-candidate")]
     BecomeCandidate {
@@ -309,38 +313,49 @@ impl SuiValidatorCommand {
                 project_url,
                 host_name,
                 gas_price,
+                account_address,
             } => {
                 let dir = std::env::current_dir()?;
                 let protocol_key_file_name = dir.join("protocol.key");
-                let account_key = match context.config.keystore.export(&sui_address)? {
-                    SuiKeyPair::Ed25519(account_key) => SuiKeyPair::Ed25519(account_key.copy()),
-                    _ => panic!(
-                        "Other account key types supported yet, please use Ed25519 keys for now."
-                    ),
-                };
-                let account_key_file_name = dir.join("account.key");
                 let network_key_file_name = dir.join("network.key");
                 let worker_key_file_name = dir.join("worker.key");
+
+                let account_key_pair = if let Some(account_address) = account_address {
+                    println!("Using provided account address: {}", account_address);
+                    None
+                } else {
+                    let account_key = match context.config.keystore.export(&sui_address)? {
+                        SuiKeyPair::Ed25519(account_key) => SuiKeyPair::Ed25519(account_key.copy()),
+                        _ => panic!(
+                            "Other account key types supported yet, please use Ed25519 keys for now."
+                        ),
+                    };
+                    let account_key_file_name = dir.join("account.key");
+                    make_key_files(account_key_file_name.clone(), false, Some(account_key.copy()))?;
+                    Some(account_key)
+                };
+
                 make_key_files(protocol_key_file_name.clone(), true, None)?;
-                make_key_files(account_key_file_name.clone(), false, Some(account_key))?;
                 make_key_files(network_key_file_name.clone(), false, None)?;
                 make_key_files(worker_key_file_name.clone(), false, None)?;
 
                 let keypair: AuthorityKeyPair =
                     read_authority_keypair_from_file(protocol_key_file_name)?;
-                let account_keypair: SuiKeyPair = read_keypair_from_file(account_key_file_name)?;
                 let worker_keypair: NetworkKeyPair =
                     read_network_keypair_from_file(worker_key_file_name)?;
                 let network_keypair: NetworkKeyPair =
                     read_network_keypair_from_file(network_key_file_name)?;
+                
+                let account_address = account_address.unwrap_or(sui_address);
+                
                 let pop =
-                    generate_proof_of_possession(&keypair, (&account_keypair.public()).into());
+                    generate_proof_of_possession(&keypair, account_address);
                 let validator_info = GenesisValidatorInfo {
                     info: sui_genesis_builder::validator_info::ValidatorInfo {
                         name,
                         protocol_key: keypair.public().into(),
                         worker_key: worker_keypair.public().clone(),
-                        account_address: SuiAddress::from(&account_keypair.public()),
+                        account_address,
                         network_key: network_keypair.public().clone(),
                         gas_price,
                         commission_rate: sui_config::node::DEFAULT_COMMISSION_RATE,
