@@ -111,7 +111,6 @@ members = [
   "crates/sui-config",
   "crates/sui-core",
   "crates/sui-cost",
-  "crates/sui-data-ingestion",
   "crates/sui-data-ingestion-core",
   "crates/sui-data-store",
   "crates/sui-default-config",
@@ -672,9 +671,9 @@ anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "4b5f0f1d06
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "4b5f0f1d06a31c8ef78ec2e5b446bc633e4e2f77" }
 
 # core-types from the new sdk for use in gRPC
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "57b6cb6a17198d291637b64ef7cb8807796a3af9", features = [ "hash", "serde" ] }
-sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "57b6cb6a17198d291637b64ef7cb8807796a3af9", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
-sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "57b6cb6a17198d291637b64ef7cb8807796a3af9" }
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "9d9539e620b8b668c1a19528d9700be3f35f269e", features = [ "hash", "serde" ] }
+sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "9d9539e620b8b668c1a19528d9700be3f35f269e", features = [ "ed25519", "secp256r1", "secp256k1", "passkey", "zklogin" ] }
+sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "9d9539e620b8b668c1a19528d9700be3f35f269e" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -698,7 +697,6 @@ sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
-sui-data-ingestion = { path = "crates/sui-data-ingestion" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
 sui-data-store = { path = "crates/sui-data-store" }
 sui-default-config = { path = "crates/sui-default-config" }

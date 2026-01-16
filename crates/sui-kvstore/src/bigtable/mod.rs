@@ -3,7 +3,5 @@
 
 pub(crate) mod client;
 mod metrics;
-pub(crate) mod progress_store;
 mod proto;
 pub(crate) mod store;
-pub(crate) mod worker;
