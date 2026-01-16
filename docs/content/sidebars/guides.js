@@ -101,8 +101,19 @@ const guides = [
     type: 'category',
     label: 'Transactions',
     items: [
-          'guides/developer/transactions/sign-and-send-txn',
+          'guides/developer/transactions/overview',
+          'guides/developer/transactions/prog-txn-blocks',
           'guides/developer/transactions/building-ptb',
+          'guides/developer/transactions/sign-and-send-txn',
+          {
+            type: 'category',
+            label: 'Transaction authentication',
+              items: [
+              'guides/developer/transactions/intent-signing',
+              'guides/developer/transactions/multisig',
+              'guides/developer/transactions/offline-signing',
+            ],
+          },
           'guides/developer/transactions/sponsor-txn',
         ],
   },
