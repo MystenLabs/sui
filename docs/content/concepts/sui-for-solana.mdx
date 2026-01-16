@@ -10,7 +10,7 @@ The biggest difference between Sui and Solana development lies in the programmin
 | Topic | Rust (Solana) | Move (Sui) |
 |------|---------------|------------|
 | Model | Account-based model where all data is stored in accounts. Programs declare read/write accounts upfront. Everything is an account (programs, data, wallets). | Object ownership inherent to Sui, objects are first class citizens and encompass everything _owned_ on Sui. |
-| Data storage | Data is stored in programs, stateless acounts that contain instructions. | Data is stored in Move objects. |
+| Data storage | Data is stored in programs, stateless accounts that contain instructions. | Data is stored in Move objects. |
 | Inheritance | No inheritance. Rust uses traits for shared behavior and composition over inheritance. | No interfaces, no polymorphism. However, Move has generics, like `Type<T>`. |
 | Dynamic dispatch | Allowed through trait objects, but not commonly used in Solana programs due to performance overhead. | Not allowed |
 | Asset/Token accessibility | Tokens stored in Program Derived Addresses (PDAs) or Associated Token Accounts. Access controlled through program logic and signer verification. | Anyone can access shared objects. Owned objects can only be accessed by object owner. |
@@ -103,7 +103,7 @@ See [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx
 | Network upgrade strategy | Feature gates voted on by validators, activated when supermajority reached | Protocol flags and framework upgrades voted on by validators then enabled |
 | IDE | VSCode (Rust Analyzer) | VSCode (Move extension) |
 | Transaction lifecycle | Transaction submitted to RPC, gossipped to leaders, included in block, voted on by validators using Tower BFT. | Two round trips from client to validators to generate transaction certificate (guaranteeing execution), another round trip for shared objects to ensure ordering. |
-| Parallel execution | Sealevel runtime enables parallel execution when transactions don't overlap in account access. Accounts must be declared upfront for scheduling. | Transactions that can be parallel are run in paralell. |
+| Parallel execution | Sealevel runtime enables parallel execution when transactions don't overlap in account access. Accounts must be declared upfront for scheduling. | Transactions that can be parallel are run in parallel. |
 | Storage fees, storage rebates | Rent-exempt accounts require minimum balance. No rent collection since 2021, no rebates | Low storage fees paid upfront, rebates on destroying objects to incentivize cleanup |
 | Contract immutability | Programs can be marked upgradeable or immutable at deployment time | Native mutable and immutable support using upgrade capabilities as objects |
 | Contract upgrading | Native, programs marked as upgradeable can be upgraded by the upgrade authority | Native, upgrade capability mediated |
