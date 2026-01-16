@@ -22,4 +22,3 @@ expression: "results.join(\"\\n\")"
    ╰────
   help: Variable names cannot be 'address', 'bool', 'vector', 'some',
         'none', 'gas', 'u8', 'u16', 'u32', 'u64', 'u128', or 'u256'.
-
