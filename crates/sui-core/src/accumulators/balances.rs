@@ -144,12 +144,9 @@ pub fn get_currency_types_for_owner(
 pub fn get_all_balances_for_owner(
     owner: SuiAddress,
     child_object_resolver: &dyn ChildObjectResolver,
-    index_tables: impl GetDynamicFieldsIter,
-    limit: usize,
-    cursor: Option<ObjectID>,
+    index_store: &crate::jsonrpc_index::IndexStore,
 ) -> SuiResult<Vec<(TypeTag, u64)>> {
-    let currency_types =
-        get_currency_types_for_owner(owner, child_object_resolver, index_tables, limit, cursor)?;
+    let currency_types = index_store.get_address_balance_coin_types_iter(owner);
     let mut balances = Vec::new();
     for currency_type in currency_types {
         let balance = get_balance(owner, child_object_resolver, currency_type.clone())?;
