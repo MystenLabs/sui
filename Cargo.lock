@@ -17127,6 +17127,7 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
+ "url",
 ]
 
 [[package]]

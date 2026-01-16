@@ -27,6 +27,7 @@ tempfile.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 object_store.workspace = true
+url.workspace = true
 indicatif.workspace = true
 consensus-core.workspace = true
 mysten-metrics.workspace = true
