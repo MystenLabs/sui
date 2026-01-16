@@ -15,7 +15,6 @@ use std::collections::BTreeMap;
 
 /// A deserialized, internally-verified package.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct Package {
     pub(crate) original_id: OriginalId,
     pub(crate) version_id: VersionId,
