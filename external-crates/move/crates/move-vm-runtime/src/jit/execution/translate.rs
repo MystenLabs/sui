@@ -300,26 +300,26 @@ fn modules(
                     continue;
                 }
                 State::Visiting => {
-                    // all deps done, now load if needed
-                    if !package_context.loaded_modules.contains_key(&cur_key) {
-                        let input_module = input_modules.get(&cur_id).ok_or_else(|| {
-                            make_invariant_violation!(format!(
-                                "Module {} not found in initial modules",
-                                cur_id
-                            ))
-                        })?;
-                        let loaded_module =
-                            module(package_context, package_context.version_id, input_module)?;
-                        if package_context
-                            .loaded_modules
-                            .insert(cur_key, loaded_module)
-                            .is_some()
-                        {
-                            return Err(make_invariant_violation!(format!(
-                                "Module {} already loaded in package context",
-                                cur_id
-                            )));
-                        }
+                    // All deps done, now load. No need to check if already loaded: a module
+                    // enters Visiting only from NotVisited, and transitions to Visited
+                    // immediately after loading, so we never reach here twice for the same module.
+                    let input_module = input_modules.get(&cur_id).ok_or_else(|| {
+                        make_invariant_violation!(format!(
+                            "Module {} not found in initial modules",
+                            cur_id
+                        ))
+                    })?;
+                    let loaded_module =
+                        module(package_context, package_context.version_id, input_module)?;
+                    if package_context
+                        .loaded_modules
+                        .insert(cur_key, loaded_module)
+                        .is_some()
+                    {
+                        return Err(make_invariant_violation!(format!(
+                            "Module {} already loaded in package context",
+                            cur_id
+                        )));
                     }
                     state.insert(cur_id, State::Visited);
                 }
