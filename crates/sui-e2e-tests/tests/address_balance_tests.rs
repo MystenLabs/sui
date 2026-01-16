@@ -11,7 +11,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
-use sui_core::accumulators::balances::get_currency_types_for_owner;
+use sui_core::accumulators::balances::get_all_balances_for_owner;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -2744,19 +2744,17 @@ async fn test_get_all_balances() {
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let indexes = state.indexes.clone().unwrap();
-        let index_tables = indexes.tables();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
 
-        let types =
-            get_currency_types_for_owner(sender, child_object_resolver, index_tables, 10, None)
-                .unwrap();
-        assert_eq!(types.len(), 2);
+        let balances = get_all_balances_for_owner(sender, child_object_resolver, &indexes).unwrap();
+
+        assert_eq!(balances.len(), 2);
         assert!(
-            types
+            balances
                 .iter()
-                .any(|t| t.to_canonical_string(true).contains("::sui::SUI"))
+                .any(|(t, _)| t.to_canonical_string(true).contains("::sui::SUI"))
         );
-        assert!(types.iter().any(|t| {
+        assert!(balances.iter().any(|(t, _)| {
             t.to_canonical_string(true)
                 .contains("::trusted_coin::TRUSTED_COIN")
         }));
