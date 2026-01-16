@@ -4,7 +4,6 @@
         "sui-node",
         "sui-tool",
         "sui-faucet",
-        "sui-data-ingestion",
         "sui-bridge",
         "sui-bridge-cli",
         "sui-test-validator",
