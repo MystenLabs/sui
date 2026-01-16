@@ -2952,6 +2952,7 @@ impl AuthorityState {
             digest,
             timestamp_ms,
             tx_coins,
+            effects.accumulator_events(),
         )
     }
 
