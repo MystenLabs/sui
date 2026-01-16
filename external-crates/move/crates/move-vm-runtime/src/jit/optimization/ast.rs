@@ -21,7 +21,6 @@ use std::collections::BTreeMap;
 
 /// An optimized package
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct Package {
     pub(crate) original_id: OriginalId,
     pub(crate) version_id: VersionId,
@@ -42,7 +41,6 @@ pub struct Module {
 #[derive(Debug, Clone)]
 pub struct Function {
     /// Original index in the compiled module
-    #[allow(unused)]
     pub(crate) ndx: FunctionDefinitionIndex,
     /// Optimized code
     pub(crate) code: Option<Code>,
@@ -52,7 +50,6 @@ pub(crate) type Label = u16;
 
 /// Optimized Function Code
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct Code {
     pub(crate) jump_tables: Vec<VariantJumpTable>,
     pub(crate) code: BTreeMap<Label, Vec<Bytecode>>,
@@ -238,7 +235,6 @@ impl ::std::fmt::Debug for Bytecode {
 // Impls
 // -------------------------------------------------------------------------------------------------
 
-#[allow(dead_code)]
 impl Bytecode {
     pub fn branch_target(&self, tables: &[VariantJumpTable]) -> Option<Vec<Label>> {
         match self {

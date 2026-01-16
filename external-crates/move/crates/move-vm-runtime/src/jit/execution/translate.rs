@@ -63,7 +63,6 @@ struct FunctionContext<'pkg_ctxt, 'natives> {
     definitions: Definitions,
 }
 
-#[allow(dead_code)]
 struct Definitions {
     structs: Vec<VMPointer<StructDef>>,
     struct_instantiations: Vec<VMPointer<StructInstantiation>>,
