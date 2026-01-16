@@ -96,10 +96,10 @@ query($owner: String!, $name: String!, {params}) {{
 )
 
 # Set up a way to make requests to GitHub's GraphQL API
-TOKEN = os.getenv("GH_TOKEN")
+GH_TOKEN = os.getenv("GH_TOKEN")
 GH_CLI_PATH = shutil.which("gh")
-if TOKEN:
-    gql = lambda query, variables: gh_api_request(TOKEN, query, variables)
+if GH_TOKEN:
+    gql = lambda query, variables: gh_api_request(GH_TOKEN, query, variables)
 elif GH_CLI_PATH:
     gql = lambda query, variables: gh_cli_request(GH_CLI_PATH, query, variables)
 else:
