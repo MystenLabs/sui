@@ -133,7 +133,7 @@ Response: {
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 6,
-                "digest": "DDuoRQFQ1E5qXLo3ScHpcZuRbnSYM9KgAk97DJ3sVdMc"
+                "digest": "J2xKmRNxxAQhvVpFERE6c5WcTrzm2whebefCQYUnAUvj"
               }
             }
           }
@@ -201,7 +201,7 @@ Response: {
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 6,
-                "digest": "DDuoRQFQ1E5qXLo3ScHpcZuRbnSYM9KgAk97DJ3sVdMc"
+                "digest": "J2xKmRNxxAQhvVpFERE6c5WcTrzm2whebefCQYUnAUvj"
               }
             }
           }
@@ -247,7 +247,7 @@ Response: {
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 6,
-                "digest": "DDuoRQFQ1E5qXLo3ScHpcZuRbnSYM9KgAk97DJ3sVdMc"
+                "digest": "J2xKmRNxxAQhvVpFERE6c5WcTrzm2whebefCQYUnAUvj"
               }
             }
           }
