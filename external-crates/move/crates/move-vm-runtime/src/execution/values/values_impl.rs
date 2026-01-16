@@ -839,7 +839,6 @@ impl Reference {
 }
 
 impl StructRef {
-    #[allow(dead_code)]
     pub fn read_ref(self) -> PartialVMResult<Value> {
         Ok(self.0.borrow().copy_value())
     }
@@ -1900,7 +1899,6 @@ impl VectorMatchRef<'_> {
         }
     }
 
-    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -1914,7 +1912,6 @@ impl VectorMatchRefMut<'_> {
         }
     }
 
-    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -2166,7 +2163,6 @@ impl Vector {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn to_vec_u8(self) -> PartialVMResult<Vec<u8>> {
         check_elem_layout(&Type::U8, &self.0)?;
         if let Value::PrimVec(PrimVec::VecU8(xs)) = self.0 {
@@ -2429,7 +2425,6 @@ impl fmt::Display for ConstantContainer {
     }
 }
 
-#[allow(dead_code)]
 pub mod debug {
     use crate::execution::interpreter::locals::StackFrame;
 
