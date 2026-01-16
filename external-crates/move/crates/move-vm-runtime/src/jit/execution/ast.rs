@@ -1072,7 +1072,6 @@ impl DatatypeDescriptor {
 }
 
 impl Type {
-    #[allow(deprecated)]
     const LEGACY_BASE_MEMORY_SIZE: AbstractMemorySize = AbstractMemorySize::new(1);
 
     /// Returns the abstract memory size the data structure occupies.
