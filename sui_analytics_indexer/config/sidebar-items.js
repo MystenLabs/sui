@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BatchSizeConfig","FileFormat","OutputStoreConfig"],"struct":["IndexerConfig","PipelineConfig"]};

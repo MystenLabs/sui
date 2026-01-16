@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["sui_types",[["impl&lt;'b, 'l&gt; Visitor&lt;'b, 'l&gt; for <a class=\"struct\" href=\"sui_types/dynamic_field/visitor/struct.FieldVisitor.html\" title=\"struct sui_types::dynamic_field::visitor::FieldVisitor\">FieldVisitor</a>"],["impl&lt;'b, 'l&gt; Visitor&lt;'b, 'l&gt; for <a class=\"struct\" href=\"sui_types/object/bounded_visitor/struct.BoundedVisitor.html\" title=\"struct sui_types::object::bounded_visitor::BoundedVisitor\">BoundedVisitor</a>"],["impl&lt;'b, 'l, T, E&gt; Visitor&lt;'b, 'l&gt; for <a class=\"struct\" href=\"sui_types/object/option_visitor/struct.OptionVisitor.html\" title=\"struct sui_types::object::option_visitor::OptionVisitor\">OptionVisitor</a>&lt;'_, T&gt;<div class=\"where\">where\n    T: Visitor&lt;'b, 'l, Error = E&gt;,\n    E: <a class=\"trait\" href=\"https://doc.rust-lang.org/1.90.0/core/convert/trait.From.html\" title=\"trait core::convert::From\">From</a>&lt;<a class=\"struct\" href=\"sui_types/object/option_visitor/struct.Error.html\" title=\"struct sui_types::object::option_visitor::Error\">Error</a>&gt; + <a class=\"trait\" href=\"https://doc.rust-lang.org/1.90.0/core/convert/trait.From.html\" title=\"trait core::convert::From\">From</a>&lt;Error&gt;,</div>"],["impl&lt;'b, 'l, W: <a class=\"trait\" href=\"sui_types/object/rpc_visitor/trait.Writer.html\" title=\"trait sui_types::object::rpc_visitor::Writer\">Writer</a>&gt; Visitor&lt;'b, 'l&gt; for <a class=\"struct\" href=\"sui_types/object/rpc_visitor/struct.RpcVisitor.html\" title=\"struct sui_types::object::rpc_visitor::RpcVisitor\">RpcVisitor</a>&lt;W&gt;"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1577]}

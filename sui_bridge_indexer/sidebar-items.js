@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ProcessedTxnData"],"fn":["create_eth_subscription_indexer","create_eth_sync_indexer","create_sui_indexer"],"mod":["config","eth_bridge_indexer","metrics","postgres_manager","storage","sui_bridge_indexer","sui_transaction_handler","sui_transaction_queries","types"],"struct":["GovernanceAction","SuiTxnError","TokenTransfer","TokenTransferData"]};

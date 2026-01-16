@@ -1,0 +1,1471 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/sui/src/keytool.rs`."><title>keytool.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="sui" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0 (1159e78c4 2025-09-14)" data-channel="1.90.0" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../../static.files/storage-68b7e25d.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">sui/</div>keytool.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Mysten Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use </span><span class="kw">crate</span>::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>anyhow::anyhow;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>aws_sdk_kms::{
+<a href=#6 id=6 data-nosnippet>6</a>    Client <span class="kw">as </span>KmsClient,
+<a href=#7 id=7 data-nosnippet>7</a>    primitives::Blob,
+<a href=#8 id=8 data-nosnippet>8</a>    types::{MessageType, SigningAlgorithmSpec},
+<a href=#9 id=9 data-nosnippet>9</a>};
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>bip32::DerivationPath;
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>clap::<span class="kw-2">*</span>;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fastcrypto::ed25519::Ed25519KeyPair;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fastcrypto::encoding::{Base64, Encoding, Hex};
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fastcrypto::hash::HashFunction;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fastcrypto::jwt_utils::parse_and_validate_jwt;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fastcrypto::secp256k1::recoverable::Secp256k1Sig;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fastcrypto::traits::{KeyPair, ToFromBytes};
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fastcrypto_zkp::bn254::utils::{
+<a href=#19 id=19 data-nosnippet>19</a>    gen_address_seed, get_nonce, get_oidc_url, get_proof, get_test_issuer_jwt_token,
+<a href=#20 id=20 data-nosnippet>20</a>    get_token_exchange_url,
+<a href=#21 id=21 data-nosnippet>21</a>};
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fastcrypto_zkp::bn254::zk_login::{OIDCProvider, ZkLoginInputs, fetch_jwks};
+<a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>im::hashmap::HashMap <span class="kw">as </span>ImHashMap;
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>json_to_table::{Orientation, json_to_table};
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>num_bigint::BigUint;
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>rand::Rng;
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>rand::SeedableRng;
+<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>rand::rngs::StdRng;
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>serde::Serialize;
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>serde_json::json;
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>shared_crypto::intent::{Intent, IntentMessage, IntentScope, PersonalMessage};
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>std::fmt::{Debug, Display, Formatter};
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span>std::fs;
+<a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span>std::path::{Path, PathBuf};
+<a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span>std::sync::Arc;
+<a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span>sui_keys::key_derive::generate_new_key;
+<a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span>sui_keys::key_identity::KeyIdentity;
+<a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span>sui_keys::keypair_file::{
+<a href=#41 id=41 data-nosnippet>41</a>    read_authority_keypair_from_file, read_keypair_from_file, write_authority_keypair_to_file,
+<a href=#42 id=42 data-nosnippet>42</a>    write_keypair_to_file,
+<a href=#43 id=43 data-nosnippet>43</a>};
+<a href=#44 id=44 data-nosnippet>44</a><span class="kw">use </span>sui_keys::keystore::{AccountKeystore, Keystore};
+<a href=#45 id=45 data-nosnippet>45</a><span class="kw">use </span>sui_types::base_types::SuiAddress;
+<a href=#46 id=46 data-nosnippet>46</a><span class="kw">use </span>sui_types::committee::EpochId;
+<a href=#47 id=47 data-nosnippet>47</a><span class="kw">use </span>sui_types::crypto::{DefaultHash, PublicKey};
+<a href=#48 id=48 data-nosnippet>48</a><span class="kw">use </span>sui_types::crypto::{
+<a href=#49 id=49 data-nosnippet>49</a>    EncodeDecodeBase64, Signature, SignatureScheme, SuiKeyPair, ZkLoginPublicIdentifier,
+<a href=#50 id=50 data-nosnippet>50</a>    get_authority_key_pair,
+<a href=#51 id=51 data-nosnippet>51</a>};
+<a href=#52 id=52 data-nosnippet>52</a><span class="kw">use </span>sui_types::error::SuiResult;
+<a href=#53 id=53 data-nosnippet>53</a><span class="kw">use </span>sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
+<a href=#54 id=54 data-nosnippet>54</a><span class="kw">use </span>sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
+<a href=#55 id=55 data-nosnippet>55</a><span class="kw">use </span>sui_types::signature::{GenericSignature, VerifyParams};
+<a href=#56 id=56 data-nosnippet>56</a><span class="kw">use </span>sui_types::signature_verification::VerifiedDigestCache;
+<a href=#57 id=57 data-nosnippet>57</a><span class="kw">use </span>sui_types::transaction::{TransactionData, TransactionDataAPI};
+<a href=#58 id=58 data-nosnippet>58</a><span class="kw">use </span>sui_types::zk_login_authenticator::ZkLoginAuthenticator;
+<a href=#59 id=59 data-nosnippet>59</a><span class="kw">use </span>tabled::builder::Builder;
+<a href=#60 id=60 data-nosnippet>60</a><span class="kw">use </span>tabled::settings::Rotate;
+<a href=#61 id=61 data-nosnippet>61</a><span class="kw">use </span>tabled::settings::{Modify, Width, object::Rows};
+<a href=#62 id=62 data-nosnippet>62</a><span class="kw">use </span>tracing::info;
+<a href=#63 id=63 data-nosnippet>63</a><span class="attr">#[cfg(test)]
+<a href=#64 id=64 data-nosnippet>64</a>#[path = <span class="string">"unit_tests/keytool_tests.rs"</span>]
+<a href=#65 id=65 data-nosnippet>65</a></span><span class="kw">mod </span>keytool_tests;
+<a href=#66 id=66 data-nosnippet>66</a>
+<a href=#67 id=67 data-nosnippet>67</a><span class="attr">#[allow(clippy::large_enum_variant)]
+<a href=#68 id=68 data-nosnippet>68</a>#[derive(Subcommand)]
+<a href=#69 id=69 data-nosnippet>69</a>#[clap(rename_all = <span class="string">"kebab-case"</span>)]
+<a href=#70 id=70 data-nosnippet>70</a></span><span class="kw">pub enum </span>KeyToolCommand {
+<a href=#71 id=71 data-nosnippet>71</a>    <span class="doccomment">/// Update an old alias to a new one.
+<a href=#72 id=72 data-nosnippet>72</a>    /// If a new alias is not provided, a random one will be generated.
+<a href=#73 id=73 data-nosnippet>73</a>    </span><span class="attr">#[clap(name = <span class="string">"update-alias"</span>)]
+<a href=#74 id=74 data-nosnippet>74</a>    </span>Alias {
+<a href=#75 id=75 data-nosnippet>75</a>        old_alias: String,
+<a href=#76 id=76 data-nosnippet>76</a>        <span class="doccomment">/// The alias must start with a letter and can contain only letters, digits, dots, hyphens (-), or underscores (_).
+<a href=#77 id=77 data-nosnippet>77</a>        </span>new_alias: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#78 id=78 data-nosnippet>78</a>    },
+<a href=#79 id=79 data-nosnippet>79</a>    <span class="doccomment">/// Convert private key in Hex or Base64 to new format (Bech32
+<a href=#80 id=80 data-nosnippet>80</a>    /// encoded 33 byte flag || private key starting with "suiprivkey").
+<a href=#81 id=81 data-nosnippet>81</a>    /// Hex private key format import and export are both deprecated in
+<a href=#82 id=82 data-nosnippet>82</a>    /// Sui Wallet and Sui CLI Keystore. Use `sui keytool import` if you
+<a href=#83 id=83 data-nosnippet>83</a>    /// wish to import a key to Sui Keystore.
+<a href=#84 id=84 data-nosnippet>84</a>    </span>Convert { value: String },
+<a href=#85 id=85 data-nosnippet>85</a>    <span class="doccomment">/// Given a Base64 encoded transaction bytes, decode its components. If a signature is provided,
+<a href=#86 id=86 data-nosnippet>86</a>    /// verify the signature against the transaction and output the result.
+<a href=#87 id=87 data-nosnippet>87</a>    </span>DecodeOrVerifyTx {
+<a href=#88 id=88 data-nosnippet>88</a>        <span class="attr">#[clap(long)]
+<a href=#89 id=89 data-nosnippet>89</a>        </span>tx_bytes: String,
+<a href=#90 id=90 data-nosnippet>90</a>        <span class="attr">#[clap(long)]
+<a href=#91 id=91 data-nosnippet>91</a>        </span>sig: <span class="prelude-ty">Option</span>&lt;GenericSignature&gt;,
+<a href=#92 id=92 data-nosnippet>92</a>        <span class="attr">#[clap(long, default_value = <span class="string">"0"</span>)]
+<a href=#93 id=93 data-nosnippet>93</a>        </span>cur_epoch: u64,
+<a href=#94 id=94 data-nosnippet>94</a>    },
+<a href=#95 id=95 data-nosnippet>95</a>    <span class="doccomment">/// Given a Base64 encoded MultiSig signature, decode its components.
+<a href=#96 id=96 data-nosnippet>96</a>    /// If tx_bytes is passed in, verify the multisig.
+<a href=#97 id=97 data-nosnippet>97</a>    </span>DecodeMultiSig {
+<a href=#98 id=98 data-nosnippet>98</a>        <span class="attr">#[clap(long)]
+<a href=#99 id=99 data-nosnippet>99</a>        </span>multisig: MultiSig,
+<a href=#100 id=100 data-nosnippet>100</a>        <span class="attr">#[clap(long)]
+<a href=#101 id=101 data-nosnippet>101</a>        </span>tx_bytes: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#102 id=102 data-nosnippet>102</a>        <span class="attr">#[clap(long, default_value = <span class="string">"0"</span>)]
+<a href=#103 id=103 data-nosnippet>103</a>        </span>cur_epoch: u64,
+<a href=#104 id=104 data-nosnippet>104</a>    },
+<a href=#105 id=105 data-nosnippet>105</a>    <span class="doccomment">/// Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1}
+<a href=#106 id=106 data-nosnippet>106</a>    /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
+<a href=#107 id=107 data-nosnippet>107</a>    /// m/54'/784'/0'/0/0 for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Word
+<a href=#108 id=108 data-nosnippet>108</a>    /// length can be { word12 | word15 | word18 | word21 | word24} default to word12
+<a href=#109 id=109 data-nosnippet>109</a>    /// if not specified.
+<a href=#110 id=110 data-nosnippet>110</a>    ///
+<a href=#111 id=111 data-nosnippet>111</a>    /// The keypair file is output to the current directory. The content of the file is
+<a href=#112 id=112 data-nosnippet>112</a>    /// a Base64 encoded string of 33-byte `flag || privkey`.
+<a href=#113 id=113 data-nosnippet>113</a>    ///
+<a href=#114 id=114 data-nosnippet>114</a>    /// Use `sui client new-address` if you want to generate and save the key into sui.keystore.
+<a href=#115 id=115 data-nosnippet>115</a>    </span>Generate {
+<a href=#116 id=116 data-nosnippet>116</a>        key_scheme: SignatureScheme,
+<a href=#117 id=117 data-nosnippet>117</a>        derivation_path: <span class="prelude-ty">Option</span>&lt;DerivationPath&gt;,
+<a href=#118 id=118 data-nosnippet>118</a>        word_length: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#119 id=119 data-nosnippet>119</a>    },
+<a href=#120 id=120 data-nosnippet>120</a>
+<a href=#121 id=121 data-nosnippet>121</a>    <span class="doccomment">/// Add a new key to Sui CLI Keystore using either the input mnemonic phrase or a Bech32 encoded 33-byte
+<a href=#122 id=122 data-nosnippet>122</a>    /// `flag || privkey` starting with "suiprivkey", the key scheme flag {ed25519 | secp256k1 | secp256r1}
+<a href=#123 id=123 data-nosnippet>123</a>    /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0
+<a href=#124 id=124 data-nosnippet>124</a>    /// for secp256k1 or m/74'/784'/0'/0/0 for secp256r1. Supports mnemonic phrase of word length 12, 15,
+<a href=#125 id=125 data-nosnippet>125</a>    /// 18, 21, 24. Set an alias for the key with the --alias flag. If no alias is provided, the tool will
+<a href=#126 id=126 data-nosnippet>126</a>    /// automatically generate one.
+<a href=#127 id=127 data-nosnippet>127</a>    </span>Import {
+<a href=#128 id=128 data-nosnippet>128</a>        <span class="doccomment">/// Sets an alias for this address. The alias must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).
+<a href=#129 id=129 data-nosnippet>129</a>        </span><span class="attr">#[clap(long)]
+<a href=#130 id=130 data-nosnippet>130</a>        </span>alias: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#131 id=131 data-nosnippet>131</a>        input_string: String,
+<a href=#132 id=132 data-nosnippet>132</a>        key_scheme: SignatureScheme,
+<a href=#133 id=133 data-nosnippet>133</a>        derivation_path: <span class="prelude-ty">Option</span>&lt;DerivationPath&gt;,
+<a href=#134 id=134 data-nosnippet>134</a>    },
+<a href=#135 id=135 data-nosnippet>135</a>    <span class="doccomment">/// Output the private key of the given key identity in Sui CLI Keystore as Bech32
+<a href=#136 id=136 data-nosnippet>136</a>    /// encoded string starting with `suiprivkey`.
+<a href=#137 id=137 data-nosnippet>137</a>    </span>Export {
+<a href=#138 id=138 data-nosnippet>138</a>        <span class="attr">#[clap(long)]
+<a href=#139 id=139 data-nosnippet>139</a>        </span>key_identity: KeyIdentity,
+<a href=#140 id=140 data-nosnippet>140</a>    },
+<a href=#141 id=141 data-nosnippet>141</a>    <span class="doccomment">/// List all keys by its Sui address, Base64 encoded public key, key scheme name in
+<a href=#142 id=142 data-nosnippet>142</a>    /// sui.keystore.
+<a href=#143 id=143 data-nosnippet>143</a>    </span>List {
+<a href=#144 id=144 data-nosnippet>144</a>        <span class="doccomment">/// Sort by alias
+<a href=#145 id=145 data-nosnippet>145</a>        </span><span class="attr">#[clap(long, short = <span class="string">'s'</span>)]
+<a href=#146 id=146 data-nosnippet>146</a>        </span>sort_by_alias: bool,
+<a href=#147 id=147 data-nosnippet>147</a>    },
+<a href=#148 id=148 data-nosnippet>148</a>    <span class="doccomment">/// This reads the content at the provided file path. The accepted format can be
+<a href=#149 id=149 data-nosnippet>149</a>    /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
+<a href=#150 id=150 data-nosnippet>150</a>    /// (Base64 encoded `privkey`). This prints out the account keypair as Base64 encoded `flag || privkey`,
+<a href=#151 id=151 data-nosnippet>151</a>    /// the network keypair, worker keypair, protocol keypair as Base64 encoded `privkey`.
+<a href=#152 id=152 data-nosnippet>152</a>    </span>LoadKeypair { file: PathBuf },
+<a href=#153 id=153 data-nosnippet>153</a>    <span class="doccomment">/// To MultiSig Sui Address. Pass in a list of all public keys `flag || pk` in Base64.
+<a href=#154 id=154 data-nosnippet>154</a>    /// See `keytool list` for example public keys.
+<a href=#155 id=155 data-nosnippet>155</a>    </span>MultiSigAddress {
+<a href=#156 id=156 data-nosnippet>156</a>        <span class="attr">#[clap(long)]
+<a href=#157 id=157 data-nosnippet>157</a>        </span>threshold: ThresholdUnit,
+<a href=#158 id=158 data-nosnippet>158</a>        <span class="attr">#[clap(long, num_args(<span class="number">1</span>..))]
+<a href=#159 id=159 data-nosnippet>159</a>        </span>pks: Vec&lt;PublicKey&gt;,
+<a href=#160 id=160 data-nosnippet>160</a>        <span class="attr">#[clap(long, num_args(<span class="number">1</span>..))]
+<a href=#161 id=161 data-nosnippet>161</a>        </span>weights: Vec&lt;WeightUnit&gt;,
+<a href=#162 id=162 data-nosnippet>162</a>    },
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="doccomment">/// Provides a list of participating signatures (`flag || sig || pk` encoded in Base64),
+<a href=#164 id=164 data-nosnippet>164</a>    /// threshold, a list of all public keys and a list of their weights that define the
+<a href=#165 id=165 data-nosnippet>165</a>    /// MultiSig address. Returns a valid MultiSig signature and its sender address. The
+<a href=#166 id=166 data-nosnippet>166</a>    /// result can be used as signature field for `sui client execute-signed-tx`. The sum
+<a href=#167 id=167 data-nosnippet>167</a>    /// of weights of all signatures must be &gt;= the threshold.
+<a href=#168 id=168 data-nosnippet>168</a>    ///
+<a href=#169 id=169 data-nosnippet>169</a>    /// The order of `sigs` must be the same as the order of `pks`.
+<a href=#170 id=170 data-nosnippet>170</a>    /// e.g. for [pk1, pk2, pk3, pk4, pk5], [sig1, sig2, sig5] is valid, but
+<a href=#171 id=171 data-nosnippet>171</a>    /// [sig2, sig1, sig5] is invalid.
+<a href=#172 id=172 data-nosnippet>172</a>    </span>MultiSigCombinePartialSig {
+<a href=#173 id=173 data-nosnippet>173</a>        <span class="attr">#[clap(long, num_args(<span class="number">1</span>..))]
+<a href=#174 id=174 data-nosnippet>174</a>        </span>sigs: Vec&lt;GenericSignature&gt;,
+<a href=#175 id=175 data-nosnippet>175</a>        <span class="attr">#[clap(long, num_args(<span class="number">1</span>..))]
+<a href=#176 id=176 data-nosnippet>176</a>        </span>pks: Vec&lt;PublicKey&gt;,
+<a href=#177 id=177 data-nosnippet>177</a>        <span class="attr">#[clap(long, num_args(<span class="number">1</span>..))]
+<a href=#178 id=178 data-nosnippet>178</a>        </span>weights: Vec&lt;WeightUnit&gt;,
+<a href=#179 id=179 data-nosnippet>179</a>        <span class="attr">#[clap(long)]
+<a href=#180 id=180 data-nosnippet>180</a>        </span>threshold: ThresholdUnit,
+<a href=#181 id=181 data-nosnippet>181</a>    },
+<a href=#182 id=182 data-nosnippet>182</a>    MultiSigCombinePartialSigLegacy {
+<a href=#183 id=183 data-nosnippet>183</a>        <span class="attr">#[clap(long, num_args(<span class="number">1</span>..))]
+<a href=#184 id=184 data-nosnippet>184</a>        </span>sigs: Vec&lt;GenericSignature&gt;,
+<a href=#185 id=185 data-nosnippet>185</a>        <span class="attr">#[clap(long, num_args(<span class="number">1</span>..))]
+<a href=#186 id=186 data-nosnippet>186</a>        </span>pks: Vec&lt;PublicKey&gt;,
+<a href=#187 id=187 data-nosnippet>187</a>        <span class="attr">#[clap(long, num_args(<span class="number">1</span>..))]
+<a href=#188 id=188 data-nosnippet>188</a>        </span>weights: Vec&lt;WeightUnit&gt;,
+<a href=#189 id=189 data-nosnippet>189</a>        <span class="attr">#[clap(long)]
+<a href=#190 id=190 data-nosnippet>190</a>        </span>threshold: ThresholdUnit,
+<a href=#191 id=191 data-nosnippet>191</a>    },
+<a href=#192 id=192 data-nosnippet>192</a>
+<a href=#193 id=193 data-nosnippet>193</a>    <span class="doccomment">/// Read the content at the provided file path. The accepted format can be
+<a href=#194 id=194 data-nosnippet>194</a>    /// [enum SuiKeyPair] (Base64 encoded of 33-byte `flag || privkey`) or `type AuthorityKeyPair`
+<a href=#195 id=195 data-nosnippet>195</a>    /// (Base64 encoded `privkey`). It prints its Base64 encoded public key and the key scheme flag.
+<a href=#196 id=196 data-nosnippet>196</a>    </span>Show { file: PathBuf },
+<a href=#197 id=197 data-nosnippet>197</a>    <span class="doccomment">/// Create signature using the private key for the given address (or its alias) in sui keystore.
+<a href=#198 id=198 data-nosnippet>198</a>    /// Any signature commits to a [struct IntentMessage] consisting of the Base64 encoded
+<a href=#199 id=199 data-nosnippet>199</a>    /// of the BCS serialized transaction bytes itself and its intent. If intent is absent,
+<a href=#200 id=200 data-nosnippet>200</a>    /// default will be used.
+<a href=#201 id=201 data-nosnippet>201</a>    </span>Sign {
+<a href=#202 id=202 data-nosnippet>202</a>        <span class="attr">#[clap(long)]
+<a href=#203 id=203 data-nosnippet>203</a>        </span>address: KeyIdentity,
+<a href=#204 id=204 data-nosnippet>204</a>        <span class="attr">#[clap(long)]
+<a href=#205 id=205 data-nosnippet>205</a>        </span>data: String,
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="attr">#[clap(long)]
+<a href=#207 id=207 data-nosnippet>207</a>        </span>intent: <span class="prelude-ty">Option</span>&lt;Intent&gt;,
+<a href=#208 id=208 data-nosnippet>208</a>    },
+<a href=#209 id=209 data-nosnippet>209</a>    <span class="doccomment">/// Creates a signature by leveraging AWS KMS. Pass in a key-id to leverage Amazon
+<a href=#210 id=210 data-nosnippet>210</a>    /// KMS to sign a message and the base64 pubkey.
+<a href=#211 id=211 data-nosnippet>211</a>    /// Generate PubKey from pem using MystenLabs/base64pemkey
+<a href=#212 id=212 data-nosnippet>212</a>    /// Any signature commits to a [struct IntentMessage] consisting of the Base64 encoded
+<a href=#213 id=213 data-nosnippet>213</a>    /// of the BCS serialized transaction bytes itself and its intent. If intent is absent,
+<a href=#214 id=214 data-nosnippet>214</a>    /// default will be used.
+<a href=#215 id=215 data-nosnippet>215</a>    </span>SignKMS {
+<a href=#216 id=216 data-nosnippet>216</a>        <span class="attr">#[clap(long)]
+<a href=#217 id=217 data-nosnippet>217</a>        </span>data: String,
+<a href=#218 id=218 data-nosnippet>218</a>        <span class="attr">#[clap(long)]
+<a href=#219 id=219 data-nosnippet>219</a>        </span>keyid: String,
+<a href=#220 id=220 data-nosnippet>220</a>        <span class="attr">#[clap(long)]
+<a href=#221 id=221 data-nosnippet>221</a>        </span>intent: <span class="prelude-ty">Option</span>&lt;Intent&gt;,
+<a href=#222 id=222 data-nosnippet>222</a>        <span class="attr">#[clap(long)]
+<a href=#223 id=223 data-nosnippet>223</a>        </span>base64pk: String,
+<a href=#224 id=224 data-nosnippet>224</a>    },
+<a href=#225 id=225 data-nosnippet>225</a>    <span class="doccomment">/// This takes [enum SuiKeyPair] of Base64 encoded of 33-byte `flag || privkey`). It
+<a href=#226 id=226 data-nosnippet>226</a>    /// outputs the keypair into a file at the current directory where the address is the filename,
+<a href=#227 id=227 data-nosnippet>227</a>    /// and prints out its Sui address, Base64 encoded public key, the key scheme, and the key scheme flag.
+<a href=#228 id=228 data-nosnippet>228</a>    </span>Unpack { keypair: String },
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a>    <span class="doccomment">/// Given the max_epoch, generate an OAuth url, ask user to paste the redirect with id_token, call salt server, then call the prover server,
+<a href=#231 id=231 data-nosnippet>231</a>    /// create a test transaction, use the ephemeral key to sign and execute it by assembling to a serialized zkLogin signature.
+<a href=#232 id=232 data-nosnippet>232</a>    </span>ZkLoginSignAndExecuteTx {
+<a href=#233 id=233 data-nosnippet>233</a>        <span class="attr">#[clap(long)]
+<a href=#234 id=234 data-nosnippet>234</a>        </span>max_epoch: EpochId,
+<a href=#235 id=235 data-nosnippet>235</a>        <span class="attr">#[clap(long, default_value = <span class="string">"devnet"</span>)]
+<a href=#236 id=236 data-nosnippet>236</a>        </span>network: String,
+<a href=#237 id=237 data-nosnippet>237</a>        <span class="attr">#[clap(long, default_value = <span class="string">"false"</span>)]
+<a href=#238 id=238 data-nosnippet>238</a>        </span>fixed: bool, <span class="comment">// if true, use a fixed kp generated from [0; 32] seed.
+<a href=#239 id=239 data-nosnippet>239</a>        </span><span class="attr">#[clap(long, default_value = <span class="string">"false"</span>)]
+<a href=#240 id=240 data-nosnippet>240</a>        </span>test_multisig: bool, <span class="comment">// if true, use a multisig address with zklogin and a traditional kp.
+<a href=#241 id=241 data-nosnippet>241</a>        </span><span class="attr">#[clap(long, default_value = <span class="string">"false"</span>)]
+<a href=#242 id=242 data-nosnippet>242</a>        </span>sign_with_sk: bool, <span class="comment">// if true, execute tx with the traditional sig (in the multisig), otherwise with the zklogin sig.
+<a href=#243 id=243 data-nosnippet>243</a>    </span>},
+<a href=#244 id=244 data-nosnippet>244</a>
+<a href=#245 id=245 data-nosnippet>245</a>    <span class="doccomment">/// A workaround to the above command because sometimes token pasting does not work (for Facebook). All the inputs required here are printed from the command above.
+<a href=#246 id=246 data-nosnippet>246</a>    </span>ZkLoginEnterToken {
+<a href=#247 id=247 data-nosnippet>247</a>        <span class="attr">#[clap(long)]
+<a href=#248 id=248 data-nosnippet>248</a>        </span>parsed_token: String,
+<a href=#249 id=249 data-nosnippet>249</a>        <span class="attr">#[clap(long)]
+<a href=#250 id=250 data-nosnippet>250</a>        </span>max_epoch: EpochId,
+<a href=#251 id=251 data-nosnippet>251</a>        <span class="attr">#[clap(long)]
+<a href=#252 id=252 data-nosnippet>252</a>        </span>jwt_randomness: String,
+<a href=#253 id=253 data-nosnippet>253</a>        <span class="attr">#[clap(long)]
+<a href=#254 id=254 data-nosnippet>254</a>        </span>kp_bigint: String,
+<a href=#255 id=255 data-nosnippet>255</a>        <span class="attr">#[clap(long)]
+<a href=#256 id=256 data-nosnippet>256</a>        </span>ephemeral_key_identifier: SuiAddress,
+<a href=#257 id=257 data-nosnippet>257</a>        <span class="attr">#[clap(long, default_value = <span class="string">"devnet"</span>)]
+<a href=#258 id=258 data-nosnippet>258</a>        </span>network: String,
+<a href=#259 id=259 data-nosnippet>259</a>        <span class="attr">#[clap(long, default_value = <span class="string">"false"</span>)]
+<a href=#260 id=260 data-nosnippet>260</a>        </span>test_multisig: bool,
+<a href=#261 id=261 data-nosnippet>261</a>        <span class="attr">#[clap(long, default_value = <span class="string">"false"</span>)]
+<a href=#262 id=262 data-nosnippet>262</a>        </span>sign_with_sk: bool,
+<a href=#263 id=263 data-nosnippet>263</a>    },
+<a href=#264 id=264 data-nosnippet>264</a>
+<a href=#265 id=265 data-nosnippet>265</a>    <span class="doccomment">/// Given a zkLogin signature, parse it if valid. If `bytes` provided,
+<a href=#266 id=266 data-nosnippet>266</a>    /// parse it as either as TransactionData or PersonalMessage based on `intent_scope`.
+<a href=#267 id=267 data-nosnippet>267</a>    /// It verifies the zkLogin signature based its latest JWK fetched.
+<a href=#268 id=268 data-nosnippet>268</a>    /// Example request: sui keytool zk-login-sig-verify --sig $SERIALIZED_ZKLOGIN_SIG --bytes $BYTES --intent-scope 0 --network devnet --curr-epoch 10
+<a href=#269 id=269 data-nosnippet>269</a>    </span>ZkLoginSigVerify {
+<a href=#270 id=270 data-nosnippet>270</a>        <span class="doccomment">/// The Base64 of the serialized zkLogin signature.
+<a href=#271 id=271 data-nosnippet>271</a>        </span><span class="attr">#[clap(long)]
+<a href=#272 id=272 data-nosnippet>272</a>        </span>sig: String,
+<a href=#273 id=273 data-nosnippet>273</a>        <span class="doccomment">/// The Base64 of the BCS encoded TransactionData or PersonalMessage.
+<a href=#274 id=274 data-nosnippet>274</a>        </span><span class="attr">#[clap(long)]
+<a href=#275 id=275 data-nosnippet>275</a>        </span>bytes: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#276 id=276 data-nosnippet>276</a>        <span class="doccomment">/// Either 0 for TransactionData or 3 for PersonalMessage.
+<a href=#277 id=277 data-nosnippet>277</a>        </span><span class="attr">#[clap(long)]
+<a href=#278 id=278 data-nosnippet>278</a>        </span>intent_scope: u8,
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="doccomment">/// The current epoch for the network to verify the signature's max_epoch against.
+<a href=#280 id=280 data-nosnippet>280</a>        </span><span class="attr">#[clap(long)]
+<a href=#281 id=281 data-nosnippet>281</a>        </span>cur_epoch: <span class="prelude-ty">Option</span>&lt;EpochId&gt;,
+<a href=#282 id=282 data-nosnippet>282</a>        <span class="doccomment">/// The network to verify the signature for, determines ZkLoginEnv.
+<a href=#283 id=283 data-nosnippet>283</a>        </span><span class="attr">#[clap(long, default_value = <span class="string">"devnet"</span>)]
+<a href=#284 id=284 data-nosnippet>284</a>        </span>network: String,
+<a href=#285 id=285 data-nosnippet>285</a>    },
+<a href=#286 id=286 data-nosnippet>286</a>
+<a href=#287 id=287 data-nosnippet>287</a>    <span class="doccomment">/// TESTING ONLY: Generate a fixed ephemeral key and its JWT token with test issuer. Produce a zklogin signature for the given data and max epoch.
+<a href=#288 id=288 data-nosnippet>288</a>    /// e.g. sui keytool zk-login-insecure-sign-personal-message --data "hello" --max-epoch 5
+<a href=#289 id=289 data-nosnippet>289</a>    </span>ZkLoginInsecureSignPersonalMessage {
+<a href=#290 id=290 data-nosnippet>290</a>        <span class="doccomment">/// The base64 encoded string of the message to sign, without the intent message wrapping.
+<a href=#291 id=291 data-nosnippet>291</a>        </span><span class="attr">#[clap(long)]
+<a href=#292 id=292 data-nosnippet>292</a>        </span>data: String,
+<a href=#293 id=293 data-nosnippet>293</a>        <span class="doccomment">/// The max epoch used for the zklogin signature validity.
+<a href=#294 id=294 data-nosnippet>294</a>        </span><span class="attr">#[clap(long)]
+<a href=#295 id=295 data-nosnippet>295</a>        </span>max_epoch: EpochId,
+<a href=#296 id=296 data-nosnippet>296</a>    },
+<a href=#297 id=297 data-nosnippet>297</a>}
+<a href=#298 id=298 data-nosnippet>298</a>
+<a href=#299 id=299 data-nosnippet>299</a><span class="comment">// Command Output types
+<a href=#300 id=300 data-nosnippet>300</a></span><span class="attr">#[derive(Serialize)]
+<a href=#301 id=301 data-nosnippet>301</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#302 id=302 data-nosnippet>302</a></span><span class="kw">pub struct </span>AliasUpdate {
+<a href=#303 id=303 data-nosnippet>303</a>    old_alias: String,
+<a href=#304 id=304 data-nosnippet>304</a>    new_alias: String,
+<a href=#305 id=305 data-nosnippet>305</a>}
+<a href=#306 id=306 data-nosnippet>306</a>
+<a href=#307 id=307 data-nosnippet>307</a><span class="attr">#[derive(Serialize)]
+<a href=#308 id=308 data-nosnippet>308</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#309 id=309 data-nosnippet>309</a></span><span class="kw">pub struct </span>DecodedMultiSig {
+<a href=#310 id=310 data-nosnippet>310</a>    public_base64_key: String,
+<a href=#311 id=311 data-nosnippet>311</a>    sig_base64: String,
+<a href=#312 id=312 data-nosnippet>312</a>    weight: String,
+<a href=#313 id=313 data-nosnippet>313</a>}
+<a href=#314 id=314 data-nosnippet>314</a>
+<a href=#315 id=315 data-nosnippet>315</a><span class="attr">#[derive(Serialize)]
+<a href=#316 id=316 data-nosnippet>316</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#317 id=317 data-nosnippet>317</a></span><span class="kw">pub struct </span>DecodedMultiSigOutput {
+<a href=#318 id=318 data-nosnippet>318</a>    multisig_address: SuiAddress,
+<a href=#319 id=319 data-nosnippet>319</a>    participating_keys_signatures: Vec&lt;DecodedMultiSig&gt;,
+<a href=#320 id=320 data-nosnippet>320</a>    pub_keys: Vec&lt;MultiSigOutput&gt;,
+<a href=#321 id=321 data-nosnippet>321</a>    threshold: usize,
+<a href=#322 id=322 data-nosnippet>322</a>    sig_verify_result: String,
+<a href=#323 id=323 data-nosnippet>323</a>}
+<a href=#324 id=324 data-nosnippet>324</a>
+<a href=#325 id=325 data-nosnippet>325</a><span class="attr">#[derive(Serialize)]
+<a href=#326 id=326 data-nosnippet>326</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#327 id=327 data-nosnippet>327</a></span><span class="kw">pub struct </span>DecodeOrVerifyTxOutput {
+<a href=#328 id=328 data-nosnippet>328</a>    tx: TransactionData,
+<a href=#329 id=329 data-nosnippet>329</a>    result: <span class="prelude-ty">Option</span>&lt;SuiResult&gt;,
+<a href=#330 id=330 data-nosnippet>330</a>}
+<a href=#331 id=331 data-nosnippet>331</a>
+<a href=#332 id=332 data-nosnippet>332</a><span class="attr">#[derive(PartialEq, Eq, PartialOrd, Ord, Serialize)]
+<a href=#333 id=333 data-nosnippet>333</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#334 id=334 data-nosnippet>334</a></span><span class="kw">pub struct </span>Key {
+<a href=#335 id=335 data-nosnippet>335</a>    alias: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#336 id=336 data-nosnippet>336</a>    sui_address: SuiAddress,
+<a href=#337 id=337 data-nosnippet>337</a>    public_base64_key: String,
+<a href=#338 id=338 data-nosnippet>338</a>    key_scheme: String,
+<a href=#339 id=339 data-nosnippet>339</a>    flag: u8,
+<a href=#340 id=340 data-nosnippet>340</a>    <span class="attr">#[serde(skip_serializing_if = <span class="string">"Option::is_none"</span>)]
+<a href=#341 id=341 data-nosnippet>341</a>    </span>mnemonic: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#342 id=342 data-nosnippet>342</a>    peer_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#343 id=343 data-nosnippet>343</a>}
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a><span class="attr">#[derive(Serialize)]
+<a href=#346 id=346 data-nosnippet>346</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#347 id=347 data-nosnippet>347</a></span><span class="kw">pub struct </span>ExportedKey {
+<a href=#348 id=348 data-nosnippet>348</a>    exported_private_key: String,
+<a href=#349 id=349 data-nosnippet>349</a>    key: Key,
+<a href=#350 id=350 data-nosnippet>350</a>}
+<a href=#351 id=351 data-nosnippet>351</a>
+<a href=#352 id=352 data-nosnippet>352</a><span class="attr">#[derive(Serialize)]
+<a href=#353 id=353 data-nosnippet>353</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#354 id=354 data-nosnippet>354</a></span><span class="kw">pub struct </span>KeypairData {
+<a href=#355 id=355 data-nosnippet>355</a>    account_keypair: String,
+<a href=#356 id=356 data-nosnippet>356</a>    network_keypair: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#357 id=357 data-nosnippet>357</a>    worker_keypair: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#358 id=358 data-nosnippet>358</a>    key_scheme: String,
+<a href=#359 id=359 data-nosnippet>359</a>}
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a><span class="attr">#[derive(Serialize)]
+<a href=#362 id=362 data-nosnippet>362</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#363 id=363 data-nosnippet>363</a></span><span class="kw">pub struct </span>MultiSigAddress {
+<a href=#364 id=364 data-nosnippet>364</a>    multisig_address: String,
+<a href=#365 id=365 data-nosnippet>365</a>    multisig: Vec&lt;MultiSigOutput&gt;,
+<a href=#366 id=366 data-nosnippet>366</a>}
+<a href=#367 id=367 data-nosnippet>367</a>
+<a href=#368 id=368 data-nosnippet>368</a><span class="attr">#[derive(Serialize)]
+<a href=#369 id=369 data-nosnippet>369</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#370 id=370 data-nosnippet>370</a></span><span class="kw">pub struct </span>MultiSigCombinePartialSig {
+<a href=#371 id=371 data-nosnippet>371</a>    multisig_address: SuiAddress,
+<a href=#372 id=372 data-nosnippet>372</a>    multisig_parsed: GenericSignature,
+<a href=#373 id=373 data-nosnippet>373</a>    multisig_serialized: String,
+<a href=#374 id=374 data-nosnippet>374</a>}
+<a href=#375 id=375 data-nosnippet>375</a>
+<a href=#376 id=376 data-nosnippet>376</a><span class="attr">#[derive(Serialize)]
+<a href=#377 id=377 data-nosnippet>377</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#378 id=378 data-nosnippet>378</a></span><span class="kw">pub struct </span>MultiSigCombinePartialSigLegacyOutput {
+<a href=#379 id=379 data-nosnippet>379</a>    multisig_address: SuiAddress,
+<a href=#380 id=380 data-nosnippet>380</a>    multisig_legacy_parsed: GenericSignature,
+<a href=#381 id=381 data-nosnippet>381</a>    multisig_legacy_serialized: String,
+<a href=#382 id=382 data-nosnippet>382</a>}
+<a href=#383 id=383 data-nosnippet>383</a>
+<a href=#384 id=384 data-nosnippet>384</a><span class="attr">#[derive(Serialize)]
+<a href=#385 id=385 data-nosnippet>385</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#386 id=386 data-nosnippet>386</a></span><span class="kw">pub struct </span>MultiSigOutput {
+<a href=#387 id=387 data-nosnippet>387</a>    address: SuiAddress,
+<a href=#388 id=388 data-nosnippet>388</a>    public_base64_key: String,
+<a href=#389 id=389 data-nosnippet>389</a>    weight: u8,
+<a href=#390 id=390 data-nosnippet>390</a>}
+<a href=#391 id=391 data-nosnippet>391</a>
+<a href=#392 id=392 data-nosnippet>392</a><span class="attr">#[derive(Serialize)]
+<a href=#393 id=393 data-nosnippet>393</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#394 id=394 data-nosnippet>394</a></span><span class="kw">pub struct </span>ConvertOutput {
+<a href=#395 id=395 data-nosnippet>395</a>    bech32_with_flag: String, <span class="comment">// latest Sui Keystore and Sui Wallet import/export format
+<a href=#396 id=396 data-nosnippet>396</a>    </span>base64_with_flag: String, <span class="comment">// Sui Keystore storage format
+<a href=#397 id=397 data-nosnippet>397</a>    </span>hex_without_flag: String, <span class="comment">// Legacy Sui Wallet format
+<a href=#398 id=398 data-nosnippet>398</a>    </span>scheme: String,
+<a href=#399 id=399 data-nosnippet>399</a>}
+<a href=#400 id=400 data-nosnippet>400</a>
+<a href=#401 id=401 data-nosnippet>401</a><span class="attr">#[derive(Serialize)]
+<a href=#402 id=402 data-nosnippet>402</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#403 id=403 data-nosnippet>403</a></span><span class="kw">pub struct </span>PrivateKeyBase64 {
+<a href=#404 id=404 data-nosnippet>404</a>    base64: String,
+<a href=#405 id=405 data-nosnippet>405</a>}
+<a href=#406 id=406 data-nosnippet>406</a>
+<a href=#407 id=407 data-nosnippet>407</a><span class="attr">#[derive(Serialize)]
+<a href=#408 id=408 data-nosnippet>408</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#409 id=409 data-nosnippet>409</a></span><span class="kw">pub struct </span>SerializedSig {
+<a href=#410 id=410 data-nosnippet>410</a>    serialized_sig_base64: String,
+<a href=#411 id=411 data-nosnippet>411</a>}
+<a href=#412 id=412 data-nosnippet>412</a>
+<a href=#413 id=413 data-nosnippet>413</a><span class="attr">#[derive(Serialize)]
+<a href=#414 id=414 data-nosnippet>414</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#415 id=415 data-nosnippet>415</a></span><span class="kw">pub struct </span>SignData {
+<a href=#416 id=416 data-nosnippet>416</a>    sui_address: SuiAddress,
+<a href=#417 id=417 data-nosnippet>417</a>    <span class="comment">// Base64 encoded string of serialized transaction data.
+<a href=#418 id=418 data-nosnippet>418</a>    </span>raw_tx_data: String,
+<a href=#419 id=419 data-nosnippet>419</a>    <span class="comment">// Intent struct used, see [struct Intent] for field definitions.
+<a href=#420 id=420 data-nosnippet>420</a>    </span>intent: Intent,
+<a href=#421 id=421 data-nosnippet>421</a>    <span class="comment">// Base64 encoded [struct IntentMessage] consisting of (intent || message)
+<a href=#422 id=422 data-nosnippet>422</a>    // where message can be `TransactionData` etc.
+<a href=#423 id=423 data-nosnippet>423</a>    </span>raw_intent_msg: String,
+<a href=#424 id=424 data-nosnippet>424</a>    <span class="comment">// Base64 encoded blake2b hash of the intent message, this is what the signature commits to.
+<a href=#425 id=425 data-nosnippet>425</a>    </span>digest: String,
+<a href=#426 id=426 data-nosnippet>426</a>    <span class="comment">// Base64 encoded `flag || signature || pubkey` for a complete
+<a href=#427 id=427 data-nosnippet>427</a>    // serialized Sui signature to be send for executing the transaction.
+<a href=#428 id=428 data-nosnippet>428</a>    </span>sui_signature: String,
+<a href=#429 id=429 data-nosnippet>429</a>}
+<a href=#430 id=430 data-nosnippet>430</a>
+<a href=#431 id=431 data-nosnippet>431</a><span class="attr">#[derive(Serialize)]
+<a href=#432 id=432 data-nosnippet>432</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#433 id=433 data-nosnippet>433</a></span><span class="kw">pub struct </span>ZkLoginSignAndExecuteTx {
+<a href=#434 id=434 data-nosnippet>434</a>    tx_digest: String,
+<a href=#435 id=435 data-nosnippet>435</a>}
+<a href=#436 id=436 data-nosnippet>436</a>
+<a href=#437 id=437 data-nosnippet>437</a><span class="attr">#[derive(Serialize)]
+<a href=#438 id=438 data-nosnippet>438</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#439 id=439 data-nosnippet>439</a></span><span class="kw">pub struct </span>ZkLoginSigVerifyResponse {
+<a href=#440 id=440 data-nosnippet>440</a>    data: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#441 id=441 data-nosnippet>441</a>    iss: String,
+<a href=#442 id=442 data-nosnippet>442</a>    address_seed: String,
+<a href=#443 id=443 data-nosnippet>443</a>    kid: String,
+<a href=#444 id=444 data-nosnippet>444</a>    parsed: String,
+<a href=#445 id=445 data-nosnippet>445</a>    jwks: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#446 id=446 data-nosnippet>446</a>    res: <span class="prelude-ty">Option</span>&lt;SuiResult&gt;,
+<a href=#447 id=447 data-nosnippet>447</a>}
+<a href=#448 id=448 data-nosnippet>448</a>
+<a href=#449 id=449 data-nosnippet>449</a><span class="attr">#[derive(Serialize)]
+<a href=#450 id=450 data-nosnippet>450</a>#[serde(rename_all = <span class="string">"camelCase"</span>)]
+<a href=#451 id=451 data-nosnippet>451</a></span><span class="kw">pub struct </span>ZkLoginInsecureSignPersonalMessage {
+<a href=#452 id=452 data-nosnippet>452</a>    sig: String,
+<a href=#453 id=453 data-nosnippet>453</a>    bytes: String,
+<a href=#454 id=454 data-nosnippet>454</a>    address: String,
+<a href=#455 id=455 data-nosnippet>455</a>}
+<a href=#456 id=456 data-nosnippet>456</a>
+<a href=#457 id=457 data-nosnippet>457</a><span class="attr">#[derive(Serialize)]
+<a href=#458 id=458 data-nosnippet>458</a>#[serde(untagged)]
+<a href=#459 id=459 data-nosnippet>459</a></span><span class="kw">pub enum </span>CommandOutput {
+<a href=#460 id=460 data-nosnippet>460</a>    Alias(AliasUpdate),
+<a href=#461 id=461 data-nosnippet>461</a>    Convert(ConvertOutput),
+<a href=#462 id=462 data-nosnippet>462</a>    DecodeMultiSig(DecodedMultiSigOutput),
+<a href=#463 id=463 data-nosnippet>463</a>    DecodeOrVerifyTx(DecodeOrVerifyTxOutput),
+<a href=#464 id=464 data-nosnippet>464</a>    Error(String),
+<a href=#465 id=465 data-nosnippet>465</a>    Generate(Key),
+<a href=#466 id=466 data-nosnippet>466</a>    Import(Key),
+<a href=#467 id=467 data-nosnippet>467</a>    Export(ExportedKey),
+<a href=#468 id=468 data-nosnippet>468</a>    List(Vec&lt;Key&gt;),
+<a href=#469 id=469 data-nosnippet>469</a>    LoadKeypair(KeypairData),
+<a href=#470 id=470 data-nosnippet>470</a>    MultiSigAddress(MultiSigAddress),
+<a href=#471 id=471 data-nosnippet>471</a>    MultiSigCombinePartialSig(MultiSigCombinePartialSig),
+<a href=#472 id=472 data-nosnippet>472</a>    MultiSigCombinePartialSigLegacy(MultiSigCombinePartialSigLegacyOutput),
+<a href=#473 id=473 data-nosnippet>473</a>    PrivateKeyBase64(PrivateKeyBase64),
+<a href=#474 id=474 data-nosnippet>474</a>    Show(Key),
+<a href=#475 id=475 data-nosnippet>475</a>    Sign(SignData),
+<a href=#476 id=476 data-nosnippet>476</a>    SignKMS(SerializedSig),
+<a href=#477 id=477 data-nosnippet>477</a>    ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx),
+<a href=#478 id=478 data-nosnippet>478</a>    ZkLoginInsecureSignPersonalMessage(ZkLoginInsecureSignPersonalMessage),
+<a href=#479 id=479 data-nosnippet>479</a>    ZkLoginSigVerify(ZkLoginSigVerifyResponse),
+<a href=#480 id=480 data-nosnippet>480</a>}
+<a href=#481 id=481 data-nosnippet>481</a>
+<a href=#482 id=482 data-nosnippet>482</a><span class="kw">impl </span>KeyToolCommand {
+<a href=#483 id=483 data-nosnippet>483</a>    <span class="kw">pub async fn </span>execute(<span class="self">self</span>, keystore: <span class="kw-2">&amp;mut </span>Keystore) -&gt; <span class="prelude-ty">Result</span>&lt;CommandOutput, anyhow::Error&gt; {
+<a href=#484 id=484 data-nosnippet>484</a>        <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="self">self </span>{
+<a href=#485 id=485 data-nosnippet>485</a>            KeyToolCommand::Alias {
+<a href=#486 id=486 data-nosnippet>486</a>                old_alias,
+<a href=#487 id=487 data-nosnippet>487</a>                new_alias,
+<a href=#488 id=488 data-nosnippet>488</a>            } =&gt; {
+<a href=#489 id=489 data-nosnippet>489</a>                <span class="kw">let </span>new_alias = keystore
+<a href=#490 id=490 data-nosnippet>490</a>                    .update_alias(<span class="kw-2">&amp;</span>old_alias, new_alias.as_deref())
+<a href=#491 id=491 data-nosnippet>491</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#492 id=492 data-nosnippet>492</a>                CommandOutput::Alias(AliasUpdate {
+<a href=#493 id=493 data-nosnippet>493</a>                    old_alias,
+<a href=#494 id=494 data-nosnippet>494</a>                    new_alias,
+<a href=#495 id=495 data-nosnippet>495</a>                })
+<a href=#496 id=496 data-nosnippet>496</a>            }
+<a href=#497 id=497 data-nosnippet>497</a>            KeyToolCommand::Convert { value } =&gt; {
+<a href=#498 id=498 data-nosnippet>498</a>                <span class="kw">let </span>result = convert_private_key_to_bech32(value)<span class="question-mark">?</span>;
+<a href=#499 id=499 data-nosnippet>499</a>                CommandOutput::Convert(result)
+<a href=#500 id=500 data-nosnippet>500</a>            }
+<a href=#501 id=501 data-nosnippet>501</a>
+<a href=#502 id=502 data-nosnippet>502</a>            KeyToolCommand::DecodeMultiSig {
+<a href=#503 id=503 data-nosnippet>503</a>                multisig,
+<a href=#504 id=504 data-nosnippet>504</a>                tx_bytes,
+<a href=#505 id=505 data-nosnippet>505</a>                cur_epoch,
+<a href=#506 id=506 data-nosnippet>506</a>            } =&gt; {
+<a href=#507 id=507 data-nosnippet>507</a>                <span class="kw">let </span>pks = multisig.get_pk().pubkeys();
+<a href=#508 id=508 data-nosnippet>508</a>                <span class="kw">let </span>sigs = multisig.get_sigs();
+<a href=#509 id=509 data-nosnippet>509</a>                <span class="kw">let </span>bitmap = multisig.get_indices()<span class="question-mark">?</span>;
+<a href=#510 id=510 data-nosnippet>510</a>                <span class="kw">let </span>address = SuiAddress::from(multisig.get_pk());
+<a href=#511 id=511 data-nosnippet>511</a>
+<a href=#512 id=512 data-nosnippet>512</a>                <span class="kw">let </span>pub_keys = pks
+<a href=#513 id=513 data-nosnippet>513</a>                    .iter()
+<a href=#514 id=514 data-nosnippet>514</a>                    .map(|(pk, w)| MultiSigOutput {
+<a href=#515 id=515 data-nosnippet>515</a>                        address: (pk).into(),
+<a href=#516 id=516 data-nosnippet>516</a>                        public_base64_key: pk.encode_base64(),
+<a href=#517 id=517 data-nosnippet>517</a>                        weight: <span class="kw-2">*</span>w,
+<a href=#518 id=518 data-nosnippet>518</a>                    })
+<a href=#519 id=519 data-nosnippet>519</a>                    .collect::&lt;Vec&lt;MultiSigOutput&gt;&gt;();
+<a href=#520 id=520 data-nosnippet>520</a>
+<a href=#521 id=521 data-nosnippet>521</a>                <span class="kw">let </span>threshold = <span class="kw-2">*</span>multisig.get_pk().threshold() <span class="kw">as </span>usize;
+<a href=#522 id=522 data-nosnippet>522</a>
+<a href=#523 id=523 data-nosnippet>523</a>                <span class="kw">let </span><span class="kw-2">mut </span>output = DecodedMultiSigOutput {
+<a href=#524 id=524 data-nosnippet>524</a>                    multisig_address: address,
+<a href=#525 id=525 data-nosnippet>525</a>                    participating_keys_signatures: <span class="macro">vec!</span>[],
+<a href=#526 id=526 data-nosnippet>526</a>                    pub_keys,
+<a href=#527 id=527 data-nosnippet>527</a>                    threshold,
+<a href=#528 id=528 data-nosnippet>528</a>                    sig_verify_result: <span class="string">""</span>.to_string(),
+<a href=#529 id=529 data-nosnippet>529</a>                };
+<a href=#530 id=530 data-nosnippet>530</a>
+<a href=#531 id=531 data-nosnippet>531</a>                <span class="kw">for </span>(sig, i) <span class="kw">in </span>sigs.iter().zip(bitmap) {
+<a href=#532 id=532 data-nosnippet>532</a>                    <span class="kw">let </span>(pk, w) = pks
+<a href=#533 id=533 data-nosnippet>533</a>                        .get(i <span class="kw">as </span>usize)
+<a href=#534 id=534 data-nosnippet>534</a>                        .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Invalid public keys index"</span>.to_string()))<span class="question-mark">?</span>;
+<a href=#535 id=535 data-nosnippet>535</a>                    output.participating_keys_signatures.push(DecodedMultiSig {
+<a href=#536 id=536 data-nosnippet>536</a>                        public_base64_key: pk.encode_base64().clone(),
+<a href=#537 id=537 data-nosnippet>537</a>                        sig_base64: Base64::encode(sig.as_ref()),
+<a href=#538 id=538 data-nosnippet>538</a>                        weight: w.to_string(),
+<a href=#539 id=539 data-nosnippet>539</a>                    })
+<a href=#540 id=540 data-nosnippet>540</a>                }
+<a href=#541 id=541 data-nosnippet>541</a>
+<a href=#542 id=542 data-nosnippet>542</a>                <span class="kw">if </span>tx_bytes.is_some() {
+<a href=#543 id=543 data-nosnippet>543</a>                    <span class="kw">let </span>tx_bytes = Base64::decode(<span class="kw-2">&amp;</span>tx_bytes.unwrap())
+<a href=#544 id=544 data-nosnippet>544</a>                        .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Invalid base64 tx bytes: {:?}"</span>, e))<span class="question-mark">?</span>;
+<a href=#545 id=545 data-nosnippet>545</a>                    <span class="kw">let </span>tx_data: TransactionData = bcs::from_bytes(<span class="kw-2">&amp;</span>tx_bytes)<span class="question-mark">?</span>;
+<a href=#546 id=546 data-nosnippet>546</a>                    <span class="kw">let </span>s = GenericSignature::MultiSig(multisig);
+<a href=#547 id=547 data-nosnippet>547</a>                    <span class="kw">let </span>res = s.verify_authenticator(
+<a href=#548 id=548 data-nosnippet>548</a>                        <span class="kw-2">&amp;</span>IntentMessage::new(Intent::sui_transaction(), tx_data),
+<a href=#549 id=549 data-nosnippet>549</a>                        address,
+<a href=#550 id=550 data-nosnippet>550</a>                        cur_epoch,
+<a href=#551 id=551 data-nosnippet>551</a>                        <span class="kw-2">&amp;</span>VerifyParams::default(),
+<a href=#552 id=552 data-nosnippet>552</a>                        Arc::new(VerifiedDigestCache::new_empty()),
+<a href=#553 id=553 data-nosnippet>553</a>                    );
+<a href=#554 id=554 data-nosnippet>554</a>
+<a href=#555 id=555 data-nosnippet>555</a>                    <span class="kw">match </span>res {
+<a href=#556 id=556 data-nosnippet>556</a>                        <span class="prelude-val">Ok</span>(()) =&gt; output.sig_verify_result = <span class="string">"OK"</span>.to_string(),
+<a href=#557 id=557 data-nosnippet>557</a>                        <span class="prelude-val">Err</span>(e) =&gt; output.sig_verify_result = <span class="macro">format!</span>(<span class="string">"{:?}"</span>, e),
+<a href=#558 id=558 data-nosnippet>558</a>                    };
+<a href=#559 id=559 data-nosnippet>559</a>                };
+<a href=#560 id=560 data-nosnippet>560</a>
+<a href=#561 id=561 data-nosnippet>561</a>                CommandOutput::DecodeMultiSig(output)
+<a href=#562 id=562 data-nosnippet>562</a>            }
+<a href=#563 id=563 data-nosnippet>563</a>
+<a href=#564 id=564 data-nosnippet>564</a>            KeyToolCommand::DecodeOrVerifyTx {
+<a href=#565 id=565 data-nosnippet>565</a>                tx_bytes,
+<a href=#566 id=566 data-nosnippet>566</a>                sig,
+<a href=#567 id=567 data-nosnippet>567</a>                cur_epoch,
+<a href=#568 id=568 data-nosnippet>568</a>            } =&gt; {
+<a href=#569 id=569 data-nosnippet>569</a>                <span class="kw">let </span>tx_bytes = Base64::decode(<span class="kw-2">&amp;</span>tx_bytes)
+<a href=#570 id=570 data-nosnippet>570</a>                    .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Invalid base64 key: {:?}"</span>, e))<span class="question-mark">?</span>;
+<a href=#571 id=571 data-nosnippet>571</a>                <span class="kw">let </span>tx_data: TransactionData = bcs::from_bytes(<span class="kw-2">&amp;</span>tx_bytes)<span class="question-mark">?</span>;
+<a href=#572 id=572 data-nosnippet>572</a>                <span class="kw">match </span>sig {
+<a href=#573 id=573 data-nosnippet>573</a>                    <span class="prelude-val">None </span>=&gt; CommandOutput::DecodeOrVerifyTx(DecodeOrVerifyTxOutput {
+<a href=#574 id=574 data-nosnippet>574</a>                        tx: tx_data,
+<a href=#575 id=575 data-nosnippet>575</a>                        result: <span class="prelude-val">None</span>,
+<a href=#576 id=576 data-nosnippet>576</a>                    }),
+<a href=#577 id=577 data-nosnippet>577</a>                    <span class="prelude-val">Some</span>(s) =&gt; {
+<a href=#578 id=578 data-nosnippet>578</a>                        <span class="kw">let </span>res = s.verify_authenticator(
+<a href=#579 id=579 data-nosnippet>579</a>                            <span class="kw-2">&amp;</span>IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
+<a href=#580 id=580 data-nosnippet>580</a>                            tx_data.sender(),
+<a href=#581 id=581 data-nosnippet>581</a>                            cur_epoch,
+<a href=#582 id=582 data-nosnippet>582</a>                            <span class="kw-2">&amp;</span>VerifyParams::default(),
+<a href=#583 id=583 data-nosnippet>583</a>                            Arc::new(VerifiedDigestCache::new_empty()),
+<a href=#584 id=584 data-nosnippet>584</a>                        );
+<a href=#585 id=585 data-nosnippet>585</a>                        CommandOutput::DecodeOrVerifyTx(DecodeOrVerifyTxOutput {
+<a href=#586 id=586 data-nosnippet>586</a>                            tx: tx_data,
+<a href=#587 id=587 data-nosnippet>587</a>                            result: <span class="prelude-val">Some</span>(res),
+<a href=#588 id=588 data-nosnippet>588</a>                        })
+<a href=#589 id=589 data-nosnippet>589</a>                    }
+<a href=#590 id=590 data-nosnippet>590</a>                }
+<a href=#591 id=591 data-nosnippet>591</a>            }
+<a href=#592 id=592 data-nosnippet>592</a>            KeyToolCommand::Generate {
+<a href=#593 id=593 data-nosnippet>593</a>                key_scheme,
+<a href=#594 id=594 data-nosnippet>594</a>                derivation_path,
+<a href=#595 id=595 data-nosnippet>595</a>                word_length,
+<a href=#596 id=596 data-nosnippet>596</a>            } =&gt; <span class="kw">match </span>key_scheme {
+<a href=#597 id=597 data-nosnippet>597</a>                SignatureScheme::BLS12381 =&gt; {
+<a href=#598 id=598 data-nosnippet>598</a>                    <span class="kw">let </span>(sui_address, kp) = get_authority_key_pair();
+<a href=#599 id=599 data-nosnippet>599</a>                    <span class="kw">let </span>file_name = <span class="macro">format!</span>(<span class="string">"bls-{sui_address}.key"</span>);
+<a href=#600 id=600 data-nosnippet>600</a>                    write_authority_keypair_to_file(<span class="kw-2">&amp;</span>kp, file_name)<span class="question-mark">?</span>;
+<a href=#601 id=601 data-nosnippet>601</a>                    CommandOutput::Generate(Key {
+<a href=#602 id=602 data-nosnippet>602</a>                        alias: <span class="prelude-val">None</span>,
+<a href=#603 id=603 data-nosnippet>603</a>                        sui_address,
+<a href=#604 id=604 data-nosnippet>604</a>                        public_base64_key: kp.public().encode_base64(),
+<a href=#605 id=605 data-nosnippet>605</a>                        key_scheme: key_scheme.to_string(),
+<a href=#606 id=606 data-nosnippet>606</a>                        flag: SignatureScheme::BLS12381.flag(),
+<a href=#607 id=607 data-nosnippet>607</a>                        mnemonic: <span class="prelude-val">None</span>,
+<a href=#608 id=608 data-nosnippet>608</a>                        peer_id: <span class="prelude-val">None</span>,
+<a href=#609 id=609 data-nosnippet>609</a>                    })
+<a href=#610 id=610 data-nosnippet>610</a>                }
+<a href=#611 id=611 data-nosnippet>611</a>                <span class="kw">_ </span>=&gt; {
+<a href=#612 id=612 data-nosnippet>612</a>                    <span class="kw">let </span>(sui_address, skp, _scheme, phrase) =
+<a href=#613 id=613 data-nosnippet>613</a>                        generate_new_key(key_scheme, derivation_path, word_length)<span class="question-mark">?</span>;
+<a href=#614 id=614 data-nosnippet>614</a>                    <span class="kw">let </span>file = <span class="macro">format!</span>(<span class="string">"{sui_address}.key"</span>);
+<a href=#615 id=615 data-nosnippet>615</a>                    write_keypair_to_file(<span class="kw-2">&amp;</span>skp, file)<span class="question-mark">?</span>;
+<a href=#616 id=616 data-nosnippet>616</a>                    <span class="kw">let </span><span class="kw-2">mut </span>key = Key::from(<span class="kw-2">&amp;</span>skp);
+<a href=#617 id=617 data-nosnippet>617</a>                    key.mnemonic = <span class="prelude-val">Some</span>(phrase);
+<a href=#618 id=618 data-nosnippet>618</a>                    CommandOutput::Generate(key)
+<a href=#619 id=619 data-nosnippet>619</a>                }
+<a href=#620 id=620 data-nosnippet>620</a>            },
+<a href=#621 id=621 data-nosnippet>621</a>
+<a href=#622 id=622 data-nosnippet>622</a>            KeyToolCommand::Import {
+<a href=#623 id=623 data-nosnippet>623</a>                alias,
+<a href=#624 id=624 data-nosnippet>624</a>                input_string,
+<a href=#625 id=625 data-nosnippet>625</a>                key_scheme,
+<a href=#626 id=626 data-nosnippet>626</a>                derivation_path,
+<a href=#627 id=627 data-nosnippet>627</a>            } =&gt; {
+<a href=#628 id=628 data-nosnippet>628</a>                <span class="kw">if </span>Hex::decode(<span class="kw-2">&amp;</span>input_string).is_ok() {
+<a href=#629 id=629 data-nosnippet>629</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
+<a href=#630 id=630 data-nosnippet>630</a>                        <span class="string">"Sui Keystore and Sui Wallet no longer support importing
+<a href=#631 id=631 data-nosnippet>631</a>                    private key as Hex, if you are sure your private key is encoded in Hex, use
+<a href=#632 id=632 data-nosnippet>632</a>                    `sui keytool convert $HEX` to convert first then import the Bech32 encoded
+<a href=#633 id=633 data-nosnippet>633</a>                    private key starting with `suiprivkey`."
+<a href=#634 id=634 data-nosnippet>634</a>                    </span>));
+<a href=#635 id=635 data-nosnippet>635</a>                }
+<a href=#636 id=636 data-nosnippet>636</a>
+<a href=#637 id=637 data-nosnippet>637</a>                <span class="kw">match </span>SuiKeyPair::decode(<span class="kw-2">&amp;</span>input_string) {
+<a href=#638 id=638 data-nosnippet>638</a>                    <span class="prelude-val">Ok</span>(skp) =&gt; {
+<a href=#639 id=639 data-nosnippet>639</a>                        <span class="macro">info!</span>(<span class="string">"Importing Bech32 encoded private key to keystore"</span>);
+<a href=#640 id=640 data-nosnippet>640</a>                        <span class="kw">let </span><span class="kw-2">mut </span>key = Key::from(<span class="kw-2">&amp;</span>skp);
+<a href=#641 id=641 data-nosnippet>641</a>                        keystore.import(alias.clone(), skp).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#642 id=642 data-nosnippet>642</a>
+<a href=#643 id=643 data-nosnippet>643</a>                        <span class="kw">let </span>alias = <span class="kw">match </span>alias {
+<a href=#644 id=644 data-nosnippet>644</a>                            <span class="prelude-val">Some</span>(x) =&gt; x,
+<a href=#645 id=645 data-nosnippet>645</a>                            <span class="prelude-val">None </span>=&gt; keystore.get_alias(<span class="kw-2">&amp;</span>key.sui_address)<span class="question-mark">?</span>,
+<a href=#646 id=646 data-nosnippet>646</a>                        };
+<a href=#647 id=647 data-nosnippet>647</a>
+<a href=#648 id=648 data-nosnippet>648</a>                        key.alias = <span class="prelude-val">Some</span>(alias);
+<a href=#649 id=649 data-nosnippet>649</a>                        CommandOutput::Import(key)
+<a href=#650 id=650 data-nosnippet>650</a>                    }
+<a href=#651 id=651 data-nosnippet>651</a>                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+<a href=#652 id=652 data-nosnippet>652</a>                        <span class="macro">info!</span>(<span class="string">"Importing mneomonics to keystore"</span>);
+<a href=#653 id=653 data-nosnippet>653</a>                        <span class="kw">let </span>sui_address = keystore
+<a href=#654 id=654 data-nosnippet>654</a>                            .import_from_mnemonic(
+<a href=#655 id=655 data-nosnippet>655</a>                                <span class="kw-2">&amp;</span>input_string,
+<a href=#656 id=656 data-nosnippet>656</a>                                key_scheme,
+<a href=#657 id=657 data-nosnippet>657</a>                                derivation_path,
+<a href=#658 id=658 data-nosnippet>658</a>                                alias.clone(),
+<a href=#659 id=659 data-nosnippet>659</a>                            )
+<a href=#660 id=660 data-nosnippet>660</a>                            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#661 id=661 data-nosnippet>661</a>                        <span class="kw">let </span>skp = keystore.export(<span class="kw-2">&amp;</span>sui_address)<span class="question-mark">?</span>;
+<a href=#662 id=662 data-nosnippet>662</a>                        <span class="kw">let </span><span class="kw-2">mut </span>key = Key::from(skp);
+<a href=#663 id=663 data-nosnippet>663</a>
+<a href=#664 id=664 data-nosnippet>664</a>                        <span class="kw">let </span>alias = <span class="kw">match </span>alias {
+<a href=#665 id=665 data-nosnippet>665</a>                            <span class="prelude-val">Some</span>(x) =&gt; x,
+<a href=#666 id=666 data-nosnippet>666</a>                            <span class="prelude-val">None </span>=&gt; keystore.get_alias(<span class="kw-2">&amp;</span>key.sui_address)<span class="question-mark">?</span>,
+<a href=#667 id=667 data-nosnippet>667</a>                        };
+<a href=#668 id=668 data-nosnippet>668</a>
+<a href=#669 id=669 data-nosnippet>669</a>                        key.alias = <span class="prelude-val">Some</span>(alias);
+<a href=#670 id=670 data-nosnippet>670</a>                        CommandOutput::Import(key)
+<a href=#671 id=671 data-nosnippet>671</a>                    }
+<a href=#672 id=672 data-nosnippet>672</a>                }
+<a href=#673 id=673 data-nosnippet>673</a>            }
+<a href=#674 id=674 data-nosnippet>674</a>            KeyToolCommand::Export { key_identity } =&gt; {
+<a href=#675 id=675 data-nosnippet>675</a>                <span class="kw">let </span>address = keystore.get_by_identity(<span class="kw-2">&amp;</span>key_identity)<span class="question-mark">?</span>;
+<a href=#676 id=676 data-nosnippet>676</a>                <span class="kw">let </span>skp = keystore.export(<span class="kw-2">&amp;</span>address)<span class="question-mark">?</span>;
+<a href=#677 id=677 data-nosnippet>677</a>                <span class="kw">let </span><span class="kw-2">mut </span>key = Key::from(skp);
+<a href=#678 id=678 data-nosnippet>678</a>                key.alias = keystore.get_alias(<span class="kw-2">&amp;</span>key.sui_address).ok();
+<a href=#679 id=679 data-nosnippet>679</a>                <span class="kw">let </span>key = ExportedKey {
+<a href=#680 id=680 data-nosnippet>680</a>                    exported_private_key: skp
+<a href=#681 id=681 data-nosnippet>681</a>                        .encode()
+<a href=#682 id=682 data-nosnippet>682</a>                        .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"Cannot decode keypair"</span>))<span class="question-mark">?</span>,
+<a href=#683 id=683 data-nosnippet>683</a>                    key,
+<a href=#684 id=684 data-nosnippet>684</a>                };
+<a href=#685 id=685 data-nosnippet>685</a>                CommandOutput::Export(key)
+<a href=#686 id=686 data-nosnippet>686</a>            }
+<a href=#687 id=687 data-nosnippet>687</a>            KeyToolCommand::List { sort_by_alias } =&gt; {
+<a href=#688 id=688 data-nosnippet>688</a>                <span class="kw">let </span><span class="kw-2">mut </span>keys = keystore
+<a href=#689 id=689 data-nosnippet>689</a>                    .entries()
+<a href=#690 id=690 data-nosnippet>690</a>                    .into_iter()
+<a href=#691 id=691 data-nosnippet>691</a>                    .map(|pk| {
+<a href=#692 id=692 data-nosnippet>692</a>                        <span class="kw">let </span><span class="kw-2">mut </span>key = Key::from(pk);
+<a href=#693 id=693 data-nosnippet>693</a>                        key.alias = keystore.get_alias(<span class="kw-2">&amp;</span>key.sui_address).ok();
+<a href=#694 id=694 data-nosnippet>694</a>                        key
+<a href=#695 id=695 data-nosnippet>695</a>                    })
+<a href=#696 id=696 data-nosnippet>696</a>                    .collect::&lt;Vec&lt;Key&gt;&gt;();
+<a href=#697 id=697 data-nosnippet>697</a>                <span class="kw">if </span>sort_by_alias {
+<a href=#698 id=698 data-nosnippet>698</a>                    keys.sort_unstable();
+<a href=#699 id=699 data-nosnippet>699</a>                }
+<a href=#700 id=700 data-nosnippet>700</a>                CommandOutput::List(keys)
+<a href=#701 id=701 data-nosnippet>701</a>            }
+<a href=#702 id=702 data-nosnippet>702</a>
+<a href=#703 id=703 data-nosnippet>703</a>            KeyToolCommand::LoadKeypair { file } =&gt; {
+<a href=#704 id=704 data-nosnippet>704</a>                <span class="kw">let </span>output = <span class="kw">match </span>read_keypair_from_file(<span class="kw-2">&amp;</span>file) {
+<a href=#705 id=705 data-nosnippet>705</a>                    <span class="prelude-val">Ok</span>(keypair) =&gt; {
+<a href=#706 id=706 data-nosnippet>706</a>                        <span class="comment">// Account keypair is encoded with the key scheme flag {},
+<a href=#707 id=707 data-nosnippet>707</a>                        // and network and worker keypair are not.
+<a href=#708 id=708 data-nosnippet>708</a>                        </span><span class="kw">let </span>network_worker_keypair = <span class="kw">match </span><span class="kw-2">&amp;</span>keypair {
+<a href=#709 id=709 data-nosnippet>709</a>                            SuiKeyPair::Ed25519(kp) =&gt; kp.encode_base64(),
+<a href=#710 id=710 data-nosnippet>710</a>                            SuiKeyPair::Secp256k1(kp) =&gt; kp.encode_base64(),
+<a href=#711 id=711 data-nosnippet>711</a>                            SuiKeyPair::Secp256r1(kp) =&gt; kp.encode_base64(),
+<a href=#712 id=712 data-nosnippet>712</a>                        };
+<a href=#713 id=713 data-nosnippet>713</a>                        KeypairData {
+<a href=#714 id=714 data-nosnippet>714</a>                            account_keypair: keypair.encode_base64(),
+<a href=#715 id=715 data-nosnippet>715</a>                            network_keypair: <span class="prelude-val">Some</span>(network_worker_keypair.clone()),
+<a href=#716 id=716 data-nosnippet>716</a>                            worker_keypair: <span class="prelude-val">Some</span>(network_worker_keypair),
+<a href=#717 id=717 data-nosnippet>717</a>                            key_scheme: keypair.public().scheme().to_string(),
+<a href=#718 id=718 data-nosnippet>718</a>                        }
+<a href=#719 id=719 data-nosnippet>719</a>                    }
+<a href=#720 id=720 data-nosnippet>720</a>                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+<a href=#721 id=721 data-nosnippet>721</a>                        <span class="comment">// Authority keypair file is not stored with the flag, it will try read as BLS keypair..
+<a href=#722 id=722 data-nosnippet>722</a>                        </span><span class="kw">match </span>read_authority_keypair_from_file(<span class="kw-2">&amp;</span>file) {
+<a href=#723 id=723 data-nosnippet>723</a>                            <span class="prelude-val">Ok</span>(keypair) =&gt; KeypairData {
+<a href=#724 id=724 data-nosnippet>724</a>                                account_keypair: keypair.encode_base64(),
+<a href=#725 id=725 data-nosnippet>725</a>                                network_keypair: <span class="prelude-val">None</span>,
+<a href=#726 id=726 data-nosnippet>726</a>                                worker_keypair: <span class="prelude-val">None</span>,
+<a href=#727 id=727 data-nosnippet>727</a>                                key_scheme: SignatureScheme::BLS12381.to_string(),
+<a href=#728 id=728 data-nosnippet>728</a>                            },
+<a href=#729 id=729 data-nosnippet>729</a>                            <span class="prelude-val">Err</span>(e) =&gt; {
+<a href=#730 id=730 data-nosnippet>730</a>                                <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="macro">format!</span>(
+<a href=#731 id=731 data-nosnippet>731</a>                                    <span class="string">"Failed to read keypair at path {:?} err: {:?}"</span>,
+<a href=#732 id=732 data-nosnippet>732</a>                                    file, e
+<a href=#733 id=733 data-nosnippet>733</a>                                )));
+<a href=#734 id=734 data-nosnippet>734</a>                            }
+<a href=#735 id=735 data-nosnippet>735</a>                        }
+<a href=#736 id=736 data-nosnippet>736</a>                    }
+<a href=#737 id=737 data-nosnippet>737</a>                };
+<a href=#738 id=738 data-nosnippet>738</a>                CommandOutput::LoadKeypair(output)
+<a href=#739 id=739 data-nosnippet>739</a>            }
+<a href=#740 id=740 data-nosnippet>740</a>
+<a href=#741 id=741 data-nosnippet>741</a>            KeyToolCommand::MultiSigAddress {
+<a href=#742 id=742 data-nosnippet>742</a>                threshold,
+<a href=#743 id=743 data-nosnippet>743</a>                pks,
+<a href=#744 id=744 data-nosnippet>744</a>                weights,
+<a href=#745 id=745 data-nosnippet>745</a>            } =&gt; {
+<a href=#746 id=746 data-nosnippet>746</a>                <span class="kw">let </span>multisig_pk = MultiSigPublicKey::new(pks.clone(), weights.clone(), threshold)<span class="question-mark">?</span>;
+<a href=#747 id=747 data-nosnippet>747</a>                <span class="kw">let </span>address: SuiAddress = (<span class="kw-2">&amp;</span>multisig_pk).into();
+<a href=#748 id=748 data-nosnippet>748</a>                <span class="kw">let </span><span class="kw-2">mut </span>output = MultiSigAddress {
+<a href=#749 id=749 data-nosnippet>749</a>                    multisig_address: address.to_string(),
+<a href=#750 id=750 data-nosnippet>750</a>                    multisig: <span class="macro">vec!</span>[],
+<a href=#751 id=751 data-nosnippet>751</a>                };
+<a href=#752 id=752 data-nosnippet>752</a>
+<a href=#753 id=753 data-nosnippet>753</a>                <span class="kw">for </span>(pk, w) <span class="kw">in </span>pks.into_iter().zip(weights.into_iter()) {
+<a href=#754 id=754 data-nosnippet>754</a>                    output.multisig.push(MultiSigOutput {
+<a href=#755 id=755 data-nosnippet>755</a>                        address: Into::&lt;SuiAddress&gt;::into(<span class="kw-2">&amp;</span>pk),
+<a href=#756 id=756 data-nosnippet>756</a>                        public_base64_key: pk.encode_base64(),
+<a href=#757 id=757 data-nosnippet>757</a>                        weight: w,
+<a href=#758 id=758 data-nosnippet>758</a>                    });
+<a href=#759 id=759 data-nosnippet>759</a>                }
+<a href=#760 id=760 data-nosnippet>760</a>                CommandOutput::MultiSigAddress(output)
+<a href=#761 id=761 data-nosnippet>761</a>            }
+<a href=#762 id=762 data-nosnippet>762</a>
+<a href=#763 id=763 data-nosnippet>763</a>            KeyToolCommand::MultiSigCombinePartialSig {
+<a href=#764 id=764 data-nosnippet>764</a>                sigs,
+<a href=#765 id=765 data-nosnippet>765</a>                pks,
+<a href=#766 id=766 data-nosnippet>766</a>                weights,
+<a href=#767 id=767 data-nosnippet>767</a>                threshold,
+<a href=#768 id=768 data-nosnippet>768</a>            } =&gt; {
+<a href=#769 id=769 data-nosnippet>769</a>                <span class="kw">let </span>multisig_pk = MultiSigPublicKey::new(pks, weights, threshold)<span class="question-mark">?</span>;
+<a href=#770 id=770 data-nosnippet>770</a>                <span class="kw">let </span>address: SuiAddress = (<span class="kw-2">&amp;</span>multisig_pk).into();
+<a href=#771 id=771 data-nosnippet>771</a>                <span class="kw">let </span>multisig = MultiSig::combine(sigs, multisig_pk)<span class="question-mark">?</span>;
+<a href=#772 id=772 data-nosnippet>772</a>                <span class="kw">let </span>generic_sig: GenericSignature = multisig.into();
+<a href=#773 id=773 data-nosnippet>773</a>                <span class="kw">let </span>multisig_serialized = generic_sig.encode_base64();
+<a href=#774 id=774 data-nosnippet>774</a>                CommandOutput::MultiSigCombinePartialSig(MultiSigCombinePartialSig {
+<a href=#775 id=775 data-nosnippet>775</a>                    multisig_address: address,
+<a href=#776 id=776 data-nosnippet>776</a>                    multisig_parsed: generic_sig,
+<a href=#777 id=777 data-nosnippet>777</a>                    multisig_serialized,
+<a href=#778 id=778 data-nosnippet>778</a>                })
+<a href=#779 id=779 data-nosnippet>779</a>            }
+<a href=#780 id=780 data-nosnippet>780</a>
+<a href=#781 id=781 data-nosnippet>781</a>            KeyToolCommand::MultiSigCombinePartialSigLegacy {
+<a href=#782 id=782 data-nosnippet>782</a>                sigs,
+<a href=#783 id=783 data-nosnippet>783</a>                pks,
+<a href=#784 id=784 data-nosnippet>784</a>                weights,
+<a href=#785 id=785 data-nosnippet>785</a>                threshold,
+<a href=#786 id=786 data-nosnippet>786</a>            } =&gt; {
+<a href=#787 id=787 data-nosnippet>787</a>                <span class="kw">let </span>multisig_pk_legacy =
+<a href=#788 id=788 data-nosnippet>788</a>                    MultiSigPublicKeyLegacy::new(pks.clone(), weights.clone(), threshold)<span class="question-mark">?</span>;
+<a href=#789 id=789 data-nosnippet>789</a>                <span class="kw">let </span>multisig_pk = MultiSigPublicKey::new(pks, weights, threshold)<span class="question-mark">?</span>;
+<a href=#790 id=790 data-nosnippet>790</a>                <span class="kw">let </span>address: SuiAddress = (<span class="kw-2">&amp;</span>multisig_pk).into();
+<a href=#791 id=791 data-nosnippet>791</a>                <span class="kw">let </span>multisig = MultiSigLegacy::combine(sigs, multisig_pk_legacy)<span class="question-mark">?</span>;
+<a href=#792 id=792 data-nosnippet>792</a>                <span class="kw">let </span>generic_sig: GenericSignature = multisig.into();
+<a href=#793 id=793 data-nosnippet>793</a>                <span class="kw">let </span>multisig_legacy_serialized = generic_sig.encode_base64();
+<a href=#794 id=794 data-nosnippet>794</a>
+<a href=#795 id=795 data-nosnippet>795</a>                CommandOutput::MultiSigCombinePartialSigLegacy(
+<a href=#796 id=796 data-nosnippet>796</a>                    MultiSigCombinePartialSigLegacyOutput {
+<a href=#797 id=797 data-nosnippet>797</a>                        multisig_address: address,
+<a href=#798 id=798 data-nosnippet>798</a>                        multisig_legacy_parsed: generic_sig,
+<a href=#799 id=799 data-nosnippet>799</a>                        multisig_legacy_serialized,
+<a href=#800 id=800 data-nosnippet>800</a>                    },
+<a href=#801 id=801 data-nosnippet>801</a>                )
+<a href=#802 id=802 data-nosnippet>802</a>            }
+<a href=#803 id=803 data-nosnippet>803</a>
+<a href=#804 id=804 data-nosnippet>804</a>            KeyToolCommand::Show { file } =&gt; {
+<a href=#805 id=805 data-nosnippet>805</a>                <span class="kw">let </span>res = read_keypair_from_file(<span class="kw-2">&amp;</span>file);
+<a href=#806 id=806 data-nosnippet>806</a>                <span class="kw">match </span>res {
+<a href=#807 id=807 data-nosnippet>807</a>                    <span class="prelude-val">Ok</span>(skp) =&gt; {
+<a href=#808 id=808 data-nosnippet>808</a>                        <span class="kw">let </span>key = Key::from(<span class="kw-2">&amp;</span>skp);
+<a href=#809 id=809 data-nosnippet>809</a>                        CommandOutput::Show(key)
+<a href=#810 id=810 data-nosnippet>810</a>                    }
+<a href=#811 id=811 data-nosnippet>811</a>                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">match </span>read_authority_keypair_from_file(<span class="kw-2">&amp;</span>file) {
+<a href=#812 id=812 data-nosnippet>812</a>                        <span class="prelude-val">Ok</span>(keypair) =&gt; {
+<a href=#813 id=813 data-nosnippet>813</a>                            <span class="kw">let </span>public_base64_key = keypair.public().encode_base64();
+<a href=#814 id=814 data-nosnippet>814</a>                            CommandOutput::Show(Key {
+<a href=#815 id=815 data-nosnippet>815</a>                                alias: <span class="prelude-val">None</span>, <span class="comment">// alias does not get stored in key files
+<a href=#816 id=816 data-nosnippet>816</a>                                </span>sui_address: (keypair.public()).into(),
+<a href=#817 id=817 data-nosnippet>817</a>                                public_base64_key,
+<a href=#818 id=818 data-nosnippet>818</a>                                key_scheme: SignatureScheme::BLS12381.to_string(),
+<a href=#819 id=819 data-nosnippet>819</a>                                flag: SignatureScheme::BLS12381.flag(),
+<a href=#820 id=820 data-nosnippet>820</a>                                peer_id: <span class="prelude-val">None</span>,
+<a href=#821 id=821 data-nosnippet>821</a>                                mnemonic: <span class="prelude-val">None</span>,
+<a href=#822 id=822 data-nosnippet>822</a>                            })
+<a href=#823 id=823 data-nosnippet>823</a>                        }
+<a href=#824 id=824 data-nosnippet>824</a>                        <span class="prelude-val">Err</span>(e) =&gt; CommandOutput::Error(<span class="macro">format!</span>(
+<a href=#825 id=825 data-nosnippet>825</a>                            <span class="string">"Failed to read keypair at path {:?}, err: {e}"</span>,
+<a href=#826 id=826 data-nosnippet>826</a>                            file
+<a href=#827 id=827 data-nosnippet>827</a>                        )),
+<a href=#828 id=828 data-nosnippet>828</a>                    },
+<a href=#829 id=829 data-nosnippet>829</a>                }
+<a href=#830 id=830 data-nosnippet>830</a>            }
+<a href=#831 id=831 data-nosnippet>831</a>
+<a href=#832 id=832 data-nosnippet>832</a>            KeyToolCommand::Sign {
+<a href=#833 id=833 data-nosnippet>833</a>                address,
+<a href=#834 id=834 data-nosnippet>834</a>                data,
+<a href=#835 id=835 data-nosnippet>835</a>                intent,
+<a href=#836 id=836 data-nosnippet>836</a>            } =&gt; {
+<a href=#837 id=837 data-nosnippet>837</a>                <span class="kw">let </span>address = keystore.get_by_identity(<span class="kw-2">&amp;</span>address)<span class="question-mark">?</span>;
+<a href=#838 id=838 data-nosnippet>838</a>                <span class="kw">let </span>intent = intent.unwrap_or_else(Intent::sui_transaction);
+<a href=#839 id=839 data-nosnippet>839</a>                <span class="kw">let </span>intent_clone = intent.clone();
+<a href=#840 id=840 data-nosnippet>840</a>                <span class="kw">let </span>msg: TransactionData =
+<a href=#841 id=841 data-nosnippet>841</a>                    bcs::from_bytes(<span class="kw-2">&amp;</span>Base64::decode(<span class="kw-2">&amp;</span>data).map_err(|e| {
+<a href=#842 id=842 data-nosnippet>842</a>                        <span class="macro">anyhow!</span>(<span class="string">"Cannot deserialize data as TransactionData {:?}"</span>, e)
+<a href=#843 id=843 data-nosnippet>843</a>                    })<span class="question-mark">?</span>)<span class="question-mark">?</span>;
+<a href=#844 id=844 data-nosnippet>844</a>                <span class="kw">let </span>intent_msg = IntentMessage::new(intent, msg);
+<a href=#845 id=845 data-nosnippet>845</a>                <span class="kw">let </span>raw_intent_msg: String = Base64::encode(bcs::to_bytes(<span class="kw-2">&amp;</span>intent_msg)<span class="question-mark">?</span>);
+<a href=#846 id=846 data-nosnippet>846</a>                <span class="kw">let </span><span class="kw-2">mut </span>hasher = DefaultHash::default();
+<a href=#847 id=847 data-nosnippet>847</a>                hasher.update(bcs::to_bytes(<span class="kw-2">&amp;</span>intent_msg)<span class="question-mark">?</span>);
+<a href=#848 id=848 data-nosnippet>848</a>                <span class="kw">let </span>digest = hasher.finalize().digest;
+<a href=#849 id=849 data-nosnippet>849</a>                <span class="kw">let </span>sui_signature = keystore
+<a href=#850 id=850 data-nosnippet>850</a>                    .sign_secure(<span class="kw-2">&amp;</span>address, <span class="kw-2">&amp;</span>intent_msg.value, intent_msg.intent)
+<a href=#851 id=851 data-nosnippet>851</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#852 id=852 data-nosnippet>852</a>                CommandOutput::Sign(SignData {
+<a href=#853 id=853 data-nosnippet>853</a>                    sui_address: address,
+<a href=#854 id=854 data-nosnippet>854</a>                    raw_tx_data: data,
+<a href=#855 id=855 data-nosnippet>855</a>                    intent: intent_clone,
+<a href=#856 id=856 data-nosnippet>856</a>                    raw_intent_msg,
+<a href=#857 id=857 data-nosnippet>857</a>                    digest: Base64::encode(digest),
+<a href=#858 id=858 data-nosnippet>858</a>                    sui_signature: sui_signature.encode_base64(),
+<a href=#859 id=859 data-nosnippet>859</a>                })
+<a href=#860 id=860 data-nosnippet>860</a>            }
+<a href=#861 id=861 data-nosnippet>861</a>
+<a href=#862 id=862 data-nosnippet>862</a>            KeyToolCommand::SignKMS {
+<a href=#863 id=863 data-nosnippet>863</a>                data,
+<a href=#864 id=864 data-nosnippet>864</a>                keyid,
+<a href=#865 id=865 data-nosnippet>865</a>                intent,
+<a href=#866 id=866 data-nosnippet>866</a>                base64pk,
+<a href=#867 id=867 data-nosnippet>867</a>            } =&gt; {
+<a href=#868 id=868 data-nosnippet>868</a>                <span class="comment">// Currently only supports secp256k1 keys
+<a href=#869 id=869 data-nosnippet>869</a>                </span><span class="kw">let </span>pk_owner = PublicKey::decode_base64(<span class="kw-2">&amp;</span>base64pk)
+<a href=#870 id=870 data-nosnippet>870</a>                    .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Invalid base64 key: {:?}"</span>, e))<span class="question-mark">?</span>;
+<a href=#871 id=871 data-nosnippet>871</a>                <span class="kw">let </span>address_owner = SuiAddress::from(<span class="kw-2">&amp;</span>pk_owner);
+<a href=#872 id=872 data-nosnippet>872</a>                <span class="macro">info!</span>(<span class="string">"Address For Corresponding KMS Key: {}"</span>, address_owner);
+<a href=#873 id=873 data-nosnippet>873</a>                <span class="macro">info!</span>(<span class="string">"Raw tx_bytes to execute: {}"</span>, data);
+<a href=#874 id=874 data-nosnippet>874</a>                <span class="kw">let </span>intent = intent.unwrap_or_else(Intent::sui_transaction);
+<a href=#875 id=875 data-nosnippet>875</a>                <span class="macro">info!</span>(<span class="string">"Intent: {:?}"</span>, intent);
+<a href=#876 id=876 data-nosnippet>876</a>                <span class="kw">let </span>msg: TransactionData =
+<a href=#877 id=877 data-nosnippet>877</a>                    bcs::from_bytes(<span class="kw-2">&amp;</span>Base64::decode(<span class="kw-2">&amp;</span>data).map_err(|e| {
+<a href=#878 id=878 data-nosnippet>878</a>                        <span class="macro">anyhow!</span>(<span class="string">"Cannot deserialize data as TransactionData {:?}"</span>, e)
+<a href=#879 id=879 data-nosnippet>879</a>                    })<span class="question-mark">?</span>)<span class="question-mark">?</span>;
+<a href=#880 id=880 data-nosnippet>880</a>                <span class="kw">let </span>intent_msg = IntentMessage::new(intent, msg);
+<a href=#881 id=881 data-nosnippet>881</a>                <span class="macro">info!</span>(
+<a href=#882 id=882 data-nosnippet>882</a>                    <span class="string">"Raw intent message: {:?}"</span>,
+<a href=#883 id=883 data-nosnippet>883</a>                    Base64::encode(bcs::to_bytes(<span class="kw-2">&amp;</span>intent_msg)<span class="question-mark">?</span>)
+<a href=#884 id=884 data-nosnippet>884</a>                );
+<a href=#885 id=885 data-nosnippet>885</a>                <span class="kw">let </span><span class="kw-2">mut </span>hasher = DefaultHash::default();
+<a href=#886 id=886 data-nosnippet>886</a>                hasher.update(bcs::to_bytes(<span class="kw-2">&amp;</span>intent_msg)<span class="question-mark">?</span>);
+<a href=#887 id=887 data-nosnippet>887</a>                <span class="kw">let </span>digest = hasher.finalize().digest;
+<a href=#888 id=888 data-nosnippet>888</a>                <span class="macro">info!</span>(<span class="string">"Digest to sign: {:?}"</span>, Base64::encode(digest));
+<a href=#889 id=889 data-nosnippet>889</a>
+<a href=#890 id=890 data-nosnippet>890</a>                <span class="comment">// Set up the KMS client in default region.
+<a href=#891 id=891 data-nosnippet>891</a>                </span><span class="kw">let </span>config = aws_config::load_from_env().<span class="kw">await</span>;
+<a href=#892 id=892 data-nosnippet>892</a>                <span class="kw">let </span>kms = KmsClient::new(<span class="kw-2">&amp;</span>config);
+<a href=#893 id=893 data-nosnippet>893</a>
+<a href=#894 id=894 data-nosnippet>894</a>                <span class="comment">// Sign the message, normalize the signature and then compacts it
+<a href=#895 id=895 data-nosnippet>895</a>                // serialize_compact is loaded as bytes for Secp256k1Signature
+<a href=#896 id=896 data-nosnippet>896</a>                </span><span class="kw">let </span>response = kms
+<a href=#897 id=897 data-nosnippet>897</a>                    .sign()
+<a href=#898 id=898 data-nosnippet>898</a>                    .key_id(keyid)
+<a href=#899 id=899 data-nosnippet>899</a>                    .message_type(MessageType::Raw)
+<a href=#900 id=900 data-nosnippet>900</a>                    .message(Blob::new(digest))
+<a href=#901 id=901 data-nosnippet>901</a>                    .signing_algorithm(SigningAlgorithmSpec::EcdsaSha256)
+<a href=#902 id=902 data-nosnippet>902</a>                    .send()
+<a href=#903 id=903 data-nosnippet>903</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#904 id=904 data-nosnippet>904</a>                <span class="kw">let </span>sig_bytes_der = response
+<a href=#905 id=905 data-nosnippet>905</a>                    .signature
+<a href=#906 id=906 data-nosnippet>906</a>                    .expect(<span class="string">"Requires Asymmetric Key Generated in KMS"</span>);
+<a href=#907 id=907 data-nosnippet>907</a>
+<a href=#908 id=908 data-nosnippet>908</a>                <span class="kw">let </span><span class="kw-2">mut </span>external_sig = Secp256k1Sig::from_der(sig_bytes_der.as_ref())<span class="question-mark">?</span>;
+<a href=#909 id=909 data-nosnippet>909</a>                external_sig.normalize_s();
+<a href=#910 id=910 data-nosnippet>910</a>                <span class="kw">let </span>sig_compact = external_sig.serialize_compact();
+<a href=#911 id=911 data-nosnippet>911</a>
+<a href=#912 id=912 data-nosnippet>912</a>                <span class="kw">let </span><span class="kw-2">mut </span>serialized_sig = <span class="macro">vec!</span>[SignatureScheme::Secp256k1.flag()];
+<a href=#913 id=913 data-nosnippet>913</a>                serialized_sig.extend_from_slice(<span class="kw-2">&amp;</span>sig_compact);
+<a href=#914 id=914 data-nosnippet>914</a>                serialized_sig.extend_from_slice(pk_owner.as_ref());
+<a href=#915 id=915 data-nosnippet>915</a>                <span class="kw">let </span>serialized_sig = Base64::encode(<span class="kw-2">&amp;</span>serialized_sig);
+<a href=#916 id=916 data-nosnippet>916</a>                CommandOutput::SignKMS(SerializedSig {
+<a href=#917 id=917 data-nosnippet>917</a>                    serialized_sig_base64: serialized_sig,
+<a href=#918 id=918 data-nosnippet>918</a>                })
+<a href=#919 id=919 data-nosnippet>919</a>            }
+<a href=#920 id=920 data-nosnippet>920</a>
+<a href=#921 id=921 data-nosnippet>921</a>            KeyToolCommand::Unpack { keypair } =&gt; {
+<a href=#922 id=922 data-nosnippet>922</a>                <span class="kw">let </span>keypair = SuiKeyPair::decode_base64(<span class="kw-2">&amp;</span>keypair)
+<a href=#923 id=923 data-nosnippet>923</a>                    .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"Invalid Base64 encode keypair"</span>))<span class="question-mark">?</span>;
+<a href=#924 id=924 data-nosnippet>924</a>
+<a href=#925 id=925 data-nosnippet>925</a>                <span class="kw">let </span>key = Key::from(<span class="kw-2">&amp;</span>keypair);
+<a href=#926 id=926 data-nosnippet>926</a>                <span class="kw">let </span>path_str = <span class="macro">format!</span>(<span class="string">"{}.key"</span>, key.sui_address).to_lowercase();
+<a href=#927 id=927 data-nosnippet>927</a>                <span class="kw">let </span>path = Path::new(<span class="kw-2">&amp;</span>path_str);
+<a href=#928 id=928 data-nosnippet>928</a>                <span class="kw">let </span>out_str = <span class="macro">format!</span>(
+<a href=#929 id=929 data-nosnippet>929</a>                    <span class="string">"address: {}\nkeypair: {}\nflag: {}"</span>,
+<a href=#930 id=930 data-nosnippet>930</a>                    key.sui_address,
+<a href=#931 id=931 data-nosnippet>931</a>                    keypair.encode_base64(),
+<a href=#932 id=932 data-nosnippet>932</a>                    key.flag
+<a href=#933 id=933 data-nosnippet>933</a>                );
+<a href=#934 id=934 data-nosnippet>934</a>                fs::write(path, out_str).unwrap();
+<a href=#935 id=935 data-nosnippet>935</a>                CommandOutput::Show(key)
+<a href=#936 id=936 data-nosnippet>936</a>            }
+<a href=#937 id=937 data-nosnippet>937</a>
+<a href=#938 id=938 data-nosnippet>938</a>            KeyToolCommand::ZkLoginInsecureSignPersonalMessage { data, max_epoch } =&gt; {
+<a href=#939 id=939 data-nosnippet>939</a>                <span class="kw">let </span>msg = PersonalMessage {
+<a href=#940 id=940 data-nosnippet>940</a>                    message: data.as_bytes().to_vec(),
+<a href=#941 id=941 data-nosnippet>941</a>                };
+<a href=#942 id=942 data-nosnippet>942</a>                <span class="kw">let </span>sub = <span class="string">"1"</span>;
+<a href=#943 id=943 data-nosnippet>943</a>                <span class="kw">let </span>user_salt = <span class="string">"1"</span>;
+<a href=#944 id=944 data-nosnippet>944</a>                <span class="kw">let </span>intent_msg = IntentMessage::new(Intent::personal_message(), msg.clone());
+<a href=#945 id=945 data-nosnippet>945</a>
+<a href=#946 id=946 data-nosnippet>946</a>                <span class="comment">// set up keypair, nonce with max_epoch
+<a href=#947 id=947 data-nosnippet>947</a>                </span><span class="kw">let </span>skp =
+<a href=#948 id=948 data-nosnippet>948</a>                    SuiKeyPair::Ed25519(Ed25519KeyPair::generate(<span class="kw-2">&amp;mut </span>StdRng::from_seed([<span class="number">0</span>; <span class="number">32</span>])));
+<a href=#949 id=949 data-nosnippet>949</a>                <span class="kw">let </span>jwt_randomness = BigUint::from_bytes_be(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]).to_string();
+<a href=#950 id=950 data-nosnippet>950</a>                <span class="kw">let </span><span class="kw-2">mut </span>eph_pk_bytes = <span class="macro">vec!</span>[<span class="number">0x00</span>];
+<a href=#951 id=951 data-nosnippet>951</a>                eph_pk_bytes.extend(skp.public().as_ref());
+<a href=#952 id=952 data-nosnippet>952</a>                <span class="kw">let </span>kp_bigint = BigUint::from_bytes_be(<span class="kw-2">&amp;</span>eph_pk_bytes).to_string();
+<a href=#953 id=953 data-nosnippet>953</a>                <span class="kw">let </span>nonce = get_nonce(<span class="kw-2">&amp;</span>eph_pk_bytes, max_epoch, <span class="kw-2">&amp;</span>jwt_randomness).unwrap();
+<a href=#954 id=954 data-nosnippet>954</a>
+<a href=#955 id=955 data-nosnippet>955</a>                <span class="comment">// call test issuer to get jwt token.
+<a href=#956 id=956 data-nosnippet>956</a>                </span><span class="kw">let </span>client = reqwest::Client::new();
+<a href=#957 id=957 data-nosnippet>957</a>                <span class="kw">let </span>parsed_token = get_test_issuer_jwt_token(
+<a href=#958 id=958 data-nosnippet>958</a>                    <span class="kw-2">&amp;</span>client,
+<a href=#959 id=959 data-nosnippet>959</a>                    <span class="kw-2">&amp;</span>nonce,
+<a href=#960 id=960 data-nosnippet>960</a>                    <span class="kw-2">&amp;</span>OIDCProvider::TestIssuer.get_config().iss,
+<a href=#961 id=961 data-nosnippet>961</a>                    sub,
+<a href=#962 id=962 data-nosnippet>962</a>                )
+<a href=#963 id=963 data-nosnippet>963</a>                .<span class="kw">await
+<a href=#964 id=964 data-nosnippet>964</a>                </span>.unwrap()
+<a href=#965 id=965 data-nosnippet>965</a>                .jwt;
+<a href=#966 id=966 data-nosnippet>966</a>
+<a href=#967 id=967 data-nosnippet>967</a>                <span class="comment">// call prover-dev for zklogin inputs
+<a href=#968 id=968 data-nosnippet>968</a>                </span><span class="kw">let </span>reader = get_proof(
+<a href=#969 id=969 data-nosnippet>969</a>                    <span class="kw-2">&amp;</span>parsed_token,
+<a href=#970 id=970 data-nosnippet>970</a>                    max_epoch,
+<a href=#971 id=971 data-nosnippet>971</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#972 id=972 data-nosnippet>972</a>                    <span class="kw-2">&amp;</span>kp_bigint,
+<a href=#973 id=973 data-nosnippet>973</a>                    user_salt,
+<a href=#974 id=974 data-nosnippet>974</a>                    <span class="string">"https://prover-dev.mystenlabs.com/v1"</span>,
+<a href=#975 id=975 data-nosnippet>975</a>                )
+<a href=#976 id=976 data-nosnippet>976</a>                .<span class="kw">await
+<a href=#977 id=977 data-nosnippet>977</a>                </span>.unwrap();
+<a href=#978 id=978 data-nosnippet>978</a>                <span class="kw">let </span>(<span class="kw">_</span>, aud, <span class="kw">_</span>) = parse_and_validate_jwt(<span class="kw-2">&amp;</span>parsed_token).unwrap();
+<a href=#979 id=979 data-nosnippet>979</a>                <span class="kw">let </span>address_seed = gen_address_seed(user_salt, <span class="string">"sub"</span>, sub, <span class="kw-2">&amp;</span>aud).unwrap();
+<a href=#980 id=980 data-nosnippet>980</a>                <span class="kw">let </span>zk_login_inputs =
+<a href=#981 id=981 data-nosnippet>981</a>                    ZkLoginInputs::from_reader(reader, <span class="kw-2">&amp;</span>address_seed.to_string()).unwrap();
+<a href=#982 id=982 data-nosnippet>982</a>                <span class="kw">let </span>pk = PublicKey::ZkLogin(
+<a href=#983 id=983 data-nosnippet>983</a>                    ZkLoginPublicIdentifier::new(
+<a href=#984 id=984 data-nosnippet>984</a>                        zk_login_inputs.get_iss(),
+<a href=#985 id=985 data-nosnippet>985</a>                        zk_login_inputs.get_address_seed(),
+<a href=#986 id=986 data-nosnippet>986</a>                    )
+<a href=#987 id=987 data-nosnippet>987</a>                    .unwrap(),
+<a href=#988 id=988 data-nosnippet>988</a>                );
+<a href=#989 id=989 data-nosnippet>989</a>                <span class="kw">let </span>address = SuiAddress::from(<span class="kw-2">&amp;</span>pk);
+<a href=#990 id=990 data-nosnippet>990</a>                <span class="comment">// sign with ephemeral key and combine with zklogin inputs to generic signature
+<a href=#991 id=991 data-nosnippet>991</a>                </span><span class="kw">let </span>s = Signature::new_secure(<span class="kw-2">&amp;</span>intent_msg, <span class="kw-2">&amp;</span>skp);
+<a href=#992 id=992 data-nosnippet>992</a>                <span class="kw">let </span>sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+<a href=#993 id=993 data-nosnippet>993</a>                    zk_login_inputs,
+<a href=#994 id=994 data-nosnippet>994</a>                    max_epoch,
+<a href=#995 id=995 data-nosnippet>995</a>                    s,
+<a href=#996 id=996 data-nosnippet>996</a>                ));
+<a href=#997 id=997 data-nosnippet>997</a>                CommandOutput::ZkLoginInsecureSignPersonalMessage(
+<a href=#998 id=998 data-nosnippet>998</a>                    ZkLoginInsecureSignPersonalMessage {
+<a href=#999 id=999 data-nosnippet>999</a>                        sig: Base64::encode(sig.as_bytes()),
+<a href=#1000 id=1000 data-nosnippet>1000</a>                        bytes: Base64::encode(data.as_bytes()),
+<a href=#1001 id=1001 data-nosnippet>1001</a>                        address: address.to_string(),
+<a href=#1002 id=1002 data-nosnippet>1002</a>                    },
+<a href=#1003 id=1003 data-nosnippet>1003</a>                )
+<a href=#1004 id=1004 data-nosnippet>1004</a>            }
+<a href=#1005 id=1005 data-nosnippet>1005</a>            KeyToolCommand::ZkLoginSignAndExecuteTx {
+<a href=#1006 id=1006 data-nosnippet>1006</a>                max_epoch,
+<a href=#1007 id=1007 data-nosnippet>1007</a>                network,
+<a href=#1008 id=1008 data-nosnippet>1008</a>                fixed,
+<a href=#1009 id=1009 data-nosnippet>1009</a>                test_multisig,
+<a href=#1010 id=1010 data-nosnippet>1010</a>                sign_with_sk,
+<a href=#1011 id=1011 data-nosnippet>1011</a>            } =&gt; {
+<a href=#1012 id=1012 data-nosnippet>1012</a>                <span class="kw">let </span>skp = <span class="kw">if </span>fixed {
+<a href=#1013 id=1013 data-nosnippet>1013</a>                    SuiKeyPair::Ed25519(Ed25519KeyPair::generate(<span class="kw-2">&amp;mut </span>StdRng::from_seed([<span class="number">0</span>; <span class="number">32</span>])))
+<a href=#1014 id=1014 data-nosnippet>1014</a>                } <span class="kw">else </span>{
+<a href=#1015 id=1015 data-nosnippet>1015</a>                    SuiKeyPair::Ed25519(Ed25519KeyPair::generate(<span class="kw-2">&amp;mut </span>rand::thread_rng()))
+<a href=#1016 id=1016 data-nosnippet>1016</a>                };
+<a href=#1017 id=1017 data-nosnippet>1017</a>                <span class="macro">println!</span>(<span class="string">"Ephemeral keypair: {:?}"</span>, skp.encode());
+<a href=#1018 id=1018 data-nosnippet>1018</a>                <span class="kw">let </span>pk = skp.public();
+<a href=#1019 id=1019 data-nosnippet>1019</a>                <span class="kw">let </span>ephemeral_key_identifier: SuiAddress = (<span class="kw-2">&amp;</span>skp.public()).into();
+<a href=#1020 id=1020 data-nosnippet>1020</a>                <span class="macro">println!</span>(<span class="string">"Ephemeral key identifier: {ephemeral_key_identifier}"</span>);
+<a href=#1021 id=1021 data-nosnippet>1021</a>                keystore.import(<span class="prelude-val">None</span>, skp).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1022 id=1022 data-nosnippet>1022</a>
+<a href=#1023 id=1023 data-nosnippet>1023</a>                <span class="kw">let </span><span class="kw-2">mut </span>eph_pk_bytes = <span class="macro">vec!</span>[pk.flag()];
+<a href=#1024 id=1024 data-nosnippet>1024</a>                eph_pk_bytes.extend(pk.as_ref());
+<a href=#1025 id=1025 data-nosnippet>1025</a>                <span class="kw">let </span>kp_bigint = BigUint::from_bytes_be(<span class="kw-2">&amp;</span>eph_pk_bytes);
+<a href=#1026 id=1026 data-nosnippet>1026</a>                <span class="macro">println!</span>(<span class="string">"Ephemeral pubkey (BigInt): {:?}"</span>, kp_bigint);
+<a href=#1027 id=1027 data-nosnippet>1027</a>
+<a href=#1028 id=1028 data-nosnippet>1028</a>                <span class="kw">let </span>jwt_randomness = <span class="kw">if </span>fixed {
+<a href=#1029 id=1029 data-nosnippet>1029</a>                    <span class="string">"100681567828351849884072155819400689117"</span>.to_string()
+<a href=#1030 id=1030 data-nosnippet>1030</a>                } <span class="kw">else </span>{
+<a href=#1031 id=1031 data-nosnippet>1031</a>                    <span class="kw">let </span>random_bytes = rand::thread_rng().r#gen::&lt;[u8; <span class="number">16</span>]&gt;();
+<a href=#1032 id=1032 data-nosnippet>1032</a>                    <span class="kw">let </span>jwt_random_bytes = BigUint::from_bytes_be(<span class="kw-2">&amp;</span>random_bytes);
+<a href=#1033 id=1033 data-nosnippet>1033</a>                    jwt_random_bytes.to_string()
+<a href=#1034 id=1034 data-nosnippet>1034</a>                };
+<a href=#1035 id=1035 data-nosnippet>1035</a>                <span class="macro">println!</span>(<span class="string">"Jwt randomness: {jwt_randomness}"</span>);
+<a href=#1036 id=1036 data-nosnippet>1036</a>                <span class="kw">let </span>url = get_oidc_url(
+<a href=#1037 id=1037 data-nosnippet>1037</a>                    OIDCProvider::Google,
+<a href=#1038 id=1038 data-nosnippet>1038</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1039 id=1039 data-nosnippet>1039</a>                    max_epoch,
+<a href=#1040 id=1040 data-nosnippet>1040</a>                    <span class="string">"25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com"</span>,
+<a href=#1041 id=1041 data-nosnippet>1041</a>                    <span class="string">"https://sui.io/"</span>,
+<a href=#1042 id=1042 data-nosnippet>1042</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1043 id=1043 data-nosnippet>1043</a>                )<span class="question-mark">?</span>;
+<a href=#1044 id=1044 data-nosnippet>1044</a>                <span class="kw">let </span>url_2 = get_oidc_url(
+<a href=#1045 id=1045 data-nosnippet>1045</a>                    OIDCProvider::Twitch,
+<a href=#1046 id=1046 data-nosnippet>1046</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1047 id=1047 data-nosnippet>1047</a>                    max_epoch,
+<a href=#1048 id=1048 data-nosnippet>1048</a>                    <span class="string">"rs1bh065i9ya4ydvifixl4kss0uhpt"</span>,
+<a href=#1049 id=1049 data-nosnippet>1049</a>                    <span class="string">"https://sui.io/"</span>,
+<a href=#1050 id=1050 data-nosnippet>1050</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1051 id=1051 data-nosnippet>1051</a>                )<span class="question-mark">?</span>;
+<a href=#1052 id=1052 data-nosnippet>1052</a>                <span class="kw">let </span>url_3 = get_oidc_url(
+<a href=#1053 id=1053 data-nosnippet>1053</a>                    OIDCProvider::Facebook,
+<a href=#1054 id=1054 data-nosnippet>1054</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1055 id=1055 data-nosnippet>1055</a>                    max_epoch,
+<a href=#1056 id=1056 data-nosnippet>1056</a>                    <span class="string">"233307156352917"</span>,
+<a href=#1057 id=1057 data-nosnippet>1057</a>                    <span class="string">"https://sui.io/"</span>,
+<a href=#1058 id=1058 data-nosnippet>1058</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1059 id=1059 data-nosnippet>1059</a>                )<span class="question-mark">?</span>;
+<a href=#1060 id=1060 data-nosnippet>1060</a>                <span class="kw">let </span>url_4 = get_oidc_url(
+<a href=#1061 id=1061 data-nosnippet>1061</a>                    OIDCProvider::Kakao,
+<a href=#1062 id=1062 data-nosnippet>1062</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1063 id=1063 data-nosnippet>1063</a>                    max_epoch,
+<a href=#1064 id=1064 data-nosnippet>1064</a>                    <span class="string">"aa6bddf393b54d4e0d42ae0014edfd2f"</span>,
+<a href=#1065 id=1065 data-nosnippet>1065</a>                    <span class="string">"https://sui.io/"</span>,
+<a href=#1066 id=1066 data-nosnippet>1066</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1067 id=1067 data-nosnippet>1067</a>                )<span class="question-mark">?</span>;
+<a href=#1068 id=1068 data-nosnippet>1068</a>                <span class="kw">let </span>url_5 = get_token_exchange_url(
+<a href=#1069 id=1069 data-nosnippet>1069</a>                    OIDCProvider::Kakao,
+<a href=#1070 id=1070 data-nosnippet>1070</a>                    <span class="string">"aa6bddf393b54d4e0d42ae0014edfd2f"</span>,
+<a href=#1071 id=1071 data-nosnippet>1071</a>                    <span class="string">"https://sui.io/"</span>,
+<a href=#1072 id=1072 data-nosnippet>1072</a>                    <span class="string">"$YOUR_AUTH_CODE"</span>,
+<a href=#1073 id=1073 data-nosnippet>1073</a>                    <span class="string">""</span>, <span class="comment">// not needed
+<a href=#1074 id=1074 data-nosnippet>1074</a>                </span>)<span class="question-mark">?</span>;
+<a href=#1075 id=1075 data-nosnippet>1075</a>                <span class="kw">let </span>url_6 = get_oidc_url(
+<a href=#1076 id=1076 data-nosnippet>1076</a>                    OIDCProvider::Apple,
+<a href=#1077 id=1077 data-nosnippet>1077</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1078 id=1078 data-nosnippet>1078</a>                    max_epoch,
+<a href=#1079 id=1079 data-nosnippet>1079</a>                    <span class="string">"nl.digkas.wallet.client"</span>,
+<a href=#1080 id=1080 data-nosnippet>1080</a>                    <span class="string">"https://sui.io/"</span>,
+<a href=#1081 id=1081 data-nosnippet>1081</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1082 id=1082 data-nosnippet>1082</a>                )<span class="question-mark">?</span>;
+<a href=#1083 id=1083 data-nosnippet>1083</a>                <span class="kw">let </span>url_7 = get_oidc_url(
+<a href=#1084 id=1084 data-nosnippet>1084</a>                    OIDCProvider::Slack,
+<a href=#1085 id=1085 data-nosnippet>1085</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1086 id=1086 data-nosnippet>1086</a>                    max_epoch,
+<a href=#1087 id=1087 data-nosnippet>1087</a>                    <span class="string">"2426087588661.5742457039348"</span>,
+<a href=#1088 id=1088 data-nosnippet>1088</a>                    <span class="string">"https://sui.io/"</span>,
+<a href=#1089 id=1089 data-nosnippet>1089</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1090 id=1090 data-nosnippet>1090</a>                )<span class="question-mark">?</span>;
+<a href=#1091 id=1091 data-nosnippet>1091</a>                <span class="kw">let </span>url_8 = get_token_exchange_url(
+<a href=#1092 id=1092 data-nosnippet>1092</a>                    OIDCProvider::Slack,
+<a href=#1093 id=1093 data-nosnippet>1093</a>                    <span class="string">"2426087588661.5742457039348"</span>,
+<a href=#1094 id=1094 data-nosnippet>1094</a>                    <span class="string">"https://sui.io/"</span>,
+<a href=#1095 id=1095 data-nosnippet>1095</a>                    <span class="string">"$YOUR_AUTH_CODE"</span>,
+<a href=#1096 id=1096 data-nosnippet>1096</a>                    <span class="string">"39b955a118f2f21110939bf3dff1de90"</span>,
+<a href=#1097 id=1097 data-nosnippet>1097</a>                )<span class="question-mark">?</span>;
+<a href=#1098 id=1098 data-nosnippet>1098</a>                <span class="kw">let </span>url_9 = get_oidc_url(
+<a href=#1099 id=1099 data-nosnippet>1099</a>                    OIDCProvider::AwsTenant((
+<a href=#1100 id=1100 data-nosnippet>1100</a>                        <span class="string">"us-east-1"</span>.to_string(),
+<a href=#1101 id=1101 data-nosnippet>1101</a>                        <span class="string">"zklogin-example"</span>.to_string(),
+<a href=#1102 id=1102 data-nosnippet>1102</a>                    )),
+<a href=#1103 id=1103 data-nosnippet>1103</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1104 id=1104 data-nosnippet>1104</a>                    max_epoch,
+<a href=#1105 id=1105 data-nosnippet>1105</a>                    <span class="string">"6c56t7re6ekgmv23o7to8r0sic"</span>,
+<a href=#1106 id=1106 data-nosnippet>1106</a>                    <span class="string">"https://www.sui.io/"</span>,
+<a href=#1107 id=1107 data-nosnippet>1107</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1108 id=1108 data-nosnippet>1108</a>                )<span class="question-mark">?</span>;
+<a href=#1109 id=1109 data-nosnippet>1109</a>                <span class="kw">let </span>url_10 = get_oidc_url(
+<a href=#1110 id=1110 data-nosnippet>1110</a>                    OIDCProvider::Microsoft,
+<a href=#1111 id=1111 data-nosnippet>1111</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1112 id=1112 data-nosnippet>1112</a>                    max_epoch,
+<a href=#1113 id=1113 data-nosnippet>1113</a>                    <span class="string">"2e3e87cb-bf24-4399-ab98-48343d457124"</span>,
+<a href=#1114 id=1114 data-nosnippet>1114</a>                    <span class="string">"https://www.sui.io"</span>,
+<a href=#1115 id=1115 data-nosnippet>1115</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1116 id=1116 data-nosnippet>1116</a>                )<span class="question-mark">?</span>;
+<a href=#1117 id=1117 data-nosnippet>1117</a>                <span class="kw">let </span>url_11 = get_oidc_url(
+<a href=#1118 id=1118 data-nosnippet>1118</a>                    OIDCProvider::KarrierOne,
+<a href=#1119 id=1119 data-nosnippet>1119</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1120 id=1120 data-nosnippet>1120</a>                    max_epoch,
+<a href=#1121 id=1121 data-nosnippet>1121</a>                    <span class="string">"kns-dev"</span>,
+<a href=#1122 id=1122 data-nosnippet>1122</a>                    <span class="string">"https://sui.io/"</span>, <span class="comment">// placeholder
+<a href=#1123 id=1123 data-nosnippet>1123</a>                    </span><span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1124 id=1124 data-nosnippet>1124</a>                )<span class="question-mark">?</span>;
+<a href=#1125 id=1125 data-nosnippet>1125</a>                <span class="kw">let </span>url_12 = get_oidc_url(
+<a href=#1126 id=1126 data-nosnippet>1126</a>                    OIDCProvider::Credenza3,
+<a href=#1127 id=1127 data-nosnippet>1127</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1128 id=1128 data-nosnippet>1128</a>                    max_epoch,
+<a href=#1129 id=1129 data-nosnippet>1129</a>                    <span class="string">"65954ec5d03dba0198ac343a"</span>,
+<a href=#1130 id=1130 data-nosnippet>1130</a>                    <span class="string">"https://example.com/callback"</span>,
+<a href=#1131 id=1131 data-nosnippet>1131</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1132 id=1132 data-nosnippet>1132</a>                )<span class="question-mark">?</span>;
+<a href=#1133 id=1133 data-nosnippet>1133</a>                <span class="kw">let </span>url_14 = get_oidc_url(
+<a href=#1134 id=1134 data-nosnippet>1134</a>                    OIDCProvider::Arden,
+<a href=#1135 id=1135 data-nosnippet>1135</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1136 id=1136 data-nosnippet>1136</a>                    max_epoch,
+<a href=#1137 id=1137 data-nosnippet>1137</a>                    <span class="string">"2e3i87cb-bf24-4399-ab98-48343d457124"</span>,
+<a href=#1138 id=1138 data-nosnippet>1138</a>                    <span class="string">"https://www.sui.io"</span>,
+<a href=#1139 id=1139 data-nosnippet>1139</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1140 id=1140 data-nosnippet>1140</a>                )<span class="question-mark">?</span>;
+<a href=#1141 id=1141 data-nosnippet>1141</a>                <span class="kw">let </span>url_15 = get_oidc_url(
+<a href=#1142 id=1142 data-nosnippet>1142</a>                    OIDCProvider::AwsTenant((<span class="string">"eu-west-3"</span>.to_string(), <span class="string">"trace"</span>.to_string())),
+<a href=#1143 id=1143 data-nosnippet>1143</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1144 id=1144 data-nosnippet>1144</a>                    max_epoch,
+<a href=#1145 id=1145 data-nosnippet>1145</a>                    <span class="string">"trace-dev"</span>,
+<a href=#1146 id=1146 data-nosnippet>1146</a>                    <span class="string">"https://trace.fan"</span>,
+<a href=#1147 id=1147 data-nosnippet>1147</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1148 id=1148 data-nosnippet>1148</a>                )<span class="question-mark">?</span>;
+<a href=#1149 id=1149 data-nosnippet>1149</a>                <span class="kw">let </span>url_16 = get_oidc_url(
+<a href=#1150 id=1150 data-nosnippet>1150</a>                    OIDCProvider::EveFrontier,
+<a href=#1151 id=1151 data-nosnippet>1151</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1152 id=1152 data-nosnippet>1152</a>                    max_epoch,
+<a href=#1153 id=1153 data-nosnippet>1153</a>                    <span class="string">"583ebc6d-abd8-4057-8c77-78405628e42d"</span>,
+<a href=#1154 id=1154 data-nosnippet>1154</a>                    <span class="string">"https://www.sui.io"</span>,
+<a href=#1155 id=1155 data-nosnippet>1155</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1156 id=1156 data-nosnippet>1156</a>                )<span class="question-mark">?</span>;
+<a href=#1157 id=1157 data-nosnippet>1157</a>                <span class="kw">let </span>url_17 = get_oidc_url(
+<a href=#1158 id=1158 data-nosnippet>1158</a>                    OIDCProvider::TestEveFrontier,
+<a href=#1159 id=1159 data-nosnippet>1159</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1160 id=1160 data-nosnippet>1160</a>                    max_epoch,
+<a href=#1161 id=1161 data-nosnippet>1161</a>                    <span class="string">"c8815001-f950-4147-905e-4833d904cd38"</span>,
+<a href=#1162 id=1162 data-nosnippet>1162</a>                    <span class="string">"https://www.sui.io"</span>,
+<a href=#1163 id=1163 data-nosnippet>1163</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1164 id=1164 data-nosnippet>1164</a>                )<span class="question-mark">?</span>;
+<a href=#1165 id=1165 data-nosnippet>1165</a>                <span class="kw">let </span>url_18 = get_oidc_url(
+<a href=#1166 id=1166 data-nosnippet>1166</a>                    OIDCProvider::AwsTenant((<span class="string">"ap-southeast-1"</span>.to_string(), <span class="string">"decot"</span>.to_string())),
+<a href=#1167 id=1167 data-nosnippet>1167</a>                    <span class="kw-2">&amp;</span>eph_pk_bytes,
+<a href=#1168 id=1168 data-nosnippet>1168</a>                    max_epoch,
+<a href=#1169 id=1169 data-nosnippet>1169</a>                    <span class="string">"42e9pih2409ktfhmkmo2ipup2h"</span>,
+<a href=#1170 id=1170 data-nosnippet>1170</a>                    <span class="string">"https://www.sui.io"</span>,
+<a href=#1171 id=1171 data-nosnippet>1171</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1172 id=1172 data-nosnippet>1172</a>                )<span class="question-mark">?</span>;
+<a href=#1173 id=1173 data-nosnippet>1173</a>                <span class="comment">// This is only for CLI testing. If frontend apps will be built, no need to add anything here.
+<a href=#1174 id=1174 data-nosnippet>1174</a>                </span><span class="macro">println!</span>(<span class="string">"Visit URL (Google): {url}"</span>);
+<a href=#1175 id=1175 data-nosnippet>1175</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (Twitch): {url_2}"</span>);
+<a href=#1176 id=1176 data-nosnippet>1176</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (Facebook): {url_3}"</span>);
+<a href=#1177 id=1177 data-nosnippet>1177</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (Kakao): {url_4}"</span>);
+<a href=#1178 id=1178 data-nosnippet>1178</a>                <span class="macro">println!</span>(<span class="string">"Token exchange URL (Kakao): {url_5}"</span>);
+<a href=#1179 id=1179 data-nosnippet>1179</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (Apple): {url_6}"</span>);
+<a href=#1180 id=1180 data-nosnippet>1180</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (Slack): {url_7}"</span>);
+<a href=#1181 id=1181 data-nosnippet>1181</a>                <span class="macro">println!</span>(<span class="string">"Token exchange URL (Slack): {url_8}"</span>);
+<a href=#1182 id=1182 data-nosnippet>1182</a>
+<a href=#1183 id=1183 data-nosnippet>1183</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (AWS): {url_9}"</span>);
+<a href=#1184 id=1184 data-nosnippet>1184</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (Microsoft): {url_10}"</span>);
+<a href=#1185 id=1185 data-nosnippet>1185</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (KarrierOne): {url_11}"</span>);
+<a href=#1186 id=1186 data-nosnippet>1186</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (Credenza3): {url_12}"</span>);
+<a href=#1187 id=1187 data-nosnippet>1187</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (Arden): {url_14}"</span>);
+<a href=#1188 id=1188 data-nosnippet>1188</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (AWS - Trace): {url_15}"</span>);
+<a href=#1189 id=1189 data-nosnippet>1189</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (EveFrontier): {url_16}"</span>);
+<a href=#1190 id=1190 data-nosnippet>1190</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (TestEveFrontier): {url_17}"</span>);
+<a href=#1191 id=1191 data-nosnippet>1191</a>                <span class="macro">println!</span>(<span class="string">"Visit URL (AWS - Decot): {url_18}"</span>);
+<a href=#1192 id=1192 data-nosnippet>1192</a>
+<a href=#1193 id=1193 data-nosnippet>1193</a>                <span class="macro">println!</span>(
+<a href=#1194 id=1194 data-nosnippet>1194</a>                    <span class="string">"Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):"
+<a href=#1195 id=1195 data-nosnippet>1195</a>                </span>);
+<a href=#1196 id=1196 data-nosnippet>1196</a>
+<a href=#1197 id=1197 data-nosnippet>1197</a>                <span class="kw">let </span>parsed_token = read_cli_line()<span class="question-mark">?</span>;
+<a href=#1198 id=1198 data-nosnippet>1198</a>                <span class="kw">let </span>tx_digest = perform_zk_login_test_tx(
+<a href=#1199 id=1199 data-nosnippet>1199</a>                    <span class="kw-2">&amp;</span>parsed_token,
+<a href=#1200 id=1200 data-nosnippet>1200</a>                    max_epoch,
+<a href=#1201 id=1201 data-nosnippet>1201</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1202 id=1202 data-nosnippet>1202</a>                    <span class="kw-2">&amp;</span>kp_bigint.to_string(),
+<a href=#1203 id=1203 data-nosnippet>1203</a>                    ephemeral_key_identifier,
+<a href=#1204 id=1204 data-nosnippet>1204</a>                    keystore,
+<a href=#1205 id=1205 data-nosnippet>1205</a>                    <span class="kw-2">&amp;</span>network,
+<a href=#1206 id=1206 data-nosnippet>1206</a>                    test_multisig,
+<a href=#1207 id=1207 data-nosnippet>1207</a>                    sign_with_sk,
+<a href=#1208 id=1208 data-nosnippet>1208</a>                )
+<a href=#1209 id=1209 data-nosnippet>1209</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1210 id=1210 data-nosnippet>1210</a>                CommandOutput::ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx { tx_digest })
+<a href=#1211 id=1211 data-nosnippet>1211</a>            }
+<a href=#1212 id=1212 data-nosnippet>1212</a>            KeyToolCommand::ZkLoginEnterToken {
+<a href=#1213 id=1213 data-nosnippet>1213</a>                parsed_token,
+<a href=#1214 id=1214 data-nosnippet>1214</a>                max_epoch,
+<a href=#1215 id=1215 data-nosnippet>1215</a>                jwt_randomness,
+<a href=#1216 id=1216 data-nosnippet>1216</a>                kp_bigint,
+<a href=#1217 id=1217 data-nosnippet>1217</a>                ephemeral_key_identifier,
+<a href=#1218 id=1218 data-nosnippet>1218</a>                network,
+<a href=#1219 id=1219 data-nosnippet>1219</a>                test_multisig,
+<a href=#1220 id=1220 data-nosnippet>1220</a>                sign_with_sk,
+<a href=#1221 id=1221 data-nosnippet>1221</a>            } =&gt; {
+<a href=#1222 id=1222 data-nosnippet>1222</a>                <span class="kw">let </span>tx_digest = perform_zk_login_test_tx(
+<a href=#1223 id=1223 data-nosnippet>1223</a>                    <span class="kw-2">&amp;</span>parsed_token,
+<a href=#1224 id=1224 data-nosnippet>1224</a>                    max_epoch,
+<a href=#1225 id=1225 data-nosnippet>1225</a>                    <span class="kw-2">&amp;</span>jwt_randomness,
+<a href=#1226 id=1226 data-nosnippet>1226</a>                    <span class="kw-2">&amp;</span>kp_bigint,
+<a href=#1227 id=1227 data-nosnippet>1227</a>                    ephemeral_key_identifier,
+<a href=#1228 id=1228 data-nosnippet>1228</a>                    keystore,
+<a href=#1229 id=1229 data-nosnippet>1229</a>                    <span class="kw-2">&amp;</span>network,
+<a href=#1230 id=1230 data-nosnippet>1230</a>                    test_multisig,
+<a href=#1231 id=1231 data-nosnippet>1231</a>                    sign_with_sk,
+<a href=#1232 id=1232 data-nosnippet>1232</a>                )
+<a href=#1233 id=1233 data-nosnippet>1233</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1234 id=1234 data-nosnippet>1234</a>                CommandOutput::ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx { tx_digest })
+<a href=#1235 id=1235 data-nosnippet>1235</a>            }
+<a href=#1236 id=1236 data-nosnippet>1236</a>
+<a href=#1237 id=1237 data-nosnippet>1237</a>            KeyToolCommand::ZkLoginSigVerify {
+<a href=#1238 id=1238 data-nosnippet>1238</a>                sig,
+<a href=#1239 id=1239 data-nosnippet>1239</a>                bytes,
+<a href=#1240 id=1240 data-nosnippet>1240</a>                intent_scope,
+<a href=#1241 id=1241 data-nosnippet>1241</a>                cur_epoch,
+<a href=#1242 id=1242 data-nosnippet>1242</a>                network,
+<a href=#1243 id=1243 data-nosnippet>1243</a>            } =&gt; {
+<a href=#1244 id=1244 data-nosnippet>1244</a>                <span class="kw">match </span>GenericSignature::from_bytes(
+<a href=#1245 id=1245 data-nosnippet>1245</a>                    <span class="kw-2">&amp;</span>Base64::decode(<span class="kw-2">&amp;</span>sig).map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Invalid base64 sig: {:?}"</span>, e))<span class="question-mark">?</span>,
+<a href=#1246 id=1246 data-nosnippet>1246</a>                )<span class="question-mark">? </span>{
+<a href=#1247 id=1247 data-nosnippet>1247</a>                    GenericSignature::ZkLoginAuthenticator(zk) =&gt; {
+<a href=#1248 id=1248 data-nosnippet>1248</a>                        <span class="kw">if </span>bytes.is_none() || cur_epoch.is_none() {
+<a href=#1249 id=1249 data-nosnippet>1249</a>                            <span class="kw">return </span><span class="prelude-val">Ok</span>(CommandOutput::ZkLoginSigVerify(ZkLoginSigVerifyResponse {
+<a href=#1250 id=1250 data-nosnippet>1250</a>                                data: <span class="prelude-val">None</span>,
+<a href=#1251 id=1251 data-nosnippet>1251</a>                                parsed: serde_json::to_string(<span class="kw-2">&amp;</span>zk)<span class="question-mark">?</span>,
+<a href=#1252 id=1252 data-nosnippet>1252</a>                                iss: zk.inputs.get_iss().to_owned(),
+<a href=#1253 id=1253 data-nosnippet>1253</a>                                kid: zk.inputs.get_kid().to_owned(),
+<a href=#1254 id=1254 data-nosnippet>1254</a>                                address_seed: zk.inputs.get_address_seed().to_string(),
+<a href=#1255 id=1255 data-nosnippet>1255</a>                                res: <span class="prelude-val">None</span>,
+<a href=#1256 id=1256 data-nosnippet>1256</a>                                jwks: <span class="prelude-val">None</span>,
+<a href=#1257 id=1257 data-nosnippet>1257</a>                            }));
+<a href=#1258 id=1258 data-nosnippet>1258</a>                        }
+<a href=#1259 id=1259 data-nosnippet>1259</a>
+<a href=#1260 id=1260 data-nosnippet>1260</a>                        <span class="kw">let </span>client = reqwest::Client::new();
+<a href=#1261 id=1261 data-nosnippet>1261</a>                        <span class="kw">let </span>provider = OIDCProvider::from_iss(zk.get_iss())
+<a href=#1262 id=1262 data-nosnippet>1262</a>                            .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"Invalid iss"</span>))<span class="question-mark">?</span>;
+<a href=#1263 id=1263 data-nosnippet>1263</a>                        <span class="kw">let </span>jwks = fetch_jwks(<span class="kw-2">&amp;</span>provider, <span class="kw-2">&amp;</span>client, <span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1264 id=1264 data-nosnippet>1264</a>                        <span class="kw">let </span>parsed: ImHashMap&lt;JwkId, JWK&gt; = jwks.clone().into_iter().collect();
+<a href=#1265 id=1265 data-nosnippet>1265</a>                        <span class="kw">let </span>env = <span class="kw">match </span>network.as_str() {
+<a href=#1266 id=1266 data-nosnippet>1266</a>                            <span class="string">"devnet" </span>| <span class="string">"localnet" </span>=&gt; ZkLoginEnv::Test,
+<a href=#1267 id=1267 data-nosnippet>1267</a>                            <span class="string">"mainnet" </span>| <span class="string">"testnet" </span>=&gt; ZkLoginEnv::Prod,
+<a href=#1268 id=1268 data-nosnippet>1268</a>                            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Invalid network"</span>)),
+<a href=#1269 id=1269 data-nosnippet>1269</a>                        };
+<a href=#1270 id=1270 data-nosnippet>1270</a>                        <span class="kw">let </span>verify_params =
+<a href=#1271 id=1271 data-nosnippet>1271</a>                            VerifyParams::new(parsed, <span class="macro">vec!</span>[], env, <span class="bool-val">true</span>, <span class="bool-val">true</span>, <span class="bool-val">true</span>, <span class="prelude-val">Some</span>(<span class="number">2</span>), <span class="bool-val">true</span>);
+<a href=#1272 id=1272 data-nosnippet>1272</a>
+<a href=#1273 id=1273 data-nosnippet>1273</a>                        <span class="kw">let </span>(serialized, res) = <span class="kw">match </span>IntentScope::try_from(intent_scope)
+<a href=#1274 id=1274 data-nosnippet>1274</a>                            .map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"Invalid scope"</span>))<span class="question-mark">?
+<a href=#1275 id=1275 data-nosnippet>1275</a>                        </span>{
+<a href=#1276 id=1276 data-nosnippet>1276</a>                            IntentScope::TransactionData =&gt; {
+<a href=#1277 id=1277 data-nosnippet>1277</a>                                <span class="kw">let </span>tx_data: TransactionData = bcs::from_bytes(
+<a href=#1278 id=1278 data-nosnippet>1278</a>                                    <span class="kw-2">&amp;</span>Base64::decode(<span class="kw-2">&amp;</span>bytes.unwrap())
+<a href=#1279 id=1279 data-nosnippet>1279</a>                                        .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Invalid base64 tx data: {:?}"</span>, e))<span class="question-mark">?</span>,
+<a href=#1280 id=1280 data-nosnippet>1280</a>                                )<span class="question-mark">?</span>;
+<a href=#1281 id=1281 data-nosnippet>1281</a>
+<a href=#1282 id=1282 data-nosnippet>1282</a>                                <span class="kw">let </span>sig = GenericSignature::ZkLoginAuthenticator(zk.clone());
+<a href=#1283 id=1283 data-nosnippet>1283</a>                                <span class="kw">let </span>res = sig.verify_authenticator(
+<a href=#1284 id=1284 data-nosnippet>1284</a>                                    <span class="kw-2">&amp;</span>IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
+<a href=#1285 id=1285 data-nosnippet>1285</a>                                    tx_data.execution_parts().<span class="number">1</span>,
+<a href=#1286 id=1286 data-nosnippet>1286</a>                                    cur_epoch.unwrap(),
+<a href=#1287 id=1287 data-nosnippet>1287</a>                                    <span class="kw-2">&amp;</span>verify_params,
+<a href=#1288 id=1288 data-nosnippet>1288</a>                                    Arc::new(VerifiedDigestCache::new_empty()),
+<a href=#1289 id=1289 data-nosnippet>1289</a>                                );
+<a href=#1290 id=1290 data-nosnippet>1290</a>                                (serde_json::to_string(<span class="kw-2">&amp;</span>tx_data)<span class="question-mark">?</span>, res)
+<a href=#1291 id=1291 data-nosnippet>1291</a>                            }
+<a href=#1292 id=1292 data-nosnippet>1292</a>                            IntentScope::PersonalMessage =&gt; {
+<a href=#1293 id=1293 data-nosnippet>1293</a>                                <span class="kw">let </span>data = PersonalMessage {
+<a href=#1294 id=1294 data-nosnippet>1294</a>                                    message: Base64::decode(<span class="kw-2">&amp;</span>bytes.unwrap()).map_err(|e| {
+<a href=#1295 id=1295 data-nosnippet>1295</a>                                        <span class="macro">anyhow!</span>(<span class="string">"Invalid base64 personal message data: {:?}"</span>, e)
+<a href=#1296 id=1296 data-nosnippet>1296</a>                                    })<span class="question-mark">?</span>,
+<a href=#1297 id=1297 data-nosnippet>1297</a>                                };
+<a href=#1298 id=1298 data-nosnippet>1298</a>
+<a href=#1299 id=1299 data-nosnippet>1299</a>                                <span class="kw">let </span>sig = GenericSignature::ZkLoginAuthenticator(zk.clone());
+<a href=#1300 id=1300 data-nosnippet>1300</a>                                <span class="kw">let </span>res = sig.verify_authenticator(
+<a href=#1301 id=1301 data-nosnippet>1301</a>                                    <span class="kw-2">&amp;</span>IntentMessage::new(Intent::personal_message(), data.clone()),
+<a href=#1302 id=1302 data-nosnippet>1302</a>                                    (<span class="kw-2">&amp;</span>zk).try_into()<span class="question-mark">?</span>,
+<a href=#1303 id=1303 data-nosnippet>1303</a>                                    cur_epoch.unwrap(),
+<a href=#1304 id=1304 data-nosnippet>1304</a>                                    <span class="kw-2">&amp;</span>verify_params,
+<a href=#1305 id=1305 data-nosnippet>1305</a>                                    Arc::new(VerifiedDigestCache::new_empty()),
+<a href=#1306 id=1306 data-nosnippet>1306</a>                                );
+<a href=#1307 id=1307 data-nosnippet>1307</a>                                (serde_json::to_string(<span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>, res)
+<a href=#1308 id=1308 data-nosnippet>1308</a>                            }
+<a href=#1309 id=1309 data-nosnippet>1309</a>                            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Invalid intent scope"</span>)),
+<a href=#1310 id=1310 data-nosnippet>1310</a>                        };
+<a href=#1311 id=1311 data-nosnippet>1311</a>                        CommandOutput::ZkLoginSigVerify(ZkLoginSigVerifyResponse {
+<a href=#1312 id=1312 data-nosnippet>1312</a>                            data: <span class="prelude-val">Some</span>(serialized),
+<a href=#1313 id=1313 data-nosnippet>1313</a>                            parsed: serde_json::to_string(<span class="kw-2">&amp;</span>zk)<span class="question-mark">?</span>,
+<a href=#1314 id=1314 data-nosnippet>1314</a>                            iss: zk.inputs.get_iss().to_owned(),
+<a href=#1315 id=1315 data-nosnippet>1315</a>                            kid: zk.inputs.get_kid().to_owned(),
+<a href=#1316 id=1316 data-nosnippet>1316</a>                            address_seed: zk.inputs.get_address_seed().to_string(),
+<a href=#1317 id=1317 data-nosnippet>1317</a>                            jwks: <span class="prelude-val">Some</span>(serde_json::to_string(<span class="kw-2">&amp;</span>jwks)<span class="question-mark">?</span>),
+<a href=#1318 id=1318 data-nosnippet>1318</a>                            res: <span class="prelude-val">Some</span>(res),
+<a href=#1319 id=1319 data-nosnippet>1319</a>                        })
+<a href=#1320 id=1320 data-nosnippet>1320</a>                    }
+<a href=#1321 id=1321 data-nosnippet>1321</a>                    <span class="kw">_ </span>=&gt; CommandOutput::Error(<span class="string">"Not a zkLogin signature"</span>.to_string()),
+<a href=#1322 id=1322 data-nosnippet>1322</a>                }
+<a href=#1323 id=1323 data-nosnippet>1323</a>            }
+<a href=#1324 id=1324 data-nosnippet>1324</a>        })
+<a href=#1325 id=1325 data-nosnippet>1325</a>    }
+<a href=#1326 id=1326 data-nosnippet>1326</a>}
+<a href=#1327 id=1327 data-nosnippet>1327</a>
+<a href=#1328 id=1328 data-nosnippet>1328</a><span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span>SuiKeyPair&gt; <span class="kw">for </span>Key {
+<a href=#1329 id=1329 data-nosnippet>1329</a>    <span class="kw">fn </span>from(skp: <span class="kw-2">&amp;</span>SuiKeyPair) -&gt; <span class="self">Self </span>{
+<a href=#1330 id=1330 data-nosnippet>1330</a>        Key::from(skp.public())
+<a href=#1331 id=1331 data-nosnippet>1331</a>    }
+<a href=#1332 id=1332 data-nosnippet>1332</a>}
+<a href=#1333 id=1333 data-nosnippet>1333</a>
+<a href=#1334 id=1334 data-nosnippet>1334</a><span class="kw">impl </span>From&lt;PublicKey&gt; <span class="kw">for </span>Key {
+<a href=#1335 id=1335 data-nosnippet>1335</a>    <span class="kw">fn </span>from(pk: PublicKey) -&gt; <span class="self">Self </span>{
+<a href=#1336 id=1336 data-nosnippet>1336</a>        Key {
+<a href=#1337 id=1337 data-nosnippet>1337</a>            alias: <span class="prelude-val">None</span>, <span class="comment">// this is retrieved later
+<a href=#1338 id=1338 data-nosnippet>1338</a>            </span>sui_address: SuiAddress::from(<span class="kw-2">&amp;</span>pk),
+<a href=#1339 id=1339 data-nosnippet>1339</a>            public_base64_key: pk.encode_base64(),
+<a href=#1340 id=1340 data-nosnippet>1340</a>            key_scheme: pk.scheme().to_string(),
+<a href=#1341 id=1341 data-nosnippet>1341</a>            mnemonic: <span class="prelude-val">None</span>,
+<a href=#1342 id=1342 data-nosnippet>1342</a>            flag: pk.flag(),
+<a href=#1343 id=1343 data-nosnippet>1343</a>            peer_id: anemo_styling(<span class="kw-2">&amp;</span>pk),
+<a href=#1344 id=1344 data-nosnippet>1344</a>        }
+<a href=#1345 id=1345 data-nosnippet>1345</a>    }
+<a href=#1346 id=1346 data-nosnippet>1346</a>}
+<a href=#1347 id=1347 data-nosnippet>1347</a>
+<a href=#1348 id=1348 data-nosnippet>1348</a><span class="kw">impl </span>Display <span class="kw">for </span>CommandOutput {
+<a href=#1349 id=1349 data-nosnippet>1349</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, formatter: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#1350 id=1350 data-nosnippet>1350</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#1351 id=1351 data-nosnippet>1351</a>            CommandOutput::Alias(update) =&gt; {
+<a href=#1352 id=1352 data-nosnippet>1352</a>                <span class="macro">write!</span>(
+<a href=#1353 id=1353 data-nosnippet>1353</a>                    formatter,
+<a href=#1354 id=1354 data-nosnippet>1354</a>                    <span class="string">"Old alias {} was updated to {}"</span>,
+<a href=#1355 id=1355 data-nosnippet>1355</a>                    update.old_alias, update.new_alias
+<a href=#1356 id=1356 data-nosnippet>1356</a>                )
+<a href=#1357 id=1357 data-nosnippet>1357</a>            }
+<a href=#1358 id=1358 data-nosnippet>1358</a>            <span class="comment">// Sign needs to be manually built because we need to wrap the very long
+<a href=#1359 id=1359 data-nosnippet>1359</a>            // rawTxData string and rawIntentMsg strings into multiple rows due to
+<a href=#1360 id=1360 data-nosnippet>1360</a>            // their lengths, which we cannot do with a JsonTable
+<a href=#1361 id=1361 data-nosnippet>1361</a>            </span>CommandOutput::Sign(data) =&gt; {
+<a href=#1362 id=1362 data-nosnippet>1362</a>                <span class="kw">let </span>intent_table = json_to_table(<span class="kw-2">&amp;</span><span class="macro">json!</span>(<span class="kw-2">&amp;</span>data.intent))
+<a href=#1363 id=1363 data-nosnippet>1363</a>                    .with(tabled::settings::Style::rounded().horizontals([]))
+<a href=#1364 id=1364 data-nosnippet>1364</a>                    .to_string();
+<a href=#1365 id=1365 data-nosnippet>1365</a>
+<a href=#1366 id=1366 data-nosnippet>1366</a>                <span class="kw">let </span><span class="kw-2">mut </span>builder = Builder::default();
+<a href=#1367 id=1367 data-nosnippet>1367</a>                builder
+<a href=#1368 id=1368 data-nosnippet>1368</a>                    .set_header([
+<a href=#1369 id=1369 data-nosnippet>1369</a>                        <span class="string">"suiSignature"</span>,
+<a href=#1370 id=1370 data-nosnippet>1370</a>                        <span class="string">"digest"</span>,
+<a href=#1371 id=1371 data-nosnippet>1371</a>                        <span class="string">"rawIntentMsg"</span>,
+<a href=#1372 id=1372 data-nosnippet>1372</a>                        <span class="string">"intent"</span>,
+<a href=#1373 id=1373 data-nosnippet>1373</a>                        <span class="string">"rawTxData"</span>,
+<a href=#1374 id=1374 data-nosnippet>1374</a>                        <span class="string">"suiAddress"</span>,
+<a href=#1375 id=1375 data-nosnippet>1375</a>                    ])
+<a href=#1376 id=1376 data-nosnippet>1376</a>                    .push_record([
+<a href=#1377 id=1377 data-nosnippet>1377</a>                        <span class="kw-2">&amp;</span>data.sui_signature,
+<a href=#1378 id=1378 data-nosnippet>1378</a>                        <span class="kw-2">&amp;</span>data.digest,
+<a href=#1379 id=1379 data-nosnippet>1379</a>                        <span class="kw-2">&amp;</span>data.raw_intent_msg,
+<a href=#1380 id=1380 data-nosnippet>1380</a>                        <span class="kw-2">&amp;</span>intent_table,
+<a href=#1381 id=1381 data-nosnippet>1381</a>                        <span class="kw-2">&amp;</span>data.raw_tx_data,
+<a href=#1382 id=1382 data-nosnippet>1382</a>                        <span class="kw-2">&amp;</span>data.sui_address.to_string(),
+<a href=#1383 id=1383 data-nosnippet>1383</a>                    ]);
+<a href=#1384 id=1384 data-nosnippet>1384</a>                <span class="kw">let </span><span class="kw-2">mut </span>table = builder.build();
+<a href=#1385 id=1385 data-nosnippet>1385</a>                table.with(Rotate::Left);
+<a href=#1386 id=1386 data-nosnippet>1386</a>                table.with(tabled::settings::Style::rounded().horizontals([]));
+<a href=#1387 id=1387 data-nosnippet>1387</a>                table.with(Modify::new(Rows::new(<span class="number">0</span>..)).with(Width::wrap(<span class="number">160</span>).keep_words()));
+<a href=#1388 id=1388 data-nosnippet>1388</a>                <span class="macro">write!</span>(formatter, <span class="string">"{}"</span>, table)
+<a href=#1389 id=1389 data-nosnippet>1389</a>            }
+<a href=#1390 id=1390 data-nosnippet>1390</a>            <span class="kw">_ </span>=&gt; {
+<a href=#1391 id=1391 data-nosnippet>1391</a>                <span class="kw">let </span>json_obj = <span class="macro">json!</span>[<span class="self">self</span>];
+<a href=#1392 id=1392 data-nosnippet>1392</a>                <span class="kw">let </span><span class="kw-2">mut </span>table = json_to_table(<span class="kw-2">&amp;</span>json_obj);
+<a href=#1393 id=1393 data-nosnippet>1393</a>                <span class="kw">let </span>style = tabled::settings::Style::rounded().horizontals([]);
+<a href=#1394 id=1394 data-nosnippet>1394</a>                table.with(style);
+<a href=#1395 id=1395 data-nosnippet>1395</a>                table.array_orientation(Orientation::Column);
+<a href=#1396 id=1396 data-nosnippet>1396</a>                <span class="macro">write!</span>(formatter, <span class="string">"{}"</span>, table)
+<a href=#1397 id=1397 data-nosnippet>1397</a>            }
+<a href=#1398 id=1398 data-nosnippet>1398</a>        }
+<a href=#1399 id=1399 data-nosnippet>1399</a>    }
+<a href=#1400 id=1400 data-nosnippet>1400</a>}
+<a href=#1401 id=1401 data-nosnippet>1401</a>
+<a href=#1402 id=1402 data-nosnippet>1402</a><span class="kw">impl </span>CommandOutput {
+<a href=#1403 id=1403 data-nosnippet>1403</a>    <span class="kw">pub fn </span>print(<span class="kw-2">&amp;</span><span class="self">self</span>, pretty: bool) {
+<a href=#1404 id=1404 data-nosnippet>1404</a>        <span class="kw">let </span>line = <span class="kw">if </span>pretty {
+<a href=#1405 id=1405 data-nosnippet>1405</a>            <span class="macro">format!</span>(<span class="string">"{self}"</span>)
+<a href=#1406 id=1406 data-nosnippet>1406</a>        } <span class="kw">else </span>{
+<a href=#1407 id=1407 data-nosnippet>1407</a>            <span class="macro">format!</span>(<span class="string">"{:?}"</span>, <span class="self">self</span>)
+<a href=#1408 id=1408 data-nosnippet>1408</a>        };
+<a href=#1409 id=1409 data-nosnippet>1409</a>        <span class="comment">// Log line by line
+<a href=#1410 id=1410 data-nosnippet>1410</a>        </span><span class="kw">for </span>line <span class="kw">in </span>line.lines() {
+<a href=#1411 id=1411 data-nosnippet>1411</a>            <span class="comment">// Logs write to a file on the side.  Print to stdout and also log to file, for tests to pass.
+<a href=#1412 id=1412 data-nosnippet>1412</a>            </span><span class="macro">println!</span>(<span class="string">"{line}"</span>);
+<a href=#1413 id=1413 data-nosnippet>1413</a>            <span class="macro">info!</span>(<span class="string">"{line}"</span>)
+<a href=#1414 id=1414 data-nosnippet>1414</a>        }
+<a href=#1415 id=1415 data-nosnippet>1415</a>    }
+<a href=#1416 id=1416 data-nosnippet>1416</a>}
+<a href=#1417 id=1417 data-nosnippet>1417</a>
+<a href=#1418 id=1418 data-nosnippet>1418</a><span class="comment">// when --json flag is used, any output result is transformed into a JSON pretty string and sent to std output
+<a href=#1419 id=1419 data-nosnippet>1419</a></span><span class="kw">impl </span>Debug <span class="kw">for </span>CommandOutput {
+<a href=#1420 id=1420 data-nosnippet>1420</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#1421 id=1421 data-nosnippet>1421</a>        <span class="kw">match </span>serde_json::to_string_pretty(<span class="self">self</span>) {
+<a href=#1422 id=1422 data-nosnippet>1422</a>            <span class="prelude-val">Ok</span>(json) =&gt; <span class="macro">write!</span>(f, <span class="string">"{json}"</span>),
+<a href=#1423 id=1423 data-nosnippet>1423</a>            <span class="prelude-val">Err</span>(err) =&gt; <span class="macro">write!</span>(f, <span class="string">"Error serializing JSON: {err}"</span>),
+<a href=#1424 id=1424 data-nosnippet>1424</a>        }
+<a href=#1425 id=1425 data-nosnippet>1425</a>    }
+<a href=#1426 id=1426 data-nosnippet>1426</a>}
+<a href=#1427 id=1427 data-nosnippet>1427</a>
+<a href=#1428 id=1428 data-nosnippet>1428</a><span class="doccomment">/// Converts legacy formatted private key to 33 bytes bech32 encoded private key or vice versa.
+<a href=#1429 id=1429 data-nosnippet>1429</a>/// It can handle:
+<a href=#1430 id=1430 data-nosnippet>1430</a>/// 1) Hex encoded 32 byte private key (assumes scheme is Ed25519), this is the legacy wallet format
+<a href=#1431 id=1431 data-nosnippet>1431</a>/// 2) Base64 encoded 32 bytes private key (assumes scheme is Ed25519)
+<a href=#1432 id=1432 data-nosnippet>1432</a>/// 3) Base64 encoded 33 bytes private key with flag.
+<a href=#1433 id=1433 data-nosnippet>1433</a>/// 4) Bech32 encoded 33 bytes private key with flag.
+<a href=#1434 id=1434 data-nosnippet>1434</a></span><span class="kw">fn </span>convert_private_key_to_bech32(value: String) -&gt; <span class="prelude-ty">Result</span>&lt;ConvertOutput, anyhow::Error&gt; {
+<a href=#1435 id=1435 data-nosnippet>1435</a>    <span class="kw">let </span>skp = <span class="kw">match </span>SuiKeyPair::decode(<span class="kw-2">&amp;</span>value) {
+<a href=#1436 id=1436 data-nosnippet>1436</a>        <span class="prelude-val">Ok</span>(s) =&gt; s,
+<a href=#1437 id=1437 data-nosnippet>1437</a>        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">match </span>Hex::decode(<span class="kw-2">&amp;</span>value) {
+<a href=#1438 id=1438 data-nosnippet>1438</a>            <span class="prelude-val">Ok</span>(decoded) =&gt; {
+<a href=#1439 id=1439 data-nosnippet>1439</a>                <span class="kw">if </span>decoded.len() != <span class="number">32 </span>{
+<a href=#1440 id=1440 data-nosnippet>1440</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="macro">format!</span>(
+<a href=#1441 id=1441 data-nosnippet>1441</a>                        <span class="string">"Invalid private key length, expected 32 but got {}"</span>,
+<a href=#1442 id=1442 data-nosnippet>1442</a>                        decoded.len()
+<a href=#1443 id=1443 data-nosnippet>1443</a>                    )));
+<a href=#1444 id=1444 data-nosnippet>1444</a>                }
+<a href=#1445 id=1445 data-nosnippet>1445</a>                SuiKeyPair::Ed25519(Ed25519KeyPair::from_bytes(<span class="kw-2">&amp;</span>decoded)<span class="question-mark">?</span>)
+<a href=#1446 id=1446 data-nosnippet>1446</a>            }
+<a href=#1447 id=1447 data-nosnippet>1447</a>            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">match </span>SuiKeyPair::decode_base64(<span class="kw-2">&amp;</span>value) {
+<a href=#1448 id=1448 data-nosnippet>1448</a>                <span class="prelude-val">Ok</span>(skp) =&gt; skp,
+<a href=#1449 id=1449 data-nosnippet>1449</a>                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">match </span>Ed25519KeyPair::decode_base64(<span class="kw-2">&amp;</span>value) {
+<a href=#1450 id=1450 data-nosnippet>1450</a>                    <span class="prelude-val">Ok</span>(kp) =&gt; SuiKeyPair::Ed25519(kp),
+<a href=#1451 id=1451 data-nosnippet>1451</a>                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Invalid private key encoding"</span>)),
+<a href=#1452 id=1452 data-nosnippet>1452</a>                },
+<a href=#1453 id=1453 data-nosnippet>1453</a>            },
+<a href=#1454 id=1454 data-nosnippet>1454</a>        },
+<a href=#1455 id=1455 data-nosnippet>1455</a>    };
+<a href=#1456 id=1456 data-nosnippet>1456</a>
+<a href=#1457 id=1457 data-nosnippet>1457</a>    <span class="prelude-val">Ok</span>(ConvertOutput {
+<a href=#1458 id=1458 data-nosnippet>1458</a>        bech32_with_flag: skp.encode().map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"Cannot encode keypair"</span>))<span class="question-mark">?</span>,
+<a href=#1459 id=1459 data-nosnippet>1459</a>        base64_with_flag: skp.encode_base64(),
+<a href=#1460 id=1460 data-nosnippet>1460</a>        hex_without_flag: Hex::encode(<span class="kw-2">&amp;</span>skp.to_bytes()[<span class="number">1</span>..]),
+<a href=#1461 id=1461 data-nosnippet>1461</a>        scheme: skp.public().scheme().to_string(),
+<a href=#1462 id=1462 data-nosnippet>1462</a>    })
+<a href=#1463 id=1463 data-nosnippet>1463</a>}
+<a href=#1464 id=1464 data-nosnippet>1464</a>
+<a href=#1465 id=1465 data-nosnippet>1465</a><span class="kw">fn </span>anemo_styling(pk: <span class="kw-2">&amp;</span>PublicKey) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+<a href=#1466 id=1466 data-nosnippet>1466</a>    <span class="kw">if let </span>PublicKey::Ed25519(public_key) = pk {
+<a href=#1467 id=1467 data-nosnippet>1467</a>        <span class="prelude-val">Some</span>(anemo::PeerId(public_key.<span class="number">0</span>).to_string())
+<a href=#1468 id=1468 data-nosnippet>1468</a>    } <span class="kw">else </span>{
+<a href=#1469 id=1469 data-nosnippet>1469</a>        <span class="prelude-val">None
+<a href=#1470 id=1470 data-nosnippet>1470</a>    </span>}
+<a href=#1471 id=1471 data-nosnippet>1471</a>}</code></pre></div></section></main></body></html>

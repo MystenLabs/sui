@@ -1,0 +1,1302 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `consensus/core/src/authority_service.rs`."><title>authority_service.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-aa0817cf.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="consensus_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.90.0 (1159e78c4 2025-09-14)" data-channel="1.90.0" data-search-js="search-fa3e91e5.js" data-settings-js="settings-5514c975.js" ><script src="../../static.files/storage-68b7e25d.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-eebb9057.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-32bb7600.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">consensus_core/</div>authority_service.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="comment">// Copyright (c) Mysten Labs, Inc.
+<a href=#2 id=2 data-nosnippet>2</a>// SPDX-License-Identifier: Apache-2.0
+<a href=#3 id=3 data-nosnippet>3</a>
+<a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">use </span>std::{
+<a href=#5 id=5 data-nosnippet>5</a>    collections::{BTreeMap, BTreeSet},
+<a href=#6 id=6 data-nosnippet>6</a>    pin::Pin,
+<a href=#7 id=7 data-nosnippet>7</a>    sync::Arc,
+<a href=#8 id=8 data-nosnippet>8</a>    time::Duration,
+<a href=#9 id=9 data-nosnippet>9</a>};
+<a href=#10 id=10 data-nosnippet>10</a>
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>async_trait::async_trait;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>bytes::Bytes;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>consensus_config::AuthorityIndex;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>consensus_types::block::{BlockRef, Round};
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>futures::{Stream, StreamExt, ready, stream, task};
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>mysten_metrics::spawn_monitored_task;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>parking_lot::RwLock;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>rand::seq::SliceRandom <span class="kw">as _</span>;
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>sui_macros::fail_point_async;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>tap::TapFallible;
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>tokio::sync::broadcast;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>tokio_util::sync::ReusableBoxFuture;
+<a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>tracing::{debug, info, warn};
+<a href=#24 id=24 data-nosnippet>24</a>
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use crate</span>::{
+<a href=#26 id=26 data-nosnippet>26</a>    CommitIndex,
+<a href=#27 id=27 data-nosnippet>27</a>    block::{BlockAPI <span class="kw">as _</span>, ExtendedBlock, GENESIS_ROUND, SignedBlock, VerifiedBlock},
+<a href=#28 id=28 data-nosnippet>28</a>    block_verifier::BlockVerifier,
+<a href=#29 id=29 data-nosnippet>29</a>    commit::{CommitAPI <span class="kw">as _</span>, CommitRange, TrustedCommit},
+<a href=#30 id=30 data-nosnippet>30</a>    commit_vote_monitor::CommitVoteMonitor,
+<a href=#31 id=31 data-nosnippet>31</a>    context::Context,
+<a href=#32 id=32 data-nosnippet>32</a>    core_thread::CoreThreadDispatcher,
+<a href=#33 id=33 data-nosnippet>33</a>    dag_state::DagState,
+<a href=#34 id=34 data-nosnippet>34</a>    error::{ConsensusError, ConsensusResult},
+<a href=#35 id=35 data-nosnippet>35</a>    network::{BlockStream, ExtendedSerializedBlock, NetworkService},
+<a href=#36 id=36 data-nosnippet>36</a>    round_tracker::PeerRoundTracker,
+<a href=#37 id=37 data-nosnippet>37</a>    stake_aggregator::{QuorumThreshold, StakeAggregator},
+<a href=#38 id=38 data-nosnippet>38</a>    storage::Store,
+<a href=#39 id=39 data-nosnippet>39</a>    synchronizer::SynchronizerHandle,
+<a href=#40 id=40 data-nosnippet>40</a>    transaction_certifier::TransactionCertifier,
+<a href=#41 id=41 data-nosnippet>41</a>};
+<a href=#42 id=42 data-nosnippet>42</a>
+<a href=#43 id=43 data-nosnippet>43</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>COMMIT_LAG_MULTIPLIER: u32 = <span class="number">5</span>;
+<a href=#44 id=44 data-nosnippet>44</a>
+<a href=#45 id=45 data-nosnippet>45</a><span class="doccomment">/// Authority's network service implementation, agnostic to the actual networking stack used.
+<a href=#46 id=46 data-nosnippet>46</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct </span>AuthorityService&lt;C: CoreThreadDispatcher&gt; {
+<a href=#47 id=47 data-nosnippet>47</a>    context: Arc&lt;Context&gt;,
+<a href=#48 id=48 data-nosnippet>48</a>    commit_vote_monitor: Arc&lt;CommitVoteMonitor&gt;,
+<a href=#49 id=49 data-nosnippet>49</a>    block_verifier: Arc&lt;<span class="kw">dyn </span>BlockVerifier&gt;,
+<a href=#50 id=50 data-nosnippet>50</a>    synchronizer: Arc&lt;SynchronizerHandle&gt;,
+<a href=#51 id=51 data-nosnippet>51</a>    core_dispatcher: Arc&lt;C&gt;,
+<a href=#52 id=52 data-nosnippet>52</a>    rx_block_broadcast: broadcast::Receiver&lt;ExtendedBlock&gt;,
+<a href=#53 id=53 data-nosnippet>53</a>    subscription_counter: Arc&lt;SubscriptionCounter&gt;,
+<a href=#54 id=54 data-nosnippet>54</a>    transaction_certifier: TransactionCertifier,
+<a href=#55 id=55 data-nosnippet>55</a>    dag_state: Arc&lt;RwLock&lt;DagState&gt;&gt;,
+<a href=#56 id=56 data-nosnippet>56</a>    store: Arc&lt;<span class="kw">dyn </span>Store&gt;,
+<a href=#57 id=57 data-nosnippet>57</a>    round_tracker: Arc&lt;RwLock&lt;PeerRoundTracker&gt;&gt;,
+<a href=#58 id=58 data-nosnippet>58</a>}
+<a href=#59 id=59 data-nosnippet>59</a>
+<a href=#60 id=60 data-nosnippet>60</a><span class="kw">impl</span>&lt;C: CoreThreadDispatcher&gt; AuthorityService&lt;C&gt; {
+<a href=#61 id=61 data-nosnippet>61</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>new(
+<a href=#62 id=62 data-nosnippet>62</a>        context: Arc&lt;Context&gt;,
+<a href=#63 id=63 data-nosnippet>63</a>        block_verifier: Arc&lt;<span class="kw">dyn </span>BlockVerifier&gt;,
+<a href=#64 id=64 data-nosnippet>64</a>        commit_vote_monitor: Arc&lt;CommitVoteMonitor&gt;,
+<a href=#65 id=65 data-nosnippet>65</a>        round_tracker: Arc&lt;RwLock&lt;PeerRoundTracker&gt;&gt;,
+<a href=#66 id=66 data-nosnippet>66</a>        synchronizer: Arc&lt;SynchronizerHandle&gt;,
+<a href=#67 id=67 data-nosnippet>67</a>        core_dispatcher: Arc&lt;C&gt;,
+<a href=#68 id=68 data-nosnippet>68</a>        rx_block_broadcast: broadcast::Receiver&lt;ExtendedBlock&gt;,
+<a href=#69 id=69 data-nosnippet>69</a>        transaction_certifier: TransactionCertifier,
+<a href=#70 id=70 data-nosnippet>70</a>        dag_state: Arc&lt;RwLock&lt;DagState&gt;&gt;,
+<a href=#71 id=71 data-nosnippet>71</a>        store: Arc&lt;<span class="kw">dyn </span>Store&gt;,
+<a href=#72 id=72 data-nosnippet>72</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#73 id=73 data-nosnippet>73</a>        <span class="kw">let </span>subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
+<a href=#74 id=74 data-nosnippet>74</a>        <span class="self">Self </span>{
+<a href=#75 id=75 data-nosnippet>75</a>            context,
+<a href=#76 id=76 data-nosnippet>76</a>            block_verifier,
+<a href=#77 id=77 data-nosnippet>77</a>            commit_vote_monitor,
+<a href=#78 id=78 data-nosnippet>78</a>            synchronizer,
+<a href=#79 id=79 data-nosnippet>79</a>            core_dispatcher,
+<a href=#80 id=80 data-nosnippet>80</a>            rx_block_broadcast,
+<a href=#81 id=81 data-nosnippet>81</a>            subscription_counter,
+<a href=#82 id=82 data-nosnippet>82</a>            transaction_certifier,
+<a href=#83 id=83 data-nosnippet>83</a>            dag_state,
+<a href=#84 id=84 data-nosnippet>84</a>            store,
+<a href=#85 id=85 data-nosnippet>85</a>            round_tracker,
+<a href=#86 id=86 data-nosnippet>86</a>        }
+<a href=#87 id=87 data-nosnippet>87</a>    }
+<a href=#88 id=88 data-nosnippet>88</a>
+<a href=#89 id=89 data-nosnippet>89</a>    <span class="comment">// Parses and validates serialized excluded ancestors.
+<a href=#90 id=90 data-nosnippet>90</a>    </span><span class="kw">fn </span>parse_excluded_ancestors(
+<a href=#91 id=91 data-nosnippet>91</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#92 id=92 data-nosnippet>92</a>        peer: AuthorityIndex,
+<a href=#93 id=93 data-nosnippet>93</a>        block: <span class="kw-2">&amp;</span>VerifiedBlock,
+<a href=#94 id=94 data-nosnippet>94</a>        <span class="kw-2">mut </span>excluded_ancestors: Vec&lt;Vec&lt;u8&gt;&gt;,
+<a href=#95 id=95 data-nosnippet>95</a>    ) -&gt; ConsensusResult&lt;Vec&lt;BlockRef&gt;&gt; {
+<a href=#96 id=96 data-nosnippet>96</a>        <span class="kw">let </span>peer_hostname = <span class="kw-2">&amp;</span><span class="self">self</span>.context.committee.authority(peer).hostname;
+<a href=#97 id=97 data-nosnippet>97</a>
+<a href=#98 id=98 data-nosnippet>98</a>        <span class="kw">let </span>excluded_ancestors_limit = <span class="self">self</span>.context.committee.size() * <span class="number">2</span>;
+<a href=#99 id=99 data-nosnippet>99</a>        <span class="kw">if </span>excluded_ancestors.len() &gt; excluded_ancestors_limit {
+<a href=#100 id=100 data-nosnippet>100</a>            <span class="macro">debug!</span>(
+<a href=#101 id=101 data-nosnippet>101</a>                <span class="string">"Dropping {} excluded ancestor(s) from {} {} due to size limit"</span>,
+<a href=#102 id=102 data-nosnippet>102</a>                excluded_ancestors.len() - excluded_ancestors_limit,
+<a href=#103 id=103 data-nosnippet>103</a>                peer,
+<a href=#104 id=104 data-nosnippet>104</a>                peer_hostname,
+<a href=#105 id=105 data-nosnippet>105</a>            );
+<a href=#106 id=106 data-nosnippet>106</a>            excluded_ancestors.truncate(excluded_ancestors_limit);
+<a href=#107 id=107 data-nosnippet>107</a>        }
+<a href=#108 id=108 data-nosnippet>108</a>
+<a href=#109 id=109 data-nosnippet>109</a>        <span class="kw">let </span>excluded_ancestors = excluded_ancestors
+<a href=#110 id=110 data-nosnippet>110</a>            .into_iter()
+<a href=#111 id=111 data-nosnippet>111</a>            .map(|serialized| {
+<a href=#112 id=112 data-nosnippet>112</a>                <span class="kw">let </span>block_ref: BlockRef =
+<a href=#113 id=113 data-nosnippet>113</a>                    bcs::from_bytes(<span class="kw-2">&amp;</span>serialized).map_err(ConsensusError::MalformedBlock)<span class="question-mark">?</span>;
+<a href=#114 id=114 data-nosnippet>114</a>                <span class="kw">if </span>!<span class="self">self</span>.context.committee.is_valid_index(block_ref.author) {
+<a href=#115 id=115 data-nosnippet>115</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(ConsensusError::InvalidAuthorityIndex {
+<a href=#116 id=116 data-nosnippet>116</a>                        index: block_ref.author,
+<a href=#117 id=117 data-nosnippet>117</a>                        max: <span class="self">self</span>.context.committee.size(),
+<a href=#118 id=118 data-nosnippet>118</a>                    });
+<a href=#119 id=119 data-nosnippet>119</a>                }
+<a href=#120 id=120 data-nosnippet>120</a>                <span class="kw">if </span>block_ref.round &gt;= block.round() {
+<a href=#121 id=121 data-nosnippet>121</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(ConsensusError::InvalidAncestorRound {
+<a href=#122 id=122 data-nosnippet>122</a>                        ancestor: block_ref.round,
+<a href=#123 id=123 data-nosnippet>123</a>                        block: block.round(),
+<a href=#124 id=124 data-nosnippet>124</a>                    });
+<a href=#125 id=125 data-nosnippet>125</a>                }
+<a href=#126 id=126 data-nosnippet>126</a>                <span class="prelude-val">Ok</span>(block_ref)
+<a href=#127 id=127 data-nosnippet>127</a>            })
+<a href=#128 id=128 data-nosnippet>128</a>            .collect::&lt;ConsensusResult&lt;Vec&lt;BlockRef&gt;&gt;&gt;()<span class="question-mark">?</span>;
+<a href=#129 id=129 data-nosnippet>129</a>
+<a href=#130 id=130 data-nosnippet>130</a>        <span class="kw">for </span>excluded_ancestor <span class="kw">in </span><span class="kw-2">&amp;</span>excluded_ancestors {
+<a href=#131 id=131 data-nosnippet>131</a>            <span class="kw">let </span>excluded_ancestor_hostname = <span class="kw-2">&amp;</span><span class="self">self
+<a href=#132 id=132 data-nosnippet>132</a>                </span>.context
+<a href=#133 id=133 data-nosnippet>133</a>                .committee
+<a href=#134 id=134 data-nosnippet>134</a>                .authority(excluded_ancestor.author)
+<a href=#135 id=135 data-nosnippet>135</a>                .hostname;
+<a href=#136 id=136 data-nosnippet>136</a>            <span class="self">self</span>.context
+<a href=#137 id=137 data-nosnippet>137</a>                .metrics
+<a href=#138 id=138 data-nosnippet>138</a>                .node_metrics
+<a href=#139 id=139 data-nosnippet>139</a>                .network_excluded_ancestors_count_by_authority
+<a href=#140 id=140 data-nosnippet>140</a>                .with_label_values(<span class="kw-2">&amp;</span>[excluded_ancestor_hostname])
+<a href=#141 id=141 data-nosnippet>141</a>                .inc();
+<a href=#142 id=142 data-nosnippet>142</a>        }
+<a href=#143 id=143 data-nosnippet>143</a>        <span class="self">self</span>.context
+<a href=#144 id=144 data-nosnippet>144</a>            .metrics
+<a href=#145 id=145 data-nosnippet>145</a>            .node_metrics
+<a href=#146 id=146 data-nosnippet>146</a>            .network_received_excluded_ancestors_from_authority
+<a href=#147 id=147 data-nosnippet>147</a>            .with_label_values(<span class="kw-2">&amp;</span>[peer_hostname])
+<a href=#148 id=148 data-nosnippet>148</a>            .inc_by(excluded_ancestors.len() <span class="kw">as </span>u64);
+<a href=#149 id=149 data-nosnippet>149</a>
+<a href=#150 id=150 data-nosnippet>150</a>        <span class="prelude-val">Ok</span>(excluded_ancestors)
+<a href=#151 id=151 data-nosnippet>151</a>    }
+<a href=#152 id=152 data-nosnippet>152</a>}
+<a href=#153 id=153 data-nosnippet>153</a>
+<a href=#154 id=154 data-nosnippet>154</a><span class="attr">#[async_trait]
+<a href=#155 id=155 data-nosnippet>155</a></span><span class="kw">impl</span>&lt;C: CoreThreadDispatcher&gt; NetworkService <span class="kw">for </span>AuthorityService&lt;C&gt; {
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="kw">async fn </span>handle_send_block(
+<a href=#157 id=157 data-nosnippet>157</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#158 id=158 data-nosnippet>158</a>        peer: AuthorityIndex,
+<a href=#159 id=159 data-nosnippet>159</a>        serialized_block: ExtendedSerializedBlock,
+<a href=#160 id=160 data-nosnippet>160</a>    ) -&gt; ConsensusResult&lt;()&gt; {
+<a href=#161 id=161 data-nosnippet>161</a>        <span class="macro">fail_point_async!</span>(<span class="string">"consensus-rpc-response"</span>);
+<a href=#162 id=162 data-nosnippet>162</a>
+<a href=#163 id=163 data-nosnippet>163</a>        <span class="kw">let </span>peer_hostname = <span class="kw-2">&amp;</span><span class="self">self</span>.context.committee.authority(peer).hostname;
+<a href=#164 id=164 data-nosnippet>164</a>
+<a href=#165 id=165 data-nosnippet>165</a>        <span class="comment">// TODO: dedup block verifications, here and with fetched blocks.
+<a href=#166 id=166 data-nosnippet>166</a>        </span><span class="kw">let </span>signed_block: SignedBlock =
+<a href=#167 id=167 data-nosnippet>167</a>            bcs::from_bytes(<span class="kw-2">&amp;</span>serialized_block.block).map_err(ConsensusError::MalformedBlock)<span class="question-mark">?</span>;
+<a href=#168 id=168 data-nosnippet>168</a>
+<a href=#169 id=169 data-nosnippet>169</a>        <span class="comment">// Reject blocks not produced by the peer.
+<a href=#170 id=170 data-nosnippet>170</a>        </span><span class="kw">if </span>peer != signed_block.author() {
+<a href=#171 id=171 data-nosnippet>171</a>            <span class="self">self</span>.context
+<a href=#172 id=172 data-nosnippet>172</a>                .metrics
+<a href=#173 id=173 data-nosnippet>173</a>                .node_metrics
+<a href=#174 id=174 data-nosnippet>174</a>                .invalid_blocks
+<a href=#175 id=175 data-nosnippet>175</a>                .with_label_values(<span class="kw-2">&amp;</span>[peer_hostname, <span class="string">"handle_send_block"</span>, <span class="string">"UnexpectedAuthority"</span>])
+<a href=#176 id=176 data-nosnippet>176</a>                .inc();
+<a href=#177 id=177 data-nosnippet>177</a>            <span class="kw">let </span>e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
+<a href=#178 id=178 data-nosnippet>178</a>            <span class="macro">info!</span>(<span class="string">"Block with wrong authority from {}: {}"</span>, peer, e);
+<a href=#179 id=179 data-nosnippet>179</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(e);
+<a href=#180 id=180 data-nosnippet>180</a>        }
+<a href=#181 id=181 data-nosnippet>181</a>
+<a href=#182 id=182 data-nosnippet>182</a>        <span class="comment">// Reject blocks failing validations.
+<a href=#183 id=183 data-nosnippet>183</a>        </span><span class="kw">let </span>(verified_block, reject_txn_votes) = <span class="self">self
+<a href=#184 id=184 data-nosnippet>184</a>            </span>.block_verifier
+<a href=#185 id=185 data-nosnippet>185</a>            .verify_and_vote(signed_block, serialized_block.block)
+<a href=#186 id=186 data-nosnippet>186</a>            .tap_err(|e| {
+<a href=#187 id=187 data-nosnippet>187</a>                <span class="self">self</span>.context
+<a href=#188 id=188 data-nosnippet>188</a>                    .metrics
+<a href=#189 id=189 data-nosnippet>189</a>                    .node_metrics
+<a href=#190 id=190 data-nosnippet>190</a>                    .invalid_blocks
+<a href=#191 id=191 data-nosnippet>191</a>                    .with_label_values(<span class="kw-2">&amp;</span>[peer_hostname, <span class="string">"handle_send_block"</span>, e.name()])
+<a href=#192 id=192 data-nosnippet>192</a>                    .inc();
+<a href=#193 id=193 data-nosnippet>193</a>                <span class="macro">info!</span>(<span class="string">"Invalid block from {}: {}"</span>, peer, e);
+<a href=#194 id=194 data-nosnippet>194</a>            })<span class="question-mark">?</span>;
+<a href=#195 id=195 data-nosnippet>195</a>        <span class="kw">let </span>block_ref = verified_block.reference();
+<a href=#196 id=196 data-nosnippet>196</a>        <span class="macro">debug!</span>(<span class="string">"Received block {} via send block."</span>, block_ref);
+<a href=#197 id=197 data-nosnippet>197</a>
+<a href=#198 id=198 data-nosnippet>198</a>        <span class="kw">let </span>now = <span class="self">self</span>.context.clock.timestamp_utc_ms();
+<a href=#199 id=199 data-nosnippet>199</a>        <span class="kw">let </span>forward_time_drift =
+<a href=#200 id=200 data-nosnippet>200</a>            Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
+<a href=#201 id=201 data-nosnippet>201</a>
+<a href=#202 id=202 data-nosnippet>202</a>        <span class="self">self</span>.context
+<a href=#203 id=203 data-nosnippet>203</a>            .metrics
+<a href=#204 id=204 data-nosnippet>204</a>            .node_metrics
+<a href=#205 id=205 data-nosnippet>205</a>            .block_timestamp_drift_ms
+<a href=#206 id=206 data-nosnippet>206</a>            .with_label_values(<span class="kw-2">&amp;</span>[peer_hostname, <span class="string">"handle_send_block"</span>])
+<a href=#207 id=207 data-nosnippet>207</a>            .inc_by(forward_time_drift.as_millis() <span class="kw">as </span>u64);
+<a href=#208 id=208 data-nosnippet>208</a>
+<a href=#209 id=209 data-nosnippet>209</a>        <span class="comment">// Observe the block for the commit votes. When local commit is lagging too much,
+<a href=#210 id=210 data-nosnippet>210</a>        // commit sync loop will trigger fetching.
+<a href=#211 id=211 data-nosnippet>211</a>        </span><span class="self">self</span>.commit_vote_monitor.observe_block(<span class="kw-2">&amp;</span>verified_block);
+<a href=#212 id=212 data-nosnippet>212</a>
+<a href=#213 id=213 data-nosnippet>213</a>        <span class="comment">// Reject blocks when local commit index is lagging too far from quorum commit index,
+<a href=#214 id=214 data-nosnippet>214</a>        // to avoid the memory overhead from suspended blocks.
+<a href=#215 id=215 data-nosnippet>215</a>        //
+<a href=#216 id=216 data-nosnippet>216</a>        // IMPORTANT: this must be done after observing votes from the block, otherwise
+<a href=#217 id=217 data-nosnippet>217</a>        // observed quorum commit will no longer progress.
+<a href=#218 id=218 data-nosnippet>218</a>        //
+<a href=#219 id=219 data-nosnippet>219</a>        // Since the main issue with too many suspended blocks is memory usage not CPU,
+<a href=#220 id=220 data-nosnippet>220</a>        // it is ok to reject after block verifications instead of before.
+<a href=#221 id=221 data-nosnippet>221</a>        </span><span class="kw">let </span>last_commit_index = <span class="self">self</span>.dag_state.read().last_commit_index();
+<a href=#222 id=222 data-nosnippet>222</a>        <span class="kw">let </span>quorum_commit_index = <span class="self">self</span>.commit_vote_monitor.quorum_commit_index();
+<a href=#223 id=223 data-nosnippet>223</a>        <span class="comment">// The threshold to ignore block should be larger than commit_sync_batch_size,
+<a href=#224 id=224 data-nosnippet>224</a>        // to avoid excessive block rejections and synchronizations.
+<a href=#225 id=225 data-nosnippet>225</a>        </span><span class="kw">if </span>last_commit_index
+<a href=#226 id=226 data-nosnippet>226</a>            + <span class="self">self</span>.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
+<a href=#227 id=227 data-nosnippet>227</a>            &lt; quorum_commit_index
+<a href=#228 id=228 data-nosnippet>228</a>        {
+<a href=#229 id=229 data-nosnippet>229</a>            <span class="self">self</span>.context
+<a href=#230 id=230 data-nosnippet>230</a>                .metrics
+<a href=#231 id=231 data-nosnippet>231</a>                .node_metrics
+<a href=#232 id=232 data-nosnippet>232</a>                .rejected_blocks
+<a href=#233 id=233 data-nosnippet>233</a>                .with_label_values(<span class="kw-2">&amp;</span>[<span class="string">"commit_lagging"</span>])
+<a href=#234 id=234 data-nosnippet>234</a>                .inc();
+<a href=#235 id=235 data-nosnippet>235</a>            <span class="macro">debug!</span>(
+<a href=#236 id=236 data-nosnippet>236</a>                <span class="string">"Block {:?} is rejected because last commit index is lagging quorum commit index too much ({} &lt; {})"</span>,
+<a href=#237 id=237 data-nosnippet>237</a>                block_ref, last_commit_index, quorum_commit_index,
+<a href=#238 id=238 data-nosnippet>238</a>            );
+<a href=#239 id=239 data-nosnippet>239</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ConsensusError::BlockRejected {
+<a href=#240 id=240 data-nosnippet>240</a>                block_ref,
+<a href=#241 id=241 data-nosnippet>241</a>                reason: <span class="macro">format!</span>(
+<a href=#242 id=242 data-nosnippet>242</a>                    <span class="string">"Last commit index is lagging quorum commit index too much ({} &lt; {})"</span>,
+<a href=#243 id=243 data-nosnippet>243</a>                    last_commit_index, quorum_commit_index,
+<a href=#244 id=244 data-nosnippet>244</a>                ),
+<a href=#245 id=245 data-nosnippet>245</a>            });
+<a href=#246 id=246 data-nosnippet>246</a>        }
+<a href=#247 id=247 data-nosnippet>247</a>
+<a href=#248 id=248 data-nosnippet>248</a>        <span class="self">self</span>.context
+<a href=#249 id=249 data-nosnippet>249</a>            .metrics
+<a href=#250 id=250 data-nosnippet>250</a>            .node_metrics
+<a href=#251 id=251 data-nosnippet>251</a>            .verified_blocks
+<a href=#252 id=252 data-nosnippet>252</a>            .with_label_values(<span class="kw-2">&amp;</span>[peer_hostname])
+<a href=#253 id=253 data-nosnippet>253</a>            .inc();
+<a href=#254 id=254 data-nosnippet>254</a>
+<a href=#255 id=255 data-nosnippet>255</a>        <span class="comment">// The block is verified and current, so it can be processed in the fastpath.
+<a href=#256 id=256 data-nosnippet>256</a>        </span><span class="kw">if </span><span class="self">self</span>.context.protocol_config.mysticeti_fastpath() {
+<a href=#257 id=257 data-nosnippet>257</a>            <span class="self">self</span>.transaction_certifier
+<a href=#258 id=258 data-nosnippet>258</a>                .add_voted_blocks(<span class="macro">vec!</span>[(verified_block.clone(), reject_txn_votes)]);
+<a href=#259 id=259 data-nosnippet>259</a>        }
+<a href=#260 id=260 data-nosnippet>260</a>
+<a href=#261 id=261 data-nosnippet>261</a>        <span class="comment">// Try to accept the block into the DAG.
+<a href=#262 id=262 data-nosnippet>262</a>        </span><span class="kw">let </span>missing_ancestors = <span class="self">self
+<a href=#263 id=263 data-nosnippet>263</a>            </span>.core_dispatcher
+<a href=#264 id=264 data-nosnippet>264</a>            .add_blocks(<span class="macro">vec!</span>[verified_block.clone()])
+<a href=#265 id=265 data-nosnippet>265</a>            .<span class="kw">await
+<a href=#266 id=266 data-nosnippet>266</a>            </span>.map_err(|<span class="kw">_</span>| ConsensusError::Shutdown)<span class="question-mark">?</span>;
+<a href=#267 id=267 data-nosnippet>267</a>
+<a href=#268 id=268 data-nosnippet>268</a>        <span class="comment">// Schedule fetching missing ancestors from this peer in the background.
+<a href=#269 id=269 data-nosnippet>269</a>        </span><span class="kw">if </span>!missing_ancestors.is_empty() {
+<a href=#270 id=270 data-nosnippet>270</a>            <span class="self">self</span>.context
+<a href=#271 id=271 data-nosnippet>271</a>                .metrics
+<a href=#272 id=272 data-nosnippet>272</a>                .node_metrics
+<a href=#273 id=273 data-nosnippet>273</a>                .handler_received_block_missing_ancestors
+<a href=#274 id=274 data-nosnippet>274</a>                .with_label_values(<span class="kw-2">&amp;</span>[peer_hostname])
+<a href=#275 id=275 data-nosnippet>275</a>                .inc_by(missing_ancestors.len() <span class="kw">as </span>u64);
+<a href=#276 id=276 data-nosnippet>276</a>            <span class="kw">let </span>synchronizer = <span class="self">self</span>.synchronizer.clone();
+<a href=#277 id=277 data-nosnippet>277</a>            <span class="macro">spawn_monitored_task!</span>(<span class="kw">async move </span>{
+<a href=#278 id=278 data-nosnippet>278</a>                <span class="comment">// This does not wait for the fetch request to complete.
+<a href=#279 id=279 data-nosnippet>279</a>                // It only waits for synchronizer to queue the request to a peer.
+<a href=#280 id=280 data-nosnippet>280</a>                // When this fails, it usually means the queue is full.
+<a href=#281 id=281 data-nosnippet>281</a>                // The fetch will retry from other peers via live and periodic syncs.
+<a href=#282 id=282 data-nosnippet>282</a>                </span><span class="kw">if let </span><span class="prelude-val">Err</span>(err) = synchronizer.fetch_blocks(missing_ancestors, peer).<span class="kw">await </span>{
+<a href=#283 id=283 data-nosnippet>283</a>                    <span class="macro">debug!</span>(<span class="string">"Failed to fetch missing ancestors via synchronizer: {err}"</span>);
+<a href=#284 id=284 data-nosnippet>284</a>                }
+<a href=#285 id=285 data-nosnippet>285</a>            });
+<a href=#286 id=286 data-nosnippet>286</a>        }
+<a href=#287 id=287 data-nosnippet>287</a>
+<a href=#288 id=288 data-nosnippet>288</a>        <span class="comment">// ------------ After processing the block, process the excluded ancestors ------------
+<a href=#289 id=289 data-nosnippet>289</a>
+<a href=#290 id=290 data-nosnippet>290</a>        </span><span class="kw">let </span>excluded_ancestors = <span class="self">self
+<a href=#291 id=291 data-nosnippet>291</a>            </span>.parse_excluded_ancestors(peer, <span class="kw-2">&amp;</span>verified_block, serialized_block.excluded_ancestors)
+<a href=#292 id=292 data-nosnippet>292</a>            .tap_err(|e| {
+<a href=#293 id=293 data-nosnippet>293</a>                <span class="macro">debug!</span>(<span class="string">"Failed to parse excluded ancestors from {peer} {peer_hostname}: {e}"</span>);
+<a href=#294 id=294 data-nosnippet>294</a>                <span class="self">self</span>.context
+<a href=#295 id=295 data-nosnippet>295</a>                    .metrics
+<a href=#296 id=296 data-nosnippet>296</a>                    .node_metrics
+<a href=#297 id=297 data-nosnippet>297</a>                    .invalid_blocks
+<a href=#298 id=298 data-nosnippet>298</a>                    .with_label_values(<span class="kw-2">&amp;</span>[peer_hostname, <span class="string">"handle_send_block"</span>, e.name()])
+<a href=#299 id=299 data-nosnippet>299</a>                    .inc();
+<a href=#300 id=300 data-nosnippet>300</a>            })<span class="question-mark">?</span>;
+<a href=#301 id=301 data-nosnippet>301</a>
+<a href=#302 id=302 data-nosnippet>302</a>        <span class="self">self</span>.round_tracker
+<a href=#303 id=303 data-nosnippet>303</a>            .write()
+<a href=#304 id=304 data-nosnippet>304</a>            .update_from_verified_block(<span class="kw-2">&amp;</span>ExtendedBlock {
+<a href=#305 id=305 data-nosnippet>305</a>                block: verified_block,
+<a href=#306 id=306 data-nosnippet>306</a>                excluded_ancestors: excluded_ancestors.clone(),
+<a href=#307 id=307 data-nosnippet>307</a>            });
+<a href=#308 id=308 data-nosnippet>308</a>
+<a href=#309 id=309 data-nosnippet>309</a>        <span class="kw">let </span>missing_excluded_ancestors = <span class="self">self
+<a href=#310 id=310 data-nosnippet>310</a>            </span>.core_dispatcher
+<a href=#311 id=311 data-nosnippet>311</a>            .check_block_refs(excluded_ancestors)
+<a href=#312 id=312 data-nosnippet>312</a>            .<span class="kw">await
+<a href=#313 id=313 data-nosnippet>313</a>            </span>.map_err(|<span class="kw">_</span>| ConsensusError::Shutdown)<span class="question-mark">?</span>;
+<a href=#314 id=314 data-nosnippet>314</a>
+<a href=#315 id=315 data-nosnippet>315</a>        <span class="comment">// Schedule fetching missing soft links from this peer in the background.
+<a href=#316 id=316 data-nosnippet>316</a>        </span><span class="kw">if </span>!missing_excluded_ancestors.is_empty() {
+<a href=#317 id=317 data-nosnippet>317</a>            <span class="self">self</span>.context
+<a href=#318 id=318 data-nosnippet>318</a>                .metrics
+<a href=#319 id=319 data-nosnippet>319</a>                .node_metrics
+<a href=#320 id=320 data-nosnippet>320</a>                .network_excluded_ancestors_sent_to_fetch
+<a href=#321 id=321 data-nosnippet>321</a>                .with_label_values(<span class="kw-2">&amp;</span>[peer_hostname])
+<a href=#322 id=322 data-nosnippet>322</a>                .inc_by(missing_excluded_ancestors.len() <span class="kw">as </span>u64);
+<a href=#323 id=323 data-nosnippet>323</a>
+<a href=#324 id=324 data-nosnippet>324</a>            <span class="kw">let </span>synchronizer = <span class="self">self</span>.synchronizer.clone();
+<a href=#325 id=325 data-nosnippet>325</a>            <span class="macro">spawn_monitored_task!</span>(<span class="kw">async move </span>{
+<a href=#326 id=326 data-nosnippet>326</a>                <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = synchronizer
+<a href=#327 id=327 data-nosnippet>327</a>                    .fetch_blocks(missing_excluded_ancestors, peer)
+<a href=#328 id=328 data-nosnippet>328</a>                    .<span class="kw">await
+<a href=#329 id=329 data-nosnippet>329</a>                </span>{
+<a href=#330 id=330 data-nosnippet>330</a>                    <span class="macro">debug!</span>(<span class="string">"Failed to fetch excluded ancestors via synchronizer: {err}"</span>);
+<a href=#331 id=331 data-nosnippet>331</a>                }
+<a href=#332 id=332 data-nosnippet>332</a>            });
+<a href=#333 id=333 data-nosnippet>333</a>        }
+<a href=#334 id=334 data-nosnippet>334</a>
+<a href=#335 id=335 data-nosnippet>335</a>        <span class="prelude-val">Ok</span>(())
+<a href=#336 id=336 data-nosnippet>336</a>    }
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">async fn </span>handle_subscribe_blocks(
+<a href=#339 id=339 data-nosnippet>339</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#340 id=340 data-nosnippet>340</a>        peer: AuthorityIndex,
+<a href=#341 id=341 data-nosnippet>341</a>        last_received: Round,
+<a href=#342 id=342 data-nosnippet>342</a>    ) -&gt; ConsensusResult&lt;BlockStream&gt; {
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="macro">fail_point_async!</span>(<span class="string">"consensus-rpc-response"</span>);
+<a href=#344 id=344 data-nosnippet>344</a>
+<a href=#345 id=345 data-nosnippet>345</a>        <span class="kw">let </span>dag_state = <span class="self">self</span>.dag_state.read();
+<a href=#346 id=346 data-nosnippet>346</a>        <span class="comment">// Find recent own blocks that have not been received by the peer.
+<a href=#347 id=347 data-nosnippet>347</a>        // If last_received is a valid and more blocks have been proposed since then, this call is
+<a href=#348 id=348 data-nosnippet>348</a>        // guaranteed to return at least some recent blocks, which will help with liveness.
+<a href=#349 id=349 data-nosnippet>349</a>        </span><span class="kw">let </span>missed_blocks = stream::iter(
+<a href=#350 id=350 data-nosnippet>350</a>            dag_state
+<a href=#351 id=351 data-nosnippet>351</a>                .get_cached_blocks(<span class="self">self</span>.context.own_index, last_received + <span class="number">1</span>)
+<a href=#352 id=352 data-nosnippet>352</a>                .into_iter()
+<a href=#353 id=353 data-nosnippet>353</a>                .map(|block| ExtendedSerializedBlock {
+<a href=#354 id=354 data-nosnippet>354</a>                    block: block.serialized().clone(),
+<a href=#355 id=355 data-nosnippet>355</a>                    excluded_ancestors: <span class="macro">vec!</span>[],
+<a href=#356 id=356 data-nosnippet>356</a>                }),
+<a href=#357 id=357 data-nosnippet>357</a>        );
+<a href=#358 id=358 data-nosnippet>358</a>
+<a href=#359 id=359 data-nosnippet>359</a>        <span class="kw">let </span>broadcasted_blocks = BroadcastedBlockStream::new(
+<a href=#360 id=360 data-nosnippet>360</a>            peer,
+<a href=#361 id=361 data-nosnippet>361</a>            <span class="self">self</span>.rx_block_broadcast.resubscribe(),
+<a href=#362 id=362 data-nosnippet>362</a>            <span class="self">self</span>.subscription_counter.clone(),
+<a href=#363 id=363 data-nosnippet>363</a>        );
+<a href=#364 id=364 data-nosnippet>364</a>
+<a href=#365 id=365 data-nosnippet>365</a>        <span class="comment">// Return a stream of blocks that first yields missed blocks as requested, then new blocks.
+<a href=#366 id=366 data-nosnippet>366</a>        </span><span class="prelude-val">Ok</span>(Box::pin(missed_blocks.chain(
+<a href=#367 id=367 data-nosnippet>367</a>            broadcasted_blocks.map(ExtendedSerializedBlock::from),
+<a href=#368 id=368 data-nosnippet>368</a>        )))
+<a href=#369 id=369 data-nosnippet>369</a>    }
+<a href=#370 id=370 data-nosnippet>370</a>
+<a href=#371 id=371 data-nosnippet>371</a>    <span class="comment">// Handles two types of requests:
+<a href=#372 id=372 data-nosnippet>372</a>    // 1. Missing block for block sync:
+<a href=#373 id=373 data-nosnippet>373</a>    //    - uses highest_accepted_rounds.
+<a href=#374 id=374 data-nosnippet>374</a>    //    - max_blocks_per_sync blocks should be returned.
+<a href=#375 id=375 data-nosnippet>375</a>    // 2. Committed block for commit sync:
+<a href=#376 id=376 data-nosnippet>376</a>    //    - does not use highest_accepted_rounds.
+<a href=#377 id=377 data-nosnippet>377</a>    //    - max_blocks_per_fetch blocks should be returned.
+<a href=#378 id=378 data-nosnippet>378</a>    </span><span class="kw">async fn </span>handle_fetch_blocks(
+<a href=#379 id=379 data-nosnippet>379</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#380 id=380 data-nosnippet>380</a>        _peer: AuthorityIndex,
+<a href=#381 id=381 data-nosnippet>381</a>        <span class="kw-2">mut </span>block_refs: Vec&lt;BlockRef&gt;,
+<a href=#382 id=382 data-nosnippet>382</a>        highest_accepted_rounds: Vec&lt;Round&gt;,
+<a href=#383 id=383 data-nosnippet>383</a>        breadth_first: bool,
+<a href=#384 id=384 data-nosnippet>384</a>    ) -&gt; ConsensusResult&lt;Vec&lt;Bytes&gt;&gt; {
+<a href=#385 id=385 data-nosnippet>385</a>        <span class="macro">fail_point_async!</span>(<span class="string">"consensus-rpc-response"</span>);
+<a href=#386 id=386 data-nosnippet>386</a>
+<a href=#387 id=387 data-nosnippet>387</a>        <span class="kw">if </span>!highest_accepted_rounds.is_empty()
+<a href=#388 id=388 data-nosnippet>388</a>            &amp;&amp; highest_accepted_rounds.len() != <span class="self">self</span>.context.committee.size()
+<a href=#389 id=389 data-nosnippet>389</a>        {
+<a href=#390 id=390 data-nosnippet>390</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ConsensusError::InvalidSizeOfHighestAcceptedRounds(
+<a href=#391 id=391 data-nosnippet>391</a>                highest_accepted_rounds.len(),
+<a href=#392 id=392 data-nosnippet>392</a>                <span class="self">self</span>.context.committee.size(),
+<a href=#393 id=393 data-nosnippet>393</a>            ));
+<a href=#394 id=394 data-nosnippet>394</a>        }
+<a href=#395 id=395 data-nosnippet>395</a>
+<a href=#396 id=396 data-nosnippet>396</a>        <span class="comment">// Some quick validation of the requested block refs
+<a href=#397 id=397 data-nosnippet>397</a>        </span><span class="kw">let </span>max_response_num_blocks = <span class="kw">if </span>!highest_accepted_rounds.is_empty() {
+<a href=#398 id=398 data-nosnippet>398</a>            <span class="self">self</span>.context.parameters.max_blocks_per_sync
+<a href=#399 id=399 data-nosnippet>399</a>        } <span class="kw">else </span>{
+<a href=#400 id=400 data-nosnippet>400</a>            <span class="self">self</span>.context.parameters.max_blocks_per_fetch
+<a href=#401 id=401 data-nosnippet>401</a>        };
+<a href=#402 id=402 data-nosnippet>402</a>        <span class="kw">if </span>block_refs.len() &gt; max_response_num_blocks {
+<a href=#403 id=403 data-nosnippet>403</a>            block_refs.truncate(max_response_num_blocks);
+<a href=#404 id=404 data-nosnippet>404</a>        }
+<a href=#405 id=405 data-nosnippet>405</a>
+<a href=#406 id=406 data-nosnippet>406</a>        <span class="comment">// Validate the requested block refs.
+<a href=#407 id=407 data-nosnippet>407</a>        </span><span class="kw">for </span>block <span class="kw">in </span><span class="kw-2">&amp;</span>block_refs {
+<a href=#408 id=408 data-nosnippet>408</a>            <span class="kw">if </span>!<span class="self">self</span>.context.committee.is_valid_index(block.author) {
+<a href=#409 id=409 data-nosnippet>409</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(ConsensusError::InvalidAuthorityIndex {
+<a href=#410 id=410 data-nosnippet>410</a>                    index: block.author,
+<a href=#411 id=411 data-nosnippet>411</a>                    max: <span class="self">self</span>.context.committee.size(),
+<a href=#412 id=412 data-nosnippet>412</a>                });
+<a href=#413 id=413 data-nosnippet>413</a>            }
+<a href=#414 id=414 data-nosnippet>414</a>            <span class="kw">if </span>block.round == GENESIS_ROUND {
+<a href=#415 id=415 data-nosnippet>415</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(ConsensusError::UnexpectedGenesisBlockRequested);
+<a href=#416 id=416 data-nosnippet>416</a>            }
+<a href=#417 id=417 data-nosnippet>417</a>        }
+<a href=#418 id=418 data-nosnippet>418</a>
+<a href=#419 id=419 data-nosnippet>419</a>        <span class="comment">// Get requested blocks from store.
+<a href=#420 id=420 data-nosnippet>420</a>        </span><span class="kw">let </span>blocks = <span class="kw">if </span>!highest_accepted_rounds.is_empty() {
+<a href=#421 id=421 data-nosnippet>421</a>            block_refs.sort();
+<a href=#422 id=422 data-nosnippet>422</a>            block_refs.dedup();
+<a href=#423 id=423 data-nosnippet>423</a>            <span class="kw">let </span><span class="kw-2">mut </span>blocks = <span class="self">self
+<a href=#424 id=424 data-nosnippet>424</a>                </span>.dag_state
+<a href=#425 id=425 data-nosnippet>425</a>                .read()
+<a href=#426 id=426 data-nosnippet>426</a>                .get_blocks(<span class="kw-2">&amp;</span>block_refs)
+<a href=#427 id=427 data-nosnippet>427</a>                .into_iter()
+<a href=#428 id=428 data-nosnippet>428</a>                .flatten()
+<a href=#429 id=429 data-nosnippet>429</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#430 id=430 data-nosnippet>430</a>
+<a href=#431 id=431 data-nosnippet>431</a>            <span class="kw">if </span>breadth_first {
+<a href=#432 id=432 data-nosnippet>432</a>                <span class="comment">// Get unique missing ancestor blocks of the requested blocks.
+<a href=#433 id=433 data-nosnippet>433</a>                </span><span class="kw">let </span><span class="kw-2">mut </span>missing_ancestors = blocks
+<a href=#434 id=434 data-nosnippet>434</a>                    .iter()
+<a href=#435 id=435 data-nosnippet>435</a>                    .flat_map(|block| block.ancestors().to_vec())
+<a href=#436 id=436 data-nosnippet>436</a>                    .filter(|block_ref| highest_accepted_rounds[block_ref.author] &lt; block_ref.round)
+<a href=#437 id=437 data-nosnippet>437</a>                    .collect::&lt;BTreeSet&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#438 id=438 data-nosnippet>438</a>                    .into_iter()
+<a href=#439 id=439 data-nosnippet>439</a>                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a>                <span class="comment">// If there are too many missing ancestors, randomly select a subset to avoid
+<a href=#442 id=442 data-nosnippet>442</a>                // fetching duplicated blocks across peers.
+<a href=#443 id=443 data-nosnippet>443</a>                </span><span class="kw">let </span>selected_num_blocks = max_response_num_blocks.saturating_sub(blocks.len());
+<a href=#444 id=444 data-nosnippet>444</a>                <span class="kw">if </span>selected_num_blocks &lt; missing_ancestors.len() {
+<a href=#445 id=445 data-nosnippet>445</a>                    missing_ancestors = missing_ancestors
+<a href=#446 id=446 data-nosnippet>446</a>                        .choose_multiple(<span class="kw-2">&amp;mut </span>mysten_common::random::get_rng(), selected_num_blocks)
+<a href=#447 id=447 data-nosnippet>447</a>                        .copied()
+<a href=#448 id=448 data-nosnippet>448</a>                        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#449 id=449 data-nosnippet>449</a>                }
+<a href=#450 id=450 data-nosnippet>450</a>                <span class="kw">let </span>ancestor_blocks = <span class="self">self</span>.dag_state.read().get_blocks(<span class="kw-2">&amp;</span>missing_ancestors);
+<a href=#451 id=451 data-nosnippet>451</a>                blocks.extend(ancestor_blocks.into_iter().flatten());
+<a href=#452 id=452 data-nosnippet>452</a>            } <span class="kw">else </span>{
+<a href=#453 id=453 data-nosnippet>453</a>                <span class="comment">// Get additional blocks from authorities with missing block, if they are available in cache.
+<a href=#454 id=454 data-nosnippet>454</a>                // Compute the lowest missing round per requested authority.
+<a href=#455 id=455 data-nosnippet>455</a>                </span><span class="kw">let </span><span class="kw-2">mut </span>lowest_missing_rounds = BTreeMap::&lt;AuthorityIndex, Round&gt;::new();
+<a href=#456 id=456 data-nosnippet>456</a>                <span class="kw">for </span>block_ref <span class="kw">in </span>blocks.iter().map(|b| b.reference()) {
+<a href=#457 id=457 data-nosnippet>457</a>                    <span class="kw">let </span>entry = lowest_missing_rounds
+<a href=#458 id=458 data-nosnippet>458</a>                        .entry(block_ref.author)
+<a href=#459 id=459 data-nosnippet>459</a>                        .or_insert(block_ref.round);
+<a href=#460 id=460 data-nosnippet>460</a>                    <span class="kw-2">*</span>entry = (<span class="kw-2">*</span>entry).min(block_ref.round);
+<a href=#461 id=461 data-nosnippet>461</a>                }
+<a href=#462 id=462 data-nosnippet>462</a>
+<a href=#463 id=463 data-nosnippet>463</a>                <span class="comment">// Retrieve additional blocks per authority, from peer's highest accepted round + 1 to
+<a href=#464 id=464 data-nosnippet>464</a>                // lowest missing round (exclusive) per requested authority.
+<a href=#465 id=465 data-nosnippet>465</a>                // No block from other authorities are retrieved. It is possible that the requestor is not
+<a href=#466 id=466 data-nosnippet>466</a>                // seeing missing block from another authority, and serving a block would just lead to unnecessary
+<a href=#467 id=467 data-nosnippet>467</a>                // data transfer. Or missing blocks from other authorities are requested from other peers.
+<a href=#468 id=468 data-nosnippet>468</a>                </span><span class="kw">let </span>dag_state = <span class="self">self</span>.dag_state.read();
+<a href=#469 id=469 data-nosnippet>469</a>                <span class="kw">for </span>(authority, lowest_missing_round) <span class="kw">in </span>lowest_missing_rounds {
+<a href=#470 id=470 data-nosnippet>470</a>                    <span class="kw">let </span>highest_accepted_round = highest_accepted_rounds[authority];
+<a href=#471 id=471 data-nosnippet>471</a>                    <span class="kw">if </span>highest_accepted_round &gt;= lowest_missing_round {
+<a href=#472 id=472 data-nosnippet>472</a>                        <span class="kw">continue</span>;
+<a href=#473 id=473 data-nosnippet>473</a>                    }
+<a href=#474 id=474 data-nosnippet>474</a>                    <span class="kw">let </span>missing_blocks = dag_state.get_cached_blocks_in_range(
+<a href=#475 id=475 data-nosnippet>475</a>                        authority,
+<a href=#476 id=476 data-nosnippet>476</a>                        highest_accepted_round + <span class="number">1</span>,
+<a href=#477 id=477 data-nosnippet>477</a>                        lowest_missing_round,
+<a href=#478 id=478 data-nosnippet>478</a>                        <span class="self">self</span>.context
+<a href=#479 id=479 data-nosnippet>479</a>                            .parameters
+<a href=#480 id=480 data-nosnippet>480</a>                            .max_blocks_per_sync
+<a href=#481 id=481 data-nosnippet>481</a>                            .saturating_sub(blocks.len()),
+<a href=#482 id=482 data-nosnippet>482</a>                    );
+<a href=#483 id=483 data-nosnippet>483</a>                    blocks.extend(missing_blocks);
+<a href=#484 id=484 data-nosnippet>484</a>                    <span class="kw">if </span>blocks.len() &gt;= <span class="self">self</span>.context.parameters.max_blocks_per_sync {
+<a href=#485 id=485 data-nosnippet>485</a>                        blocks.truncate(<span class="self">self</span>.context.parameters.max_blocks_per_sync);
+<a href=#486 id=486 data-nosnippet>486</a>                        <span class="kw">break</span>;
+<a href=#487 id=487 data-nosnippet>487</a>                    }
+<a href=#488 id=488 data-nosnippet>488</a>                }
+<a href=#489 id=489 data-nosnippet>489</a>            }
+<a href=#490 id=490 data-nosnippet>490</a>
+<a href=#491 id=491 data-nosnippet>491</a>            blocks
+<a href=#492 id=492 data-nosnippet>492</a>        } <span class="kw">else </span>{
+<a href=#493 id=493 data-nosnippet>493</a>            <span class="self">self</span>.dag_state
+<a href=#494 id=494 data-nosnippet>494</a>                .read()
+<a href=#495 id=495 data-nosnippet>495</a>                .get_blocks(<span class="kw-2">&amp;</span>block_refs)
+<a href=#496 id=496 data-nosnippet>496</a>                .into_iter()
+<a href=#497 id=497 data-nosnippet>497</a>                .flatten()
+<a href=#498 id=498 data-nosnippet>498</a>                .collect()
+<a href=#499 id=499 data-nosnippet>499</a>        };
+<a href=#500 id=500 data-nosnippet>500</a>
+<a href=#501 id=501 data-nosnippet>501</a>        <span class="comment">// Return the serialized blocks
+<a href=#502 id=502 data-nosnippet>502</a>        </span><span class="kw">let </span>bytes = blocks
+<a href=#503 id=503 data-nosnippet>503</a>            .into_iter()
+<a href=#504 id=504 data-nosnippet>504</a>            .map(|block| block.serialized().clone())
+<a href=#505 id=505 data-nosnippet>505</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#506 id=506 data-nosnippet>506</a>        <span class="prelude-val">Ok</span>(bytes)
+<a href=#507 id=507 data-nosnippet>507</a>    }
+<a href=#508 id=508 data-nosnippet>508</a>
+<a href=#509 id=509 data-nosnippet>509</a>    <span class="kw">async fn </span>handle_fetch_commits(
+<a href=#510 id=510 data-nosnippet>510</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#511 id=511 data-nosnippet>511</a>        _peer: AuthorityIndex,
+<a href=#512 id=512 data-nosnippet>512</a>        commit_range: CommitRange,
+<a href=#513 id=513 data-nosnippet>513</a>    ) -&gt; ConsensusResult&lt;(Vec&lt;TrustedCommit&gt;, Vec&lt;VerifiedBlock&gt;)&gt; {
+<a href=#514 id=514 data-nosnippet>514</a>        <span class="macro">fail_point_async!</span>(<span class="string">"consensus-rpc-response"</span>);
+<a href=#515 id=515 data-nosnippet>515</a>
+<a href=#516 id=516 data-nosnippet>516</a>        <span class="comment">// Compute an inclusive end index and bound the maximum number of commits scanned.
+<a href=#517 id=517 data-nosnippet>517</a>        </span><span class="kw">let </span>inclusive_end = commit_range.end().min(
+<a href=#518 id=518 data-nosnippet>518</a>            commit_range.start() + <span class="self">self</span>.context.parameters.commit_sync_batch_size <span class="kw">as </span>CommitIndex
+<a href=#519 id=519 data-nosnippet>519</a>                - <span class="number">1</span>,
+<a href=#520 id=520 data-nosnippet>520</a>        );
+<a href=#521 id=521 data-nosnippet>521</a>        <span class="kw">let </span><span class="kw-2">mut </span>commits = <span class="self">self
+<a href=#522 id=522 data-nosnippet>522</a>            </span>.store
+<a href=#523 id=523 data-nosnippet>523</a>            .scan_commits((commit_range.start()..=inclusive_end).into())<span class="question-mark">?</span>;
+<a href=#524 id=524 data-nosnippet>524</a>        <span class="kw">let </span><span class="kw-2">mut </span>certifier_block_refs = <span class="macro">vec!</span>[];
+<a href=#525 id=525 data-nosnippet>525</a>        <span class="lifetime">'commit</span>: <span class="kw">while let </span><span class="prelude-val">Some</span>(c) = commits.last() {
+<a href=#526 id=526 data-nosnippet>526</a>            <span class="kw">let </span>index = c.index();
+<a href=#527 id=527 data-nosnippet>527</a>            <span class="kw">let </span>votes = <span class="self">self</span>.store.read_commit_votes(index)<span class="question-mark">?</span>;
+<a href=#528 id=528 data-nosnippet>528</a>            <span class="kw">let </span><span class="kw-2">mut </span>stake_aggregator = StakeAggregator::&lt;QuorumThreshold&gt;::new();
+<a href=#529 id=529 data-nosnippet>529</a>            <span class="kw">for </span>v <span class="kw">in </span><span class="kw-2">&amp;</span>votes {
+<a href=#530 id=530 data-nosnippet>530</a>                stake_aggregator.add(v.author, <span class="kw-2">&amp;</span><span class="self">self</span>.context.committee);
+<a href=#531 id=531 data-nosnippet>531</a>            }
+<a href=#532 id=532 data-nosnippet>532</a>            <span class="kw">if </span>stake_aggregator.reached_threshold(<span class="kw-2">&amp;</span><span class="self">self</span>.context.committee) {
+<a href=#533 id=533 data-nosnippet>533</a>                certifier_block_refs = votes;
+<a href=#534 id=534 data-nosnippet>534</a>                <span class="kw">break </span><span class="lifetime">'commit</span>;
+<a href=#535 id=535 data-nosnippet>535</a>            } <span class="kw">else </span>{
+<a href=#536 id=536 data-nosnippet>536</a>                <span class="macro">debug!</span>(
+<a href=#537 id=537 data-nosnippet>537</a>                    <span class="string">"Commit {} votes did not reach quorum to certify, {} &lt; {}, skipping"</span>,
+<a href=#538 id=538 data-nosnippet>538</a>                    index,
+<a href=#539 id=539 data-nosnippet>539</a>                    stake_aggregator.stake(),
+<a href=#540 id=540 data-nosnippet>540</a>                    stake_aggregator.threshold(<span class="kw-2">&amp;</span><span class="self">self</span>.context.committee)
+<a href=#541 id=541 data-nosnippet>541</a>                );
+<a href=#542 id=542 data-nosnippet>542</a>                <span class="self">self</span>.context
+<a href=#543 id=543 data-nosnippet>543</a>                    .metrics
+<a href=#544 id=544 data-nosnippet>544</a>                    .node_metrics
+<a href=#545 id=545 data-nosnippet>545</a>                    .commit_sync_fetch_commits_handler_uncertified_skipped
+<a href=#546 id=546 data-nosnippet>546</a>                    .inc();
+<a href=#547 id=547 data-nosnippet>547</a>                commits.pop();
+<a href=#548 id=548 data-nosnippet>548</a>            }
+<a href=#549 id=549 data-nosnippet>549</a>        }
+<a href=#550 id=550 data-nosnippet>550</a>        <span class="kw">let </span>certifier_blocks = <span class="self">self
+<a href=#551 id=551 data-nosnippet>551</a>            </span>.store
+<a href=#552 id=552 data-nosnippet>552</a>            .read_blocks(<span class="kw-2">&amp;</span>certifier_block_refs)<span class="question-mark">?
+<a href=#553 id=553 data-nosnippet>553</a>            </span>.into_iter()
+<a href=#554 id=554 data-nosnippet>554</a>            .flatten()
+<a href=#555 id=555 data-nosnippet>555</a>            .collect();
+<a href=#556 id=556 data-nosnippet>556</a>        <span class="prelude-val">Ok</span>((commits, certifier_blocks))
+<a href=#557 id=557 data-nosnippet>557</a>    }
+<a href=#558 id=558 data-nosnippet>558</a>
+<a href=#559 id=559 data-nosnippet>559</a>    <span class="kw">async fn </span>handle_fetch_latest_blocks(
+<a href=#560 id=560 data-nosnippet>560</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#561 id=561 data-nosnippet>561</a>        peer: AuthorityIndex,
+<a href=#562 id=562 data-nosnippet>562</a>        authorities: Vec&lt;AuthorityIndex&gt;,
+<a href=#563 id=563 data-nosnippet>563</a>    ) -&gt; ConsensusResult&lt;Vec&lt;Bytes&gt;&gt; {
+<a href=#564 id=564 data-nosnippet>564</a>        <span class="macro">fail_point_async!</span>(<span class="string">"consensus-rpc-response"</span>);
+<a href=#565 id=565 data-nosnippet>565</a>
+<a href=#566 id=566 data-nosnippet>566</a>        <span class="kw">if </span>authorities.len() &gt; <span class="self">self</span>.context.committee.size() {
+<a href=#567 id=567 data-nosnippet>567</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ConsensusError::TooManyAuthoritiesProvided(peer));
+<a href=#568 id=568 data-nosnippet>568</a>        }
+<a href=#569 id=569 data-nosnippet>569</a>
+<a href=#570 id=570 data-nosnippet>570</a>        <span class="comment">// Ensure that those are valid authorities
+<a href=#571 id=571 data-nosnippet>571</a>        </span><span class="kw">for </span>authority <span class="kw">in </span><span class="kw-2">&amp;</span>authorities {
+<a href=#572 id=572 data-nosnippet>572</a>            <span class="kw">if </span>!<span class="self">self</span>.context.committee.is_valid_index(<span class="kw-2">*</span>authority) {
+<a href=#573 id=573 data-nosnippet>573</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(ConsensusError::InvalidAuthorityIndex {
+<a href=#574 id=574 data-nosnippet>574</a>                    index: <span class="kw-2">*</span>authority,
+<a href=#575 id=575 data-nosnippet>575</a>                    max: <span class="self">self</span>.context.committee.size(),
+<a href=#576 id=576 data-nosnippet>576</a>                });
+<a href=#577 id=577 data-nosnippet>577</a>            }
+<a href=#578 id=578 data-nosnippet>578</a>        }
+<a href=#579 id=579 data-nosnippet>579</a>
+<a href=#580 id=580 data-nosnippet>580</a>        <span class="comment">// Read from the dag state to find the latest blocks.
+<a href=#581 id=581 data-nosnippet>581</a>        // TODO: at the moment we don't look into the block manager for suspended blocks. Ideally we
+<a href=#582 id=582 data-nosnippet>582</a>        // want in the future if we think we would like to tackle the majority of cases.
+<a href=#583 id=583 data-nosnippet>583</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>blocks = <span class="macro">vec!</span>[];
+<a href=#584 id=584 data-nosnippet>584</a>        <span class="kw">let </span>dag_state = <span class="self">self</span>.dag_state.read();
+<a href=#585 id=585 data-nosnippet>585</a>        <span class="kw">for </span>authority <span class="kw">in </span>authorities {
+<a href=#586 id=586 data-nosnippet>586</a>            <span class="kw">let </span>block = dag_state.get_last_block_for_authority(authority);
+<a href=#587 id=587 data-nosnippet>587</a>
+<a href=#588 id=588 data-nosnippet>588</a>            <span class="macro">debug!</span>(<span class="string">"Latest block for {authority}: {block:?} as requested from {peer}"</span>);
+<a href=#589 id=589 data-nosnippet>589</a>
+<a href=#590 id=590 data-nosnippet>590</a>            <span class="comment">// no reason to serve back the genesis block - it's equal as if it has not received any block
+<a href=#591 id=591 data-nosnippet>591</a>            </span><span class="kw">if </span>block.round() != GENESIS_ROUND {
+<a href=#592 id=592 data-nosnippet>592</a>                blocks.push(block);
+<a href=#593 id=593 data-nosnippet>593</a>            }
+<a href=#594 id=594 data-nosnippet>594</a>        }
+<a href=#595 id=595 data-nosnippet>595</a>
+<a href=#596 id=596 data-nosnippet>596</a>        <span class="comment">// Return the serialised blocks
+<a href=#597 id=597 data-nosnippet>597</a>        </span><span class="kw">let </span>result = blocks
+<a href=#598 id=598 data-nosnippet>598</a>            .into_iter()
+<a href=#599 id=599 data-nosnippet>599</a>            .map(|block| block.serialized().clone())
+<a href=#600 id=600 data-nosnippet>600</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#601 id=601 data-nosnippet>601</a>
+<a href=#602 id=602 data-nosnippet>602</a>        <span class="prelude-val">Ok</span>(result)
+<a href=#603 id=603 data-nosnippet>603</a>    }
+<a href=#604 id=604 data-nosnippet>604</a>
+<a href=#605 id=605 data-nosnippet>605</a>    <span class="kw">async fn </span>handle_get_latest_rounds(
+<a href=#606 id=606 data-nosnippet>606</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#607 id=607 data-nosnippet>607</a>        _peer: AuthorityIndex,
+<a href=#608 id=608 data-nosnippet>608</a>    ) -&gt; ConsensusResult&lt;(Vec&lt;Round&gt;, Vec&lt;Round&gt;)&gt; {
+<a href=#609 id=609 data-nosnippet>609</a>        <span class="macro">fail_point_async!</span>(<span class="string">"consensus-rpc-response"</span>);
+<a href=#610 id=610 data-nosnippet>610</a>
+<a href=#611 id=611 data-nosnippet>611</a>        <span class="kw">let </span><span class="kw-2">mut </span>highest_received_rounds = <span class="self">self</span>.core_dispatcher.highest_received_rounds();
+<a href=#612 id=612 data-nosnippet>612</a>
+<a href=#613 id=613 data-nosnippet>613</a>        <span class="kw">let </span>blocks = <span class="self">self
+<a href=#614 id=614 data-nosnippet>614</a>            </span>.dag_state
+<a href=#615 id=615 data-nosnippet>615</a>            .read()
+<a href=#616 id=616 data-nosnippet>616</a>            .get_last_cached_block_per_authority(Round::MAX);
+<a href=#617 id=617 data-nosnippet>617</a>        <span class="kw">let </span>highest_accepted_rounds = blocks
+<a href=#618 id=618 data-nosnippet>618</a>            .into_iter()
+<a href=#619 id=619 data-nosnippet>619</a>            .map(|(block, <span class="kw">_</span>)| block.round())
+<a href=#620 id=620 data-nosnippet>620</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#621 id=621 data-nosnippet>621</a>
+<a href=#622 id=622 data-nosnippet>622</a>        <span class="comment">// Own blocks do not go through the core dispatcher, so they need to be set separately.
+<a href=#623 id=623 data-nosnippet>623</a>        </span>highest_received_rounds[<span class="self">self</span>.context.own_index] =
+<a href=#624 id=624 data-nosnippet>624</a>            highest_accepted_rounds[<span class="self">self</span>.context.own_index];
+<a href=#625 id=625 data-nosnippet>625</a>
+<a href=#626 id=626 data-nosnippet>626</a>        <span class="prelude-val">Ok</span>((highest_received_rounds, highest_accepted_rounds))
+<a href=#627 id=627 data-nosnippet>627</a>    }
+<a href=#628 id=628 data-nosnippet>628</a>}
+<a href=#629 id=629 data-nosnippet>629</a>
+<a href=#630 id=630 data-nosnippet>630</a><span class="kw">struct </span>Counter {
+<a href=#631 id=631 data-nosnippet>631</a>    count: usize,
+<a href=#632 id=632 data-nosnippet>632</a>    subscriptions_by_authority: Vec&lt;usize&gt;,
+<a href=#633 id=633 data-nosnippet>633</a>}
+<a href=#634 id=634 data-nosnippet>634</a>
+<a href=#635 id=635 data-nosnippet>635</a><span class="doccomment">/// Atomically counts the number of active subscriptions to the block broadcast stream.
+<a href=#636 id=636 data-nosnippet>636</a></span><span class="kw">struct </span>SubscriptionCounter {
+<a href=#637 id=637 data-nosnippet>637</a>    context: Arc&lt;Context&gt;,
+<a href=#638 id=638 data-nosnippet>638</a>    counter: parking_lot::Mutex&lt;Counter&gt;,
+<a href=#639 id=639 data-nosnippet>639</a>}
+<a href=#640 id=640 data-nosnippet>640</a>
+<a href=#641 id=641 data-nosnippet>641</a><span class="kw">impl </span>SubscriptionCounter {
+<a href=#642 id=642 data-nosnippet>642</a>    <span class="kw">fn </span>new(context: Arc&lt;Context&gt;) -&gt; <span class="self">Self </span>{
+<a href=#643 id=643 data-nosnippet>643</a>        <span class="comment">// Set the subscribed peers by default to 0
+<a href=#644 id=644 data-nosnippet>644</a>        </span><span class="kw">for </span>(<span class="kw">_</span>, authority) <span class="kw">in </span>context.committee.authorities() {
+<a href=#645 id=645 data-nosnippet>645</a>            context
+<a href=#646 id=646 data-nosnippet>646</a>                .metrics
+<a href=#647 id=647 data-nosnippet>647</a>                .node_metrics
+<a href=#648 id=648 data-nosnippet>648</a>                .subscribed_by
+<a href=#649 id=649 data-nosnippet>649</a>                .with_label_values(<span class="kw-2">&amp;</span>[authority.hostname.as_str()])
+<a href=#650 id=650 data-nosnippet>650</a>                .set(<span class="number">0</span>);
+<a href=#651 id=651 data-nosnippet>651</a>        }
+<a href=#652 id=652 data-nosnippet>652</a>
+<a href=#653 id=653 data-nosnippet>653</a>        <span class="self">Self </span>{
+<a href=#654 id=654 data-nosnippet>654</a>            counter: parking_lot::Mutex::new(Counter {
+<a href=#655 id=655 data-nosnippet>655</a>                count: <span class="number">0</span>,
+<a href=#656 id=656 data-nosnippet>656</a>                subscriptions_by_authority: <span class="macro">vec!</span>[<span class="number">0</span>; context.committee.size()],
+<a href=#657 id=657 data-nosnippet>657</a>            }),
+<a href=#658 id=658 data-nosnippet>658</a>            context,
+<a href=#659 id=659 data-nosnippet>659</a>        }
+<a href=#660 id=660 data-nosnippet>660</a>    }
+<a href=#661 id=661 data-nosnippet>661</a>
+<a href=#662 id=662 data-nosnippet>662</a>    <span class="kw">fn </span>increment(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: AuthorityIndex) -&gt; <span class="prelude-ty">Result</span>&lt;(), ConsensusError&gt; {
+<a href=#663 id=663 data-nosnippet>663</a>        <span class="kw">let </span><span class="kw-2">mut </span>counter = <span class="self">self</span>.counter.lock();
+<a href=#664 id=664 data-nosnippet>664</a>        counter.count += <span class="number">1</span>;
+<a href=#665 id=665 data-nosnippet>665</a>        counter.subscriptions_by_authority[peer] += <span class="number">1</span>;
+<a href=#666 id=666 data-nosnippet>666</a>
+<a href=#667 id=667 data-nosnippet>667</a>        <span class="kw">let </span>peer_hostname = <span class="kw-2">&amp;</span><span class="self">self</span>.context.committee.authority(peer).hostname;
+<a href=#668 id=668 data-nosnippet>668</a>        <span class="self">self</span>.context
+<a href=#669 id=669 data-nosnippet>669</a>            .metrics
+<a href=#670 id=670 data-nosnippet>670</a>            .node_metrics
+<a href=#671 id=671 data-nosnippet>671</a>            .subscribed_by
+<a href=#672 id=672 data-nosnippet>672</a>            .with_label_values(<span class="kw-2">&amp;</span>[peer_hostname])
+<a href=#673 id=673 data-nosnippet>673</a>            .set(<span class="number">1</span>);
+<a href=#674 id=674 data-nosnippet>674</a>
+<a href=#675 id=675 data-nosnippet>675</a>        <span class="prelude-val">Ok</span>(())
+<a href=#676 id=676 data-nosnippet>676</a>    }
+<a href=#677 id=677 data-nosnippet>677</a>
+<a href=#678 id=678 data-nosnippet>678</a>    <span class="kw">fn </span>decrement(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: AuthorityIndex) -&gt; <span class="prelude-ty">Result</span>&lt;(), ConsensusError&gt; {
+<a href=#679 id=679 data-nosnippet>679</a>        <span class="kw">let </span><span class="kw-2">mut </span>counter = <span class="self">self</span>.counter.lock();
+<a href=#680 id=680 data-nosnippet>680</a>        counter.count -= <span class="number">1</span>;
+<a href=#681 id=681 data-nosnippet>681</a>        counter.subscriptions_by_authority[peer] -= <span class="number">1</span>;
+<a href=#682 id=682 data-nosnippet>682</a>
+<a href=#683 id=683 data-nosnippet>683</a>        <span class="kw">if </span>counter.subscriptions_by_authority[peer] == <span class="number">0 </span>{
+<a href=#684 id=684 data-nosnippet>684</a>            <span class="kw">let </span>peer_hostname = <span class="kw-2">&amp;</span><span class="self">self</span>.context.committee.authority(peer).hostname;
+<a href=#685 id=685 data-nosnippet>685</a>            <span class="self">self</span>.context
+<a href=#686 id=686 data-nosnippet>686</a>                .metrics
+<a href=#687 id=687 data-nosnippet>687</a>                .node_metrics
+<a href=#688 id=688 data-nosnippet>688</a>                .subscribed_by
+<a href=#689 id=689 data-nosnippet>689</a>                .with_label_values(<span class="kw-2">&amp;</span>[peer_hostname])
+<a href=#690 id=690 data-nosnippet>690</a>                .set(<span class="number">0</span>);
+<a href=#691 id=691 data-nosnippet>691</a>        }
+<a href=#692 id=692 data-nosnippet>692</a>
+<a href=#693 id=693 data-nosnippet>693</a>        <span class="prelude-val">Ok</span>(())
+<a href=#694 id=694 data-nosnippet>694</a>    }
+<a href=#695 id=695 data-nosnippet>695</a>}
+<a href=#696 id=696 data-nosnippet>696</a>
+<a href=#697 id=697 data-nosnippet>697</a><span class="doccomment">/// Each broadcasted block stream wraps a broadcast receiver for blocks.
+<a href=#698 id=698 data-nosnippet>698</a>/// It yields blocks that are broadcasted after the stream is created.
+<a href=#699 id=699 data-nosnippet>699</a></span><span class="kw">type </span>BroadcastedBlockStream = BroadcastStream&lt;ExtendedBlock&gt;;
+<a href=#700 id=700 data-nosnippet>700</a>
+<a href=#701 id=701 data-nosnippet>701</a><span class="doccomment">/// Adapted from `tokio_stream::wrappers::BroadcastStream`. The main difference is that
+<a href=#702 id=702 data-nosnippet>702</a>/// this tolerates lags with only logging, without yielding errors.
+<a href=#703 id=703 data-nosnippet>703</a></span><span class="kw">struct </span>BroadcastStream&lt;T&gt; {
+<a href=#704 id=704 data-nosnippet>704</a>    peer: AuthorityIndex,
+<a href=#705 id=705 data-nosnippet>705</a>    <span class="comment">// Stores the receiver across poll_next() calls.
+<a href=#706 id=706 data-nosnippet>706</a>    </span>inner: ReusableBoxFuture&lt;
+<a href=#707 id=707 data-nosnippet>707</a>        <span class="lifetime">'static</span>,
+<a href=#708 id=708 data-nosnippet>708</a>        (
+<a href=#709 id=709 data-nosnippet>709</a>            <span class="prelude-ty">Result</span>&lt;T, broadcast::error::RecvError&gt;,
+<a href=#710 id=710 data-nosnippet>710</a>            broadcast::Receiver&lt;T&gt;,
+<a href=#711 id=711 data-nosnippet>711</a>        ),
+<a href=#712 id=712 data-nosnippet>712</a>    &gt;,
+<a href=#713 id=713 data-nosnippet>713</a>    <span class="comment">// Counts total subscriptions / active BroadcastStreams.
+<a href=#714 id=714 data-nosnippet>714</a>    </span>subscription_counter: Arc&lt;SubscriptionCounter&gt;,
+<a href=#715 id=715 data-nosnippet>715</a>}
+<a href=#716 id=716 data-nosnippet>716</a>
+<a href=#717 id=717 data-nosnippet>717</a><span class="kw">impl</span>&lt;T: <span class="lifetime">'static </span>+ Clone + Send&gt; BroadcastStream&lt;T&gt; {
+<a href=#718 id=718 data-nosnippet>718</a>    <span class="kw">pub fn </span>new(
+<a href=#719 id=719 data-nosnippet>719</a>        peer: AuthorityIndex,
+<a href=#720 id=720 data-nosnippet>720</a>        rx: broadcast::Receiver&lt;T&gt;,
+<a href=#721 id=721 data-nosnippet>721</a>        subscription_counter: Arc&lt;SubscriptionCounter&gt;,
+<a href=#722 id=722 data-nosnippet>722</a>    ) -&gt; <span class="self">Self </span>{
+<a href=#723 id=723 data-nosnippet>723</a>        <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = subscription_counter.increment(peer) {
+<a href=#724 id=724 data-nosnippet>724</a>            <span class="kw">match </span>err {
+<a href=#725 id=725 data-nosnippet>725</a>                ConsensusError::Shutdown =&gt; {}
+<a href=#726 id=726 data-nosnippet>726</a>                <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Unexpected error: {err}"</span>),
+<a href=#727 id=727 data-nosnippet>727</a>            }
+<a href=#728 id=728 data-nosnippet>728</a>        }
+<a href=#729 id=729 data-nosnippet>729</a>        <span class="self">Self </span>{
+<a href=#730 id=730 data-nosnippet>730</a>            peer,
+<a href=#731 id=731 data-nosnippet>731</a>            inner: ReusableBoxFuture::new(make_recv_future(rx)),
+<a href=#732 id=732 data-nosnippet>732</a>            subscription_counter,
+<a href=#733 id=733 data-nosnippet>733</a>        }
+<a href=#734 id=734 data-nosnippet>734</a>    }
+<a href=#735 id=735 data-nosnippet>735</a>}
+<a href=#736 id=736 data-nosnippet>736</a>
+<a href=#737 id=737 data-nosnippet>737</a><span class="kw">impl</span>&lt;T: <span class="lifetime">'static </span>+ Clone + Send&gt; Stream <span class="kw">for </span>BroadcastStream&lt;T&gt; {
+<a href=#738 id=738 data-nosnippet>738</a>    <span class="kw">type </span>Item = T;
+<a href=#739 id=739 data-nosnippet>739</a>
+<a href=#740 id=740 data-nosnippet>740</a>    <span class="kw">fn </span>poll_next(
+<a href=#741 id=741 data-nosnippet>741</a>        <span class="kw-2">mut </span><span class="self">self</span>: Pin&lt;<span class="kw-2">&amp;mut </span><span class="self">Self</span>&gt;,
+<a href=#742 id=742 data-nosnippet>742</a>        cx: <span class="kw-2">&amp;mut </span>task::Context&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#743 id=743 data-nosnippet>743</a>    ) -&gt; task::Poll&lt;<span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt;&gt; {
+<a href=#744 id=744 data-nosnippet>744</a>        <span class="kw">let </span>peer = <span class="self">self</span>.peer;
+<a href=#745 id=745 data-nosnippet>745</a>        <span class="kw">let </span>maybe_item = <span class="kw">loop </span>{
+<a href=#746 id=746 data-nosnippet>746</a>            <span class="kw">let </span>(result, rx) = <span class="macro">ready!</span>(<span class="self">self</span>.inner.poll(cx));
+<a href=#747 id=747 data-nosnippet>747</a>            <span class="self">self</span>.inner.set(make_recv_future(rx));
+<a href=#748 id=748 data-nosnippet>748</a>
+<a href=#749 id=749 data-nosnippet>749</a>            <span class="kw">match </span>result {
+<a href=#750 id=750 data-nosnippet>750</a>                <span class="prelude-val">Ok</span>(item) =&gt; <span class="kw">break </span><span class="prelude-val">Some</span>(item),
+<a href=#751 id=751 data-nosnippet>751</a>                <span class="prelude-val">Err</span>(broadcast::error::RecvError::Closed) =&gt; {
+<a href=#752 id=752 data-nosnippet>752</a>                    <span class="macro">info!</span>(<span class="string">"Block BroadcastedBlockStream {} closed"</span>, peer);
+<a href=#753 id=753 data-nosnippet>753</a>                    <span class="kw">break </span><span class="prelude-val">None</span>;
+<a href=#754 id=754 data-nosnippet>754</a>                }
+<a href=#755 id=755 data-nosnippet>755</a>                <span class="prelude-val">Err</span>(broadcast::error::RecvError::Lagged(n)) =&gt; {
+<a href=#756 id=756 data-nosnippet>756</a>                    <span class="macro">warn!</span>(
+<a href=#757 id=757 data-nosnippet>757</a>                        <span class="string">"Block BroadcastedBlockStream {} lagged by {} messages"</span>,
+<a href=#758 id=758 data-nosnippet>758</a>                        peer, n
+<a href=#759 id=759 data-nosnippet>759</a>                    );
+<a href=#760 id=760 data-nosnippet>760</a>                    <span class="kw">continue</span>;
+<a href=#761 id=761 data-nosnippet>761</a>                }
+<a href=#762 id=762 data-nosnippet>762</a>            }
+<a href=#763 id=763 data-nosnippet>763</a>        };
+<a href=#764 id=764 data-nosnippet>764</a>        task::Poll::Ready(maybe_item)
+<a href=#765 id=765 data-nosnippet>765</a>    }
+<a href=#766 id=766 data-nosnippet>766</a>}
+<a href=#767 id=767 data-nosnippet>767</a>
+<a href=#768 id=768 data-nosnippet>768</a><span class="kw">impl</span>&lt;T&gt; Drop <span class="kw">for </span>BroadcastStream&lt;T&gt; {
+<a href=#769 id=769 data-nosnippet>769</a>    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#770 id=770 data-nosnippet>770</a>        <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self</span>.subscription_counter.decrement(<span class="self">self</span>.peer) {
+<a href=#771 id=771 data-nosnippet>771</a>            <span class="kw">match </span>err {
+<a href=#772 id=772 data-nosnippet>772</a>                ConsensusError::Shutdown =&gt; {}
+<a href=#773 id=773 data-nosnippet>773</a>                <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Unexpected error: {err}"</span>),
+<a href=#774 id=774 data-nosnippet>774</a>            }
+<a href=#775 id=775 data-nosnippet>775</a>        }
+<a href=#776 id=776 data-nosnippet>776</a>    }
+<a href=#777 id=777 data-nosnippet>777</a>}
+<a href=#778 id=778 data-nosnippet>778</a>
+<a href=#779 id=779 data-nosnippet>779</a><span class="kw">async fn </span>make_recv_future&lt;T: Clone&gt;(
+<a href=#780 id=780 data-nosnippet>780</a>    <span class="kw-2">mut </span>rx: broadcast::Receiver&lt;T&gt;,
+<a href=#781 id=781 data-nosnippet>781</a>) -&gt; (
+<a href=#782 id=782 data-nosnippet>782</a>    <span class="prelude-ty">Result</span>&lt;T, broadcast::error::RecvError&gt;,
+<a href=#783 id=783 data-nosnippet>783</a>    broadcast::Receiver&lt;T&gt;,
+<a href=#784 id=784 data-nosnippet>784</a>) {
+<a href=#785 id=785 data-nosnippet>785</a>    <span class="kw">let </span>result = rx.recv().<span class="kw">await</span>;
+<a href=#786 id=786 data-nosnippet>786</a>    (result, rx)
+<a href=#787 id=787 data-nosnippet>787</a>}
+<a href=#788 id=788 data-nosnippet>788</a>
+<a href=#789 id=789 data-nosnippet>789</a><span class="comment">// TODO: add a unit test for BroadcastStream.
+<a href=#790 id=790 data-nosnippet>790</a>
+<a href=#791 id=791 data-nosnippet>791</a></span><span class="attr">#[cfg(test)]
+<a href=#792 id=792 data-nosnippet>792</a></span><span class="kw">mod </span>tests {
+<a href=#793 id=793 data-nosnippet>793</a>    <span class="kw">use </span>std::{
+<a href=#794 id=794 data-nosnippet>794</a>        collections::{BTreeMap, BTreeSet},
+<a href=#795 id=795 data-nosnippet>795</a>        sync::Arc,
+<a href=#796 id=796 data-nosnippet>796</a>        time::Duration,
+<a href=#797 id=797 data-nosnippet>797</a>    };
+<a href=#798 id=798 data-nosnippet>798</a>
+<a href=#799 id=799 data-nosnippet>799</a>    <span class="kw">use </span>async_trait::async_trait;
+<a href=#800 id=800 data-nosnippet>800</a>    <span class="kw">use </span>bytes::Bytes;
+<a href=#801 id=801 data-nosnippet>801</a>    <span class="kw">use </span>consensus_config::AuthorityIndex;
+<a href=#802 id=802 data-nosnippet>802</a>    <span class="kw">use </span>consensus_types::block::{BlockDigest, BlockRef, Round};
+<a href=#803 id=803 data-nosnippet>803</a>    <span class="kw">use </span>mysten_metrics::monitored_mpsc;
+<a href=#804 id=804 data-nosnippet>804</a>    <span class="kw">use </span>parking_lot::{Mutex, RwLock};
+<a href=#805 id=805 data-nosnippet>805</a>    <span class="kw">use </span>tokio::{sync::broadcast, time::sleep};
+<a href=#806 id=806 data-nosnippet>806</a>
+<a href=#807 id=807 data-nosnippet>807</a>    <span class="kw">use crate</span>::{
+<a href=#808 id=808 data-nosnippet>808</a>        authority_service::AuthorityService,
+<a href=#809 id=809 data-nosnippet>809</a>        block::{BlockAPI, SignedBlock, TestBlock, VerifiedBlock},
+<a href=#810 id=810 data-nosnippet>810</a>        commit::{CertifiedCommits, CommitRange},
+<a href=#811 id=811 data-nosnippet>811</a>        commit_vote_monitor::CommitVoteMonitor,
+<a href=#812 id=812 data-nosnippet>812</a>        context::Context,
+<a href=#813 id=813 data-nosnippet>813</a>        core_thread::{CoreError, CoreThreadDispatcher},
+<a href=#814 id=814 data-nosnippet>814</a>        dag_state::DagState,
+<a href=#815 id=815 data-nosnippet>815</a>        error::ConsensusResult,
+<a href=#816 id=816 data-nosnippet>816</a>        network::{BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkService},
+<a href=#817 id=817 data-nosnippet>817</a>        round_tracker::PeerRoundTracker,
+<a href=#818 id=818 data-nosnippet>818</a>        storage::mem_store::MemStore,
+<a href=#819 id=819 data-nosnippet>819</a>        synchronizer::Synchronizer,
+<a href=#820 id=820 data-nosnippet>820</a>        test_dag_builder::DagBuilder,
+<a href=#821 id=821 data-nosnippet>821</a>        transaction_certifier::TransactionCertifier,
+<a href=#822 id=822 data-nosnippet>822</a>    };
+<a href=#823 id=823 data-nosnippet>823</a>    <span class="kw">struct </span>FakeCoreThreadDispatcher {
+<a href=#824 id=824 data-nosnippet>824</a>        blocks: Mutex&lt;Vec&lt;VerifiedBlock&gt;&gt;,
+<a href=#825 id=825 data-nosnippet>825</a>    }
+<a href=#826 id=826 data-nosnippet>826</a>
+<a href=#827 id=827 data-nosnippet>827</a>    <span class="kw">impl </span>FakeCoreThreadDispatcher {
+<a href=#828 id=828 data-nosnippet>828</a>        <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
+<a href=#829 id=829 data-nosnippet>829</a>            <span class="self">Self </span>{
+<a href=#830 id=830 data-nosnippet>830</a>                blocks: Mutex::new(<span class="macro">vec!</span>[]),
+<a href=#831 id=831 data-nosnippet>831</a>            }
+<a href=#832 id=832 data-nosnippet>832</a>        }
+<a href=#833 id=833 data-nosnippet>833</a>
+<a href=#834 id=834 data-nosnippet>834</a>        <span class="kw">fn </span>get_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;VerifiedBlock&gt; {
+<a href=#835 id=835 data-nosnippet>835</a>            <span class="self">self</span>.blocks.lock().clone()
+<a href=#836 id=836 data-nosnippet>836</a>        }
+<a href=#837 id=837 data-nosnippet>837</a>    }
+<a href=#838 id=838 data-nosnippet>838</a>
+<a href=#839 id=839 data-nosnippet>839</a>    <span class="attr">#[async_trait]
+<a href=#840 id=840 data-nosnippet>840</a>    </span><span class="kw">impl </span>CoreThreadDispatcher <span class="kw">for </span>FakeCoreThreadDispatcher {
+<a href=#841 id=841 data-nosnippet>841</a>        <span class="kw">async fn </span>add_blocks(
+<a href=#842 id=842 data-nosnippet>842</a>            <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#843 id=843 data-nosnippet>843</a>            blocks: Vec&lt;VerifiedBlock&gt;,
+<a href=#844 id=844 data-nosnippet>844</a>        ) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeSet&lt;BlockRef&gt;, CoreError&gt; {
+<a href=#845 id=845 data-nosnippet>845</a>            <span class="kw">let </span>block_refs = blocks.iter().map(|b| b.reference()).collect();
+<a href=#846 id=846 data-nosnippet>846</a>            <span class="self">self</span>.blocks.lock().extend(blocks);
+<a href=#847 id=847 data-nosnippet>847</a>            <span class="prelude-val">Ok</span>(block_refs)
+<a href=#848 id=848 data-nosnippet>848</a>        }
+<a href=#849 id=849 data-nosnippet>849</a>
+<a href=#850 id=850 data-nosnippet>850</a>        <span class="kw">async fn </span>check_block_refs(
+<a href=#851 id=851 data-nosnippet>851</a>            <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#852 id=852 data-nosnippet>852</a>            _block_refs: Vec&lt;BlockRef&gt;,
+<a href=#853 id=853 data-nosnippet>853</a>        ) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeSet&lt;BlockRef&gt;, CoreError&gt; {
+<a href=#854 id=854 data-nosnippet>854</a>            <span class="prelude-val">Ok</span>(BTreeSet::new())
+<a href=#855 id=855 data-nosnippet>855</a>        }
+<a href=#856 id=856 data-nosnippet>856</a>
+<a href=#857 id=857 data-nosnippet>857</a>        <span class="kw">async fn </span>add_certified_commits(
+<a href=#858 id=858 data-nosnippet>858</a>            <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#859 id=859 data-nosnippet>859</a>            _commits: CertifiedCommits,
+<a href=#860 id=860 data-nosnippet>860</a>        ) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeSet&lt;BlockRef&gt;, CoreError&gt; {
+<a href=#861 id=861 data-nosnippet>861</a>            <span class="macro">todo!</span>()
+<a href=#862 id=862 data-nosnippet>862</a>        }
+<a href=#863 id=863 data-nosnippet>863</a>
+<a href=#864 id=864 data-nosnippet>864</a>        <span class="kw">async fn </span>new_block(<span class="kw-2">&amp;</span><span class="self">self</span>, _round: Round, _force: bool) -&gt; <span class="prelude-ty">Result</span>&lt;(), CoreError&gt; {
+<a href=#865 id=865 data-nosnippet>865</a>            <span class="prelude-val">Ok</span>(())
+<a href=#866 id=866 data-nosnippet>866</a>        }
+<a href=#867 id=867 data-nosnippet>867</a>
+<a href=#868 id=868 data-nosnippet>868</a>        <span class="kw">async fn </span>get_missing_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeSet&lt;BlockRef&gt;, CoreError&gt; {
+<a href=#869 id=869 data-nosnippet>869</a>            <span class="prelude-val">Ok</span>(Default::default())
+<a href=#870 id=870 data-nosnippet>870</a>        }
+<a href=#871 id=871 data-nosnippet>871</a>
+<a href=#872 id=872 data-nosnippet>872</a>        <span class="kw">fn </span>set_propagation_delay(<span class="kw-2">&amp;</span><span class="self">self</span>, _propagation_delay: Round) -&gt; <span class="prelude-ty">Result</span>&lt;(), CoreError&gt; {
+<a href=#873 id=873 data-nosnippet>873</a>            <span class="macro">todo!</span>()
+<a href=#874 id=874 data-nosnippet>874</a>        }
+<a href=#875 id=875 data-nosnippet>875</a>
+<a href=#876 id=876 data-nosnippet>876</a>        <span class="kw">fn </span>set_last_known_proposed_round(<span class="kw-2">&amp;</span><span class="self">self</span>, _round: Round) -&gt; <span class="prelude-ty">Result</span>&lt;(), CoreError&gt; {
+<a href=#877 id=877 data-nosnippet>877</a>            <span class="macro">todo!</span>()
+<a href=#878 id=878 data-nosnippet>878</a>        }
+<a href=#879 id=879 data-nosnippet>879</a>
+<a href=#880 id=880 data-nosnippet>880</a>        <span class="kw">fn </span>highest_received_rounds(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;Round&gt; {
+<a href=#881 id=881 data-nosnippet>881</a>            <span class="macro">todo!</span>()
+<a href=#882 id=882 data-nosnippet>882</a>        }
+<a href=#883 id=883 data-nosnippet>883</a>    }
+<a href=#884 id=884 data-nosnippet>884</a>
+<a href=#885 id=885 data-nosnippet>885</a>    <span class="attr">#[derive(Default)]
+<a href=#886 id=886 data-nosnippet>886</a>    </span><span class="kw">struct </span>FakeNetworkClient {}
+<a href=#887 id=887 data-nosnippet>887</a>
+<a href=#888 id=888 data-nosnippet>888</a>    <span class="attr">#[async_trait]
+<a href=#889 id=889 data-nosnippet>889</a>    </span><span class="kw">impl </span>NetworkClient <span class="kw">for </span>FakeNetworkClient {
+<a href=#890 id=890 data-nosnippet>890</a>        <span class="kw">async fn </span>send_block(
+<a href=#891 id=891 data-nosnippet>891</a>            <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#892 id=892 data-nosnippet>892</a>            _peer: AuthorityIndex,
+<a href=#893 id=893 data-nosnippet>893</a>            _block: <span class="kw-2">&amp;</span>VerifiedBlock,
+<a href=#894 id=894 data-nosnippet>894</a>            _timeout: Duration,
+<a href=#895 id=895 data-nosnippet>895</a>        ) -&gt; ConsensusResult&lt;()&gt; {
+<a href=#896 id=896 data-nosnippet>896</a>            <span class="macro">unimplemented!</span>(<span class="string">"Unimplemented"</span>)
+<a href=#897 id=897 data-nosnippet>897</a>        }
+<a href=#898 id=898 data-nosnippet>898</a>
+<a href=#899 id=899 data-nosnippet>899</a>        <span class="kw">async fn </span>subscribe_blocks(
+<a href=#900 id=900 data-nosnippet>900</a>            <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#901 id=901 data-nosnippet>901</a>            _peer: AuthorityIndex,
+<a href=#902 id=902 data-nosnippet>902</a>            _last_received: Round,
+<a href=#903 id=903 data-nosnippet>903</a>            _timeout: Duration,
+<a href=#904 id=904 data-nosnippet>904</a>        ) -&gt; ConsensusResult&lt;BlockStream&gt; {
+<a href=#905 id=905 data-nosnippet>905</a>            <span class="macro">unimplemented!</span>(<span class="string">"Unimplemented"</span>)
+<a href=#906 id=906 data-nosnippet>906</a>        }
+<a href=#907 id=907 data-nosnippet>907</a>
+<a href=#908 id=908 data-nosnippet>908</a>        <span class="kw">async fn </span>fetch_blocks(
+<a href=#909 id=909 data-nosnippet>909</a>            <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#910 id=910 data-nosnippet>910</a>            _peer: AuthorityIndex,
+<a href=#911 id=911 data-nosnippet>911</a>            _block_refs: Vec&lt;BlockRef&gt;,
+<a href=#912 id=912 data-nosnippet>912</a>            _highest_accepted_rounds: Vec&lt;Round&gt;,
+<a href=#913 id=913 data-nosnippet>913</a>            _breadth_first: bool,
+<a href=#914 id=914 data-nosnippet>914</a>            _timeout: Duration,
+<a href=#915 id=915 data-nosnippet>915</a>        ) -&gt; ConsensusResult&lt;Vec&lt;Bytes&gt;&gt; {
+<a href=#916 id=916 data-nosnippet>916</a>            <span class="macro">unimplemented!</span>(<span class="string">"Unimplemented"</span>)
+<a href=#917 id=917 data-nosnippet>917</a>        }
+<a href=#918 id=918 data-nosnippet>918</a>
+<a href=#919 id=919 data-nosnippet>919</a>        <span class="kw">async fn </span>fetch_commits(
+<a href=#920 id=920 data-nosnippet>920</a>            <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#921 id=921 data-nosnippet>921</a>            _peer: AuthorityIndex,
+<a href=#922 id=922 data-nosnippet>922</a>            _commit_range: CommitRange,
+<a href=#923 id=923 data-nosnippet>923</a>            _timeout: Duration,
+<a href=#924 id=924 data-nosnippet>924</a>        ) -&gt; ConsensusResult&lt;(Vec&lt;Bytes&gt;, Vec&lt;Bytes&gt;)&gt; {
+<a href=#925 id=925 data-nosnippet>925</a>            <span class="macro">unimplemented!</span>(<span class="string">"Unimplemented"</span>)
+<a href=#926 id=926 data-nosnippet>926</a>        }
+<a href=#927 id=927 data-nosnippet>927</a>
+<a href=#928 id=928 data-nosnippet>928</a>        <span class="kw">async fn </span>fetch_latest_blocks(
+<a href=#929 id=929 data-nosnippet>929</a>            <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#930 id=930 data-nosnippet>930</a>            _peer: AuthorityIndex,
+<a href=#931 id=931 data-nosnippet>931</a>            _authorities: Vec&lt;AuthorityIndex&gt;,
+<a href=#932 id=932 data-nosnippet>932</a>            _timeout: Duration,
+<a href=#933 id=933 data-nosnippet>933</a>        ) -&gt; ConsensusResult&lt;Vec&lt;Bytes&gt;&gt; {
+<a href=#934 id=934 data-nosnippet>934</a>            <span class="macro">unimplemented!</span>(<span class="string">"Unimplemented"</span>)
+<a href=#935 id=935 data-nosnippet>935</a>        }
+<a href=#936 id=936 data-nosnippet>936</a>
+<a href=#937 id=937 data-nosnippet>937</a>        <span class="kw">async fn </span>get_latest_rounds(
+<a href=#938 id=938 data-nosnippet>938</a>            <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#939 id=939 data-nosnippet>939</a>            _peer: AuthorityIndex,
+<a href=#940 id=940 data-nosnippet>940</a>            _timeout: Duration,
+<a href=#941 id=941 data-nosnippet>941</a>        ) -&gt; ConsensusResult&lt;(Vec&lt;Round&gt;, Vec&lt;Round&gt;)&gt; {
+<a href=#942 id=942 data-nosnippet>942</a>            <span class="macro">unimplemented!</span>(<span class="string">"Unimplemented"</span>)
+<a href=#943 id=943 data-nosnippet>943</a>        }
+<a href=#944 id=944 data-nosnippet>944</a>    }
+<a href=#945 id=945 data-nosnippet>945</a>
+<a href=#946 id=946 data-nosnippet>946</a>    <span class="attr">#[tokio::test(flavor = <span class="string">"current_thread"</span>, start_paused = <span class="bool-val">true</span>)]
+<a href=#947 id=947 data-nosnippet>947</a>    </span><span class="kw">async fn </span>test_handle_send_block() {
+<a href=#948 id=948 data-nosnippet>948</a>        <span class="kw">let </span>(context, _keys) = Context::new_for_test(<span class="number">4</span>);
+<a href=#949 id=949 data-nosnippet>949</a>        <span class="kw">let </span>context = Arc::new(context);
+<a href=#950 id=950 data-nosnippet>950</a>        <span class="kw">let </span>block_verifier = Arc::new(<span class="kw">crate</span>::block_verifier::NoopBlockVerifier {});
+<a href=#951 id=951 data-nosnippet>951</a>        <span class="kw">let </span>commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+<a href=#952 id=952 data-nosnippet>952</a>        <span class="kw">let </span>core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+<a href=#953 id=953 data-nosnippet>953</a>        <span class="kw">let </span>(_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(<span class="number">100</span>);
+<a href=#954 id=954 data-nosnippet>954</a>        <span class="kw">let </span>network_client = Arc::new(FakeNetworkClient::default());
+<a href=#955 id=955 data-nosnippet>955</a>        <span class="kw">let </span>(blocks_sender, _blocks_receiver) =
+<a href=#956 id=956 data-nosnippet>956</a>            monitored_mpsc::unbounded_channel(<span class="string">"consensus_block_output"</span>);
+<a href=#957 id=957 data-nosnippet>957</a>        <span class="kw">let </span>store = Arc::new(MemStore::new());
+<a href=#958 id=958 data-nosnippet>958</a>        <span class="kw">let </span>dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+<a href=#959 id=959 data-nosnippet>959</a>        <span class="kw">let </span>transaction_certifier = TransactionCertifier::new(
+<a href=#960 id=960 data-nosnippet>960</a>            context.clone(),
+<a href=#961 id=961 data-nosnippet>961</a>            block_verifier.clone(),
+<a href=#962 id=962 data-nosnippet>962</a>            dag_state.clone(),
+<a href=#963 id=963 data-nosnippet>963</a>            blocks_sender,
+<a href=#964 id=964 data-nosnippet>964</a>        );
+<a href=#965 id=965 data-nosnippet>965</a>        <span class="kw">let </span>synchronizer = Synchronizer::start(
+<a href=#966 id=966 data-nosnippet>966</a>            network_client,
+<a href=#967 id=967 data-nosnippet>967</a>            context.clone(),
+<a href=#968 id=968 data-nosnippet>968</a>            core_dispatcher.clone(),
+<a href=#969 id=969 data-nosnippet>969</a>            commit_vote_monitor.clone(),
+<a href=#970 id=970 data-nosnippet>970</a>            block_verifier.clone(),
+<a href=#971 id=971 data-nosnippet>971</a>            transaction_certifier.clone(),
+<a href=#972 id=972 data-nosnippet>972</a>            dag_state.clone(),
+<a href=#973 id=973 data-nosnippet>973</a>            <span class="bool-val">false</span>,
+<a href=#974 id=974 data-nosnippet>974</a>        );
+<a href=#975 id=975 data-nosnippet>975</a>        <span class="kw">let </span>round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+<a href=#976 id=976 data-nosnippet>976</a>        <span class="kw">let </span>authority_service = Arc::new(AuthorityService::new(
+<a href=#977 id=977 data-nosnippet>977</a>            context.clone(),
+<a href=#978 id=978 data-nosnippet>978</a>            block_verifier,
+<a href=#979 id=979 data-nosnippet>979</a>            commit_vote_monitor,
+<a href=#980 id=980 data-nosnippet>980</a>            round_tracker,
+<a href=#981 id=981 data-nosnippet>981</a>            synchronizer,
+<a href=#982 id=982 data-nosnippet>982</a>            core_dispatcher.clone(),
+<a href=#983 id=983 data-nosnippet>983</a>            rx_block_broadcast,
+<a href=#984 id=984 data-nosnippet>984</a>            transaction_certifier,
+<a href=#985 id=985 data-nosnippet>985</a>            dag_state,
+<a href=#986 id=986 data-nosnippet>986</a>            store,
+<a href=#987 id=987 data-nosnippet>987</a>        ));
+<a href=#988 id=988 data-nosnippet>988</a>
+<a href=#989 id=989 data-nosnippet>989</a>        <span class="comment">// Test delaying blocks with time drift.
+<a href=#990 id=990 data-nosnippet>990</a>        </span><span class="kw">let </span>now = context.clock.timestamp_utc_ms();
+<a href=#991 id=991 data-nosnippet>991</a>        <span class="kw">let </span>max_drift = context.parameters.max_forward_time_drift;
+<a href=#992 id=992 data-nosnippet>992</a>        <span class="kw">let </span>input_block = VerifiedBlock::new_for_test(
+<a href=#993 id=993 data-nosnippet>993</a>            TestBlock::new(<span class="number">9</span>, <span class="number">0</span>)
+<a href=#994 id=994 data-nosnippet>994</a>                .set_timestamp_ms(now + max_drift.as_millis() <span class="kw">as </span>u64)
+<a href=#995 id=995 data-nosnippet>995</a>                .build(),
+<a href=#996 id=996 data-nosnippet>996</a>        );
+<a href=#997 id=997 data-nosnippet>997</a>
+<a href=#998 id=998 data-nosnippet>998</a>        <span class="kw">let </span>service = authority_service.clone();
+<a href=#999 id=999 data-nosnippet>999</a>        <span class="kw">let </span>serialized = ExtendedSerializedBlock {
+<a href=#1000 id=1000 data-nosnippet>1000</a>            block: input_block.serialized().clone(),
+<a href=#1001 id=1001 data-nosnippet>1001</a>            excluded_ancestors: <span class="macro">vec!</span>[],
+<a href=#1002 id=1002 data-nosnippet>1002</a>        };
+<a href=#1003 id=1003 data-nosnippet>1003</a>
+<a href=#1004 id=1004 data-nosnippet>1004</a>        tokio::spawn({
+<a href=#1005 id=1005 data-nosnippet>1005</a>            <span class="kw">let </span>service = service.clone();
+<a href=#1006 id=1006 data-nosnippet>1006</a>            <span class="kw">let </span>context = context.clone();
+<a href=#1007 id=1007 data-nosnippet>1007</a>            <span class="kw">async move </span>{
+<a href=#1008 id=1008 data-nosnippet>1008</a>                service
+<a href=#1009 id=1009 data-nosnippet>1009</a>                    .handle_send_block(context.committee.to_authority_index(<span class="number">0</span>).unwrap(), serialized)
+<a href=#1010 id=1010 data-nosnippet>1010</a>                    .<span class="kw">await
+<a href=#1011 id=1011 data-nosnippet>1011</a>                    </span>.unwrap();
+<a href=#1012 id=1012 data-nosnippet>1012</a>            }
+<a href=#1013 id=1013 data-nosnippet>1013</a>        });
+<a href=#1014 id=1014 data-nosnippet>1014</a>
+<a href=#1015 id=1015 data-nosnippet>1015</a>        sleep(max_drift / <span class="number">2</span>).<span class="kw">await</span>;
+<a href=#1016 id=1016 data-nosnippet>1016</a>
+<a href=#1017 id=1017 data-nosnippet>1017</a>        <span class="kw">let </span>blocks = core_dispatcher.get_blocks();
+<a href=#1018 id=1018 data-nosnippet>1018</a>        <span class="macro">assert_eq!</span>(blocks.len(), <span class="number">1</span>);
+<a href=#1019 id=1019 data-nosnippet>1019</a>        <span class="macro">assert_eq!</span>(blocks[<span class="number">0</span>], input_block);
+<a href=#1020 id=1020 data-nosnippet>1020</a>
+<a href=#1021 id=1021 data-nosnippet>1021</a>        <span class="comment">// Test invalid block.
+<a href=#1022 id=1022 data-nosnippet>1022</a>        </span><span class="kw">let </span>invalid_block =
+<a href=#1023 id=1023 data-nosnippet>1023</a>            VerifiedBlock::new_for_test(TestBlock::new(<span class="number">10</span>, <span class="number">1000</span>).set_timestamp_ms(<span class="number">10</span>).build());
+<a href=#1024 id=1024 data-nosnippet>1024</a>        <span class="kw">let </span>extended_block = ExtendedSerializedBlock {
+<a href=#1025 id=1025 data-nosnippet>1025</a>            block: invalid_block.serialized().clone(),
+<a href=#1026 id=1026 data-nosnippet>1026</a>            excluded_ancestors: <span class="macro">vec!</span>[],
+<a href=#1027 id=1027 data-nosnippet>1027</a>        };
+<a href=#1028 id=1028 data-nosnippet>1028</a>        service
+<a href=#1029 id=1029 data-nosnippet>1029</a>            .handle_send_block(
+<a href=#1030 id=1030 data-nosnippet>1030</a>                context.committee.to_authority_index(<span class="number">0</span>).unwrap(),
+<a href=#1031 id=1031 data-nosnippet>1031</a>                extended_block,
+<a href=#1032 id=1032 data-nosnippet>1032</a>            )
+<a href=#1033 id=1033 data-nosnippet>1033</a>            .<span class="kw">await
+<a href=#1034 id=1034 data-nosnippet>1034</a>            </span>.unwrap_err();
+<a href=#1035 id=1035 data-nosnippet>1035</a>
+<a href=#1036 id=1036 data-nosnippet>1036</a>        <span class="comment">// Test invalid excluded ancestors.
+<a href=#1037 id=1037 data-nosnippet>1037</a>        </span><span class="kw">let </span>invalid_excluded_ancestors = <span class="macro">vec!</span>[
+<a href=#1038 id=1038 data-nosnippet>1038</a>            bcs::to_bytes(<span class="kw-2">&amp;</span>BlockRef::new(
+<a href=#1039 id=1039 data-nosnippet>1039</a>                <span class="number">10</span>,
+<a href=#1040 id=1040 data-nosnippet>1040</a>                AuthorityIndex::new_for_test(<span class="number">1000</span>),
+<a href=#1041 id=1041 data-nosnippet>1041</a>                BlockDigest::MIN,
+<a href=#1042 id=1042 data-nosnippet>1042</a>            ))
+<a href=#1043 id=1043 data-nosnippet>1043</a>            .unwrap(),
+<a href=#1044 id=1044 data-nosnippet>1044</a>            <span class="macro">vec!</span>[<span class="number">3u8</span>; <span class="number">40</span>],
+<a href=#1045 id=1045 data-nosnippet>1045</a>            bcs::to_bytes(<span class="kw-2">&amp;</span>invalid_block.reference()).unwrap(),
+<a href=#1046 id=1046 data-nosnippet>1046</a>        ];
+<a href=#1047 id=1047 data-nosnippet>1047</a>        <span class="kw">let </span>extended_block = ExtendedSerializedBlock {
+<a href=#1048 id=1048 data-nosnippet>1048</a>            block: input_block.serialized().clone(),
+<a href=#1049 id=1049 data-nosnippet>1049</a>            excluded_ancestors: invalid_excluded_ancestors,
+<a href=#1050 id=1050 data-nosnippet>1050</a>        };
+<a href=#1051 id=1051 data-nosnippet>1051</a>        service
+<a href=#1052 id=1052 data-nosnippet>1052</a>            .handle_send_block(
+<a href=#1053 id=1053 data-nosnippet>1053</a>                context.committee.to_authority_index(<span class="number">0</span>).unwrap(),
+<a href=#1054 id=1054 data-nosnippet>1054</a>                extended_block,
+<a href=#1055 id=1055 data-nosnippet>1055</a>            )
+<a href=#1056 id=1056 data-nosnippet>1056</a>            .<span class="kw">await
+<a href=#1057 id=1057 data-nosnippet>1057</a>            </span>.unwrap_err();
+<a href=#1058 id=1058 data-nosnippet>1058</a>    }
+<a href=#1059 id=1059 data-nosnippet>1059</a>
+<a href=#1060 id=1060 data-nosnippet>1060</a>    <span class="attr">#[tokio::test(flavor = <span class="string">"current_thread"</span>, start_paused = <span class="bool-val">true</span>)]
+<a href=#1061 id=1061 data-nosnippet>1061</a>    </span><span class="kw">async fn </span>test_handle_fetch_blocks() {
+<a href=#1062 id=1062 data-nosnippet>1062</a>        <span class="comment">// GIVEN
+<a href=#1063 id=1063 data-nosnippet>1063</a>        // Use NUM_AUTHORITIES and NUM_ROUNDS higher than max_blocks_per_sync to test limits.
+<a href=#1064 id=1064 data-nosnippet>1064</a>        </span><span class="kw">const </span>NUM_AUTHORITIES: usize = <span class="number">40</span>;
+<a href=#1065 id=1065 data-nosnippet>1065</a>        <span class="kw">const </span>NUM_ROUNDS: usize = <span class="number">40</span>;
+<a href=#1066 id=1066 data-nosnippet>1066</a>        <span class="kw">let </span>(context, _keys) = Context::new_for_test(NUM_AUTHORITIES);
+<a href=#1067 id=1067 data-nosnippet>1067</a>        <span class="kw">let </span>context = Arc::new(context);
+<a href=#1068 id=1068 data-nosnippet>1068</a>        <span class="kw">let </span>block_verifier = Arc::new(<span class="kw">crate</span>::block_verifier::NoopBlockVerifier {});
+<a href=#1069 id=1069 data-nosnippet>1069</a>        <span class="kw">let </span>commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+<a href=#1070 id=1070 data-nosnippet>1070</a>        <span class="kw">let </span>core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+<a href=#1071 id=1071 data-nosnippet>1071</a>        <span class="kw">let </span>(_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(<span class="number">100</span>);
+<a href=#1072 id=1072 data-nosnippet>1072</a>        <span class="kw">let </span>network_client = Arc::new(FakeNetworkClient::default());
+<a href=#1073 id=1073 data-nosnippet>1073</a>        <span class="kw">let </span>(blocks_sender, _blocks_receiver) =
+<a href=#1074 id=1074 data-nosnippet>1074</a>            monitored_mpsc::unbounded_channel(<span class="string">"consensus_block_output"</span>);
+<a href=#1075 id=1075 data-nosnippet>1075</a>        <span class="kw">let </span>store = Arc::new(MemStore::new());
+<a href=#1076 id=1076 data-nosnippet>1076</a>        <span class="kw">let </span>dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+<a href=#1077 id=1077 data-nosnippet>1077</a>        <span class="kw">let </span>transaction_certifier = TransactionCertifier::new(
+<a href=#1078 id=1078 data-nosnippet>1078</a>            context.clone(),
+<a href=#1079 id=1079 data-nosnippet>1079</a>            block_verifier.clone(),
+<a href=#1080 id=1080 data-nosnippet>1080</a>            dag_state.clone(),
+<a href=#1081 id=1081 data-nosnippet>1081</a>            blocks_sender,
+<a href=#1082 id=1082 data-nosnippet>1082</a>        );
+<a href=#1083 id=1083 data-nosnippet>1083</a>        <span class="kw">let </span>synchronizer = Synchronizer::start(
+<a href=#1084 id=1084 data-nosnippet>1084</a>            network_client,
+<a href=#1085 id=1085 data-nosnippet>1085</a>            context.clone(),
+<a href=#1086 id=1086 data-nosnippet>1086</a>            core_dispatcher.clone(),
+<a href=#1087 id=1087 data-nosnippet>1087</a>            commit_vote_monitor.clone(),
+<a href=#1088 id=1088 data-nosnippet>1088</a>            block_verifier.clone(),
+<a href=#1089 id=1089 data-nosnippet>1089</a>            transaction_certifier.clone(),
+<a href=#1090 id=1090 data-nosnippet>1090</a>            dag_state.clone(),
+<a href=#1091 id=1091 data-nosnippet>1091</a>            <span class="bool-val">false</span>,
+<a href=#1092 id=1092 data-nosnippet>1092</a>        );
+<a href=#1093 id=1093 data-nosnippet>1093</a>        <span class="kw">let </span>round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+<a href=#1094 id=1094 data-nosnippet>1094</a>        <span class="kw">let </span>authority_service = Arc::new(AuthorityService::new(
+<a href=#1095 id=1095 data-nosnippet>1095</a>            context.clone(),
+<a href=#1096 id=1096 data-nosnippet>1096</a>            block_verifier,
+<a href=#1097 id=1097 data-nosnippet>1097</a>            commit_vote_monitor,
+<a href=#1098 id=1098 data-nosnippet>1098</a>            round_tracker,
+<a href=#1099 id=1099 data-nosnippet>1099</a>            synchronizer,
+<a href=#1100 id=1100 data-nosnippet>1100</a>            core_dispatcher.clone(),
+<a href=#1101 id=1101 data-nosnippet>1101</a>            rx_block_broadcast,
+<a href=#1102 id=1102 data-nosnippet>1102</a>            transaction_certifier,
+<a href=#1103 id=1103 data-nosnippet>1103</a>            dag_state.clone(),
+<a href=#1104 id=1104 data-nosnippet>1104</a>            store,
+<a href=#1105 id=1105 data-nosnippet>1105</a>        ));
+<a href=#1106 id=1106 data-nosnippet>1106</a>
+<a href=#1107 id=1107 data-nosnippet>1107</a>        <span class="comment">// GIVEN: 40 rounds of blocks in the dag state.
+<a href=#1108 id=1108 data-nosnippet>1108</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>dag_builder = DagBuilder::new(context.clone());
+<a href=#1109 id=1109 data-nosnippet>1109</a>        dag_builder
+<a href=#1110 id=1110 data-nosnippet>1110</a>            .layers(<span class="number">1</span>..=(NUM_ROUNDS <span class="kw">as </span>u32))
+<a href=#1111 id=1111 data-nosnippet>1111</a>            .build()
+<a href=#1112 id=1112 data-nosnippet>1112</a>            .persist_layers(dag_state.clone());
+<a href=#1113 id=1113 data-nosnippet>1113</a>        <span class="kw">let </span>all_blocks = dag_builder.all_blocks();
+<a href=#1114 id=1114 data-nosnippet>1114</a>
+<a href=#1115 id=1115 data-nosnippet>1115</a>        <span class="comment">// WHEN: Request 2 blocks from round 40, get ancestors breadth first.
+<a href=#1116 id=1116 data-nosnippet>1116</a>        </span><span class="kw">let </span>missing_block_refs: Vec&lt;BlockRef&gt; = all_blocks
+<a href=#1117 id=1117 data-nosnippet>1117</a>            .iter()
+<a href=#1118 id=1118 data-nosnippet>1118</a>            .rev()
+<a href=#1119 id=1119 data-nosnippet>1119</a>            .take(<span class="number">2</span>)
+<a href=#1120 id=1120 data-nosnippet>1120</a>            .map(|b| b.reference())
+<a href=#1121 id=1121 data-nosnippet>1121</a>            .collect();
+<a href=#1122 id=1122 data-nosnippet>1122</a>        <span class="kw">let </span>highest_accepted_rounds: Vec&lt;Round&gt; = <span class="macro">vec!</span>[<span class="number">1</span>; NUM_AUTHORITIES];
+<a href=#1123 id=1123 data-nosnippet>1123</a>        <span class="kw">let </span>results = authority_service
+<a href=#1124 id=1124 data-nosnippet>1124</a>            .handle_fetch_blocks(
+<a href=#1125 id=1125 data-nosnippet>1125</a>                AuthorityIndex::new_for_test(<span class="number">0</span>),
+<a href=#1126 id=1126 data-nosnippet>1126</a>                missing_block_refs.clone(),
+<a href=#1127 id=1127 data-nosnippet>1127</a>                highest_accepted_rounds,
+<a href=#1128 id=1128 data-nosnippet>1128</a>                <span class="bool-val">true</span>,
+<a href=#1129 id=1129 data-nosnippet>1129</a>            )
+<a href=#1130 id=1130 data-nosnippet>1130</a>            .<span class="kw">await
+<a href=#1131 id=1131 data-nosnippet>1131</a>            </span>.unwrap();
+<a href=#1132 id=1132 data-nosnippet>1132</a>
+<a href=#1133 id=1133 data-nosnippet>1133</a>        <span class="comment">// THEN: the expected number of unique blocks are returned.
+<a href=#1134 id=1134 data-nosnippet>1134</a>        </span><span class="kw">let </span>blocks: BTreeMap&lt;BlockRef, VerifiedBlock&gt; = results
+<a href=#1135 id=1135 data-nosnippet>1135</a>            .iter()
+<a href=#1136 id=1136 data-nosnippet>1136</a>            .map(|b| {
+<a href=#1137 id=1137 data-nosnippet>1137</a>                <span class="kw">let </span>signed = bcs::from_bytes(b).unwrap();
+<a href=#1138 id=1138 data-nosnippet>1138</a>                <span class="kw">let </span>block = VerifiedBlock::new_verified(signed, b.clone());
+<a href=#1139 id=1139 data-nosnippet>1139</a>                (block.reference(), block)
+<a href=#1140 id=1140 data-nosnippet>1140</a>            })
+<a href=#1141 id=1141 data-nosnippet>1141</a>            .collect();
+<a href=#1142 id=1142 data-nosnippet>1142</a>        <span class="macro">assert_eq!</span>(blocks.len(), context.parameters.max_blocks_per_sync);
+<a href=#1143 id=1143 data-nosnippet>1143</a>        <span class="comment">// All missing blocks are returned.
+<a href=#1144 id=1144 data-nosnippet>1144</a>        </span><span class="kw">for </span>b <span class="kw">in </span><span class="kw-2">&amp;</span>missing_block_refs {
+<a href=#1145 id=1145 data-nosnippet>1145</a>            <span class="macro">assert!</span>(blocks.contains_key(b));
+<a href=#1146 id=1146 data-nosnippet>1146</a>        }
+<a href=#1147 id=1147 data-nosnippet>1147</a>        <span class="kw">let </span>num_missing_ancestors = blocks
+<a href=#1148 id=1148 data-nosnippet>1148</a>            .keys()
+<a href=#1149 id=1149 data-nosnippet>1149</a>            .filter(|b| b.round == NUM_ROUNDS <span class="kw">as </span>Round - <span class="number">1</span>)
+<a href=#1150 id=1150 data-nosnippet>1150</a>            .count();
+<a href=#1151 id=1151 data-nosnippet>1151</a>        <span class="macro">assert_eq!</span>(
+<a href=#1152 id=1152 data-nosnippet>1152</a>            num_missing_ancestors,
+<a href=#1153 id=1153 data-nosnippet>1153</a>            context.parameters.max_blocks_per_sync - missing_block_refs.len()
+<a href=#1154 id=1154 data-nosnippet>1154</a>        );
+<a href=#1155 id=1155 data-nosnippet>1155</a>
+<a href=#1156 id=1156 data-nosnippet>1156</a>        <span class="comment">// WHEN: Request 2 blocks from round 37, get ancestors depth first.
+<a href=#1157 id=1157 data-nosnippet>1157</a>        </span><span class="kw">let </span>missing_round = NUM_ROUNDS <span class="kw">as </span>Round - <span class="number">3</span>;
+<a href=#1158 id=1158 data-nosnippet>1158</a>        <span class="kw">let </span>missing_block_refs: Vec&lt;BlockRef&gt; = all_blocks
+<a href=#1159 id=1159 data-nosnippet>1159</a>            .iter()
+<a href=#1160 id=1160 data-nosnippet>1160</a>            .filter(|b| b.reference().round == missing_round)
+<a href=#1161 id=1161 data-nosnippet>1161</a>            .map(|b| b.reference())
+<a href=#1162 id=1162 data-nosnippet>1162</a>            .take(<span class="number">2</span>)
+<a href=#1163 id=1163 data-nosnippet>1163</a>            .collect();
+<a href=#1164 id=1164 data-nosnippet>1164</a>        <span class="kw">let </span><span class="kw-2">mut </span>highest_accepted_rounds: Vec&lt;Round&gt; = <span class="macro">vec!</span>[<span class="number">1</span>; NUM_AUTHORITIES];
+<a href=#1165 id=1165 data-nosnippet>1165</a>        <span class="comment">// Try to fill up the blocks from the 1st authority in missing_block_refs.
+<a href=#1166 id=1166 data-nosnippet>1166</a>        </span>highest_accepted_rounds[missing_block_refs[<span class="number">0</span>].author] = missing_round - <span class="number">5</span>;
+<a href=#1167 id=1167 data-nosnippet>1167</a>        <span class="kw">let </span>results = authority_service
+<a href=#1168 id=1168 data-nosnippet>1168</a>            .handle_fetch_blocks(
+<a href=#1169 id=1169 data-nosnippet>1169</a>                AuthorityIndex::new_for_test(<span class="number">0</span>),
+<a href=#1170 id=1170 data-nosnippet>1170</a>                missing_block_refs.clone(),
+<a href=#1171 id=1171 data-nosnippet>1171</a>                highest_accepted_rounds,
+<a href=#1172 id=1172 data-nosnippet>1172</a>                <span class="bool-val">false</span>,
+<a href=#1173 id=1173 data-nosnippet>1173</a>            )
+<a href=#1174 id=1174 data-nosnippet>1174</a>            .<span class="kw">await
+<a href=#1175 id=1175 data-nosnippet>1175</a>            </span>.unwrap();
+<a href=#1176 id=1176 data-nosnippet>1176</a>
+<a href=#1177 id=1177 data-nosnippet>1177</a>        <span class="comment">// THEN: the expected number of unique blocks are returned.
+<a href=#1178 id=1178 data-nosnippet>1178</a>        </span><span class="kw">let </span>blocks: BTreeMap&lt;BlockRef, VerifiedBlock&gt; = results
+<a href=#1179 id=1179 data-nosnippet>1179</a>            .iter()
+<a href=#1180 id=1180 data-nosnippet>1180</a>            .map(|b| {
+<a href=#1181 id=1181 data-nosnippet>1181</a>                <span class="kw">let </span>signed = bcs::from_bytes(b).unwrap();
+<a href=#1182 id=1182 data-nosnippet>1182</a>                <span class="kw">let </span>block = VerifiedBlock::new_verified(signed, b.clone());
+<a href=#1183 id=1183 data-nosnippet>1183</a>                (block.reference(), block)
+<a href=#1184 id=1184 data-nosnippet>1184</a>            })
+<a href=#1185 id=1185 data-nosnippet>1185</a>            .collect();
+<a href=#1186 id=1186 data-nosnippet>1186</a>        <span class="macro">assert_eq!</span>(blocks.len(), context.parameters.max_blocks_per_sync);
+<a href=#1187 id=1187 data-nosnippet>1187</a>        <span class="comment">// All missing blocks are returned.
+<a href=#1188 id=1188 data-nosnippet>1188</a>        </span><span class="kw">for </span>b <span class="kw">in </span><span class="kw-2">&amp;</span>missing_block_refs {
+<a href=#1189 id=1189 data-nosnippet>1189</a>            <span class="macro">assert!</span>(blocks.contains_key(b));
+<a href=#1190 id=1190 data-nosnippet>1190</a>        }
+<a href=#1191 id=1191 data-nosnippet>1191</a>        <span class="comment">// Ancestor blocks are from the expected rounds and authorities.
+<a href=#1192 id=1192 data-nosnippet>1192</a>        </span><span class="kw">let </span>expected_authors = [missing_block_refs[<span class="number">0</span>].author, missing_block_refs[<span class="number">1</span>].author];
+<a href=#1193 id=1193 data-nosnippet>1193</a>        <span class="kw">for </span>b <span class="kw">in </span>blocks.keys() {
+<a href=#1194 id=1194 data-nosnippet>1194</a>            <span class="macro">assert!</span>(b.round &lt;= missing_round);
+<a href=#1195 id=1195 data-nosnippet>1195</a>            <span class="macro">assert!</span>(expected_authors.contains(<span class="kw-2">&amp;</span>b.author));
+<a href=#1196 id=1196 data-nosnippet>1196</a>        }
+<a href=#1197 id=1197 data-nosnippet>1197</a>
+<a href=#1198 id=1198 data-nosnippet>1198</a>        <span class="comment">// WHEN: Request 5 block from round 40, not getting ancestors.
+<a href=#1199 id=1199 data-nosnippet>1199</a>        </span><span class="kw">let </span>missing_block_refs: Vec&lt;BlockRef&gt; = all_blocks
+<a href=#1200 id=1200 data-nosnippet>1200</a>            .iter()
+<a href=#1201 id=1201 data-nosnippet>1201</a>            .filter(|b| b.reference().round == NUM_ROUNDS <span class="kw">as </span>Round - <span class="number">10</span>)
+<a href=#1202 id=1202 data-nosnippet>1202</a>            .map(|b| b.reference())
+<a href=#1203 id=1203 data-nosnippet>1203</a>            .take(<span class="number">5</span>)
+<a href=#1204 id=1204 data-nosnippet>1204</a>            .collect();
+<a href=#1205 id=1205 data-nosnippet>1205</a>        <span class="kw">let </span>results = authority_service
+<a href=#1206 id=1206 data-nosnippet>1206</a>            .handle_fetch_blocks(
+<a href=#1207 id=1207 data-nosnippet>1207</a>                AuthorityIndex::new_for_test(<span class="number">0</span>),
+<a href=#1208 id=1208 data-nosnippet>1208</a>                missing_block_refs.clone(),
+<a href=#1209 id=1209 data-nosnippet>1209</a>                <span class="macro">vec!</span>[],
+<a href=#1210 id=1210 data-nosnippet>1210</a>                <span class="bool-val">false</span>,
+<a href=#1211 id=1211 data-nosnippet>1211</a>            )
+<a href=#1212 id=1212 data-nosnippet>1212</a>            .<span class="kw">await
+<a href=#1213 id=1213 data-nosnippet>1213</a>            </span>.unwrap();
+<a href=#1214 id=1214 data-nosnippet>1214</a>
+<a href=#1215 id=1215 data-nosnippet>1215</a>        <span class="comment">// THEN: the expected number of unique blocks are returned.
+<a href=#1216 id=1216 data-nosnippet>1216</a>        </span><span class="kw">let </span>blocks: BTreeMap&lt;BlockRef, VerifiedBlock&gt; = results
+<a href=#1217 id=1217 data-nosnippet>1217</a>            .iter()
+<a href=#1218 id=1218 data-nosnippet>1218</a>            .map(|b| {
+<a href=#1219 id=1219 data-nosnippet>1219</a>                <span class="kw">let </span>signed = bcs::from_bytes(b).unwrap();
+<a href=#1220 id=1220 data-nosnippet>1220</a>                <span class="kw">let </span>block = VerifiedBlock::new_verified(signed, b.clone());
+<a href=#1221 id=1221 data-nosnippet>1221</a>                (block.reference(), block)
+<a href=#1222 id=1222 data-nosnippet>1222</a>            })
+<a href=#1223 id=1223 data-nosnippet>1223</a>            .collect();
+<a href=#1224 id=1224 data-nosnippet>1224</a>        <span class="macro">assert_eq!</span>(blocks.len(), <span class="number">5</span>);
+<a href=#1225 id=1225 data-nosnippet>1225</a>        <span class="kw">for </span>b <span class="kw">in </span><span class="kw-2">&amp;</span>missing_block_refs {
+<a href=#1226 id=1226 data-nosnippet>1226</a>            <span class="macro">assert!</span>(blocks.contains_key(b));
+<a href=#1227 id=1227 data-nosnippet>1227</a>        }
+<a href=#1228 id=1228 data-nosnippet>1228</a>    }
+<a href=#1229 id=1229 data-nosnippet>1229</a>
+<a href=#1230 id=1230 data-nosnippet>1230</a>    <span class="attr">#[tokio::test(flavor = <span class="string">"current_thread"</span>, start_paused = <span class="bool-val">true</span>)]
+<a href=#1231 id=1231 data-nosnippet>1231</a>    </span><span class="kw">async fn </span>test_handle_fetch_latest_blocks() {
+<a href=#1232 id=1232 data-nosnippet>1232</a>        <span class="comment">// GIVEN
+<a href=#1233 id=1233 data-nosnippet>1233</a>        </span><span class="kw">let </span>(context, _keys) = Context::new_for_test(<span class="number">4</span>);
+<a href=#1234 id=1234 data-nosnippet>1234</a>        <span class="kw">let </span>context = Arc::new(context);
+<a href=#1235 id=1235 data-nosnippet>1235</a>        <span class="kw">let </span>block_verifier = Arc::new(<span class="kw">crate</span>::block_verifier::NoopBlockVerifier {});
+<a href=#1236 id=1236 data-nosnippet>1236</a>        <span class="kw">let </span>commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+<a href=#1237 id=1237 data-nosnippet>1237</a>        <span class="kw">let </span>core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+<a href=#1238 id=1238 data-nosnippet>1238</a>        <span class="kw">let </span>(_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(<span class="number">100</span>);
+<a href=#1239 id=1239 data-nosnippet>1239</a>        <span class="kw">let </span>network_client = Arc::new(FakeNetworkClient::default());
+<a href=#1240 id=1240 data-nosnippet>1240</a>        <span class="kw">let </span>(blocks_sender, _blocks_receiver) =
+<a href=#1241 id=1241 data-nosnippet>1241</a>            monitored_mpsc::unbounded_channel(<span class="string">"consensus_block_output"</span>);
+<a href=#1242 id=1242 data-nosnippet>1242</a>        <span class="kw">let </span>store = Arc::new(MemStore::new());
+<a href=#1243 id=1243 data-nosnippet>1243</a>        <span class="kw">let </span>dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+<a href=#1244 id=1244 data-nosnippet>1244</a>        <span class="kw">let </span>transaction_certifier = TransactionCertifier::new(
+<a href=#1245 id=1245 data-nosnippet>1245</a>            context.clone(),
+<a href=#1246 id=1246 data-nosnippet>1246</a>            block_verifier.clone(),
+<a href=#1247 id=1247 data-nosnippet>1247</a>            dag_state.clone(),
+<a href=#1248 id=1248 data-nosnippet>1248</a>            blocks_sender,
+<a href=#1249 id=1249 data-nosnippet>1249</a>        );
+<a href=#1250 id=1250 data-nosnippet>1250</a>        <span class="kw">let </span>synchronizer = Synchronizer::start(
+<a href=#1251 id=1251 data-nosnippet>1251</a>            network_client,
+<a href=#1252 id=1252 data-nosnippet>1252</a>            context.clone(),
+<a href=#1253 id=1253 data-nosnippet>1253</a>            core_dispatcher.clone(),
+<a href=#1254 id=1254 data-nosnippet>1254</a>            commit_vote_monitor.clone(),
+<a href=#1255 id=1255 data-nosnippet>1255</a>            block_verifier.clone(),
+<a href=#1256 id=1256 data-nosnippet>1256</a>            transaction_certifier.clone(),
+<a href=#1257 id=1257 data-nosnippet>1257</a>            dag_state.clone(),
+<a href=#1258 id=1258 data-nosnippet>1258</a>            <span class="bool-val">true</span>,
+<a href=#1259 id=1259 data-nosnippet>1259</a>        );
+<a href=#1260 id=1260 data-nosnippet>1260</a>        <span class="kw">let </span>round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+<a href=#1261 id=1261 data-nosnippet>1261</a>        <span class="kw">let </span>authority_service = Arc::new(AuthorityService::new(
+<a href=#1262 id=1262 data-nosnippet>1262</a>            context.clone(),
+<a href=#1263 id=1263 data-nosnippet>1263</a>            block_verifier,
+<a href=#1264 id=1264 data-nosnippet>1264</a>            commit_vote_monitor,
+<a href=#1265 id=1265 data-nosnippet>1265</a>            round_tracker,
+<a href=#1266 id=1266 data-nosnippet>1266</a>            synchronizer,
+<a href=#1267 id=1267 data-nosnippet>1267</a>            core_dispatcher.clone(),
+<a href=#1268 id=1268 data-nosnippet>1268</a>            rx_block_broadcast,
+<a href=#1269 id=1269 data-nosnippet>1269</a>            transaction_certifier,
+<a href=#1270 id=1270 data-nosnippet>1270</a>            dag_state.clone(),
+<a href=#1271 id=1271 data-nosnippet>1271</a>            store,
+<a href=#1272 id=1272 data-nosnippet>1272</a>        ));
+<a href=#1273 id=1273 data-nosnippet>1273</a>
+<a href=#1274 id=1274 data-nosnippet>1274</a>        <span class="comment">// Create some blocks for a few authorities. Create some equivocations as well and store in dag state.
+<a href=#1275 id=1275 data-nosnippet>1275</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>dag_builder = DagBuilder::new(context.clone());
+<a href=#1276 id=1276 data-nosnippet>1276</a>        dag_builder
+<a href=#1277 id=1277 data-nosnippet>1277</a>            .layers(<span class="number">1</span>..=<span class="number">10</span>)
+<a href=#1278 id=1278 data-nosnippet>1278</a>            .authorities(<span class="macro">vec!</span>[AuthorityIndex::new_for_test(<span class="number">2</span>)])
+<a href=#1279 id=1279 data-nosnippet>1279</a>            .equivocate(<span class="number">1</span>)
+<a href=#1280 id=1280 data-nosnippet>1280</a>            .build()
+<a href=#1281 id=1281 data-nosnippet>1281</a>            .persist_layers(dag_state);
+<a href=#1282 id=1282 data-nosnippet>1282</a>
+<a href=#1283 id=1283 data-nosnippet>1283</a>        <span class="comment">// WHEN
+<a href=#1284 id=1284 data-nosnippet>1284</a>        </span><span class="kw">let </span>authorities_to_request = <span class="macro">vec!</span>[
+<a href=#1285 id=1285 data-nosnippet>1285</a>            AuthorityIndex::new_for_test(<span class="number">1</span>),
+<a href=#1286 id=1286 data-nosnippet>1286</a>            AuthorityIndex::new_for_test(<span class="number">2</span>),
+<a href=#1287 id=1287 data-nosnippet>1287</a>        ];
+<a href=#1288 id=1288 data-nosnippet>1288</a>        <span class="kw">let </span>results = authority_service
+<a href=#1289 id=1289 data-nosnippet>1289</a>            .handle_fetch_latest_blocks(AuthorityIndex::new_for_test(<span class="number">1</span>), authorities_to_request)
+<a href=#1290 id=1290 data-nosnippet>1290</a>            .<span class="kw">await</span>;
+<a href=#1291 id=1291 data-nosnippet>1291</a>
+<a href=#1292 id=1292 data-nosnippet>1292</a>        <span class="comment">// THEN
+<a href=#1293 id=1293 data-nosnippet>1293</a>        </span><span class="kw">let </span>serialised_blocks = results.unwrap();
+<a href=#1294 id=1294 data-nosnippet>1294</a>        <span class="kw">for </span>serialised_block <span class="kw">in </span>serialised_blocks {
+<a href=#1295 id=1295 data-nosnippet>1295</a>            <span class="kw">let </span>signed_block: SignedBlock =
+<a href=#1296 id=1296 data-nosnippet>1296</a>                bcs::from_bytes(<span class="kw-2">&amp;</span>serialised_block).expect(<span class="string">"Error while deserialising block"</span>);
+<a href=#1297 id=1297 data-nosnippet>1297</a>            <span class="kw">let </span>verified_block = VerifiedBlock::new_verified(signed_block, serialised_block);
+<a href=#1298 id=1298 data-nosnippet>1298</a>
+<a href=#1299 id=1299 data-nosnippet>1299</a>            <span class="macro">assert_eq!</span>(verified_block.round(), <span class="number">10</span>);
+<a href=#1300 id=1300 data-nosnippet>1300</a>        }
+<a href=#1301 id=1301 data-nosnippet>1301</a>    }
+<a href=#1302 id=1302 data-nosnippet>1302</a>}</code></pre></div></section></main></body></html>

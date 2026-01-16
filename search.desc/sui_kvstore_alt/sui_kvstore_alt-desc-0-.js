@@ -1,0 +1,1 @@
+searchState.loadedDescShard("sui_kvstore_alt", 0, "New kvstore binary using sui-indexer-alt-framework.\nBigTable app profile ID\nReturns the argument unchanged.\nBigTable instance ID (e.g., “…\nCalls <code>U::from(self)</code>.\nInterval between watermark updates\nNumber of concurrent checkpoint writes")

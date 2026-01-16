@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BigTableClient","BigTableConnection","BigTableStore","Checkpoint","KvStorePipeline","TransactionData","TransactionEventsData"],"trait":["KeyValueStoreReader","KeyValueStoreWriter"]};

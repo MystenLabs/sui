@@ -1,0 +1,1 @@
+searchState.loadedDescShard("bridge_indexer", 0, "Path to a yaml config\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.")
