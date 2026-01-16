@@ -4,7 +4,7 @@
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
-use crate::workloads::payload::{ConcurrentTransactionResult, Payload};
+use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionResult};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder,
 };
@@ -272,11 +272,11 @@ impl Payload for RandomizedTransactionPayload {
         Some(ExpectedFailureType::NoFailure)
     }
 
-    fn is_concurrent_batch(&self) -> bool {
+    fn is_soft_bundle(&self) -> bool {
         true
     }
 
-    fn make_concurrent_transactions(&mut self) -> Vec<Transaction> {
+    fn make_soft_bundle_transactions(&mut self) -> Vec<Transaction> {
         let rgp = self
             .system_state_observer
             .state
@@ -343,13 +343,14 @@ impl Payload for RandomizedTransactionPayload {
         transactions
     }
 
-    fn handle_concurrent_results(&mut self, results: &[ConcurrentTransactionResult]) {
+    fn handle_soft_bundle_results(&mut self, results: &SoftBundleExecutionResults) {
         let mut success_count = 0;
         let mut lock_conflict_count = 0;
+        let mut retriable_count = 0;
 
-        for (i, result) in results.iter().enumerate() {
+        for (i, result) in results.results.iter().enumerate() {
             match result {
-                ConcurrentTransactionResult::Success { effects } => {
+                SoftBundleTransactionResult::Success { effects } => {
                     success_count += 1;
                     // Update gas object ref
                     self.gas_objects[i].0 = effects.gas_object().0;
@@ -374,7 +375,7 @@ impl Payload for RandomizedTransactionPayload {
                         "Immutable object should not be in mutated objects"
                     );
                 }
-                ConcurrentTransactionResult::Failure { error } => {
+                SoftBundleTransactionResult::PermanentFailure { error } => {
                     // Check if it's an ObjectLockConflict (expected when owned object is included)
                     if error.contains("ObjectLockConflict") {
                         lock_conflict_count += 1;
@@ -386,14 +387,19 @@ impl Payload for RandomizedTransactionPayload {
                         tracing::debug!("Transaction {} failed with error: {:?}", i, error);
                     }
                 }
+                SoftBundleTransactionResult::RetriableFailure { error } => {
+                    retriable_count += 1;
+                    tracing::debug!("Transaction {} had retriable failure: {:?}", i, error);
+                }
             }
         }
 
         tracing::debug!(
-            "Concurrent batch results: {} success, {} lock conflicts out of {} transactions",
+            "Soft bundle results: {} success, {} lock conflicts, {} retriable out of {} transactions",
             success_count,
             lock_conflict_count,
-            results.len()
+            retriable_count,
+            results.results.len()
         );
     }
 }

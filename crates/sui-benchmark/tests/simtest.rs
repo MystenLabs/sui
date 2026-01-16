@@ -18,7 +18,6 @@ mod test {
     use sui_benchmark::system_state_observer::SystemStateObserver;
     use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
     use sui_benchmark::workloads::benchmark_move_base_dir;
-    use sui_benchmark::workloads::composite::CompositeWorkload;
     use sui_benchmark::workloads::composite::CompositeWorkloadConfig;
     use sui_benchmark::workloads::expected_failure::ExpectedFailurePayloadCfg;
     use sui_benchmark::workloads::workload::ExpectedFailureType;
@@ -1160,7 +1159,7 @@ mod test {
         let registry = prometheus::Registry::new();
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
             Arc::new(
-                FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url)
+                FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url, &registry)
                     .await
                     .unwrap(),
             )
