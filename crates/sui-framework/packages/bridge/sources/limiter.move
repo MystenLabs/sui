@@ -30,7 +30,7 @@ public struct TransferRecord has store {
     hour_head: u64,
     hour_tail: u64,
     per_hour_amounts: vector<u64>,
-    // total amount in USD, 4 DP accuracy, so 10000 => 1USD
+    // total amount in USD, 8 DP accuracy, so 100000000 => 1USD
     total_amount: u64,
 }
 
