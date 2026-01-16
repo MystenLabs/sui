@@ -53,7 +53,7 @@ pub struct TestFailure {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestRunInfo {
     pub elapsed_time: Duration,
-    pub instructions_executed: u64,
+    pub gas_used: u64,
     pub trace: Option<Vec<u8>>,
 }
 
@@ -84,12 +84,12 @@ fn write_bytes_to_file(filepath: &str, content: &[u8]) -> std::io::Result<()> {
 impl TestRunInfo {
     pub fn new(
         elapsed_time: Duration,
-        instructions_executed: u64,
+        gas_used: u64,
         trace: Option<MoveTrace>,
     ) -> Self {
         Self {
             elapsed_time,
-            instructions_executed,
+            gas_used,
             trace: trace.map(|t| t.into_compressed_json_bytes()),
         }
     }
@@ -419,10 +419,10 @@ fn calculate_run_statistics<'a, I: IntoIterator<Item = &'a TestRunInfo>>(
 ) -> (Duration, u64) {
     test_results.into_iter().fold(
         (Duration::new(0, 0), 0),
-        |(mut acc_time, mut acc_instrs), test_run_info| {
+        |(mut acc_time, mut acc_gas_used), test_run_info| {
             acc_time += test_run_info.elapsed_time;
-            acc_instrs += test_run_info.instructions_executed;
-            (acc_time, acc_instrs)
+            acc_gas_used += test_run_info.gas_used;
+            (acc_time, acc_gas_used)
         },
     )
 }
@@ -450,13 +450,13 @@ impl TestResults {
                             format_module_id(&self.test_plan.module_info, module_id),
                             function_name,
                         );
-                        let (time, instrs_executed) = calculate_run_statistics(test_results);
+                        let (time, gas_used) = calculate_run_statistics(test_results);
                         writeln!(
                             writer.lock().unwrap(),
                             "{},{},{}",
                             qualified_function_name,
                             time.as_nanos(),
-                            instrs_executed,
+                            gas_used,
                         )?;
                     }
                 }
@@ -486,8 +486,8 @@ impl TestResults {
                 passed_fns.insert(qualified_function_name.clone());
                 max_function_name_size =
                     std::cmp::max(max_function_name_size, qualified_function_name.len());
-                let (time, instrs_executed) = calculate_run_statistics(test_results);
-                stats.push((qualified_function_name, time.as_secs_f32(), instrs_executed))
+                let (time, gas_used) = calculate_run_statistics(test_results);
+                stats.push((qualified_function_name, time.as_secs_f32(), gas_used))
             }
         }
 
@@ -511,9 +511,9 @@ impl TestResults {
                     format!("{qualified_function_name}{also_passed_modifier}");
                 max_function_name_size =
                     std::cmp::max(max_function_name_size, qualified_function_name.len());
-                let (time, instrs_executed) =
+                let (time, gas_used) =
                     calculate_run_statistics(test_failure.iter().map(|f| &f.test_run_info));
-                stats.push((qualified_function_name, time.as_secs_f32(), instrs_executed));
+                stats.push((qualified_function_name, time.as_secs_f32(), gas_used));
             }
         }
 
@@ -528,14 +528,14 @@ impl TestResults {
             )?;
             writeln!(
                 writer.lock().unwrap(),
-                "│ {name:^width$} │ {time:^10} │ {instructions:^25} │",
+                "│ {name:^width$} │ {time:^10} │ {gas_used:^25} │",
                 width = max_function_name_size,
                 name = "Test Name",
                 time = "Time",
-                instructions = "Gas Used"
+                gas_used = "Gas Used"
             )?;
 
-            for (qualified_function_name, time, instructions) in stats {
+            for (qualified_function_name, time, gas_used) in stats {
                 writeln!(
                     writer.lock().unwrap(),
                     "├─{:─^width$}─┼─{:─^10}─┼─{:─^25}─┤",
@@ -546,11 +546,11 @@ impl TestResults {
                 )?;
                 writeln!(
                     writer.lock().unwrap(),
-                    "│ {name:<width$} │ {time:^10.3} │ {instructions:^25} │",
+                    "│ {name:<width$} │ {time:^10.3} │ {gas_used:^25} │",
                     name = qualified_function_name,
                     width = max_function_name_size,
                     time = time,
-                    instructions = instructions,
+                    gas_used = gas_used,
                 )?;
             }
 
