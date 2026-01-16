@@ -18,7 +18,7 @@ use crate::{
     },
 };
 use futures::stream::{FuturesUnordered, StreamExt};
-use mysten_common::debug_fatal;
+use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
 use std::{
@@ -389,6 +389,7 @@ impl ExecutionScheduler {
                 match result {
                     Ok(result) => match result.status {
                         ScheduleStatus::InsufficientFunds => {
+                            assert_reachable!("tx cancelled, insufficient funds");
                             let tx_digest = result.tx_digest;
                             debug!(
                                 ?tx_digest,
@@ -399,12 +400,14 @@ impl ExecutionScheduler {
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
                         ScheduleStatus::SufficientFunds => {
+                            assert_reachable!("tx scheduled, sufficient funds");
                             let tx_digest = result.tx_digest;
                             debug!(?tx_digest, "Funds withdraw scheduling result: Success");
                             let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
                         ScheduleStatus::SkipSchedule => {
+                            assert_reachable!("tx withdrawal scheduling skipped");
                             let tx_digest = result.tx_digest;
                             debug!(?tx_digest, "Skip scheduling funds withdraw");
                         }
