@@ -1,0 +1,28 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/expansion/mixed_address_module_empty_0.move:1:1
+  │
+1 │ address a {
+  │ ^^^^^^^ 'address' blocks are deprecated. Use addresses directly in module definitions instead.
+2 │     module a::m;
+  │               - Replace with 'a::m'
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/expansion/mixed_address_module_empty_0.move:2:12
+  │
+1 │ address a {
+  │         - Address previously specified here
+2 │     module a::m;
+  │            ^ Redundant address specification
+
+error[E02004]: invalid 'module' declaration
+  ┌─ tests/move_2024/expansion/mixed_address_module_empty_0.move:2:15
+  │
+2 │     module a::m;
+  │               ^ Cannot define 'module' label in address block
