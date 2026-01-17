@@ -30,12 +30,12 @@ use move_core_types::{
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use std::{collections::BTreeMap, path::Path};
 use sui_json::{is_receiving_argument, primitive_type};
-use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
+use sui_json_rpc_types::{SuiData, SuiObjectData, SuiObjectDataOptions, SuiRawData};
 use sui_sdk::{apis::ReadApi, wallet_context::WalletContext};
 use sui_types::{
     Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     base_types::{ObjectID, TxContext, TxContextKind, is_primitive_type_tag},
-    move_package::MovePackage,
+    move_package::{MovePackage, UpgradeCap},
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     resolve_address,
@@ -932,10 +932,13 @@ impl<'a> PTBBuilder<'a> {
                 }
 
                 let build_config = MoveBuildConfig::default();
-                let root_pkg =
+                let mut root_pkg =
                     load_root_pkg_for_publish_upgrade(self.wallet, &build_config, package_path)
                         .await
                         .map_err(|e| err!(pkg_loc, "Cannot compile package: {e}"))?;
+                root_pkg
+                    .save_lockfile_to_disk()
+                    .map_err(|e| err!(pkg_loc, "Failed to save lockfile: {e}"))?;
 
                 let compiled_package = compile_package(
                     self.reader,
@@ -957,7 +960,9 @@ impl<'a> PTBBuilder<'a> {
             }
             // Update this command to not do as many things. It should result in a single command.
             ParsedPTBCommand::Upgrade(sp!(path_loc, package_path), mut arg) => {
-                let package_path = Path::new(&package_path);
+                let package_path = Path::new(&package_path)
+                    .canonicalize()
+                    .map_err(|e| err!(path_loc, "Failed to canonicalize package path: {e}"))?;
                 if !package_path.exists() {
                     error!(
                         path_loc,
@@ -981,12 +986,18 @@ impl<'a> PTBBuilder<'a> {
                     }
                 };
 
-                let package_path = Path::new(&package_path);
-                let build_config = MoveBuildConfig::default();
-                let root_pkg =
-                    load_root_pkg_for_publish_upgrade(self.wallet, &build_config, package_path)
+                let build_config = MoveBuildConfig {
+                    root_as_zero: true,
+                    ..MoveBuildConfig::default()
+                };
+                let mut root_pkg =
+                    load_root_pkg_for_publish_upgrade(self.wallet, &build_config, &package_path)
                         .await
                         .map_err(|e| err!(path_loc, "Cannot compile package: {e}"))?;
+
+                root_pkg
+                    .save_lockfile_to_disk()
+                    .map_err(|e| err!(path_loc, "Failed to save lockfile: {e}"))?;
 
                 let upgrade_cap_arg = self
                     .resolve(
@@ -999,22 +1010,46 @@ impl<'a> PTBBuilder<'a> {
                     self.reader,
                     &root_pkg,
                     build_config.clone(),
-                    package_path,
+                    &package_path,
                     ObjectID::from_address(upgrade_cap_id.into_inner()),
                     false, /* with_unpublished_dependencies */
-                    false, /* skip_dependency_verification */
+                    true,  /* skip_dependency_verification */
                            // None,
                 )
                 .await
                 .map_err(|e| err!(path_loc, "{e}"))?;
 
+                // try first to use the publication info if exists. If it does not exist, fetch the
+                // upgrade cap obj and deserialize it to get the package ID.
+                let package_id = if let Some(pub_info) = root_pkg.publication() {
+                    pub_info.addresses.published_at.0.into()
+                } else {
+                    // Fetch the upgrade cap to get the package ID
+                    let upgrade_cap_obj = self
+                        .reader
+                        .get_object_with_options(
+                            ObjectID::from_address(upgrade_cap_id.into_inner()),
+                            SuiObjectDataOptions::default().with_bcs(),
+                        )
+                        .await
+                        .map_err(|e| err!(path_loc, "Failed to fetch upgrade cap: {e}"))?;
+
+                    let data = upgrade_cap_obj
+                        .data
+                        .ok_or_else(|| err!(path_loc, "Upgrade cap object not found"))?;
+                    let bcs = data
+                        .bcs
+                        .ok_or_else(|| err!(path_loc, "No BCS data for upgrade cap"))?;
+                    let upgrade_cap: UpgradeCap = bcs
+                        .try_as_move()
+                        .ok_or_else(|| err!(path_loc, "Upgrade cap is not a Move object"))?
+                        .deserialize()
+                        .map_err(|e| err!(path_loc, "Failed to deserialize upgrade cap: {e}"))?;
+
+                    upgrade_cap.package.bytes
+                };
                 let package_digest = compiled_package.get_package_digest(false);
-                let package_id = compiled_package
-                    .published_at
-                    .ok_or_else(|| err!(path_loc, "No published-at information"))?;
                 let compiled_modules = compiled_package.get_package_bytes(false);
-                // let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
-                //     upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
 
                 let upgrade_arg = self
                     .ptb
