@@ -109,6 +109,32 @@ public fun saturating_mul(x: u8, y: u8): u8 {
     std::macros::num_saturating_mul!(x, y, max_value!())
 }
 
+/// Shifts `x` left by `shift` bits.
+/// Returns `None` if the shift is greater than or equal to the bit size of 8.
+public fun checked_shl(x: u8, shift: u8): Option<u8> {
+    std::macros::num_checked_shl!(x, shift, 8)
+}
+
+/// Shifts `x` right by `shift` bits.
+/// Returns `None` if the shift is greater than or equal to the bit size of 8.
+public fun checked_shr(x: u8, shift: u8): Option<u8> {
+    std::macros::num_checked_shr!(x, shift, 8)
+}
+
+/// Shifts `x` left by `shift` bits.
+/// Returns `None` if the shift is larger than or equal to the bit size of 8, or if the shift would
+/// lose any bits (if the operation is not reversible).
+public fun lossless_shl(x: u8, shift: u8): Option<u8> {
+    std::macros::num_lossless_shl!(x, shift, 8)
+}
+
+/// Shifts `x` right by `shift` bits.
+/// Returns `None` if the shift is larger than or equal to the bit size of 8, or if the shift would
+/// lose any bits (if the operation is not reversible).
+public fun lossless_shr(x: u8, shift: u8): Option<u8> {
+    std::macros::num_lossless_shr!(x, shift, 8)
+}
+
 /// Maximum value for a `u8`
 public macro fun max_value(): u8 {
     0xFF
