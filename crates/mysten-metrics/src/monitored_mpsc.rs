@@ -48,17 +48,14 @@ impl<T> Sender<T> {
     /// Attempts to immediately send a message on this `Sender`
     /// Increments the gauge in case of a successful `try_send`.
     pub fn try_send(&self, message: T) -> Result<(), TrySendError<T>> {
-        self.inner
-            .try_send(message)
-            // TODO: switch to inspect() once the repo upgrades to Rust 1.76 or higher.
-            .map(|_| {
-                if let Some(inflight) = &self.inflight {
-                    inflight.inc();
-                }
-                if let Some(sent) = &self.sent {
-                    sent.inc();
-                }
-            })
+        self.inner.try_send(message).inspect(|_| {
+            if let Some(inflight) = &self.inflight {
+                inflight.inc();
+            }
+            if let Some(sent) = &self.sent {
+                sent.inc();
+            }
+        })
     }
 
     // TODO: facade [`send_timeout`](tokio::mpsc::Sender::send_timeout) under the tokio feature flag "time"
