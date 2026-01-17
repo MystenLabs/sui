@@ -1,0 +1,76 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-43:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 12144800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 45:
+//# view-object 1,1
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::TreasuryCap<T::test::TEST> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,1),
+        },
+    },
+    total_supply: sui::balance::Supply<T::test::TEST> {
+        value: 0u64,
+    },
+}
+
+task 3, lines 47-49:
+//# programmable --sender A --inputs object(1,1) 1000000u64 2000u64 @A
+//> T::test::mint_balance(Input(0), Input(1), Input(3));
+//> T::test::mint_coin(Input(0), Input(2), Input(3));
+created: object(3,0)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(3,1), A, sui::balance::Balance<T::test::TEST>, Merge)
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 4, line 51:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 53-72:
+//# run-graphql
+Response: {
+  "data": {
+    "address": {
+      "balance": {
+        "totalBalance": "1002000",
+        "coinBalance": "2000",
+        "addressBalance": "1000000"
+      },
+      "balances": {
+        "nodes": [
+          {
+            "coinType": {
+              "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+            },
+            "totalBalance": "299999984505896",
+            "coinBalance": "299999984505896",
+            "addressBalance": "0"
+          },
+          {
+            "coinType": {
+              "repr": "0x871b5b72dbbd9a32fcba584fadeea5df73efc78541fb1f89f4da918b67a6b827::test::TEST"
+            },
+            "totalBalance": "1002000",
+            "coinBalance": "2000",
+            "addressBalance": "1000000"
+          }
+        ]
+      }
+    }
+  }
+}
