@@ -2201,12 +2201,12 @@ dependencies = [
  "hyper 0.14.26",
  "hyper 1.8.1",
  "hyper-rustls 0.24.2",
- "hyper-rustls 0.27.2",
+ "hyper-rustls 0.27.7",
  "hyper-util",
  "pin-project-lite",
  "rustls 0.21.12",
  "rustls 0.23.31",
- "rustls-native-certs 0.8.1",
+ "rustls-native-certs",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.2",
@@ -2802,7 +2802,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.12.1",
+ "itertools 0.10.5",
  "lazy_static",
  "lazycell",
  "log",
@@ -3948,16 +3948,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "543d1dd138ef086e2ff05e3a48cf9da045da2033d16f8538fd76b86cd49b2ca3"
 dependencies = [
  "walkdir",
-]
-
-[[package]]
-name = "core-foundation"
-version = "0.9.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91e195e091a93c46f7102ec7818a2aa394e1e1771c3ab4825963fa03e45afb8f"
-dependencies = [
- "core-foundation-sys",
- "libc",
 ]
 
 [[package]]
@@ -6092,7 +6082,7 @@ dependencies = [
  "http 1.3.1",
  "http-body-util",
  "hyper 1.8.1",
- "hyper-rustls 0.27.2",
+ "hyper-rustls 0.27.7",
  "hyper-util",
  "ring 0.17.8",
  "rustls-pki-types",
@@ -6744,22 +6734,21 @@ dependencies = [
 
 [[package]]
 name = "hyper-rustls"
-version = "0.27.2"
+version = "0.27.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ee4be2c948921a1a5320b629c4193916ed787a7f7f293fd3f7f5a6c9de74155"
+checksum = "e3c93eb611681b207e1fe55d5a71ecf91572ec8a6705cdb6857f7d8d5242cf58"
 dependencies = [
- "futures-util",
  "http 1.3.1",
  "hyper 1.8.1",
  "hyper-util",
  "log",
  "rustls 0.23.31",
- "rustls-native-certs 0.7.1",
+ "rustls-native-certs",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.2",
  "tower-service",
- "webpki-roots 0.26.3",
+ "webpki-roots 1.0.3",
 ]
 
 [[package]]
@@ -7464,7 +7453,7 @@ dependencies = [
  "base64 0.22.1",
  "http-body 1.0.1",
  "hyper 1.8.1",
- "hyper-rustls 0.27.2",
+ "hyper-rustls 0.27.7",
  "hyper-util",
  "jsonrpsee-core",
  "jsonrpsee-types",
@@ -9506,7 +9495,7 @@ dependencies = [
  "futures",
  "http 1.3.1",
  "http-body 1.0.1",
- "hyper-rustls 0.27.2",
+ "hyper-rustls 0.27.7",
  "hyper-util",
  "multiaddr",
  "mysten-metrics",
@@ -11950,7 +11939,7 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.8.1",
- "hyper-rustls 0.27.2",
+ "hyper-rustls 0.27.7",
  "hyper-util",
  "js-sys",
  "log",
@@ -11958,7 +11947,7 @@ dependencies = [
  "pin-project-lite",
  "quinn",
  "rustls 0.23.31",
- "rustls-native-certs 0.8.1",
+ "rustls-native-certs",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -12488,19 +12477,6 @@ dependencies = [
 
 [[package]]
 name = "rustls-native-certs"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a88d6d420651b496bdd98684116959239430022a115c1240e6c3993be0b15fba"
-dependencies = [
- "openssl-probe",
- "rustls-pemfile",
- "rustls-pki-types",
- "schannel",
- "security-framework 2.11.0",
-]
-
-[[package]]
-name = "rustls-native-certs"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcff2dd52b58a8d98a70243663a0d234c4e2b79235637849d15913394a247d3"
@@ -12508,17 +12484,7 @@ dependencies = [
  "openssl-probe",
  "rustls-pki-types",
  "schannel",
- "security-framework 3.2.0",
-]
-
-[[package]]
-name = "rustls-pemfile"
-version = "2.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29993a25686778eb88d4189742cd713c9bce943bc54251a33509dc63cbacf73d"
-dependencies = [
- "base64 0.22.1",
- "rustls-pki-types",
+ "security-framework",
 ]
 
 [[package]]
@@ -12536,16 +12502,16 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5467026f437b4cb2a533865eaa73eb840019a0916f4b9ec563c6e617e086c9"
 dependencies = [
- "core-foundation 0.10.0",
+ "core-foundation",
  "core-foundation-sys",
  "jni",
  "log",
  "once_cell",
  "rustls 0.23.31",
- "rustls-native-certs 0.8.1",
+ "rustls-native-certs",
  "rustls-platform-verifier-android",
  "rustls-webpki 0.103.4",
- "security-framework 3.2.0",
+ "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
  "windows-sys 0.59.0",
@@ -12878,25 +12844,12 @@ dependencies = [
 
 [[package]]
 name = "security-framework"
-version = "2.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c627723fd09706bacdb5cf41499e95098555af3c3c29d014dc3c458ef6be11c0"
-dependencies = [
- "bitflags 2.6.0",
- "core-foundation 0.9.4",
- "core-foundation-sys",
- "libc",
- "security-framework-sys",
-]
-
-[[package]]
-name = "security-framework"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "271720403f46ca04f7ba6f55d438f8bd878d6b8ca0a1046e8228c4145bcbb316"
 dependencies = [
  "bitflags 2.6.0",
- "core-foundation 0.10.0",
+ "core-foundation",
  "core-foundation-sys",
  "libc",
  "security-framework-sys",
@@ -16976,7 +16929,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "hyper 1.8.1",
- "hyper-rustls 0.27.2",
+ "hyper-rustls 0.27.7",
  "indicatif",
  "integer-encoding",
  "itertools 0.13.0",
@@ -18395,7 +18348,7 @@ dependencies = [
  "hyper-util",
  "percent-encoding",
  "pin-project",
- "rustls-native-certs 0.8.1",
+ "rustls-native-certs",
  "socket2 0.6.0",
  "sync_wrapper 1.0.2",
  "tokio",
@@ -20162,7 +20115,7 @@ dependencies = [
  "http 1.3.1",
  "http-body-util",
  "hyper 1.8.1",
- "hyper-rustls 0.27.2",
+ "hyper-rustls 0.27.7",
  "hyper-util",
  "log",
  "percent-encoding",
