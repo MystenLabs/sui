@@ -221,12 +221,15 @@ message Balance {
   // `0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI`.
   optional string coin_type = 2;
 
-  // The total balance for coins of this type, owned by one address,
-  // denominated in its smallest unit.
+  // The sum total of the accumulator balance and coins of this type,
+  // owned by one address, denominated in its smallest unit.
   optional uint64 total_balance = 3;
 
+  // Total balance of the coin type as tracked by the accumulator object
+  // for the address.
   optional uint64 address_balance = 4;
 
+  // Total balance for coins of this type owned by the address.
   optional uint64 coin_balance = 5;
 
   // Pagination cursor pointing to this balance entry, if this Balance is part

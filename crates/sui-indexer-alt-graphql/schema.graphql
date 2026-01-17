@@ -273,11 +273,19 @@ The total balance for a particular coin type.
 """
 type Balance {
 	"""
+	The balance as tracked by the accumulator object for the address.
+	"""
+	addressBalance: BigInt
+	"""
+	Total balance across all owned coin objects of the coin type.
+	"""
+	coinBalance: BigInt
+	"""
 	Coin type for the balance, such as `0x2::sui::SUI`.
 	"""
 	coinType: MoveType
 	"""
-	The total balance across all coin objects of this coin type.
+	The sum total of the accumulator balance and individual coin balances owned by the address.
 	"""
 	totalBalance: BigInt
 }
