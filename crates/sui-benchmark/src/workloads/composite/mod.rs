@@ -12,7 +12,7 @@ pub use operations::{
 
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::Payload;
+use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionResult};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COUNTER, Workload,
     WorkloadBuilder,
@@ -402,9 +402,10 @@ impl Payload for CompositePayload {
                 op_names
             );
 
-            let use_address_balance_gas = self
-                .rng
-                .gen_bool(self.config.address_balance_gas_probability as f64);
+            let use_address_balance_gas = batch_size > 1
+                || self
+                    .rng
+                    .gen_bool(self.config.address_balance_gas_probability as f64);
 
             let pool = self.pool.read().unwrap();
 
@@ -412,21 +413,62 @@ impl Payload for CompositePayload {
             {
                 let builder = tx_builder.ptb_builder_mut();
                 for op in &ops {
-                    let resources =
-                        Self::resolve_resources_for_op(op.as_ref(), &pool, &self.config, &mut self.rng);
+                    let resources = Self::resolve_resources_for_op(
+                        op.as_ref(),
+                        &pool,
+                        &self.config,
+                        &mut self.rng,
+                    );
                     op.apply(builder, &resources, &mut self.rng);
                 }
             }
 
             if use_address_balance_gas {
                 let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
-                tx_builder =
-                    tx_builder.with_address_balance_gas(pool.chain_identifier, current_epoch, nonce);
+                tx_builder = tx_builder.with_address_balance_gas(
+                    pool.chain_identifier,
+                    current_epoch,
+                    nonce,
+                );
             }
             transactions.push(tx_builder.build_and_sign(self.gas.2.as_ref()));
         }
 
         transactions
+    }
+
+    fn handle_soft_bundle_results(&mut self, results: &SoftBundleExecutionResults) {
+        for result in &results.results {
+            match result {
+                SoftBundleTransactionResult::Success { effects } => {
+                    let mut metrics = self.metrics.lock().unwrap();
+                    if effects.is_cancelled() {
+                        metrics.record_cancellation(self.current_op_set);
+                    } else if effects.is_ok() {
+                        metrics.record_success(self.current_op_set);
+                    } else {
+                        metrics.record_failure(self.current_op_set);
+                        effects.print_gas_summary();
+                        error!("Composite tx failed... Status: {:?}", effects.status());
+                        panic!(
+                            "Composite soft bundle transaction failed: {:?}",
+                            effects.status()
+                        );
+                    }
+                    drop(metrics);
+                    self.gas.0 = effects.gas_object().0;
+                }
+                SoftBundleTransactionResult::RetriableFailure { error } => {
+                    tracing::debug!("Composite transaction had retriable failure: {:?}", error);
+                }
+                SoftBundleTransactionResult::PermanentFailure { error } => {
+                    panic!(
+                        "Composite soft bundle transaction failed permanently: {}",
+                        error
+                    );
+                }
+            }
+        }
     }
 }
 
