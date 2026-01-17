@@ -91,6 +91,7 @@ pub async fn build_analytics_indexer(
                 .transpose()?,
             rpc_username: config.rpc_username.clone(),
             rpc_password: config.rpc_password.clone(),
+            ..Default::default()
         },
         streaming: sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs {
             streaming_url: config

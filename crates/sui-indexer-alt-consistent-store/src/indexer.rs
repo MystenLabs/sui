@@ -154,6 +154,7 @@ mod tests {
     use sui_indexer_alt_framework::pipeline::Processor;
     use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
     use sui_indexer_alt_framework::types::object::Object;
+    use tokio::fs;
 
     use crate::db::Db;
     use crate::db::tests::wm;
@@ -222,6 +223,9 @@ mod tests {
         }
 
         {
+            // Create a dummy ingestion directory.
+            fs::create_dir(d.path().join("checkpoints")).await.unwrap();
+
             // If the pipeline is being restored, then the indexer will not allow it to be added.
             let mut indexer = Indexer::<TestSchema>::new(
                 d.path().join("db"),
