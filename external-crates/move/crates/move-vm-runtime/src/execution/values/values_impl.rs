@@ -2,9 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// THIS IS TO SUPRESS CI ERRORS -- DO NOT MERGE IT
-#![allow(deprecated)]
-
 use crate::{
     cache::arena::{Arena, ArenaVec},
     jit::execution::ast::Type,
