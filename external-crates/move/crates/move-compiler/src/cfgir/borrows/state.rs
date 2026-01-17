@@ -380,12 +380,12 @@ impl BorrowState {
         );
     }
 
-    fn local_borrowed_by(&self, local: &Var) -> BTreeMap<RefID, Loc> {
+    fn local_borrowed_by(&self, local: &Var) -> (BTreeMap<RefID, Loc>, BTreeMap<RefID, Loc>) {
         let (full_borrows, mut field_borrows) = self.borrows.borrowed_by(Self::LOCAL_ROOT);
-        assert!(full_borrows.is_empty());
-        field_borrows
+        let local_borrows = field_borrows
             .remove(&Self::local_label(local))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        (full_borrows, local_borrows)
     }
 
     // returns empty errors if borrowed_by is empty
@@ -456,12 +456,13 @@ impl BorrowState {
                 Diagnostics::new()
             }
             Value::NonRef => {
-                let borrowed_by = self.local_borrowed_by(local);
+                let (mut full_borrows, local_borrows) = self.local_borrowed_by(local);
+                full_borrows.extend(local_borrows);
                 Self::check_use_borrowed_by(
                     &self.borrows,
                     loc,
                     local,
-                    &borrowed_by,
+                    &full_borrows,
                     ReferenceSafety::Dangling,
                     "assignment",
                 )
@@ -502,11 +503,12 @@ impl BorrowState {
         let mut diags = Diagnostics::new();
         for (local, stored_value) in self.locals.key_cloned_iter() {
             if let Value::NonRef = stored_value {
-                let borrowed_by = self.local_borrowed_by(&local);
+                let (mut full_borrows, local_borrows) = self.local_borrowed_by(&local);
+                full_borrows.extend(local_borrows);
                 let local_diag = Self::borrow_error(
                     &self.borrows,
                     loc,
-                    &borrowed_by,
+                    &full_borrows,
                     &BTreeMap::new(),
                     ReferenceSafety::InvalidReturn,
                     || {
@@ -570,12 +572,12 @@ impl BorrowState {
         match old_value {
             Value::Ref(id) => (Diagnostics::new(), Value::Ref(id)),
             Value::NonRef if last_usage_inferred => {
-                let borrowed_by = self.local_borrowed_by(local);
-
+                let (mut full_borrows, local_borrows) = self.local_borrowed_by(local);
+                full_borrows.extend(local_borrows);
                 let mut diag_opt = Self::borrow_error(
                     &self.borrows,
                     loc,
-                    &borrowed_by,
+                    &full_borrows,
                     &BTreeMap::new(),
                     ReferenceSafety::AmbiguousVariableUsage,
                     || {
@@ -616,12 +618,13 @@ impl BorrowState {
                 (diag_opt.into(), Value::NonRef)
             }
             Value::NonRef => {
-                let borrowed_by = self.local_borrowed_by(local);
+                let (mut full_borrows, local_borrows) = self.local_borrowed_by(local);
+                full_borrows.extend(local_borrows);
                 let diag_opt = Self::check_use_borrowed_by(
                     &self.borrows,
                     loc,
                     local,
-                    &borrowed_by,
+                    &full_borrows,
                     ReferenceSafety::Dangling,
                     "move",
                 );
@@ -639,10 +642,11 @@ impl BorrowState {
                 (Diagnostics::new(), Value::Ref(new_id))
             }
             Value::NonRef => {
-                let borrowed_by = self.local_borrowed_by(local);
+                let (mut full_borrows, borrowed_by) = self.local_borrowed_by(local);
                 let borrows = &self.borrows;
-                // check that it is 'readable'
-                let mut_borrows = borrowed_by
+                // additional check that it is 'readable'
+                full_borrows.extend(borrowed_by);
+                let mut_borrows = full_borrows
                     .into_iter()
                     .filter(|(id, _loc)| borrows.is_mutable(*id))
                     .collect();
@@ -668,26 +672,24 @@ impl BorrowState {
         );
         let new_id = self.declare_new_ref(loc, mut_);
         // fails if there are full/epsilon borrows on the local
-        let borrowed_by = self.local_borrowed_by(local);
-        let diags = if !mut_ {
-            let borrows = &self.borrows;
+        let (mut full_borrows, borrowed_by) = self.local_borrowed_by(local);
+        let borrows = &self.borrows;
+        if !mut_ {
             // check that it is 'readable'
             let mut_borrows = borrowed_by
                 .into_iter()
-                .filter(|(id, _loc)| borrows.is_mutable(*id))
-                .collect();
-            Self::check_use_borrowed_by(
-                borrows,
-                loc,
-                local,
-                &mut_borrows,
-                ReferenceSafety::RefTrans,
-                "borrow",
-            )
-            .into()
-        } else {
-            Diagnostics::new()
+                .filter(|(id, _loc)| borrows.is_mutable(*id));
+            full_borrows.extend(mut_borrows);
         };
+        let diags = Self::check_use_borrowed_by(
+            borrows,
+            loc,
+            local,
+            &full_borrows,
+            ReferenceSafety::RefTrans,
+            "borrow",
+        )
+        .into();
         self.add_local_borrow(loc, local, new_id);
         (diags, Value::Ref(new_id))
     }
