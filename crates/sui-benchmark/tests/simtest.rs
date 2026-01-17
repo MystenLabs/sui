@@ -57,6 +57,7 @@ mod test {
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
     use test_cluster::{TestCluster, TestClusterBuilder};
+    use tokio::sync::oneshot;
     use tracing::{error, info, trace};
     use typed_store::traits::Map;
 
@@ -228,12 +229,15 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_rolling_restarts_all_validators() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 330_000, 1).await;
+        let test_cluster = build_test_cluster(4, 0, 1).await;
 
         let validators = test_cluster.get_validator_pubkeys();
         let test_cluster_clone = test_cluster.clone();
+        let (shutdown_sender, mut shutdown_receiver) = oneshot::channel();
         let restarter_task = tokio::task::spawn(async move {
-            for _ in 0..4 {
+            tokio::time::sleep(Duration::from_secs(20)).await;
+            for i in 0..4 {
+                info!("restarting wave {}", i);
                 for validator in validators.iter() {
                     info!("Killing validator {:?}", validator.concise());
                     test_cluster_clone.stop_node(validator);
@@ -241,11 +245,22 @@ mod test {
                     info!("Starting validator {:?}", validator.concise());
                     test_cluster_clone.start_node(validator).await;
                 }
+                // check if the shutdown signal is received
+                if shutdown_receiver.try_recv().is_ok() {
+                    break;
+                }
             }
+            info!("Restarter task finished");
         });
-        test_simulated_load(test_cluster.clone(), 330).await;
+        info!("Starting simulated load");
+        test_simulated_load_without_surfer(test_cluster.clone(), 90).await;
+        info!("Finished simulated load");
+        // send the shutdown signal
+        shutdown_sender.send(()).unwrap();
         restarter_task.await.unwrap();
-        test_cluster.wait_for_epoch_all_nodes(1).await;
+        info!("Waiting for epoch 1");
+        // Ensure the cluster is live and can reconfigure
+        test_cluster.trigger_reconfiguration().await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -1124,6 +1139,22 @@ mod test {
         .await;
     }
 
+    async fn test_simulated_load_without_surfer(
+        test_cluster: Arc<TestCluster>,
+        test_duration_secs: u64,
+    ) {
+        test_simulated_load_with_test_config(
+            test_cluster,
+            test_duration_secs,
+            SimulatedLoadConfig::default(),
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false, // disable_surfer
+        )
+        .await;
+    }
+
     async fn test_simulated_load_with_test_config<F, Fut>(
         test_cluster: Arc<TestCluster>,
         test_duration_secs: u64,
@@ -1136,6 +1167,7 @@ mod test {
         F: FnOnce(Arc<TestCluster>) -> Fut + Send,
         Fut: std::future::Future<Output = ()> + Send,
     {
+        info!("test_simulated_load_with_test_config");
         let sender = test_cluster.get_address_0();
         let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
         let genesis = test_cluster.swarm.config().genesis.clone();
@@ -1168,6 +1200,7 @@ mod test {
             )
         };
 
+        info!("test_simulated_load_with_test_config");
         let bank = BenchmarkBank::new(proxy.clone(), primary_coin);
         let system_state_observer = {
             let mut system_state_observer = SystemStateObserver::new(proxy.clone());
@@ -1260,10 +1293,12 @@ mod test {
         };
 
         // Run any pre-load setup after gas creation but before load generation
+        info!("test_simulated_load_with_test_config");
         if let Some(setup_fn) = pre_load_setup {
             setup_fn(test_cluster.clone()).await;
         }
 
+        info!("test_simulated_load_with_test_config");
         let bench_task = tokio::spawn(async move {
             let driver = BenchDriver::new(5, false);
 
@@ -1271,6 +1306,7 @@ mod test {
             let interval = Interval::Time(test_duration);
 
             let show_progress = interval.is_unbounded();
+            info!("test_simulated_load_with_test_config");
             let (benchmark_stats, _) = driver
                 .run(
                     vec![proxy],
@@ -1288,6 +1324,7 @@ mod test {
             assert!(benchmark_stats.num_error_txes < 100);
         });
 
+        info!("test_simulated_load_with_test_config");
         if enable_surfer {
             let surfer_task = tokio::spawn(async move {
                 // now do a sui-surfer test

@@ -109,7 +109,7 @@ if __name__ == "__main__":
         next_seed = args.seed_start + i
         commands.append(("%s --test-threads 1 %s %s %s" % (binary, '--no-capture' if args.no_capture else '', '--exact' if args.exact else '', args.testname), {
           "MSIM_TEST_SEED": "%d" % next_seed,
-          "RUST_LOG": "error",
+          "RUST_LOG": "off",
         }))
 
     # register clean up code to kill all child processes when we exit
