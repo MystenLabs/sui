@@ -11,4 +11,4 @@ sui client --client.config $CONFIG ptb \
  --publish "test_pkg" \
  --assign upgrade_cap \
  --transfer-objects "[upgrade_cap]" sender \
- 2>&1 > output.log
+ > output.log 2>&1 || cat output.log

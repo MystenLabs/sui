@@ -17,8 +17,8 @@ sui client --client.config "$CONFIG" publish test_pkg --dry-run \
 success: true
 exit_code: 0
 ----- stdout -----
-BUILDING test_pkg
 Dry run completed, execution status: success
 Dry run completed, execution status: success
 
 ----- stderr -----
+BUILDING test_pkg

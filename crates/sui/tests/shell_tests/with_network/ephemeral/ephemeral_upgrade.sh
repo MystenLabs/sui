@@ -32,13 +32,13 @@ extract_published() {
 echo "=== test-publish a, then test-publish b, then add a module to b & upgrade b ==="
 
 sui client --client.config $CONFIG \
-  test-publish --build-env testnet --pubfile-path Pub.local.toml a > /dev/null
+  test-publish --build-env testnet --pubfile-path Pub.local.toml a > out.log 2>&1 || cat out.log
 
 echo "=== published a ==="
 extract_published Pub.local.toml
 
 sui client --client.config $CONFIG \
-  test-publish --build-env testnet --pubfile-path Pub.local.toml b > /dev/null
+  test-publish --build-env testnet --pubfile-path Pub.local.toml b > out.log 2>&1 || cat out.log
 
 echo "=== published b ==="
 extract_published Pub.local.toml
@@ -46,13 +46,13 @@ extract_published Pub.local.toml
 echo "module b::new_module; public fun b() { a::a::a() }" >> b/sources/new_module.move
 
 sui client --client.config $CONFIG \
-  test-upgrade --build-env testnet --pubfile-path Pub.local.toml b > /dev/null
+  test-upgrade --build-env testnet --pubfile-path Pub.local.toml b > out.log 2>&1 || cat out.log
 
 echo "=== upgraded b ==="
 extract_published Pub.local.toml
 
 sui client --client.config $CONFIG \
-  test-upgrade --build-env testnet --pubfile-path Pub.local.toml a > /dev/null
+  test-upgrade --build-env testnet --pubfile-path Pub.local.toml a > out.log 2>&1 || cat out.log
 
 echo "=== upgraded a ==="
 extract_published Pub.local.toml

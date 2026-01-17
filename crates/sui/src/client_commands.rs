@@ -1940,11 +1940,10 @@ pub(crate) async fn compile_package(
     // This will direct the pkg-system to set all unpublished dependencies to address 0x0
     build_config.set_unpublished_deps_to_zero = with_unpublished_deps;
 
-    let mut stdout = std::io::stdout();
     let package = move_package_alt_compilation::compile_from_root_package::<
-        std::io::Stdout,
+        std::io::Stderr,
         SuiFlavor,
-    >(root_pkg, &build_config, &mut stdout)
+    >(root_pkg, &build_config, &mut std::io::stderr())
     .unwrap();
 
     let published_at = root_pkg
