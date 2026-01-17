@@ -252,7 +252,7 @@ impl Default for CompositeWorkloadConfig {
             num_shared_counters: 10,
             shared_counter_hotness: 0.5,
             address_balance_amount: 1000,
-            address_balance_gas_probability: 0.0,
+            address_balance_gas_probability: 0.5,
             metrics: None,
         }
     }
@@ -372,45 +372,61 @@ impl Payload for CompositePayload {
     }
 
     fn make_transaction(&mut self) -> Transaction {
+        self.make_soft_bundle_transactions().pop().unwrap()
+    }
+
+    fn is_soft_bundle(&self) -> bool {
+        true
+    }
+
+    fn make_soft_bundle_transactions(&mut self) -> Vec<Transaction> {
+        let batch_size = self.rng.gen_range(1..=4);
+
         let system_state = self.system_state_observer.state.borrow().clone();
         let rgp = system_state.reference_gas_price;
         let current_epoch = system_state.epoch;
 
-        let ops = self.sample_operations();
+        let mut transactions = Vec::with_capacity(batch_size);
 
-        self.current_op_set = OperationSet::new();
-        for op in &ops {
-            self.current_op_set = self.current_op_set.with(op.operation_flag());
-        }
+        for _ in 0..batch_size {
+            let ops = self.sample_operations();
 
-        let op_names: Vec<&str> = ops.iter().map(|op| op.name()).collect();
-        tracing::trace!(
-            "Building composite transaction with operations: {:?}",
-            op_names
-        );
-
-        let pool = self.pool.read().unwrap();
-
-        let use_address_balance_gas = self
-            .rng
-            .gen_bool(self.config.address_balance_gas_probability as f64);
-
-        let mut tx_builder = TestTransactionBuilder::new(self.gas.1, self.gas.0, rgp);
-        {
-            let builder = tx_builder.ptb_builder_mut();
+            self.current_op_set = OperationSet::new();
             for op in &ops {
-                let resources =
-                    Self::resolve_resources_for_op(op.as_ref(), &pool, &self.config, &mut self.rng);
-                op.apply(builder, &resources, &mut self.rng);
+                self.current_op_set = self.current_op_set.with(op.operation_flag());
             }
+
+            let op_names: Vec<&str> = ops.iter().map(|op| op.name()).collect();
+            tracing::trace!(
+                "Building composite transaction with operations: {:?}",
+                op_names
+            );
+
+            let use_address_balance_gas = self
+                .rng
+                .gen_bool(self.config.address_balance_gas_probability as f64);
+
+            let pool = self.pool.read().unwrap();
+
+            let mut tx_builder = TestTransactionBuilder::new(self.gas.1, self.gas.0, rgp);
+            {
+                let builder = tx_builder.ptb_builder_mut();
+                for op in &ops {
+                    let resources =
+                        Self::resolve_resources_for_op(op.as_ref(), &pool, &self.config, &mut self.rng);
+                    op.apply(builder, &resources, &mut self.rng);
+                }
+            }
+
+            if use_address_balance_gas {
+                let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
+                tx_builder =
+                    tx_builder.with_address_balance_gas(pool.chain_identifier, current_epoch, nonce);
+            }
+            transactions.push(tx_builder.build_and_sign(self.gas.2.as_ref()));
         }
 
-        if use_address_balance_gas {
-            let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
-            tx_builder =
-                tx_builder.with_address_balance_gas(pool.chain_identifier, current_epoch, nonce);
-        }
-        tx_builder.build_and_sign(self.gas.2.as_ref())
+        transactions
     }
 }
 
