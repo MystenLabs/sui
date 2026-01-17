@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::DateTime;
 use chrono::Utc;
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
@@ -161,7 +161,7 @@ impl store::Connection for Connection<'_> {
             tx_hi: watermark.tx_hi as i64,
             timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive as i64,
             reader_lo: 0,
-            pruner_timestamp: NaiveDateTime::UNIX_EPOCH,
+            pruner_timestamp: DateTime::UNIX_EPOCH.naive_utc(),
             pruner_hi: 0,
         };
 

@@ -12,7 +12,7 @@ use futures::TryStreamExt;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use object_store::path::Path;
-use object_store::{DynObjectStore, Error, ObjectStore};
+use object_store::{DynObjectStore, Error, ObjectStore, ObjectStoreExt};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;

@@ -13,13 +13,15 @@ use std::sync::RwLock;
 use async_trait::async_trait;
 use bytes::Bytes;
 use futures::stream::BoxStream;
+use object_store::CopyOptions;
 use object_store::GetOptions;
 use object_store::GetResult;
 use object_store::ListResult;
 use object_store::MultipartUpload;
 use object_store::ObjectMeta;
 use object_store::ObjectStore;
-use object_store::PutMultipartOpts;
+use object_store::ObjectStoreExt as _;
+use object_store::PutMultipartOptions;
 use object_store::PutOptions;
 use object_store::PutPayload;
 use object_store::PutResult;
@@ -126,15 +128,6 @@ impl std::fmt::Display for MockStore {
 
 #[async_trait]
 impl ObjectStore for MockStore {
-    async fn put(&self, location: &Path, payload: PutPayload) -> Result<PutResult> {
-        if self.should_fail_put(location) {
-            return Err(self.make_error(location));
-        }
-        let result = self.inner.put(location, payload).await?;
-        self.record_put(location);
-        Ok(result)
-    }
-
     async fn put_opts(
         &self,
         location: &Path,
@@ -149,43 +142,30 @@ impl ObjectStore for MockStore {
         Ok(result)
     }
 
-    async fn put_multipart(&self, location: &Path) -> Result<Box<dyn MultipartUpload>> {
-        self.inner.put_multipart(location).await
-    }
-
     async fn put_multipart_opts(
         &self,
         location: &Path,
-        opts: PutMultipartOpts,
+        opts: PutMultipartOptions,
     ) -> Result<Box<dyn MultipartUpload>> {
         self.inner.put_multipart_opts(location, opts).await
-    }
-
-    async fn get(&self, location: &Path) -> Result<GetResult> {
-        self.inner.get(location).await
     }
 
     async fn get_opts(&self, location: &Path, options: GetOptions) -> Result<GetResult> {
         self.inner.get_opts(location, options).await
     }
 
-    async fn get_range(&self, location: &Path, range: Range<usize>) -> Result<Bytes> {
-        self.inner.get_range(location, range).await
-    }
-
-    async fn get_ranges(&self, location: &Path, ranges: &[Range<usize>]) -> Result<Vec<Bytes>> {
+    async fn get_ranges(&self, location: &Path, ranges: &[Range<u64>]) -> Result<Vec<Bytes>> {
         self.inner.get_ranges(location, ranges).await
     }
 
-    async fn head(&self, location: &Path) -> Result<ObjectMeta> {
-        self.inner.head(location).await
+    fn delete_stream(
+        &self,
+        locations: BoxStream<'static, Result<Path>>,
+    ) -> BoxStream<'static, Result<Path>> {
+        self.inner.delete_stream(locations)
     }
 
-    async fn delete(&self, location: &Path) -> Result<()> {
-        self.inner.delete(location).await
-    }
-
-    fn list(&self, prefix: Option<&Path>) -> BoxStream<'_, Result<ObjectMeta>> {
+    fn list(&self, prefix: Option<&Path>) -> BoxStream<'static, Result<ObjectMeta>> {
         self.inner.list(prefix)
     }
 
@@ -193,7 +173,7 @@ impl ObjectStore for MockStore {
         &self,
         prefix: Option<&Path>,
         offset: &Path,
-    ) -> BoxStream<'_, Result<ObjectMeta>> {
+    ) -> BoxStream<'static, Result<ObjectMeta>> {
         self.inner.list_with_offset(prefix, offset)
     }
 
@@ -201,20 +181,8 @@ impl ObjectStore for MockStore {
         self.inner.list_with_delimiter(prefix).await
     }
 
-    async fn copy(&self, from: &Path, to: &Path) -> Result<()> {
-        self.inner.copy(from, to).await
-    }
-
-    async fn rename(&self, from: &Path, to: &Path) -> Result<()> {
-        self.inner.rename(from, to).await
-    }
-
-    async fn copy_if_not_exists(&self, from: &Path, to: &Path) -> Result<()> {
-        self.inner.copy_if_not_exists(from, to).await
-    }
-
-    async fn rename_if_not_exists(&self, from: &Path, to: &Path) -> Result<()> {
-        self.inner.rename_if_not_exists(from, to).await
+    async fn copy_opts(&self, from: &Path, to: &Path, options: CopyOptions) -> Result<()> {
+        self.inner.copy_opts(from, to, options).await
     }
 }
 

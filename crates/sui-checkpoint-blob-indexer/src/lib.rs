@@ -14,6 +14,7 @@ pub use handlers::EpochsPipeline;
 mod tests {
     use super::*;
     use bytes::Bytes;
+    use object_store::ObjectStoreExt as _;
     use object_store::memory::InMemory;
     use object_store::path::Path as ObjectPath;
     use std::sync::Arc;

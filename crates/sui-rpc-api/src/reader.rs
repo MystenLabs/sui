@@ -30,6 +30,7 @@ impl StateReader {
         &self.inner
     }
 
+    #[allow(unused)]
     #[tracing::instrument(skip(self))]
     pub fn get_object(&self, object_id: Address) -> crate::Result<Option<Object>> {
         self.inner
@@ -39,6 +40,7 @@ impl StateReader {
             .map_err(Into::into)
     }
 
+    #[allow(unused)]
     #[tracing::instrument(skip(self))]
     pub fn get_object_with_version(
         &self,
