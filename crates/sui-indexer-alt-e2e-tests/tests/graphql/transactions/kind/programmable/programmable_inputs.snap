@@ -76,7 +76,7 @@ task 12, lines 84-103:
 Response: {
   "data": {
     "pureInputTest": {
-      "digest": "3vN92ssd7QUH46pRkq3x2nzj8TEYwX1LJPeqH82BCoD8",
+      "digest": "aUyvWn5Sif7VJ5UNjJQHVZ815ZL9Fw77HpZrHGVuySz",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -101,14 +101,14 @@ task 13, lines 105-126:
 Response: {
   "data": {
     "sharedInputTest": {
-      "digest": "7orny7x5fKU9h9FAfgqxNoSyxHCJ4izRsFPHqBBCDL6w",
+      "digest": "BGBTN3r9UDSu9qkCBigDaTc6SfQYHRyDRz5TKifWWK4D",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
           "nodes": [
             {
               "__typename": "SharedInput",
-              "address": "0x15f1a98bf64d17ecdc077a0a59848ee92a7e0005f86b67a7bac566c1c7926126",
+              "address": "0xac7587b0909c8652fd1bb8696c5e57f3a6ee15d2d11aded2b090def2324db961",
               "initialSharedVersion": 2,
               "mutable": true
             },
@@ -127,7 +127,7 @@ task 14, lines 128-151:
 Response: {
   "data": {
     "ownedOrImmutableTest": {
-      "digest": "EpTKN5v4qda3khSqP3osYfN7JsQ7HxPbaYQAm7d1RJte",
+      "digest": "9ri9DEpjdypnAjJ8Ctq9djze5MCUMcrYz9AYWSmuf6F9",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -135,9 +135,9 @@ Response: {
             {
               "__typename": "OwnedOrImmutable",
               "object": {
-                "address": "0xe99fcfc6846da366c584674afc52d37c71ce3bf076adeff83d52c4e3322d12e6",
+                "address": "0x3c53f36a1aaf2edd36ea86c0887666c3fd56da28b62b578b42c2d7edf5990691",
                 "version": 2,
-                "digest": "Fd5gUnMRjAegAQiJJkLraQCcSeph4XzvbpDiV1eo9w24"
+                "digest": "DfJYwPuEPVQGDxGVALGtX3FQueHsdjE3FKWt715oKNVD"
               }
             }
           ]
@@ -152,7 +152,7 @@ task 15, lines 153-176:
 Response: {
   "data": {
     "receivingInputTest": {
-      "digest": "AuuQ6MmSz5avpGWLGoFfd4kV4KhNp2PyvBF1VPnfWuBm",
+      "digest": "8SJVkkqHEGTpqaJindudNTbMTPH5DMaux4sHqhcqmA4P",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -163,9 +163,9 @@ Response: {
             {
               "__typename": "Receiving",
               "object": {
-                "address": "0xa6f9693563a3a8c260656930577e22bcfd621a2380037a68c99f73cf28235146",
+                "address": "0xec11d9f9ea3d85d54c79324c51d02205bd81c284939c7040c75e6786eca2bc33",
                 "version": 6,
-                "digest": "5Gh3wL6s5ezhdQi6PWK11PEBgSGh65tb4Mtcyh4eZDDQ"
+                "digest": "3HEpxtNkranAXWicQcSZv1eX3odHDAoVuFMwcp4ApszY"
               }
             },
             {

@@ -53,10 +53,10 @@ Response: {
             },
             "sequenceNumber": 0,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAeFUhlbGxvIGZyb20gdGVzdCBldmVudCoAAAAAAAAA",
+            "eventBcs": "TKIWi8FSBIs0jgaaT1w8av/Pg1Mug2Di17j4thXEflcLZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHkyiFovBUgSLNI4Gmk9cPGr/z4NTLoNg4te4+LYVxH5XC2V2ZW50c190ZXN0CVRlc3RFdmVudAAeFUhlbGxvIGZyb20gdGVzdCBldmVudCoAAAAAAAAA",
             "contents": {
               "type": {
-                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+                "repr": "0x4ca2168bc152048b348e069a4f5c3c6affcf83532e8360e2d7b8f8b615c47e57::events_test::TestEvent"
               },
               "json": {
                 "message": "Hello from test event",
@@ -64,11 +64,11 @@ Response: {
               }
             },
             "transaction": {
-              "digest": "3QXGQcUWzKsiqfcdrZwMXp6jFZDErSc59PyvJ7osufCf"
+              "digest": "8SSHFf7Umggp9jLXtaipfFyegv2v8Sq9rXpKbSUE5pS"
             },
             "transactionModule": {
               "package": {
-                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+                "address": "0x4ca2168bc152048b348e069a4f5c3c6affcf83532e8360e2d7b8f8b615c47e57"
               },
               "name": "events_test"
             }
@@ -96,10 +96,10 @@ Response: {
             },
             "sequenceNumber": 0,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAUC0ZpcnN0IGV2ZW50AQAAAAAAAAA=",
+            "eventBcs": "TKIWi8FSBIs0jgaaT1w8av/Pg1Mug2Di17j4thXEflcLZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHkyiFovBUgSLNI4Gmk9cPGr/z4NTLoNg4te4+LYVxH5XC2V2ZW50c190ZXN0CVRlc3RFdmVudAAUC0ZpcnN0IGV2ZW50AQAAAAAAAAA=",
             "contents": {
               "type": {
-                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+                "repr": "0x4ca2168bc152048b348e069a4f5c3c6affcf83532e8360e2d7b8f8b615c47e57::events_test::TestEvent"
               },
               "json": {
                 "message": "First event",
@@ -107,11 +107,11 @@ Response: {
               }
             },
             "transaction": {
-              "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
+              "digest": "LLwup2iFR9w9x4vc9in2Dieh9rvEQ6Tr9k9m1su1eZS"
             },
             "transactionModule": {
               "package": {
-                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+                "address": "0x4ca2168bc152048b348e069a4f5c3c6affcf83532e8360e2d7b8f8b615c47e57"
               },
               "name": "events_test"
             }
@@ -122,10 +122,10 @@ Response: {
             },
             "sequenceNumber": 1,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAVDFNlY29uZCBldmVudAIAAAAAAAAA",
+            "eventBcs": "TKIWi8FSBIs0jgaaT1w8av/Pg1Mug2Di17j4thXEflcLZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHkyiFovBUgSLNI4Gmk9cPGr/z4NTLoNg4te4+LYVxH5XC2V2ZW50c190ZXN0CVRlc3RFdmVudAAVDFNlY29uZCBldmVudAIAAAAAAAAA",
             "contents": {
               "type": {
-                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+                "repr": "0x4ca2168bc152048b348e069a4f5c3c6affcf83532e8360e2d7b8f8b615c47e57::events_test::TestEvent"
               },
               "json": {
                 "message": "Second event",
@@ -133,11 +133,11 @@ Response: {
               }
             },
             "transaction": {
-              "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
+              "digest": "LLwup2iFR9w9x4vc9in2Dieh9rvEQ6Tr9k9m1su1eZS"
             },
             "transactionModule": {
               "package": {
-                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+                "address": "0x4ca2168bc152048b348e069a4f5c3c6affcf83532e8360e2d7b8f8b615c47e57"
               },
               "name": "events_test"
             }
@@ -165,10 +165,10 @@ Response: {
             },
             "sequenceNumber": 0,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAUC0ZpcnN0IGV2ZW50AQAAAAAAAAA=",
+            "eventBcs": "TKIWi8FSBIs0jgaaT1w8av/Pg1Mug2Di17j4thXEflcLZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHkyiFovBUgSLNI4Gmk9cPGr/z4NTLoNg4te4+LYVxH5XC2V2ZW50c190ZXN0CVRlc3RFdmVudAAUC0ZpcnN0IGV2ZW50AQAAAAAAAAA=",
             "contents": {
               "type": {
-                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+                "repr": "0x4ca2168bc152048b348e069a4f5c3c6affcf83532e8360e2d7b8f8b615c47e57::events_test::TestEvent"
               },
               "json": {
                 "message": "First event",
@@ -176,11 +176,11 @@ Response: {
               }
             },
             "transaction": {
-              "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
+              "digest": "LLwup2iFR9w9x4vc9in2Dieh9rvEQ6Tr9k9m1su1eZS"
             },
             "transactionModule": {
               "package": {
-                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+                "address": "0x4ca2168bc152048b348e069a4f5c3c6affcf83532e8360e2d7b8f8b615c47e57"
               },
               "name": "events_test"
             }
@@ -208,10 +208,10 @@ Response: {
             },
             "sequenceNumber": 1,
             "timestamp": "1970-01-01T00:00:00Z",
-            "eventBcs": "rjWhwYTnKh7Z5VlciyycqsS5lbzrQsRPxfsUNfSDFzELZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHq41ocGE5yoe2eVZXIssnKrEuZW860LET8X7FDX0gxcxC2V2ZW50c190ZXN0CVRlc3RFdmVudAAVDFNlY29uZCBldmVudAIAAAAAAAAA",
+            "eventBcs": "TKIWi8FSBIs0jgaaT1w8av/Pg1Mug2Di17j4thXEflcLZXZlbnRzX3Rlc3T8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHkyiFovBUgSLNI4Gmk9cPGr/z4NTLoNg4te4+LYVxH5XC2V2ZW50c190ZXN0CVRlc3RFdmVudAAVDFNlY29uZCBldmVudAIAAAAAAAAA",
             "contents": {
               "type": {
-                "repr": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731::events_test::TestEvent"
+                "repr": "0x4ca2168bc152048b348e069a4f5c3c6affcf83532e8360e2d7b8f8b615c47e57::events_test::TestEvent"
               },
               "json": {
                 "message": "Second event",
@@ -219,11 +219,11 @@ Response: {
               }
             },
             "transaction": {
-              "digest": "2KquAhDwgXYraqFkiEJgH4KcETB9bg4Z3PpUp2WqsLwk"
+              "digest": "LLwup2iFR9w9x4vc9in2Dieh9rvEQ6Tr9k9m1su1eZS"
             },
             "transactionModule": {
               "package": {
-                "address": "0xae35a1c184e72a1ed9e5595c8b2c9caac4b995bceb42c44fc5fb1435f4831731"
+                "address": "0x4ca2168bc152048b348e069a4f5c3c6affcf83532e8360e2d7b8f8b615c47e57"
               },
               "name": "events_test"
             }

@@ -40,9 +40,9 @@ Response: {
     "transferTransaction": {
       "gasEffects": {
         "gasObject": {
-          "address": "0x2834d85dbfefdcd66f04811231ba818893793e83a895d53402fd99e132e36562",
+          "address": "0x269e52118e2bb7d562895724291039a937e3fcdf7fa4e3a5dd3e21a9bee9ed52",
           "version": 2,
-          "digest": "5oZq28MSbMZczmoEx7NppwgfS39saKEDR5kPUGJL3xhR"
+          "digest": "HkoqVvECEJzdyNXcnH5aDoqgj8f5D2SNqucDNfhsUFFz"
         },
         "gasSummary": {
           "computationCost": 1000000,
@@ -62,9 +62,9 @@ Response: {
     "functionCallTransaction": {
       "gasEffects": {
         "gasObject": {
-          "address": "0x2834d85dbfefdcd66f04811231ba818893793e83a895d53402fd99e132e36562",
+          "address": "0x269e52118e2bb7d562895724291039a937e3fcdf7fa4e3a5dd3e21a9bee9ed52",
           "version": 3,
-          "digest": "CarkTNvzXbUZPij4ebGttPTGtMwugEjXavBgjQLzABiC"
+          "digest": "BttcwXjsHq4Qjz9uSW3BCVZogSr9oA7u2UmKQSkLpD2L"
         },
         "gasSummary": {
           "computationCost": 1000000,

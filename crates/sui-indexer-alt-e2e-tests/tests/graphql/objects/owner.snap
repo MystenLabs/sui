@@ -77,7 +77,7 @@ Response: {
       "owner": {
         "__typename": "ObjectOwner",
         "address": {
-          "address": "0xb3bf8b7f115edf19fb96cbafabc1c65b38a0c5a595701a8538249e409ce739e3"
+          "address": "0xbd7430e5f9dab0031bb607fdc355a093638684fdf1e983f68784347d65bf5196"
         }
       }
     },
@@ -115,7 +115,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "json": {
-                  "id": "0xb3bf8b7f115edf19fb96cbafabc1c65b38a0c5a595701a8538249e409ce739e3",
+                  "id": "0xbd7430e5f9dab0031bb607fdc355a093638684fdf1e983f68784347d65bf5196",
                   "size": "2"
                 }
               }
@@ -131,7 +131,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "json": {
-                  "id": "0xb3bf8b7f115edf19fb96cbafabc1c65b38a0c5a595701a8538249e409ce739e3",
+                  "id": "0xbd7430e5f9dab0031bb607fdc355a093638684fdf1e983f68784347d65bf5196",
                   "size": "2"
                 }
               }
@@ -154,7 +154,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "json": {
-                  "id": "0xb3bf8b7f115edf19fb96cbafabc1c65b38a0c5a595701a8538249e409ce739e3",
+                  "id": "0xbd7430e5f9dab0031bb607fdc355a093638684fdf1e983f68784347d65bf5196",
                   "size": "1"
                 }
               }
@@ -177,7 +177,7 @@ Response: {
             "asMoveObject": {
               "contents": {
                 "json": {
-                  "id": "0xb3bf8b7f115edf19fb96cbafabc1c65b38a0c5a595701a8538249e409ce739e3",
+                  "id": "0xbd7430e5f9dab0031bb607fdc355a093638684fdf1e983f68784347d65bf5196",
                   "size": "1"
                 }
               }

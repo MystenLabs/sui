@@ -46,44 +46,44 @@ Response: {
   "data": {
     "c0": {
       "sequenceNumber": 0,
-      "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
-      "contentDigest": "AgQ37j8wCNoA7Hw7B8WDwTe6d1x23HpD5Q398FREE68b"
+      "digest": "4Kxh38MGZSf9fVqjtQtELiTE7f2WrY7JfN6Gh1rGQBL3",
+      "contentDigest": "AzK3jrXWn5VRAsc42qmQj7CQbSCELzem2cXmSryG5tY1"
     },
     "c1": {
       "sequenceNumber": 1,
-      "digest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P",
-      "contentDigest": "6WqRHqMjbG8x3DTRLyqCicLU3m9k69zwR3SVzZRZPHbq"
+      "digest": "HWbdaxd9NeQwrAdmsswYaBnKWo8jhhTo4XULVvHnm87m",
+      "contentDigest": "7d8CJWLfm6JEMkELRnwBAQBj6hRoA457ZNVmddWud5tG"
     },
     "c2": {
       "sequenceNumber": 2,
-      "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
-      "contentDigest": "6GDrFGtQ8QrMiqPKBD8CLNWpRVBCBig4SvkLzxHJrXzj"
+      "digest": "JDjUMQ9EcQwHV8seq7EheoyD2fF47FEWzKx1zwzUUqdS",
+      "contentDigest": "AtY6dJHymPBrwThBDksspQUHGPva6RZAYmXQHda89pL9"
     },
     "c3": {
       "sequenceNumber": 3,
-      "digest": "5MPMJ8CDUt35cXKebu3AbzQNg8sLXNtX5nhggxZSnDpj",
-      "contentDigest": "HQWfdryyKCGZsp3ypii6WRqco3uUYeGCSTkfgUagjC9s"
+      "digest": "27DN3nyj4eZYmiTn8XaFJNEmEqZDfga1asoxM3TFX8bp",
+      "contentDigest": "25VJpnRAi6Q52x9ewvGbWDxy4YyyET2JvNsJubMKM99H"
     },
     "multiGetCheckpoints": [
       {
         "sequenceNumber": 0,
-        "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
-        "contentDigest": "AgQ37j8wCNoA7Hw7B8WDwTe6d1x23HpD5Q398FREE68b"
+        "digest": "4Kxh38MGZSf9fVqjtQtELiTE7f2WrY7JfN6Gh1rGQBL3",
+        "contentDigest": "AzK3jrXWn5VRAsc42qmQj7CQbSCELzem2cXmSryG5tY1"
       },
       {
         "sequenceNumber": 1,
-        "digest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P",
-        "contentDigest": "6WqRHqMjbG8x3DTRLyqCicLU3m9k69zwR3SVzZRZPHbq"
+        "digest": "HWbdaxd9NeQwrAdmsswYaBnKWo8jhhTo4XULVvHnm87m",
+        "contentDigest": "7d8CJWLfm6JEMkELRnwBAQBj6hRoA457ZNVmddWud5tG"
       },
       {
         "sequenceNumber": 2,
-        "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
-        "contentDigest": "6GDrFGtQ8QrMiqPKBD8CLNWpRVBCBig4SvkLzxHJrXzj"
+        "digest": "JDjUMQ9EcQwHV8seq7EheoyD2fF47FEWzKx1zwzUUqdS",
+        "contentDigest": "AtY6dJHymPBrwThBDksspQUHGPva6RZAYmXQHda89pL9"
       },
       {
         "sequenceNumber": 3,
-        "digest": "5MPMJ8CDUt35cXKebu3AbzQNg8sLXNtX5nhggxZSnDpj",
-        "contentDigest": "HQWfdryyKCGZsp3ypii6WRqco3uUYeGCSTkfgUagjC9s"
+        "digest": "27DN3nyj4eZYmiTn8XaFJNEmEqZDfga1asoxM3TFX8bp",
+        "contentDigest": "25VJpnRAi6Q52x9ewvGbWDxy4YyyET2JvNsJubMKM99H"
       }
     ]
   }
@@ -104,14 +104,14 @@ Response: {
     "multiGetCheckpoints": [
       {
         "sequenceNumber": 2,
-        "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
-        "contentDigest": "6GDrFGtQ8QrMiqPKBD8CLNWpRVBCBig4SvkLzxHJrXzj"
+        "digest": "JDjUMQ9EcQwHV8seq7EheoyD2fF47FEWzKx1zwzUUqdS",
+        "contentDigest": "AtY6dJHymPBrwThBDksspQUHGPva6RZAYmXQHda89pL9"
       },
       null,
       {
         "sequenceNumber": 0,
-        "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
-        "contentDigest": "AgQ37j8wCNoA7Hw7B8WDwTe6d1x23HpD5Q398FREE68b"
+        "digest": "4Kxh38MGZSf9fVqjtQtELiTE7f2WrY7JfN6Gh1rGQBL3",
+        "contentDigest": "AzK3jrXWn5VRAsc42qmQj7CQbSCELzem2cXmSryG5tY1"
       },
       null
     ]
