@@ -1,0 +1,12 @@
+# legacy package that depends on a legacy package
+[package]
+name = "LegacyDependsOnModern"
+edition = "2024"
+implicit-dependencies = false
+
+[dependencies]
+# TODO DVX-1960: if this is "Modern = " instead of "modern = " you get a misleading error message
+modern = { local = "../modern" }
+
+[addresses]
+legacy_depends_on_modern = "0x0"
