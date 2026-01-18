@@ -7,30 +7,35 @@ A guide to the semantic restrictions enforced by the Move 2024 compiler. Follow 
 Move 2024 automatically imports common modules and types. You don't need explicit `use` statements for these.
 
 ### Built-in Types (always available)
+
 ```move
 bool, u8, u16, u32, u64, u128, u256, address, vector<T>
 ```
 
 ### Standard Library (auto-imported)
-| Module/Type | Available As |
-|-------------|--------------|
-| `std::vector` | `vector` |
-| `std::option` | `option` |
-| `std::option::Option` | `Option` |
-| `std::internal` | `internal` |
+
+| Module/Type           | Available As |
+| --------------------- | ------------ |
+| `std::vector`         | `vector`     |
+| `std::option`         | `option`     |
+| `std::option::Option` | `Option`     |
+| `std::internal`       | `internal`   |
 
 ### Sui Framework (auto-imported in Sui mode)
-| Module/Type | Available As |
-|-------------|--------------|
-| `sui::object` | `object` |
-| `sui::transfer` | `transfer` |
-| `sui::tx_context` | `tx_context` |
-| `sui::object::ID` | `ID` |
-| `sui::object::UID` | `UID` |
-| `sui::tx_context::TxContext` | `TxContext` |
+
+| Module/Type                  | Available As |
+| ---------------------------- | ------------ |
+| `sui::object`                | `object`     |
+| `sui::transfer`              | `transfer`   |
+| `sui::tx_context`            | `tx_context` |
+| `sui::object::ID`            | `ID`         |
+| `sui::object::UID`           | `UID`        |
+| `sui::tx_context::TxContext` | `TxContext`  |
 
 ### Module-level Aliases
+
 Within a module, these are automatically available:
+
 - `Self` - alias for the current module
 - All defined structs, enums, functions, and constants by their simple name
 
@@ -53,32 +58,34 @@ public fun create(ctx: &mut TxContext): MyObject {  // TxContext is implicit
 
 ## 2. Naming Rules
 
-| Element | Rule | Example |
-|---------|------|---------|
-| Variables | Start with `a-z` or `_` | `let count = 0;` |
-| Functions | Start with `a-z`, no leading `_` | `public fun transfer()` |
-| Structs/Enums | Start with `A-Z` | `public struct Coin { }` |
-| Constants | Start with `A-Z` | `const MAX_SUPPLY: u64 = 1000;` |
-| Type Parameters | Start with `A-Z` | `public struct Box<T> { }` |
-| Macro Parameters | Must start with `$` | `macro fun m($x: u64)` |
+| Element          | Rule                             | Example                         |
+| ---------------- | -------------------------------- | ------------------------------- |
+| Variables        | Start with `a-z` or `_`          | `let count = 0;`                |
+| Functions        | Start with `a-z`, no leading `_` | `public fun transfer()`         |
+| Structs/Enums    | Start with `A-Z`                 | `public struct Coin { }`        |
+| Constants        | Start with `A-Z`                 | `const MAX_SUPPLY: u64 = 1000;` |
+| Type Parameters  | Start with `A-Z`                 | `public struct Box<T> { }`      |
+| Macro Parameters | Must start with `$`              | `macro fun m($x: u64)`          |
 
 ## 2. Ability System
 
 Every type in Move has a set of abilities that control how values can be used:
 
-| Ability | Meaning |
-|---------|---------|
-| `copy` | Value can be copied |
-| `drop` | Value can be implicitly discarded |
-| `store` | Value can be stored in global storage |
-| `key` | Value can be a top-level storage object (Sui) |
+| Ability | Meaning                                       |
+| ------- | --------------------------------------------- |
+| `copy`  | Value can be copied                           |
+| `drop`  | Value can be implicitly discarded             |
+| `store` | Value can be stored in global storage         |
+| `key`   | Value can be a top-level storage object (Sui) |
 
 **Built-in type abilities:**
+
 - Primitives (`u8`-`u256`, `bool`, `address`): `copy`, `drop`, `store`
 - References (`&T`, `&mut T`): `copy`, `drop` only
 - `vector<T>`: inherits from `T`
 
 **Rules:**
+
 - Struct abilities are declared: `public struct Coin has copy, drop { }`
 - Type parameters can require abilities: `fun consume<T: drop>(x: T)`
 - Types without `drop` MUST be explicitly consumed (cannot be ignored)
@@ -103,15 +110,18 @@ fun good() {
 ## 3. Reference and Borrow Rules
 
 **Immutable borrows (`&T`):**
+
 - Multiple immutable borrows allowed simultaneously
 - Cannot modify through immutable reference
 
 **Mutable borrows (`&mut T`):**
+
 - Only ONE mutable borrow at a time
 - No other borrows (mutable or immutable) can coexist
 - Variable must be declared `mut`: `let mut x = ...`
 
 **Critical restrictions:**
+
 - Cannot return references to local variables (dangling)
 - Struct fields CANNOT contain references
 - References have `copy` and `drop` but NOT `store`
@@ -145,6 +155,7 @@ y = 6;  // OK
 ```
 
 To take a mutable borrow, the variable must be `mut`:
+
 ```move
 let x = 5;
 let r = &mut x;  // ERROR
@@ -174,11 +185,11 @@ fun example() {
 
 ## 6. Visibility Rules
 
-| Visibility | Accessible From |
-|------------|-----------------|
-| `public` | Anywhere |
+| Visibility        | Accessible From   |
+| ----------------- | ----------------- |
+| `public`          | Anywhere          |
 | `public(package)` | Same package only |
-| (none) | Same module only |
+| (none)            | Same module only  |
 
 ```move
 module pkg::a;
@@ -191,6 +202,7 @@ fun internal_fn() { }             // This module only
 ## 7. Type Restrictions
 
 **Recursive types are forbidden:**
+
 ```move
 // ERROR: Recursive type
 public struct Node { next: Node }
@@ -200,8 +212,10 @@ public struct Node { next: Option<Node> }
 ```
 
 **Phantom type parameters:**
+
 - Declared with `phantom` keyword
 - Cannot appear in field types (only in phantom positions)
+
 ```move
 public struct Marker<phantom T> {}  // OK: T not used in fields
 public struct Bad<phantom T> { value: T }  // ERROR: phantom T in field
@@ -210,6 +224,7 @@ public struct Bad<phantom T> { value: T }  // ERROR: phantom T in field
 ## 8. Constant Restrictions
 
 Constants can only have these types:
+
 - Primitives: `u8`, `u16`, `u32`, `u64`, `u128`, `u256`, `bool`, `address`
 - `vector` of primitives
 - Byte strings
@@ -221,6 +236,7 @@ const BAD: Coin = Coin { };         // ERROR: struct not allowed
 ```
 
 Constant expressions cannot contain:
+
 - Function calls
 - Control flow (if/loops)
 - References
@@ -229,6 +245,7 @@ Constant expressions cannot contain:
 ## 9. Pattern Matching Rules
 
 **Patterns must be exhaustive:**
+
 ```move
 // ERROR: Non-exhaustive
 match (opt) {
@@ -246,6 +263,7 @@ match (opt) {
 ## 10. Function Arity
 
 Type arguments and value arguments must match exactly:
+
 ```move
 fun take_two<T>(a: T, b: T) { }
 
@@ -257,15 +275,15 @@ take_two(1, 2);        // OK (type inferred)
 
 ## 11. Common Errors and Fixes
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| "value without drop" | Type lacks `drop`, not consumed | Explicitly use or destroy the value |
-| "cannot copy" | Type lacks `copy` | Use `move` or add `copy` ability |
-| "invalid borrow" | Borrowing moved value | Borrow before move, or copy first |
-| "cannot mutate" | Variable not `mut` | Add `mut` to declaration |
-| "dangling reference" | Returning local ref | Return owned value or borrow param |
-| "recursive type" | Self-referential struct | Use `Option` or `vector` indirection |
-| "visibility" | Calling private function | Make function `public` or `public(package)` |
+| Error                | Cause                           | Fix                                         |
+| -------------------- | ------------------------------- | ------------------------------------------- |
+| "value without drop" | Type lacks `drop`, not consumed | Explicitly use or destroy the value         |
+| "cannot copy"        | Type lacks `copy`               | Use `move` or add `copy` ability            |
+| "invalid borrow"     | Borrowing moved value           | Borrow before move, or copy first           |
+| "cannot mutate"      | Variable not `mut`              | Add `mut` to declaration                    |
+| "dangling reference" | Returning local ref             | Return owned value or borrow param          |
+| "recursive type"     | Self-referential struct         | Use `Option` or `vector` indirection        |
+| "visibility"         | Calling private function        | Make function `public` or `public(package)` |
 
 ## 12. Quick Reference: Valid Patterns
 
@@ -299,6 +317,7 @@ These rules are enforced in addition to core Move 2024 semantics when compiling 
 ### 13.1 Object Rules
 
 **Objects must have `id: UID` as first field:**
+
 ```move
 // CORRECT: First field is id: UID
 public struct MyObject has key {
@@ -312,12 +331,14 @@ public struct AlsoBad has key { data: u64, id: UID }
 ```
 
 **Enums cannot have `key` ability:**
+
 ```move
 // ERROR: Enums cannot be objects
 public enum MyEnum has key { A, B }
 ```
 
 **Fresh UID required for object creation:**
+
 ```move
 // CORRECT: UID from object::new()
 let obj = MyObject {
@@ -353,6 +374,7 @@ fun init(a: u64, b: u64, ctx: &mut TxContext) { }  // Max 2 params
 ```
 
 **Rules:**
+
 - Must be private (no visibility modifier)
 - Cannot be `entry`
 - No type parameters allowed
@@ -377,25 +399,32 @@ fun init(otw: MY_COIN, ctx: &mut TxContext) {
 ```
 
 **OTW Requirements:**
+
 - Name must be uppercase version of module name
 - Only `drop` ability (no `copy`, `store`, `key`)
 - No type parameters
 - No fields, or single `bool` field
 - Cannot be manually constructed (passed by runtime to `init`)
 
-### 13.4 Entry Function Rules
+### 13.4 Public / Entry Function Rules
 
-Entry functions can be called directly in transactions:
+Public and Entry functions can be called directly in PTBs:
 
 ```move
-public entry fun do_something(
+use std::string::String;
+
+public fun do_something(
     obj: &mut MyObject,       // Objects by reference or value
     value: u64,               // Primitives by value
+    object_id: ID,
+    optional_object_id: Option<ID>,
+    string_argument: String,
     ctx: &mut TxContext,      // TxContext last (optional)
 ) { }
 ```
 
 **Valid parameter types:**
+
 - Primitives (by value): `u8`-`u256`, `bool`, `address`
 - Strings: `std::string::String`, `std::ascii::String`
 - Object ID: `sui::object::ID`
@@ -405,11 +434,12 @@ public entry fun do_something(
 - `Receiving<T>` arguments
 
 **Invalid parameters:**
+
 - `&mut Clock` - must be `&Clock`
 - `&mut Random` - must be `&Random`
 - Non-object structs without `key`
 
-**Return type:** Must have `drop` ability (or be unit `()`)
+**Return type:** Must have `drop` ability (or be unit `()`) for entry functions, and any type for public functions.
 
 ### 13.5 Transfer Rules
 
@@ -445,24 +475,24 @@ These are warnings (not errors) that indicate potential issues. Suppress with `#
 
 **Default Lints (enabled by default):**
 
-| Filter | Warning | Issue | Fix |
-|--------|---------|-------|-----|
-| `share_owned` | "possible owned object share" | Sharing object passed as parameter or from unpacking | Create fresh object and share in same function |
-| `self_transfer` | "non-composable transfer to sender" | Transferring to `tx_context::sender()` | Return object from function for composability |
-| `custom_state_change` | "potentially unenforceable custom transfer policy" | Custom transfer/share/freeze on types with `store` | Use `public_transfer`/`public_share_object` |
-| `coin_field` | "sub-optimal Coin field type" | `sui::coin::Coin` in struct field | Use `sui::balance::Balance` instead |
-| `freeze_wrapped` | "attempting to freeze wrapped objects" | Freezing struct containing nested `key` types | Nested objects become inaccessible |
-| `collection_equality` | "possibly useless collections compare" | Comparing `Table`, `Bag`, `VecMap` etc. with `==` | Structural equality not checked |
-| `public_random` | "Risky use of sui::random" | Public function taking `Random`/`RandomGenerator` | Make function private or add access control |
-| `missing_key` | "struct with id but missing key ability" | Struct has `id: UID` field but no `key` ability | Add `key` ability |
-| `public_entry` | "unnecessary entry on public function" | `public entry fun` limits composability | Remove `entry` or make function non-public |
+| Filter                | Warning                                            | Issue                                                | Fix                                            |
+| --------------------- | -------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------- |
+| `share_owned`         | "possible owned object share"                      | Sharing object passed as parameter or from unpacking | Create fresh object and share in same function |
+| `self_transfer`       | "non-composable transfer to sender"                | Transferring to `tx_context::sender()`               | Return object from function for composability  |
+| `custom_state_change` | "potentially unenforceable custom transfer policy" | Custom transfer/share/freeze on types with `store`   | Use `public_transfer`/`public_share_object`    |
+| `coin_field`          | "sub-optimal Coin field type"                      | `sui::coin::Coin` in struct field                    | Use `sui::balance::Balance` instead            |
+| `freeze_wrapped`      | "attempting to freeze wrapped objects"             | Freezing struct containing nested `key` types        | Nested objects become inaccessible             |
+| `collection_equality` | "possibly useless collections compare"             | Comparing `Table`, `Bag`, `VecMap` etc. with `==`    | Structural equality not checked                |
+| `public_random`       | "Risky use of sui::random"                         | Public function taking `Random`/`RandomGenerator`    | Make function private or add access control    |
+| `missing_key`         | "struct with id but missing key ability"           | Struct has `id: UID` field but no `key` ability      | Add `key` ability                              |
+| `public_entry`        | "unnecessary entry on public function"             | `public entry fun` limits composability              | Remove `entry` or make function non-public     |
 
 **Additional Lints (enable with `#[lint_allow(lint(all))]`):**
 
-| Filter | Warning | Issue | Fix |
-|--------|---------|-------|-----|
-| `freezing_capability` | "freezing potential capability" | Freezing types matching `*Cap*` pattern | Capabilities should not be frozen |
-| `prefer_mut_tx_context` | "prefer &mut TxContext over &TxContext" | Public function uses `&TxContext` | Use `&mut TxContext` for upgradability |
+| Filter                  | Warning                                 | Issue                                   | Fix                                    |
+| ----------------------- | --------------------------------------- | --------------------------------------- | -------------------------------------- |
+| `freezing_capability`   | "freezing potential capability"         | Freezing types matching `*Cap*` pattern | Capabilities should not be frozen      |
+| `prefer_mut_tx_context` | "prefer &mut TxContext over &TxContext" | Public function uses `&TxContext`       | Use `&mut TxContext` for upgradability |
 
 ### 13.8 Quick Reference: Sui Patterns
 
@@ -486,7 +516,7 @@ fun init(_otw: MY_MODULE, _ctx: &mut TxContext) {
 }
 
 // Entry function
-public entry fun create(ctx: &mut TxContext) {
+entry fun create_and_keep(ctx: &mut TxContext) {
     let obj = MyObject {
         id: object::new(ctx),
         value: 0,
@@ -494,8 +524,8 @@ public entry fun create(ctx: &mut TxContext) {
     transfer::transfer(obj, ctx.sender());
 }
 
-// Public function for objects with store
-public fun create_and_return(ctx: &mut TxContext): MyObject {
+// Public function which allows objects to be used in the transaction
+public fun create(ctx: &mut TxContext): MyObject {
     MyObject {
         id: object::new(ctx),
         value: 0,
@@ -520,6 +550,7 @@ transfer::transfer(obj, ctx.sender());
 ```
 
 **Characteristics:**
+
 - Fast path execution (no consensus required for single-owner transactions)
 - Can be transferred to another address
 - Can be converted to shared or immutable
@@ -540,6 +571,7 @@ public fun bad(obj: MyObject) {
 ```
 
 **Characteristics:**
+
 - Any address can read/write (if function allows)
 - Requires consensus ordering (slower than owned)
 - Cannot be transferred or made immutable once shared
@@ -556,6 +588,7 @@ transfer::freeze_object(obj);
 ```
 
 **Characteristics:**
+
 - Read-only forever (cannot be modified or deleted)
 - Anyone can reference with `&T`
 - No consensus needed (fast reads)
@@ -573,6 +606,7 @@ public struct Wrapper has key {
 ```
 
 **Characteristics:**
+
 - No longer exists as independent object in storage
 - Accessed only through parent object
 - UID still exists but object is not addressable
@@ -580,38 +614,37 @@ public struct Wrapper has key {
 
 ### 14.5 Object Ownership Summary
 
-| State | Owner | Consensus | Mutable | Use Case |
-|-------|-------|-----------|---------|----------|
-| **Owned** | Single address | No | Yes | User assets, personal data |
-| **Shared** | None (global) | Yes | Yes | Shared state, AMM pools, registries |
-| **Immutable** | None (frozen) | No | No | Config, constants, packages |
-| **Wrapped** | Parent object | Depends on parent | Via parent | Composition, bundling |
+| State         | Owner          | Consensus         | Mutable    | Use Case                            |
+| ------------- | -------------- | ----------------- | ---------- | ----------------------------------- |
+| **Owned**     | Single address | No                | Yes        | User assets, personal data          |
+| **Shared**    | None (global)  | Yes               | Yes        | Shared state, AMM pools, registries |
+| **Immutable** | None (frozen)  | No                | No         | Config, constants, packages         |
+| **Wrapped**   | Parent object  | Depends on parent | Via parent | Composition, bundling               |
 
 ### 14.6 Storage State Transitions
 
 ```
-                    ┌──────────────┐
-        create ───▶ │    Owned     │
-                    └──────────────┘
+                    ┌───────────────────────┐
+        create ───▶ │    Freshly Created    │
+                    └───────────────────────┘
                            │
-           ┌───────────────┼───────────────┐
-           ▼               ▼               ▼
-    ┌────────────┐  ┌────────────┐  ┌────────────┐
-    │   Shared   │  │ Immutable  │  │  Wrapped   │
-    └────────────┘  └────────────┘  └────────────┘
-         │                               │
-         ▼                               ▼
-    (permanent)                    (can unwrap)
+           ┌───────────────┼───────────────┼───────────────┐
+           ▼               ▼               ▼               ▼
+    ┌────────────┐  ┌────────────┐  ┌────────────┐ ┌────────────┐
+    │   Shared   │  │ Immutable  │  │  Wrapped   │ │   Owned    │
+    └────────────┘  └────────────┘  └────────────┘ └────────────┘
 ```
 
 **Rules:**
-- Owned → Shared: `transfer::share_object()` (irreversible, **fresh objects only**)
-- Owned → Immutable: `transfer::freeze_object()` (irreversible)
-- Owned → Wrapped: Store as field in another object
+
+- Fresh → Shared: `transfer::share_object()` (irreversible)
+- Fresh → Immutable: `transfer::freeze_object()` (irreversible)
+- Fresh → Wrapped: Store as field in another object
 - Wrapped → Owned: Extract and `transfer::transfer()`
 - Shared/Immutable: Cannot change state once set
 
 **Critical:**
+
 - `share_owned` lint: warns when sharing an owned (transferred) object - changing its storage model
 - Shared objects can be reshared (take by value, call `share_object` again)
 - Shared objects can be deleted (take by value and destroy)
