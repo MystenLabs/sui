@@ -137,7 +137,7 @@ pub trait ReadApi {
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>>;
 
     /// Return the protocol config table for the given version number.
-    /// If the version number is not specified, If none is specified, the node uses the version of the latest epoch it has processed.
+    /// If none is specified, the node uses the version of the latest epoch it has processed.
     #[method(name = "getProtocolConfig")]
     async fn get_protocol_config(
         &self,
