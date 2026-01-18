@@ -19,10 +19,15 @@
  *   - use fun declarations
  *   - Macro functions
  *
- * Reserved keywords in Move 2024:
+ * Reserved keywords in Move 2024 (from lexer.rs):
  *   abort, acquires, as, break, const, continue, copy, else, enum, false,
- *   for, friend, fun, if, invariant, let, loop, match, module, move, mut,
- *   native, public, return, struct, true, type, use, while
+ *   for, friend, fun, if, let, loop, match, module, move, mut, native,
+ *   public, return, struct, true, type, use, while
+ *
+ * Contextual keywords (from keywords.rs - parsed contextually, not as tokens):
+ *   address, entry, has, macro, phantom, Self
+ *
+ * Note: 'invariant' and 'spec' are keywords only in legacy Move, not Move 2024.
  *
  * Notation:
  *   [ optional ]    - Zero or one
@@ -30,6 +35,44 @@
  *   ( grouped )     - Grouping
  *   |               - Alternation
  *   Comma<X>        - Comma-separated list with optional trailing comma
+ *
+ * ============================================================================
+ * SEMANTIC RESTRICTIONS (not enforced by parser)
+ * ============================================================================
+ *
+ * The following restrictions are enforced during type checking, not parsing.
+ * Code that violates these rules will parse successfully but fail to compile.
+ *
+ * [SEM-1] Lambda expressions: Syntactically valid anywhere an Exp is expected,
+ *         but semantically restricted to direct arguments of macro functions.
+ *         Example: `let f = |x| x + 1` parses but fails with E04031.
+ *
+ * [SEM-2] Module labels: Only ONE module per file may use label syntax (;).
+ *         Additional modules in the same file must use braced form ({}).
+ *         Example: `module a; ... module b;` fails with E02004.
+ *
+ * [SEM-3] Use fun declarations: The function's first parameter must be the
+ *         receiver type (by value, &, or &mut). Constructor-style functions
+ *         (returning the type) cannot be used with `use fun`.
+ *         Example: `use fun new as T.create` where `fun new(): T` fails E02017.
+ *
+ * [SEM-4] Named block labels with break/continue: Named blocks ('label: {})
+ *         only support `return 'label`, not `break 'label` or `continue 'label`.
+ *         Loop labels ('label: loop/while) support break/continue.
+ *         Example: `'b: { break 'b }` fails with E03014.
+ *
+ * [SEM-5] Ability constraints: Types without `drop` cannot be ignored (via _)
+ *         or implicitly discarded. Types without `copy` cannot be used after move.
+ *         These must be explicitly consumed or have required abilities declared.
+ *
+ * [SEM-6] Type parameter constraints: When a generic type requires abilities
+ *         on its parameters (e.g., `Generic<T: copy>`), any type using it must
+ *         propagate those constraints to its own parameters.
+ *
+ * [SEM-7] Struct construction: Structs use `Name { field: value }` syntax.
+ *         `Name::method()` syntax is only valid for enum variant construction
+ *         or associated function calls via `use fun`.
+ *
  *)
 
 (* ============================================================================
@@ -76,10 +119,11 @@ AddressBlock = "address" LeadingNameAccess "{" { ModuleDefinition } "}" ;
  * ModuleDefinition
  * ----------------
  * Test files: top_level_module.move, multi_module_invalid_*.move
- *)
-(*
+ *
  * Module address is REQUIRED in Move 2024.
  * Either via path (module 0x1::foo) or named address (module pkg::foo).
+ *
+ * See [SEM-2]: Only one module per file may use label syntax.
  *)
 ModuleDefinition =
     { Attributes }
@@ -88,7 +132,7 @@ ModuleDefinition =
     "module"
     LeadingNameAccess "::" ModuleName  (* Address is required *)
     ( "{" { ModuleMember } "}"         (* Braced form - required for multiple modules *)
-    | ";" { ModuleMember }             (* Label form - only if single module in file *)
+    | ";" { ModuleMember }             (* Label form - only if single module in file [SEM-2] *)
     )
   ;
 
@@ -119,7 +163,7 @@ UseDecl =
   ;
 
 Use =
-    "fun" NameAccessChain "as" NameAccessChain "." Identifier
+    "fun" NameAccessChain "as" NameAccessChain "." Identifier  (* [SEM-3] *)
   | LeadingNameAccess "::" UseModule
   | LeadingNameAccess "::" "{" Comma<UseNestedModule> "}"
   ;
@@ -326,6 +370,8 @@ Exp =
 (*
  * Lambda Expressions
  * Test files: lambda_expression_return_type.move, lambda_lvalue.move
+ *
+ * See [SEM-1]: Lambdas parse as expressions but are restricted to macro arguments.
  *)
 LambdaExp =
     LambdaBindList Exp
@@ -388,11 +434,12 @@ Term =
   | BlockLabel ":" Exp                 (* Labeled expression *)
   ;
 
+(* See [SEM-7]: Struct construction uses {} syntax; Name::x() is for enums/use fun *)
 NameExp =
     NameAccessChain
-  | NameAccessChain "(" Comma<Exp> ")"
-  | NameAccessChain "!" "(" Comma<Exp> ")"
-  | NameAccessChain "{" Comma<ExpField> "}"
+  | NameAccessChain "(" Comma<Exp> ")"            (* Enum variant or function call *)
+  | NameAccessChain "!" "(" Comma<Exp> ")"        (* Macro invocation *)
+  | NameAccessChain "{" Comma<ExpField> "}"       (* Struct construction *)
   ;
 
 ExpField = Field [ ":" Exp ] ;
@@ -449,9 +496,10 @@ PositionalFieldPattern =
   | MatchPattern
   ;
 
+(* See [SEM-4]: break/continue only work with loop labels, not named blocks *)
 BreakExp = "break" [ BlockLabel ] [ Exp ] ;
 ContinueExp = "continue" [ BlockLabel ] ;
-ReturnExp = "return" [ BlockLabel ] [ Exp ] ;
+ReturnExp = "return" [ BlockLabel ] [ Exp ] ;  (* Works with both loop and block labels *)
 AbortExp = "abort" [ Exp ] ;
 
 ExpOrBlock =

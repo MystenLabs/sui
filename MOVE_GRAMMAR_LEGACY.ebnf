@@ -19,13 +19,16 @@
  *   - No use fun declarations
  *   - No macro functions
  *
- * Reserved keywords in Legacy Move:
+ * Reserved keywords in Legacy Move (25 total, from lexer.rs):
  *   abort, acquires, as, break, const, continue, copy, else, false,
  *   friend, fun, if, invariant, let, loop, module, move, native,
  *   public, return, spec, struct, true, use, while
  *
- * NOT reserved (can be used as identifiers):
- *   mut, enum, type, match, for
+ * Contextual keywords (parsed contextually, not as tokens):
+ *   address, entry, has, phantom, Self
+ *
+ * NOT reserved in legacy (can be used as identifiers, keywords in Move 2024):
+ *   enum, for, match, mut, type
  *)
 
 (* ============================================================================
