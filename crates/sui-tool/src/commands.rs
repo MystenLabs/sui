@@ -340,6 +340,11 @@ pub enum ToolCommand {
         /// Defaults to 3 retries. Set to 0 to disable retries.
         #[clap(long = "max-retries", default_value = "3")]
         max_retries: usize,
+
+        /// Resume a previously interrupted download instead of starting from scratch.
+        /// When enabled, already downloaded files will be skipped.
+        #[clap(long = "resume")]
+        resume: bool,
     },
 
     #[clap(name = "replay")]
@@ -668,6 +673,7 @@ impl ToolCommand {
                 latest,
                 verbose,
                 max_retries,
+                resume,
             } => {
                 if !verbose {
                     tracing_handle
@@ -796,6 +802,7 @@ impl ToolCommand {
                     network,
                     verify,
                     max_retries,
+                    resume,
                 )
                 .await?;
             }
