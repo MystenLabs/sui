@@ -31,13 +31,13 @@ success: false
 exit_code: 1
 ----- stdout -----
 === publish a ===
-INCLUDING DEPENDENCY MoveStdlib
-INCLUDING DEPENDENCY Sui
-INCLUDING DEPENDENCY UnpublishedNonZeroAddress
-BUILDING examples
 Failed to fetch package UnpublishedNonZeroAddress
 
 Caused by:
     Object 0x0000000000000000000000000000000000000000000000000000000000000bad does not exist
 
 ----- stderr -----
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY UnpublishedNonZeroAddress
+BUILDING examples
