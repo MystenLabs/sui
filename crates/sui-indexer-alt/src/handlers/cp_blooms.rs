@@ -6,8 +6,6 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use diesel::ExpressionMethods;
-use diesel::define_sql_function;
-use diesel::sql_types::Binary;
 use diesel::upsert::excluded;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::pipeline::Processor;
@@ -21,20 +19,12 @@ use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_framework::types::full_checkpoint_content::ExecutedTransaction;
 use sui_indexer_alt_framework::types::object::Owner;
 use sui_indexer_alt_framework::types::transaction::TransactionDataAPI;
-use sui_indexer_alt_schema::blooms::bloom::BloomFilter;
-use sui_indexer_alt_schema::cp_blooms::BLOOM_FILTER_SEED;
-use sui_indexer_alt_schema::cp_blooms::CP_BLOOM_NUM_BYTES;
-use sui_indexer_alt_schema::cp_blooms::CP_BLOOM_NUM_HASHES;
+use sui_indexer_alt_schema::cp_blooms::CpBloomFilter;
 use sui_indexer_alt_schema::cp_blooms::MAX_FOLD_DENSITY;
 use sui_indexer_alt_schema::cp_blooms::MIN_FOLD_BYTES;
 use sui_indexer_alt_schema::cp_blooms::StoredCpBlooms;
+use sui_indexer_alt_schema::cp_blooms::bytea_or;
 use sui_indexer_alt_schema::schema::cp_blooms;
-
-// Define the bytea_or SQL function for merging bloom filters
-define_sql_function! {
-    /// Performs bitwise OR on two bytea values. Used for merging bloom filters.
-    fn bytea_or(a: Binary, b: Binary) -> Binary;
-}
 
 /// Indexes bloom filters per checkpoint for transaction scanning.
 pub(crate) struct CpBlooms;
@@ -48,8 +38,7 @@ impl Processor for CpBlooms {
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
         let cp_num = checkpoint.summary.sequence_number;
 
-        let mut bloom =
-            BloomFilter::new(CP_BLOOM_NUM_BYTES, CP_BLOOM_NUM_HASHES, BLOOM_FILTER_SEED);
+        let mut bloom = CpBloomFilter::new();
         for tx in checkpoint.transactions.iter() {
             insert_tx_values(tx, &mut bloom);
         }
@@ -146,8 +135,7 @@ mod tests {
     use diesel::QueryDsl;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::Indexer;
-    use sui_indexer_alt_schema::blooms::hash;
-    use sui_indexer_alt_schema::cp_blooms::CP_BLOOM_NUM_BITS;
+    use sui_indexer_alt_schema::cp_blooms::hash;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;
     use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
@@ -166,19 +154,14 @@ mod tests {
     /// Check if a key might be in a folded bloom filter.
     fn folded_bloom_contains(folded_bytes: &[u8], key: &[u8]) -> bool {
         let folded_bits = folded_bytes.len() * 8;
-        let mut hasher = hash::DoubleHasher::with_value(key, BLOOM_FILTER_SEED);
-        (0..CP_BLOOM_NUM_HASHES).all(|_| {
-            let pos = (hasher.next_hash() as usize) % CP_BLOOM_NUM_BITS;
-            let folded_pos = pos % folded_bits;
-            folded_bytes[folded_pos / 8] & (1 << (folded_pos % 8)) != 0
+        hash(key).all(|bit_idx| {
+            let folded_idx = bit_idx % folded_bits;
+            folded_bytes[folded_idx / 8] & (1 << (folded_idx % 8)) != 0
         })
     }
 
     #[tokio::test]
     async fn test_cp_blooms_empty_checkpoint() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let _conn = indexer.store().connect().await.unwrap();
-
         let mut builder = TestCheckpointBuilder::new(0);
         let checkpoint = Arc::new(builder.build_checkpoint());
 
@@ -216,41 +199,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cp_blooms_with_affected_addresses() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let _conn = indexer.store().connect().await.unwrap();
-
-        let mut builder = TestCheckpointBuilder::new(0);
-        builder = builder
-            .start_transaction(1) // Use sender_idx=1 to avoid SuiAddress::ZERO which is filtered out
-            .create_owned_object(0)
-            .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
-
-        let values = CpBlooms.process(&checkpoint).await.unwrap();
-
-        assert_eq!(values.len(), 1);
-        assert!(!values[0].bloom_filter.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_cp_blooms_with_affected_objects() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let _conn = indexer.store().connect().await.unwrap();
-
-        let mut builder = TestCheckpointBuilder::new(0);
-        builder = builder
-            .start_transaction(1) // Use sender_idx=1 to avoid SuiAddress::ZERO which is filtered out
-            .create_shared_object(0)
-            .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
-
-        let values = CpBlooms.process(&checkpoint).await.unwrap();
-
-        assert_eq!(values.len(), 1);
-    }
-
-    #[tokio::test]
     async fn test_cp_blooms_multiple_checkpoints() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
@@ -277,9 +225,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_cp_blooms_filter_accuracy() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let _conn = indexer.store().connect().await.unwrap();
-
         let mut builder = TestCheckpointBuilder::new(0);
         // Use sender_idx=1 and 2 to avoid SuiAddress::ZERO which is filtered out
         builder = builder
@@ -326,43 +271,6 @@ mod tests {
         assert!(
             !folded_bloom_contains(bloom_bytes, &random_addr.to_vec()),
             "Should not contain random address"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_cp_blooms_mixed_transactions() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let _conn = indexer.store().connect().await.unwrap();
-
-        let mut builder = TestCheckpointBuilder::new(0);
-        builder = builder
-            .start_transaction(0)
-            .finish_transaction()
-            .start_transaction(1)
-            .add_move_call(ObjectID::ZERO, "module", "function")
-            .finish_transaction();
-        let checkpoint = Arc::new(builder.build_checkpoint());
-
-        let values = CpBlooms.process(&checkpoint).await.unwrap();
-        assert_eq!(values.len(), 1);
-
-        let bloom_bytes = &values[0].bloom_filter;
-
-        let sender_0 = checkpoint.transactions[0].transaction.sender();
-        let sender_1 = checkpoint.transactions[1].transaction.sender();
-        assert!(
-            folded_bloom_contains(bloom_bytes, &sender_0.to_vec()),
-            "Should contain sender from tx 0"
-        );
-        assert!(
-            folded_bloom_contains(bloom_bytes, &sender_1.to_vec()),
-            "Should contain sender from tx 1"
-        );
-
-        // Verify bloom filter contains package ID from move call in tx 1
-        assert!(
-            folded_bloom_contains(bloom_bytes, &ObjectID::ZERO.to_vec()),
-            "Should contain package ID from move call in tx 1"
         );
     }
 

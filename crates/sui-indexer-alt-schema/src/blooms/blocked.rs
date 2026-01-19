@@ -1,78 +1,57 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::blooms::hash::DoubleHasher;
 use crate::blooms::hash::set_bit;
 
+/// Probe for a blocked bloom filter: (block_idx, byte_offsets, bit_masks).
+pub type BlockedBloomProbe = (usize, Vec<usize>, Vec<usize>);
+
 #[derive(Clone)]
-pub struct BlockedBloomFilter {
-    blocks: Vec<Vec<u8>>,
+pub struct BlockedBloomFilter<const BYTES: usize, const BLOCKS: usize, const HASHES: u32> {
+    blocks: Vec<[u8; BYTES]>,
     seed: u128,
-    num_hashes: u32,
-    num_blocks: usize,
-    bytes_per_block: usize,
 }
 
-impl BlockedBloomFilter {
-    /// Create a new blocked bloom filter with the given configuration.
-    pub fn new(seed: u128, num_blocks: usize, bytes_per_block: usize, num_hashes: u32) -> Self {
+impl<const BYTES: usize, const BLOCKS: usize, const HASHES: u32>
+    BlockedBloomFilter<BYTES, BLOCKS, HASHES>
+{
+    pub fn new(seed: u128) -> Self {
         Self {
-            blocks: vec![vec![0u8; bytes_per_block]; num_blocks],
+            blocks: vec![[0u8; BYTES]; BLOCKS],
             seed,
-            num_blocks,
-            bytes_per_block,
-            num_hashes,
         }
     }
 
     /// Insert a value into the bloom filter by setting the bits in the block that the
-    /// hash function produces.
+    /// hash function produces. The first hash sets the block index, and the remaining hashes
+    /// set bits within that block. This allows us to query specific blocks for membership instead
+    /// of scanning the entire bloom filter.
     pub fn insert(&mut self, value: &[u8]) {
-        let bits_per_block = self.bytes_per_block * 8;
+        let bits_per_block = BYTES * 8;
         let block_idx = {
             let mut hasher = DoubleHasher::with_value(value, self.seed);
-            (hasher.next_hash() as usize) % self.num_blocks
+            (hasher.next_hash() as usize) % BLOCKS
         };
         let block = &mut self.blocks[block_idx];
-        for h in DoubleHasher::with_value(value, self.seed.wrapping_add(1))
-            .take(self.num_hashes as usize)
-        {
+        for h in DoubleHasher::with_value(value, self.seed.wrapping_add(1)).take(HASHES as usize) {
             set_bit(block, (h as usize) % bits_per_block);
         }
     }
 
-    /// Produce the index of the block and the bit positions set in that block for a value.
-    /// Uses two independent DoubleHashers to produce the block index and the bit positions to prevent keys that
-    /// hash to the same block from have correlated bit positions.
-    pub fn hash(
-        key: &[u8],
-        seed: u128,
-        num_blocks: usize,
-        num_hashes: u32,
-        bytes_per_block: usize,
-    ) -> (usize, Vec<usize>) {
-        let bits_per_block = bytes_per_block * 8;
-        let block_idx = {
-            let mut hasher = DoubleHasher::with_value(key, seed);
-            (hasher.next_hash() as usize) % num_blocks
-        };
-        let bit_idxs: Vec<usize> = DoubleHasher::with_value(key, seed.wrapping_add(1))
-            .take(num_hashes as usize)
-            .map(|h| (h as usize) % bits_per_block)
-            .collect();
-        (block_idx, bit_idxs)
-    }
-
-    /// Consume the filter and return non-zero blocks.
-    pub fn into_sparse_blocks(self) -> Vec<(usize, Vec<u8>)> {
+    /// The block index and block's bloom filter for filters with bits set.
+    pub fn into_sparse_blocks(self) -> impl Iterator<Item = (usize, Vec<u8>)> {
         self.blocks
             .into_iter()
             .enumerate()
             .filter(|(_, block)| block.iter().any(|&b| b != 0))
-            .collect()
+            .map(|(idx, block)| (idx, block.to_vec()))
     }
 }
 
-impl<T: AsRef<[u8]>> Extend<T> for BlockedBloomFilter {
+impl<T: AsRef<[u8]>, const BYTES: usize, const BLOCKS: usize, const HASHES: u32> Extend<T>
+    for BlockedBloomFilter<BYTES, BLOCKS, HASHES>
+{
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         for key in iter {
             self.insert(key.as_ref());
@@ -80,12 +59,34 @@ impl<T: AsRef<[u8]>> Extend<T> for BlockedBloomFilter {
     }
 }
 
+/// Hashes a value to the block index and bit positions to set/check in a blocked bloom filter.
+/// Uses separate hashers for block selection and bit indexes to prevent correlated patterns.
+pub fn hash<const BYTES: usize, const BLOCKS: usize, const HASHES: u32>(
+    value: &[u8],
+    seed: u128,
+) -> (usize, impl Iterator<Item = usize>) {
+    let bits_per_block = BYTES * 8;
+    let block_idx = {
+        let mut hasher = DoubleHasher::with_value(value, seed);
+        (hasher.next_hash() as usize) % BLOCKS
+    };
+    let bit_iter = DoubleHasher::with_value(value, seed.wrapping_add(1))
+        .take(HASHES as usize)
+        .map(move |h| (h as usize) % bits_per_block);
+    (block_idx, bit_iter)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::cp_bloom_blocks::{BLOOM_BLOCK_BYTES, NUM_BLOOM_BLOCKS, NUM_HASHES};
 
-    impl BlockedBloomFilter {
+    type TestBloomFilter =
+        BlockedBloomFilter<{ BLOOM_BLOCK_BYTES }, { NUM_BLOOM_BLOCKS }, { NUM_HASHES }>;
+
+    impl<const BYTES: usize, const BLOCKS: usize, const HASHES: u32>
+        BlockedBloomFilter<BYTES, BLOCKS, HASHES>
+    {
         /// Get a specific block by index.
         pub fn get_block(&self, block_idx: usize) -> Option<&[u8]> {
             self.blocks.get(block_idx).map(|b| b.as_slice())
@@ -101,21 +102,18 @@ mod tests {
         /// Check if a key might be in the bloom filter.
         pub fn contains(&self, key: &[u8]) -> bool {
             use crate::blooms::hash::check_bit;
-            let (block_idx, bit_idxs) = Self::hash(
-                key,
-                self.seed,
-                self.num_blocks,
-                self.num_hashes,
-                self.bytes_per_block,
-            );
-            bit_idxs
-                .iter()
-                .all(|&bit_idx| check_bit(&self.blocks[block_idx], bit_idx))
+            let (block_idx, mut bit_idxs) = hash::<BYTES, BLOCKS, HASHES>(key, self.seed);
+            bit_idxs.all(|bit_idx| check_bit(&self.blocks[block_idx], bit_idx))
+        }
+
+        /// Number of blocks in the filter (for tests).
+        pub fn num_blocks(&self) -> usize {
+            BLOCKS
         }
     }
 
-    fn new_test_filter(seed: u128) -> BlockedBloomFilter {
-        BlockedBloomFilter::new(seed, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BYTES, NUM_HASHES)
+    fn new_test_filter(seed: u128) -> TestBloomFilter {
+        TestBloomFilter::new(seed)
     }
 
     #[test]
@@ -152,7 +150,7 @@ mod tests {
 
         let bloomed = bloom.clone();
 
-        let sparse = bloom.into_sparse_blocks();
+        let sparse: Vec<_> = bloom.into_sparse_blocks().collect();
 
         // Should have far fewer than 128 blocks
         assert!(sparse.len() <= 3);
@@ -182,7 +180,7 @@ mod tests {
         let bloomed = bloom.clone();
 
         // Analyze saturation across all non-zero blocks
-        let sparse_blocks = bloom.into_sparse_blocks();
+        let sparse_blocks: Vec<_> = bloom.into_sparse_blocks().collect();
 
         let mut total_saturated_bytes = 0;
         let mut max_saturated_bytes = 0;
@@ -253,7 +251,7 @@ mod tests {
 
         // Count bits before insert
         let mut bits_before = 0;
-        for block_idx in 0..bloom.num_blocks {
+        for block_idx in 0..bloom.num_blocks() {
             if let Some(block) = bloom.get_block(block_idx) {
                 for &byte in block {
                     bits_before += byte.count_ones();
@@ -267,7 +265,7 @@ mod tests {
 
         // Count bits after insert
         let mut bits_after = 0;
-        let mut bits_per_block = vec![0u32; bloom.num_blocks];
+        let mut bits_per_block = vec![0u32; bloom.num_blocks()];
         for (block_idx, bits) in bits_per_block.iter_mut().enumerate() {
             if let Some(block) = bloom.get_block(block_idx) {
                 for &byte in block {
@@ -284,11 +282,11 @@ mod tests {
             .filter(|&(_, count)| *count > 0)
             .collect();
 
-        // Should be exactly num_hashes bits, all in ONE block
+        // Should be exactly NUM_HASHES bits, all in ONE block
         assert_eq!(
-            bits_after, bloom.num_hashes,
-            "Should set exactly {} bits (num_hashes), got {}",
-            bloom.num_hashes, bits_after
+            bits_after, NUM_HASHES,
+            "Should set exactly {} bits (NUM_HASHES), got {}",
+            NUM_HASHES, bits_after
         );
         assert_eq!(
             non_zero_blocks.len(),
