@@ -162,17 +162,16 @@ impl ConsistentReader {
         address: String,
         coin_type: String,
     ) -> Result<proto::Balance, Error> {
-        Ok(self
-            .request(
-                "get_balance",
-                Some(checkpoint),
-                |mut client, request| async move { client.get_balance(request).await },
-                proto::GetBalanceRequest {
-                    owner: Some(address),
-                    coin_type: Some(coin_type),
-                },
-            )
-            .await?)
+        self.request(
+            "get_balance",
+            Some(checkpoint),
+            |mut client, request| async move { client.get_balance(request).await },
+            proto::GetBalanceRequest {
+                owner: Some(address),
+                coin_type: Some(coin_type),
+            },
+        )
+        .await
     }
 
     /// Paginate coin balances for `address`, at checkpoint `checkpoint`.
