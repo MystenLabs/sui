@@ -84,8 +84,7 @@ pub async fn get_verified_object(config: &Config, id: ObjectID) -> Result<Object
         .all_changed_objects()
         .iter()
         .find(|object_ref| object_ref.0 == target_object_ref)
-        .ok_or(anyhow!("Object not found"))
-        .expect("Object not found");
+        .ok_or(anyhow!("Object not found"))?;
 
     Ok(object)
 }
@@ -198,8 +197,7 @@ pub async fn get_verified_checkpoint(
         .all_changed_objects()
         .iter()
         .find(|object_ref| object_ref.0 == target_object_ref)
-        .ok_or(anyhow!("Object not found"))
-        .expect("Object not found");
+        .ok_or(anyhow!("Object not found"))?;
 
     // Create object store
     let object_store = SuiObjectStore::new(config)?;
