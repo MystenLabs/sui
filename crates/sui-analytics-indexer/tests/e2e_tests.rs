@@ -150,13 +150,12 @@ impl TestHarness {
 
     fn default_config(&self) -> IndexerConfig {
         IndexerConfig {
-            rest_url: "https://checkpoints.testnet.sui.io".to_string(),
             client_metric_host: "127.0.0.1".to_string(),
             client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(self.object_store.clone()),
             remote_store_url: None,
             streaming_url: None,
-            rpc_api_url: None,
+            rpc_api_url: "http://localhost".to_string(),
             rpc_username: None,
             rpc_password: None,
             work_dir: None,
@@ -280,13 +279,12 @@ impl TestHarness {
             _ => panic!("Unknown pipeline: {}", pipeline),
         };
         let config = IndexerConfig {
-            rest_url: "http://localhost".to_string(),
             client_metric_host: "127.0.0.1".to_string(),
             client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(self.object_store.clone()),
             remote_store_url: None,
             streaming_url: None,
-            rpc_api_url: None,
+            rpc_api_url: "http://localhost".to_string(),
             rpc_username: None,
             rpc_password: None,
             work_dir: None,
@@ -389,13 +387,12 @@ impl MockTestHarness {
 
     fn default_config(&self) -> IndexerConfig {
         IndexerConfig {
-            rest_url: "https://checkpoints.testnet.sui.io".to_string(),
             client_metric_host: "127.0.0.1".to_string(),
             client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(self.mock_store.clone()),
             remote_store_url: None,
             streaming_url: None,
-            rpc_api_url: None,
+            rpc_api_url: "http://localhost".to_string(),
             rpc_username: None,
             rpc_password: None,
             work_dir: None,
@@ -494,13 +491,12 @@ impl MockTestHarness {
             _ => panic!("Unknown pipeline: {}", pipeline),
         };
         let config = IndexerConfig {
-            rest_url: "http://localhost".to_string(),
             client_metric_host: "127.0.0.1".to_string(),
             client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(self.inner_store.clone()),
             remote_store_url: None,
             streaming_url: None,
-            rpc_api_url: None,
+            rpc_api_url: "http://localhost".to_string(),
             rpc_username: None,
             rpc_password: None,
             work_dir: None,

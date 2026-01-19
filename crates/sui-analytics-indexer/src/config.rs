@@ -94,8 +94,6 @@ pub enum OutputStoreConfig {
 /// Main configuration for an analytics indexer job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexerConfig {
-    /// The url of the checkpoint client to connect to.
-    pub rest_url: String,
     /// The url of the metrics client to connect to.
     #[serde(default = "default_client_metric_host")]
     pub client_metric_host: String,
@@ -108,8 +106,8 @@ pub struct IndexerConfig {
     pub remote_store_url: Option<String>,
     /// Optional streaming URL for real-time indexing
     pub streaming_url: Option<String>,
-    /// Optional RPC API URL for request/reply from full node
-    pub rpc_api_url: Option<String>,
+    /// RPC API URL for request/reply from full node.
+    pub rpc_api_url: String,
     /// Optional RPC username
     pub rpc_username: Option<String>,
     /// Optional RPC password
