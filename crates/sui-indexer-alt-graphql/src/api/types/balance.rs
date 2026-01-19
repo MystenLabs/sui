@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context as _;
 use async_graphql::Context;
 use async_graphql::SimpleObject;
 use async_graphql::connection::Connection;
 use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
-use sui_indexer_alt_reader::consistent_reader::Balance as StoredBalance;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
+use sui_indexer_alt_reader::consistent_reader::proto::Balance as ProtoBalance;
 use sui_indexer_alt_reader::consistent_reader::{self};
 use sui_types::TypeTag;
 use sui_types::base_types::SuiAddress;
@@ -58,13 +59,19 @@ pub(crate) enum Error {
 pub(crate) type Cursor = cursor::BcsCursor<(u64, Vec<u8>)>;
 
 impl Balance {
-    fn from_stored(stored: StoredBalance, scope: Scope) -> Self {
-        Balance {
-            coin_type: Some(MoveType::from_native(stored.coin_type, scope)),
-            total_balance: Some(BigInt::from(stored.total_balance)),
-            coin_balance: Some(BigInt::from(stored.coin_balance)),
-            address_balance: Some(BigInt::from(stored.address_balance)),
-        }
+    fn try_from_proto(proto: ProtoBalance, scope: Scope) -> Result<Self, RpcError<Error>> {
+        let coin_type: TypeTag = proto
+            .coin_type
+            .context("coin type missing")?
+            .parse()
+            .context("invalid coin type")?;
+
+        Ok(Balance {
+            coin_type: Some(MoveType::from_native(coin_type, scope)),
+            total_balance: Some(BigInt::from(proto.total_balance.unwrap_or(0))),
+            coin_balance: Some(BigInt::from(proto.coin_balance.unwrap_or(0))),
+            address_balance: Some(BigInt::from(proto.address_balance.unwrap_or(0))),
+        })
     }
 
     /// Fetch the balance for a single coin type owned by the given address, live at the current
@@ -96,7 +103,7 @@ impl Balance {
             .await
             .map_err(|e| consistent_error(checkpoint, e))?;
 
-        Ok(Some(Balance::from_stored(balance, scope.clone())))
+        Ok(Some(Balance::try_from_proto(balance, scope.clone())?))
     }
 
     /// Fetch balances for multiple coin types owned by the given address, live at the current
@@ -132,8 +139,8 @@ impl Balance {
         Ok(Some(
             balances
                 .into_iter()
-                .map(|balance| Balance::from_stored(balance, scope.clone()))
-                .collect(),
+                .map(|balance| Balance::try_from_proto(balance, scope.clone()))
+                .collect::<Result<_, _>>()?,
         ))
     }
 
@@ -196,7 +203,7 @@ impl Balance {
             let balance = edge.value;
 
             let cursor = Cursor::new((checkpoint, edge.token));
-            let balance = Balance::from_stored(balance, scope.clone());
+            let balance = Balance::try_from_proto(balance, scope.clone())?;
 
             conn.edges.push(Edge::new(cursor.encode_cursor(), balance));
         }

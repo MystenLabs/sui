@@ -9,7 +9,6 @@ use anyhow::Context;
 use anyhow::anyhow;
 use prometheus::Registry;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_client::ConsistentServiceClient;
-use sui_types::TypeTag;
 use sui_types::base_types::ObjectDigest;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
@@ -53,13 +52,6 @@ pub struct Page<T> {
 pub struct Edge<T> {
     pub token: Vec<u8>,
     pub value: T,
-}
-
-pub struct Balance {
-    pub coin_type: TypeTag,
-    pub total_balance: u64,
-    pub coin_balance: u64,
-    pub address_balance: u64,
 }
 
 type Client = ConsistentServiceClient<Channel>;
@@ -136,7 +128,7 @@ impl ConsistentReader {
         checkpoint: u64,
         address: String,
         coin_types: Vec<String>,
-    ) -> Result<Vec<Balance>, Error> {
+    ) -> Result<Vec<proto::Balance>, Error> {
         let response = self
             .request(
                 "batch_get_balances",
@@ -156,8 +148,7 @@ impl ConsistentReader {
 
         let mut results = vec![];
         for balance in response.balances {
-            let edge: Edge<Balance> = balance.try_into()?;
-            results.push(edge.value);
+            results.push(balance);
         }
 
         Ok(results)
@@ -170,8 +161,8 @@ impl ConsistentReader {
         checkpoint: u64,
         address: String,
         coin_type: String,
-    ) -> Result<Balance, Error> {
-        let response = self
+    ) -> Result<proto::Balance, Error> {
+        Ok(self
             .request(
                 "get_balance",
                 Some(checkpoint),
@@ -181,10 +172,7 @@ impl ConsistentReader {
                     coin_type: Some(coin_type),
                 },
             )
-            .await?;
-
-        let edge: Edge<Balance> = response.try_into()?;
-        Ok(edge.value)
+            .await?)
     }
 
     /// Paginate coin balances for `address`, at checkpoint `checkpoint`.
@@ -197,7 +185,7 @@ impl ConsistentReader {
         after_token: Option<Vec<u8>>,
         before_token: Option<Vec<u8>>,
         is_from_front: bool,
-    ) -> Result<Page<Balance>, Error> {
+    ) -> Result<Page<proto::Balance>, Error> {
         let response = self
             .request(
                 "list_balances",
@@ -223,8 +211,11 @@ impl ConsistentReader {
         let results = response
             .balances
             .into_iter()
-            .map(TryFrom::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|b| Edge {
+                token: b.page_token.clone().unwrap_or_default().into(),
+                value: b,
+            })
+            .collect();
 
         Ok(Page {
             results,
@@ -395,29 +386,29 @@ impl ConsistentReader {
     }
 }
 
-impl TryFrom<proto::Balance> for Edge<Balance> {
-    type Error = Error;
+// impl TryFrom<proto::Balance> for Edge<Balance> {
+//     type Error = Error;
 
-    fn try_from(proto: proto::Balance) -> Result<Self, Error> {
-        let coin_type: TypeTag = proto
-            .coin_type
-            .context("coin type missing")?
-            .parse()
-            .context("invalid coin type")?;
+//     fn try_from(proto: proto::Balance) -> Result<Self, Error> {
+//         let coin_type: TypeTag = proto
+//             .coin_type
+//             .context("coin type missing")?
+//             .parse()
+//             .context("invalid coin type")?;
 
-        let token: Vec<u8> = proto.page_token.unwrap_or_default().into();
+//         let token: Vec<u8> = proto.page_token.unwrap_or_default().into();
 
-        Ok(Edge {
-            token,
-            value: Balance {
-                coin_type,
-                total_balance: proto.total_balance.unwrap_or(0),
-                coin_balance: proto.coin_balance.unwrap_or(0),
-                address_balance: proto.address_balance.unwrap_or(0),
-            },
-        })
-    }
-}
+//         Ok(Edge {
+//             token,
+//             value: Balance {
+//                 coin_type,
+//                 total_balance: proto.total_balance.unwrap_or(0),
+//                 coin_balance: proto.coin_balance.unwrap_or(0),
+//                 address_balance: proto.address_balance.unwrap_or(0),
+//             },
+//         })
+//     }
+// }
 
 impl TryFrom<proto::Object> for Edge<ObjectRef> {
     type Error = Error;
