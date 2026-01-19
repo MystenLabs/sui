@@ -138,7 +138,12 @@ impl MoveRuntime {
                     .iter()
                     .map(|(id, pkg)| (*id, &*pkg.verified))
                     .collect();
-                validate_for_vm_execution(validation_packages)?;
+
+                let storage_ids = link_context.linkage_table.values().cloned().collect::<std::collections::BTreeSet<_>>();
+                if !self.cache().seen_linkages.read().contains(&storage_ids) {
+                    validate_for_vm_execution(validation_packages)?;
+                    self.cache().seen_linkages.write().insert(storage_ids);
+                }
 
                 let runtime_packages = packages
                     .into_values()
