@@ -386,30 +386,6 @@ impl ConsistentReader {
     }
 }
 
-// impl TryFrom<proto::Balance> for Edge<Balance> {
-//     type Error = Error;
-
-//     fn try_from(proto: proto::Balance) -> Result<Self, Error> {
-//         let coin_type: TypeTag = proto
-//             .coin_type
-//             .context("coin type missing")?
-//             .parse()
-//             .context("invalid coin type")?;
-
-//         let token: Vec<u8> = proto.page_token.unwrap_or_default().into();
-
-//         Ok(Edge {
-//             token,
-//             value: Balance {
-//                 coin_type,
-//                 total_balance: proto.total_balance.unwrap_or(0),
-//                 coin_balance: proto.coin_balance.unwrap_or(0),
-//                 address_balance: proto.address_balance.unwrap_or(0),
-//             },
-//         })
-//     }
-// }
-
 impl TryFrom<proto::Object> for Edge<ObjectRef> {
     type Error = Error;
 
