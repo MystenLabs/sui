@@ -412,16 +412,23 @@ impl Payload for CompositePayload {
             {
                 let builder = tx_builder.ptb_builder_mut();
                 for op in &ops {
-                    let resources =
-                        Self::resolve_resources_for_op(op.as_ref(), &pool, &self.config, &mut self.rng);
+                    let resources = Self::resolve_resources_for_op(
+                        op.as_ref(),
+                        &pool,
+                        &self.config,
+                        &mut self.rng,
+                    );
                     op.apply(builder, &resources, &mut self.rng);
                 }
             }
 
             if use_address_balance_gas {
                 let nonce = self.nonce_counter.fetch_add(1, Ordering::Relaxed);
-                tx_builder =
-                    tx_builder.with_address_balance_gas(pool.chain_identifier, current_epoch, nonce);
+                tx_builder = tx_builder.with_address_balance_gas(
+                    pool.chain_identifier,
+                    current_epoch,
+                    nonce,
+                );
             }
             transactions.push(tx_builder.build_and_sign(self.gas.2.as_ref()));
         }
