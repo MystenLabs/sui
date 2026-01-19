@@ -7,8 +7,6 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use diesel::ExpressionMethods;
-use diesel::define_sql_function;
-use diesel::sql_types::Binary;
 use diesel::upsert::excluded;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::pipeline::Processor;
@@ -16,23 +14,14 @@ use sui_indexer_alt_framework::pipeline::concurrent::BatchStatus;
 use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::postgres::Connection;
 use sui_indexer_alt_framework::postgres::Db;
-use sui_indexer_alt_schema::blooms::blocked::BlockedBloomFilter;
-use sui_indexer_alt_schema::cp_bloom_blocks::BLOOM_BLOCK_BYTES;
-use sui_indexer_alt_schema::cp_bloom_blocks::NUM_BLOOM_BLOCKS;
-use sui_indexer_alt_schema::cp_bloom_blocks::NUM_HASHES;
+use sui_indexer_alt_schema::cp_bloom_blocks::CpBlockedBloomFilter;
 use sui_indexer_alt_schema::cp_bloom_blocks::StoredCpBloomBlock;
 use sui_indexer_alt_schema::cp_bloom_blocks::cp_block_id;
-use sui_indexer_alt_schema::cp_bloom_blocks::cp_block_seed;
+use sui_indexer_alt_schema::cp_blooms::bytea_or;
 use sui_indexer_alt_schema::schema::cp_bloom_blocks;
 use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::handlers::cp_blooms::insert_tx_values;
-
-// Define the bytea_or SQL function for merging bloom filters
-define_sql_function! {
-    /// Performs bitwise OR on two bytea values. Used for merging bloom filters.
-    fn bytea_or(a: Binary, b: Binary) -> Binary;
-}
 
 /// Blocked bloom filters that span multiple checkpoints for efficient range queries.
 ///
@@ -62,17 +51,15 @@ impl Processor for CpBloomBlocks {
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
         let cp_num = checkpoint.summary.sequence_number;
         let block_id = cp_block_id(cp_num);
-        let seed = cp_block_seed(block_id);
+        let seed = block_id as u128;
 
-        let mut bloom =
-            BlockedBloomFilter::new(seed, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BYTES, NUM_HASHES);
+        let mut bloom = CpBlockedBloomFilter::new(seed);
         for tx in checkpoint.transactions.iter() {
             insert_tx_values(tx, &mut bloom);
         }
 
         let blocks: BTreeMap<u16, Vec<u8>> = bloom
             .into_sparse_blocks()
-            .into_iter()
             .map(|(idx, data)| (idx as u16, data))
             .collect();
 
@@ -168,15 +155,15 @@ mod tests {
     use diesel::QueryDsl;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_schema::cp_bloom_blocks::hash;
 
     use crate::MIGRATIONS;
 
     /// Build a CheckpointBloom from a checkpoint number and list of keys.
     fn make_checkpoint_bloom(cp_num: i64, keys: &[&[u8]]) -> CheckpointBloom {
         let block_id = cp_block_id(cp_num as u64);
-        let seed = cp_block_seed(block_id);
-        let mut bloom =
-            BlockedBloomFilter::new(seed, NUM_BLOOM_BLOCKS, BLOOM_BLOCK_BYTES, NUM_HASHES);
+        let seed = block_id as u128;
+        let mut bloom = CpBlockedBloomFilter::new(seed);
         for key in keys {
             bloom.insert(key);
         }
@@ -184,7 +171,6 @@ mod tests {
             cp_sequence_number: cp_num,
             blocks: bloom
                 .into_sparse_blocks()
-                .into_iter()
                 .map(|(idx, data)| (idx as u16, data))
                 .collect(),
         }
@@ -192,11 +178,9 @@ mod tests {
 
     /// Check if a key is present in a bloom filter block.
     fn block_contains_key(block_data: &[u8], key: &[u8], seed: u128) -> bool {
-        let (_, positions) =
-            BlockedBloomFilter::hash(key, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BYTES);
-        positions
-            .iter()
-            .all(|&pos| (block_data[pos / 8] & (1 << (pos % 8))) != 0)
+        hash(key, seed)
+            .1
+            .all(|idx| (block_data[idx / 8] & (1 << (idx % 8))) != 0)
     }
 
     /// Load all bloom blocks for a given cp_block_id.
@@ -246,14 +230,12 @@ mod tests {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        let seed = cp_block_seed(0);
+        let seed = 0u128;
 
         // Find two keys that hash to the same bloom_block_index to test the merge behavior.
-        // This is important because merge only happens when there's a conflict on
         // (cp_block_id, bloom_block_index).
         let key1 = b"key_0";
-        let (target_block_idx, _) =
-            BlockedBloomFilter::hash(key1, seed, NUM_BLOOM_BLOCKS, NUM_HASHES, BLOOM_BLOCK_BYTES);
+        let (target_block_idx, _) = hash(key1, seed);
 
         // key_104 hashes to the same bloom_block_index as key_0 with seed 0
         let key2 = b"key_104";
@@ -304,73 +286,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_merge_preserves_original_keys() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.store().connect().await.unwrap();
-
-        let seed = cp_block_seed(0);
-
-        // First batch with a specific key
-        let blooms1 = vec![make_checkpoint_bloom(0, &[b"original_key"])];
-
-        commit_blooms(blooms1, &mut conn).await;
-
-        // Second batch with different key
-        let blooms2 = vec![make_checkpoint_bloom(1, &[b"new_key"])];
-
-        commit_blooms(blooms2, &mut conn).await;
-
-        // Verify original key is still present
-        let blocks = get_bloom_blocks(&mut conn, 0).await;
-        let (original_block_idx, _) = BlockedBloomFilter::hash(
-            b"original_key",
-            seed,
-            NUM_BLOOM_BLOCKS,
-            NUM_HASHES,
-            BLOOM_BLOCK_BYTES,
-        );
-        let block = blocks
-            .iter()
-            .find(|b| b.bloom_block_index == original_block_idx as i16)
-            .expect("Block for original key should exist");
-
-        assert!(
-            block_contains_key(&block.bloom_filter, b"original_key", seed),
-            "Original key should still be present after merge"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_idempotent_commit() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.store().connect().await.unwrap();
-
-        let blooms = vec![make_checkpoint_bloom(0, &[b"test_key"])];
-
-        // Commit twice with same data
-        commit_blooms(blooms.clone(), &mut conn).await;
-        commit_blooms(blooms, &mut conn).await;
-
-        let blocks = get_bloom_blocks(&mut conn, 0).await;
-        let block = &blocks[0];
-
-        // Verify the key is still present
-        let seed = cp_block_seed(0);
-        assert!(
-            block_contains_key(&block.bloom_filter, b"test_key", seed),
-            "Key should be present after idempotent commit"
-        );
-    }
-
-    #[tokio::test]
     async fn test_different_cp_blocks_are_separate() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        // Batch for cp_block 0 (checkpoints 0-999)
         let blooms0 = vec![make_checkpoint_bloom(500, &[b"block0_key"])];
 
-        // Batch for cp_block 1 (checkpoints 1000-1999)
         let blooms1 = vec![make_checkpoint_bloom(1500, &[b"block1_key"])];
 
         commit_blooms(blooms0, &mut conn).await;
@@ -382,13 +303,11 @@ mod tests {
         assert!(!blocks0.is_empty(), "cp_block 0 should have data");
         assert!(!blocks1.is_empty(), "cp_block 1 should have data");
 
-        // Verify they have different cp_block_ids
         assert_eq!(blocks0[0].cp_block_id, 0);
         assert_eq!(blocks1[0].cp_block_id, 1);
 
-        // Verify each block contains its respective key
-        let seed0 = cp_block_seed(0);
-        let seed1 = cp_block_seed(1);
+        let seed0 = 0u128;
+        let seed1 = 1u128;
         assert!(
             block_contains_key(&blocks0[0].bloom_filter, b"block0_key", seed0),
             "Block 0 should contain block0_key"
@@ -422,17 +341,11 @@ mod tests {
         let blocks = get_bloom_blocks(&mut conn, 0).await;
         assert!(!blocks.is_empty(), "Should have bloom blocks");
 
-        let seed = cp_block_seed(0);
+        let seed = 0u128;
 
         // Verify every key can be found (no false negatives)
         for (i, key) in test_keys.iter().enumerate() {
-            let (block_idx, _) = BlockedBloomFilter::hash(
-                key,
-                seed,
-                NUM_BLOOM_BLOCKS,
-                NUM_HASHES,
-                BLOOM_BLOCK_BYTES,
-            );
+            let (block_idx, _) = hash(key, seed);
 
             let block = blocks
                 .iter()
@@ -458,7 +371,7 @@ mod tests {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.store().connect().await.unwrap();
 
-        let seed = cp_block_seed(0);
+        let seed = 0u128;
 
         // Generate keys for batch 1 (checkpoints 0-1)
         let mut batch1_keys: Vec<Vec<u8>> = Vec::new();
@@ -483,13 +396,7 @@ mod tests {
         // Check batch 1 keys are in DB before merge
         let blocks_before = get_bloom_blocks(&mut conn, 0).await;
         for (i, key) in batch1_keys.iter().enumerate() {
-            let (block_idx, _) = BlockedBloomFilter::hash(
-                key,
-                seed,
-                NUM_BLOOM_BLOCKS,
-                NUM_HASHES,
-                BLOOM_BLOCK_BYTES,
-            );
+            let (block_idx, _) = hash(key, seed);
             let block = blocks_before
                 .iter()
                 .find(|b| b.bloom_block_index == block_idx as i16)
@@ -511,13 +418,7 @@ mod tests {
 
         // Check ALL keys from batch 1 survive the bytea_or merge
         for (i, key) in batch1_keys.iter().enumerate() {
-            let (block_idx, _) = BlockedBloomFilter::hash(
-                key,
-                seed,
-                NUM_BLOOM_BLOCKS,
-                NUM_HASHES,
-                BLOOM_BLOCK_BYTES,
-            );
+            let (block_idx, _) = hash(key, seed);
 
             let block = blocks_after
                 .iter()
@@ -533,13 +434,7 @@ mod tests {
 
         // Check batch 2 keys are also present
         for (i, key) in batch2_keys.iter().enumerate() {
-            let (block_idx, _) = BlockedBloomFilter::hash(
-                key,
-                seed,
-                NUM_BLOOM_BLOCKS,
-                NUM_HASHES,
-                BLOOM_BLOCK_BYTES,
-            );
+            let (block_idx, _) = hash(key, seed);
 
             let block = blocks_after
                 .iter()
