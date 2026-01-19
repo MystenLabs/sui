@@ -90,7 +90,7 @@ impl LocalDBPackageStore {
     pub fn new(path: &Path, rpc_url: &str) -> Self {
         Self {
             tables: PackageStoreTables::new(path),
-            client: Client::new(rpc_url).expect("invalid REST URL"),
+            client: Client::new(rpc_url).expect("invalid rpc url"),
         }
     }
 
