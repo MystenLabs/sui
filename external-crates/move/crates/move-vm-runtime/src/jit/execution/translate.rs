@@ -1236,6 +1236,13 @@ pub(crate) fn flatten_and_renumber_blocks(
                 // jump table itself has already been updated above
                 input::Bytecode::VariantSwitch(table_ndx)
             }
+            // Super-instruction: BrFalseBranch has two branch targets that need remapping
+            input::Bytecode::BrFalseBranch(false_target, true_target) => {
+                input::Bytecode::BrFalseBranch(
+                    *offset_map.get(&false_target).expect("Invalid branch target"),
+                    *offset_map.get(&true_target).expect("Invalid branch target"),
+                )
+            }
             other => other,
         })
         .collect())
@@ -1433,6 +1440,21 @@ fn bytecode(
         input::Bytecode::VariantSwitch(ndx) => {
             let jump_table = &jump_tables[ndx.0 as usize];
             Bytecode::VariantSwitch(jump_table.ptr_clone())
+        }
+
+        // Super-instructions
+        input::Bytecode::MoveLocPop(ndx) => Bytecode::MoveLocPop(ndx),
+        input::Bytecode::CallGenericStLoc(func_ndx, local_ndx) => {
+            let generic_ptr = &context.definitions.function_instantiations[func_ndx.0 as usize];
+            Bytecode::CallGenericStLoc(generic_ptr.ptr_clone(), local_ndx)
+        }
+        input::Bytecode::ImmBorrowFieldReadRef(ndx) => {
+            let field_ptr = &context.definitions.field_handles[ndx.0 as usize];
+            Bytecode::ImmBorrowFieldReadRef(field_ptr.ptr_clone())
+        }
+        input::Bytecode::CopyLocFreezeRef(ndx) => Bytecode::CopyLocFreezeRef(ndx),
+        input::Bytecode::BrFalseBranch(false_target, true_target) => {
+            Bytecode::BrFalseBranch(false_target, true_target)
         }
     };
     Ok(bytecode)
