@@ -29,9 +29,7 @@ use tokio_util::sync::CancellationToken;
 use crate::drivers::HistogramWrapper;
 use crate::drivers::driver::Driver;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::{
-    Payload, SoftBundleExecutionResults, SoftBundleTransactionResult,
-};
+use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionResult};
 use crate::workloads::workload::ExpectedFailureType;
 use crate::workloads::{GroupID, WorkloadInfo};
 use crate::{ExecutionEffects, ValidatorProxy};
