@@ -278,7 +278,7 @@ fn pg_isready(port: u16) -> Result<(), HealthCheckError> {
         .arg(port.to_string())
         .arg("--username=postgres")
         .output()
-        .map_err(|e| HealthCheckError::Unknown(format!("command not found: pg_ctl: {e}")))?;
+        .map_err(|e| HealthCheckError::Unknown(format!("command not found: pg_isready: {e}")))?;
 
     trace!("pg_isready code: {:?}", output.status.code());
     trace!("pg_isready output: {}", output.stderr.escape_ascii());
