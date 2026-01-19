@@ -58,7 +58,7 @@ static WRITE_SYNC_ENABLED: OnceLock<bool> = OnceLock::new();
 
 fn write_sync_enabled() -> bool {
     *WRITE_SYNC_ENABLED
-        .get_or_init(|| std::env::var("SUI_WRITE_SYNC").is_ok_and(|v| v == "1" || v == "true"))
+        .get_or_init(|| std::env::var("SUI_DB_SYNC_TO_DISK").is_ok_and(|v| v == "1" || v == "true"))
 }
 
 #[cfg(test)]
