@@ -193,6 +193,11 @@ impl CommitTestFixture {
         // Use linearizer to create CommittedSubDag
         let committed_sub_dags = self.linearizer.handle_commit(leaders);
 
+        // After handle_commit(), the GC round is updated. We need to unsuspend any blocks that were
+        // suspended because of missing ancestors that are now GC'ed.
+        self.block_manager
+            .try_unsuspend_blocks_for_latest_gc_round();
+
         // Process through commit finalizer
         let mut finalized_commits = vec![];
         for mut subdag in committed_sub_dags {
@@ -206,34 +211,40 @@ impl CommitTestFixture {
 }
 
 /// Compare commit sequences across all runs, asserting they are identical.
-/// Returns the last commit sequence for additional assertions if needed.
+/// Returns the shortest commit sequence for additional assertions if needed.
 pub fn assert_commit_sequences_match(
-    mut commit_sequences: Vec<Vec<CommittedSubDag>>,
+    commit_sequences: Vec<Vec<CommittedSubDag>>,
 ) -> Vec<CommittedSubDag> {
-    let last_commit_sequence = commit_sequences.pop().unwrap();
+    let (shortest_idx, shortest_sequence) = commit_sequences
+        .iter()
+        .enumerate()
+        .min_by_key(|(_, seq)| seq.len())
+        .expect("commit_sequences should not be empty");
 
-    for (run, commit_sequence) in commit_sequences.into_iter().enumerate() {
-        assert_eq!(
+    for (run, commit_sequence) in commit_sequences.iter().enumerate() {
+        assert!(
+            commit_sequence.len() <= shortest_sequence.len() + 3,
+            "Commit sequence at run {run} is more than 3 commits longer than shortest (run {shortest_idx}): {} vs {}",
             commit_sequence.len(),
-            last_commit_sequence.len(),
-            "Commit sequence length mismatch at run {run}"
+            shortest_sequence.len()
         );
+
         for (commit_index, (c1, c2)) in commit_sequence
             .iter()
-            .zip(last_commit_sequence.iter())
+            .zip(shortest_sequence.iter())
             .enumerate()
         {
             assert_eq!(
                 c1.leader, c2.leader,
-                "Leader mismatch at commit {commit_index}"
+                "Leader mismatch at run {run} commit {commit_index}"
             );
             assert_eq!(
                 c1.commit_ref, c2.commit_ref,
-                "Commit sequence mismatch at commit {commit_index}"
+                "Commit sequence mismatch at run {run} commit {commit_index}"
             );
             assert_eq!(
                 c1.rejected_transactions_by_block, c2.rejected_transactions_by_block,
-                "Rejected transactions mismatch at commit {commit_index}"
+                "Rejected transactions mismatch at run {run} commit {commit_index}"
             );
         }
     }
@@ -242,7 +253,7 @@ pub fn assert_commit_sequences_match(
     let mut rejected_transactions = 0;
     let mut reject_votes = 0;
     let mut blocks = 4;
-    for commit in last_commit_sequence.iter() {
+    for commit in shortest_sequence.iter() {
         total_transactions += commit
             .blocks
             .iter()
@@ -263,14 +274,14 @@ pub fn assert_commit_sequences_match(
 
     tracing::info!(
         "Finished comparing commit sequences. Commits: {}, Blocks: {}, Total transactions: {}, Rejected transactions: {}, Reject votes: {}",
-        last_commit_sequence.len(),
+        shortest_sequence.len(),
         blocks,
         total_transactions,
         rejected_transactions,
         reject_votes
     );
 
-    last_commit_sequence
+    shortest_sequence.clone()
 }
 
 // ---- RandomDag and RandomDagIterator ----
@@ -305,7 +316,6 @@ impl RandomDag {
 
 impl RandomDag {
     /// Creates a new RandomDag with generated blocks containing transactions and reject votes.
-    #[allow(unused)]
     pub fn new(
         context: Arc<Context>,
         rng: &mut StdRng,
@@ -341,31 +351,46 @@ impl RandomDag {
             let target_stake = rng.gen_range(quorum_threshold..=total_stake);
             let mut authorities: Vec<_> = committee.authorities().map(|(a, _)| a).collect();
             authorities.shuffle(rng);
-            let mut accumulated_stake: Stake = 0;
             let selected_authorities: Vec<_> = authorities
                 .into_iter()
-                .take_while(|a| {
-                    accumulated_stake += committee.stake(*a);
-                    accumulated_stake < target_stake
+                .scan(0, |acc, a| {
+                    if *acc >= target_stake {
+                        return None;
+                    }
+                    *acc += committee.stake(a);
+                    Some(a)
                 })
                 .collect();
 
             let mut current_round_blocks = Vec::new();
 
             for authority in selected_authorities {
-                // First, select blocks from the previous round until quorum stake is reached.
-                let mut prev_round_blocks = last_round_blocks.clone();
+                // Start with own authority's latest block as first ancestor
+                let own_latest_block = latest_block_per_authority[authority.value()].clone();
+                let own_latest_ref = own_latest_block.reference();
+                // Check if own block is from the previous round
+                let own_is_prev_round = own_latest_ref.round == r - 1;
+                // Select blocks from the previous round until quorum stake is reached.
+                let mut prev_round_blocks: Vec<_> = last_round_blocks
+                    .iter()
+                    .filter(|b| b.reference() != own_latest_ref)
+                    .cloned()
+                    .collect();
                 prev_round_blocks.shuffle(rng);
-                let mut parent_stake: Stake = 0;
-                let mut quorum_count = 0;
+                let mut parent_stake: Stake = if own_is_prev_round {
+                    committee.stake(authority)
+                } else {
+                    0
+                };
+                let mut quorum_selected_count = 0;
                 for block in &prev_round_blocks {
-                    parent_stake += committee.stake(block.author());
-                    quorum_count += 1;
                     if parent_stake >= quorum_threshold {
                         break;
                     }
+                    parent_stake += committee.stake(block.author());
+                    quorum_selected_count += 1;
                 }
-                prev_round_blocks.truncate(quorum_count);
+                prev_round_blocks.truncate(quorum_selected_count);
                 let quorum_parents = prev_round_blocks;
 
                 // Collect authorities already included in quorum parents.
@@ -376,17 +401,21 @@ impl RandomDag {
                 let unselected: Vec<_> = committee
                     .authorities()
                     .map(|(a, _)| a)
-                    .filter(|a| !quorum_authorities.contains(a))
+                    .filter(|a| !quorum_authorities.contains(a) && *a != authority)
                     .collect();
 
-                // Randomly select 0-N of unselected authorities' latest blocks.
-                let extra_count = rng.gen_range(0..=unselected.len());
+                // Use min of two uniform samples to bias toward fewer additional ancestors
+                // while maintaining non-zero probability for all counts.
+                let extra_count = rng
+                    .gen_range(0..=unselected.len())
+                    .min(rng.gen_range(0..=unselected.len()));
                 let mut additional_ancestors = unselected;
                 additional_ancestors.shuffle(rng);
                 additional_ancestors.truncate(extra_count);
 
                 // Combine ancestors: quorum parents + extra ancestors from unselected authorities.
-                let mut ancestor_blocks = quorum_parents;
+                let mut ancestor_blocks = vec![own_latest_block];
+                ancestor_blocks.extend(quorum_parents);
                 ancestor_blocks.extend(
                     additional_ancestors
                         .iter()

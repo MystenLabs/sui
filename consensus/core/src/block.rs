@@ -622,7 +622,24 @@ impl TestBlock {
         self
     }
 
-    pub fn set_ancestors(mut self, ancestors: Vec<BlockRef>) -> Self {
+    /// Sorts then sets ancestors in the TestBlock.
+    pub fn set_ancestors(mut self, mut ancestors: Vec<BlockRef>) -> Self {
+        ancestors.sort_by(|a, b| {
+            // Put own authority ancestor at the front.
+            if a.author == self.block.author {
+                return std::cmp::Ordering::Less;
+            }
+            if b.author == self.block.author {
+                return std::cmp::Ordering::Greater;
+            }
+            a.author.cmp(&b.author)
+        });
+        self.block.ancestors = ancestors;
+        self
+    }
+
+    /// Sets ancestors in the TestBlock exactly as provided.
+    pub fn set_ancestors_raw(mut self, ancestors: Vec<BlockRef>) -> Self {
         self.block.ancestors = ancestors;
         self
     }

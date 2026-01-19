@@ -48,7 +48,8 @@ mod consensus_dag_tests {
         // Collect finalized commit sequences from each run.
         let mut commit_sequences = vec![];
 
-        for _ in 0..NUM_RUNS {
+        for i in 0..NUM_RUNS {
+            tracing::info!("Run {i} of randomized test...");
             let mut fixture = CommitTestFixture::new(context.clone());
             let mut finalized_commits = vec![];
             let mut last_decided = Slot::new_for_test(0, 0);
