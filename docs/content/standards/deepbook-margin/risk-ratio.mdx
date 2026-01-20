@@ -26,8 +26,8 @@ risk_ratio = total_assets / total_debts
 
 Where assets and debts are valued in a common denomination using oracle prices. A higher risk ratio indicates a safer position with more collateral relative to debt.
 
-- **Risk ratio = 2.0**: You have $2 of assets for every $1 of debt (50% LTV)
-- **Risk ratio = 1.25**: You have $1.25 of assets for every $1 of debt (80% LTV)
+- **Risk ratio = 2.0**: You have 2 units of assets for every 1 unit of debt (50% LTV)
+- **Risk ratio = 1.25**: You have 1.25 units of assets for every 1 unit of debt (80% LTV)
 - **Risk ratio = 1.0**: Your assets exactly equal your debts (100% LTV, insolvent)
 
 ## Risk ratio thresholds
@@ -71,9 +71,9 @@ The target risk ratio that liquidation aims to restore the position to.
 
 The maximum leverage for a trading pair is determined by the Min Borrow Risk Ratio:
 
-```
-max_leverage ≈ 1 / (1 - 1/min_borrow_risk_ratio)
-```
+$$
+\text{max\_leverage} \approx \frac{1}{1 - \frac{1}{\text{min\_borrow\_risk\_ratio}}}
+$$
 
 | Min Borrow Risk Ratio | Approximate Max Leverage |
 |-----------------------|--------------------------|
@@ -91,21 +91,26 @@ Consider a SUI/USDC position with the following risk parameters:
 
 **Opening a position:**
 1. You deposit 100 USDC as collateral
-2. You borrow 80 USDC worth of SUI (risk ratio = 100/80 = 1.25, at the minimum)
-3. You now have 5x leveraged exposure to SUI
+2. You borrow 400 USDC worth of SUI
+3. Total assets = 100 USDC collateral + 400 USDC worth of SUI = 500 USDC
+4. Total debt = 400 USDC
+5. Risk ratio = 500/400 = 1.25 (at the minimum borrow ratio)
+6. You now have 5x leveraged exposure to SUI
 
 **Price moves in your favor:**
-1. SUI price increases 10%
-2. Your assets are now worth 108 USDC, debt is still 80 USDC
-3. Risk ratio = 108/80 = 1.35 (safer position)
+1. SUI price increases 10%, your SUI is now worth 440 USDC
+2. Total assets = 100 + 440 = 540 USDC, debt is still 400 USDC
+3. Risk ratio = 540/400 = 1.35 (safer position)
 4. You can withdraw some profit, as long as ratio stays above 2.0
 
 **Price moves against you:**
-1. SUI price drops, your assets fall to 88 USDC
-2. Risk ratio = 88/80 = 1.1 (at liquidation threshold)
-3. Your position can now be liquidated by anyone
-4. Liquidator repays part of your debt and receives collateral plus a reward
-5. After liquidation, your remaining position has a risk ratio of 1.25
+1. SUI price drops 10%, your SUI is now worth 360 USDC
+2. Total assets = 100 + 360 = 460 USDC, debt is still 400 USDC
+3. Risk ratio = 460/400 = 1.15 (approaching liquidation)
+4. If SUI drops further to 340 USDC worth, ratio = (100 + 340)/400 = 1.1 (liquidation threshold)
+5. Your position can now be liquidated by anyone
+6. Liquidator repays part of your debt and receives collateral plus a reward
+7. After liquidation, your remaining position has a risk ratio of 1.25
 
 ## Liquidation rewards
 
@@ -120,7 +125,7 @@ These rewards ensure liquidators are incentivized to maintain system health and 
 
 1. **Monitor your risk ratio**: Keep track of your position's health, especially during volatile markets
 2. **Maintain a buffer**: Don't borrow up to the maximum - leave room for price fluctuations
-3. **Set stop losses**: Use TPSL orders to automatically close positions before liquidation
+3. **Set stop losses**: Use [TPSL orders](./tpsl.mdx) to automatically close positions before liquidation
 4. **Understand the assets**: Higher volatility assets typically have stricter risk parameters (lower leverage)
 
 ## Related links
