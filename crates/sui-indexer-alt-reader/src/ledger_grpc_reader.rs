@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
 use async_graphql::dataloader::DataLoader;
+use prometheus::Registry;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_types::effects::TransactionEffects;
 use sui_types::event::Event;
@@ -14,6 +16,8 @@ use sui_types::transaction::TransactionData;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 use tonic::transport::Uri;
+
+use crate::metrics::LedgerGrpcReaderMetrics;
 
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct LedgerGrpcArgs {
@@ -37,7 +41,11 @@ pub struct CheckpointedTransaction {
 /// This connects to archival service that implements the same LedgerService gRPC interface
 /// as fullnode, but is backed by Bigtable for serving historical data.
 #[derive(Clone)]
-pub struct LedgerGrpcReader(pub(crate) LedgerServiceClient<Channel>);
+pub struct LedgerGrpcReader {
+    client: LedgerServiceClient<Channel>,
+    timeout: Option<Duration>,
+    metrics: Arc<LedgerGrpcReaderMetrics>,
+}
 
 impl LedgerGrpcArgs {
     pub fn statement_timeout(&self) -> Option<std::time::Duration> {
@@ -47,7 +55,12 @@ impl LedgerGrpcArgs {
 }
 
 impl LedgerGrpcReader {
-    pub async fn new(uri: Uri, args: LedgerGrpcArgs) -> anyhow::Result<Self> {
+    pub async fn new(
+        uri: Uri,
+        args: LedgerGrpcArgs,
+        prefix: Option<&str>,
+        registry: &Registry,
+    ) -> anyhow::Result<Self> {
         let tls_config = ClientTlsConfig::new().with_native_roots();
 
         let mut endpoint = Channel::builder(uri);
@@ -57,7 +70,14 @@ impl LedgerGrpcReader {
         let channel = endpoint.tls_config(tls_config)?.connect_lazy();
 
         let client = LedgerServiceClient::new(channel.clone());
-        Ok(Self(client))
+        let timeout = args.statement_timeout();
+        let metrics = LedgerGrpcReaderMetrics::new(prefix, registry);
+
+        Ok(Self {
+            client,
+            timeout,
+            metrics,
+        })
     }
 
     pub fn as_data_loader(&self) -> DataLoader<Self> {
@@ -72,17 +92,9 @@ impl LedgerGrpcReader {
         let request =
             GetCheckpointRequest::default().with_read_mask(FieldMask::from_paths(["summary.bcs"]));
 
-        let response = self
-            .0
-            .clone()
-            .get_checkpoint(request)
-            .await
-            .context("Failed to get latest checkpoint")?;
+        let response = self.get_checkpoint(request).await?;
 
-        let checkpoint = response
-            .into_inner()
-            .checkpoint
-            .context("No checkpoint returned")?;
+        let checkpoint = response.checkpoint.context("No checkpoint returned")?;
 
         checkpoint
             .summary
@@ -91,5 +103,101 @@ impl LedgerGrpcReader {
             .context("Missing summary.bcs")?
             .deserialize()
             .context("Failed to deserialize checkpoint summary")
+    }
+
+    // Public wrapper methods for gRPC calls with metrics instrumentation
+
+    pub async fn get_checkpoint(
+        &self,
+        request: sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest,
+    ) -> Result<sui_rpc::proto::sui::rpc::v2::GetCheckpointResponse, tonic::Status> {
+        self.request(
+            "get_checkpoint",
+            |mut client, request| async move { client.get_checkpoint(request).await },
+            request,
+        )
+        .await
+    }
+
+    pub async fn batch_get_transactions(
+        &self,
+        request: sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest,
+    ) -> Result<sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsResponse, tonic::Status> {
+        self.request(
+            "batch_get_transactions",
+            |mut client, request| async move { client.batch_get_transactions(request).await },
+            request,
+        )
+        .await
+    }
+
+    pub async fn batch_get_objects(
+        &self,
+        request: sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest,
+    ) -> Result<sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse, tonic::Status> {
+        self.request(
+            "batch_get_objects",
+            |mut client, request| async move { client.batch_get_objects(request).await },
+            request,
+        )
+        .await
+    }
+
+    pub async fn get_transaction(
+        &self,
+        request: sui_rpc::proto::sui::rpc::v2::GetTransactionRequest,
+    ) -> Result<sui_rpc::proto::sui::rpc::v2::GetTransactionResponse, tonic::Status> {
+        self.request(
+            "get_transaction",
+            |mut client, request| async move { client.get_transaction(request).await },
+            request,
+        )
+        .await
+    }
+
+    // Generic request wrapper that instruments all gRPC calls with metrics
+    async fn request<F, Fut, I, R>(
+        &self,
+        method: &str,
+        response: F,
+        input: I,
+    ) -> Result<R, tonic::Status>
+    where
+        F: FnOnce(LedgerServiceClient<Channel>, tonic::Request<I>) -> Fut,
+        Fut: std::future::Future<Output = Result<tonic::Response<R>, tonic::Status>>,
+    {
+        self.metrics
+            .requests_received
+            .with_label_values(&[method])
+            .inc();
+
+        let _timer = self
+            .metrics
+            .latency
+            .with_label_values(&[method])
+            .start_timer();
+
+        let mut request = tonic::Request::new(input);
+        if let Some(timeout) = self.timeout {
+            request.set_timeout(timeout);
+        }
+
+        let response = response(self.client.clone(), request)
+            .await
+            .map(|r| r.into_inner());
+
+        if response.is_ok() {
+            self.metrics
+                .requests_succeeded
+                .with_label_values(&[method])
+                .inc();
+        } else {
+            self.metrics
+                .requests_failed
+                .with_label_values(&[method])
+                .inc();
+        }
+
+        response
     }
 }
