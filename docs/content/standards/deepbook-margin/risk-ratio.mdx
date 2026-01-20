@@ -40,7 +40,7 @@ The minimum risk ratio required **after** withdrawing collateral.
 
 - If a withdrawal would cause your position's risk ratio to fall below this threshold, the withdrawal is rejected
 - This prevents users from extracting too much collateral and leaving an unsafe position
-- Typically set to 2.0 (50% LTV), meaning you must maintain at least $2 of assets per $1 of debt to withdraw
+- Typically set to 2.0 (50% LTV), meaning you must maintain at least 2 units of assets per 1 unit of debt to withdraw
 
 ### Min Borrow Risk Ratio
 
@@ -71,9 +71,7 @@ The target risk ratio that liquidation aims to restore the position to.
 
 The maximum leverage for a trading pair is determined by the Min Borrow Risk Ratio:
 
-$$
-\text{max\_leverage} \approx \frac{1}{1 - \frac{1}{\text{min\_borrow\_risk\_ratio}}}
-$$
+$$\text{Max Leverage} \approx \frac{1}{1 - \frac{1}{\text{Min Borrow Risk Ratio}}}$$
 
 | Min Borrow Risk Ratio | Approximate Max Leverage |
 |-----------------------|--------------------------|
