@@ -73,61 +73,62 @@ const guides = [
       },
       'guides/developer/objects/derived-objects',
       {
-				type: 'category',
-				label: 'Dynamic Fields',
-				link: {
-					type: 'doc',
-					id: 'guides/developer/objects/dynamic-fields',
-				},
-				items: ['guides/developer/objects/tables-bags'],
-			},
+        type: 'category',
+        label: 'Dynamic Fields',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/objects/dynamic-fields',
+        },
+        items: ['guides/developer/objects/tables-bags'],
+      },
       'guides/developer/objects/versioning',
       'guides/developer/objects/local-fee-markets',
       'guides/developer/objects/simulating-refs',
 
     ],
+  },
+  {
+    type: 'category',
+    label: 'Packages',
+    items: [
+      'guides/developer/packages/move-package-management',
+      'guides/developer/packages/upgrade',
+      'guides/developer/packages/custom-policies',
+      'guides/developer/packages/automated-address-management',
+    ],
+  },
+  {
+    type: 'category',
+    label: 'Transactions',
+    link: {
+      type: 'doc',
+      id: 'guides/developer/transactions/txn-overview',
     },
-    {
-        type: 'category',
-        label: 'Packages',
-  				items: [
-          'guides/developer/packages/move-package-management',
-					'guides/developer/packages/upgrade',
-					'guides/developer/packages/custom-policies',
-					'guides/developer/packages/automated-address-management',
-				],
-			},
+    items: [
       {
-				type: 'category',
-				label: 'Transactions',
-				link: {
-					type: 'doc',
-					id: 'guides/developer/transactions/txn-overview',
-				},
+        type: 'category',
+        label: 'Programmable Transaction Blocks',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/transactions/prog-txn-blocks',
+        },
         items: [
-           {
-            type: 'category',
-            label: 'Programmable Transaction Blocks',
-            link: {
-              type: 'doc',
-              id: 'guides/developer/transactions/prog-txn-blocks',
-            },
-              items: [
-              'guides/developer/transactions/building-ptb',
-              ],
-            },
-            'guides/developer/transactions/sign-and-send-txn',
-            'guides/developer/transactions/sponsor-txn',
-            {
-            type: 'category',
-            label: 'Transaction Authentication',
-              items: [
-              'guides/developer/transactions/transaction-auth/intent-signing',
-              'guides/developer/transactions/transaction-auth/multisig',
-              'guides/developer/transactions/transaction-auth/offline-signing',
-              ],
-            },
+          'guides/developer/transactions/building-ptb',
         ],
+      },
+      'guides/developer/transactions/sign-and-send-txn',
+      'guides/developer/transactions/sponsor-txn',
+      {
+        type: 'category',
+        label: 'Transaction Authentication',
+        items: [
+          'guides/developer/transactions/transaction-auth/intent-signing',
+          'guides/developer/transactions/transaction-auth/multisig',
+          'guides/developer/transactions/transaction-auth/offline-signing',
+          'guides/developer/transactions/address-aliases',
+        ],
+      },
+    ],
   },
   {
     type: 'category',
@@ -145,12 +146,12 @@ const guides = [
           type: 'doc',
           id: 'guides/developer/accessing-data/custom-indexing-framework',
         },
-          items: [
-            'guides/developer/accessing-data/custom-indexer/build',
-            'guides/developer/accessing-data/custom-indexer/indexer-walrus',
-            'guides/developer/accessing-data/custom-indexer/bring-your-own-store',
-          ]
-        },
+        items: [
+          'guides/developer/accessing-data/custom-indexer/build',
+          'guides/developer/accessing-data/custom-indexer/indexer-walrus',
+          'guides/developer/accessing-data/custom-indexer/bring-your-own-store',
+        ]
+      },
     ],
   },
   {
@@ -218,7 +219,7 @@ const guides = [
       },
     ],
   },
-    {
+  {
     type: 'category',
     label: 'Nautilus',
     link: {
