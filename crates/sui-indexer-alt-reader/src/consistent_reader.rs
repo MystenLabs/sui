@@ -9,7 +9,6 @@ use anyhow::Context;
 use anyhow::anyhow;
 use prometheus::Registry;
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_client::ConsistentServiceClient;
-use sui_types::TypeTag;
 use sui_types::base_types::ObjectDigest;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
@@ -129,7 +128,7 @@ impl ConsistentReader {
         checkpoint: u64,
         address: String,
         coin_types: Vec<String>,
-    ) -> Result<Vec<(TypeTag, u64)>, Error> {
+    ) -> Result<Vec<proto::Balance>, Error> {
         let response = self
             .request(
                 "batch_get_balances",
@@ -149,8 +148,7 @@ impl ConsistentReader {
 
         let mut results = vec![];
         for balance in response.balances {
-            let edge: Edge<(TypeTag, u64)> = balance.try_into()?;
-            results.push(edge.value);
+            results.push(balance);
         }
 
         Ok(results)
@@ -163,21 +161,17 @@ impl ConsistentReader {
         checkpoint: u64,
         address: String,
         coin_type: String,
-    ) -> Result<(TypeTag, u64), Error> {
-        let response = self
-            .request(
-                "get_balance",
-                Some(checkpoint),
-                |mut client, request| async move { client.get_balance(request).await },
-                proto::GetBalanceRequest {
-                    owner: Some(address),
-                    coin_type: Some(coin_type),
-                },
-            )
-            .await?;
-
-        let edge: Edge<(TypeTag, u64)> = response.try_into()?;
-        Ok(edge.value)
+    ) -> Result<proto::Balance, Error> {
+        self.request(
+            "get_balance",
+            Some(checkpoint),
+            |mut client, request| async move { client.get_balance(request).await },
+            proto::GetBalanceRequest {
+                owner: Some(address),
+                coin_type: Some(coin_type),
+            },
+        )
+        .await
     }
 
     /// Paginate coin balances for `address`, at checkpoint `checkpoint`.
@@ -190,7 +184,7 @@ impl ConsistentReader {
         after_token: Option<Vec<u8>>,
         before_token: Option<Vec<u8>>,
         is_from_front: bool,
-    ) -> Result<Page<(TypeTag, u64)>, Error> {
+    ) -> Result<Page<proto::Balance>, Error> {
         let response = self
             .request(
                 "list_balances",
@@ -216,8 +210,11 @@ impl ConsistentReader {
         let results = response
             .balances
             .into_iter()
-            .map(TryFrom::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|b| Edge {
+                token: b.page_token.clone().unwrap_or_default().into(),
+                value: b,
+            })
+            .collect();
 
         Ok(Page {
             results,
@@ -385,27 +382,6 @@ impl ConsistentReader {
         }
 
         response
-    }
-}
-
-impl TryFrom<proto::Balance> for Edge<(TypeTag, u64)> {
-    type Error = Error;
-
-    fn try_from(proto: proto::Balance) -> Result<Self, Error> {
-        let coin_type: TypeTag = proto
-            .coin_type
-            .context("coin type missing")?
-            .parse()
-            .context("invalid coin type")?;
-
-        let balance: u64 = proto.total_balance.unwrap_or(0);
-
-        let token: Vec<u8> = proto.page_token.unwrap_or_default().into();
-
-        Ok(Edge {
-            token,
-            value: (coin_type, balance),
-        })
     }
 }
 
