@@ -110,17 +110,8 @@ const guides = [
     type: 'category',
     label: 'Accessing Data',
     items: [
-      {
-        type: 'category',
-        label: 'gRPC',
-        link: {
-          type: 'doc',
-          id: 'guides/developer/accessing-data/grpc-overview',
-        },
-        items: [
-          'guides/developer/accessing-data/query-with-graphql',
-        ],
-      },
+      'guides/developer/accessing-data/grpc-overview',
+      'guides/developer/accessing-data/query-with-graphql',
       {
         type: 'category',
         label: 'Custom Indexer Framework',
