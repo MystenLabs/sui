@@ -12,7 +12,7 @@
       { "source": "/learn/sui-move-diffs", "destination": "/concepts/sui-move-concepts", "permanent": true },
       { "source": "/learn/transactions", "destination": "/concepts/transactions", "permanent": true },
       { "source": "/learn/cryptography/groth16", "destination": "/guides/developer/cryptography/groth16", "permanent": true },
-      { "source": "/learn/cryptography/sui-multisig", "destination": "/concepts/transactions/transaction-auth/multisig", "permanent": true },
+      { "source": "/learn/cryptography/sui-multisig", "destination": "/guides/developer/transactions/transaction-auth/multisig", "permanent": true },
       { "source": "/learn/cryptography/sui-signatures", "destination": "/concepts/transactions/transaction-auth/signatures", "permanent": true },
       { "source": "/learn/cryptography/hashing", "destination": "/guides/developer/cryptography/hashing", "permanent": true },
       { "source": "/learn/cryptography/sui-intent-signing", "destination": "/concepts/transactions/transaction-auth/intent-signing", "permanent": true },
