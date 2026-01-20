@@ -9,11 +9,10 @@ use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata,
 use crate::crypto::{AuthorityPublicKey, NetworkPublicKey};
 use crate::multiaddr::Multiaddr;
 use anemo::PeerId;
-use anemo::types::{PeerAffinity, PeerInfo};
 use consensus_config::{Authority, Committee as ConsensusCommittee};
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
-use tracing::{error, warn};
+use tracing::error;
 
 #[enum_dispatch]
 pub trait EpochStartSystemStateTrait {
@@ -27,7 +26,8 @@ pub trait EpochStartSystemStateTrait {
     fn get_sui_committee(&self) -> Committee;
     fn get_sui_committee_with_network_metadata(&self) -> CommitteeWithNetworkMetadata;
     fn get_consensus_committee(&self) -> ConsensusCommittee;
-    fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo>;
+    fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName)
+    -> Vec<(PeerId, Multiaddr)>;
     fn get_authority_names_to_peer_ids(&self) -> HashMap<AuthorityName, PeerId>;
     fn get_authority_names_to_hostnames(&self) -> HashMap<AuthorityName, String>;
 }
@@ -218,28 +218,16 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
         ConsensusCommittee::new(self.epoch as consensus_config::Epoch, authorities)
     }
 
-    fn get_validator_as_p2p_peers(&self, excluding_self: AuthorityName) -> Vec<PeerInfo> {
+    fn get_validator_as_p2p_peers(
+        &self,
+        excluding_self: AuthorityName,
+    ) -> Vec<(PeerId, Multiaddr)> {
         self.active_validators
             .iter()
             .filter(|validator| validator.authority_name() != excluding_self)
             .map(|validator| {
-                let address = validator
-                    .p2p_address
-                    .to_anemo_address()
-                    .into_iter()
-                    .collect::<Vec<_>>();
                 let peer_id = PeerId(validator.narwhal_network_pubkey.0.to_bytes());
-                if address.is_empty() {
-                    warn!(
-                        ?peer_id,
-                        "Peer has invalid p2p address: {}", &validator.p2p_address
-                    );
-                }
-                PeerInfo {
-                    peer_id,
-                    affinity: PeerAffinity::High,
-                    address,
-                }
+                (peer_id, validator.p2p_address.clone())
             })
             .collect()
     }
