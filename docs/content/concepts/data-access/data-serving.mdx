@@ -37,7 +37,7 @@ View the video below for a comparison of the latest and legacy Sui data stacks.
 
 ### gRPC API
 
-[gRPC API](/concepts/data-access/graphql-rpc.mdx) replaces the JSON-RPC on full nodes. JSON-RPC is **deprecated** and gRPC API is generally available. Apart from the message and request format changes between the two, the gRPC API comes with a couple of key functional differences:
+[gRPC API](/concepts/data-access/grpc) replaces the JSON-RPC on full nodes. JSON-RPC is **deprecated** and gRPC API is generally available. Apart from the message and request format changes between the two, the gRPC API comes with a couple of key functional differences:
 
 - Use streaming or subscription API endpoints to consume real-time streaming data in your application without having to poll for those records. This support replaces the deprecated WebSocket support in JSON-RPC.
 
@@ -98,7 +98,7 @@ The target times indicated are tentative and subject to updates based on project
 
 ### Archival Store and Service
 
-Long-term access to historical on-chain data is essential for developers, although full nodes enforce limited retention for scalability and performance. Use the [Archival Store and Service](/guides/developer/accessing-data/archival-store.mdx) to access historical on-chain data through a pluggable storage backend (like [Bigtable](https://cloud.google.com/bigtable)) and a [gRPC interface compatible with the `LedgerService` endpoint](/concepts/data-access/graphql-rpc.mdx).
+Long-term access to historical on-chain data is essential for developers, although full nodes enforce limited retention for scalability and performance. Use the [Archival Store and Service](/guides/developer/accessing-data/archival-store.mdx) to access historical on-chain data through a pluggable storage backend (like [Bigtable](https://cloud.google.com/bigtable)) and a [gRPC interface compatible with the `LedgerService` endpoint](/concepts/data-access/grpc).
 
 This infrastructure serves as the historical backbone for GraphQL RPC, gRPC-based apps, and data platforms, providing efficient point-lookups for old transactions, checkpoints, and object states, even after full nodes have pruned them.
 
@@ -147,11 +147,11 @@ You can get real-time or historical data using JSON-RPC. Retention period for hi
 
 ## Related links
 
-<RelatedLink to="/concepts/data-access/graphql-rpc" />
+<RelatedLink to="/concepts/data-access/grpc" />
 <RelatedLink to="/guides/developer/accessing-data/custom-indexing-framework" />
 <RelatedLink to="/guides/developer/accessing-data/pipeline-architecture" />
 <RelatedLink to="/guides/developer/accessing-data/archival-store" />
-<RelatedLink to="/guides/developer/accessing-data/custom-indexer" />
+<RelatedLink to="/guides/developer/accessing-data/custom-indexing-framework" />
 <RelatedLink to="/concepts/data-access/graphql-indexer" />
 <RelatedLink href="/references/fullnode-protocol" label="Sui Full Node gRPC" desc="Generated documentation from the Sui gRPC schema." />
 <RelatedLink href="/references/sui-api/sui-graphql/beta/reference" label="GraphQL Beta schema" desc="Schema documentation for GraphQL Beta." />

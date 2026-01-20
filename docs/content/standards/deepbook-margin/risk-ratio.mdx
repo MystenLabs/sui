@@ -1,0 +1,140 @@
+---
+title: Risk Ratio
+description: Understanding risk ratios and how they determine leverage limits, collateral requirements, and liquidation thresholds in DeepBook Margin.
+keywords:
+  [
+    risk ratio,
+    leverage,
+    liquidation,
+    collateral,
+    margin trading,
+    borrow ratio,
+    withdraw ratio,
+    deepbook margin,
+  ]
+---
+
+Risk ratios are the core mechanism that governs leverage limits and position safety in DeepBook Margin. Understanding these ratios is essential for managing margin positions effectively.
+
+## What is a risk ratio?
+
+The **risk ratio** is defined as:
+
+```
+risk_ratio = total_assets / total_debts
+```
+
+Where assets and debts are valued in a common denomination using oracle prices. A higher risk ratio indicates a safer position with more collateral relative to debt.
+
+- **Risk ratio = 2.0**: You have 2 units of assets for every 1 unit of debt (50% LTV)
+- **Risk ratio = 1.25**: You have 1.25 units of assets for every 1 unit of debt (80% LTV)
+- **Risk ratio = 1.0**: Your assets exactly equal your debts (100% LTV, insolvent)
+
+## Risk ratio thresholds
+
+Each trading pair has four risk ratio thresholds that control different operations:
+
+### Min Withdraw Risk Ratio
+
+The minimum risk ratio required **after** withdrawing collateral.
+
+- If a withdrawal would cause your position's risk ratio to fall below this threshold, the withdrawal is rejected
+- This prevents users from extracting too much collateral and leaving an unsafe position
+- Typically set to 2.0 (50% LTV), meaning you must maintain at least 2 units of assets per 1 unit of debt to withdraw
+
+### Min Borrow Risk Ratio
+
+The minimum risk ratio required **after** borrowing additional funds.
+
+- If a borrow would cause your position's risk ratio to fall below this threshold, the borrow is rejected
+- This determines the maximum leverage available for the trading pair
+- A min borrow ratio of 1.25 allows approximately 5x leverage
+- A min borrow ratio of 1.5 allows approximately 3x leverage
+
+### Liquidation Risk Ratio
+
+The risk ratio threshold at which a position becomes **eligible for liquidation**.
+
+- When a position's risk ratio falls to or below this value, anyone can liquidate the position
+- This is the "danger zone" - if price moves against you and your ratio hits this level, you can be liquidated
+- Typically set between 1.1 and 1.2 depending on asset volatility
+
+### Target Liquidation Risk Ratio
+
+The target risk ratio that liquidation aims to restore the position to.
+
+- Liquidation repays enough debt to bring the position back to a healthy state at this ratio
+- This ensures the position is safe after liquidation, not just barely above the liquidation threshold
+- Typically equals the Min Borrow Risk Ratio
+
+## How leverage is determined
+
+The maximum leverage for a trading pair is determined by the Min Borrow Risk Ratio:
+
+$$\text{Max Leverage} \approx \frac{1}{1 - \frac{1}{\text{Min Borrow Risk Ratio}}}$$
+
+| Min Borrow Risk Ratio | Approximate Max Leverage |
+|-----------------------|--------------------------|
+| 1.25 | 5x |
+| 1.5 | 3x |
+| 2.0 | 2x |
+
+## Example: SUI/USDC position lifecycle
+
+Consider a SUI/USDC position with the following risk parameters:
+- Min Withdraw Risk Ratio: 2.0
+- Min Borrow Risk Ratio: 1.25
+- Liquidation Risk Ratio: 1.1
+- Target Liquidation Risk Ratio: 1.25
+
+**Opening a position:**
+1. You deposit 100 USDC as collateral
+2. You borrow 400 USDC worth of SUI
+3. Total assets = 100 USDC collateral + 400 USDC worth of SUI = 500 USDC
+4. Total debt = 400 USDC
+5. Risk ratio = 500/400 = 1.25 (at the minimum borrow ratio)
+6. You now have 5x leveraged exposure to SUI
+
+**Price moves in your favor:**
+1. SUI price increases 10%, your SUI is now worth 440 USDC
+2. Total assets = 100 + 440 = 540 USDC, debt is still 400 USDC
+3. Risk ratio = 540/400 = 1.35 (safer position)
+4. You can withdraw some profit, as long as ratio stays above 2.0
+
+**Price moves against you:**
+1. SUI price drops 10%, your SUI is now worth 360 USDC
+2. Total assets = 100 + 360 = 460 USDC, debt is still 400 USDC
+3. Risk ratio = 460/400 = 1.15 (approaching liquidation)
+4. If SUI drops further to 340 USDC worth, ratio = (100 + 340)/400 = 1.1 (liquidation threshold)
+5. Your position can now be liquidated by anyone
+6. Liquidator repays part of your debt and receives collateral plus a reward
+7. After liquidation, your remaining position has a risk ratio of 1.25
+
+## Liquidation rewards
+
+When a position is liquidated:
+
+- **User Liquidation Reward**: A percentage of the liquidated amount paid to the liquidator as incentive (typically 2%)
+- **Pool Liquidation Reward**: A percentage paid to the margin pool to cover potential bad debt (typically 3%)
+
+These rewards ensure liquidators are incentivized to maintain system health and the protocol has reserves against defaults.
+
+## Risk management best practices
+
+1. **Monitor your risk ratio**: Keep track of your position's health, especially during volatile markets
+2. **Maintain a buffer**: Don't borrow up to the maximum - leave room for price fluctuations
+3. **Set stop losses**: Use [TPSL orders](./tpsl.mdx) to automatically close positions before liquidation
+4. **Understand the assets**: Higher volatility assets typically have stricter risk parameters (lower leverage)
+
+## Related links
+
+<RelatedLink
+	href="./contract-information"
+	label="Contract Information"
+	desc="View current risk parameters for each trading pair."
+/>
+<RelatedLink
+	href="./tpsl"
+	label="Take Profit Stop Loss"
+	desc="Learn how to set up automated risk management orders."
+/>

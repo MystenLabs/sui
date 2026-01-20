@@ -22,15 +22,19 @@ source: crates/sui/tests/shell_tests.rs
 echo "=== expect to fail when publishing e because prereqs aren't published ==="
 sui client --client.config $CONFIG \
   test-publish --build-env testnet --pubfile-path Pub.local.toml e \
-  > /dev/null || echo "failed to build e"
+  > output.log 2>&1 || cat output.log
 
 
 # publish a
+echo ""
+echo "=== this should be succesful ==="
 sui client --client.config $CONFIG \
   test-publish --build-env testnet --pubfile-path Pub.local.toml a \
-  > /dev/null || echo "failed to publish a"
+  > output.log 2>&1 || cat output.log
 
 # trying to republish should fail now.
+echo ""
+echo "=== this should fail ==="
 sui client --client.config $CONFIG test-publish --build-env testnet --pubfile-path Pub.local.toml a
 
 ----- results -----
@@ -38,12 +42,18 @@ success: false
 exit_code: 1
 ----- stdout -----
 === expect to fail when publishing e because prereqs aren't published ===
-failed to build e
-INCLUDING DEPENDENCY MoveStdlib
-INCLUDING DEPENDENCY Sui
-BUILDING a
+The package has unpublished dependencies. If you want to publish with unpublished dependencies, please publish them one by one, or (not recommended) pass the `--with-unpublished-dependencies` flag.
+ Unpublished dependencies: a, b, c, d
+        
+
+=== this should be succesful ===
+
+=== this should fail ===
 Failed to publish the Move module(s), reason: Your package is already published. You have to manually remove the publication entry to publish again.
  - If you are doing a regular publish, you can remove the entry for your environment from `Published.toml`.
  - If you are doing a test publish, you can either specify a new file with `--pubfile-path`, or remove the entry from your existing ephemeral publication file.
 
 ----- stderr -----
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY Sui
+BUILDING a

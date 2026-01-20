@@ -4,6 +4,7 @@
 use crate::{ErrorReason, Result, RpcError, RpcService};
 use sui_rpc::proto::google::rpc::bad_request::FieldViolation;
 use sui_rpc::proto::sui::rpc::v2::{Balance, GetBalanceRequest, GetBalanceResponse};
+use sui_sdk_types::Address;
 use sui_sdk_types::StructTag;
 use sui_types::base_types::SuiAddress;
 use sui_types::storage::BalanceInfo;
@@ -25,12 +26,13 @@ pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<G
                 .with_description("missing owner")
                 .with_reason(ErrorReason::FieldMissing)
         })?
-        .parse::<SuiAddress>()
+        .parse::<Address>()
         .map_err(|e| {
             FieldViolation::new("owner")
                 .with_description(format!("invalid owner: {e}"))
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
+    let owner = SuiAddress::from(owner);
 
     let coin_type = request
         .coin_type

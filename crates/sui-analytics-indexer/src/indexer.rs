@@ -62,7 +62,7 @@ pub async fn build_analytics_indexer(
     };
 
     let package_cache_path = work_dir.join("package_cache");
-    let package_cache = Arc::new(PackageCache::new(&package_cache_path, &config.rest_url));
+    let package_cache = Arc::new(PackageCache::new(&package_cache_path, &config.rpc_api_url));
 
     let indexer_args = sui_indexer_alt_framework::IndexerArgs {
         first_checkpoint: adjusted_first_checkpoint,
@@ -84,11 +84,7 @@ pub async fn build_analytics_indexer(
                     .transpose()?
             },
             local_ingestion_path: config.local_ingestion_path.clone(),
-            rpc_api_url: config
-                .rpc_api_url
-                .as_ref()
-                .map(|url| url.parse())
-                .transpose()?,
+            rpc_api_url: Some(config.rpc_api_url.parse()?),
             rpc_username: config.rpc_username.clone(),
             rpc_password: config.rpc_password.clone(),
         },

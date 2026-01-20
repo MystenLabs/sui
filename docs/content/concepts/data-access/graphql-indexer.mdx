@@ -353,7 +353,7 @@ Retaining long-term historical data in Postgres is not recommended unless requir
 
 For all production deployments, pair Postgres with the [Archival Service](/guides/developer/accessing-data/archival-store.mdx) to support point lookups of transactions, objects, and checkpoints when relevant data does not exist in Postgres. The Archival Service serves as the backend for historical versions and checkpoint data, reducing pressure on your Postgres instance. While not strictly required, use the Archival Service in any production setup that aims to support high-retention GraphQL or gRPC workloads.
 
-Current implementation supports [GCP Bigtable](https://cloud.google.com/bigtable) which is a highly scalable and performant data store. If you plan to operate your own archival store, refer to `sui-kvstore` and `sui-kv-rpc` for indexer setup and RPC service implementation respectively. For the indexer setup, make sure to use the [custom indexing framework](/guides/developer/accessing-data/custom-indexer.mdx). If you're interested in contributing support for other scalable data stores, reach out on GitHub by creating a new issue.
+Current implementation supports [GCP Bigtable](https://cloud.google.com/bigtable) which is a highly scalable and performant data store. If you plan to operate your own archival store, refer to `sui-kvstore` and `sui-kv-rpc` for indexer setup and RPC service implementation respectively. For the indexer setup, make sure to use the [custom indexing framework](/guides/developer/accessing-data/custom-indexing-framework.mdx). If you're interested in contributing support for other scalable data stores, reach out on GitHub by creating a new issue.
 
 <details>
 <summary>
@@ -408,7 +408,7 @@ To improve performance and reliability, also consider these operational best pra
 <RelatedLink to="/guides/developer/accessing-data/pipeline-architecture" />
 <RelatedLink to="/guides/developer/accessing-data/archival-store" />
 <RelatedLink to="/guides/operator/indexer-stack-setup" />
-<RelatedLink to="/guides/developer/accessing-data/custom-indexer" />
+<RelatedLink to="/guides/developer/accessing-data/custom-indexing-framework" />
 <RelatedLink href="https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt" label="Sui Indexer Alt" desc="The `sui-indexer-alt` crate in the Sui repo." />
 <RelatedLink href="https://github.com/MystenLabs/mvr/tree/main/crates/mvr-indexer" label="Move Registry" desc="The indexer that the Move Registry (MVR) implements." />
 <RelatedLink href="https://github.com/MystenLabs/deepbookv3/tree/main/crates/indexer" label="DeepBook Indexer" desc="The indexer that DeepBook implements." />

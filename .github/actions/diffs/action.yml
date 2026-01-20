@@ -28,6 +28,9 @@ outputs:
   isExamples:
     description: True when changes happened in examples/ directory
     value: "${{ steps.diff.outputs.isExamples }}"
+  isReleaseNotesScript:
+    description: True when changes happened to release notes scripts
+    value: "${{ steps.diff.outputs.isReleaseNotesScript }}"
 
 runs:
   using: composite
@@ -84,3 +87,6 @@ runs:
           - 'external-crates/move/crates/move-analyzer/trace-adapter/**'
         isExamples:
           - 'examples/**'
+        isReleaseNotesScript:
+          - 'scripts/release_notes.py'
+          - 'scripts/release_notes_test.py'
