@@ -14089,6 +14089,7 @@ dependencies = [
  "object_store",
  "parquet",
  "prometheus",
+ "prost 0.14.1",
  "reqwest",
  "scoped-futures",
  "serde",
@@ -14105,6 +14106,7 @@ dependencies = [
  "sui-indexer-alt-object-store",
  "sui-json-rpc-types",
  "sui-package-resolver",
+ "sui-rpc",
  "sui-rpc-api",
  "sui-storage",
  "sui-types",
@@ -14117,6 +14119,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "url",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -14189,6 +14192,7 @@ dependencies = [
  "mysten-common",
  "mysten-metrics",
  "prometheus",
+ "prost 0.14.1",
  "rand 0.8.5",
  "regex",
  "roaring 0.10.9",
@@ -14206,6 +14210,7 @@ dependencies = [
  "sui-move-build",
  "sui-network",
  "sui-protocol-config",
+ "sui-rpc",
  "sui-sdk",
  "sui-simulator",
  "sui-storage",
@@ -14220,6 +14225,7 @@ dependencies = [
  "tokio-util 0.7.13",
  "tracing",
  "typed-store",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -14540,6 +14546,7 @@ dependencies = [
  "pprof",
  "pretty_assertions",
  "prometheus",
+ "prost 0.14.1",
  "rand 0.8.5",
  "rayon",
  "reqwest",
@@ -14567,6 +14574,7 @@ dependencies = [
  "sui-move-build",
  "sui-network",
  "sui-protocol-config",
+ "sui-rpc",
  "sui-simulator",
  "sui-storage",
  "sui-swarm-config",
@@ -14586,6 +14594,7 @@ dependencies = [
  "tracing",
  "twox-hash",
  "typed-store",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -14648,10 +14657,12 @@ dependencies = [
  "object_store",
  "once_cell",
  "prometheus",
+ "prost 0.14.1",
  "rand 0.8.5",
  "serde",
  "serde_json",
  "sui-protocol-config",
+ "sui-rpc",
  "sui-rpc-api",
  "sui-storage",
  "sui-types",
@@ -14661,6 +14672,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "url",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -17008,14 +17020,16 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clap",
+ "prost 0.14.1",
  "simulacrum",
- "sui-storage",
+ "sui-rpc",
  "sui-test-transaction-builder",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
  "tokio",
  "tracing",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
