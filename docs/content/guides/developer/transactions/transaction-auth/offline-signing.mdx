@@ -54,7 +54,7 @@ Digest to sign: <DIGEST>
 Serialized signature (`flag || sig || pk` in Base64): <SERIALIZED-SIGNATURE>
 ```
 
-To ensure the signature produced offline matches with Sui validity rules for testing purposes, you can import the mnemonics to `sui.keystore` using `sui keytool import`. You can then sign with it using `sui keytool sign` and then compare the signature results. Additionally, you can find test vectors in `~/sui/sdk/typescript/test/e2e/raw-signer.test.ts`.
+To ensure the signature produced offline meets Sui validity rules for testing purposes, you can import the mnemonics to `sui.keystore` using `sui keytool import`. You can then sign with it using `sui keytool sign` and compare the signature results. Additionally, you can find test vectors in `~/sui/sdk/typescript/test/e2e/raw-signer.test.ts`.
 
 To verify a signature against the cryptography library backing Sui when debugging, see [sigs-cli](https://github.com/MystenLabs/fastcrypto/blob/4cf71bd8b3a373495beeb77ce81c27827516c218/fastcrypto-cli/src/sigs_cli.rs).
 
