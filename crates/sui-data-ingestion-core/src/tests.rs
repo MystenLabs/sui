@@ -7,14 +7,18 @@ use crate::{ReaderOptions, Worker};
 use anyhow::Result;
 use async_trait::async_trait;
 use prometheus::Registry;
+use prost::Message;
 use rand::SeedableRng;
 use rand::prelude::StdRng;
 use std::path::PathBuf;
 use std::time::Duration;
 use sui_protocol_config::ProtocolConfig;
-use sui_storage::blob::{Blob, BlobEncoding};
+use sui_rpc::field::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::sui::rpc;
 use sui_types::crypto::KeypairTraits;
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::full_checkpoint_content::{Checkpoint, CheckpointData};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
@@ -99,7 +103,7 @@ async fn basic_flow() {
     let path = temp_dir();
     for checkpoint_number in 0..20 {
         let bytes = mock_checkpoint_data_bytes(checkpoint_number);
-        std::fs::write(path.join(format!("{}.chk", checkpoint_number)), bytes).unwrap();
+        std::fs::write(path.join(format!("{}.binpb.zst", checkpoint_number)), bytes).unwrap();
     }
     let result = run(bundle.executor, Some(path), Some(Duration::from_secs(1))).await;
     assert!(result.is_ok());
@@ -165,7 +169,42 @@ fn mock_checkpoint_data_bytes(seq_number: CheckpointSequenceNumber) -> Vec<u8> {
         checkpoint_contents: contents,
         transactions: vec![],
     };
-    Blob::encode(&checkpoint_data, BlobEncoding::Bcs)
-        .unwrap()
-        .to_bytes()
+
+    let checkpoint: Checkpoint = checkpoint_data.into();
+
+    let mask = FieldMask::from_paths([
+        rpc::v2::Checkpoint::path_builder().sequence_number(),
+        rpc::v2::Checkpoint::path_builder().summary().bcs().value(),
+        rpc::v2::Checkpoint::path_builder().signature().finish(),
+        rpc::v2::Checkpoint::path_builder().contents().bcs().value(),
+        rpc::v2::Checkpoint::path_builder()
+            .transactions()
+            .transaction()
+            .bcs()
+            .value(),
+        rpc::v2::Checkpoint::path_builder()
+            .transactions()
+            .effects()
+            .bcs()
+            .value(),
+        rpc::v2::Checkpoint::path_builder()
+            .transactions()
+            .effects()
+            .unchanged_loaded_runtime_objects()
+            .finish(),
+        rpc::v2::Checkpoint::path_builder()
+            .transactions()
+            .events()
+            .bcs()
+            .value(),
+        rpc::v2::Checkpoint::path_builder()
+            .objects()
+            .objects()
+            .bcs()
+            .value(),
+    ]);
+
+    let proto_checkpoint = rpc::v2::Checkpoint::merge_from(&checkpoint, &mask.into());
+    let proto_bytes = proto_checkpoint.encode_to_vec();
+    zstd::encode_all(&proto_bytes[..], 3).unwrap()
 }

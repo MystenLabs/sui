@@ -3,9 +3,13 @@
 
 use crate::checkpoints::checkpoint_executor::{CheckpointExecutionData, CheckpointTransactionData};
 use crate::execution_cache::TransactionCacheRead;
+use prost::Message;
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
-use sui_storage::blob::{Blob, BlobEncoding};
+use sui_rpc::field::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::sui::rpc;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::full_checkpoint_content::{
@@ -18,7 +22,7 @@ pub(crate) fn store_checkpoint_locally(
     checkpoint_data: &CheckpointData,
 ) -> SuiResult {
     let path = path.as_ref();
-    let file_name = format!("{}.chk", checkpoint_data.checkpoint_summary.sequence_number);
+    let sequence_number = checkpoint_data.checkpoint_summary.sequence_number;
 
     std::fs::create_dir_all(path).map_err(|err| {
         SuiErrorKind::FileIOError(format!(
@@ -27,17 +31,52 @@ pub(crate) fn store_checkpoint_locally(
         ))
     })?;
 
-    Blob::encode(&checkpoint_data, BlobEncoding::Bcs)
-        .map_err(|_| SuiErrorKind::TransactionSerializationError {
-            error: "failed to serialize full checkpoint content".to_string(),
-        }) // Map the first error
-        .and_then(|blob| {
-            std::fs::write(path.join(file_name), blob.to_bytes()).map_err(|_| {
-                SuiErrorKind::FileIOError(
-                    "failed to save full checkpoint content locally".to_string(),
-                )
-            })
-        })?;
+    let checkpoint: Checkpoint = checkpoint_data.clone().into();
+
+    let mask = FieldMask::from_paths([
+        rpc::v2::Checkpoint::path_builder().sequence_number(),
+        rpc::v2::Checkpoint::path_builder().summary().bcs().value(),
+        rpc::v2::Checkpoint::path_builder().signature().finish(),
+        rpc::v2::Checkpoint::path_builder().contents().bcs().value(),
+        rpc::v2::Checkpoint::path_builder()
+            .transactions()
+            .transaction()
+            .bcs()
+            .value(),
+        rpc::v2::Checkpoint::path_builder()
+            .transactions()
+            .effects()
+            .bcs()
+            .value(),
+        rpc::v2::Checkpoint::path_builder()
+            .transactions()
+            .effects()
+            .unchanged_loaded_runtime_objects()
+            .finish(),
+        rpc::v2::Checkpoint::path_builder()
+            .transactions()
+            .events()
+            .bcs()
+            .value(),
+        rpc::v2::Checkpoint::path_builder()
+            .objects()
+            .objects()
+            .bcs()
+            .value(),
+    ]);
+
+    let proto_checkpoint = rpc::v2::Checkpoint::merge_from(&checkpoint, &mask.into());
+    let proto_bytes = proto_checkpoint.encode_to_vec();
+    let compressed = zstd::encode_all(&proto_bytes[..], 3).map_err(|_| {
+        SuiErrorKind::TransactionSerializationError {
+            error: "failed to compress checkpoint content".to_string(),
+        }
+    })?;
+
+    let file_name = format!("{}.binpb.zst", sequence_number);
+    std::fs::write(path.join(file_name), compressed).map_err(|_| {
+        SuiErrorKind::FileIOError("failed to save full checkpoint content locally".to_string())
+    })?;
 
     Ok(())
 }

@@ -60,8 +60,11 @@ sui-indexer-alt-object-store.workspace = true
 sui-indexer-alt-metrics.workspace = true
 
 [dev-dependencies]
+prost.workspace = true
+sui-rpc.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
+zstd.workspace = true
 
 [[bin]]
 name = "sui-analytics-indexer"
