@@ -155,7 +155,7 @@ impl EnvFinder<'_> {
         if candidates.len() > 1 {
             let mut s = String::new();
             for e in candidates.keys() {
-                s.push_str(&format!("\n\t--build-env {e}"))
+                s.push_str(&format!("\n\t-e {e}"))
             }
             bail!(
                 "Found multiple environments defined in Move.toml with chain-id `{chain_id}`. Please pass one of the following:{s}"
