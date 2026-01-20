@@ -25,7 +25,7 @@ const concepts = [
 		label: 'Transactions',
 		items: [
 			'concepts/transactions/transaction-lifecycle',
-			'concepts/transactions/sponsored-transactions',
+			'concepts/transactions/inputs-and-results',
 			'concepts/transactions/gas-smashing',
 			'concepts/transactions/transaction-auth',
 		],
