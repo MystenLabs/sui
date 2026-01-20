@@ -73,38 +73,39 @@ const guides = [
       },
       'guides/developer/objects/derived-objects',
       {
-				type: 'category',
-				label: 'Dynamic Fields',
-				link: {
-					type: 'doc',
-					id: 'guides/developer/objects/dynamic-fields',
-				},
-				items: ['guides/developer/objects/tables-bags'],
-			},
+        type: 'category',
+        label: 'Dynamic Fields',
+        link: {
+          type: 'doc',
+          id: 'guides/developer/objects/dynamic-fields',
+        },
+        items: ['guides/developer/objects/tables-bags'],
+      },
       'guides/developer/objects/versioning',
       'guides/developer/objects/local-fee-markets',
       'guides/developer/objects/simulating-refs',
 
     ],
-    },
-    {
-        type: 'category',
-        label: 'Packages',
-  				items: [
-          'guides/developer/packages/move-package-management',
-					'guides/developer/packages/upgrade',
-					'guides/developer/packages/custom-policies',
-					'guides/developer/packages/automated-address-management',
-				],
-			},
+  },
+  {
+    type: 'category',
+    label: 'Packages',
+    items: [
+      'guides/developer/packages/move-package-management',
+      'guides/developer/packages/upgrade',
+      'guides/developer/packages/custom-policies',
+      'guides/developer/packages/automated-address-management',
+    ],
+  },
   {
     type: 'category',
     label: 'Transactions',
     items: [
-          'guides/developer/transactions/sign-and-send-txn',
-          'guides/developer/transactions/building-ptb',
-          'guides/developer/transactions/sponsor-txn',
-        ],
+      'guides/developer/transactions/sign-and-send-txn',
+      'guides/developer/transactions/building-ptb',
+      'guides/developer/transactions/sponsor-txn',
+      'guides/developer/transactions/address-aliases',
+    ],
   },
   {
     type: 'category',
@@ -206,7 +207,7 @@ const guides = [
       },
     ],
   },
-    {
+  {
     type: 'category',
     label: 'Nautilus',
     link: {
