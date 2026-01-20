@@ -12,20 +12,20 @@
 echo "=== publish legacy_dep ==="
 sui client --client.config $CONFIG \
     test-publish --build-env testnet --pubfile-path Pub.local.toml legacy_dep \
-    > output.log && echo "success" || cat output.log
+    2> output.log > output.log && echo "success" || cat output.log
 
 echo "=== publish legacy ==="
 sui client --client.config $CONFIG \
     test-publish --build-env testnet --pubfile-path Pub.local.toml legacy \
-    > output.log && echo "success" || cat output.log
+    2> output.log > output.log && echo "success" || cat output.log
 
 echo "=== publish modern ==="
 sui client --client.config $CONFIG \
     test-publish --build-env testnet --pubfile-path Pub.local.toml modern \
-    > output.log && echo "success" || cat output.log
+    2> output.log > output.log && echo "success" || cat output.log
 
 echo "=== publish legacy_depends_on_modern ==="
 echo "    Should fail because legacy packages are not allowed to depend on modern packages"
 sui client --client.config $CONFIG \
     test-publish --build-env testnet --pubfile-path Pub.local.toml legacy_depends_on_modern \
-    > output.log && echo "success" || cat output.log
+    2> output.log > output.log && echo "success" || cat output.log
