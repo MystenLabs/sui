@@ -30,7 +30,7 @@ add_env_to_toml b
 sui client --client.config $CONFIG publish b
 
 # Publish A, so we can try to publish twice
-sui client --client.config $CONFIG publish a > /dev/null || echo "failed to publish a"
+sui client --client.config $CONFIG publish a > output.log 2>&1 || cat output.log
 
 # Try to publish A again.
 sui client --client.config $CONFIG publish a

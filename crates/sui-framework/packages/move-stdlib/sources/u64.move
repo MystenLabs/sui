@@ -109,6 +109,21 @@ public fun checked_div(x: u64, y: u64): Option<u64> {
     std::macros::num_checked_div!(x, y)
 }
 
+/// Add `x` and `y`, saturating at the maximum value instead of overflowing.
+public fun saturating_add(x: u64, y: u64): u64 {
+    std::macros::num_saturating_add!(x, y, max_value!())
+}
+
+/// Subtract `y` from `x`, saturating at `0` instead of underflowing.
+public fun saturating_sub(x: u64, y: u64): u64 {
+    std::macros::num_saturating_sub!(x, y)
+}
+
+/// Multiply `x` and `y`, saturating at the maximum value instead of overflowing.
+public fun saturating_mul(x: u64, y: u64): u64 {
+    std::macros::num_saturating_mul!(x, y, max_value!())
+}
+
 /// Maximum value for a `u64`
 public macro fun max_value(): u64 {
     0xFFFF_FFFF_FFFF_FFFF

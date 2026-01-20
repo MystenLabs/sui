@@ -154,7 +154,7 @@
       { "source": "/concepts/sui-architecture/indexer-functions", "destination": "/concepts/data-access/data-serving"},
       { "source": "/concepts/sui-architecture/transaction-lifecycle", "destination": "/concepts/transactions/transaction-lifecycle"},
       { "source": "/concepts/app-devs", "destination": "/concepts"},
-      { "source": "/concepts/grpc-overview", "destination": "/concepts/data-access/graphql-rpc"},
+      { "source": "/concepts/grpc-overview", "destination": "/concepts/data-access/grpc"},
       { "source": "/concepts/graphql-indexer", "destination": "/concepts/data-access/graphql-indexer"},
       { "source": "/concepts/graphql-rpc", "destination": "/concepts/data-access/graphql-rpc"},
       { "source": "/concepts/custom-indexing-framework", "destination": "/guides/developer/accessing-data/custom-indexing-framework"},
@@ -185,7 +185,7 @@
       { "source": "/concepts/cryptography/nautilus/using-nautilus", "destination": "/guides/developer/nautilus/using-nautilus"},
       { "source": "/guides/developer/advanced/move-2024-migration", "destination": "/concepts/sui-move-concepts/move-2024-migration" },
       { "source": "/guides/developer/sui-101/coin-mgt", "destination": "/concepts/transactions/coin-mgt" },
-      { "source": "/guides/developer/advanced/custom-indexer", "destination": "/guides/developer/accessing-data/custom-indexer" },
+      { "source": "/guides/developer/advanced/custom-indexer", "destination": "/guides/developer/accessing-data/custom-indexing-framework" },
       { "source": "/guides/developer/advanced/custom-indexer/build", "destination": "/guides/developer/accessing-data/custom-indexer/build" },
       { "source": "/guides/developer/advanced/custom-indexer/indexer-data-integration", "destination": "/guides/developer/accessing-data/custom-indexer/indexer-data-integration" },
       { "source": "/guides/developer/advanced/custom-indexer/indexer-runtime-perf", "destination": "/guides/developer/accessing-data/custom-indexer/indexer-runtime-perf" },
@@ -203,7 +203,7 @@
       { "source": "/guides/developer/sui-101/working-with-ptbs", "destination": "/guides/developer/transactions/working-with-ptbs" },
       { "source": "/concepts/data-access/archival-store", "destination": "/guides/developer/accessing-data/archival-store" },
       { "source": "/concepts/data-access/custom-indexing-framework", "destination": "/guides/developer/accessing-data/custom-indexing-framework" },
-      { "source": "/concepts/data-access/grpc-overview", "destination": "/concepts/data-access/graphql-rpc" },
+      { "source": "/concepts/data-access/grpc-overview", "destination": "/concepts/data-access/grpc" },
       { "source": "/concepts/data-access/pipeline-architecture", "destination": "/guides/developer/accessing-data/pipeline-architecture" },
       { "source": "/guides/developer/sui-move", "destination": "/guides" },
       { "source": "/learn/architecture", "destination": "/concepts" },
@@ -744,6 +744,7 @@
       { "source": "/concepts/transactions/transaction-auth/multisig", "destination": "/guides/developer/transactions/transaction-auth/multisig" },
       { "source": "/concepts/transactions/transaction-auth/offline-signing", "destination": "/guides/developer/transactions/transaction-auth/offline-signing" },
       { "source": "/guides/developer/transactions/working-with-ptbs", "destination": "/guides/developer/transactions/prog-txn-blocks" },
-      { "source": "/concepts/transactions/sponsored-transactions", "destination": "/guides/developer/transactions/sponsor-txn" }
-  ]
+      { "source": "/concepts/transactions/sponsored-transactions", "destination": "/guides/developer/transactions/sponsor-txn" },
+      { "source": "/guides/developer/accessing-data/custom-indexer ", "destination": "/guides/developer/accessing-data/custom-indexing-framework" }
+    ]
 }

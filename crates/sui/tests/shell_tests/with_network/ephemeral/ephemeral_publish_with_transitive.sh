@@ -18,7 +18,7 @@
 echo "publishing e (using --publish-unpublished-deps)"
 sui client --client.config $CONFIG test-publish --build-env testnet \
   --pubfile-path Pub.local.toml --publish-unpublished-deps e \
-  > /dev/null || echo "failed to publish e (or one of its transitive dependencies)"
+  > out.log 2>&1 || cat out.log
 
 echo "attempting a second ephemeral publish of e, which should fail"
 sui client --client.config $CONFIG test-publish --build-env testnet \

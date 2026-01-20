@@ -66,8 +66,8 @@ public fun digest(attestation: &NitroAttestationDocument): &vector<u8> {
 }
 
 /// Returns a list of mapping PCREntry containg the index and the PCR bytes.
-/// AWS supports PCR0-31. Required PCRs (index 0-4 & 8) are always included regardless of their 
-/// value. In devnet and testnet, additional custom PCRs (index 5-7, 9-31) are also included if 
+/// AWS supports PCR0-31. Required PCRs (index 0-4 & 8) are always included regardless of their
+/// value. In devnet and testnet, additional custom PCRs (index 5-7, 9-31) are also included if
 /// they are nonzeros. In mainnet, only required PCRs (index 0-4 & 8) are included.
 public fun pcrs(attestation: &NitroAttestationDocument): &vector<PCREntry> {
     &attestation.pcrs

@@ -87,10 +87,10 @@ pub struct LocalDBPackageStore {
 }
 
 impl LocalDBPackageStore {
-    pub fn new(path: &Path, rest_url: &str) -> Self {
+    pub fn new(path: &Path, rpc_url: &str) -> Self {
         Self {
             tables: PackageStoreTables::new(path),
-            client: Client::new(rest_url).expect("invalid REST URL"),
+            client: Client::new(rpc_url).expect("invalid rpc url"),
         }
     }
 
@@ -199,8 +199,8 @@ pub struct PackageCache {
 }
 
 impl PackageCache {
-    pub fn new(path: &Path, rest_url: &str) -> Self {
-        let base_store = LocalDBPackageStore::new(path, rest_url);
+    pub fn new(path: &Path, rpc_url: &str) -> Self {
+        let base_store = LocalDBPackageStore::new(path, rpc_url);
         let global_cache = Arc::new(PackageStoreWithLruCache::new(base_store.clone()));
         Self {
             resolver: Resolver::new(GlobalArcStore(global_cache.clone())),
