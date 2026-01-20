@@ -86,6 +86,12 @@ At the beginning of execution, the PTB runtime takes the input objects and loads
 
 The most important thing to note at this stage is the effects on the gas coin. At the beginning of execution, the maximum gas budget (in terms of SUI) is withdrawn from the gas coin. Any unused gas is returned to the gas coin at the end of execution, even if the coin has changed owners.
 
+### Object consumption 
+
+All objects created or returned by Move commands must either be consumed (destroyed, transferred, or used by another command) or explicitly dropped if the type has the `drop` ability. 
+
+In a PTB, if you create an object through a Move command and do not destroy, transfer, or use it in a subsequent command, the transaction will fail with an error. 
+
 ### Pre-execution validation
 
 When a transaction is signed, the network performs the following validations on specific commands:
