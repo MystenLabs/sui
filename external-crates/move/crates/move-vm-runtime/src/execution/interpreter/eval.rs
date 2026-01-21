@@ -147,7 +147,7 @@ fn step(
     }
     let instruction = &instructions[pc];
 
-    #[cfg(feature = "profiling")]
+    #[cfg(feature = "tracing")]
     crate::profiling::BYTECODE_COUNTERS.increment(instruction.into());
 
     fail_point!("move_vm::interpreter_loop", |_| {

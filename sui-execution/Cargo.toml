@@ -72,5 +72,5 @@ tracing = [
     "move-vm-config/tracing",
 ]
 profiling = [
-    "move-vm-runtime-latest/profiling",
+    "move-vm-runtime-latest/tracing",
 ]

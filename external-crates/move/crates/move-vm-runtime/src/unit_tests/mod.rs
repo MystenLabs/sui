@@ -24,5 +24,5 @@ mod value_tests;
 #[cfg(all(test, feature = "fuzzing"))]
 mod value_prop_tests;
 
-#[cfg(all(test, feature = "profiling"))]
+#[cfg(all(test, feature = "tracing"))]
 mod profiling_tests;
