@@ -120,7 +120,8 @@ public fun lossless_shr(x: u256, shift: u8): Option<u256> {
 }
 
 /// Divides `x` by `y`.
-/// Returns `None` if `y` is zero or if there is a non-zero remainder (if `x % y != 0`).
+/// Returns `None` if `y` is zero or if there is a non-zero remainder (if `x % y != 0`). In other
+/// words, it returns `None` if the operation is not reversible.
 public fun lossless_div(x: u256, y: u256): Option<u256> {
     std::macros::num_lossless_div!(x, y)
 }
