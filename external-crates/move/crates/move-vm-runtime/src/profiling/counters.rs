@@ -5,8 +5,10 @@
 //!
 //! This module provides atomic counters for tracking bytecode execution frequency.
 //! The counters are designed for minimal overhead when profiling is enabled.
+//!
+//! Bytecode statistics are exposed through the telemetry infrastructure via
+//! `MoveRuntimeTelemetry::bytecode_stats`.
 
-use crate::shared::constants::{DEFAULT_PROFILE_FILE, SUI_PROFILE_FILE_ENV};
 use move_binary_format::file_format_common::Opcodes;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -172,34 +174,6 @@ impl BytecodeSnapshot {
     }
 }
 
-/// Dump profile information to a file.
-///
-/// Takes a snapshot of the current bytecode counters and writes them to a CSV file.
-/// The file path is determined by:
-/// 1. The `SUI_PROFILE_FILE` environment variable if set
-/// 2. Otherwise, defaults to "sui-profile.profraw"
-///
-/// Returns `Ok(())` if the file was written successfully, or an error message.
-pub fn dump_profile_info() -> Result<(), String> {
-    let file_path =
-        std::env::var(SUI_PROFILE_FILE_ENV).unwrap_or_else(|_| DEFAULT_PROFILE_FILE.to_string());
-    dump_profile_info_to_file(&file_path)
-}
-
-/// Dump profile information to a specified file path.
-///
-/// Takes a snapshot of the current bytecode counters and writes them to a CSV file
-/// at the specified path.
-///
-/// Returns `Ok(())` if the file was written successfully, or an error message.
-pub fn dump_profile_info_to_file(file_path: &str) -> Result<(), String> {
-    let snapshot = BYTECODE_COUNTERS.snapshot();
-    let csv_content = snapshot.format_csv();
-
-    std::fs::write(file_path, csv_content)
-        .map_err(|e| format!("Failed to write profile to {}: {}", file_path, e))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -341,40 +315,5 @@ mod tests {
 
         // Should only have header when no counts
         assert_eq!(csv, "opcode,count,percentage\n");
-    }
-
-    #[test]
-    fn test_dump_profile_info_to_file() {
-        use std::fs;
-
-        // Use a unique temp file for this test
-        let test_file = "/tmp/test_dump_profile_info.profraw";
-
-        // Reset counters and add some data
-        BYTECODE_COUNTERS.reset();
-        BYTECODE_COUNTERS.increment(Opcodes::CALL);
-        BYTECODE_COUNTERS.increment(Opcodes::CALL);
-        BYTECODE_COUNTERS.increment(Opcodes::RET);
-
-        // Dump to file using the explicit path function
-        let result = dump_profile_info_to_file(test_file);
-        assert!(
-            result.is_ok(),
-            "dump_profile_info_to_file failed: {:?}",
-            result
-        );
-
-        // Read and verify file contents
-        let contents = fs::read_to_string(test_file).expect("Failed to read profile file");
-
-        // Verify header
-        assert!(contents.starts_with("opcode,count,percentage\n"));
-
-        // Verify CALL and RET are present
-        assert!(contents.contains("CALL,2,"));
-        assert!(contents.contains("RET,1,"));
-
-        // Cleanup
-        let _ = fs::remove_file(test_file);
     }
 }
