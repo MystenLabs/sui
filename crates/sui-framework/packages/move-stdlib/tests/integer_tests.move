@@ -588,3 +588,45 @@ public(package) macro fun test_lossless_shr<$T>($max: $T, $bit_size: u8) {
     assert_eq!((1: $T).lossless_shr(1), option::none());
     assert_eq!((3: $T).lossless_shr(1), option::none())
 }
+
+public(package) macro fun test_lossless_div<$T>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    // basic cases
+    assert_eq!((0: $T).lossless_div(1), option::some(0));
+    assert_eq!((1: $T).lossless_div(1), option::some(1));
+    assert_eq!((4: $T).lossless_div(2), option::some(2));
+    assert_eq!((6: $T).lossless_div(3), option::some(2));
+    // division with remainder
+    assert_eq!((1: $T).lossless_div(2), option::none());
+    assert_eq!((3: $T).lossless_div(2), option::none());
+    assert_eq!((5: $T).lossless_div(3), option::none());
+    assert_eq!(max.lossless_div(2), option::none());
+    // case iteration
+    cases!(max, cases, |case_pred, case, case_succ| {
+        if (case == 0) return;
+
+        // basic cases
+        assert_eq!(case.lossless_div(0), option::none());
+        assert_eq!((0: $T).lossless_div(case), option::some(0));
+        assert_eq!(case.lossless_div(1), option::some(case));
+        assert_eq!(case.lossless_div(case), option::some(1));
+
+        // case * 2 / 2 should be lossless if case * 2 doesn't overflow
+        if (case <= max / 2) {
+            assert_eq!((case * 2).lossless_div(2), option::some(case));
+        };
+
+
+        // case +/- 1 should be none
+        if (case_pred != case) {
+            assert_eq!(case.lossless_div(case_pred), option::none());
+            assert_eq!(case_pred.lossless_div(case), option::none());
+        };
+        if (case_succ != case) {
+            assert_eq!(case.lossless_div(case_succ), option::none());
+            assert_eq!(case_succ.lossless_div(case), option::none());
+        };
+    });
+    abort 0;
+}
