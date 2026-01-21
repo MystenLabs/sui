@@ -75,6 +75,7 @@ const standards = [
 			'standards/deepbook-margin/margin-pool',
 			'standards/deepbook-margin/orders',
 			'standards/deepbook-margin/tpsl',
+			'standards/deepbook-margin/supply-referral',
 			'standards/deepbook-margin/maintainer',
 			'standards/deepbook-margin-indexer',
 			{
