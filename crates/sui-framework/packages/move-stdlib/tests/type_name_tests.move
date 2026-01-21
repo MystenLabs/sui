@@ -111,6 +111,19 @@ fun test_get_module() {
     );
 }
 
+#[test]
+fun test_get_datatype() {
+    assert!(with_defining_ids<std::ascii::String>().datatype_string().as_bytes() == b"String");
+    assert!(with_defining_ids<TestStruct>().datatype_string().as_bytes() == b"TestStruct");
+    assert!(
+        with_defining_ids<TestGenerics<std::string::String>>().datatype_string().as_bytes() == b"TestGenerics",
+    );
+    assert!(
+        with_defining_ids<TestMultiGenerics<bool, u64, u128>>().datatype_string().as_bytes() == b"TestMultiGenerics",
+    );
+    assert!(with_defining_ids<std::option::Option<u64>>().datatype_string().as_bytes() == b"Option");
+}
+
 #[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
 fun test_get_address_aborts_with_primitive() {
     with_defining_ids<u8>().address_string();
@@ -129,6 +142,16 @@ fun test_get_address_aborts_with_primitive_generic() {
 #[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
 fun test_get_module_aborts_with_primitive_generic() {
     with_defining_ids<vector<TestGenerics<std::ascii::String>>>().module_string();
+}
+
+#[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
+fun test_get_datatype_aborts_with_primitive() {
+    with_defining_ids<bool>().datatype_string();
+}
+
+#[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
+fun test_get_datatype_aborts_with_primitive_generic() {
+    with_defining_ids<vector<TestGenerics<std::ascii::String>>>().datatype_string();
 }
 
 #[test]
