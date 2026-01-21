@@ -38,7 +38,7 @@ For all types of ownership on Sui, see [Object Ownership](/guides/developer/obje
 
 Identity or role-based access control is widely used through OpenZeppelin's `Ownable` and `AccessControl` contracts in Solidity.
 
-Because object ownership is inherent in Sui, access to contract functions are typically gated through [capability object](https://move-book.com/programmability/capability/).
+Because object ownership is inherent in Sui, access to contract functions is typically gated through [capability objects](https://move-book.com/programmability/capability/).
 
 These objects are issued to users and thus grant them the rights to call certain functions. Function calls fail if a user does not own the object a function expects.
 
