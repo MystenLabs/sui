@@ -99,7 +99,7 @@ See [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx
 | Eventing | Indexed by program logs, requires custom parsing or indexer | Indexed by sender, object ID, type, timestamp |
 | Indexing | High level transaction data, requires custom indexers (Helius, Triton, Shyft) | High level transaction data + objects, coins, GraphQL RPC support |
 | Oracles | Third party | Third party |
-| Network upgrade strategy | Feature gates voted on by validators, activated when supermajority reached | Protocol flags and framework upgrades voted on by validators then enabled |
+| Network upgrade strategy | Feature gates voted on by validators, activated when supermajority is reached | Protocol flags and framework upgrades voted on by validators then enabled |
 | IDE | VSCode (Rust Analyzer) | VSCode (Move extension) |
 | Transaction lifecycle | Transaction submitted to RPC, gossipped to leaders, included in block, voted on by validators using Tower BFT. | Two round trips from client to validators to generate transaction certificate (guaranteeing execution), another round trip for shared objects to ensure ordering. |
 | Parallel execution | Sealevel runtime enables parallel execution when transactions don't overlap in account access. Accounts must be declared upfront for scheduling. | Transactions that can be parallel are run in parallel. |
