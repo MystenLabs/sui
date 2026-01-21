@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    NativesCostTable, abstract_size, get_extension, get_extension_mut, legacy_test_cost,
+    abstract_size, get_extension, get_extension_mut, legacy_test_cost,
     object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
+    NativesCostTable,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -151,7 +152,7 @@ fn emit_impl(
     }
 
     // Get the type tag before getting the mutable reference to avoid borrowing issues
-    let stream_head_type_tag = if let Some(ref stream_ref) = stream_ref {
+    let stream_head_type_tag = if let Some(stream_ref) = &stream_ref {
         Some(context.type_to_type_tag(&stream_ref.stream_head_ty)?)
     } else {
         None
