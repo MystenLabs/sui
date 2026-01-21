@@ -19,6 +19,10 @@ This module holds shared implementation of macros used in <code>std</code>
 -  [Macro function `num_saturating_add`](#std_macros_num_saturating_add)
 -  [Macro function `num_saturating_sub`](#std_macros_num_saturating_sub)
 -  [Macro function `num_saturating_mul`](#std_macros_num_saturating_mul)
+-  [Macro function `num_checked_shl`](#std_macros_num_checked_shl)
+-  [Macro function `num_checked_shr`](#std_macros_num_checked_shr)
+-  [Macro function `num_lossless_shl`](#std_macros_num_lossless_shl)
+-  [Macro function `num_lossless_shr`](#std_macros_num_lossless_shr)
 -  [Macro function `range_do`](#std_macros_range_do)
 -  [Macro function `range_do_eq`](#std_macros_range_do_eq)
 -  [Macro function `do`](#std_macros_do)
@@ -435,6 +439,122 @@ This module holds shared implementation of macros used in <code>std</code>
     <b>if</b> (x == 0 || y == 0) 0
     <b>else</b> <b>if</b> (y &gt; max_t / x) max_t
     <b>else</b> x * y
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_checked_shl"></a>
+
+## Macro function `num_checked_shl`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_shl">num_checked_shl</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_shl">num_checked_shl</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> shift = $shift;
+    <b>let</b> bit_size = $bit_size;
+    <b>if</b> (shift &gt;= bit_size) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x &lt;&lt; shift)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_checked_shr"></a>
+
+## Macro function `num_checked_shr`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_shr">num_checked_shr</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_shr">num_checked_shr</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> shift = $shift;
+    <b>let</b> bit_size = $bit_size;
+    <b>if</b> (shift &gt;= bit_size) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x &gt;&gt; shift)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_lossless_shl"></a>
+
+## Macro function `num_lossless_shl`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_lossless_shl">num_lossless_shl</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_lossless_shl">num_lossless_shl</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> shift = $shift;
+    <b>let</b> bit_size = $bit_size;
+    <b>if</b> (shift &gt;= bit_size) <a href="../std/option.md#std_option_none">option::none</a>()
+    <b>else</b> {
+        <b>let</b> result = x &lt;&lt; shift;
+        <b>if</b> (result &gt;&gt; shift == x) <a href="../std/option.md#std_option_some">option::some</a>(result) <b>else</b> <a href="../std/option.md#std_option_none">option::none</a>()
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_lossless_shr"></a>
+
+## Macro function `num_lossless_shr`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_lossless_shr">num_lossless_shr</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_lossless_shr">num_lossless_shr</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> shift = $shift;
+    <b>let</b> bit_size = $bit_size;
+    <b>if</b> (shift &gt;= bit_size) <a href="../std/option.md#std_option_none">option::none</a>()
+    <b>else</b> {
+        <b>let</b> result = x &gt;&gt; shift;
+        <b>if</b> (result &lt;&lt; shift == x) <a href="../std/option.md#std_option_some">option::some</a>(result) <b>else</b> <a href="../std/option.md#std_option_none">option::none</a>()
+    }
 }
 </code></pre>
 
