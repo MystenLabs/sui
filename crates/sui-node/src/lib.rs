@@ -518,6 +518,7 @@ impl SuiNode {
         let perpetual_tables_options = AuthorityPerpetualTablesOptions {
             enable_write_stall,
             compaction_filter,
+            is_validator,
         };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),

@@ -38,6 +38,7 @@ pub struct AuthorityPerpetualTablesOptions {
     /// Whether to enable write stalling on all column families.
     pub enable_write_stall: bool,
     pub compaction_filter: Option<ObjectsCompactionFilter>,
+    pub is_validator: bool,
 }
 
 impl AuthorityPerpetualTablesOptions {
@@ -214,7 +215,7 @@ impl AuthorityPerpetualTables {
     #[cfg(tidehunter)]
     pub fn open(
         parent_path: &Path,
-        _: Option<AuthorityPerpetualTablesOptions>,
+        db_options_override: Option<AuthorityPerpetualTablesOptions>,
         pruner_watermark: Option<Arc<AtomicU64>>,
     ) -> Self {
         use crate::authority::authority_store_pruner::apply_relocation_filter;
@@ -257,6 +258,13 @@ impl AuthorityPerpetualTables {
         let owned_object_transaction_locks_indexing =
             KeyIndexing::key_reduction(obj_ref_size, 16..(obj_ref_size - 16));
 
+        let mut objects_config = KeySpaceConfig::new()
+            .with_unloaded_iterator(true)
+            .with_max_dirty_keys(4048);
+        if matches!(db_options_override, Some(options) if options.is_validator) {
+            objects_config = objects_config.with_compactor(Box::new(objects_compactor));
+        }
+
         let configs = vec![
             (
                 "objects".to_string(),
@@ -264,10 +272,7 @@ impl AuthorityPerpetualTables {
                     object_indexing,
                     mutexes,
                     KeyType::uniform(default_cells_per_mutex() * 4),
-                    KeySpaceConfig::new()
-                        .with_unloaded_iterator(true)
-                        .with_max_dirty_keys(4048)
-                        .with_compactor(Box::new(objects_compactor)),
+                    objects_config,
                 ),
             ),
             (
