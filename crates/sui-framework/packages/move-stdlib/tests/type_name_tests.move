@@ -177,7 +177,9 @@ fun test_get_datatype() {
     assert!(
         with_defining_ids<TestMultiGenerics<bool, u64, u128>>().datatype_string().as_bytes() == b"TestMultiGenerics",
     );
-    assert!(with_defining_ids<std::option::Option<u64>>().datatype_string().as_bytes() == b"Option");
+    assert!(
+        with_defining_ids<std::option::Option<u64>>().datatype_string().as_bytes() == b"Option",
+    );
     assert!(with_defining_ids<TestEnum>().datatype_string().as_bytes() == b"TestEnum");
     assert!(
         with_defining_ids<TestGenericsEnum<std::string::String>>().datatype_string().as_bytes() == b"TestGenericsEnum",
