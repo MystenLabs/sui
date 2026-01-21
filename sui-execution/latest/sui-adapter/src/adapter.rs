@@ -32,7 +32,7 @@ mod checked {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         base_types::*,
-        error::ExecutionError,
+        error::{ExecutionError, ExecutionErrorTrait},
         error::{ExecutionErrorKind, SuiError},
         metrics::LimitsMetrics,
         storage::ChildObjectResolver,

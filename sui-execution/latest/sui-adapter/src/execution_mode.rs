@@ -5,7 +5,10 @@ use crate::execution_value::{RawValueType, Value};
 use crate::type_resolver::TypeTagResolver;
 use move_core_types::language_storage::TypeTag;
 use sui_types::{
-    error::ExecutionError, execution::ExecutionResult, transaction::Argument, transfer::Receiving,
+    error::{ExecutionError, ExecutionErrorTrait},
+    execution::ExecutionResult,
+    transaction::Argument,
+    transfer::Receiving,
 };
 
 pub type TransactionIndex = usize;
@@ -15,6 +18,8 @@ pub trait ExecutionMode {
     type ArgumentUpdates;
     /// the gathered results from batched executions
     type ExecutionResults;
+    /// The error type produced during execution
+    type Error: ExecutionErrorTrait;
 
     /// Controls the calling of arbitrary Move functions
     fn allow_arbitrary_function_calls() -> bool;
@@ -39,14 +44,14 @@ pub trait ExecutionMode {
         acc: &mut Self::ArgumentUpdates,
         arg: Argument,
         _new_value: &Value,
-    ) -> Result<(), ExecutionError>;
+    ) -> Result<(), Self::Error>;
 
     fn finish_command(
         resolver: &impl TypeTagResolver,
         acc: &mut Self::ExecutionResults,
         argument_updates: Self::ArgumentUpdates,
         command_result: &[Value],
-    ) -> Result<(), ExecutionError>;
+    ) -> Result<(), Self::Error>;
 
     // == Arg/Result V2 ==
 
@@ -57,13 +62,13 @@ pub trait ExecutionMode {
         arg: Argument,
         bytes: Vec<u8>,
         type_: TypeTag,
-    ) -> Result<(), ExecutionError>;
+    ) -> Result<(), Self::Error>;
 
     fn finish_command_v2(
         acc: &mut Self::ExecutionResults,
         argument_updates: Vec<(Argument, Vec<u8>, TypeTag)>,
         command_result: Vec<(Vec<u8>, TypeTag)>,
-    ) -> Result<(), ExecutionError>;
+    ) -> Result<(), Self::Error>;
 }
 
 #[derive(Copy, Clone)]
@@ -72,6 +77,7 @@ pub struct Normal;
 impl ExecutionMode for Normal {
     type ArgumentUpdates = ();
     type ExecutionResults = ();
+    type Error = ExecutionError;
 
     fn allow_arbitrary_function_calls() -> bool {
         false
@@ -98,7 +104,7 @@ impl ExecutionMode for Normal {
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -107,7 +113,7 @@ impl ExecutionMode for Normal {
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -118,7 +124,7 @@ impl ExecutionMode for Normal {
         _arg: Argument,
         _bytes: Vec<u8>,
         _type_: TypeTag,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         invariant_violation!("should not be called");
     }
 
@@ -126,7 +132,7 @@ impl ExecutionMode for Normal {
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Vec<(Argument, Vec<u8>, TypeTag)>,
         _command_result: Vec<(Vec<u8>, TypeTag)>,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         invariant_violation!("should not be called");
     }
 }
@@ -137,6 +143,7 @@ pub struct Genesis;
 impl ExecutionMode for Genesis {
     type ArgumentUpdates = ();
     type ExecutionResults = ();
+    type Error = ExecutionError;
 
     fn allow_arbitrary_function_calls() -> bool {
         true
@@ -163,7 +170,7 @@ impl ExecutionMode for Genesis {
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -172,7 +179,7 @@ impl ExecutionMode for Genesis {
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -183,7 +190,7 @@ impl ExecutionMode for Genesis {
         _arg: Argument,
         _bytes: Vec<u8>,
         _type_: TypeTag,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         invariant_violation!("should not be called");
     }
 
@@ -191,7 +198,7 @@ impl ExecutionMode for Genesis {
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Vec<(Argument, Vec<u8>, TypeTag)>,
         _command_result: Vec<(Vec<u8>, TypeTag)>,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         invariant_violation!("should not be called");
     }
 }
@@ -205,6 +212,7 @@ pub struct System;
 impl ExecutionMode for System {
     type ArgumentUpdates = ();
     type ExecutionResults = ();
+    type Error = ExecutionError;
 
     fn allow_arbitrary_function_calls() -> bool {
         // allows bypassing visibility for system calls
@@ -234,7 +242,7 @@ impl ExecutionMode for System {
         _acc: &mut Self::ArgumentUpdates,
         _arg: Argument,
         _new_value: &Value,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -243,7 +251,7 @@ impl ExecutionMode for System {
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Self::ArgumentUpdates,
         _command_result: &[Value],
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -254,7 +262,7 @@ impl ExecutionMode for System {
         _arg: Argument,
         _bytes: Vec<u8>,
         _type_: TypeTag,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         invariant_violation!("should not be called");
     }
 
@@ -262,7 +270,7 @@ impl ExecutionMode for System {
         _acc: &mut Self::ExecutionResults,
         _argument_updates: Vec<(Argument, Vec<u8>, TypeTag)>,
         _command_result: Vec<(Vec<u8>, TypeTag)>,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         invariant_violation!("should not be called");
     }
 }
@@ -275,6 +283,7 @@ pub struct DevInspect<const SKIP_ALL_CHECKS: bool>;
 impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> {
     type ArgumentUpdates = Vec<(Argument, Vec<u8>, TypeTag)>;
     type ExecutionResults = Vec<ExecutionResult>;
+    type Error = ExecutionError;
 
     fn allow_arbitrary_function_calls() -> bool {
         SKIP_ALL_CHECKS
@@ -305,8 +314,8 @@ impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> 
         acc: &mut Self::ArgumentUpdates,
         arg: Argument,
         new_value: &Value,
-    ) -> Result<(), ExecutionError> {
-        let (bytes, type_tag) = value_to_bytes_and_tag(resolver, new_value)?;
+    ) -> Result<(), Self::Error> {
+        let (bytes, type_tag) = value_to_bytes_and_tag::<Self::Error>(resolver, new_value)?;
         acc.push((arg, bytes, type_tag));
         Ok(())
     }
@@ -316,10 +325,10 @@ impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> 
         acc: &mut Self::ExecutionResults,
         argument_updates: Self::ArgumentUpdates,
         command_result: &[Value],
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         let command_bytes = command_result
             .iter()
-            .map(|value| value_to_bytes_and_tag(resolver, value))
+            .map(|value| value_to_bytes_and_tag::<Self::Error>(resolver, value))
             .collect::<Result<_, _>>()?;
         acc.push((argument_updates, command_bytes));
         Ok(())
@@ -332,7 +341,7 @@ impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> 
         arg: Argument,
         bytes: Vec<u8>,
         type_: TypeTag,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         acc.push((arg, bytes, type_));
         Ok(())
     }
@@ -341,16 +350,16 @@ impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> 
         acc: &mut Self::ExecutionResults,
         argument_updates: Vec<(Argument, Vec<u8>, TypeTag)>,
         command_result: Vec<(Vec<u8>, TypeTag)>,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), Self::Error> {
         acc.push((argument_updates, command_result));
         Ok(())
     }
 }
 
-fn value_to_bytes_and_tag(
+fn value_to_bytes_and_tag<E: ExecutionErrorTrait>(
     resolver: &impl TypeTagResolver,
     value: &Value,
-) -> Result<(Vec<u8>, TypeTag), ExecutionError> {
+) -> Result<(Vec<u8>, TypeTag), E> {
     let (type_tag, bytes) = match value {
         Value::Object(obj) => {
             let tag = resolver.get_type_tag(&obj.type_)?;

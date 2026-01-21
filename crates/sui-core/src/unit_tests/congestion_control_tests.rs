@@ -24,6 +24,7 @@ use sui_protocol_config::{
 };
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{InputConsensusObject, TransactionEffectsAPI};
+use sui_types::error::ExecutionErrorTrait;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::transaction::PlainTransactionWithClaims;

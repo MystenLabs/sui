@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag, u256::U256};
+use sui_types::error::ExecutionErrorTrait;
 use sui_types::{
     base_types::TxContext,
     error::ExecutionError,
@@ -26,7 +27,7 @@ pub fn transaction<Mode: ExecutionMode>(
     // be the same length as the inputs
     withdrawal_compatibility_inputs: Option<Vec<bool>>,
     pt: P::ProgrammableTransaction,
-) -> Result<L::Transaction, ExecutionError> {
+) -> Result<L::Transaction, Mode::Error> {
     metering::pre_translation::meter(meter, &pt)?;
     let P::ProgrammableTransaction { inputs, commands } = pt;
     // withdrawal_compatibility_inputs specified ==> the protocol config flag is set
@@ -53,7 +54,7 @@ pub fn transaction<Mode: ExecutionMode>(
     let commands = commands
         .into_iter()
         .enumerate()
-        .map(|(idx, cmd)| command(env, cmd).map_err(|e| e.with_command_index(idx)))
+        .map(|(idx, cmd)| command(env, cmd).map_err(|e: Mode::Error| e.with_command_index(idx)))
         .collect::<Result<Vec<_>, _>>()?;
     let loaded_tx = L::Transaction { inputs, commands };
     metering::loading::meter(meter, &loaded_tx)?;
@@ -189,12 +190,12 @@ fn object_mutability(mutability: SharedObjectMutability) -> L::ObjectMutability 
     }
 }
 
-fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError> {
+fn command<E: ExecutionErrorTrait>(env: &Env, command: P::Command) -> Result<L::Command, E> {
     Ok(match command {
         P::Command::MoveCall(pmc) => {
             let resolved_linkage = env
                 .linkage_analysis
-                .compute_call_linkage(&pmc, env.linkable_store)?;
+                .compute_call_linkage::<E>(&pmc, env.linkable_store)?;
             let P::ProgrammableMoveCall {
                 package,
                 module,
@@ -228,13 +229,13 @@ fn command(env: &Env, command: P::Command) -> Result<L::Command, ExecutionError>
         P::Command::Publish(items, object_ids) => {
             let resolved_linkage = env
                 .linkage_analysis
-                .compute_publication_linkage(&object_ids, env.linkable_store)?;
+                .compute_publication_linkage::<E>(&object_ids, env.linkable_store)?;
             L::Command::Publish(items, object_ids, resolved_linkage)
         }
         P::Command::Upgrade(items, object_ids, object_id, argument) => {
             let resolved_linkage = env
                 .linkage_analysis
-                .compute_publication_linkage(&object_ids, env.linkable_store)?;
+                .compute_publication_linkage::<E>(&object_ids, env.linkable_store)?;
             L::Command::Upgrade(items, object_ids, object_id, argument, resolved_linkage)
         }
     })

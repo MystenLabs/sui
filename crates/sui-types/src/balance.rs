@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::SUI_FRAMEWORK_ADDRESS;
-use crate::error::{ExecutionError, ExecutionErrorKind};
+use crate::error::{ExecutionError, ExecutionErrorKind, ExecutionErrorTrait};
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
 use move_core_types::account_address::AccountAddress;

@@ -15,9 +15,10 @@ use crate::{
 use move_core_types::account_address::AccountAddress;
 use move_trace_format::format::MoveTraceBuilder;
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
+use sui_types::error::ExecutionErrorTrait;
 use sui_types::{
     base_types::TxContext,
-    error::{ExecutionError, ExecutionErrorKind},
+    error::ExecutionErrorKind,
     execution::{ExecutionTiming, ResultWithTimings},
     execution_status::PackageUpgradeError,
     metrics::LimitsMetrics,
@@ -33,7 +34,7 @@ pub fn execute<'env, 'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
     gas_charger: &mut GasCharger,
     ast: T::Transaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
-) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError>
+) -> ResultWithTimings<Mode::ExecutionResults, Mode::Error>
 where
     'pc: 'state,
     'env: 'state,
@@ -66,7 +67,7 @@ pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, Mode: ExecutionMode>(
     gas_charger: &mut GasCharger,
     ast: T::Transaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
-) -> Result<Mode::ExecutionResults, ExecutionError>
+) -> Result<Mode::ExecutionResults, Mode::Error>
 where
     'pc: 'state,
 {
@@ -146,7 +147,7 @@ fn execute_command<Mode: ExecutionMode>(
     mode_results: &mut Mode::ExecutionResults,
     c: T::Command_,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
-) -> Result<(), ExecutionError> {
+) -> Result<(), Mode::Error> {
     let T::Command_ {
         command,
         result_type,
@@ -210,7 +211,7 @@ fn execute_command<Mode: ExecutionMode>(
             let mut total: u64 = 0;
             for amount in &amount_values {
                 let Some(new_total) = total.checked_add(*amount) else {
-                    return Err(ExecutionError::from_kind(
+                    return Err(Mode::Error::from_kind(
                         ExecutionErrorKind::CoinBalanceOverflow,
                     ));
                 };
@@ -226,7 +227,7 @@ fn execute_command<Mode: ExecutionMode>(
             let coin_value = context.copy_value(&coin_ref)?.coin_ref_value()?;
             fp_ensure!(
                 coin_value >= total,
-                ExecutionError::new_with_source(
+                Mode::Error::new_with_source(
                     ExecutionErrorKind::InsufficientCoinBalance,
                     format!("balance: {coin_value} required: {total}")
                 )
@@ -278,7 +279,7 @@ fn execute_command<Mode: ExecutionMode>(
             let mut additional: u64 = 0;
             for amount in amounts {
                 let Some(new_additional) = additional.checked_add(amount) else {
-                    return Err(ExecutionError::from_kind(
+                    return Err(Mode::Error::from_kind(
                         ExecutionErrorKind::CoinBalanceOverflow,
                     ));
                 };
@@ -287,7 +288,7 @@ fn execute_command<Mode: ExecutionMode>(
             let target_value = context.copy_value(&target_ref)?.coin_ref_value()?;
             fp_ensure!(
                 target_value.checked_add(additional).is_some(),
-                ExecutionError::from_kind(ExecutionErrorKind::CoinBalanceOverflow,)
+                Mode::Error::from_kind(ExecutionErrorKind::CoinBalanceOverflow,)
             );
             target_ref.coin_ref_add_balance(additional)?;
             trace_utils::trace_merge_coins(
@@ -336,7 +337,7 @@ fn execute_command<Mode: ExecutionMode>(
                 .into_upgrade_ticket()?;
             // Make sure the passed-in package ID matches the package ID in the `upgrade_ticket`.
             if current_package_id != upgrade_ticket.package.bytes {
-                return Err(ExecutionError::from_kind(
+                return Err(Mode::Error::from_kind(
                     ExecutionErrorKind::PackageUpgradeError {
                         upgrade_error: PackageUpgradeError::PackageIDDoesNotMatch {
                             package_id: current_package_id,
@@ -355,7 +356,7 @@ fn execute_command<Mode: ExecutionMode>(
             )
             .to_vec();
             if computed_digest != upgrade_ticket.digest {
-                return Err(ExecutionError::from_kind(
+                return Err(Mode::Error::from_kind(
                     ExecutionErrorKind::PackageUpgradeError {
                         upgrade_error: PackageUpgradeError::DigestDoesNotMatch {
                             digest: computed_digest,
@@ -364,7 +365,7 @@ fn execute_command<Mode: ExecutionMode>(
                 ));
             }
 
-            let upgraded_package_id = context.upgrade(
+            let upgraded_package_id = context.upgrade::<Mode>(
                 modules,
                 &dep_ids,
                 current_package_id,

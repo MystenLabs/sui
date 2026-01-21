@@ -31,7 +31,9 @@ use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolC
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
     committee::EpochId,
-    error::{ExecutionError, ExecutionErrorKind, VMMemoryLimitExceededSubStatusCode},
+    error::{
+        ExecutionError, ExecutionErrorKind, ExecutionErrorTrait, VMMemoryLimitExceededSubStatusCode,
+    },
     execution::DynamicallyLoadedObjectMetadata,
     id::UID,
     metrics::LimitsMetrics,

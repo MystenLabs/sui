@@ -9,7 +9,6 @@ use crate::{
         metering::{self, translation_meter::TranslationMeter},
     },
 };
-use sui_types::error::ExecutionError;
 
 pub mod ast;
 pub mod invariant_checks;
@@ -20,9 +19,9 @@ pub fn translate_and_verify<Mode: ExecutionMode>(
     meter: &mut TranslationMeter<'_, '_>,
     env: &env::Env,
     lt: L::Transaction,
-) -> Result<ast::Transaction, ExecutionError> {
+) -> Result<ast::Transaction, Mode::Error> {
     let mut ast = translate::transaction::<Mode>(env, lt)?;
-    metering::typing::meter(meter, &ast)?;
+    metering::typing::meter::<Mode::Error>(meter, &ast)?;
     verify::transaction::<Mode>(env, &mut ast)?;
     invariant_checks::transaction::<Mode>(env, &ast)?;
     Ok(ast)

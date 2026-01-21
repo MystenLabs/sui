@@ -59,6 +59,8 @@ macro_rules! make_invariant_violation {
         if cfg!(debug_assertions) {
             panic!($($args),*)
         }
+        #[allow(unused_imports)]
+        use $crate::error::ExecutionErrorTrait;
         $crate::error::ExecutionError::invariant_violation(format!($($args),*))
     }}
 }
@@ -86,6 +88,8 @@ macro_rules! checked_as {
     ($value:expr, $target_type:ty) => {{
         let v = $value;
         <$target_type>::try_from(v).map_err(|e| {
+            #[allow(unused_imports)]
+            use $crate::error::ExecutionErrorTrait;
             $crate::make_invariant_violation!(
                 "Value {} cannot be safely cast to {}: {:?}",
                 v,
@@ -1162,6 +1166,41 @@ type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub type ExecutionErrorKind = ExecutionFailureStatus;
 
+/// A trait for execution errors that provides common methods for accessing error information and creating new errors.
+pub trait ExecutionErrorTrait:
+    From<ExecutionError> + Debug + std::error::Error + Send + Sync + Sized
+{
+    fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, source: E) -> Self;
+
+    fn with_command_index(self, command: CommandIndex) -> Self;
+
+    fn command_argument_error(e: CommandArgumentError, arg_idx: usize) -> Self
+    where
+        Self: Sized,
+    {
+        Self::new_with_source(
+            ExecutionErrorKind::command_argument_error(e, arg_idx as u16),
+            Box::new(e),
+        )
+    }
+
+    fn invariant_violation<E: Into<BoxError>>(source: E) -> Self
+    where
+        Self: Sized,
+    {
+        Self::new_with_source(ExecutionFailureStatus::InvariantViolation, source.into())
+    }
+
+    fn from_kind(kind: ExecutionErrorKind) -> Self;
+
+    fn kind(&self) -> &ExecutionErrorKind;
+    fn command(&self) -> Option<CommandIndex>;
+
+    fn to_execution_status(&self) -> (ExecutionFailureStatus, Option<CommandIndex>) {
+        (self.kind().clone(), self.command())
+    }
+}
+
 #[derive(Debug)]
 pub struct ExecutionError {
     inner: Box<ExecutionErrorInner>,
@@ -1185,37 +1224,8 @@ impl ExecutionError {
         }
     }
 
-    pub fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, source: E) -> Self {
-        Self::new(kind, Some(source.into()))
-    }
-
-    pub fn invariant_violation<E: Into<BoxError>>(source: E) -> Self {
-        Self::new_with_source(ExecutionFailureStatus::InvariantViolation, source)
-    }
-
-    pub fn with_command_index(mut self, command: CommandIndex) -> Self {
-        self.inner.command = Some(command);
-        self
-    }
-
-    pub fn from_kind(kind: ExecutionErrorKind) -> Self {
-        Self::new(kind, None)
-    }
-
-    pub fn kind(&self) -> &ExecutionErrorKind {
-        &self.inner.kind
-    }
-
-    pub fn command(&self) -> Option<CommandIndex> {
-        self.inner.command
-    }
-
     pub fn source(&self) -> &Option<BoxError> {
         &self.inner.source
-    }
-
-    pub fn to_execution_status(&self) -> (ExecutionFailureStatus, Option<CommandIndex>) {
-        (self.kind().clone(), self.command())
     }
 }
 
@@ -1228,6 +1238,29 @@ impl std::fmt::Display for ExecutionError {
 impl std::error::Error for ExecutionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         self.inner.source.as_ref().map(|e| &**e as _)
+    }
+}
+
+impl ExecutionErrorTrait for ExecutionError {
+    fn kind(&self) -> &ExecutionErrorKind {
+        &self.inner.kind
+    }
+
+    fn command(&self) -> Option<CommandIndex> {
+        self.inner.command
+    }
+
+    fn from_kind(kind: ExecutionErrorKind) -> Self {
+        Self::new(kind, None)
+    }
+
+    fn new_with_source<E: Into<BoxError>>(kind: ExecutionErrorKind, source: E) -> Self {
+        Self::new(kind, Some(source.into()))
+    }
+
+    fn with_command_index(mut self, command: CommandIndex) -> Self {
+        self.inner.command = Some(command);
+        self
     }
 }
 

@@ -37,6 +37,7 @@ use move_vm_runtime::move_vm::MoveVM;
 use move_vm_types::{data_store::DataStore, loaded_data::runtime_types as vm_runtime_type};
 use std::{cell::OnceCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
+use sui_types::error::ExecutionErrorTrait;
 use sui_types::{
     Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
     balance::RESOLVED_BALANCE_STRUCT,
@@ -716,12 +717,12 @@ fn to_identifier(name: String) -> Result<Identifier, ExecutionError> {
     })
 }
 
-fn convert_vm_error(
+fn convert_vm_error<E: ExecutionErrorTrait>(
     error: VMError,
     vm: &MoveVM,
     store: &dyn PackageStore,
     linkage: Option<&RootedLinkage>,
-) -> ExecutionError {
+) -> E {
     use crate::error::convert_vm_error_impl;
     convert_vm_error_impl(
         error,

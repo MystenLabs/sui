@@ -18,7 +18,7 @@ use sui_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
         VersionDigest,
     },
-    error::{ExecutionError, SuiResult},
+    error::{ExecutionError, ExecutionErrorTrait, SuiResult},
     event::Event,
     gas::GasCostSummary,
     object::Owner,

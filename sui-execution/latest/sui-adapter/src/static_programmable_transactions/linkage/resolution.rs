@@ -8,7 +8,7 @@ use std::{
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
-    error::{ExecutionError, ExecutionErrorKind},
+    error::{ExecutionError, ExecutionErrorKind, ExecutionErrorTrait},
     move_package::MovePackage,
 };
 

@@ -30,7 +30,7 @@ use crate::epoch_data::EpochData;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
 use crate::error::SuiErrorKind;
-use crate::error::{ExecutionError, SuiResult};
+use crate::error::{ExecutionError, ExecutionErrorTrait, SuiResult};
 use crate::gas_coin::GAS;
 use crate::gas_coin::GasCoin;
 use crate::governance::STAKED_SUI_STRUCT_NAME;

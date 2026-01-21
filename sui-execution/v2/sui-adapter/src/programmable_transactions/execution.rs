@@ -5,11 +5,13 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use crate::adapter::substitute_package_id;
     use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{
         CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
     };
     use crate::gas_charger::GasCharger;
+    use crate::programmable_transactions::context::*;
     use move_binary_format::{
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
@@ -45,7 +47,7 @@ mod checked {
             TX_CONTEXT_STRUCT_NAME,
         },
         coin::Coin,
-        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
+        error::{command_argument_error, ExecutionError, ExecutionErrorKind, ExecutionErrorTrait},
         id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{
@@ -61,9 +63,6 @@ mod checked {
         INIT_FN_NAME,
     };
     use tracing::instrument;
-
-    use crate::adapter::substitute_package_id;
-    use crate::programmable_transactions::context::*;
 
     pub fn execute<Mode: ExecutionMode>(
         protocol_config: &ProtocolConfig,

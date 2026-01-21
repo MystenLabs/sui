@@ -39,7 +39,7 @@ mod checked {
     use sui_types::committee::EpochId;
     use sui_types::deny_list_v1::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
     use sui_types::effects::TransactionEffects;
-    use sui_types::error::{ExecutionError, ExecutionErrorKind};
+    use sui_types::error::{ExecutionError, ExecutionErrorKind, ExecutionErrorTrait};
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
