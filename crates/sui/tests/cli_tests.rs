@@ -5554,7 +5554,8 @@ async fn test_move_build_dump_bytecode_as_base64_with_unpublished_deps() -> Resu
 }
 
 #[sim_test]
-async fn test_publish_sender_flag_respected_in_serialized_transaction() -> Result<(), anyhow::Error> {
+async fn test_publish_sender_flag_respected_in_serialized_transaction() -> Result<(), anyhow::Error>
+{
     // This test verifies that when using --serialize-unsigned-transaction with --sender,
     // the sender address is correctly used as the UpgradeCap recipient in the PTB.
     // Previously, the sender was inferred from gas objects BEFORE checking the --sender flag,
@@ -5632,15 +5633,13 @@ async fn test_publish_sender_flag_respected_in_serialized_transaction() -> Resul
     };
 
     // Decode the address from BCS bytes
-    let recipient: SuiAddress = bcs::from_bytes(addr_bytes)
-        .expect("Failed to decode address from PTB input");
+    let recipient: SuiAddress =
+        bcs::from_bytes(addr_bytes).expect("Failed to decode address from PTB input");
 
     assert_eq!(
-        recipient,
-        specified_sender,
+        recipient, specified_sender,
         "UpgradeCap recipient in PTB should be the specified sender ({}), not active address ({})",
-        specified_sender,
-        active_address
+        specified_sender, active_address
     );
 
     Ok(())
