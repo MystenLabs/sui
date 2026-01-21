@@ -55,6 +55,7 @@ use test_adapter::{PRE_COMPILED, SuiTestAdapter};
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    // TODO(bella-ciao): Re-enable these tests once we perform an execution cut.
     const DISABLED: &[&str] = &[
         "child_count/count_decremented_v74.move",
         "deny_list_v2/double_add_v74.move",
@@ -75,6 +76,10 @@ pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         "upgrade/type_resolution_v82.move",
         "upgrade/type_resolution.move",
         "shared/re_share_v45.move",
+        "enums/enum_with_key_only_uid_field_version_48.mvir",
+        "enums/enum_with_key_only_version_48.mvir",
+        "enums/enum_with_key_store_uid_field_version_48.mvir",
+        "enums/enum_with_key_store_version_48.mvir",
     ];
     if DISABLED.iter().any(|p| path.ends_with(p)) {
         return Ok(());

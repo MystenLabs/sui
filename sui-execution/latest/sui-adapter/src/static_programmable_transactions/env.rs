@@ -278,7 +278,7 @@ impl<'pc, 'vm, 'state, 'linkage> Env<'pc, 'vm, 'state, 'linkage> {
                     ExecutionError::new_with_source(
                         ExecutionErrorKind::FunctionNotFound,
                         format!(
-                            "Could not resolve function '{}' in module {}",
+                            "Could not resolve function '{}' in module '{}'",
                             name, &version_mid,
                         ),
                     )
