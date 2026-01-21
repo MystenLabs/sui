@@ -145,6 +145,12 @@ public fun lossless_shr(x: u32, shift: u8): Option<u32> {
     std::macros::num_lossless_shr!(x, shift, 32)
 }
 
+/// Divides `x` by `y`.
+/// Returns `None` if `y` is zero or if there is a non-zero remainder (if `x % y != 0`).
+public fun lossless_div(x: u32, y: u32): Option<u32> {
+    std::macros::num_lossless_div!(x, y)
+}
+
 /// Maximum value for a `u32`
 public macro fun max_value(): u32 {
     0xFFFF_FFFF
