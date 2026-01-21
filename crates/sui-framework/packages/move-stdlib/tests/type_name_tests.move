@@ -10,10 +10,18 @@ module 0xA::type_name_tests;
 use std::type_name::{with_defining_ids, defining_id};
 
 public struct TestStruct {}
-
 public struct TestGenerics<phantom T> {}
-
 public struct TestMultiGenerics<phantom T1, phantom T2, phantom T3> {}
+
+public enum TestEnum {
+    V,
+}
+public enum TestGenericsEnum<phantom T> {
+    V,
+}
+public enum TestMultiGenericsEnum<phantom T1, phantom T2, phantom T3> {
+    V,
+}
 
 #[test]
 fun test_primitive_types() {
@@ -45,6 +53,11 @@ fun test_is_primitive() {
     assert!(with_defining_ids<vector<u8>>().is_primitive());
     assert!(with_defining_ids<vector<vector<u8>>>().is_primitive());
     assert!(with_defining_ids<vector<vector<std::string::String>>>().is_primitive());
+    // structs and enums are not primitives
+    assert!(!with_defining_ids<TestStruct>().is_primitive());
+    assert!(!with_defining_ids<TestGenerics<u64>>().is_primitive());
+    assert!(!with_defining_ids<TestEnum>().is_primitive());
+    assert!(!with_defining_ids<TestGenericsEnum<u64>>().is_primitive());
 }
 
 // Note: these tests assume a 32 byte address length
@@ -66,6 +79,14 @@ fun test_structs() {
 
 // Note: these tests assume a 32 byte address length
 #[test]
+fun test_enums() {
+    assert!(
+        with_defining_ids<TestEnum>().as_string().as_bytes() == b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestEnum",
+    );
+}
+
+// Note: these tests assume a 32 byte address length
+#[test]
 fun test_generics() {
     assert!(
         with_defining_ids<TestGenerics<std::string::String>>().as_string().as_bytes() == b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestGenerics<0000000000000000000000000000000000000000000000000000000000000001::string::String>",
@@ -80,12 +101,37 @@ fun test_generics() {
 
 // Note: these tests assume a 32 byte address length
 #[test]
+fun test_generics_enum() {
+    assert!(
+        with_defining_ids<TestGenericsEnum<std::string::String>>().as_string().as_bytes() == b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestGenericsEnum<0000000000000000000000000000000000000000000000000000000000000001::string::String>",
+    );
+    assert!(
+        with_defining_ids<vector<TestGenericsEnum<u64>>>().as_string().as_bytes() == b"vector<000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestGenericsEnum<u64>>",
+    );
+    assert!(
+        with_defining_ids<std::option::Option<TestGenericsEnum<u8>>>().as_string().as_bytes() == b"0000000000000000000000000000000000000000000000000000000000000001::option::Option<000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestGenericsEnum<u8>>",
+    );
+}
+
+// Note: these tests assume a 32 byte address length
+#[test]
 fun test_multi_generics() {
     assert!(
         with_defining_ids<TestMultiGenerics<bool, u64, u128>>().as_string().as_bytes() == b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestMultiGenerics<bool,u64,u128>",
     );
     assert!(
         with_defining_ids<TestMultiGenerics<bool, vector<u64>, TestGenerics<u128>>>().as_string().as_bytes() == b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestMultiGenerics<bool,vector<u64>,000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestGenerics<u128>>",
+    );
+}
+
+// Note: these tests assume a 32 byte address length
+#[test]
+fun test_multi_generics_enum() {
+    assert!(
+        with_defining_ids<TestMultiGenericsEnum<bool, u64, u128>>().as_string().as_bytes() == b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestMultiGenericsEnum<bool,u64,u128>",
+    );
+    assert!(
+        with_defining_ids<TestMultiGenericsEnum<bool, vector<u64>, TestGenericsEnum<u128>>>().as_string().as_bytes() == b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestMultiGenericsEnum<bool,vector<u64>,000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestGenericsEnum<u128>>",
     );
 }
 
@@ -100,14 +146,24 @@ fun test_get_address() {
     assert!(
         with_defining_ids<TestGenerics<std::string::String>>().address_string().as_bytes() ==  b"000000000000000000000000000000000000000000000000000000000000000a",
     );
+    assert!(
+        with_defining_ids<TestEnum>().address_string().as_bytes() == b"000000000000000000000000000000000000000000000000000000000000000a",
+    );
+    assert!(
+        with_defining_ids<TestGenericsEnum<std::string::String>>().address_string().as_bytes() == b"000000000000000000000000000000000000000000000000000000000000000a",
+    );
 }
 
 #[test]
 fun test_get_module() {
     assert!(with_defining_ids<std::ascii::String>().module_string().as_bytes() == b"ascii");
-    assert!(with_defining_ids<TestStruct>().module_string().as_bytes() ==  b"type_name_tests");
+    assert!(with_defining_ids<TestStruct>().module_string().as_bytes() == b"type_name_tests");
     assert!(
-        with_defining_ids<TestGenerics<std::string::String>>().module_string().as_bytes()==  b"type_name_tests",
+        with_defining_ids<TestGenerics<std::string::String>>().module_string().as_bytes() == b"type_name_tests",
+    );
+    assert!(with_defining_ids<TestEnum>().module_string().as_bytes() == b"type_name_tests");
+    assert!(
+        with_defining_ids<TestGenericsEnum<std::string::String>>().module_string().as_bytes() == b"type_name_tests",
     );
 }
 
@@ -122,6 +178,13 @@ fun test_get_datatype() {
         with_defining_ids<TestMultiGenerics<bool, u64, u128>>().datatype_string().as_bytes() == b"TestMultiGenerics",
     );
     assert!(with_defining_ids<std::option::Option<u64>>().datatype_string().as_bytes() == b"Option");
+    assert!(with_defining_ids<TestEnum>().datatype_string().as_bytes() == b"TestEnum");
+    assert!(
+        with_defining_ids<TestGenericsEnum<std::string::String>>().datatype_string().as_bytes() == b"TestGenericsEnum",
+    );
+    assert!(
+        with_defining_ids<TestMultiGenericsEnum<bool, u64, u128>>().datatype_string().as_bytes() == b"TestMultiGenericsEnum",
+    );
 }
 
 #[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
@@ -159,6 +222,8 @@ fun test_defining_id() {
     assert!(defining_id<std::ascii::String>() == @1);
     assert!(defining_id<TestStruct>() == @0xa);
     assert!(defining_id<TestGenerics<std::string::String>>() == @0xa);
+    assert!(defining_id<TestEnum>() == @0xa);
+    assert!(defining_id<TestGenericsEnum<std::string::String>>() == @0xa);
 }
 
 #[test, expected_failure(abort_code = std::type_name::ENonModuleType)]
