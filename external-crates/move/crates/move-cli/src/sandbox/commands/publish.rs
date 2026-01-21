@@ -161,7 +161,7 @@ pub fn publish(
         }
     } else {
         // NOTE: the VM enforces the most strict way of module republishing and does not allow
-        // backward incompatible changes, as as result, if this flag is set, we skip the VM process
+        // backward incompatible changes, as a result, if this flag is set, we skip the VM process
         // and force the CLI to override the on-disk state directly
         let mut serialized_modules = vec![];
         for unit in modules_to_publish {
