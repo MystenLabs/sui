@@ -10,7 +10,11 @@ use object_store::ObjectStoreExt;
 use object_store::path::Path as ObjectPath;
 use serde::de::DeserializeOwned;
 use tracing::debug;
+<<<<<<< HEAD:crates/sui-indexer-alt-framework/src/ingestion/store_client.rs
 use tracing::error;
+=======
+use url::Url;
+>>>>>>> 2dfe41f986 (Fix as per clippy suggestions):crates/sui-indexer-alt-framework/src/ingestion/remote_client.rs
 
 use crate::ingestion::ingestion_client::FetchData;
 use crate::ingestion::ingestion_client::FetchError;

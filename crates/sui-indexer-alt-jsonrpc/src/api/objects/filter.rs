@@ -393,6 +393,7 @@ async fn by_sequential_scan(
 }
 
 /// Fetch a page of `StoredObjInfo` corresponding to objects owned by `owner`.
+#[allow(clippy::double_parens)]
 async fn owned_obj_info(
     ctx: &Context,
     owner: SuiAddress,
@@ -461,6 +462,7 @@ async fn owned_obj_info(
 /// assumed to be a simple type filter that can be served by indices in the database, as well as
 /// the pagination parameters. Returns the IDs and a cursor pointing to the last result (if
 /// there are any results).
+#[allow(clippy::double_parens)]
 async fn by_type_indices(
     ctx: &Context,
     owner: SuiAddress,
