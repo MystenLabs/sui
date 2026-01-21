@@ -1,82 +1,52 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
+use std::sync::Arc;
 
-use reqwest::Client;
-use reqwest::StatusCode;
+use bytes::Bytes;
+use object_store::Error as ObjectStoreError;
+use object_store::ObjectStore;
+use object_store::path::Path as ObjectPath;
+use serde::de::DeserializeOwned;
 use tracing::debug;
 use tracing::error;
-use url::Url;
 
-use crate::ingestion::Result as IngestionResult;
 use crate::ingestion::ingestion_client::FetchData;
 use crate::ingestion::ingestion_client::FetchError;
 use crate::ingestion::ingestion_client::FetchResult;
 use crate::ingestion::ingestion_client::IngestionClientTrait;
 
-/// Default timeout for remote checkpoint fetches.
-/// This prevents requests from hanging indefinitely due to network issues,
-/// unresponsive servers, or other connection problems.
-const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
-
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
-pub enum HttpError {
-    #[error("HTTP error with status code: {0}")]
-    Http(StatusCode),
+pub struct StoreIngestionClient {
+    store: Arc<dyn ObjectStore>,
 }
 
-fn status_code_to_error(code: StatusCode) -> anyhow::Error {
-    HttpError::Http(code).into()
-}
-
-pub struct RemoteIngestionClient {
-    url: Url,
-    client: Client,
-}
-
-impl RemoteIngestionClient {
-    pub fn new(url: Url) -> IngestionResult<Self> {
-        Ok(Self {
-            url,
-            client: Client::builder().timeout(DEFAULT_REQUEST_TIMEOUT).build()?,
-        })
-    }
-
-    pub fn new_with_timeout(url: Url, timeout: Duration) -> IngestionResult<Self> {
-        Ok(Self {
-            url,
-            client: Client::builder().timeout(timeout).build()?,
-        })
+impl StoreIngestionClient {
+    pub fn new(store: Arc<dyn ObjectStore>) -> Self {
+        Self { store }
     }
 
     /// Fetch metadata mapping epoch IDs to the sequence numbers of their last checkpoints.
     /// The response is a JSON-encoded array of checkpoint sequence numbers.
-    pub async fn end_of_epoch_checkpoints(&self) -> reqwest::Result<reqwest::Response> {
-        // SAFETY: The path being joined is statically known to be valid.
-        let url = self
-            .url
-            .join("epochs.json")
-            .expect("Unexpected invalid URL");
-
-        self.client.get(url).send().await
+    pub async fn end_of_epoch_checkpoints<T: DeserializeOwned>(&self) -> anyhow::Result<T> {
+        let bytes = self.bytes(ObjectPath::from("epochs.json")).await?;
+        Ok(serde_json::from_slice(&bytes)?)
     }
 
     /// Fetch the bytes for a checkpoint by its sequence number.
     /// The response is the serialized representation of a checkpoint, as raw bytes.
-    pub async fn checkpoint(&self, checkpoint: u64) -> reqwest::Result<reqwest::Response> {
-        // SAFETY: The path being joined is statically known to be valid.
-        let url = self
-            .url
-            .join(&format!("{checkpoint}.chk"))
-            .expect("Unexpected invalid URL");
+    pub async fn checkpoint(&self, checkpoint: u64) -> object_store::Result<Bytes> {
+        self.bytes(ObjectPath::from(format!("{checkpoint}.chk")))
+            .await
+    }
 
-        self.client.get(url).send().await
+    async fn bytes(&self, path: ObjectPath) -> object_store::Result<Bytes> {
+        let result = self.store.get(&path).await?;
+        result.bytes().await
     }
 }
 
 #[async_trait::async_trait]
-impl IngestionClientTrait for RemoteIngestionClient {
+impl IngestionClientTrait for StoreIngestionClient {
     /// Fetch a checkpoint from the remote store.
     ///
     /// Transient errors include:
@@ -87,75 +57,32 @@ impl IngestionClientTrait for RemoteIngestionClient {
     /// - server errors (5xx),
     /// - issues getting a full response.
     async fn fetch(&self, checkpoint: u64) -> FetchResult {
-        let response = self
-            .checkpoint(checkpoint)
-            .await
-            .map_err(|e| FetchError::Transient {
-                reason: "request",
-                error: e.into(),
-            })?;
-
-        match response.status() {
-            code if code.is_success() => {
-                // Failure to extract all the bytes from the payload, or to deserialize the
-                // checkpoint from them is considered a transient error -- the store being
-                // fetched from needs to be corrected, and ingestion will keep retrying it
-                // until it is.
-                response
-                    .bytes()
-                    .await
-                    .map_err(|e| FetchError::Transient {
-                        reason: "bytes",
-                        error: e.into(),
-                    })
-                    .map(FetchData::Raw)
-            }
-
-            // Treat 404s as a special case so we can match on this error type.
-            code @ StatusCode::NOT_FOUND => {
-                debug!(checkpoint, %code, "Checkpoint not found");
+        match self.checkpoint(checkpoint).await {
+            Ok(bytes) => Ok(FetchData::Raw(bytes)),
+            Err(ObjectStoreError::NotFound { .. }) => {
+                debug!(checkpoint, "Checkpoint not found");
                 Err(FetchError::NotFound)
             }
-
-            // Timeouts are a client error but they are usually transient.
-            code @ StatusCode::REQUEST_TIMEOUT => Err(FetchError::Transient {
-                reason: "timeout",
-                error: status_code_to_error(code),
-            }),
-
-            // Rate limiting is also a client error, but the backoff will eventually widen the
-            // interval appropriately.
-            code @ StatusCode::TOO_MANY_REQUESTS => Err(FetchError::Transient {
-                reason: "too_many_requests",
-                error: status_code_to_error(code),
-            }),
-
-            // Assume that if the server is facing difficulties, it will recover eventually.
-            code if code.is_server_error() => Err(FetchError::Transient {
-                reason: "server_error",
-                error: status_code_to_error(code),
-            }),
-
-            // Still retry on other unsuccessful codes, but the reason is unclear.
-            code => Err(FetchError::Transient {
-                reason: "unknown",
-                error: status_code_to_error(code),
-            }),
+            Err(error) => {
+                error!(checkpoint, "Failed to fetch checkpoint: {error}");
+                Err(FetchError::Transient {
+                    reason: "object_store",
+                    error: error.into(),
+                })
+            }
         }
     }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::*;
-    use crate::ingestion::error::Error;
-    use crate::ingestion::ingestion_client::IngestionClient;
-    use crate::ingestion::test_utils::test_checkpoint_data;
-    use crate::metrics::tests::test_ingestion_metrics;
     use axum::http::StatusCode;
+    use object_store::ClientOptions;
+    use object_store::http::HttpBuilder;
     use std::sync::Mutex;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
+    use std::time::Duration;
     use wiremock::Mock;
     use wiremock::MockServer;
     use wiremock::Request;
@@ -164,9 +91,16 @@ pub(crate) mod tests {
     use wiremock::matchers::method;
     use wiremock::matchers::path_regex;
 
+    use crate::ingestion::error::Error;
+    use crate::ingestion::ingestion_client::IngestionClient;
+    use crate::ingestion::test_utils::test_checkpoint_data;
+    use crate::metrics::tests::test_ingestion_metrics;
+
+    use super::*;
+
     pub(crate) async fn respond_with(server: &MockServer, response: impl Respond + 'static) {
         Mock::given(method("GET"))
-            .and(path_regex(r"/\d+.chk"))
+            .and(path_regex(r"/\d+\.chk"))
             .respond_with(response)
             .mount(server)
             .await;
@@ -177,7 +111,13 @@ pub(crate) mod tests {
     }
 
     fn remote_test_client(uri: String) -> IngestionClient {
-        IngestionClient::new_remote(Url::parse(&uri).unwrap(), test_ingestion_metrics()).unwrap()
+        let store = HttpBuilder::new()
+            .with_url(uri)
+            .with_client_options(ClientOptions::default().with_allow_http(true))
+            .build()
+            .map(Arc::new)
+            .unwrap();
+        IngestionClient::with_store(store, test_ingestion_metrics()).unwrap()
     }
 
     #[tokio::test]
@@ -202,8 +142,8 @@ pub(crate) mod tests {
             let mut times = times.lock().unwrap();
             *times += 1;
             match (*times, r.url.path()) {
-                // The first request will trigger a redirect to 0.chk no matter what the original
-                // request was for -- triggering a request error.
+                // The first request will trigger a redirect to 0.chk no matter what the
+                // original request was for -- triggering a request error.
                 (1, _) => status(StatusCode::MOVED_PERMANENTLY).append_header("Location", "/0.chk"),
 
                 // Set-up checkpoint 0 as an infinite redirect loop.
@@ -275,8 +215,6 @@ pub(crate) mod tests {
     /// The first request will timeout, the second will succeed.
     #[tokio::test]
     async fn retry_on_timeout() {
-        use std::sync::Arc;
-
         let server = MockServer::start().await;
         let times: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
         let times_clone = times.clone();
@@ -297,13 +235,17 @@ pub(crate) mod tests {
         })
         .await;
 
-        // Create a client with a 2 second timeout for testing
-        let ingestion_client = IngestionClient::new_remote_with_timeout(
-            Url::parse(&server.uri()).unwrap(),
-            Duration::from_secs(2),
-            test_ingestion_metrics(),
-        )
-        .unwrap();
+        let options = ClientOptions::default()
+            .with_allow_http(true)
+            .with_timeout(Duration::from_secs(2));
+        let store = HttpBuilder::new()
+            .with_url(server.uri())
+            .with_client_options(options)
+            .build()
+            .map(Arc::new)
+            .unwrap();
+        let ingestion_client =
+            IngestionClient::with_store(store, test_ingestion_metrics()).unwrap();
 
         // This should timeout once, then succeed on retry
         let checkpoint = ingestion_client.fetch(42).await.unwrap();
