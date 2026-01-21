@@ -42,6 +42,11 @@ use self::simtest_sui_system_state_inner::{
 const SUI_SYSTEM_STATE_WRAPPER_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemState");
 
 pub const SUI_SYSTEM_MODULE_NAME: &IdentStr = ident_str!("sui_system");
+pub const SUI_SYSTEM_STATE_INNER_MODULE_NAME: &IdentStr = ident_str!("sui_system_state_inner");
+pub const SUI_SYSTEM_STATE_INNER_V1_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemStateInner");
+pub const SUI_SYSTEM_STATE_INNER_V2_STRUCT_NAME: &IdentStr = ident_str!("SuiSystemStateInnerV2");
+pub const VALIDATOR_MODULE_NAME: &IdentStr = ident_str!("validator");
+pub const VALIDATOR_STRUCT_NAME: &IdentStr = ident_str!("Validator");
 pub const ADVANCE_EPOCH_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch");
 pub const ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME: &IdentStr = ident_str!("advance_epoch_safe_mode");
 

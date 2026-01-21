@@ -1,25 +1,63 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Context;
-use diesel::{ConnectionError, ConnectionResult};
+use diesel::ConnectionError;
+use diesel::ConnectionResult;
+use diesel::QueryableByName;
+use diesel::sql_types::Integer;
 use diesel_async::AsyncPgConnection;
-use rustls::{
-    ClientConfig, DigitallySignedStruct, RootCertStore,
-    client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
-    pki_types::{CertificateDer, ServerName, UnixTime},
-};
+use diesel_async::RunQueryDsl;
+use diesel_async::pooled_connection::PoolableConnection;
+use rustls::ClientConfig;
+use rustls::DigitallySignedStruct;
+use rustls::RootCertStore;
+use rustls::client::danger::HandshakeSignatureValid;
+use rustls::client::danger::ServerCertVerified;
+use rustls::client::danger::ServerCertVerifier;
+use rustls::pki_types::CertificateDer;
+use rustls::pki_types::ServerName;
+use rustls::pki_types::UnixTime;
 use tokio_postgres_rustls::MakeRustlsConnect;
+use tracing::debug;
 use tracing::error;
+use tracing::info;
 use webpki_roots::TLS_SERVER_ROOTS;
 
 /// A custom verifier that skips all server certificate verification. This mirrors libpq default
 /// behavior of not doing any server verification.
 #[derive(Debug)]
 pub(crate) struct SkipServerCertCheck;
+
+pub struct AsyncPgConnectionWithId {
+    pub pid: i32,
+    pub conn: AsyncPgConnection,
+}
+
+impl Deref for AsyncPgConnectionWithId {
+    type Target = AsyncPgConnection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.conn
+    }
+}
+
+impl DerefMut for AsyncPgConnectionWithId {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.conn
+    }
+}
+
+impl PoolableConnection for AsyncPgConnectionWithId {
+    fn is_broken(&mut self) -> bool {
+        self.conn.is_broken()
+    }
+}
 
 /// Implement the `ServerCertVerifier` trait for `SkipServerCertCheck` to always return valid. This
 /// skips all server certificate verification.
@@ -72,25 +110,50 @@ impl ServerCertVerifier for SkipServerCertCheck {
 pub(crate) async fn establish_tls_connection(
     database_url: &str,
     tls_config: ClientConfig,
-) -> ConnectionResult<AsyncPgConnection> {
+) -> ConnectionResult<AsyncPgConnectionWithId> {
     let tls = MakeRustlsConnect::new(tls_config);
-    let (client, conn) = tokio_postgres::connect(database_url, tls)
+    let (client, tokio_conn) = tokio_postgres::connect(database_url, tls)
         .await
         .map_err(|e| ConnectionError::BadConnection(e.to_string()))?;
 
     // The `conn` object performs actual IO with the database, and tokio-postgres suggests spawning
-    // it off to run in the background. This will resolve only when the connection is closed, either
-    // because of a fatal error or because its associated Client has dropped and all outstanding
-    // work has completed.
-    tokio::spawn(async move {
-        if let Err(e) = conn.await {
-            error!("Database connection terminated: {e}");
-        }
-    });
+    // it off to run in the background. This will resolve only when the connection is closed,
+    // either because of a fatal error or because its associated Client has dropped and all
+    // outstanding work has completed.
+    let h_conn = tokio::spawn(tokio_conn);
 
     // Users interact with the database through the client object. We convert it into an
     // AsyncPgConnection so it can be compatible with diesel.
-    AsyncPgConnection::try_from(client).await
+    let mut conn = AsyncPgConnection::try_from(client).await?;
+
+    #[derive(QueryableByName)]
+    struct Pid {
+        #[diesel(sql_type = Integer)]
+        pid: i32,
+    }
+
+    let Pid { pid } = diesel::sql_query("SELECT pg_backend_pid() AS pid")
+        .get_result(&mut conn)
+        .await
+        .map_err(ConnectionError::CouldntSetupConfiguration)?;
+
+    info!(pid, "Database connection established");
+
+    tokio::spawn(async move {
+        match h_conn.await {
+            Ok(Err(e)) => {
+                error!(pid, "Database connection terminated with error: {e}");
+            }
+            Ok(Ok(())) => {
+                debug!(pid, "Database connection terminated without error");
+            }
+            Err(e) => {
+                debug!(pid, "Database connection task failed: {e}");
+            }
+        }
+    });
+
+    Ok(AsyncPgConnectionWithId { conn, pid })
 }
 
 /// Builds a TLS configuration from the provided DbArgs. If tls_verify_cert is false, disable server

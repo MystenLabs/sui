@@ -4,55 +4,69 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{
-    Context, InputObject, Object,
-    connection::{Connection, CursorType, Edge},
-    dataloader::DataLoader,
-};
-use diesel::{ExpressionMethods, QueryDsl, sql_types::Bool};
-use serde::{Deserialize, Serialize};
-use sui_indexer_alt_reader::{
-    packages::{
-        CheckpointBoundedOriginalPackageKey, PackageOriginalIdKey, VersionedOriginalPackageKey,
-    },
-    pg_reader::PgReader,
-};
-use sui_indexer_alt_schema::{packages::StoredPackage, schema::kv_packages};
+use async_graphql::Context;
+use async_graphql::InputObject;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
+use async_graphql::dataloader::DataLoader;
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
+use diesel::sql_types::Bool;
+use serde::Deserialize;
+use serde::Serialize;
+use sui_indexer_alt_reader::packages::CheckpointBoundedOriginalPackageKey;
+use sui_indexer_alt_reader::packages::PackageOriginalIdKey;
+use sui_indexer_alt_reader::packages::VersionedOriginalPackageKey;
+use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_indexer_alt_schema::packages::StoredPackage;
+use sui_indexer_alt_schema::schema::kv_packages;
 use sui_package_resolver::Package as ParsedMovePackage;
 use sui_pg_db::sql;
 use sui_sql_macro::query;
-use sui_types::{
-    base_types::{ObjectID, SuiAddress as NativeSuiAddress},
-    move_package::MovePackage as NativeMovePackage,
-    object::Object as NativeObject,
-};
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::move_package::MovePackage as NativeMovePackage;
+use sui_types::object::Object as NativeObject;
 use tokio::sync::OnceCell;
 
-use crate::{
-    api::scalars::{
-        base64::Base64,
-        big_int::BigInt,
-        cursor::{BcsCursor, JsonCursor},
-        sui_address::SuiAddress,
-        type_filter::TypeInput,
-        uint53::UInt53,
-    },
-    error::{RpcError, bad_user_input, upcast},
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
-
-use super::{
-    balance::{self, Balance},
-    linkage::Linkage,
-    move_module::MoveModule,
-    move_object::MoveObject,
-    object::{self, CLive, CVersion, Object, VersionFilter},
-    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
-    owner::Owner,
-    transaction::{CTransaction, Transaction, filter::TransactionFilter},
-    type_origin::TypeOrigin,
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::cursor::BcsCursor;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address;
+use crate::api::types::address::Address;
+use crate::api::types::balance::Balance;
+use crate::api::types::balance::{self as balance};
+use crate::api::types::linkage::Linkage;
+use crate::api::types::move_module::MoveModule;
+use crate::api::types::move_object::MoveObject;
+use crate::api::types::name_record::NameRecord;
+use crate::api::types::object::CLive;
+use crate::api::types::object::CVersion;
+use crate::api::types::object::Object;
+use crate::api::types::object::VersionFilter;
+use crate::api::types::object::{self as object};
+use crate::api::types::object_filter::ObjectFilter;
+use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
+use crate::api::types::owner::Owner;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::type_origin::TypeOrigin;
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::upcast;
+use crate::extensions::query_limits;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 #[derive(Clone)]
 pub(crate) struct MovePackage {
@@ -68,7 +82,7 @@ pub(crate) struct MovePackage {
 
 /// Identifies a specific version of a package.
 ///
-/// The `address` field must be specified, as well as at most one of `version`, or `atCheckpoint`. If neither is provided, the package is fetched at the current checkpoint.
+/// The `address` field must be specified, as well as at most one of `version`, or `atCheckpoint`. If neither is provided, the package is fetched at the checkpoint being viewed.
 ///
 /// See `Query.package` for more details.
 #[derive(InputObject, Debug, Clone, Eq, PartialEq)]
@@ -125,9 +139,29 @@ pub(crate) type CSysPackage = BcsCursor<Vec<u8>>;
 /// A MovePackage is a kind of Object that represents code that has been published on-chain. It exposes information about its modules, type definitions, functions, and dependencies.
 #[Object]
 impl MovePackage {
+    /// The package's globally unique identifier, which can be passed to `Query.node` to refetch it.
+    pub(crate) async fn id(&self) -> Id {
+        Id::MovePackage(self.super_.super_.address)
+    }
+
     /// The MovePackage's ID.
     pub(crate) async fn address(&self, ctx: &Context<'_>) -> Result<SuiAddress, RpcError> {
         self.super_.address(ctx).await
+    }
+
+    /// Fetch the address as it was at a different root version, or checkpoint.
+    ///
+    /// If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
+    pub(crate) async fn address_at(
+        &self,
+        ctx: &Context<'_>,
+        root_version: Option<UInt53>,
+        checkpoint: Option<UInt53>,
+    ) -> Option<Result<Address, RpcError<address::Error>>> {
+        self.super_
+            .address_at(ctx, root_version, checkpoint)
+            .await
+            .ok()?
     }
 
     /// The version of this package that this content comes from.
@@ -166,12 +200,12 @@ impl MovePackage {
             .ok()?
     }
 
-    /// The domain explicitly configured as the default SuiNS name for this address.
-    pub(crate) async fn default_suins_name(
+    /// The domain explicitly configured as the default Name Service name for this address.
+    pub(crate) async fn default_name_record(
         &self,
         ctx: &Context<'_>,
-    ) -> Option<Result<String, RpcError>> {
-        self.super_.default_suins_name(ctx).await.ok()?
+    ) -> Option<Result<NameRecord, RpcError<object::Error>>> {
+        self.super_.default_name_record(ctx).await.ok()?
     }
 
     /// The module named `name` in this package.
@@ -355,24 +389,24 @@ impl MovePackage {
         self.super_.owner(ctx).await.ok()?
     }
 
-    /// Fetch the package with the same original ID, at a different version, root version bound, or checkpoint.
+    /// Fetch the package with the same original ID, at a different version, or checkpoint.
     ///
-    /// If no additional bound is provided, the latest version of this package is fetched at the latest checkpoint.
+    /// If no additional bound is provided, the package is fetched at the latest checkpoint known to the RPC.
     async fn package_at(
         &self,
         ctx: &Context<'_>,
         version: Option<UInt53>,
         checkpoint: Option<UInt53>,
     ) -> Option<Result<MovePackage, RpcError<Error>>> {
-        MovePackage::by_key(
-            ctx,
-            self.super_.super_.scope.clone(),
-            PackageKey {
+        async {
+            let key = PackageKey {
                 address: self.super_.super_.address.into(),
                 version,
                 at_checkpoint: checkpoint,
-            },
-        )
+            };
+
+            MovePackage::by_key(ctx, Scope::new(ctx)?, key).await
+        }
         .await
         .transpose()
     }
@@ -600,10 +634,13 @@ impl MovePackage {
                 .await
                 .map_err(upcast)
         } else if let Some(cp) = key.at_checkpoint {
-            let scope = scope
-                .with_checkpoint_viewed_at(cp.into())
-                .ok_or_else(|| bad_user_input(Error::Future(cp.into())))?;
+            // Validate checkpoint isn't in the future
+            let watermark: &Arc<Watermarks> = ctx.data()?;
+            if u64::from(cp) > watermark.high_watermark().checkpoint() {
+                return Err(bad_user_input(Error::Future(cp.into())));
+            }
 
+            // checkpoint_bounded sets the root checkpoint bound
             Self::checkpoint_bounded(ctx, scope, key.address, cp)
                 .await
                 .map_err(upcast)
@@ -681,7 +718,10 @@ impl MovePackage {
             return Ok(None);
         };
 
-        Self::from_stored(scope, stored_package)
+        Self::from_stored(
+            scope.with_root_checkpoint(at_checkpoint.into()),
+            stored_package,
+        )
     }
 
     /// Construct a GraphQL representation of a `MovePackage` from its representation in the
@@ -731,8 +771,9 @@ impl MovePackage {
             return Ok(Connection::new(false, false));
         };
 
-        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+        query_limits::rich::debit(ctx)?;
         let pg_reader: &PgReader = ctx.data()?;
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
 
         let Some(original_id) = pg_loader
             .load_one(PackageOriginalIdKey(address.into()))
@@ -821,6 +862,7 @@ impl MovePackage {
             return Ok(Connection::new(false, false));
         };
 
+        query_limits::rich::debit(ctx)?;
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut query = p::kv_packages
@@ -893,46 +935,6 @@ impl MovePackage {
         )
     }
 
-    /// Get the native MovePackage, loading it lazily if needed.
-    pub(crate) async fn native(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<&Option<NativeMovePackage>, RpcError> {
-        self.native
-            .get_or_try_init(async || {
-                let Some(contents) = self.super_.contents(ctx).await? else {
-                    return Ok(None);
-                };
-
-                let native = contents
-                    .data
-                    .try_as_package()
-                    .context("Object is not a MovePackage")?;
-
-                Ok(Some(native.clone()))
-            })
-            .await
-    }
-
-    /// Get the parsed representation of this package, loading it lazily if needed.
-    pub(crate) async fn parsed(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<&Option<ParsedMovePackage>, RpcError> {
-        self.parsed
-            .get_or_try_init(async || {
-                let Some(native) = self.native(ctx).await?.as_ref() else {
-                    return Ok(None);
-                };
-
-                let parsed = ParsedMovePackage::read_from_package(native)
-                    .context("Failed to parse MovePackage")?;
-
-                Ok(Some(parsed))
-            })
-            .await
-    }
-
     /// Paginate through versions of a package, identified by its original ID. `address` points to
     /// any package on-chain that has that original ID.
     pub(crate) async fn paginate_system_packages(
@@ -941,6 +943,7 @@ impl MovePackage {
         page: Page<CSysPackage>,
         checkpoint: u64,
     ) -> Result<Connection<String, MovePackage>, RpcError> {
+        query_limits::rich::debit(ctx)?;
         let pg_reader: &PgReader = ctx.data()?;
 
         let mut pagination = query!("");
@@ -1013,5 +1016,50 @@ impl MovePackage {
             |p| BcsCursor::new(p.original_id.clone()),
             |p| Ok(Self::from_stored(scope.clone(), p)?.context("Failed to instantiate package")?),
         )
+    }
+
+    /// The package's address
+    pub(crate) fn address_impl(&self) -> NativeSuiAddress {
+        self.super_.super_.address
+    }
+
+    /// Get the native MovePackage, loading it lazily if needed.
+    pub(crate) async fn native(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<&Option<NativeMovePackage>, RpcError> {
+        self.native
+            .get_or_try_init(async || {
+                let Some(contents) = self.super_.contents(ctx).await? else {
+                    return Ok(None);
+                };
+
+                let native = contents
+                    .data
+                    .try_as_package()
+                    .context("Object is not a MovePackage")?;
+
+                Ok(Some(native.clone()))
+            })
+            .await
+    }
+
+    /// Get the parsed representation of this package, loading it lazily if needed.
+    pub(crate) async fn parsed(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<&Option<ParsedMovePackage>, RpcError> {
+        self.parsed
+            .get_or_try_init(async || {
+                let Some(native) = self.native(ctx).await? else {
+                    return Ok(None);
+                };
+
+                let parsed = ParsedMovePackage::read_from_package(native)
+                    .context("Failed to parse MovePackage")?;
+
+                Ok(Some(parsed))
+            })
+            .await
     }
 }

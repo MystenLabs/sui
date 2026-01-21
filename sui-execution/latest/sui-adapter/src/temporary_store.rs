@@ -156,31 +156,6 @@ impl<'backing> TemporaryStore<'backing> {
         }
     }
 
-    fn merge_accumulator_events(
-        accumulator_events: &[AccumulatorEvent],
-    ) -> impl Iterator<Item = (ObjectID, EffectsObjectChange)> + '_ {
-        accumulator_events
-            .iter()
-            .fold(
-                BTreeMap::<ObjectID, Vec<AccumulatorWriteV1>>::new(),
-                |mut map, event| {
-                    map.entry(*event.accumulator_obj.inner())
-                        .or_default()
-                        .push(event.write.clone());
-                    map
-                },
-            )
-            .into_iter()
-            .map(|(obj_id, writes)| {
-                (
-                    obj_id,
-                    EffectsObjectChange::new_from_accumulator_write(AccumulatorWriteV1::merge(
-                        writes,
-                    )),
-                )
-            })
-    }
-
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
     pub fn into_inner(self) -> InnerTemporaryStore {
         let results = self.execution_results;
@@ -243,7 +218,17 @@ impl<'backing> TemporaryStore<'backing> {
                     ),
                 )
             })
-            .chain(Self::merge_accumulator_events(&results.accumulator_events))
+            .chain(results.accumulator_events.iter().cloned().map(
+                |AccumulatorEvent {
+                     accumulator_obj,
+                     write,
+                 }| {
+                    (
+                        *accumulator_obj.inner(),
+                        EffectsObjectChange::new_from_accumulator_write(write),
+                    )
+                },
+            ))
             .collect()
     }
 
@@ -528,8 +513,17 @@ impl<'backing> TemporaryStore<'backing> {
         self.mutate_input_object(system_state_wrapper);
     }
 
-    /// Add an accumulator event to the execution results
+    /// Add an accumulator event to the execution results, merging with any existing
+    /// event for the same accumulator object.
     pub fn add_accumulator_event(&mut self, event: AccumulatorEvent) {
+        let obj_id = *event.accumulator_obj.inner();
+        for existing in self.execution_results.accumulator_events.iter_mut() {
+            if *existing.accumulator_obj.inner() == obj_id {
+                existing.write =
+                    AccumulatorWriteV1::merge(vec![existing.write.clone(), event.write]);
+                return;
+            }
+        }
         self.execution_results.accumulator_events.push(event);
     }
 

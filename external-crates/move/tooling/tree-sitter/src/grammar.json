@@ -1,5 +1,4 @@
 {
-  "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/grammar.schema.json",
   "name": "move",
   "word": "identifier",
   "rules": {
@@ -3072,10 +3071,6 @@
         {
           "type": "STRING",
           "value": "signer"
-        },
-        {
-          "type": "STRING",
-          "value": "bytearray"
         }
       ]
     },
@@ -6723,6 +6718,10 @@
         {
           "type": "SYMBOL",
           "name": "byte_string_literal"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "string_literal"
         }
       ]
     },
@@ -6849,6 +6848,10 @@
       "type": "PATTERN",
       "value": "b\"(\\\\.|[^\\\\\"])*\""
     },
+    "string_literal": {
+      "type": "PATTERN",
+      "value": "\"(\\\\.|[^\\\\\"])*\""
+    },
     "_module_identifier": {
       "type": "ALIAS",
       "content": {
@@ -6948,6 +6951,10 @@
         {
           "type": "SYMBOL",
           "name": "_exists"
+        },
+        {
+          "type": "STRING",
+          "value": "spec"
         }
       ]
     },
@@ -7080,6 +7087,10 @@
     ],
     [
       "abort_expression"
+    ],
+    [
+      "spec_block",
+      "_reserved_identifier"
     ]
   ],
   "precedences": [],
@@ -7087,6 +7098,5 @@
   "inline": [],
   "supertypes": [
     "_spec_block_target"
-  ],
-  "reserved": {}
+  ]
 }

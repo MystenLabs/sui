@@ -1,0 +1,1056 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 20 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-47:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 8078800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 49:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 51-53:
+//# programmable --sender A --inputs @A
+//> 0: test::mod::cap();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 55-57:
+//# programmable --sender A --inputs object(3,0) @A
+//> 0: test::mod::foo(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(4,0)
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3982400,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+
+task 5, lines 59-60:
+//# programmable --sender A --inputs object(4,0) @A
+//> 0: test::mod::bag(Input(0))
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 3024800,  storage_rebate: 2693592, non_refundable_storage_fee: 27208
+
+task 6, line 62:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 64-65:
+//# programmable --sender A --inputs object(4,0) 1u64 200u64
+//> 0: test::mod::add(Input(0), Input(1), Input(2))
+created: object(7,0)
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 4491600,  storage_rebate: 2994552, non_refundable_storage_fee: 30248
+
+task 8, line 67:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 9, lines 69-70:
+//# programmable --sender A --inputs object(4,0) 3u64 400u64
+//> 0: test::mod::add(Input(0), Input(1), Input(2))
+created: object(9,0)
+mutated: object(0,0), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 4491600,  storage_rebate: 2994552, non_refundable_storage_fee: 30248
+
+task 10, line 72:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 11, lines 74-75:
+//# programmable --sender A --inputs object(4,0) 3u64 4u64
+//> 0: test::mod::set(Input(0), Input(1), Input(2))
+mutated: object(0,0), object(4,0), object(9,0)
+gas summary: computation_cost: 1000000, storage_cost: 4491600,  storage_rebate: 4446684, non_refundable_storage_fee: 44916
+
+task 12, lines 77-78:
+//# programmable --sender A --inputs object(4,0) 1u64 2u64
+//> 0: test::mod::set(Input(0), Input(1), Input(2))
+mutated: object(0,0), object(4,0), object(7,0)
+gas summary: computation_cost: 1000000, storage_cost: 4491600,  storage_rebate: 4446684, non_refundable_storage_fee: 44916
+
+task 13, line 80:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 14, lines 82-102:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": {
+          "extract": {
+            "asAddress": {
+              "objects": {
+                "nodes": [
+                  {
+                    "contents": {
+                      "type": {
+                        "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      },
+                      "json": {
+                        "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                        "balance": "299999977479288"
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "type": {
+                        "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::Foo"
+                      },
+                      "json": {
+                        "id": "0x77ebb0de24ebd5b04bebb311578d889ab662dc955c7a75afe764151f69cbb3f0",
+                        "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                        "cap": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8",
+                        "bag": {
+                          "id": "0xeb551474f65d46dc66e063c63e4fb5048803235c7d713e081142116339a40e42",
+                          "size": "2"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "contents": {
+                      "type": {
+                        "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::FooCap"
+                      },
+                      "json": {
+                        "id": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 15, lines 104-138:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": {
+          "extract": {
+            "asAddress": {
+              "transactions": {
+                "nodes": [
+                  {
+                    "effects": {
+                      "objectChanges": {
+                        "nodes": [
+                          {
+                            "idCreated": true,
+                            "inputState": null,
+                            "outputState": {
+                              "asMoveObject": null
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "300000000000000"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999990921200"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "effects": {
+                      "objectChanges": {
+                        "nodes": [
+                          {
+                            "idCreated": true,
+                            "inputState": null,
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::FooCap"
+                                  },
+                                  "json": {
+                                    "id": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999990921200"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999988649720"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "effects": {
+                      "objectChanges": {
+                        "nodes": [
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::FooCap"
+                                  },
+                                  "json": {
+                                    "id": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::FooCap"
+                                  },
+                                  "json": {
+                                    "id": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": true,
+                            "inputState": null,
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0x77ebb0de24ebd5b04bebb311578d889ab662dc955c7a75afe764151f69cbb3f0",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8",
+                                    "bag": null
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999988649720"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999985894424"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "effects": {
+                      "objectChanges": {
+                        "nodes": [
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0x77ebb0de24ebd5b04bebb311578d889ab662dc955c7a75afe764151f69cbb3f0",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8",
+                                    "bag": null
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0x77ebb0de24ebd5b04bebb311578d889ab662dc955c7a75afe764151f69cbb3f0",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8",
+                                    "bag": {
+                                      "id": "0xeb551474f65d46dc66e063c63e4fb5048803235c7d713e081142116339a40e42",
+                                      "size": "0"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999985894424"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999984563216"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": true,
+                            "inputState": null,
+                            "outputState": null
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "effects": {
+                      "objectChanges": {
+                        "nodes": [
+                          {
+                            "idCreated": true,
+                            "inputState": null,
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
+                                  },
+                                  "json": {
+                                    "id": "0x2d60afadbabb72e6d17af65ce388bd962e95ea17cf5e45829be56269421b8385",
+                                    "name": "1",
+                                    "value": "200"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0x77ebb0de24ebd5b04bebb311578d889ab662dc955c7a75afe764151f69cbb3f0",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8",
+                                    "bag": {
+                                      "id": "0xeb551474f65d46dc66e063c63e4fb5048803235c7d713e081142116339a40e42",
+                                      "size": "0"
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0x77ebb0de24ebd5b04bebb311578d889ab662dc955c7a75afe764151f69cbb3f0",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8",
+                                    "bag": {
+                                      "id": "0xeb551474f65d46dc66e063c63e4fb5048803235c7d713e081142116339a40e42",
+                                      "size": "1"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999984563216"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999982066168"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "effects": {
+                      "objectChanges": {
+                        "nodes": [
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0x77ebb0de24ebd5b04bebb311578d889ab662dc955c7a75afe764151f69cbb3f0",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8",
+                                    "bag": {
+                                      "id": "0xeb551474f65d46dc66e063c63e4fb5048803235c7d713e081142116339a40e42",
+                                      "size": "1"
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0x77ebb0de24ebd5b04bebb311578d889ab662dc955c7a75afe764151f69cbb3f0",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8",
+                                    "bag": {
+                                      "id": "0xeb551474f65d46dc66e063c63e4fb5048803235c7d713e081142116339a40e42",
+                                      "size": "2"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999982066168"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999979569120"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": true,
+                            "inputState": null,
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
+                                  },
+                                  "json": {
+                                    "id": "0xd698d84c34ff188691b9b540987d3f18f8ba3e9e0d1f1c43b85f3b119e76120c",
+                                    "name": "3",
+                                    "value": "400"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "effects": {
+                      "objectChanges": {
+                        "nodes": [
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0x77ebb0de24ebd5b04bebb311578d889ab662dc955c7a75afe764151f69cbb3f0",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8",
+                                    "bag": {
+                                      "id": "0xeb551474f65d46dc66e063c63e4fb5048803235c7d713e081142116339a40e42",
+                                      "size": "2"
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0x77ebb0de24ebd5b04bebb311578d889ab662dc955c7a75afe764151f69cbb3f0",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8",
+                                    "bag": {
+                                      "id": "0xeb551474f65d46dc66e063c63e4fb5048803235c7d713e081142116339a40e42",
+                                      "size": "2"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999979569120"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999978524204"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
+                                  },
+                                  "json": {
+                                    "id": "0xd698d84c34ff188691b9b540987d3f18f8ba3e9e0d1f1c43b85f3b119e76120c",
+                                    "name": "3",
+                                    "value": "400"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
+                                  },
+                                  "json": {
+                                    "id": "0xd698d84c34ff188691b9b540987d3f18f8ba3e9e0d1f1c43b85f3b119e76120c",
+                                    "name": "3",
+                                    "value": "4"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "effects": {
+                      "objectChanges": {
+                        "nodes": [
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
+                                  },
+                                  "json": {
+                                    "id": "0x2d60afadbabb72e6d17af65ce388bd962e95ea17cf5e45829be56269421b8385",
+                                    "name": "1",
+                                    "value": "200"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
+                                  },
+                                  "json": {
+                                    "id": "0x2d60afadbabb72e6d17af65ce388bd962e95ea17cf5e45829be56269421b8385",
+                                    "name": "1",
+                                    "value": "2"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0x77ebb0de24ebd5b04bebb311578d889ab662dc955c7a75afe764151f69cbb3f0",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8",
+                                    "bag": {
+                                      "id": "0xeb551474f65d46dc66e063c63e4fb5048803235c7d713e081142116339a40e42",
+                                      "size": "2"
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::Foo"
+                                  },
+                                  "json": {
+                                    "id": "0x77ebb0de24ebd5b04bebb311578d889ab662dc955c7a75afe764151f69cbb3f0",
+                                    "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+                                    "cap": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8",
+                                    "bag": {
+                                      "id": "0xeb551474f65d46dc66e063c63e4fb5048803235c7d713e081142116339a40e42",
+                                      "size": "2"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999978524204"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                                  },
+                                  "json": {
+                                    "id": "0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a",
+                                    "balance": "299999977479288"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 16, lines 140-160:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": {
+          "extract": {
+            "asAddress": {
+              "asObject": {
+                "asMoveObject": {
+                  "contents": {
+                    "type": {
+                      "repr": "0x60a87fa6b28df30426fa69d9a1dca4c4d527cca968e419db8fa4144ce5b2d42a::mod::FooCap"
+                    },
+                    "json": {
+                      "id": "0x48f571021f8bd5fe468eba177806b548bc8f55f510a7833da699bd5e41bd6bb8"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 17, lines 162-181:
+//# run-graphql --cursors bcs(1u64)
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": {
+          "field": {
+            "json": "2"
+          },
+          "bag": {
+            "asAddress": {
+              "dynamicField": {
+                "value": {
+                  "json": "2"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 18, lines 183-204:
+//# run-graphql --cursors bcs(3u64)
+Response: {
+  "data": {
+    "objectVersions": {
+      "nodes": [
+        {
+          "asMoveObject": {
+            "contents": {
+              "field": null,
+              "bag": null
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "contents": {
+              "field": null,
+              "bag": {
+                "asAddress": {
+                  "dynamicField": null
+                }
+              }
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "contents": {
+              "field": null,
+              "bag": {
+                "asAddress": {
+                  "dynamicField": null
+                }
+              }
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "contents": {
+              "field": {
+                "json": "400"
+              },
+              "bag": {
+                "asAddress": {
+                  "dynamicField": {
+                    "value": {
+                      "json": "400"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "contents": {
+              "field": {
+                "json": "4"
+              },
+              "bag": {
+                "asAddress": {
+                  "dynamicField": {
+                    "value": {
+                      "json": "4"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "asMoveObject": {
+            "contents": {
+              "field": {
+                "json": "4"
+              },
+              "bag": {
+                "asAddress": {
+                  "dynamicField": {
+                    "value": {
+                      "json": "4"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 19, lines 206-239:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": {
+          "uid": {
+            "asAddress": {
+              "before": {
+                "dynamicFields": {
+                  "nodes": [
+                    {
+                      "name": {
+                        "json": "1"
+                      },
+                      "value": {
+                        "json": "200"
+                      }
+                    },
+                    {
+                      "name": {
+                        "json": "3"
+                      },
+                      "value": {
+                        "json": "400"
+                      }
+                    }
+                  ]
+                }
+              },
+              "latest": {
+                "dynamicFields": {
+                  "nodes": [
+                    {
+                      "name": {
+                        "json": "1"
+                      },
+                      "value": {
+                        "json": "2"
+                      }
+                    },
+                    {
+                      "name": {
+                        "json": "3"
+                      },
+                      "value": {
+                        "json": "4"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "id": {
+            "asAddress": {
+              "dynamicFields": {
+                "nodes": [
+                  {
+                    "name": {
+                      "json": "1"
+                    },
+                    "value": {
+                      "json": "2"
+                    }
+                  },
+                  {
+                    "name": {
+                      "json": "3"
+                    },
+                    "value": {
+                      "json": "4"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

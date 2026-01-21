@@ -1,0 +1,484 @@
+---
+title: Contract Information
+description: DeepBookV3 contract addresses, supported coins, and pool information on Sui Mainnet.
+keywords:
+  [
+    deepbook,
+    deepbookv3,
+    contract address,
+    package id,
+    pool id,
+    coins,
+    mainnet,
+    registry,
+  ]
+---
+
+This page contains the contract addresses, supported coins, and pool information for DeepBookV3 on Sui Mainnet.
+
+## Contract versions
+
+DeepBookV3 uses upgradeable contracts. When a contract is upgraded, only `DEEPBOOK_PACKAGE_ID` needs to be updated - previous versions remain compatible unless noted. A redeployment would require updating `DEEPBOOK_PACKAGE_ID`, `REGISTRY_ID`, and all pool IDs.
+
+### Current version
+
+| Parameter | Value |
+|-----------|-------|
+| Version | 6 |
+| Package ID | `0x337f4f4f6567fcd778d5454f27c16c70e2f274cc6377ea6249ddf491482ef497` |
+| Registry ID | `0xaf16199a2dff736e9f07a845f23c5da6df6f756eddb631aed9d24a93efc4549d` |
+
+### Version history
+
+| Version | Date | Package ID | Changes |
+|---------|------|------------|---------|
+| 6 | Jan 7, 2026 | `0x337f4f4f6567fcd778d5454f27c16c70e2f274cc6377ea6249ddf491482ef497` | Final preparation for margin launch |
+| 5 | Dec 18, 2025 | `0x2d93777cc8b67c064b495e8606f2f8f5fd578450347bbe7b36e0bc03963c1c40` | Improvements for referral system |
+| 4 | Dec 9, 2025 | `0x00c1a56ec8c4c623a848b2ed2f03d23a25d17570b670c22106f336eb933785cc` | Referral system, penalty taker fees |
+| 3 | Jun 11, 2025 | `0xb29d83c26cdd2a64959263abbcfc4a6937f0c9fccaf98580ca56faded65be244` | Small bug fix for creating balance manager |
+| 2 | Apr 16, 2025 | `0xcaf6ba059d539a97646d47f0b9ddf843e138d215e2a12ca1f4585d386f7aec3a` | Input token fees, permissionless pool creation, gas improvements |
+| 1 | Oct 10, 2024 | `0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809` | Original deployment |
+
+## Supported coins
+
+<details>
+<summary>DEEP Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP` |
+| Decimals | 6 |
+
+</details>
+
+<details>
+<summary>SUI Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI` |
+| Decimals | 9 |
+
+</details>
+
+<details>
+<summary>Native USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC` |
+| Decimals | 6 |
+
+</details>
+
+<details>
+<summary>Native Bridged ETH (BETH)</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0xd0e89b2af5e4910726fbcd8b8dd37bb79b29e5f83f7491bca830e94f7f226d29::eth::ETH` |
+| Decimals | 8 |
+
+</details>
+
+<details>
+<summary>Wormhole USDT (WUSDT)</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN` |
+| Decimals | 6 |
+
+</details>
+
+<details>
+<summary>Wormhole USDC (WUSDC)</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN` |
+| Decimals | 6 |
+
+</details>
+
+<details>
+<summary>NS Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x5145494a5f5100e645e4b0aa950fa6b68f614e8c59e17bc5ded3495123a79178::ns::NS` |
+| Decimals | 6 |
+
+</details>
+
+<details>
+<summary>TYPUS Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0xf82dc05634970553615eef6112a1ac4fb7bf10272bf6cbe0f80ef44a6c489385::typus::TYPUS` |
+| Decimals | 9 |
+
+</details>
+
+<details>
+<summary>AUSD Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2::ausd::AUSD` |
+| Decimals | 6 |
+
+</details>
+
+<details>
+<summary>DRF Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x294de7579d55c110a00a7c4946e09a1b5cbeca2592fbb83fd7bfacba3cfeaf0e::drf::DRF` |
+| Decimals | 6 |
+
+</details>
+
+<details>
+<summary>SEND Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0xb45fcfcc2cc07ce0702cc2d229621e046c906ef14d9b25e8e4d25f6e8763fef7::send::SEND` |
+| Decimals | 6 |
+
+</details>
+
+<details>
+<summary>xBTC Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x876a4b7bce8aeaef60464c11f4026903e9afacab79b9b142686158aa86560b50::xbtc::XBTC` |
+| Decimals | 8 |
+
+</details>
+
+<details>
+<summary>WAL Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL` |
+| Decimals | 9 |
+
+</details>
+
+<details>
+<summary>IKA Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x7262fb2f7a3a14c888c438a3cd9b912469a58cf60f367352c46584262e8299aa::ika::IKA` |
+| Decimals | 9 |
+
+</details>
+
+<details>
+<summary>ALKIMI Token</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x1a8f4bc33f8ef7fbc851f156857aa65d397a6a6fd27a7ac2ca717b51f2fd9489::alkimi::ALKIMI` |
+| Decimals | 9 |
+
+</details>
+
+<details>
+<summary>LayerZero WBTC (LZWBTC)</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0x0041f9f9344cac094454cd574e333c4fdb132d7bcc9379bcd4aab485b2a63942::wbtc::WBTC` |
+| Decimals | 8 |
+
+</details>
+
+## Pools
+
+:::info
+
+Taker and maker fees are subject to change based on governance proposals. See [Staking and Governance](./staking-governance.mdx) for more information on how fees can be adjusted through the governance process.
+
+:::
+
+<details>
+<summary>DEEP/SUI</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0xb663828d6217467c8a1838a03793da896cbe745b150ebd57d82f814ca579fc22` |
+| Tick Size | 0.00001 |
+| Lot Size | 1 DEEP |
+| Min Size | 10 DEEP |
+| Taker Fee | 0 bps |
+| Maker Fee | 0 bps |
+
+</details>
+
+<details>
+<summary>DEEP/USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0xf948981b806057580f91622417534f491da5f61aeaf33d0ed8e69fd5691c95ce` |
+| Tick Size | 0.00001 |
+| Lot Size | 1 DEEP |
+| Min Size | 10 DEEP |
+| Taker Fee | 0 bps |
+| Maker Fee | 0 bps |
+
+</details>
+
+<details>
+<summary>SUI/USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0xe05dafb5133bcffb8d59f4e12465dc0e9faeaa05e3e342a08fe135800e3e4407` |
+| Tick Size | 0.00001 |
+| Lot Size | 0.1 SUI |
+| Min Size | 1 SUI |
+| Taker Fee | 1 bps |
+| Maker Fee | 0 bps |
+
+</details>
+
+<details>
+<summary>BETH/USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x1109352b9112717bd2a7c3eb9a416fff1ba6951760f5bdd5424cf5e4e5b3e65c` |
+| Tick Size | 0.001 |
+| Lot Size | 0.0001 BETH |
+| Min Size | 0.001 BETH |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+<details>
+<summary>WUSDC/USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0xa0b9ebefb38c963fd115f52d71fa64501b79d1adcb5270563f92ce0442376545` |
+| Tick Size | 0.00001 |
+| Lot Size | 0.1 WUSDC |
+| Min Size | 1 WUSDC |
+| Taker Fee | 0 bps |
+| Maker Fee | 0 bps |
+
+</details>
+
+<details>
+<summary>WUSDT/USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x4e2ca3988246e1d50b9bf209abb9c1cbfec65bd95afdacc620a36c67bdb8452f` |
+| Tick Size | 0.00001 |
+| Lot Size | 0.1 WUSDT |
+| Min Size | 1 WUSDT |
+| Taker Fee | 1 bps |
+| Maker Fee | 0.5 bps |
+
+</details>
+
+<details>
+<summary>NS/SUI</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x27c4fdb3b846aa3ae4a65ef5127a309aa3c1f466671471a806d8912a18b253e8` |
+| Tick Size | 0.00001 |
+| Lot Size | 0.1 NS |
+| Min Size | 1 NS |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+<details>
+<summary>NS/USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x0c0fdd4008740d81a8a7d4281322aee71a1b62c449eb5b142656753d89ebc060` |
+| Tick Size | 0.00001 |
+| Lot Size | 0.1 NS |
+| Min Size | 1 NS |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+<details>
+<summary>TYPUS/SUI</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0xe8e56f377ab5a261449b92ac42c8ddaacd5671e9fec2179d7933dd1a91200eec` |
+| Tick Size | 0.00001 |
+| Lot Size | 0.1 TYPUS |
+| Min Size | 1 TYPUS |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+<details>
+<summary>SUI/AUSD</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x183df694ebc852a5f90a959f0f563b82ac9691e42357e9a9fe961d71a1b809c8` |
+| Tick Size | 0.0001 |
+| Lot Size | 0.1 SUI |
+| Min Size | 1 SUI |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+<details>
+<summary>AUSD/USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x5661fc7f88fbeb8cb881150a810758cf13700bb4e1f31274a244581b37c303c3` |
+| Tick Size | 0.00001 |
+| Lot Size | 0.1 AUSD |
+| Min Size | 1 AUSD |
+| Taker Fee | 1 bps |
+| Maker Fee | 0.5 bps |
+
+</details>
+
+<details>
+<summary>DRF/SUI</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x126865a0197d6ab44bfd15fd052da6db92fd2eb831ff9663451bbfa1219e2af2` |
+| Tick Size | 0.000001 |
+| Lot Size | 1 DRF |
+| Min Size | 10 DRF |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+<details>
+<summary>SEND/USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x1fe7b99c28ded39774f37327b509d58e2be7fff94899c06d22b407496a6fa990` |
+| Tick Size | 0.000001 |
+| Lot Size | 0.1 SEND |
+| Min Size | 1 SEND |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+<details>
+<summary>WAL/USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x56a1c985c1f1123181d6b881714793689321ba24301b3585eec427436eb1c76d` |
+| Tick Size | 0.000001 |
+| Lot Size | 0.1 WAL |
+| Min Size | 1 WAL |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+<details>
+<summary>WAL/SUI</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x81f5339934c83ea19dd6bcc75c52e83509629a5f71d3257428c2ce47cc94d08b` |
+| Tick Size | 0.000001 |
+| Lot Size | 0.1 WAL |
+| Min Size | 1 WAL |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+<details>
+<summary>xBTC/USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x20b9a3ec7a02d4f344aa1ebc5774b7b0ccafa9a5d76230662fdc0300bb215307` |
+| Tick Size | 1 |
+| Lot Size | 0.00001 xBTC |
+| Min Size | 0.00001 xBTC |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+<details>
+<summary>IKA/USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0xfa732993af2b60d04d7049511f801e79426b2b6a5103e22769c0cead982b0f47` |
+| Tick Size | 0.000001 |
+| Lot Size | 10 IKA |
+| Min Size | 10 IKA |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+<details>
+<summary>ALKIMI/SUI</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0x84752993c6dc6fce70e25ddeb4daddb6592d6b9b0912a0a91c07cfff5a721d89` |
+| Tick Size | 0.00001 |
+| Lot Size | 0.1 ALKIMI |
+| Min Size | 1 ALKIMI |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+<details>
+<summary>LZWBTC/USDC</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Pool ID | `0xf5142aafa24866107df628bf92d0358c7da6acc46c2f10951690fd2b8570f117` |
+| Tick Size | 1 |
+| Lot Size | 0.00001 LZWBTC |
+| Min Size | 0.00001 LZWBTC |
+| Taker Fee | 10 bps |
+| Maker Fee | 5 bps |
+
+</details>
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3"
+	label="DeepBookV3 repository"
+	desc="The DeepBookV3 repository on GitHub."
+/>

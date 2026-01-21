@@ -1,0 +1,514 @@
+---
+title: Using Nautilus
+description: Details on how to use Nautilus with the reproducible build template.
+keywords: [ nautilus, using nautilus, deploy aws nitro enclave, aws nitro, enclaves, tee, ec2 ]
+---
+
+[Nautilus](/guides/developer/nautilus/index.mdx) is a framework for secure and verifiable off-chain computation on Sui. It enables builders to delegate sensitive or resource-intensive tasks to a self-managed [trusted execution environment (TEE)](https://en.wikipedia.org/wiki/Trusted_execution_environment) while preserving trust on-chain through smart contract-based verification.
+
+The [Nautilus repo](https://github.com/MystenLabs/nautilus) provides scaffolding such as reproducible builds, signature formatting, and HTTPS traffic forwarding. This allows you to focus on implementing the off-chain computation logic inside the enclave.
+
+The framework also provides an on-chain template that includes the minimal smart contract code required to register a Nautilus instance and its public key. 
+
+## Developer workflow 
+
+To use Nautilus in your dApp:
+
+1. Implement the enclave in Rust with the desired computation logic.
+
+2. Deploy a Move smart contract that stores the expected platform configuration registers (PCRs) and allows updates by the contract deployer.
+
+3. Deploy the enclave instance on AWS and register it on-chain using its attestation document.
+
+4. Upload signed responses from the registered enclave, verify them on-chain, and consume the results in your smart contract.
+
+This guide walks you through the following steps:
+
+1. Write and deploy a basic Nautilus off-chain instance using AWS Nitro Enclaves. The example instance runs a server that fetches weather data for a specific location.
+
+2. Write a Move smart contract that registers the enclave by verifying its attestation and public key, then verifies the Nautilus response (signature and payload) on-chain and mints an NFT with the location and temperature data.
+
+:::info
+
+Frontend code is not included in this guide. 
+
+:::
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] Install [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
+
+- [x] Install [Rust](https://rust-lang.org/tools/install/) and [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html).
+
+- [x] Install [Make](https://www.gnu.org/software/make/).
+
+- [x] Install the Sui CLI](/guides/developer/getting-started/sui-install.mdx).
+
+- [x] Download or git clone the [Nautilus repo](https://github.com/MystenLabs/nautilus).
+
+</TabItem>
+</Tabs>
+
+###step Create an AWS developer account 
+
+Set up an AWS developer account and install the AWS CLI. For detailed instructions, see the [AWS Nitro Enclaves getting started guide](https://docs.aws.amazon.com/enclaves/latest/user/getting-started.html#launch-instance).
+
+###step Configure AWS SSO
+
+Confirm AWS CLI version:
+
+```bash
+aws --version
+```
+
+This should print a version that begins with `2`:
+
+```
+aws-cli/2.x.x
+```
+
+Configure the single sign on for the AWS CLI tool using the command:
+
+```bash
+aws configure sso
+```
+
+When prompted, fill in the following fields:
+
+- SSO start URL: `https://d-926756e6a4.awsapps.com/start/#`
+
+- SSO region: `us-east-1`
+
+If you see expired credentials, reset them with:
+
+```bash
+rm ~/.aws/credentials
+rm ~/.aws/config
+```
+
+###step Log in to AWS SSO 
+
+After configuring AWS SSO, you will be redirected to login through a browser window. Choose an account and the role `AdministratorAccess`. AWS should create a profile such as `AdministratorAccess-094557288217`.
+
+###step List existing EC2 SSH key pairwise
+
+Run the following command to list all key pairs created in your AWS account. These are used only for SSH into EC2.
+
+```bash
+aws ec2 describe-key-pairs \
+  --region us-east-1 \
+  --profile AdministratorAccess-094557288217
+```
+
+####substep Create a new EC2 SSH key pair (optional)
+
+If you don't already have one you want to use, create a new EC2 SSH key pair with the command:
+
+```bash
+aws ec2 create-key-pair \
+  --key-name <your-alias> \
+  --query 'KeyMaterial' \
+  --output text \
+  --region us-east-1 > ~/.ssh/<your-alias>.pem
+```
+
+Configure the SSH key's permissions:
+
+```bash
+chmod 400 ~/.ssh/<your-alias>.pem
+```
+
+###step Set environment variables
+
+Set the `KEY_PAIR` variable with the name of your EC2 key pair:
+
+```bash
+export KEY_PAIR=<your-key-pair-name>
+```
+
+Then, you must set the `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN` environment variables. These are required for the Nautilus provisioning script.
+
+Export the values for these variables using the command:
+
+```bash
+aws configure export-credentials \
+  --profile AdministratorAccess-094557288217 \
+  --format env > ~/aws-temp-creds.sh
+```
+
+Then, load these credentials:
+
+```bash
+source ~/aws-temp-creds.sh
+```
+
+Confirm that they have been set properly:
+
+```bash
+env | grep AWS_
+```
+
+You can also verify your AWS identity with the command:
+
+```bash
+aws sts get-caller-identity
+```
+
+Expected output:
+
+```
+{
+    "UserId": "AROARMBANW4MXIS7SZ7S6:george.melas@mystenlabs.com",
+    "Account": "094557288217",
+    "Arn": "arn:aws:sts::094557288217:assumed-role/AWSReservedSSO_AdministratorAccess_bb69586677f0373c/george.melas@mystenlabs.com"
+}
+```
+
+If this works, then your AWS environment is ready to use with Nautilus. 
+
+###step View the Nautilus repository structure
+
+View the contents of the Nautilus repository that you have downloaded or cloned.
+
+```sh title="Repository structure"
+/move
+  /enclave          # Utility functions for enclave config and public key registration
+  /weather-example  # Example on-chain logic using enclave functions
+  /twitter-example  # Alternative example on-chain logic
+
+/src
+  /aws              # AWS boilerplate; does not require modification.
+  /init             # AWS boilerplate; does not require modification.
+  /system           # AWS boilerplate; does not require modification.
+  /nautilus-server  # Nautilus server that runs inside the enclave.
+    /src
+      /apps
+        /weather-example    # Example directory. Replace with your own application logic as needed.
+          mod.rs            # Defines the process_data endpoint and related logic. Replace with your off-chain computation logic.
+          allowed_endpoints.yaml  # Lists all endpoints the enclave can access. By default, the enclave has no internet access. During configuration, this file generates code for traffic forwarding.
+        /twitter-example    # Another example directory with a similar structure. 
+    run.sh           # Runs the Rust server inside the enclave. Do not modify.
+    common.rs        # Common code for retrieving attestation. Do not modify. 
+```
+
+Key implementation files:
+
+- `allowed_endpoints.yaml`: Defines external API access permissions.
+
+- `mod.rs`: Contains application-specific computation logic.
+
+- `run.sh`: Handles server startup and configuration.
+
+- `common.rs`: Manages retrieving attestation.
+
+To create your own Nautilus app:
+
+- Add a directory under `move/my_app` for your Move modules.
+
+- Add a directory under `src/nautilus-server/src/apps/my_app` for your Rust server logic.
+
+- Use existing app directories as references.
+
+- Build frontend logic to interact with the deployed Move contract and enclave-hosted Rust server.
+
+Most of the template can remain unmodified, which streamlines development while giving you full control over app-specific logic.
+
+###step Run the Nautilus provisioning script
+
+Run from the root of the Nautilus directory:
+
+```bash
+cd /nautilus
+sh configure_enclave.sh weather-example
+```
+
+The setup script:
+
+- Launches a preconfigured EC2 instance and allocates a Nitro Enclave.
+
+- Builds the Rust-based template application into an enclave image format (EIF) binary and runs it inside the enclave.
+
+- Configures required HTTP domains so the enclave can access external APIs through the parent EC2 instance (as the enclave itself has no internet access).
+
+- Exposes 3 endpoints to allow client-side communication with the enclave.
+
+When the enclave starts, it generates a fresh key pair and exposes the following endpoints:
+
+- `health_check`: Probes allowed domains inside the enclave. This logic is built into the template and does not require modification.
+
+- `get_attestation`: Returns a signed attestation document over the enclave public key. Use this during on-chain registration. This logic is built into the template and does not require modification.
+
+- `process_data`: Fetches weather data from an external API, signs it with the enclave key, and returns the result. You must implement this customizable logic.
+
+Run `sh configure_enclave.sh -h` to view additional instructions. If your AWS account is not in `us-east-1`, you might need to configure `REGION` and `AMI_ID` values specific to your region. Refer to this [guide](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/finding-an-ami.html) to find a suitable Amazon Linux image ID.
+
+```sh
+$ export REGION=<your-region>
+$ export AMI_ID=<find-an-amazon-linux-ami-for-your-region>
+```
+
+You might need to create a VPC with a public subnet. Refer to this [AWS guide](https://000058.awsstudygroup.com/2-prerequiste/2.1-createec2/2.1.2-createpublicsubnet/) for instructions.
+
+###step Run the example 
+
+To run the weather example as is, you do not need to modify `allowed_endpoints.yaml` because it already includes `api.weatherapi.com`. Follow the prompts to enter the required values. This step demonstrates how to store a secret (an API key) using AWS Secrets Manager, so you can avoid including the secret in the public application code.
+
+```sh
+Enter EC2 instance base name: weather # anything you like
+Do you want to use a secret? (y/n): y
+Do you want to create a new secret or use an existing secret ARN? (new/existing): new
+Enter secret name: weather-api-key # anything you like
+Enter secret value: 045a27812dbe456392913223221306 # this is an example api key, you can get your own at weatherapi.com
+```
+
+The output will include:
+
+- Instance ID
+
+- Public IP
+
+- Security group
+
+- IAM role created
+
+**Save the public IP, such as:**
+
+```
+Instance launched with ID: i-0728fc72a13834bc8
+Public IP: 18.208.226.122
+```
+
+Wait 2 to 3 minutes for EC2 initialisation.
+
+###step Copy the Nautilus repo to EC2
+
+When the script completes successfully, changes are generated in `/src/nautilus-server/run.sh` and `expose_enclave.sh`. You must copy these changes to EC2, as they are required when building the enclave image.
+
+```bash
+rsync -avz -e "ssh -i ~/.ssh/<your-alias>.pem" \
+  /Users/<you>/suistack/nautilus/ \
+  ec2-user@<public-ip>:~/nautilus/
+  
+# example: rsync -avz -e "ssh -i ~/.ssh/melas-se-3.pem" \
+#      /Users/geomel/suistack/nautilus/ \
+#      ec2-user@18.208.226.122:~/nautilus/
+```
+
+:::info
+
+To allow the enclave to access additional external domains, add them to `allowed_endpoints.yaml`. If you update this file, you must rerun `configure_enclave.sh` to generate a new instance, as the endpoint list is compiled into the enclave build.
+
+You can optionally create a secret to store any sensitive value you do not want included in the codebase. The secret is passed to the enclave as an environment variable. You can verify newly created secrets or find existing ARNs in the [AWS Secrets Manager console](https://us-east-1.console.aws.amazon.com/secretsmanager/).
+
+:::
+
+###step SSH into EC2
+
+```bash 
+ssh -i ~/.ssh/<your-alias>.pem ec2-user@<public-ip>
+
+# example: ssh -i ~/.ssh/melas-se-3.pem ec2-user@18.208.226.122
+```
+
+You are now inside the directory containing the server code, including the committed file changes from the previous step. Next, build the enclave image, run it, and expose the HTTP endpoint on port 3000.
+
+```sh
+$ cd nautilus/
+$ make ENCLAVE_APP=<APP> && make run # this builds the enclave and runs it, ex. `make ENCLAVE_APP=weather-example`
+$ sh expose_enclave.sh # this exposes port 3000 to the Internet for traffic
+```
+
+Use `make run-debug` instead of `make run` to run the enclave in debug mode. This prints all logs, where the production build does not. In debug mode, the PCR values are all zeros and are not valid for production use.
+
+You can now interact with the enclave from the outside world. You can find the `PUBLIC_IP` in the AWS console.
+
+```sh
+# Run a health check:
+$ curl -H 'Content-Type: application/json' -X GET http://<PUBLIC_IP>:3000/health_check
+
+# View the attestation document:
+$ curl -H 'Content-Type: application/json' -X GET http://<PUBLIC_IP>:3000/get_attestation
+
+# Get weather data for a location:
+$ curl -H 'Content-Type: application/json' -d '{"payload": { "location": "San Francisco"}}' -X POST http://<PUBLIC_IP>:3000/process_data
+```
+
+Optionally, you can set up an application load balancer (ALB) for the EC2 instance with an SSL/TLS certificate from AWS Certificate Manager (ACM), and configure Amazon Route 53 for DNS routing. For more information, see the [ACM User Guide](https://docs.aws.amazon.com/acm/latest/userguide/gs-acm-request-public.html) and the [ALB Guide](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html).
+
+###step Register the enclave on-chain
+
+After finalizing the Rust code, the dApp administrator can register the enclave with the corresponding PCRs and public key.
+
+```sh
+# Optionally
+$ sui client switch --env testnet # or appropriate network
+$ sui client faucet
+$ sui client gas
+# deploy the enclave package
+$ cd move/enclave
+$ sui move build
+$ sui client publish
+
+# Record ENCLAVE_PACKAGE_ID as env var from publish output
+$ ENCLAVE_PACKAGE_ID=0x3b009f952e11f0fa0612d0a8e07461fb69edc355d732e5d6e39267b1b4fd7138
+
+# Deploy your dApp logic
+$ cd ../<APP>
+$ sui move build
+$ sui client publish
+
+# Record CAP_OBJECT_ID (owned object of type Cap), ENCLAVE_CONFIG_OBJECT_ID (shared object), APP_PACKAGE_ID (package containing weather module) as env var from publish output
+
+$ CAP_OBJECT_ID=0xb232d20245ba2d624d1c1628c4fc062bd1d3249601385476d9736fc60c897d2b
+$ ENCLAVE_CONFIG_OBJECT_ID=0x9a50017ab37090ef4b5704eb24201c88b2e4bbad2aad1d4e69ecf1bdfbae9ccb
+$ APP_PACKAGE_ID=0x097b551dec72f0c47e32e5f8114d0d12a98ab31762d21adff295f6d95d353154
+
+# Record the deployed enclave url, for example http://<PUBLIC_IP>:3000
+$ ENCLAVE_URL=<DEPLOYED_URL>
+
+# The module name and otw name used to create the dApp, defined in your Move code `fun init`
+$ MODULE_NAME=weather
+$ OTW_NAME=WEATHER
+
+# Make sure all env vars are populated
+$ echo $APP_PACKAGE_ID
+$ echo $ENCLAVE_PACKAGE_ID
+$ echo $CAP_OBJECT_ID
+$ echo $ENCLAVE_CONFIG_OBJECT_ID
+$ echo 0x$PCR0
+$ echo 0x$PCR1
+$ echo 0x$PCR2
+$ echo $MODULE_NAME
+$ echo $OTW_NAME
+$ echo $ENCLAVE_URL
+
+# =======
+# The two steps that follow (update pcrs, register enclave) can be reused if enclave server is updated
+# =======
+
+# This calls the update_pcrs on-chain with the enclave cap and built PCRs, this can be reused to update PCRs if Rust server code is updated
+$ sui client call --function update_pcrs --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$APP_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID 0x$PCR0 0x$PCR1 0x$PCR2
+
+# Optional, give it a name you like
+$ sui client call --function update_name --module enclave --package $ENCLAVE_PACKAGE_ID --type-args "$APP_PACKAGE_ID::$MODULE_NAME::$OTW_NAME" --args $ENCLAVE_CONFIG_OBJECT_ID $CAP_OBJECT_ID "weather enclave, updated 2025-05-13"
+
+# This script calls the get_attestation endpoint from your enclave url and uses it to call register_enclave on-chain to register the public key, resulting in the created enclave object
+$ sh ../../register_enclave.sh $ENCLAVE_PACKAGE_ID $APP_PACKAGE_ID $ENCLAVE_CONFIG_OBJECT_ID $ENCLAVE_URL $MODULE_NAME $OTW_NAME
+
+# Record the created shared object ENCLAVE_OBJECT_ID as env var from register output
+$ ENCLAVE_OBJECT_ID=0x1c9ccfc0f391f5e679e1f9f7d53c7fa455bf977e0f6dc71222990401f359c42a
+```
+
+You can view an [example enclave config object](https://testnet.suivision.xyz/object/0x58a6a284aaea8c8e71151e4ae0de2350ae877f0bd94adc2b2d0266cf23b6b41d) containing PCR values on SuiScan. Additionally, see an [example enclave object](https://testnet.suivision.xyz/object/0xe0e70df5347560a1b43e5954267cadd1386a562095cb4285f2581bf2974c838d) that includes the registered enclave public key.
+
+###step Stop your EC2 instance 
+
+It is important that you stop your EC2 instance when done, otherwise AWS charges $0.19/hour.
+
+```bash
+aws ec2 stop-instances --instance-ids <instance-id>
+```
+
+To start the instance later:
+
+```bash
+aws ec2 start-instances --instance-ids <instance-id>
+```
+
+To reconnect to your instance: 
+
+```bash
+ssh -i ~/.ssh/nautilus-seint-2598.pem ec2-user@18.208.226.122
+cd nautilus
+make ENCLAVE_APP=weather-example
+make run
+sh expose_enclave.sh
+```
+
+## Artifacts for Twitter example
+
+If you'd like to try out the other example, `apps/twitter-example`, use the following artifacts:
+
+```sh
+$ cd nautilus/
+$ make ENCLAVE_APP=twitter-example
+$ cat out/nitro.pcrs
+```
+
+<details>
+<summary>Output</summary>
+
+```sh
+968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879 PCR0
+968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879 PCR1
+21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a PCR2
+```
+
+</details>
+
+```sh
+# Add environment variables to use later when registering the enclave.
+$ PCR0=968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879
+$ PCR1=968f1266150cf8c4d62c9692b9f9b8fd6889d9331019d323f67a6ae6ab88b9378ad23f49f58c349526b9fdd5865da879
+$ PCR2=21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
+
+$ MODULE_NAME=twitter
+$ OTW_NAME=TWITTER
+
+# replace with your registered enclave
+$ ENCLAVE_PACKAGE_ID=0xcca410b231d0acfa92c7709d490ab2f15fb5619be719ee0786099ffc3f6c9ab8
+$ APP_PACKAGE_ID=0x652875162b566bb04187c76f93215e56c28aa05487393056279e331598ba4978
+$ CAP_OBJECT_ID=0x44f3b57aa3870762ad334424cccb7f4c785cac007baab7e987c6d6a43c6aa100
+$ ENCLAVE_CONFIG_OBJECT_ID=0xe33641a2dae5eb4acad3859e603ec4e25641af05f837c85058645c7d8d9d831a
+$ ENCLAVE_OBJECT_ID=0x53db077721140910697668f9b2ee80fbecd104ac076d60fc1fb49ae57cd96c0d
+
+# replace with your own enclave IP
+$ ENCLAVE_URL=http://<PUBLIC_IP>:3000
+```
+
+You can view an [example enclave config object](https://testnet.suivision.xyz/object/0xe33641a2dae5eb4acad3859e603ec4e25641af05f837c85058645c7d8d9d831a) containing PCR values. You can also view an [example enclave object](https://testnet.suivision.xyz/object/0x53db077721140910697668f9b2ee80fbecd104ac076d60fc1fb49ae57cd96c0d) that includes the registered enclave public key.
+
+You can find the frontend code for the Twitter example [in this repository](https://github.com/MystenLabs/nautilus-twitter/tree/main/frontend).
+
+## Troubleshooting
+
+- **Traffic forwarder error:** Ensure all targeted domains are listed in the `allowed_endpoints.yaml`. Use the following command to test enclave connections to all domains.
+
+```sh
+$ curl -H 'Content-Type: application/json' -X GET http://<PUBLIC_IP>:3000/health_check
+```
+
+<details>
+
+<summary>Output</summary>
+
+```json
+{
+  "pk":"f343dae1df7f2c4676612368e40bf42878e522349e4135c2caa52bc79f0fc6e2",
+  "endpoints_status":
+    {
+      "api.weatherapi.com":true
+    }
+}
+```
+
+</details>
+
+- **Docker is not running:** The EC2 instance might still be starting up. Wait a few moments, then try again.
+
+- **Cannot connect to enclave:** This might be due to a VSOCK communication issue. Verify that the enclave is running and properly exposed with `sh expose_enclave.sh`.
+
+- **SSO expired:** This error can be fixed with the commands:
+
+```bash
+aws sso login --profile AdministratorAccess-094557288217
+aws configure export-credentials --profile AdministratorAccess-094557288217 --format env > ~/aws-temp-creds.sh
+source ~/aws-temp-creds.sh
+```
+
+- **PEM “invalid format”:** Your file is empty or corrupted. Recreate the keypair.
+
+- **rsync permission denied:** Fix permissions: `chmod 700 ~/.ssh\chmod 400 ~/.ssh/<your-alias>.pem`
+
+- **Enclave endpoint unreachable:** Check that `expose_enclave.sh` is running, the instance is running, and you are using the correct public IP.

@@ -6,17 +6,22 @@
 // bound is hit, the indexer could deadlock.
 #![allow(clippy::disallowed_methods)]
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 
 use prometheus::Registry;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
 
 use crate::ingestion::broadcaster::broadcaster;
-use crate::ingestion::error::{Error, Result};
-use crate::ingestion::ingestion_client::{IngestionClient, IngestionClientArgs};
-use crate::ingestion::streaming_client::{GrpcStreamingClient, StreamingClientArgs};
+use crate::ingestion::error::Error;
+use crate::ingestion::error::Result;
+use crate::ingestion::ingestion_client::IngestionClient;
+use crate::ingestion::ingestion_client::IngestionClientArgs;
+use crate::ingestion::streaming_client::GrpcStreamingClient;
+use crate::ingestion::streaming_client::StreamingClientArgs;
 use crate::metrics::IngestionMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
 
@@ -223,9 +228,11 @@ mod tests {
     use reqwest::StatusCode;
     use sui_futures::task::TaskGuard;
     use url::Url;
-    use wiremock::{MockServer, Request};
+    use wiremock::MockServer;
+    use wiremock::Request;
 
-    use crate::ingestion::remote_client::tests::{respond_with, status};
+    use crate::ingestion::remote_client::tests::respond_with;
+    use crate::ingestion::remote_client::tests::status;
     use crate::ingestion::test_utils::test_checkpoint_data;
 
     use super::*;

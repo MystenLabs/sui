@@ -2,14 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_default_config::DefaultConfig;
-use sui_indexer_alt_framework::{
-    ingestion::IngestionConfig,
-    pipeline::{
-        CommitterConfig,
-        concurrent::{ConcurrentConfig, PrunerConfig},
-        sequential::SequentialConfig,
-    },
-};
+use sui_indexer_alt_framework::ingestion::IngestionConfig;
+use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_framework::pipeline::concurrent::PrunerConfig;
+use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 
 /// Trait for merging configuration structs together.
 pub trait Merge: Sized {
@@ -229,6 +226,7 @@ impl CommitterLayer {
             watermark_interval_ms: self
                 .watermark_interval_ms
                 .unwrap_or(base.watermark_interval_ms),
+            watermark_interval_jitter_ms: 0,
         })
     }
 }
@@ -606,6 +604,7 @@ mod tests {
                 write_concurrency: 5,
                 collect_interval_ms: 50,
                 watermark_interval_ms: 500,
+                ..Default::default()
             },
             pruner: Some(PrunerConfig::default()),
         };
@@ -617,6 +616,7 @@ mod tests {
                     write_concurrency: 5,
                     collect_interval_ms: 50,
                     watermark_interval_ms: 500,
+                    ..
                 },
                 pruner: None,
             },
@@ -635,6 +635,7 @@ mod tests {
                 write_concurrency: 5,
                 collect_interval_ms: 50,
                 watermark_interval_ms: 500,
+                ..Default::default()
             },
             pruner: None,
         };
@@ -646,6 +647,7 @@ mod tests {
                     write_concurrency: 5,
                     collect_interval_ms: 50,
                     watermark_interval_ms: 500,
+                    ..
                 },
                 pruner: None,
             },
@@ -667,6 +669,7 @@ mod tests {
                 write_concurrency: 5,
                 collect_interval_ms: 50,
                 watermark_interval_ms: 500,
+                ..Default::default()
             },
             pruner: Some(PrunerConfig {
                 interval_ms: 100,
@@ -684,6 +687,7 @@ mod tests {
                     write_concurrency: 5,
                     collect_interval_ms: 50,
                     watermark_interval_ms: 500,
+                    ..
                 },
                 pruner: Some(PrunerConfig {
                     interval_ms: 1000,

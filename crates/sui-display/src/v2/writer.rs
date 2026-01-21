@@ -2,12 +2,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt;
+use std::fmt::Write as _;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use sui_types::object::rpc_visitor as RV;
 
 use crate::v2::error::FormatError;
+use crate::v2::parser::Transform;
+use crate::v2::value as V;
+
+/// A writer of evaluated values into JSON, tracking limits on output size and depth. A single
+/// writer can be used to write multiple values concurrently, with all writers sharing the same
+/// budgets.
+///
+/// Once a write is attempted, the budgets are decremented, even if the write fails, meaning that
+/// the errors are sticky and not recoverable.
+pub(crate) struct Writer {
+    max_depth: usize,
+    max_output_size: usize,
+    used_output: AtomicUsize,
+}
 
 /// A writer of strings that tracks an output budget (measured in bytes) shared across multiple
 /// writers. Writes will fail once the total number of bytes sent to be written, across all
@@ -34,8 +49,62 @@ pub(crate) struct JsonWriter<'u> {
     depth_budget: usize,
 }
 
+impl Writer {
+    /// Create a new writer with the given limits.
+    ///
+    /// `max_depth` specifies the maximum depth of the output JSON, and `max_output_size` specifies
+    /// the size in bytes of the output JSON.
+    pub(crate) fn new(max_depth: usize, max_output_size: usize) -> Self {
+        Self {
+            max_depth,
+            max_output_size,
+            used_output: AtomicUsize::new(0),
+        }
+    }
+
+    /// Format a single strand as JSON.
+    pub(crate) fn write(
+        &self,
+        mut strands: Vec<V::Strand<'_>>,
+    ) -> Result<serde_json::Value, FormatError> {
+        // Detect and handle JSON transforms (single strand containing an expression with an JSON
+        // transform) as a special case, because they do not always evaluate to strings.
+        if matches!(&strands[..], [V::Strand::Value { transform, .. }] if *transform == Transform::Json)
+        {
+            let V::Strand::Value { offset, value, .. } = strands.pop().unwrap() else {
+                unreachable!();
+            };
+
+            let writer = JsonWriter::new(&self.used_output, self.max_output_size, self.max_depth);
+            return value
+                .format_json(writer)
+                .map_err(|e| e.for_expr_at_offset(offset));
+        }
+
+        // Otherwise gather the results of formatting all strands into a single string.
+        let mut writer = StringWriter::new(&self.used_output, self.max_output_size);
+        for strand in strands {
+            match strand {
+                V::Strand::Text(s) => writer
+                    .write_str(s)
+                    .map_err(|_| FormatError::TooMuchOutput)?,
+
+                V::Strand::Value {
+                    offset,
+                    value,
+                    transform,
+                } => value
+                    .format(transform, &mut writer)
+                    .map_err(|e| e.for_expr_at_offset(offset))?,
+            }
+        }
+
+        Ok(serde_json::Value::String(writer.finish()))
+    }
+}
+
 impl<'u> StringWriter<'u> {
-    pub(crate) fn new(used: &'u AtomicUsize, max: usize) -> Self {
+    fn new(used: &'u AtomicUsize, max: usize) -> Self {
         Self {
             output: String::new(),
             used,
@@ -43,7 +112,7 @@ impl<'u> StringWriter<'u> {
         }
     }
 
-    pub(crate) fn finish(self) -> String {
+    fn finish(self) -> String {
         self.output
     }
 }

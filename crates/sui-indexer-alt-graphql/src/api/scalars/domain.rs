@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{ops::Deref, str::FromStr};
+use std::ops::Deref;
+use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use sui_name_service::Domain as NativeDomain;
 
-use super::impl_string_input;
+use crate::api::scalars::impl_string_input;
 
 /// Wrap SuiNS domain type to expose as a string scalar in GraphQL.
 #[derive(Serialize, Deserialize)]
@@ -33,5 +35,11 @@ impl FromStr for Domain {
 impl From<NativeDomain> for Domain {
     fn from(value: NativeDomain) -> Self {
         Domain(value)
+    }
+}
+
+impl From<Domain> for NativeDomain {
+    fn from(value: Domain) -> Self {
+        value.0
     }
 }

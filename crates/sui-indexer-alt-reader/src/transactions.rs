@@ -1,20 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 
 use anyhow::Context;
 use async_graphql::dataloader::Loader;
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
 use prost_types::FieldMask;
-use sui_indexer_alt_schema::{schema::kv_transactions, transactions::StoredTransaction};
+use sui_indexer_alt_schema::schema::kv_transactions;
+use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::TransactionData;
+use sui_rpc::field::FieldMaskUtil;
+use sui_rpc::proto::proto_to_timestamp_ms;
 use sui_rpc::proto::sui::rpc::v2 as proto;
-use sui_rpc::{field::FieldMaskUtil, proto::proto_to_timestamp_ms};
 use sui_types::digests::TransactionDigest;
 
-use crate::ledger_grpc_reader::{CheckpointedTransaction, LedgerGrpcReader};
-use crate::{bigtable_reader::BigtableReader, error::Error, pg_reader::PgReader};
+use crate::bigtable_reader::BigtableReader;
+use crate::error::Error;
+use crate::ledger_grpc_reader::CheckpointedTransaction;
+use crate::ledger_grpc_reader::LedgerGrpcReader;
+use crate::pg_reader::PgReader;
 
 /// Key for fetching transaction contents (TransactionData, Effects, and Events) by digest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

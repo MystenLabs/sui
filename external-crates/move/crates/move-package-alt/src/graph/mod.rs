@@ -10,7 +10,7 @@ mod to_lockfile;
 
 pub use builder::LockfileError;
 use derive_where::derive_where;
-pub use linkage::{LinkageError, LinkageTable};
+pub use linkage::LinkageError;
 pub use package_info::{NamedAddress, PackageInfo};
 use petgraph::visit::EdgeRef;
 pub use rename_from::RenameError;
@@ -19,8 +19,9 @@ use tracing::debug;
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::package::package_loader::PackageConfig;
 use crate::package::package_lock::PackageSystemLock;
-use crate::schema::{LockfileDependencyInfo, ModeName, Publication};
+use crate::schema::{EphemeralDependencyInfo, ModeName, Publication};
 use crate::{
     dependency::PinnedDependencyInfo,
     errors::PackageResult,
@@ -61,8 +62,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         path: &PackagePath,
         env: &Environment,
         mtx: &PackageSystemLock,
+        config: &PackageConfig,
     ) -> PackageResult<Self> {
-        let builder = PackageGraphBuilder::<F>::new();
+        let builder = PackageGraphBuilder::<F>::new(config);
 
         if let Some(graph) = builder.load_from_lockfile(path, env, mtx).await? {
             debug!("successfully loaded lockfile");
@@ -79,8 +81,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         path: &PackagePath,
         env: &Environment,
         mtx: &PackageSystemLock,
+        config: &PackageConfig,
     ) -> PackageResult<Self> {
-        PackageGraphBuilder::new()
+        PackageGraphBuilder::new(config)
             .load_from_manifests(path, env, mtx)
             .await
     }
@@ -92,8 +95,9 @@ impl<F: MoveFlavor> PackageGraph<F> {
         path: &PackagePath,
         env: &Environment,
         mtx: &PackageSystemLock,
+        config: &PackageConfig,
     ) -> PackageResult<Option<Self>> {
-        PackageGraphBuilder::new()
+        PackageGraphBuilder::new(config)
             .load_from_lockfile_ignore_digests(path, env, mtx)
             .await
     }
@@ -106,7 +110,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     /// Return the list of all packages that are in the package graph. Note that depending on whether the
     /// graph has been filtered or not, this may contain multiple packages with the same original
     /// ID
-    pub fn packages(&self) -> Vec<PackageInfo<F>> {
+    pub fn packages(&self) -> Vec<PackageInfo<'_, F>> {
         self.inner
             .node_indices()
             .map(|node| self.package_info(node))
@@ -114,22 +118,33 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     /// Return the list of all packages that are in the package graph, sorted in topological order.
-    pub fn sorted_packages(&self) -> Vec<PackageInfo<F>> {
+    pub fn sorted_packages(&self) -> Vec<PackageInfo<'_, F>> {
         let sorted = toposort(&self.inner, None).expect("to sort the graph");
         sorted.iter().map(|x| self.package_info(*x)).collect()
     }
 
-    /// For each entry in `overrides`, override the package publication in `self` for the
-    /// corresponding dependency. Warns if the package ID is unrecognized.
-    pub fn add_publish_overrides(
-        &mut self,
-        overrides: BTreeMap<LockfileDependencyInfo, Publication<F>>,
-    ) {
+    /// Update the publications for the nodes in the graph to reflect the ephemeral file in
+    /// overrides.
+    ///  - if `overrides` contains the package, we replace its publication
+    ///  - if the package has a system address (see F::is_system_address), we keep it
+    ///  - otherwise, we drop it
+    pub fn make_ephemeral(&mut self, overrides: BTreeMap<EphemeralDependencyInfo, Publication<F>>) {
         for (_, index) in &self.package_ids {
-            let dep = self.inner[*index].dep_for_self().clone().into();
-            if let Some(publish) = overrides.get(&dep) {
-                self.inner[*index] = Arc::new(self.inner[*index].override_publish(publish.clone()));
-            }
+            let package = self.inner[*index].clone();
+            let dep = package.dep_for_self().clone().into();
+            let new_publish = if let Some(publish) = overrides.get(&dep) {
+                // take from ephemeral file
+                Some(publish.clone())
+            } else if let Some(original_publish) = package.publication()
+                && F::is_system_address(&original_publish.addresses.original_id)
+            {
+                // keep system deps
+                Some(original_publish.clone())
+            } else {
+                // clobber everything else
+                None
+            };
+            self.inner[*index] = Arc::new(package.override_publish(new_publish));
         }
     }
 
@@ -178,7 +193,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
     }
 
     /// Return a `PackageInfo` for `id`. Panics if the ID is not present
-    fn get_package(&self, id: &PackageID) -> PackageInfo<F> {
+    fn get_package(&self, id: &PackageID) -> PackageInfo<'_, F> {
         let node = self
             .package_ids
             .get_by_left(id)
@@ -189,9 +204,14 @@ impl<F: MoveFlavor> PackageGraph<F> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use test_log::test;
 
-    use crate::{schema::PackageID, test_utils::graph_builder::TestPackageGraph};
+    use crate::{
+        schema::{OriginalID, PackageID, PublishedID},
+        test_utils::graph_builder::TestPackageGraph,
+    };
 
     /// ```mermaid
     /// graph LR
@@ -323,5 +343,215 @@ mod tests {
             .collect();
 
         assert_eq!(ids, ["a", "b", "c", "root"]);
+    }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a
+    /// ```
+    ///
+    /// We call `add_publish_overrides` with an entry for published `a`; the returned publication
+    /// info should be the new publication
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn test_override_published_addr() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_published("a", OriginalID::from(1), PublishedID::from(2))
+            .add_deps([("root", "a")])
+            .build();
+
+        let mut graph = scenario.graph_for("root").await;
+
+        let overrides = BTreeMap::from([scenario.ephemeral_for(
+            "a",
+            OriginalID::from(3),
+            PublishedID::from(4),
+        )]);
+
+        graph.make_ephemeral(overrides);
+        assert_eq!(
+            graph
+                .get_package(&"a".to_string())
+                .published()
+                .unwrap()
+                .original_id,
+            OriginalID::from(3)
+        );
+        assert_eq!(
+            graph
+                .get_package(&"a".to_string())
+                .published()
+                .unwrap()
+                .published_at,
+            PublishedID::from(4)
+        );
+    }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a
+    /// ```
+    ///
+    /// We call `add_publish_overrides` with an entry for unpublished `a`; the returned publication
+    /// info should be the new publication
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn test_override_unpublished_addr() {
+        let scenario = TestPackageGraph::new(["root", "a"])
+            .add_deps([("root", "a")])
+            .build();
+
+        let mut graph = scenario.graph_for("root").await;
+
+        let overrides = BTreeMap::from([scenario.ephemeral_for(
+            "a",
+            OriginalID::from(3),
+            PublishedID::from(4),
+        )]);
+
+        graph.make_ephemeral(overrides);
+        assert_eq!(
+            graph
+                .get_package(&"a".to_string())
+                .published()
+                .unwrap()
+                .original_id,
+            OriginalID::from(3)
+        );
+        assert_eq!(
+            graph
+                .get_package(&"a".to_string())
+                .published()
+                .unwrap()
+                .published_at,
+            PublishedID::from(4)
+        );
+    }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a
+    /// ```
+    ///
+    /// We call `add_publish_overrides` with an entry for a system package `a`; the returned
+    /// publication info should be the new publication
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn test_override_system_addr() {
+        let scenario = TestPackageGraph::new(["root"])
+            // Note: 0xBEEF is a system dep for Vanilla
+            .add_published("a", OriginalID::from(0xBEEF), PublishedID::from(0xBEEF))
+            .add_deps([("root", "a")])
+            .build();
+
+        let mut graph = scenario.graph_for("root").await;
+
+        let overrides = BTreeMap::from([scenario.ephemeral_for(
+            "a",
+            OriginalID::from(3),
+            PublishedID::from(4),
+        )]);
+
+        graph.make_ephemeral(overrides);
+        assert_eq!(
+            graph
+                .get_package(&"a".to_string())
+                .published()
+                .unwrap()
+                .original_id,
+            OriginalID::from(3)
+        );
+        assert_eq!(
+            graph
+                .get_package(&"a".to_string())
+                .published()
+                .unwrap()
+                .published_at,
+            PublishedID::from(4)
+        );
+    }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a
+    /// ```
+    ///
+    /// We call `add_publish_overrides` with no entry for published `a`; the returned publication
+    /// info should be None
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn test_no_override_published_addr() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_published("a", OriginalID::from(1), PublishedID::from(2))
+            .add_deps([("root", "a")])
+            .build();
+
+        let mut graph = scenario.graph_for("root").await;
+
+        let overrides = BTreeMap::new();
+
+        graph.make_ephemeral(overrides);
+        assert!(graph.get_package(&"a".to_string()).published().is_none());
+    }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a
+    /// ```
+    ///
+    /// We call `add_publish_overrides` with an entry for unpublished `a`; the returned publication
+    /// info should be None
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn test_no_override_unpublished_addr() {
+        let scenario = TestPackageGraph::new(["root", "a"])
+            .add_deps([("root", "a")])
+            .build();
+
+        let mut graph = scenario.graph_for("root").await;
+
+        let overrides = BTreeMap::new();
+
+        graph.make_ephemeral(overrides);
+        assert!(graph.get_package(&"a".to_string()).published().is_none());
+    }
+
+    /// ```mermaid
+    /// graph LR
+    ///     root --> a
+    /// ```
+    ///
+    /// We call `add_publish_overrides` with an entry for a system package `a`; the returned
+    /// publication info should be the original system publication
+    #[cfg_attr(doc, aquamarine::aquamarine)]
+    #[cfg_attr(not(doc), test(tokio::test))]
+    async fn test_no_override_system_addr() {
+        let scenario = TestPackageGraph::new(["root"])
+            // Note: 0xBEEF is a system dep for Vanilla
+            .add_published("a", OriginalID::from(0xBEEF), PublishedID::from(0xBEEF))
+            .add_deps([("root", "a")])
+            .build();
+
+        let mut graph = scenario.graph_for("root").await;
+
+        let overrides = BTreeMap::new();
+
+        graph.make_ephemeral(overrides);
+        assert_eq!(
+            graph
+                .get_package(&"a".to_string())
+                .published()
+                .unwrap()
+                .original_id,
+            OriginalID::from(0xBEEF)
+        );
+        assert_eq!(
+            graph
+                .get_package(&"a".to_string())
+                .published()
+                .unwrap()
+                .published_at,
+            PublishedID::from(0xBEEF)
+        );
     }
 }

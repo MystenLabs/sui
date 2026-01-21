@@ -2,7 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
 use std::{collections::BTreeMap, fmt, path::Path};
 
 use indexmap::IndexMap;
@@ -11,10 +10,10 @@ use tracing::debug;
 use super::paths::{EphemeralPubfilePath, OutputPath, PackagePath};
 use super::{EnvironmentID, manifest::Manifest};
 use crate::graph::PackageInfo;
-use crate::package::block_on;
+use crate::package::package_loader::{LoadType, PackageConfig};
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{
-    Environment, LocalPub, LockfileDependencyInfo, ModeName, PackageID, ParsedEphemeralPubs,
+    Environment, EphemeralDependencyInfo, LocalPub, PackageID, ParsedEphemeralPubs,
     ParsedPublishedFile, Publication, RenderToml,
 };
 use crate::{
@@ -24,55 +23,6 @@ use crate::{
     package::EnvironmentName,
     schema::ParsedLockfile,
 };
-
-#[derive(Clone, Debug)]
-pub struct PackageConfig {
-    /// The path to read all input files from (e.g. lockfiles, pubfiles, etc). If this path is
-    /// different from `output_path`, the package system won't touch any files here Note that in
-    /// the case of ephemeral loads, `self.load_type.ephemeral_file` may also be read
-    input_path: PathBuf,
-
-    /// The chain ID to build for
-    chain_id: EnvironmentID,
-
-    /// The ephemeral or persistent environment to load for
-    load_type: LoadType,
-
-    /// The directory to write all output files into (e.g. updated lockfiles, etc)
-    /// Note that in the case of ephemeral loads, `self.load_type.ephemeral_file` may also be
-    /// written
-    output_path: PathBuf,
-
-    /// The modes to load for
-    modes: Vec<ModeName>,
-
-    /// Repin the dependencies even if the lockfile is up-to-date
-    pub(crate) force_repin: bool,
-
-    /// Use the lockfile even if the manifest digests are out of date
-    pub(crate) ignore_digests: bool,
-    // TODO: The directory to use for the git cache (defaults to `~/.move`)
-    // cache_dir: Option<PathBuf>,
-    // TODO: `--allow-dirty`
-}
-
-#[derive(Clone, Debug)]
-pub enum LoadType {
-    Persistent {
-        env: EnvironmentName,
-    },
-    Ephemeral {
-        /// The environment to build for. If it is `None`, the value in `ephemeral_file` will be
-        /// used; if that file also doesn't exist, then the load will fail
-        build_env: Option<EnvironmentName>,
-
-        /// The ephemeral file to use for addresses, relative to the current working directory (not
-        /// to `input_path`). This file will be written if the package is published (i.e. if
-        /// [RootPackage::write_publish_data] is called). It does not have to exist a priori, but
-        /// if it does, the addresses will be used.
-        ephemeral_file: EphemeralPubfilePath,
-    },
-}
 
 /// A package that is defined as the root of a Move project.
 ///
@@ -105,30 +55,6 @@ pub struct RootPackage<F: MoveFlavor + fmt::Debug> {
     mutex: PackageSystemLock,
 }
 
-impl PackageConfig {
-    fn persistent(path: impl AsRef<Path>, env: Environment, modes: Vec<ModeName>) -> Self {
-        Self {
-            input_path: path.as_ref().to_path_buf(),
-            chain_id: env.id,
-            load_type: LoadType::Persistent { env: env.name },
-            output_path: path.as_ref().to_path_buf(),
-            modes,
-            force_repin: false,
-            ignore_digests: false,
-        }
-    }
-}
-
-impl LoadType {
-    /// return `Some(path)` if `self` is a valid ephemeral load, or None if it is a persistent load
-    fn ephemeral_file(&self) -> Option<&EphemeralPubfilePath> {
-        match self {
-            LoadType::Persistent { .. } => None,
-            LoadType::Ephemeral { ephemeral_file, .. } => Some(ephemeral_file),
-        }
-    }
-}
-
 /// Root package is the "public" entrypoint for operations with the package management.
 /// It's like a facade for all functionality, controlled by this.
 impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
@@ -146,97 +72,8 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         Ok(environments)
     }
 
-    /// Load the root package for `env` using the "normal" path - we first try to load from the
-    /// lockfiles; if the digests don't match then we repin using the manifests. Note that it does
-    /// not write to the lockfile; you should call [Self::write_pinned_deps] to save the results.
-    ///
-    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
-    pub async fn load(
-        path: impl AsRef<Path>,
-        env: Environment,
-        modes: Vec<ModeName>,
-    ) -> PackageResult<Self> {
-        let config = PackageConfig::persistent(path, env, modes);
-
-        Self::validate_and_construct(config).await
-    }
-
-    /// A synchronous version of `load` that can be used to load a package while blocking in place.
-    pub fn load_sync(path: PathBuf, env: Environment, modes: Vec<ModeName>) -> PackageResult<Self> {
-        block_on!(Self::load(path.as_path(), env, modes))
-    }
-
-    /// Load the root package from `root` in environment `build_env`, but replace all the addresses
-    /// with the addresses in `pubfile`. Saving publication data will also save to the output to
-    /// `pubfile` rather than `Published.toml`
-    ///
-    /// If `pubfile` does not exist, one is created with the provided `chain_id` and `build_env`;
-    /// If the file does exist but these fields differ, then an error is returned.
-    ///
-    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
-    pub async fn load_ephemeral(
-        root: impl AsRef<Path>,
-        build_env: Option<EnvironmentName>,
-        chain_id: EnvironmentID,
-        pubfile_path: impl AsRef<Path>,
-        modes: Vec<ModeName>,
-    ) -> PackageResult<Self> {
-        let ephemeral_file = EphemeralPubfilePath::new(pubfile_path)?;
-        let config = PackageConfig {
-            input_path: root.as_ref().to_path_buf(),
-            chain_id,
-            load_type: LoadType::Ephemeral {
-                build_env,
-                ephemeral_file,
-            },
-            output_path: root.as_ref().to_path_buf(),
-            modes,
-            force_repin: false,
-            ignore_digests: false,
-        };
-
-        Self::validate_and_construct(config).await
-    }
-
-    /// Loads the root package from path and builds a dependency graph from the manifests.
-    /// This forcefully re-pins all dependencies even if the manifest digests match. Note that it
-    /// does not write to the lockfile; you should call [Self::save_to_disk] to save the results.
-    ///
-    /// TODO: We should load from lockfiles instead of manifests for deps.
-    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
-    pub async fn load_force_repin(
-        path: impl AsRef<Path>,
-        env: Environment,
-        modes: Vec<ModeName>,
-    ) -> PackageResult<Self> {
-        let mut config = PackageConfig::persistent(path, env, modes);
-        config.force_repin = true;
-        /*
-        let graph = PackageGraph::<F>::load_from_manifests(&package_path, &env).await?;
-        */
-
-        Self::validate_and_construct(config).await
-    }
-
-    /// Loads the root lockfile only, ignoring all manifests. Returns an error if the lockfile
-    /// doesn't exist of if it doesn't contain a dependency graph for `env`.
-    ///
-    /// Note that this still fetches all of the dependencies, it just doesn't look at their
-    /// manifests.
-    ///
-    /// dependencies with modes will be filtered out if those modes don't intersect with `modes`
-    pub async fn load_ignore_digests(
-        path: impl AsRef<Path>,
-        env: Environment,
-        modes: Vec<ModeName>,
-    ) -> PackageResult<Self> {
-        let mut config = PackageConfig::persistent(path, env, modes);
-        config.ignore_digests = true;
-        Self::validate_and_construct(config).await
-    }
-
     /// The metadata for the root package in [PackageInfo] form
-    pub fn package_info(&self) -> PackageInfo<F> {
+    pub fn package_info(&self) -> PackageInfo<'_, F> {
         self.filtered_graph.root_package_info()
     }
 
@@ -247,11 +84,16 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     ///
     /// This helps validate:
     /// 1. TODO: Fill this in! (deduplicate nodes etc)
-    async fn validate_and_construct(mut config: PackageConfig) -> PackageResult<Self> {
+    pub(crate) async fn validate_and_construct(mut config: PackageConfig) -> PackageResult<Self> {
         let input_path = PackagePath::new(config.input_path.clone())?;
         let mutex = input_path.lock()?;
 
-        let ephemeral_file = config.load_type.ephemeral_file().cloned();
+        let ephemeral_file = config
+            .load_type
+            .ephemeral_file()
+            .map(EphemeralPubfilePath::new)
+            .transpose()?;
+
         let output_path = OutputPath::new(config.output_path.clone())?;
 
         debug!(
@@ -261,27 +103,39 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
         debug!("getting ephemeral files");
         let (env, ephemeral_pubs) = Self::get_env_and_ephemeral_file(&mut config).await?;
+        debug!("ephemeral_pubs: {ephemeral_pubs:#?}");
 
         debug!("loading unfiltered graph");
         let unfiltered_graph = if config.force_repin {
-            PackageGraph::<F>::load_from_manifests(&input_path, &env, &mutex).await?
+            PackageGraph::<F>::load_from_manifests(&input_path, &env, &mutex, &config).await?
         } else if config.ignore_digests {
-            PackageGraph::<F>::load_from_lockfile_ignore_digests(&input_path, &env, &mutex)
+            PackageGraph::<F>::load_from_lockfile_ignore_digests(&input_path, &env, &mutex, &config)
                 .await?
                 .unwrap()
         } else {
-            PackageGraph::<F>::load(&input_path, &env, &mutex).await?
+            PackageGraph::<F>::load(&input_path, &env, &mutex, &config).await?
         };
 
         debug!("filtering graph");
         let mut filtered_graph = unfiltered_graph.filter_for_mode(&config.modes).linkage()?;
         if let Some(ephemeral_pubs) = ephemeral_pubs {
             debug!("adding overrides");
-            filtered_graph.add_publish_overrides(localpubs_to_publications(&ephemeral_pubs)?);
+            filtered_graph.make_ephemeral(localpubs_to_publications(&ephemeral_pubs)?);
         }
 
         debug!("checking rename-from");
         unfiltered_graph.check_rename_from()?;
+
+        debug!("checking for legacy -> modern dependencies");
+        if unfiltered_graph.root_package().is_legacy()
+            && unfiltered_graph
+                .root_package_info()
+                .direct_deps()
+                .iter()
+                .any(|(_, pkg)| !pkg.package().is_legacy())
+        {
+            return Err(PackageError::LegacyDependsOnModern);
+        }
 
         debug!(
             "packages (unfiltered): {:?}",
@@ -317,8 +171,9 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
                 build_env,
                 ephemeral_file,
             } => {
+                let mut ephemeral_file = EphemeralPubfilePath::new(ephemeral_file)?;
                 let ephemeral =
-                    Self::load_ephemeral_pubfile(build_env, &config.chain_id, ephemeral_file)?;
+                    Self::load_ephemeral_pubfile(build_env, &config.chain_id, &mut ephemeral_file)?;
                 (
                     Environment::new(ephemeral.build_env.clone(), config.chain_id.clone()),
                     Some(ephemeral),
@@ -348,8 +203,14 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
     /// Return the list of all packages in the root package's package graph (including itself and all
     /// transitive dependencies). This includes the non-duplicate addresses only.
-    pub fn packages(&self) -> Vec<PackageInfo<F>> {
+    pub fn packages(&self) -> Vec<PackageInfo<'_, F>> {
         self.filtered_graph.packages()
+    }
+
+    /// Return the list of all packages in the root package's package graph (including itself and all
+    /// transitive dependencies). This includes the non-duplicate addresses only, sorted in topological order.
+    pub fn sorted_packages(&self) -> Vec<PackageInfo<'_, F>> {
+        self.filtered_graph.sorted_packages()
     }
 
     /// Update the dependencies in the lockfile for this environment to match the dependency graph
@@ -494,7 +355,7 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
 
 fn localpubs_to_publications<F: MoveFlavor>(
     pubfile: &ParsedEphemeralPubs<F>,
-) -> PackageResult<BTreeMap<LockfileDependencyInfo, Publication<F>>> {
+) -> PackageResult<BTreeMap<EphemeralDependencyInfo, Publication<F>>> {
     let mut result = BTreeMap::new();
     for local_pub in &pubfile.published {
         let new = Publication::<F> {
@@ -523,9 +384,10 @@ mod tests {
 
     use super::*;
     use crate::{
+        PackageLoader,
         flavor::{
             Vanilla,
-            vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME, default_environment},
+            vanilla::{self, DEFAULT_ENV_ID, DEFAULT_ENV_NAME},
         },
         graph::NamedAddress,
         schema::{
@@ -550,7 +412,7 @@ mod tests {
     ///   depends_a_b/Move.toml  # depends on pkg_a and pkg_b
     /// ```
     async fn setup_test_move_project() -> (Environment, PathBuf) {
-        let env = crate::flavor::vanilla::default_environment();
+        let env = Vanilla::default_environment();
         let project = test_utils::project()
             .file(
                 "packages/pkg_a/Move.toml",
@@ -605,9 +467,11 @@ pkg_b = { local = "../pkg_b" }"#,
 
         for name in names {
             let pkg_path = root_path.join("packages").join(name);
-            let package = RootPackage::<Vanilla>::load(&pkg_path, env.clone(), vec![])
+            let package = PackageLoader::new(&pkg_path, env.clone())
+                .load::<Vanilla>()
                 .await
                 .unwrap();
+
             assert_eq!(
                 &&package.name().to_string(),
                 name,
@@ -629,7 +493,8 @@ pkg_b = { local = "../pkg_b" }"#,
         );
 
         // Test loading root package with check for environment existing in manifest
-        let root = RootPackage::<Vanilla>::load(&pkg_path, env, vec![])
+        let root = PackageLoader::new(&pkg_path, env)
+            .load::<Vanilla>()
             .await
             .unwrap();
 
@@ -653,7 +518,8 @@ pkg_b = { local = "../pkg_b" }"#,
         let environment =
             Environment::new(DEFAULT_ENV_NAME.to_string(), DEFAULT_ENV_ID.to_string());
 
-        let load_err = RootPackage::<Vanilla>::load(&project.root(), environment, vec![])
+        let load_err = PackageLoader::new(&project.root(), environment)
+            .load::<Vanilla>()
             .await
             .unwrap_err();
 
@@ -674,11 +540,11 @@ pkg_b = { local = "../pkg_b" }"#,
         let path = root_path.join("graph");
         // should fail as devnet does not exist in the manifest
         assert!(
-            RootPackage::<Vanilla>::load(
+            PackageLoader::new(
                 &path,
                 Environment::new("devnet".to_string(), "abcd1234".to_string()),
-                vec![]
             )
+            .load::<Vanilla>()
             .await
             .is_err()
         );
@@ -696,7 +562,8 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_deps([("a", "b")])
             .build();
 
-        RootPackage::<Vanilla>::load(scenario.path_for("a"), default_environment(), vec![])
+        PackageLoader::new(scenario.path_for("a"), Vanilla::default_environment())
+            .load::<Vanilla>()
             .await
             .unwrap_err();
     }
@@ -708,8 +575,9 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_deps([("example", "baz"), ("baz", "bar")])
             .build();
 
-        let env = default_environment();
-        let mut root = RootPackage::<Vanilla>::load(scenario.path_for("example"), env, vec![])
+        let env = Vanilla::default_environment();
+        let mut root = PackageLoader::new(scenario.path_for("example"), env)
+            .load::<Vanilla>()
             .await
             .unwrap();
 
@@ -762,7 +630,7 @@ pkg_b = { local = "../pkg_b" }"#,
     /// A git dependency on a branch gets pinned to the sha
     #[test(tokio::test)]
     pub async fn git_branch_dep_pinned() {
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let repo = git::new().await;
         let commit = repo.commit(|project| project.add_packages(["a"])).await;
         commit.branch("branch-name").await;
@@ -771,10 +639,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_git_dep("root", &repo, "a", "branch-name", |dep| dep)
             .build();
 
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
 
         root_pkg.save_lockfile_to_disk().unwrap();
 
@@ -785,7 +653,7 @@ pkg_b = { local = "../pkg_b" }"#,
     /// A git dependency on a short sha gets pinned to the sha
     #[test(tokio::test)]
     pub async fn git_short_sha_dep_pinned() {
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let repo = git::new().await;
         let commit = repo.commit(|project| project.add_packages(["a"])).await;
 
@@ -793,10 +661,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_git_dep("root", &repo, "a", commit.short_sha(), |dep| dep)
             .build();
 
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
 
         root_pkg.save_lockfile_to_disk().unwrap();
 
@@ -808,7 +676,7 @@ pkg_b = { local = "../pkg_b" }"#,
     /// we get the sha of the first commit. See also [git_force_repin]
     #[test(tokio::test)]
     pub async fn git_no_repin() {
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let repo = git::new().await;
         let commit1 = repo.commit(|project| project.add_packages(["a"])).await;
         commit1.branch("branch-name").await;
@@ -818,10 +686,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .build();
 
         // load the root package and save the lockfile
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
         drop(root_pkg); // release the fs lock
 
@@ -832,10 +700,10 @@ pkg_b = { local = "../pkg_b" }"#,
         commit2.branch("branch-name").await;
 
         // reload the root package and save the lockfile again
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
 
         // sha should still be for commit 1
@@ -847,7 +715,7 @@ pkg_b = { local = "../pkg_b" }"#,
     /// with forced repinning, we get the sha of the second commit. See also [git_no_repin]
     #[test(tokio::test)]
     pub async fn git_force_repin() {
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let repo = git::new().await;
         let commit1 = repo.commit(|project| project.add_packages(["a"])).await;
         commit1.branch("branch-name").await;
@@ -857,10 +725,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .build();
 
         // load the root package and save the lockfile
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
         drop(root_pkg); // release FS lock
 
@@ -871,10 +739,11 @@ pkg_b = { local = "../pkg_b" }"#,
         commit2.branch("branch-name").await;
 
         // reload the root package with force repinning and save the lockfile again
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .force_repin(true)
+            .load::<Vanilla>()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
 
         // since we repinned, sha should be for commit 2
@@ -887,7 +756,7 @@ pkg_b = { local = "../pkg_b" }"#,
     /// change should trigger a repin
     #[test(tokio::test)]
     pub async fn git_change_manifest() {
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let repo = git::new().await;
         let commit1 = repo.commit(|project| project.add_packages(["a"])).await;
         commit1.branch("branch-name").await;
@@ -897,10 +766,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .build();
 
         // load the root package and save the lockfile
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
         drop(root_pkg); // release FS lock
 
@@ -912,10 +781,11 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // modify the manifest and then reload
         project.extend_file("root/Move.toml", "\n# extra stuff\n");
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .force_repin(true)
+            .load()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
 
         // since the manifest changed, we should have repinned, so the sha should be for commit 2
@@ -931,7 +801,7 @@ pkg_b = { local = "../pkg_b" }"#,
         // we first pin root, then we update the branch and dirty `dirty`
         // when we reload `root`, we should notice that `dirty` is dirty and repin, which should
         // cause `git_dep` to be bumped to the latest version
-        let env = default_environment();
+        let env = Vanilla::default_environment();
         let repo = git::new().await;
         let commit1 = repo
             .commit(|project| project.add_packages(["git_dep"]))
@@ -944,10 +814,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .build();
 
         // load the root package and save the lockfile
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
         drop(root_pkg); // release package lock
 
@@ -959,10 +829,11 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // modify the manifest for `dirty` and then reload
         project.extend_file("dirty/Move.toml", "\n# extra stuff\n");
-        let mut root_pkg =
-            RootPackage::<Vanilla>::load_force_repin(project.path_for("root"), env.clone(), vec![])
-                .await
-                .unwrap();
+        let mut root_pkg = PackageLoader::new(project.path_for("root"), env.clone())
+            .force_repin(true)
+            .load()
+            .await
+            .unwrap();
         root_pkg.save_lockfile_to_disk().unwrap();
 
         // since the dependency's manifest changed, we should have repinned, so the sha should be
@@ -985,6 +856,75 @@ pkg_b = { local = "../pkg_b" }"#,
         git.rev.to_string()
     }
 
+    /// Using `allow_dirty` when loading a package succeeds even if a dependency repo is dirty
+    /// See also [disallow_dirty]
+    #[test(tokio::test)]
+    async fn allow_dirty() {
+        let repo = git::new().await;
+        let commit = repo
+            .commit(|project| project.add_packages(["git_dep"]))
+            .await;
+        commit.branch("branch-name").await;
+
+        let project = TestPackageGraph::new(["root"])
+            .add_git_dep("root", &repo, "git_dep", "branch-name", |dep| dep)
+            .build();
+
+        // Get the dependency cached and find its path
+        let root_package = project.root_package("root").await;
+        let cached_dep_path = root_package
+            .packages()
+            .iter()
+            .find(|pkg| pkg.name().as_str() == "git_dep")
+            .unwrap()
+            .path()
+            .clone();
+
+        drop(root_package);
+
+        // Dirty the cached package
+        std::fs::write(cached_dep_path.path().join("dirty_file.txt"), "dirty stuff").unwrap();
+
+        // Reload root package with `allow_dirty`; should succeed
+        let _ = project
+            .root_package_with_config("root", |loader| loader.allow_dirty(true))
+            .await;
+    }
+
+    /// Loading a package fails without `allow_dirty` if a dependency repo is dirty
+    /// See also [allow_dirty]
+    #[test(tokio::test)]
+    async fn disallow_dirty() {
+        let repo = git::new().await;
+        let commit = repo
+            .commit(|project| project.add_packages(["git_dep"]))
+            .await;
+        commit.branch("branch-name").await;
+
+        let project = TestPackageGraph::new(["root"])
+            .add_git_dep("root", &repo, "git_dep", "branch-name", |dep| dep)
+            .build();
+
+        // Get the dependency cached and find its path
+        let root_package = project.root_package("root").await;
+        let cached_dep_path = root_package
+            .packages()
+            .iter()
+            .find(|pkg| pkg.name().as_str() == "git_dep")
+            .unwrap()
+            .path()
+            .clone();
+
+        drop(root_package);
+
+        // Dirty the cached package
+        std::fs::write(cached_dep_path.path().join("dirty_file.txt"), "dirty stuff").unwrap();
+
+        // Reload root package, expecting an error
+        let error = project.root_package_err("root").await;
+        assert!(error.contains("is dirty"));
+    }
+
     ////////////////////////////////////////////////////////////////////////////////////////////////
     // Ephemeral loading and storing ///////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1005,22 +945,23 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ root = true }}
+            source = {{ local = "{path}" }}
             original-id = "0x2"
             published-at = "0x3"
             version = 0
             "###,
+            path = scenario.path_for("root").canonicalize().unwrap().display(),
         )
         .unwrap();
 
         // load root package with ephemeral file
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
@@ -1054,23 +995,24 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ local = "../dep" }}
+            source = {{ local = "{path}" }}
             original-id = "0x2"
             published-at = "0x3"
             version = 0
             "###,
+            path = scenario.path_for("dep").canonicalize().unwrap().display()
         )
         .unwrap();
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
@@ -1104,13 +1046,13 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ root = true }}
+            source = {{ local = "/foo/bar" }}
             version = 1
             published-at = "0x1"
             original-id = "0x2"
 
             [[published]]
-            source = {{ root = true }}
+            source = {{ local = "/foo/bar" }}
             version = 2
             published-at = "0x1"
             original-id = "0x2"
@@ -1120,21 +1062,21 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let err = RootPackage::<Vanilla>::load_ephemeral(
+        let err = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load::<Vanilla>()
         .await
         .unwrap_err();
 
-        assert_snapshot!(err.to_string(), @"Multiple entries with `source = { root = true }` exist in the publication file");
+        assert_snapshot!(err.to_string(), @"Multiple entries with `source = { local = \"/foo/bar\" }` exist in the publication file");
     }
 
-    /// Ephemerally loading a dep that is published but not in the ephemeral file produces the
-    /// original address. Note: it should also warn but this is not tested
+    /// Ephemerally loading a dep that is published but not in the ephemeral file produces no
+    /// address.
     #[test(tokio::test)]
     async fn ephemeral_only_pub() {
         let scenario = TestPackageGraph::new(["root"])
@@ -1154,28 +1096,24 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
         // check the dependency's addresses
 
-        let dep_addrs = root
+        let dep = root
             .filtered_graph
             .package_info_by_id(&PackageID::from("dep"))
-            .unwrap()
-            .published()
-            .unwrap()
-            .clone();
+            .unwrap();
 
-        assert_eq!(dep_addrs.original_id, OriginalID::from(1));
-        assert_eq!(dep_addrs.published_at, PublishedID::from(1));
+        assert!(dep.published().is_none());
     }
 
     /// Ephemerally loading a dep that is not published but is in the ephemeral file produces the
@@ -1194,23 +1132,24 @@ pkg_b = { local = "../pkg_b" }"#,
             build-env = "{DEFAULT_ENV_NAME}"
 
             [[published]]
-            source = {{ local = "../dep" }}
+            source = {{ local = "{path}" }}
             original-id = "0x2"
             published-at = "0x3"
             version = 0
             "###,
+            path = scenario.path_for("dep").canonicalize().unwrap().display(),
         )
         .unwrap();
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
@@ -1248,13 +1187,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
@@ -1300,13 +1239,13 @@ pkg_b = { local = "../pkg_b" }"#,
         )
         .unwrap();
 
-        RootPackage::<Vanilla>::load_ephemeral(
+        PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load::<Vanilla>()
         .await
         .unwrap();
     }
@@ -1343,13 +1282,13 @@ pkg_b = { local = "../pkg_b" }"#,
         )
         .unwrap();
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load::<Vanilla>()
         .await;
 
         assert_snapshot!(root.unwrap_err().to_string(), @r###"
@@ -1365,7 +1304,7 @@ pkg_b = { local = "../pkg_b" }"#,
         "###);
     }
 
-    /// Loading an ephemeral root package from a non-existing file succeeds and uses the published
+    /// Loading an ephemeral root package from a non-existing file succeeds and has no published
     /// addresses for the build environment
     #[test(tokio::test)]
     async fn ephemeral_empty() {
@@ -1379,27 +1318,23 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             Some(DEFAULT_ENV_NAME.to_string()),
             "localnet".into(),
             ephemeral.as_path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
         // check the dependency's addresses
-        let dep_addrs = root
+        let dep = root
             .filtered_graph
             .package_info_by_id(&PackageID::from("dep"))
-            .unwrap()
-            .published()
-            .unwrap()
-            .clone();
+            .unwrap();
 
-        assert_eq!(dep_addrs.original_id, OriginalID::from(1));
-        assert_eq!(dep_addrs.published_at, PublishedID::from(2));
+        assert!(dep.published().is_none());
     }
 
     /// Loading an ephemeral root package and then publishing correctly updates the ephemeral file
@@ -1424,13 +1359,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let mut root = RootPackage::<Vanilla>::load_ephemeral(
+        let mut root: RootPackage<Vanilla> = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load()
         .await
         .unwrap();
 
@@ -1453,6 +1388,15 @@ pkg_b = { local = "../pkg_b" }"#,
         let postpublish_pubfile =
             std::fs::read_to_string(scenario.path_for("root/Published.toml")).unwrap();
         let ephemeral_data = std::fs::read_to_string(ephemeral.path()).unwrap();
+        let ephemeral_data = ephemeral_data.replace(
+            scenario
+                .path_for("root")
+                .canonicalize()
+                .unwrap()
+                .to_string_lossy()
+                .as_ref(),
+            "<ROOT>",
+        );
 
         assert_eq!(prepublish_pubfile, postpublish_pubfile);
         assert_snapshot!(ephemeral_data, @r###"
@@ -1464,7 +1408,7 @@ pkg_b = { local = "../pkg_b" }"#,
         chain-id = "localnet"
 
         [[published]]
-        source = { root = true }
+        source = { local = "<ROOT>" }
         published-at = "0x0000000000000000000000000000000000000000000000000000000000000002"
         original-id = "0x0000000000000000000000000000000000000000000000000000000000000001"
         version = 0
@@ -1488,13 +1432,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load::<Vanilla>()
         .await;
 
         let message = root
@@ -1522,13 +1466,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             Some(DEFAULT_ENV_NAME.to_string()),
             "localnet".into(),
             ephemeral.path(),
-            vec![],
         )
+        .load::<Vanilla>()
         .await;
 
         let message = root
@@ -1549,13 +1493,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             None,
             "localnet".into(),
             ephemeral.join("nonexistent.toml"),
-            vec![],
         )
+        .load::<Vanilla>()
         .await;
 
         let message = root
@@ -1576,13 +1520,13 @@ pkg_b = { local = "../pkg_b" }"#,
 
         // load root package with ephemeral file
 
-        let root = RootPackage::<Vanilla>::load_ephemeral(
+        let root = PackageLoader::new_ephemeral(
             scenario.path_for("root"),
             Some("unknown environment".into()),
             "localnet".into(),
             ephemeral.clone(),
-            vec![],
         )
+        .load::<Vanilla>()
         .await;
 
         let message = root.unwrap_err().to_string().replace(
@@ -1612,10 +1556,10 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_dep("a", "c2", |dep| dep.set_override().modes(["test"]))
             .build();
 
-        let root =
-            RootPackage::<Vanilla>::load(scenario.path_for("root"), default_environment(), vec![])
-                .await
-                .unwrap();
+        let root = PackageLoader::new(scenario.path_for("root"), Vanilla::default_environment())
+            .load::<Vanilla>()
+            .await
+            .unwrap();
 
         let mut package_names: Vec<_> = root
             .packages()
@@ -1645,13 +1589,11 @@ pkg_b = { local = "../pkg_b" }"#,
             .add_dep("a", "c2", |dep| dep.set_override().modes(["test"]))
             .build();
 
-        let root = RootPackage::<Vanilla>::load(
-            scenario.path_for("root"),
-            default_environment(),
-            vec!["test".to_string()],
-        )
-        .await
-        .unwrap();
+        let root = PackageLoader::new(scenario.path_for("root"), Vanilla::default_environment())
+            .modes(vec!["test".to_string()])
+            .load::<Vanilla>()
+            .await
+            .unwrap();
 
         let mut package_names: Vec<_> = root
             .packages()
@@ -1713,5 +1655,26 @@ pkg_b = { local = "../pkg_b" }"#,
             named_addresses.get("a").unwrap(),
             &NamedAddress::Defined(OriginalID::from(2))
         );
+    }
+
+    #[test(tokio::test)]
+    /// ```mermaid
+    /// graph LR
+    ///     root --> legacy --> modern
+    /// ```
+    ///
+    /// Loading `legacy` should fail, but loading `root` should succeed
+    async fn legacy_depends_on_modern() {
+        let scenario = TestPackageGraph::new(["root", "modern"])
+            .add_legacy_packages(["legacy"])
+            .add_deps([("root", "legacy"), ("legacy", "modern")])
+            .build();
+
+        // should succeed
+        let root = scenario.root_package("root");
+        drop(root);
+
+        let legacy_err = scenario.root_package_err("legacy").await;
+        assert_snapshot!(legacy_err, @"Packages with old-style Move.toml files cannot depend on new-style packages. See https://docs.sui.io/references/package-managers/package-manager-migration for instructions.");
     }
 }

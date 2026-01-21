@@ -222,12 +222,14 @@ impl TestCaseImpl for CoinIndexTest {
                 coin_object_count: old_coin_object_count,
                 total_balance,
                 locked_balance: HashMap::new(),
+                funds_in_address_balance: 0,
             },
             Balance {
                 coin_type: coin_type_str.clone(),
                 coin_object_count: 1,
                 total_balance: 10000,
                 locked_balance: HashMap::new(),
+                funds_in_address_balance: 0,
             },
         ];
         // Comes with asc order.

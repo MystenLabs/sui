@@ -35,9 +35,9 @@ use crate::signature_verification::{
 };
 use crate::type_input::TypeInput;
 use crate::{
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
-    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+    SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
@@ -145,40 +145,29 @@ pub enum ObjectArg {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum Reservation {
-    // Reserve the entire balance.
-    // This is not yet supported.
-    EntireBalance,
     // Reserve a specific amount of the balance.
     MaxAmountU64(u64),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum WithdrawalTypeArg {
-    Balance(TypeInput),
+    Balance(TypeTag),
 }
 
 impl WithdrawalTypeArg {
     /// Convert the withdrawal type argument to a full type tag,
     /// e.g. `Balance<T>` -> `0x2::balance::Balance<T>`
-    pub fn to_type_tag(&self) -> UserInputResult<TypeTag> {
-        match self {
-            WithdrawalTypeArg::Balance(type_param) => {
-                Ok(Balance::type_tag(type_param.to_type_tag().map_err(
-                    |e| UserInputError::InvalidWithdrawReservation {
-                        error: e.to_string(),
-                    },
-                )?))
-            }
-        }
+    pub fn to_type_tag(&self) -> TypeTag {
+        let WithdrawalTypeArg::Balance(type_param) = self;
+        Balance::type_tag(type_param.clone())
     }
 
     /// If this is a Balance accumulator, return the type parameter of `Balance<T>`,
     /// e.g. `Balance<T>` -> `Some(T)`
     /// Otherwise, return `None`. This is not possible today, but in the future we will support other types of accumulators.
-    pub fn get_balance_type_param(&self) -> anyhow::Result<Option<TypeTag>> {
-        match self {
-            WithdrawalTypeArg::Balance(type_param) => type_param.to_type_tag().map(Some),
-        }
+    pub fn get_balance_type_param(&self) -> Option<TypeTag> {
+        let WithdrawalTypeArg::Balance(type_param) = self;
+        Some(type_param.clone())
     }
 }
 
@@ -204,7 +193,7 @@ pub enum WithdrawFrom {
 
 impl FundsWithdrawalArg {
     /// Withdraws from `Balance<balance_type>` in the sender's address.
-    pub fn balance_from_sender(amount: u64, balance_type: TypeInput) -> Self {
+    pub fn balance_from_sender(amount: u64, balance_type: TypeTag) -> Self {
         Self {
             reservation: Reservation::MaxAmountU64(amount),
             type_arg: WithdrawalTypeArg::Balance(balance_type),
@@ -213,7 +202,7 @@ impl FundsWithdrawalArg {
     }
 
     /// Withdraws from `Balance<balance_type>` in the sponsor's address (gas owner).
-    pub fn balance_from_sponsor(amount: u64, balance_type: TypeInput) -> Self {
+    pub fn balance_from_sponsor(amount: u64, balance_type: TypeTag) -> Self {
         Self {
             reservation: Reservation::MaxAmountU64(amount),
             type_arg: WithdrawalTypeArg::Balance(balance_type),
@@ -221,7 +210,7 @@ impl FundsWithdrawalArg {
         }
     }
 
-    fn owner_for_withdrawal(&self, tx: &impl TransactionDataAPI) -> SuiAddress {
+    pub fn owner_for_withdrawal(&self, tx: &impl TransactionDataAPI) -> SuiAddress {
         match self.withdraw_from {
             WithdrawFrom::Sender => tx.sender(),
             WithdrawFrom::Sponsor => tx.gas_owner(),
@@ -1093,12 +1082,6 @@ impl ProgrammableMoveCall {
         }
         Ok(())
     }
-
-    fn is_input_arg_used(&self, arg: u16) -> bool {
-        self.arguments
-            .iter()
-            .any(|a| matches!(a, Argument::Input(inp) if *inp == arg))
-    }
 }
 
 impl Command {
@@ -1225,20 +1208,23 @@ impl Command {
     }
 
     fn is_input_arg_used(&self, input_arg: u16) -> bool {
+        self.is_argument_used(Argument::Input(input_arg))
+    }
+
+    pub fn is_gas_coin_used(&self) -> bool {
+        self.is_argument_used(Argument::GasCoin)
+    }
+
+    pub fn is_argument_used(&self, argument: Argument) -> bool {
         match self {
-            Command::MoveCall(c) => c.is_input_arg_used(input_arg),
+            Command::MoveCall(c) => c.arguments.iter().any(|a| a == &argument),
             Command::TransferObjects(args, arg)
             | Command::MergeCoins(arg, args)
-            | Command::SplitCoins(arg, args) => args
-                .iter()
-                .chain(once(arg))
-                .any(|a| matches!(a, Argument::Input(inp) if *inp == input_arg)),
-            Command::MakeMoveVec(_, args) => args
-                .iter()
-                .any(|a| matches!(a, Argument::Input(inp) if *inp == input_arg)),
-            Command::Upgrade(_, _, _, arg) => {
-                matches!(arg, Argument::Input(inp) if *inp == input_arg)
+            | Command::SplitCoins(arg, args) => {
+                args.iter().chain(once(arg)).any(|a| a == &argument)
             }
+            Command::MakeMoveVec(_, args) => args.iter().any(|a| a == &argument),
+            Command::Upgrade(_, _, _, arg) => arg == &argument,
             Command::Publish(_, _) => false,
         }
     }
@@ -1552,6 +1538,14 @@ impl TransactionKind {
             self,
             TransactionKind::EndOfEpochTransaction(_) | TransactionKind::ChangeEpoch(_)
         )
+    }
+
+    pub fn is_accumulator_barrier_settle_tx(&self) -> bool {
+        matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
+            && self.shared_input_objects().any(|obj| {
+                obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
+                    && obj.mutability == SharedObjectMutability::Mutable
+            })
     }
 
     /// If this is advance epoch transaction, returns (total gas charged, total gas rebated).
@@ -2434,6 +2428,8 @@ pub trait TransactionDataAPI {
 
     fn expiration(&self) -> &TransactionExpiration;
 
+    fn expiration_mut(&mut self) -> &mut TransactionExpiration;
+
     fn move_calls(&self) -> Vec<(usize, &ObjectID, &str, &str)>;
 
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>>;
@@ -2559,6 +2555,10 @@ impl TransactionDataAPI for TransactionDataV1 {
         &self.expiration
     }
 
+    fn expiration_mut(&mut self) -> &mut TransactionExpiration {
+        &mut self.expiration
+    }
+
     fn move_calls(&self) -> Vec<(usize, &ObjectID, &str, &str)> {
         self.kind.move_calls()
     }
@@ -2627,15 +2627,14 @@ impl TransactionDataAPI for TransactionDataV1 {
                     assert!(*amount > 0, "verified in validity check");
                     *amount
                 }
-                Reservation::EntireBalance => unreachable!("verified in validity check"),
             };
 
             let account_address = withdraw.owner_for_withdrawal(self);
             let account_id =
-                AccumulatorValue::get_field_id(account_address, &withdraw.type_arg.to_type_tag()?)
+                AccumulatorValue::get_field_id(account_address, &withdraw.type_arg.to_type_tag())
                     .map_err(|e| UserInputError::InvalidWithdrawReservation {
-                        error: e.to_string(),
-                    })?;
+                    error: e.to_string(),
+                })?;
 
             let current_amount = withdraw_map.entry(account_id).or_default();
             *current_amount = current_amount.checked_add(reserved_amount).ok_or(
@@ -2664,17 +2663,14 @@ impl TransactionDataAPI for TransactionDataV1 {
                     assert!(*amount > 0, "verified in validity check");
                     *amount
                 }
-                Reservation::EntireBalance => unreachable!("verified in validity check"),
             };
 
             let withdrawal_owner = withdraw.owner_for_withdrawal(self);
 
             // unwrap checked at signing time
-            let account_id = AccumulatorValue::get_field_id(
-                withdrawal_owner,
-                &withdraw.type_arg.to_type_tag().unwrap(),
-            )
-            .unwrap();
+            let account_id =
+                AccumulatorValue::get_field_id(withdrawal_owner, &withdraw.type_arg.to_type_tag())
+                    .unwrap();
 
             let value = withdraw_map.entry(account_id).or_default();
             // overflow checked at signing time
@@ -2844,12 +2840,6 @@ impl TransactionDataAPI for TransactionDataV1 {
                             }
                             .into()
                         );
-                    }
-                    Reservation::EntireBalance => {
-                        return Err(UserInputError::InvalidWithdrawReservation {
-                            error: "Reserving the entire balance is not supported".to_string(),
-                        }
-                        .into());
                     }
                 };
             }
@@ -3048,15 +3038,9 @@ impl TransactionDataV1 {
     fn get_funds_withdrawal_for_gas_payment(&self) -> Option<FundsWithdrawalArg> {
         if self.is_gas_paid_from_address_balance() {
             Some(if self.sender() != self.gas_owner() {
-                FundsWithdrawalArg::balance_from_sponsor(
-                    self.gas_data().budget,
-                    TypeInput::from(GAS::type_tag()),
-                )
+                FundsWithdrawalArg::balance_from_sponsor(self.gas_data().budget, GAS::type_tag())
             } else {
-                FundsWithdrawalArg::balance_from_sender(
-                    self.gas_data().budget,
-                    TypeInput::from(GAS::type_tag()),
-                )
+                FundsWithdrawalArg::balance_from_sender(self.gas_data().budget, GAS::type_tag())
             })
         } else {
             None

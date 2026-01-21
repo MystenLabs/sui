@@ -78,7 +78,7 @@ use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::layout_resolver::into_struct_layout;
-use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
+use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::InputKey;
@@ -1025,7 +1025,7 @@ impl AuthorityState {
         )?;
 
         self.execution_cache_trait_pointers
-            .child_object_resolver
+            .account_funds_read
             .check_amounts_available(&withdraws)?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
@@ -1069,8 +1069,6 @@ impl AuthorityState {
                 withdraw
                     .type_arg
                     .get_balance_type_param()
-                    // unwrap safe because we already verified the transaction.
-                    .unwrap()
                     .map(|ty| ty.to_canonical_string(false))
             })
             .collect::<BTreeSet<_>>();
@@ -1609,6 +1607,7 @@ impl AuthorityState {
         }
 
         let scheduling_source = execution_env.scheduling_source;
+        let accumulator_version = execution_env.assigned_versions.accumulator_version;
         let mysticeti_fp_outputs = if epoch_store.protocol_config().mysticeti_fastpath() {
             tx_cache_reader.get_mysticeti_fastpath_outputs(tx_digest)
         } else {
@@ -1702,6 +1701,21 @@ impl AuthorityState {
 
                 assert_eq!(sys_jwks, active_jwks);
             }
+        }
+
+        // TODO: We should also settle address funds during execution,
+        // instead of from checkpoint builder. It will improve performance
+        // since we will be settling as soon as we can.
+        if certificate
+            .transaction_data()
+            .kind()
+            .is_accumulator_barrier_settle_tx()
+        {
+            // unwrap safe because we assign accumulator version for every transaction
+            // when accumulator is enabled.
+            let next_accumulator_version = accumulator_version.unwrap().next();
+            self.execution_scheduler
+                .settle_object_funds(next_accumulator_version);
         }
 
         tx_guard.commit_tx();
@@ -2485,6 +2499,7 @@ impl AuthorityState {
         &self,
         mut transaction: TransactionData,
         checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
     ) -> SuiResult<SimulateTransactionResult> {
         if transaction.kind().is_system_tx() {
             return Err(SuiErrorKind::UnsupportedFeatureError {
@@ -2525,7 +2540,7 @@ impl AuthorityState {
         )?;
 
         // mock a gas object if one was not provided
-        let mock_gas_id = if transaction.gas().is_empty() {
+        let mock_gas_id = if allow_mock_gas_coin && transaction.gas().is_empty() {
             let mock_gas_object = Object::new_move(
                 MoveObject::new_gas_coin(
                     OBJECT_START_VERSION,
@@ -2937,6 +2952,7 @@ impl AuthorityState {
             digest,
             timestamp_ms,
             tx_coins,
+            effects.accumulator_events(),
         )
     }
 
@@ -3567,7 +3583,7 @@ impl AuthorityState {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = Arc::new(ExecutionScheduler::new(
             execution_cache_trait_pointers.object_cache_reader.clone(),
-            execution_cache_trait_pointers.child_object_resolver.clone(),
+            execution_cache_trait_pointers.account_funds_read.clone(),
             execution_cache_trait_pointers
                 .transaction_cache_reader
                 .clone(),
@@ -3710,6 +3726,10 @@ impl AuthorityState {
 
     pub fn get_child_object_resolver(&self) -> &Arc<dyn ChildObjectResolver + Send + Sync> {
         &self.execution_cache_trait_pointers.child_object_resolver
+    }
+
+    pub(crate) fn get_account_funds_read(&self) -> &Arc<dyn AccountFundsRead> {
+        &self.execution_cache_trait_pointers.account_funds_read
     }
 
     pub fn get_backing_package_store(&self) -> &Arc<dyn BackingPackageStore + Send + Sync> {
@@ -3939,7 +3959,7 @@ impl AuthorityState {
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
         self.execution_scheduler
-            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
+            .reconfigure(&new_epoch_store, self.get_account_funds_read());
         *execution_lock = new_epoch;
 
         self.notify_epoch(new_epoch);
@@ -4052,10 +4072,12 @@ impl AuthorityState {
         assert!(effects.status().is_ok());
 
         let next_accumulator_version = accumulator_version.next();
-        self.execution_scheduler.settle_funds(FundsSettlement {
-            funds_changes: balance_changes,
-            next_accumulator_version,
-        });
+        self.execution_scheduler
+            .settle_address_funds(FundsSettlement {
+                funds_changes: balance_changes,
+                next_accumulator_version,
+            });
+        // object funds are settled while executing the barrier transaction
     }
 
     /// Advance the epoch store to the next epoch for testing only.
@@ -4084,7 +4106,7 @@ impl AuthorityState {
                 .unwrap_or_default(),
         );
         self.execution_scheduler
-            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
+            .reconfigure(&new_epoch_store, self.get_account_funds_read());
         let new_epoch = new_epoch_store.epoch();
         self.epoch_store.store(new_epoch_store);
         epoch_store.epoch_terminated().await;
@@ -5395,94 +5417,6 @@ impl AuthorityState {
         Some(res)
     }
 
-    // TODO: delete once authority_capabilities_v2 is deployed everywhere
-    fn is_protocol_version_supported_v1(
-        current_protocol_version: ProtocolVersion,
-        proposed_protocol_version: ProtocolVersion,
-        protocol_config: &ProtocolConfig,
-        committee: &Committee,
-        capabilities: Vec<AuthorityCapabilitiesV1>,
-        mut buffer_stake_bps: u64,
-    ) -> Option<(ProtocolVersion, Vec<ObjectRef>)> {
-        if proposed_protocol_version > current_protocol_version + 1
-            && !protocol_config.advance_to_highest_supported_protocol_version()
-        {
-            return None;
-        }
-
-        if buffer_stake_bps > 10000 {
-            warn!("clamping buffer_stake_bps to 10000");
-            buffer_stake_bps = 10000;
-        }
-
-        // For each validator, gather the protocol version and system packages that it would like
-        // to upgrade to in the next epoch.
-        let mut desired_upgrades: Vec<_> = capabilities
-            .into_iter()
-            .filter_map(|mut cap| {
-                // A validator that lists no packages is voting against any change at all.
-                if cap.available_system_packages.is_empty() {
-                    return None;
-                }
-
-                cap.available_system_packages.sort();
-
-                info!(
-                    "validator {:?} supports {:?} with system packages: {:?}",
-                    cap.authority.concise(),
-                    cap.supported_protocol_versions,
-                    cap.available_system_packages,
-                );
-
-                // A validator that only supports the current protocol version is also voting
-                // against any change, because framework upgrades always require a protocol version
-                // bump.
-                cap.supported_protocol_versions
-                    .is_version_supported(proposed_protocol_version)
-                    .then_some((cap.available_system_packages, cap.authority))
-            })
-            .collect();
-
-        // There can only be one set of votes that have a majority, find one if it exists.
-        desired_upgrades.sort();
-        desired_upgrades
-            .into_iter()
-            .chunk_by(|(packages, _authority)| packages.clone())
-            .into_iter()
-            .find_map(|(packages, group)| {
-                // should have been filtered out earlier.
-                assert!(!packages.is_empty());
-
-                let mut stake_aggregator: StakeAggregator<(), true> =
-                    StakeAggregator::new(Arc::new(committee.clone()));
-
-                for (_, authority) in group {
-                    stake_aggregator.insert_generic(authority, ());
-                }
-
-                let total_votes = stake_aggregator.total_votes();
-                let quorum_threshold = committee.quorum_threshold();
-                let f = committee.total_votes() - committee.quorum_threshold();
-
-                // multiple by buffer_stake_bps / 10000, rounded up.
-                let buffer_stake = (f * buffer_stake_bps).div_ceil(10000);
-                let effective_threshold = quorum_threshold + buffer_stake;
-
-                info!(
-                    ?total_votes,
-                    ?quorum_threshold,
-                    ?buffer_stake_bps,
-                    ?effective_threshold,
-                    ?proposed_protocol_version,
-                    ?packages,
-                    "support for upgrade"
-                );
-
-                let has_support = total_votes >= effective_threshold;
-                has_support.then_some((proposed_protocol_version, packages))
-            })
-    }
-
     fn is_protocol_version_supported_v2(
         current_protocol_version: ProtocolVersion,
         proposed_protocol_version: ProtocolVersion,
@@ -5571,32 +5505,6 @@ impl AuthorityState {
             })
     }
 
-    // TODO: delete once authority_capabilities_v2 is deployed everywhere
-    fn choose_protocol_version_and_system_packages_v1(
-        current_protocol_version: ProtocolVersion,
-        protocol_config: &ProtocolConfig,
-        committee: &Committee,
-        capabilities: Vec<AuthorityCapabilitiesV1>,
-        buffer_stake_bps: u64,
-    ) -> (ProtocolVersion, Vec<ObjectRef>) {
-        let mut next_protocol_version = current_protocol_version;
-        let mut system_packages = vec![];
-
-        while let Some((version, packages)) = Self::is_protocol_version_supported_v1(
-            current_protocol_version,
-            next_protocol_version + 1,
-            protocol_config,
-            committee,
-            capabilities.clone(),
-            buffer_stake_bps,
-        ) {
-            next_protocol_version = version;
-            system_packages = packages;
-        }
-
-        (next_protocol_version, system_packages)
-    }
-
     fn choose_protocol_version_and_system_packages_v2(
         current_protocol_version: ProtocolVersion,
         protocol_config: &ProtocolConfig,
@@ -5604,6 +5512,7 @@ impl AuthorityState {
         capabilities: Vec<AuthorityCapabilitiesV2>,
         buffer_stake_bps: u64,
     ) -> (ProtocolVersion, Vec<ObjectRef>) {
+        assert!(protocol_config.authority_capabilities_v2());
         let mut next_protocol_version = current_protocol_version;
         let mut system_packages = vec![];
 
@@ -6043,27 +5952,15 @@ impl AuthorityState {
         let buffer_stake_bps = epoch_store.get_effective_buffer_stake_bps();
 
         let (next_epoch_protocol_version, next_epoch_system_packages) =
-            if epoch_store.protocol_config().authority_capabilities_v2() {
-                Self::choose_protocol_version_and_system_packages_v2(
-                    epoch_store.protocol_version(),
-                    epoch_store.protocol_config(),
-                    epoch_store.committee(),
-                    epoch_store
-                        .get_capabilities_v2()
-                        .expect("read capabilities from db cannot fail"),
-                    buffer_stake_bps,
-                )
-            } else {
-                Self::choose_protocol_version_and_system_packages_v1(
-                    epoch_store.protocol_version(),
-                    epoch_store.protocol_config(),
-                    epoch_store.committee(),
-                    epoch_store
-                        .get_capabilities_v1()
-                        .expect("read capabilities from db cannot fail"),
-                    buffer_stake_bps,
-                )
-            };
+            Self::choose_protocol_version_and_system_packages_v2(
+                epoch_store.protocol_version(),
+                epoch_store.protocol_config(),
+                epoch_store.committee(),
+                epoch_store
+                    .get_capabilities_v2()
+                    .expect("read capabilities from db cannot fail"),
+                buffer_stake_bps,
+            );
 
         // since system packages are created during the current epoch, they should abide by the
         // rules of the current epoch, including the current epoch's max Move binary format version

@@ -1,0 +1,7 @@
+[package]
+name = "e"
+edition = "2024"
+
+[dependencies]
+c = { local = "../c" }
+d = { local = "../d" }

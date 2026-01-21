@@ -1,5 +1,5 @@
 ---
-title: Guides and Tutorials
+title: Guides
 sidebar_label: Overview
 description: Start developing on Sui through example projects and developer guides.
 keywords: [ developer guides, get started, operator guides, suiplayx01 guides, sui 101, coins, tokens, nfts ]
@@ -22,42 +22,83 @@ Install tooling, setup your environment, and deploy a "Hello, World!" Move packa
 <Card className="plausible-event-name=guides+next+button" title="6. Next Steps" href="/guides/developer/getting-started/next-steps" />
 </Cards>
 
-## Sui essentials
+## Objects
 
-Follow these guides to learn about essential Sui concepts.
+Learn about Sui's object model, ownership patterns, and how to work with dynamic fields.
 
 <Cards>
+<Card title="Object Model" href="/guides/developer/objects/object-model" />
 <Card title="Object Ownership" href="/guides/developer/objects/object-ownership" />
-<Card title="Using Events" href="/guides/developer/sui-101/using-events" />
-<Card title="Access Sui Data" href="/concepts/data-access/data-serving" />
-<Card title="Access On-Chain Time" href="/guides/developer/sui-101/access-time" />
+<Card title="Transfers" href="/guides/developer/objects/transfers" />
+<Card title="Dynamic Fields" href="/guides/developer/objects/dynamic-fields" />
+<Card title="Object Versioning" href="/guides/developer/objects/versioning" />
+<Card title="Simulating References" href="/guides/developer/objects/simulating-refs" />
 </Cards>
 
-## Signing and sending transactions 
+## Packages
 
-Learn about signing and sending transactions.
+Learn how to manage, upgrade, and configure Move packages on Sui.
 
 <Cards>
-<Card title="Sponsored Transactions" href="/guides/developer/sui-101/sponsor-txn" />
-<Card title="Avoid Equivocation" href="/concepts/sui-architecture/epochs" />
-<Card title="Building PTBs" href="/guides/developer/sui-101/building-ptb" />
-<Card title="Coin Management" href="/guides/developer/sui-101/coin-mgt" />
-<Card title="Simulating References" href="/guides/developer/sui-101/simulating-refs" />
+<Card title="Move Package Management" href="/guides/developer/packages/move-package-management" />
+<Card title="Package Upgrades" href="/guides/developer/packages/upgrade" />
+<Card title="Custom Policies" href="/guides/developer/packages/custom-policies" />
+<Card title="Automated Address Management" href="/guides/developer/packages/automated-address-management" />
 </Cards>
 
-## Coins, tokens, and NFTs
+## Transactions
 
-Learn how to mint coins and tokens on Sui.
+Learn about signing and sending transactions, building programmable transaction blocks, and sponsored transactions.
+
+<Cards>
+<Card title="Sign and Send Transactions" href="/guides/developer/transactions/sign-and-send-txn" />
+<Card title="Building PTBs" href="/guides/developer/transactions/building-ptb" />
+<Card title="Sponsored Transactions" href="/guides/developer/transactions/sponsor-txn" />
+</Cards>
+
+## Accessing data
+
+Build your own custom indexer, query data with GraphQL, and work with events.
+
+<Cards>
+<Card title="Using gRPC" href="/guides/developer/accessing-data/grpc-overview" />
+<Card title="Query with GraphQL" href="/guides/developer/accessing-data/query-with-graphql" />
+<Card title="Custom Indexing Framework" href="/guides/developer/accessing-data/custom-indexing-framework" />
+<Card title="Build Your First Custom Indexer" href="/guides/developer/accessing-data/custom-indexing-framework/build" />
+<Card title="Custom Indexer and Walrus" href="/guides/developer/accessing-data/custom-indexer/indexer-walrus" />
+<Card title="Using Events" href="/guides/developer/accessing-data/using-events" />
+</Cards>
+
+## Currencies and tokens
+
+Learn how to create and manage coins and tokens on Sui.
 
 <Cards>
 <Card title="Create Currencies and Tokens" href="/guides/developer/currency" />
 <Card title="Regulated Currency and Deny List" href="/guides/developer/coin/regulated" />
 <Card title="In-Game Currency" href="/guides/developer/coin/in-game-token" />
 <Card title="Loyalty Token" href="/guides/developer/coin/loyalty" />
+<Card title="Vesting Strategies" href="/guides/developer/coin/vesting-strategies" />
+</Cards>
+
+## NFTs
+
+Learn how to create NFTs, implement soulbound tokens, and tokenize assets.
+
+<Cards>
 <Card title="Create an NFT" href="/guides/developer/nft" />
 <Card title="Soulbound NFT" href="/guides/developer/nft/nft-soulbound" />
 <Card title="NFT Rental Example" href="/guides/developer/nft/nft-rental" />
 <Card title="Asset Tokenization" href="/guides/developer/nft/asset-tokenization" />
+</Cards>
+
+## On-chain primitives
+
+Learn how to work with time and randomness on-chain.
+
+<Cards>
+<Card title="Access On-Chain Time" href="/guides/developer/on-chain-primitives/access-time" />
+<Card title="On-Chain Randomness" href="/guides/developer/on-chain-primitives/randomness-onchain" />
 </Cards>
 
 ## Cryptography 
@@ -70,19 +111,17 @@ Learn about on-chain signatures, multisig authentication, and zkLogin.
 <Card title="Hashing" href="/guides/developer/cryptography/hashing" />
 <Card title="ECVRF" href="/guides/developer/cryptography/ecvrf" />
 <Card title="Multisig Authentication" href="/guides/developer/cryptography/multisig" />
+<Card title="zkLogin Integration Guide" href="/guides/developer/cryptography/zklogin-integration" />
 <Card title="Configure OpenID Providers" href="/guides/developer/cryptography/zklogin-integration/developer-account" />
 <Card title="zkLogin Example" href="/guides/developer/cryptography/zklogin-integration/zklogin-example" />
 </Cards>
 
-## Indexers 
-
-Build your own custom indexer, integrate it with your application, and benchmark its performance.
+## Nautilus
 
 <Cards>
-<Card title="Build Your First Custom Indexer" href="/guides/developer/advanced/custom-indexer/build" />
-<Card title="Custom Indexer and Walrus" href="/guides/developer/advanced/custom-indexer/indexer-walrus" />
-<Card title="Indexer Data and Integration" href="/guides/developer/advanced/custom-indexer/indexer-data-integration" />
-<Card title="Indexer Runtime and Performance" href="/guides/developer/advanced/custom-indexer/indexer-runtime-perf" />
+<Card title="Nautilus Overview" href="/guides/developer/nautilus" />
+<Card title="Using Nautilus" href="/guides/developer/nautilus/using-nautilus" />
+<Card title="Customize Nautilus" href="/guides/developer/nautilus/customize-nautilus" />
 </Cards>
 
 ## Example applications 
@@ -97,16 +136,32 @@ Try out these example applications to learn more about Sui.
 <Card title="Blackjack" href="/guides/developer/app-examples/blackjack" />
 <Card title="Plinko" href="/guides/developer/app-examples/plinko" />
 <Card title="Tic-Tac-Toe" href="/guides/developer/app-examples/tic-tac-toe" />
-<Card title="Weather oracle" href="/guides/developer/app-examples/weather-oracle" />
+<Card title="Oracles" href="/guides/developer/app-examples/oracle" />
+<Card title="Weather Oracle" href="/guides/developer/app-examples/weather-oracle" />
+<Card title="Meta Pricing Oracle" href="/guides/developer/app-examples/meta-pricing-oracle" />
 </Cards>
 
-## Validating and operating nodes on Sui
+## Operator guides
 
 Processes and guides for validators and node operators on the Sui network.
 
 <Cards>
-<Card title="Validator Configuration" href="/guides/operator/validator/validator-config" />
+<Card title="Operator Overview" href="/guides/operator" />
 <Card title="Run a Sui Full Node" href="/guides/operator/sui-full-node" />
 <Card title="Full Node Data Management" href="/guides/operator/data-management"/>
+<Card title="Monitoring" href="/guides/operator/monitoring" />
+<Card title="Validator Configuration" href="/guides/operator/validator/validator-config" />
 <Card title="Sui Bridge Node Configuration" href="/guides/operator/bridge-node-configuration" />
+</Cards>
+
+## SuiPlay0X1
+
+Guides for developing games for the SuiPlay0X1 handheld gaming device.
+
+<Cards>
+<Card title="SuiPlay0X1 Overview" href="/guides/suiplay0x1" />
+<Card title="Integration" href="/guides/suiplay0x1/integration" />
+<Card title="Migration Strategies" href="/guides/suiplay0x1/migration-strategies" />
+<Card title="Wallet Integration" href="/guides/suiplay0x1/wallet-integration" />
+<Card title="Best Practices" href="/guides/suiplay0x1/best-practices" />
 </Cards>

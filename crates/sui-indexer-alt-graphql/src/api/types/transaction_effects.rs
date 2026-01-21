@@ -4,43 +4,46 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Enum, Object, connection::Connection, dataloader::DataLoader};
-use fastcrypto::encoding::{Base58, Encoding};
-use sui_indexer_alt_reader::{
-    kv_loader::{KvLoader, TransactionContents as NativeTransactionContents},
-    pg_reader::PgReader,
-    tx_balance_changes::TxBalanceChangeKey,
-};
+use async_graphql::Context;
+use async_graphql::Enum;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
+use async_graphql::dataloader::DataLoader;
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
+use sui_indexer_alt_reader::kv_loader::KvLoader;
+use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
+use sui_indexer_alt_reader::pg_reader::PgReader;
+use sui_indexer_alt_reader::tx_balance_changes::TxBalanceChangeKey;
 use sui_indexer_alt_schema::transactions::BalanceChange as StoredBalanceChange;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction;
-use sui_types::{
-    digests::TransactionDigest,
-    effects::TransactionEffectsAPI,
-    execution_status::ExecutionStatus as NativeExecutionStatus,
-    signature::GenericSignature,
-    transaction::{TransactionData, TransactionDataAPI},
-};
+use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::execution_status::ExecutionStatus as NativeExecutionStatus;
+use sui_types::signature::GenericSignature;
+use sui_types::transaction::TransactionData;
+use sui_types::transaction::TransactionDataAPI;
 
-use crate::{
-    api::scalars::{
-        base64::Base64, cursor::JsonCursor, date_time::DateTime, digest::Digest, uint53::UInt53,
-    },
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-};
-
-use super::{
-    balance_change::BalanceChange,
-    checkpoint::Checkpoint,
-    epoch::Epoch,
-    event::Event,
-    execution_error::ExecutionError,
-    gas_effects::GasEffects,
-    object_change::ObjectChange,
-    transaction::{Transaction, TransactionContents},
-    unchanged_consensus_object::UnchangedConsensusObject,
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::date_time::DateTime;
+use crate::api::scalars::digest::Digest;
+use crate::api::scalars::json::Json;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::balance_change::BalanceChange;
+use crate::api::types::checkpoint::Checkpoint;
+use crate::api::types::epoch::Epoch;
+use crate::api::types::event::Event;
+use crate::api::types::execution_error::ExecutionError;
+use crate::api::types::gas_effects::GasEffects;
+use crate::api::types::object_change::ObjectChange;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::TransactionContents;
+use crate::api::types::unchanged_consensus_object::UnchangedConsensusObject;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
 
 /// The execution status of this transaction: success or failure.
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -264,10 +267,72 @@ impl EffectsContents {
         )
     }
 
+    /// The balance changes as a JSON array, matching the gRPC proto format.
+    async fn balance_changes_json(&self, ctx: &Context<'_>) -> Option<Result<Json, RpcError>> {
+        let content = self.contents.as_ref()?;
+
+        Some(
+            async {
+                // First try to get balance changes from execution context
+                if let Some(grpc_balance_changes) = content.balance_changes() {
+                    let json_value = serde_json::to_value(grpc_balance_changes)
+                        .context("Failed to serialize balance changes to JSON")?;
+                    return json_value.try_into();
+                }
+
+                // Fall back to loading from database
+                let transaction_digest = content.digest()?;
+                let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+                let key = TxBalanceChangeKey(transaction_digest);
+
+                let Some(stored_balance_changes) = pg_loader
+                    .load_one(key)
+                    .await
+                    .context("Failed to load balance changes")?
+                else {
+                    // No balance changes found, return empty array
+                    return serde_json::json!([]).try_into();
+                };
+
+                // Deserialize and convert to gRPC format
+                let balance_changes: Vec<StoredBalanceChange> =
+                    bcs::from_bytes(&stored_balance_changes.balance_changes)
+                        .context("Failed to deserialize balance changes")?;
+
+                let grpc_balance_changes: Vec<_> = balance_changes
+                    .into_iter()
+                    .map(BalanceChange::stored_to_grpc)
+                    .collect();
+
+                let json_value = serde_json::to_value(&grpc_balance_changes)
+                    .context("Failed to serialize balance changes to JSON")?;
+                json_value.try_into()
+            }
+            .await,
+        )
+    }
+
     /// The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
     async fn effects_bcs(&self) -> Option<Result<Base64, RpcError>> {
         let content = self.contents.as_ref()?;
         Some(content.raw_effects().map(Base64).map_err(RpcError::from))
+    }
+
+    /// The effects as a JSON blob, matching the gRPC proto format (excluding BCS).
+    async fn effects_json(&self) -> Option<Result<Json, RpcError>> {
+        let content = self.contents.as_ref()?;
+
+        Some(
+            async {
+                let mut proto_effects = content.proto_effects()?;
+                // Clear the bcs field as effectsJson is intended to provide a full structured output
+                proto_effects.bcs = None;
+                let json_value = serde_json::to_value(&proto_effects)
+                    .context("Failed to serialize effects to JSON")?;
+                json_value.try_into()
+            }
+            .await,
+        )
     }
 
     /// A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
@@ -373,7 +438,10 @@ impl EffectsContents {
                 let effects = content.effects()?;
                 let dependencies = effects.dependencies();
                 page.paginate_indices(dependencies.len(), |i| {
-                    Ok(Transaction::with_id(self.scope.clone(), dependencies[i]))
+                    Ok(Transaction::with_digest(
+                        self.scope.clone(),
+                        dependencies[i],
+                    ))
                 })
             }
             .await,

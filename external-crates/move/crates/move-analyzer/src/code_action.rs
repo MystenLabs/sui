@@ -39,7 +39,7 @@ use move_compiler::{
     parser::ast::{LeadingNameAccess_, NameAccessChain_},
     shared::{Identifier, Name},
 };
-use move_package_alt::flavor::MoveFlavor;
+use move_package_alt::MoveFlavor;
 
 // The following reflects prefixes of error messages for
 // problems with a single-element access chain that are

@@ -57,6 +57,7 @@ module P::M {
 
 fragment D on MoveDatatype {
   name
+  fullyQualifiedName
   abilities
   typeParameters {
     constraints
@@ -95,5 +96,6 @@ fragment D on MoveDatatypeConnection {
   }
   nodes {
     name
+    fullyQualifiedName
   }
 }

@@ -40,6 +40,8 @@ pub fn execute<Mode: ExecutionMode>(
     package_store: &dyn BackingPackageStore,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,
+    // which inputs are withdrawals that need to be converted to coins
+    withdrawal_compatibility_inputs: Option<Vec<bool>>,
     txn: ProgrammableTransaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
 ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
@@ -59,8 +61,14 @@ pub fn execute<Mode: ExecutionMode>(
 
     let txn = {
         let tx_context_ref = tx_context.borrow();
-        loading::translate::transaction::<Mode>(&mut translation_meter, &env, &tx_context_ref, txn)
-            .map_err(|e| (e, vec![]))?
+        loading::translate::transaction::<Mode>(
+            &mut translation_meter,
+            &env,
+            &tx_context_ref,
+            withdrawal_compatibility_inputs,
+            txn,
+        )
+        .map_err(|e| (e, vec![]))?
     };
     let txn = typing::translate_and_verify::<Mode>(&mut translation_meter, &env, txn)
         .map_err(|e| (e, vec![]))?;

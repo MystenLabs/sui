@@ -3,21 +3,23 @@
 
 use std::path::PathBuf;
 
-use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::{
-    BatchGetBalancesRequest, GetBalanceRequest, ListBalancesRequest,
-    consistent_service_client::ConsistentServiceClient,
-};
-use sui_indexer_alt_e2e_tests::{FullCluster, find};
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::BatchGetBalancesRequest;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::GetBalanceRequest;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::ListBalancesRequest;
+use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha::consistent_service_client::ConsistentServiceClient;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::{
-    base_types::{ObjectRef, SuiAddress},
-    crypto::get_account_key_pair,
-    effects::TransactionEffectsAPI,
-    gas_coin::GAS,
-    object::Owner,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{Transaction, TransactionData},
-};
+use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::get_account_key_pair;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::gas_coin::GAS;
+use sui_types::object::Owner;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+
+use sui_indexer_alt_e2e_tests::FullCluster;
+use sui_indexer_alt_e2e_tests::find;
 
 /// 5 SUI gas budget
 const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
@@ -744,7 +746,7 @@ async fn list_balances(
         .into_iter()
         .map(|b| {
             assert_eq!(b.owner(), &owner, "Owner mismatch in balance response");
-            (b.coin_type().to_owned(), b.balance())
+            (b.coin_type().to_owned(), b.total_balance())
         })
         .collect();
 
@@ -782,7 +784,7 @@ async fn get_balance(
         "Owner mismatch in balance response"
     );
 
-    Ok((response.coin_type().to_owned(), response.balance()))
+    Ok((response.coin_type().to_owned(), response.total_balance()))
 }
 
 async fn batch_get_balances(
@@ -816,6 +818,12 @@ async fn batch_get_balances(
         .into_inner()
         .balances
         .into_iter()
-        .map(|b| (b.owner().to_owned(), b.coin_type().to_owned(), b.balance()))
+        .map(|b| {
+            (
+                b.owner().to_owned(),
+                b.coin_type().to_owned(),
+                b.total_balance(),
+            )
+        })
         .collect())
 }

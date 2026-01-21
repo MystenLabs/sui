@@ -20,6 +20,7 @@ use sui_rpc::proto::sui::rpc::v2::TransactionKind;
 use sui_rpc::proto::sui::rpc::v2::TransferObjects;
 use sui_rpc::proto::sui::rpc::v2::UserSignature;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+use sui_rpc::proto::sui::rpc::v2::transaction_expiration::TransactionExpirationKind;
 use sui_rpc_api::Client;
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
@@ -358,7 +359,7 @@ async fn resolve_transaction_insufficient_gas() {
         .unwrap_err();
 
     assert_eq!(error.code(), tonic::Code::InvalidArgument);
-    assert_contains(error.message(), "unable to select sufficient gas");
+    assert_contains(error.message(), "Unable to perform gas selection");
 }
 
 fn assert_contains(haystack: &str, needle: &str) {
@@ -672,4 +673,114 @@ async fn resolve_transaction_shared_object_with_generic_type_parameter() {
 
     assert!(effects.status().is_ok());
     assert_eq!(effects_from_simulation, effects);
+}
+
+#[sim_test]
+async fn test_gas_selection_with_address_balance() {
+    let _guard = sui_protocol_config::ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+        cfg.create_root_accumulator_object_for_testing();
+        cfg.enable_accumulators_for_testing();
+        cfg
+    });
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+
+    let mut client = sui_rpc::Client::new(test_cluster.rpc_url()).unwrap();
+
+    let receiver = test_cluster.get_address_1();
+
+    // Transfer some SUI to address balance, but not enough to pay for gas
+    let txn = sui_test_transaction_builder::make_transfer_sui_address_balance_transaction(
+        &test_cluster.wallet,
+        Some(receiver),
+        10_000,
+    )
+    .await;
+    super::super::execute_transaction(&mut client, &txn).await;
+
+    let mut transaction = Transaction::default();
+    {
+        let ptb = transaction.kind_mut().programmable_transaction_mut();
+        ptb.set_inputs(vec![Input::default().with_object_id("0x6")]);
+        ptb.set_commands(vec![Command::from(
+            MoveCall::default()
+                .with_package("0x2")
+                .with_module("clock")
+                .with_function("timestamp_ms")
+                .with_arguments(vec![Argument::new_input(0)]),
+        )])
+    }
+    transaction.set_sender(receiver.to_string());
+
+    // First check that we still fallback to coin selection if we have a balance but not enough to
+    // pay for the required budget.
+    let resolved = client
+        .execution_client()
+        .simulate_transaction(
+            SimulateTransactionRequest::new(transaction.clone()).with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+
+    // Assert that the txn simulated correctly
+    assert!(resolved.transaction().effects().status().success());
+    // Assert that gas coins is not empty which means we still used coins
+    assert!(
+        !resolved
+            .transaction()
+            .transaction()
+            .gas_payment()
+            .objects()
+            .is_empty()
+    );
+    assert!(resolved.transaction().effects().gas_object_opt().is_some());
+    // Assert expiration was left to `None`
+    assert_eq!(
+        resolved.transaction().transaction().expiration().kind(),
+        TransactionExpirationKind::None
+    );
+
+    // Transfer some more SUI to address balance, enough to pay for gas
+    let txn = sui_test_transaction_builder::make_transfer_sui_address_balance_transaction(
+        &test_cluster.wallet,
+        Some(receiver),
+        100_000_000_000,
+    )
+    .await;
+    super::super::execute_transaction(&mut client, &txn).await;
+
+    // Now check that we properly select address balance to use
+    let resolved = client
+        .execution_client()
+        .simulate_transaction(
+            SimulateTransactionRequest::new(transaction).with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+
+    // Assert that the txn simulated correctly
+    assert!(resolved.transaction().effects().status().success());
+    // Assert that gas coins is empty which means we used address balance
+    assert!(
+        resolved
+            .transaction()
+            .transaction()
+            .gas_payment()
+            .objects()
+            .is_empty()
+    );
+    assert!(resolved.transaction().effects().gas_object_opt().is_none());
+    // There is an accumulator_write in effects
+    assert!(
+        resolved.transaction().effects().changed_objects()[0]
+            .accumulator_write_opt()
+            .is_some()
+    );
+    // Assert expiration was properly set to `ValidDuring`
+    assert_eq!(
+        resolved.transaction().transaction().expiration().kind(),
+        TransactionExpirationKind::ValidDuring
+    );
 }

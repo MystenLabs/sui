@@ -1,24 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use sui_futures::service::Service;
-use tokio::{
-    sync::Semaphore,
-    time::{MissedTickBehavior, interval},
-};
-use tracing::{debug, error, info, warn};
+use tokio::sync::Semaphore;
+use tokio::time::MissedTickBehavior;
+use tokio::time::interval;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use crate::{
-    metrics::IndexerMetrics,
-    pipeline::logging::{LoggerWatermark, WatermarkLogger},
-    store::{Connection, Store},
-};
-
-use super::{Handler, PrunerConfig};
+use crate::metrics::IndexerMetrics;
+use crate::pipeline::concurrent::Handler;
+use crate::pipeline::concurrent::PrunerConfig;
+use crate::pipeline::logging::LoggerWatermark;
+use crate::pipeline::logging::WatermarkLogger;
+use crate::store::Connection;
+use crate::store::Store;
 
 #[derive(Default)]
 struct PendingRanges {
@@ -323,23 +326,21 @@ async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::sync::Arc;
-    use std::{
-        collections::HashMap,
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
 
     use async_trait::async_trait;
     use prometheus::Registry;
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::time::Duration;
 
-    use crate::{
-        FieldCount,
-        metrics::IndexerMetrics,
-        mocks::store::*,
-        pipeline::{Processor, concurrent::BatchStatus},
-    };
+    use crate::FieldCount;
+    use crate::metrics::IndexerMetrics;
+    use crate::mocks::store::*;
+    use crate::pipeline::Processor;
+    use crate::pipeline::concurrent::BatchStatus;
 
     use super::*;
 

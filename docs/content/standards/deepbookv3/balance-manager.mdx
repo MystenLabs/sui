@@ -33,7 +33,8 @@ With exception to swaps, all interactions with DeepBookV3 require a `BalanceMana
 
 Following are the different public functions that the `BalanceManager` exposes.
 
-### Create a `BalanceManager`
+<details>
+<summary>Create a `BalanceManager`</summary>
 
 The `new()` function creates a `BalanceManager`. Combine it with `share`, or else the transaction fails. You can combine the transaction with deposit calls, allowing you to create, deposit, then share the balance manager in one transaction.
 
@@ -46,7 +47,10 @@ The `new()` function creates a `BalanceManager`. Combine it with `share`, or els
 	noComments
 />
 
-### Create a `BalanceManager` with custom owner
+</details>
+
+<details>
+<summary>Create a `BalanceManager` with custom owner</summary>
 
 The `new_with_custom_owner()` function creates a `BalanceManager` with a custom owner. Combine it with `share`, or else the transaction fails. You can combine the transaction with deposit calls, allowing you to create, deposit, then share the balance manager in one transaction.
 
@@ -59,12 +63,15 @@ The `new_with_custom_owner()` function creates a `BalanceManager` with a custom 
 	noComments
 />
 
-### Create a `BalanceManager` with custom owner and capabilities
+</details>
 
-The `new_with_custom_owner_and_caps()` function creates a `BalanceManager` with a custom owner and returns all three capabilities (`DepositCap`, `WithdrawCap`, and `TradeCap`) in a single call. Combine the balance manager with `share`, or else the transaction fails. This is a convenient way to set up a complete balance manager with all necessary capabilities in one transaction.
+<details>
+<summary>Create a `BalanceManager` with custom owner and capabilities</summary>
+
+The `new_with_custom_owner_caps<App>()` function creates a `BalanceManager` with a custom owner and returns all three capabilities (`DepositCap`, `WithdrawCap`, and `TradeCap`) in a single call. This function requires authorization through the DeepBook Registry with a specific `App` type. Combine the balance manager with `share`, or else the transaction fails. This is a convenient way to set up a complete balance manager with all necessary capabilities in one transaction.
 
 :::caution
-Move code using DeepBookV3  uses `DepositCap`, `WithdrawCap`, and `TradeCap`, while the DeepBookV3 SDK uses `depositCap`, `withdrawCap`, and `tradeCap`.
+Move code using DeepBookV3 uses `DepositCap`, `WithdrawCap`, and `TradeCap`, while the DeepBookV3 SDK uses `depositCap`, `withdrawCap`, and `tradeCap`.
 :::
 
 <ImportContent
@@ -72,11 +79,14 @@ Move code using DeepBookV3  uses `DepositCap`, `WithdrawCap`, and `TradeCap`, wh
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="new_with_custom_owner_and_caps"
+	fun="new_with_custom_owner_caps"
 	noComments
 />
 
-### Mint a `TradeCap`
+</details>
+
+<details>
+<summary>Mint a `TradeCap`</summary>
 
 The owner of a `BalanceManager` can mint a `TradeCap` and send it to another address. Upon receipt, that address will have the capability to place orders with this `BalanceManager`. The address owner cannot deposit or withdraw funds, however. The maximum total number of `TradeCap`, `WithdrawCap`, and `DepositCap` that can be assigned for a `BalanceManager` is `1000`. If this limit is reached, one or more existing caps must be revoked before minting new ones. You can also use `revoke_trade_cap` to revoke `DepositCap` and `WithdrawCap`.
 
@@ -88,7 +98,10 @@ The owner of a `BalanceManager` can mint a `TradeCap` and send it to another add
 	fun="mint_trade_cap,revoke_trade_cap"
 />
 
-### Mint a `DepositCap` or `WithdrawCap`
+</details>
+
+<details>
+<summary>Mint a `DepositCap` or `WithdrawCap`</summary>
 
 The owner of a `BalanceManager` can mint a `DepositCap` or `WithdrawCap` and send it to another address. Upon receipt, that address will have the capability to deposit in or withdraw from `BalanceManager`. The address owner cannot execute trades, however. The maximum total number of `TradeCap`, `WithdrawCap`, and `DepositCap` that can be assigned for a `BalanceManager` is `1000`. If this limit is reached, one or more existing caps must be revoked before minting new ones.
 
@@ -100,7 +113,10 @@ The owner of a `BalanceManager` can mint a `DepositCap` or `WithdrawCap` and sen
 	fun="mint_deposit_cap,mint_withdraw_cap"
 />
 
-### Generate a `TradeProof`
+</details>
+
+<details>
+<summary>Generate a `TradeProof`</summary>
 
 To call any function that requires a balance check or transfer, the user must provide their `BalanceManager` as well as a `TradeProof`. There are two ways to generate a trade proof, one used by the owner and another used by a `TradeCap` owner.
 
@@ -112,7 +128,10 @@ To call any function that requires a balance check or transfer, the user must pr
 	fun="generate_proof_as_owner,generate_proof_as_trader"
 />
 
-### Deposit funds
+</details>
+
+<details>
+<summary>Deposit funds</summary>
 
 Only the owner can call this function to deposit funds into the `BalanceManager`.
 
@@ -124,7 +143,10 @@ Only the owner can call this function to deposit funds into the `BalanceManager`
 	fun="deposit"
 />
 
-### Withdraw funds
+</details>
+
+<details>
+<summary>Withdraw funds</summary>
 
 Only the owner can call this function to withdraw funds from the `BalanceManager`.
 
@@ -136,7 +158,10 @@ Only the owner can call this function to withdraw funds from the `BalanceManager
 	fun="withdraw,withdraw_all"
 />
 
-### Deposit funds using `DepositCap`
+</details>
+
+<details>
+<summary>Deposit funds using `DepositCap`</summary>
 
 Only holders of a `DepositCap` for the `BalanceManager` can call this function to deposit funds into the `BalanceManager`.
 
@@ -148,7 +173,10 @@ Only holders of a `DepositCap` for the `BalanceManager` can call this function t
 	fun="deposit_with_cap"
 />
 
-### Withdraw funds using `WithdrawCap`
+</details>
+
+<details>
+<summary>Withdraw funds using WithdrawCap</summary>
 
 Only holders of a `WithdrawCap` for the `BalanceManager` can call this function to withdraw funds from the `BalanceManager`.
 
@@ -160,19 +188,25 @@ Only holders of a `WithdrawCap` for the `BalanceManager` can call this function 
 	fun="withdraw_with_cap"
 />
 
-### Set and unset referral
+</details>
 
-The owner of a `TradeCap` can set or unset a referral for the balance manager. Setting a referral allows the balance manager to be associated with a specific `DeepBookReferral`, which can track and earn referral fees.
+<details>
+<summary>Set and unset referral</summary>
+
+The owner of a `TradeCap` can set or unset a pool-specific referral for the balance manager. Setting a referral allows the balance manager to be associated with a `DeepBookPoolReferral` for that pool, which can track and earn referral fees. Each balance manager can have different referrals for different pools.
 
 <ImportContent
 	source="packages/deepbook/sources/balance_manager.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="set_referral,unset_referral"
+	fun="set_balance_manager_referral,unset_balance_manager_referral"
 />
 
-### Register balance manager
+</details>
+
+<details>
+<summary>Register balance manager</summary>
 
 Register a balance manager with the registry. This adds the balance manager to the owner's list of managers in the registry.
 
@@ -181,18 +215,55 @@ Register a balance manager with the registry. This adds the balance manager to t
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="register_manager"
+	fun="register_balance_manager"
 />
 
-### Read endpoints
+</details>
+
+<details>
+<summary>Read endpoints</summary>
 
 <ImportContent
 	source="packages/deepbook/sources/balance_manager.move"
 	mode="code"
 	org="MystenLabs"
 	repo="deepbookv3"
-	fun="validate_proof,balance,owner,id,get_referral_id,referral_owner"
+	fun="validate_proof,balance,owner,id,get_balance_manager_referral_id,balance_manager_referral_owner,balance_manager_referral_pool_id"
 />
+
+</details>
+
+## Events
+
+<details>
+<summary>`BalanceManagerEvent`</summary>
+
+Emitted when a new balance manager is created.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="BalanceManagerEvent"
+/>
+
+</details>
+
+<details>
+<summary>BalanceEvent</summary>
+
+Emitted when a deposit or withdrawal occurs.
+
+<ImportContent
+	source="packages/deepbook/sources/balance_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="BalanceEvent"
+/>
+
+</details>
 
 ## Related links
 

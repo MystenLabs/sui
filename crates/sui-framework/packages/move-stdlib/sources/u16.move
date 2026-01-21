@@ -75,6 +75,45 @@ public fun to_string(x: u16): String {
     std::macros::num_to_string!(x)
 }
 
+/// Try to add `x` and `y`.
+/// Returns `None` if the addition would overflow.
+public fun checked_add(x: u16, y: u16): Option<u16> {
+    std::macros::num_checked_add!(x, y, max_value!())
+}
+
+/// Try to subtract `y` from `x`.
+/// Returns `None` if `y > x`.
+public fun checked_sub(x: u16, y: u16): Option<u16> {
+    std::macros::num_checked_sub!(x, y)
+}
+
+/// Try to multiply `x` and `y`.
+/// Returns `None` if the multiplication would overflow.
+public fun checked_mul(x: u16, y: u16): Option<u16> {
+    std::macros::num_checked_mul!(x, y, max_value!())
+}
+
+/// Try to divide `x` by `y`.
+/// Returns `None` if `y` is zero.
+public fun checked_div(x: u16, y: u16): Option<u16> {
+    std::macros::num_checked_div!(x, y)
+}
+
+/// Add `x` and `y`, saturating at the maximum value instead of overflowing.
+public fun saturating_add(x: u16, y: u16): u16 {
+    std::macros::num_saturating_add!(x, y, max_value!())
+}
+
+/// Subtract `y` from `x`, saturating at `0` instead of underflowing.
+public fun saturating_sub(x: u16, y: u16): u16 {
+    std::macros::num_saturating_sub!(x, y)
+}
+
+/// Multiply `x` and `y`, saturating at the maximum value instead of overflowing.
+public fun saturating_mul(x: u16, y: u16): u16 {
+    std::macros::num_saturating_mul!(x, y, max_value!())
+}
+
 /// Maximum value for a `u16`
 public macro fun max_value(): u16 {
     0xFFFF

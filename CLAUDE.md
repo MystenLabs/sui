@@ -57,18 +57,18 @@ cargo xclippy
 
 ```
 sui/
-├── crates/                   # Main Rust crates
-│   ├── sui-core/             # Core blockchain logic
-│   ├── sui-node/             # Validator node implementation
-│   ├── sui-framework/        # Move system packages & stdlib
-│   ├── sui-types/            # Core type definitions
-│   ├── sui-json-rpc/         # JSON-RPC API server
-│   ├── sui-graphql-rpc/      # GraphQL API server
-│   └── sui-indexer-alt/      # Blockchain data indexer
-├── consensus/                # Consensus mechanism (Mysticeti)
-├── sui-execution/            # Move execution layer with versions (v0, v1, v2 and latest)
-├── apps/                     # Frontend applications
-└── external-crates/          # Move compiler and VM
+├── crates/                             # Main Rust crates
+│   ├── sui-core/                       # Core blockchain logic
+│   ├── sui-node/                       # Validator node implementation
+│   ├── sui-framework/                  # Move system packages & stdlib
+│   ├── sui-types/                      # Core type definitions
+│   ├── sui-json-rpc/                   # JSON-RPC API server
+│   ├── sui-indexer-alt-graphql/        # GraphQL API server
+│   └── sui-indexer-alt/                # Blockchain data indexer
+├── consensus/                          # Consensus mechanism (Mysticeti)
+├── sui-execution/                      # Move execution layer with versions (v0, v1, v2 and latest)
+├── apps/                               # Frontend applications
+└── external-crates/                    # Move compiler and VM
 ```
 
 ### Key Architectural Patterns
@@ -84,7 +84,7 @@ sui/
    - Transactions affecting only owned objects can start execution before consensus
    - Shared object transactions require consensus ordering before execution
 
-4. **Storage Layer**: 
+4. **Storage Layer**:
    - Uses RocksDB for persistent storage
    - Separate stores for objects, transactions, and effects
    - Checkpointing system for state synchronization
@@ -109,7 +109,7 @@ sui/
 **Do NOT comment the obvious** - comments should not simply repeat what the code does.
 **When to comment**:
 - Non-obvious algorithms or business logic
-- Temporary exclusions, timeouts, or thresholds and their reasoning  
+- Temporary exclusions, timeouts, or thresholds and their reasoning
 - Complex calculations where the "why" isn't immediately clear
 - Subtle race conditions or threading considerations
 - Assumptions about external state or preconditions

@@ -303,6 +303,7 @@ impl Debug for ConsensusTransactionKey {
     }
 }
 
+/// Deprecated in favor of AuthorityCapabilitiesV2
 /// Used to advertise capabilities of each authority via consensus. This allows validators to
 /// negotiate the creation of the ChangeEpoch transaction.
 #[derive(Serialize, Deserialize, Clone, Hash)]
@@ -335,27 +336,6 @@ impl Debug for AuthorityCapabilitiesV1 {
             )
             .field("available_system_packages", &self.available_system_packages)
             .finish()
-    }
-}
-
-impl AuthorityCapabilitiesV1 {
-    pub fn new(
-        authority: AuthorityName,
-        supported_protocol_versions: SupportedProtocolVersions,
-        available_system_packages: Vec<ObjectRef>,
-    ) -> Self {
-        let generation = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Sui did not exist prior to 1970")
-            .as_millis()
-            .try_into()
-            .expect("This build of sui is not supported in the year 500,000,000");
-        Self {
-            authority,
-            generation,
-            supported_protocol_versions,
-            available_system_packages,
-        }
     }
 }
 
@@ -451,11 +431,10 @@ impl ExecutionTimeObservation {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ConsensusTransactionKind {
     CertifiedTransaction(Box<CertifiedTransaction>),
-    // V1: dedup by authority + sequence only
-    CheckpointSignature(Box<CheckpointSignatureMessage>),
+    CheckpointSignature(Box<CheckpointSignatureMessage>), // deprecated, use CheckpointSignatureV2
     EndOfPublish(AuthorityName),
 
-    CapabilityNotification(AuthorityCapabilitiesV1),
+    CapabilityNotification(AuthorityCapabilitiesV1), // deprecated, use CapabilityNotificationV2
 
     NewJWKFetched(AuthorityName, JwkId, JWK),
     RandomnessStateUpdate(u64, Vec<u8>), // deprecated
@@ -631,16 +610,6 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn new_checkpoint_signature_message(data: CheckpointSignatureMessage) -> Self {
-        let mut hasher = DefaultHasher::new();
-        data.summary.auth_sig().signature.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_le_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::CheckpointSignature(Box::new(data)),
-        }
-    }
-
     pub fn new_checkpoint_signature_message_v2(data: CheckpointSignatureMessage) -> Self {
         let mut hasher = DefaultHasher::new();
         data.summary.auth_sig().signature.hash(&mut hasher);
@@ -658,16 +627,6 @@ impl ConsensusTransaction {
         Self {
             tracking_id,
             kind: ConsensusTransactionKind::EndOfPublish(authority),
-        }
-    }
-
-    pub fn new_capability_notification(capabilities: AuthorityCapabilitiesV1) -> Self {
-        let mut hasher = DefaultHasher::new();
-        capabilities.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_le_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::CapabilityNotification(capabilities),
         }
     }
 

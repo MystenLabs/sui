@@ -29,7 +29,6 @@ use sui_types::transaction::{
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
 };
-use tracing::debug;
 
 use crate::execution_cache::TransactionCacheRead;
 
@@ -467,14 +466,6 @@ pub fn build_accumulator_barrier_tx(
                 IDOperation::None => (created, destroyed),
             }
         });
-
-    debug!(
-        epoch,
-        checkpoint_height,
-        "building barrier transaction with {objects_created} objects created and {objects_destroyed} objects destroyed in {num_settlements} settlement tx"
-    );
-
-    debug!("barrier settlement effects: {:#?}", settlement_effects); //TODO-DNS
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let root = builder

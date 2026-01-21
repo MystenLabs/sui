@@ -4,39 +4,39 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object, connection::Connection};
-
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::connection::Connection;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
-use sui_types::{
-    crypto::AuthorityStrongQuorumSignInfo,
-    message_envelope::Message,
-    messages_checkpoint::{
-        CheckpointCommitment, CheckpointContents as NativeCheckpointContents, CheckpointSummary,
-    },
-};
+use sui_types::crypto::AuthorityStrongQuorumSignInfo;
+use sui_types::message_envelope::Message;
+use sui_types::messages_checkpoint::CheckpointCommitment;
+use sui_types::messages_checkpoint::CheckpointContents as NativeCheckpointContents;
+use sui_types::messages_checkpoint::CheckpointSummary;
 
-use crate::{
-    api::{
-        query::Query,
-        scalars::{base64::Base64, cursor::JsonCursor, date_time::DateTime, uint53::UInt53},
-        types::available_range::AvailableRangeKey,
-    },
-    error::RpcError,
-    pagination::{Page, PaginationConfig},
-    scope::Scope,
-    task::watermark::Watermarks,
-};
-
-use super::{
-    checkpoint::filter::{CheckpointFilter, checkpoint_bounds, cp_by_epoch, cp_unfiltered},
-    epoch::Epoch,
-    gas::GasCostSummary,
-    transaction::{
-        CTransaction, Transaction,
-        filter::{TransactionFilter, TransactionFilterValidator as TFValidator},
-    },
-    validator_aggregated_signature::ValidatorAggregatedSignature,
-};
+use crate::api::query::Query;
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::cursor::JsonCursor;
+use crate::api::scalars::date_time::DateTime;
+use crate::api::scalars::id::Id;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::checkpoint::filter::CheckpointFilter;
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
+use crate::api::types::checkpoint::filter::cp_by_epoch;
+use crate::api::types::checkpoint::filter::cp_unfiltered;
+use crate::api::types::epoch::Epoch;
+use crate::api::types::gas::GasCostSummary;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
+use crate::api::types::validator_aggregated_signature::ValidatorAggregatedSignature;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::pagination::PaginationConfig;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
 
@@ -62,17 +62,22 @@ pub(crate) type CCheckpoint = JsonCursor<u64>;
 /// Checkpoints contain finalized transactions and are used for node synchronization and global transaction ordering.
 #[Object]
 impl Checkpoint {
+    /// The checkpoint's globally unique identifier, which can be passed to `Query.node` to refetch it.
+    pub(crate) async fn id(&self) -> Id {
+        Id::Checkpoint(self.sequence_number)
+    }
+
     /// The checkpoint's position in the total order of finalized checkpoints, agreed upon by consensus.
     async fn sequence_number(&self) -> UInt53 {
         self.sequence_number.into()
     }
 
     /// Query the RPC as if this checkpoint were the latest checkpoint.
-    async fn query(&self) -> Option<Result<Query, RpcError>> {
+    async fn query(&self, ctx: &Context<'_>) -> Option<Result<Query, RpcError>> {
         async {
             let scope = Some(
                 self.scope
-                    .with_checkpoint_viewed_at(self.sequence_number)
+                    .with_checkpoint_viewed_at(ctx, self.sequence_number)
                     .context("Checkpoint in the future")?,
             );
 

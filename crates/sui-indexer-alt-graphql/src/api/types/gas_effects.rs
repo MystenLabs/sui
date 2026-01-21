@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::SimpleObject;
-use sui_types::effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI};
+use sui_types::effects::TransactionEffects as NativeTransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 
-use crate::{api::types::gas::GasCostSummary, scope::Scope};
-
-use super::object::Object;
+use crate::api::types::gas::GasCostSummary;
+use crate::api::types::object::Object;
+use crate::scope::Scope;
 
 /// Effects related to gas (costs incurred and the identity of the smashed gas object returned).
 #[derive(SimpleObject)]

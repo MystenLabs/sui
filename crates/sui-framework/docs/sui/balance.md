@@ -23,6 +23,7 @@ custom coins with <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a
 -  [Function `send_funds`](#sui_balance_send_funds)
 -  [Function `redeem_funds`](#sui_balance_redeem_funds)
 -  [Function `withdraw_funds_from_object`](#sui_balance_withdraw_funds_from_object)
+-  [Function `settled_funds_value`](#sui_balance_settled_funds_value)
 -  [Function `create_supply_internal`](#sui_balance_create_supply_internal)
 -  [Function `create_staking_rewards`](#sui_balance_create_staking_rewards)
 -  [Function `destroy_storage_rebates`](#sui_balance_destroy_storage_rebates)
@@ -36,6 +37,7 @@ custom coins with <code><a href="../sui/balance.md#sui_balance_Supply">Supply</a
 <b>use</b> <a href="../std/option.md#std_option">std::option</a>;
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
+<b>use</b> <a href="../std/u128.md#std_u128">std::u128</a>;
 <b>use</b> <a href="../std/vector.md#std_vector">std::vector</a>;
 <b>use</b> <a href="../sui/accumulator.md#sui_accumulator">sui::accumulator</a>;
 <b>use</b> <a href="../sui/address.md#sui_address">sui::address</a>;
@@ -502,6 +504,37 @@ Create a <code>Withdrawal&lt;<a href="../sui/balance.md#sui_balance_Balance">Bal
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_withdraw_funds_from_object">withdraw_funds_from_object</a>&lt;T&gt;(obj: &<b>mut</b> UID, <a href="../sui/balance.md#sui_balance_value">value</a>: u64): Withdrawal&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt; {
     <a href="../sui/funds_accumulator.md#sui_funds_accumulator_withdraw_from_object">sui::funds_accumulator::withdraw_from_object</a>(obj, <a href="../sui/balance.md#sui_balance_value">value</a> <b>as</b> u256)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_balance_settled_funds_value"></a>
+
+## Function `settled_funds_value`
+
+Read the value of the funds of type T owned by <code><b>address</b></code> as of the beginning of
+the current consensus commit. Can read either address-owned or object-owned balances.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_settled_funds_value">settled_funds_value</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, <b>address</b>: <b>address</b>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/balance.md#sui_balance_settled_funds_value">settled_funds_value</a>&lt;T&gt;(root: &<a href="../sui/accumulator.md#sui_accumulator_AccumulatorRoot">sui::accumulator::AccumulatorRoot</a>, <b>address</b>: <b>address</b>): u64 {
+    <b>if</b> (!root.u128_exists&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt;(<b>address</b>)) {
+        <b>return</b> 0
+    };
+    <b>let</b> val: u128 = root.u128_read&lt;<a href="../sui/balance.md#sui_balance_Balance">Balance</a>&lt;T&gt;&gt;(<b>address</b>);
+    <b>let</b> val = <a href="../std/u128.md#std_u128_min">std::u128::min</a>(<a href="../std/u64.md#std_u64_max_value">std::u64::max_value</a>!() <b>as</b> u128, val);
+    val <b>as</b> u64
 }
 </code></pre>
 

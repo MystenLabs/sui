@@ -24,13 +24,21 @@ module test::mod {
 
   public struct Foo has key, store {
     id: UID,
-    deep: Deep<Deep<Deep<Deep<Deep<Deep<Deep<Deep<Deep<Deep<Deep<u8>>>>>>>>>>>,
+    deep: Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<Deep<Deep<Deep<
+          Deep<u8>
+          >>>>>>>>>>>>>>>>
+          >>>>>>>>>>>>>>>>,
   }
 
 
-  public struct Deep<T: store> has store {
-    deep: T,
-  }
+  public struct Deep<T: store>(T) has store;
 
   fun init(otw: MOD, ctx: &mut TxContext) {
     let publisher = package::claim(otw, ctx);
@@ -38,7 +46,7 @@ module test::mod {
       &publisher,
       // Too deep to display
       vector[utf8(b"deep")],
-      vector[utf8(b"{deep.deep.deep.deep.deep.deep.deep.deep.deep.deep.deep}")],
+      vector[utf8(b"{d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d.d}")],
       ctx,
     );
 
@@ -50,12 +58,18 @@ module test::mod {
   public fun new(d: u8, ctx: &mut TxContext): Foo {
     Foo {
       id: object::new(ctx),
-      deep: deep(deep(deep(deep(deep(deep(deep(deep(deep(deep(deep(d)))))))))))
+      deep: Deep(Deep(Deep(Deep(
+            Deep(Deep(Deep(Deep(
+            Deep(Deep(Deep(Deep(
+            Deep(Deep(Deep(Deep(
+            Deep(Deep(Deep(Deep(
+            Deep(Deep(Deep(Deep(
+            Deep(Deep(Deep(Deep(
+            Deep(Deep(Deep(Deep(
+            Deep(d)
+            ))))))))))))))))
+            ))))))))))))))))
     }
-  }
-
-  fun deep<T: store>(deep: T): Deep<T> {
-    Deep { deep }
   }
 }
 

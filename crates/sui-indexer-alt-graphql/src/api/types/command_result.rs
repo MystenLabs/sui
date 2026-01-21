@@ -4,13 +4,10 @@
 use async_graphql::SimpleObject;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 
-use crate::{
-    api::types::{
-        move_type::MoveType, move_value::MoveValue,
-        transaction_kind::programmable::commands::TransactionArgument,
-    },
-    scope::Scope,
-};
+use crate::api::types::move_type::MoveType;
+use crate::api::types::move_value::MoveValue;
+use crate::api::types::transaction_kind::programmable::commands::TransactionArgument;
+use crate::scope::Scope;
 
 /// The intermediate results for each command of a transaction simulation.
 #[derive(Clone, SimpleObject)]

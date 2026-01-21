@@ -18,13 +18,17 @@ Stake required is the amount of DEEP tokens a user must have staked in the pool 
 
 `Pool` exposes the following endpoints for staking and governance.
 
-### Stake
+<details>
+<summary>Stake</summary>
 
 DEEP tokens must be available in the `balance_manager` for staking. A user's stake becomes active in the following epoch. If the user's active stake is greater than the stake required, the user can get reduced taker fees and can accumulate trading fee rebates during that epoch.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="stake" noComments />
 
-### Unstake
+</details>
+
+<details>
+<summary>Unstake</summary>
 
 All of the user's active and inactive stake are removed and added back into the `BalanceManager`. Any casted votes are removed. Maker rebates for the epoch are forfeited, and any reduced taker fees for the remaining epoch are disabled.
 
@@ -32,7 +36,10 @@ The `balance_manager` must have enough staked DEEP tokens. The `balance_manager`
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="unstake" noComments />
 
-### Submit proposal
+</details>
+
+<details>
+<summary>Submit proposal</summary>
 
 Users with a non zero active stake can submit proposals. One proposal per user. The user automatically votes for the proposal they submit.
 
@@ -40,17 +47,25 @@ Submit a proposal to change the taker fee, maker fee, and stake required. The `b
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="submit_proposal" noComments />
 
-### Vote
+</details>
+
+<details>
+<summary>Vote</summary>
 
 Users with non-zero voting power can vote on a proposal. All voting power is used on a single proposal. If the user has voted on a different proposal during this epoch, then that vote is removed and recasted into the new proposal. The `balance_manager` must have enough staked DEEP tokens to participate.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="vote" noComments />
 
-### Claim rebates
+</details>
+
+<details>
+<summary>Claim rebates</summary>
 
 Use `claim_rebates` to claim the rewards for the `balance_manager`. The `balance_manager` must have rewards to claim. The `balance_manager` data is updated with the claimed rewards.
 
 <ImportContent source="packages/deepbook/sources/pool.move" mode="code" org="MystenLabs" repo="deepbookv3" fun="claim_rebates" noComments />
+
+</details>
 
 ## Related links
 

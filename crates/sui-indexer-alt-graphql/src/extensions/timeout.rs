@@ -1,19 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Duration,
-};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 
-use async_graphql::{
-    Response, ServerError, ServerResult, Variables,
-    extensions::{Extension, ExtensionContext, ExtensionFactory, NextExecute, NextParseQuery},
-    parser::types::{ExecutableDocument, OperationType},
-};
+use async_graphql::Response;
+use async_graphql::ServerError;
+use async_graphql::ServerResult;
+use async_graphql::Variables;
+use async_graphql::extensions::Extension;
+use async_graphql::extensions::ExtensionContext;
+use async_graphql::extensions::ExtensionFactory;
+use async_graphql::extensions::NextExecute;
+use async_graphql::extensions::NextParseQuery;
+use async_graphql::parser::types::ExecutableDocument;
+use async_graphql::parser::types::OperationType;
 use tokio::time::timeout;
 
 use crate::error::request_timeout;
@@ -95,7 +98,11 @@ impl Extension for TimeoutExt {
 
 #[cfg(test)]
 mod tests {
-    use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema, Value};
+    use async_graphql::EmptyMutation;
+    use async_graphql::EmptySubscription;
+    use async_graphql::Object;
+    use async_graphql::Schema;
+    use async_graphql::Value;
 
     use crate::error::code;
 

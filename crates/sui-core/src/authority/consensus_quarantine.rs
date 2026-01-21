@@ -39,11 +39,10 @@ use typed_store::rocks::DBBatch;
 use crate::{
     authority::{
         authority_per_epoch_store::AuthorityPerEpochStore,
-        epoch_start_configuration::{EpochStartConfigTrait, EpochStartConfiguration},
         shared_object_congestion_tracker::CongestionPerObjectDebt,
     },
     checkpoints::{CheckpointHeight, PendingCheckpoint},
-    consensus_handler::{SequencedConsensusTransactionKey, VerifiedSequencedConsensusTransaction},
+    consensus_handler::SequencedConsensusTransactionKey,
     epoch::{
         randomness::{VersionedProcessedMessage, VersionedUsedProcessedMessages},
         reconfiguration::ReconfigState,
@@ -65,12 +64,7 @@ pub(crate) struct ConsensusCommitOutput {
     // transaction scheduling state
     next_shared_object_versions: Option<HashMap<ConsensusObjectSequenceKey, SequenceNumber>>,
 
-    // TODO: If we delay committing consensus output until after all deferrals have been loaded,
-    // we can move deferred_txns to the ConsensusOutputCache and save disk bandwidth.
-    deferred_txns: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>,
-    // TODO(commit-handler-rewrite): remove the original once we no longer need to support the old consensus handler
-    deferred_txns_v2: Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>,
-    // deferred txns that have been loaded and can be removed
+    deferred_txns: Vec<(DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>)>,
     deleted_deferred_txns: BTreeSet<DeferralKey>,
 
     // checkpoint state
@@ -114,7 +108,7 @@ impl ConsensusCommitOutput {
     }
 
     pub fn has_deferred_transactions(&self) -> bool {
-        !self.deferred_txns.is_empty() || !self.deferred_txns_v2.is_empty()
+        !self.deferred_txns.is_empty()
     }
 
     fn get_randomness_last_round_timestamp(&self) -> Option<TimestampMs> {
@@ -200,7 +194,7 @@ impl ConsensusCommitOutput {
         key: DeferralKey,
         transactions: Vec<VerifiedExecutableTransactionWithAliases>,
     ) {
-        self.deferred_txns_v2.push((key, transactions));
+        self.deferred_txns.push((key, transactions));
     }
 
     pub fn delete_loaded_deferred_transactions(&mut self, deferral_keys: &[DeferralKey]) {
@@ -321,7 +315,7 @@ impl ConsensusCommitOutput {
 
         batch.insert_batch(
             &tables.deferred_transactions_with_aliases_v2,
-            self.deferred_txns_v2.into_iter().map(|(key, txs)| {
+            self.deferred_txns.into_iter().map(|(key, txs)| {
                 (
                     key,
                     txs.into_iter()
@@ -412,7 +406,7 @@ impl ConsensusCommitOutput {
 pub(crate) struct ConsensusOutputCache {
     // deferred transactions is only used by consensus handler so there should never be lock contention
     // - hence no need for a DashMap.
-    pub(crate) deferred_transactions_v2:
+    pub(crate) deferred_transactions:
         Mutex<BTreeMap<DeferralKey, Vec<VerifiedExecutableTransactionWithAliases>>>,
 
     // user_signatures_for_checkpoints is written to by consensus handler and read from by checkpoint builder
@@ -426,23 +420,15 @@ pub(crate) struct ConsensusOutputCache {
 }
 
 impl ConsensusOutputCache {
-    pub(crate) fn new(
-        epoch_start_configuration: &EpochStartConfiguration,
-        tables: &AuthorityEpochTables,
-    ) -> Self {
-        let deferred_transactions_v2 = tables
+    pub(crate) fn new(tables: &AuthorityEpochTables) -> Self {
+        let deferred_transactions = tables
             .get_all_deferred_transactions_v2()
             .expect("load deferred transactions cannot fail");
-
-        assert!(
-            epoch_start_configuration.is_data_quarantine_active_from_beginning_of_epoch(),
-            "This version of sui-node can only run after data quarantining has been enabled. Please run version 1.45.0 or later to the end of the current epoch and retry"
-        );
 
         let executed_in_epoch_cache_capacity = 50_000;
 
         Self {
-            deferred_transactions_v2: Mutex::new(deferred_transactions_v2),
+            deferred_transactions: Mutex::new(deferred_transactions),
             user_signatures_for_checkpoints: Default::default(),
             executed_in_epoch: RwLock::new(DashMap::with_shard_amount(2048)),
             executed_in_epoch_cache: MokaCache::builder(8)

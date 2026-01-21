@@ -27,7 +27,7 @@ use diffy::create_patch;
 use itertools::Itertools;
 use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::{CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME, NotifyRead};
-use mysten_common::{assert_reachable, debug_fatal, fatal};
+use mysten_common::{assert_reachable, debug_fatal, fatal, in_antithesis};
 use mysten_metrics::{MonitoredFutureExt, monitored_scope, spawn_monitored_task};
 use nonempty::NonEmpty;
 use parking_lot::Mutex;
@@ -146,8 +146,6 @@ pub struct CheckpointStoreTables {
     // TODO: Once the switch to `full_checkpoint_content_v2` is fully active on mainnet,
     // deprecate this table (and remove when possible).
     full_checkpoint_content: DBMap<CheckpointSequenceNumber, FullCheckpointContents>,
-    #[default_options_override_fn = "full_checkpoint_content_table_default_config"]
-    full_checkpoint_content_v2: DBMap<CheckpointSequenceNumber, VersionedFullCheckpointContents>,
 
     /// Stores certified checkpoints
     pub(crate) certified_checkpoints: DBMap<CheckpointSequenceNumber, TrustedCheckpoint>,
@@ -175,6 +173,8 @@ pub struct CheckpointStoreTables {
             TransactionEffectsDigest,
         ),
     >,
+    #[default_options_override_fn = "full_checkpoint_content_table_default_config"]
+    full_checkpoint_content_v2: DBMap<CheckpointSequenceNumber, VersionedFullCheckpointContents>,
 }
 
 fn full_checkpoint_content_table_default_config() -> DBOptions {
@@ -1557,7 +1557,6 @@ impl CheckpointBuilder {
             tx_key,
         )
         .await;
-        debug!("barrier effects: {:#?}", barrier_effects); //TODO-DNS
 
         let settlement_effects: Vec<_> = settlement_effects
             .into_iter()
@@ -1590,7 +1589,9 @@ impl CheckpointBuilder {
             funds_changes,
         };
 
-        self.state.execution_scheduler().settle_funds(settlements);
+        self.state
+            .execution_scheduler()
+            .settle_address_funds(settlements);
 
         (tx_key, settlement_effects)
     }
@@ -1658,43 +1659,39 @@ impl CheckpointBuilder {
                 .in_monitored_scope("CheckpointNotifyRead")
                 .await;
 
-            let consensus_commit_prologue = if self
-                .epoch_store
-                .protocol_config()
-                .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
-            {
-                // If the roots contains consensus commit prologue transaction, we want to extract it,
-                // and put it to the front of the checkpoint.
+            assert!(
+                self.epoch_store
+                    .protocol_config()
+                    .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
+            );
 
-                let consensus_commit_prologue =
-                    self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
+            // If the roots contains consensus commit prologue transaction, we want to extract it,
+            // and put it to the front of the checkpoint.
+            let consensus_commit_prologue =
+                self.extract_consensus_commit_prologue(&root_digests, &root_effects)?;
 
-                // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
-                // other dependencies that haven't been included in any previous checkpoints.
-                if let Some((ccp_digest, ccp_effects)) = &consensus_commit_prologue {
-                    let unsorted_ccp = self.complete_checkpoint_effects(
-                        vec![ccp_effects.clone()],
-                        &mut effects_in_current_checkpoint,
-                    )?;
+            // Get the unincluded depdnencies of the consensus commit prologue. We should expect no
+            // other dependencies that haven't been included in any previous checkpoints.
+            if let Some((ccp_digest, ccp_effects)) = &consensus_commit_prologue {
+                let unsorted_ccp = self.complete_checkpoint_effects(
+                    vec![ccp_effects.clone()],
+                    &mut effects_in_current_checkpoint,
+                )?;
 
-                    // No other dependencies of this consensus commit prologue that haven't been included
-                    // in any previous checkpoint.
-                    if unsorted_ccp.len() != 1 {
-                        fatal!(
-                            "Expected 1 consensus commit prologue, got {:?}",
-                            unsorted_ccp
-                                .iter()
-                                .map(|e| e.transaction_digest())
-                                .collect::<Vec<_>>()
-                        );
-                    }
-                    assert_eq!(unsorted_ccp.len(), 1);
-                    assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
+                // No other dependencies of this consensus commit prologue that haven't been included
+                // in any previous checkpoint.
+                if unsorted_ccp.len() != 1 {
+                    fatal!(
+                        "Expected 1 consensus commit prologue, got {:?}",
+                        unsorted_ccp
+                            .iter()
+                            .map(|e| e.transaction_digest())
+                            .collect::<Vec<_>>()
+                    );
                 }
-                consensus_commit_prologue
-            } else {
-                None
-            };
+                assert_eq!(unsorted_ccp.len(), 1);
+                assert_eq!(unsorted_ccp[0].transaction_digest(), ccp_digest);
+            }
 
             let unsorted =
                 self.complete_checkpoint_effects(root_effects, &mut effects_in_current_checkpoint)?;
@@ -2422,14 +2419,6 @@ impl CheckpointBuilder {
         root_digests: &[TransactionDigest],
         sorted: &[TransactionEffects],
     ) {
-        if !self
-            .epoch_store
-            .protocol_config()
-            .prepend_prologue_tx_in_consensus_commit_in_checkpoints()
-        {
-            return;
-        }
-
         // Gets all the consensus commit prologue transactions from the roots.
         let root_txs = self
             .state
@@ -2499,8 +2488,14 @@ async fn wait_for_effects_with_retry(
     digests: &[TransactionDigest],
     tx_key: TransactionKey,
 ) -> Vec<TransactionEffects> {
+    let delay = if in_antithesis() {
+        // antithesis has aggressive thread pausing, 5 seconds causes false positives
+        15
+    } else {
+        5
+    };
     loop {
-        match tokio::time::timeout(Duration::from_secs(5), async {
+        match tokio::time::timeout(Duration::from_secs(delay), async {
             effects_store
                 .notify_read_executed_effects(task_name, digests)
                 .await

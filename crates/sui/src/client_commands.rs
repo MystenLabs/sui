@@ -32,7 +32,7 @@ use move_bytecode_verifier_meter::Scope;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
 };
-use move_package_alt::schema::ModeName;
+use move_package_alt::{PackageLoader, schema::ModeName};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
@@ -95,7 +95,7 @@ use tabled::{
 };
 
 use move_package_alt::{
-    package::RootPackage,
+    RootPackage,
     schema::{OriginalID, Publication, PublishAddresses, PublishedID},
 };
 use move_symbol_pool::Symbol;
@@ -399,6 +399,27 @@ pub enum SuiClientCommands {
     #[clap(name = "publish")]
     Publish(PublishArgs),
 
+    /// Publish a package using ephemeral addresses for dependencies.
+    #[clap(
+        name = "test-publish",
+        after_long_help = "The `test-publish` command is used to publish packages ephemerally, i.e. without recording the published addresses in the main `Published.toml` file. Running `sui client test-publish --pubfile-path <pubfile> --build-env <env>` will build the package for environment <env>, but will publish it on the current network, taking the dependency addresses from <pubfile>. It will also record the publication information for the package in <pubfile>. \n\
+                \n\
+                See https://docs.sui.io/guides/developer/sui-101/move-package-management for more information."
+    )]
+    TestPublish(TestPublishArgs),
+
+    /// Upgrade Move modules
+    #[clap(name = "upgrade")]
+    Upgrade(UpgradeArgs),
+
+    #[clap(
+        name = "test-upgrade",
+        after_long_help = "The `test-upgrade` command is used to upgrade ephemeral packages, for packages published using `test-publish` command. This does not write publication info to `Published.toml` file. Running `sui client test-upgrade --pubfile-path <pubfile> --build-env <env>` will build the package for environment <env>, but will publish it on the current network, taking the dependency addresses from <pubfile>. It will also record the publication information for the package in <pubfile>. \n\
+            \n\
+            See https://docs.sui.io/guides/developer/sui-101/move-package-management for more information."
+    )]
+    TestUpgrade(TestUpgradeArgs),
+
     /// Execute, dry-run, dev-inspect or otherwise inspect an already serialized transaction.
     SerializedTx {
         /// Base64-encoded BCS-serialized TransactionData.
@@ -459,15 +480,6 @@ pub enum SuiClientCommands {
         env: Option<String>,
     },
 
-    /// Publish a package using ephemeral addresses for dependencies.
-    #[clap(
-        name = "test-publish",
-        after_long_help = "The `test-publish` command is used to publish packages ephemerally, i.e. without recording the published addresses in the main `Published.toml` file. Running `sui client test-publish <pubfile> --build-env <env>` will build the package for environment <env>, but will publish it on the current network, taking the dependency addresses from <pubfile>. It will also record the publication information for the package in <pubfile>. \n\
-        \n\
-        See https://docs.sui.io/guides/developer/sui-101/move-package-management for more information."
-    )]
-    TestPublish(TestPublishArgs),
-
     /// Get the effects of executing the given transaction block
     #[clap(name = "tx-block")]
     TransactionBlock {
@@ -513,49 +525,6 @@ pub enum SuiClientCommands {
         /// The amount to transfer, if not specified, the entire coin object will be transferred.
         #[clap(long)]
         amount: Option<u64>,
-
-        #[clap(flatten)]
-        gas_data: GasDataArgs,
-
-        #[clap(flatten)]
-        processing: TxProcessingArgs,
-    },
-
-    /// Upgrade Move modules
-    #[clap(name = "upgrade")]
-    Upgrade {
-        /// Path to directory containing a Move package
-        #[clap(name = "package_path", global = true, default_value = ".")]
-        package_path: PathBuf,
-
-        /// ID of the upgrade capability for the package being upgraded.
-        #[clap(long, short = 'c')]
-        upgrade_capability: Option<ObjectID>,
-
-        /// Package build options
-        #[clap(flatten)]
-        build_config: MoveBuildConfig,
-
-        /// Skip verifying package compatibility locally before publishing.
-        #[clap(long)]
-        skip_verify_compatibility: bool,
-
-        /// Upgrade the package without checking whether dependency source code compiles to the on-chain
-        /// bytecode
-        #[clap(long)]
-        skip_dependency_verification: bool,
-
-        /// Check that the dependency source code compiles to the on-chain bytecode before
-        /// upgrading the package (currently the default behavior)
-        #[clap(long, conflicts_with = "skip_dependency_verification")]
-        verify_deps: bool,
-
-        /// Also publish transitive dependencies that have not already been published.
-        #[clap(long)]
-        with_unpublished_dependencies: bool,
-
-        #[clap(flatten)]
-        payment: PaymentArgs,
 
         #[clap(flatten)]
         gas_data: GasDataArgs,
@@ -639,7 +608,7 @@ pub struct PaymentArgs {
 }
 
 /// Arguments related to setting gas data, apart from payment coins.
-#[derive(Args, Debug, Default)]
+#[derive(Args, Debug, Default, Clone)]
 pub struct GasDataArgs {
     /// An optional gas budget for this transaction (in MIST). If gas budget is not provided, the
     /// tool will first perform a dry run to estimate the gas cost, and then it will execute the
@@ -666,7 +635,7 @@ pub struct GasDataArgs {
 }
 
 /// Arguments related to what to do to a transaction after it has been built.
-#[derive(Args, Debug, Default)]
+#[derive(Args, Debug, Default, Clone)]
 pub struct TxProcessingArgs {
     /// Compute the transaction digest and print it out, but do not execute the transaction.
     #[arg(long)]
@@ -732,9 +701,49 @@ pub struct PublishArgs {
 }
 
 #[derive(Args, Debug, Default)]
-pub struct TestPublishArgs {
+pub struct UpgradeArgs {
+    /// Path to directory containing a Move package
+    #[clap(name = "package_path", global = true, default_value = ".")]
+    pub package_path: PathBuf,
+
+    /// ID of the upgrade capability for the package being upgraded.
+    #[clap(long, short = 'c')]
+    pub upgrade_capability: Option<ObjectID>,
+
+    /// Package build options
     #[clap(flatten)]
-    pub publish_args: PublishArgs,
+    pub build_config: MoveBuildConfig,
+
+    /// Skip verifying package compatibility locally before publishing.
+    #[clap(long)]
+    pub skip_verify_compatibility: bool,
+
+    /// Upgrade the package without checking whether dependency source code compiles to the on-chain
+    /// bytecode
+    #[clap(long)]
+    pub skip_dependency_verification: bool,
+
+    /// Check that the dependency source code compiles to the on-chain bytecode before
+    /// upgrading the package (currently the default behavior)
+    #[clap(long, conflicts_with = "skip_dependency_verification")]
+    pub verify_deps: bool,
+
+    /// Also publish transitive dependencies that have not already been published.
+    #[clap(long)]
+    pub with_unpublished_dependencies: bool,
+
+    #[clap(flatten)]
+    pub payment: PaymentArgs,
+
+    #[clap(flatten)]
+    pub gas_data: GasDataArgs,
+
+    #[clap(flatten)]
+    pub processing: TxProcessingArgs,
+}
+
+#[derive(Args, Debug, Default, Clone)]
+pub struct EphemeralArgs {
     /// The build environment
     #[clap(long)]
     pub build_env: Option<String>,
@@ -743,6 +752,32 @@ pub struct TestPublishArgs {
     pub pubfile_path: Option<PathBuf>,
 }
 
+impl EphemeralArgs {
+    pub fn get_pubfile_path_or_default(&self, alias: &str) -> PathBuf {
+        self.pubfile_path
+            .clone()
+            .unwrap_or_else(|| PathBuf::from(format!("Pub.{alias}.toml")))
+    }
+}
+
+#[derive(Args, Debug, Default)]
+pub struct TestPublishArgs {
+    #[clap(flatten)]
+    pub publish_args: PublishArgs,
+    #[clap(flatten)]
+    pub ephemeral: EphemeralArgs,
+    #[clap(long, default_value = "false")]
+    /// Publishes transitive dependencies that have not already been published.
+    pub publish_unpublished_deps: bool,
+}
+
+#[derive(Args, Debug, Default)]
+pub struct TestUpgradeArgs {
+    #[clap(flatten)]
+    pub upgrade_args: UpgradeArgs,
+    #[clap(flatten)]
+    pub ephemeral: EphemeralArgs,
+}
 #[derive(serde::Deserialize, Debug)]
 struct FaucetResponse {
     error: Option<String>,
@@ -871,164 +906,20 @@ impl SuiClientCommands {
                 SuiClientCommandResult::DynamicFieldQuery(df_read)
             }
 
-            SuiClientCommands::Upgrade {
-                package_path,
-                upgrade_capability,
-                mut build_config,
-                skip_dependency_verification,
-                verify_deps,
-                skip_verify_compatibility,
-                with_unpublished_dependencies,
-                payment,
-                gas_data,
-                processing,
-            } => {
-                let sender = context.infer_sender(&payment.gas).await?;
+            SuiClientCommands::Upgrade(args) => {
+                verify_no_test_mode(&args.build_config)?;
                 let client = context.get_client().await?;
                 let _ = context.cache_chain_id(&client).await?;
-                let read_api = client.read_api();
-                let chain_id = read_api.get_chain_identifier().await?;
-
-                // For upgrade, we want to force the root package to have `0x0` as its address
-                build_config.root_as_zero = true;
-
-                check_protocol_version_and_warn(read_api).await?;
-                let package_path = package_path.canonicalize().map_err(|e| {
-                    SuiErrorKind::ModulePublishFailure {
-                        error: format!("Failed to canonicalize package path: {}", e),
-                    }
-                })?;
-
-                let mut root_pkg =
-                    load_root_pkg_for_publish_upgrade(context, &build_config, &package_path)
-                        .await?;
-
-                let verify =
-                    check_dep_verification_flags(skip_dependency_verification, verify_deps)?;
-
-                let upgrade_cap = if let Some(ref upgrade_cap) = upgrade_capability {
-                    upgrade_cap
-                } else {
-                    &root_pkg.publication().as_ref().ok_or_else(|| {
-                        anyhow!("Cannot determine the publication information. Please pass the upgrade cap with `-c <UPGRADE_CAP>`.")
-                    })?
-                    .metadata.upgrade_capability.ok_or_else(|| {
-                        anyhow!("No upgrade capability found in the published data. Please pass the upgrade cap with `-c <UPGRADE_CAP>`.")
-                    })?
-                };
-
-                // TODO: pkg-alt we should read upgrade cap from published file, but the question
-                // is how do we migrate? During migration we might want to try to find the upgrade
-                // cap?
-                let upgrade_result = upgrade_package(
-                    read_api,
-                    &root_pkg,
-                    build_config.clone(),
-                    &package_path,
-                    *upgrade_cap,
-                    with_unpublished_dependencies,
-                    !verify,
-                )
-                .await;
-
-                let (upgrade_policy, compiled_package) =
-                    upgrade_result.map_err(|e| anyhow!("{e}"))?;
-
-                let compiled_modules =
-                    compiled_package.get_package_bytes(with_unpublished_dependencies);
-                let package_id = compiled_package.published_at.ok_or_else(|| {
-                    anyhow::anyhow!("Cannot upgrade package without having a published id ")
-                })?;
-                let package_digest =
-                    compiled_package.get_package_digest(with_unpublished_dependencies);
-                let dep_ids = compiled_package.get_published_dependencies_ids();
-
-                if !skip_verify_compatibility {
-                    let protocol_version =
-                        read_api.get_protocol_config(None).await?.protocol_version;
-
-                    let chain_id = read_api.get_chain_identifier().await.ok();
-                    let protocol_config = ProtocolConfig::get_for_version(
-                        protocol_version,
-                        match chain_id
-                            .as_ref()
-                            .and_then(ChainIdentifier::from_chain_short_id)
-                        {
-                            Some(chain_id) => chain_id.chain(),
-                            None => Chain::Unknown,
-                        },
-                    );
-                    check_compatibility(
-                        read_api,
-                        package_id,
-                        compiled_package,
-                        package_path.clone(),
-                        upgrade_policy,
-                        protocol_config,
-                    )
-                    .await?;
-                }
-
-                let tx_kind = client
-                    .transaction_builder()
-                    .upgrade_tx_kind(
-                        package_id,
-                        compiled_modules,
-                        dep_ids,
-                        *upgrade_cap,
-                        upgrade_policy,
-                        package_digest.to_vec(),
-                    )
-                    .await?;
-
-                let gas_payment = client
-                    .transaction_builder()
-                    .input_refs(&payment.gas)
-                    .await?;
-
-                let result = dry_run_or_execute_or_serialize(
-                    sender,
-                    tx_kind,
-                    context,
-                    gas_payment,
-                    gas_data,
-                    processing,
-                )
-                .await?;
-
-                let response = if let SuiClientCommandResult::TransactionBlock(ref tx) = result {
-                    tx
-                } else {
-                    bail!("Failed to get the transaction response from the upgrade result.");
-                };
-
-                let publish_data = update_publication(
-                    &chain_id,
-                    LockCommand::Upgrade,
-                    response,
-                    &build_config,
-                    root_pkg.publication().cloned().as_mut(),
-                )?;
-                root_pkg.write_publish_data(publish_data)?;
-
-                result
+                upgrade_command(args, context, None).await?
             }
-            SuiClientCommands::Publish(args) => {
-                if args.build_config.test_mode {
-                    return Err(SuiErrorKind::ModulePublishFailure {
-                        error:
-                            "The `publish` subcommand should not be used with the `--test` flag\n\
-                            \n\
-                            Code in published packages must not depend on test code.\n\
-                            In order to fix this and publish the package without `--test`, \
-                            remove any non-test dependencies on test-only code.\n\
-                            You can ensure all test-only dependencies have been removed by \
-                            compiling the package normally with `sui move build`."
-                                .to_string(),
-                    }
-                    .into());
-                }
 
+            SuiClientCommands::TestUpgrade(args) => {
+                verify_no_test_mode(&args.upgrade_args.build_config)?;
+                upgrade_command(args.upgrade_args, context, Some(args.ephemeral)).await?
+            }
+
+            SuiClientCommands::Publish(args) => {
+                verify_no_test_mode(&args.build_config)?;
                 let client = context.get_client().await?;
                 let _ = context.cache_chain_id(&client).await?;
                 let mut root_package = load_root_pkg_for_publish_upgrade(
@@ -1042,32 +933,39 @@ impl SuiClientCommands {
             }
 
             SuiClientCommands::TestPublish(args) => {
-                if args.publish_args.build_config.test_mode {
-                    return Err(SuiErrorKind::ModulePublishFailure {
-                        error:
-                            "The `publish` subcommand should not be used with the `--test` flag\n\
-                            \n\
-                            Code in published packages must not depend on test code.\n\
-                            In order to fix this and publish the package without `--test`, \
-                            remove any non-test dependencies on test-only code.\n\
-                            You can ensure all test-only dependencies have been removed by \
-                            compiling the package normally with `sui move build`."
-                                .to_string(),
-                    }
-                    .into());
-                }
+                verify_no_test_mode(&args.publish_args.build_config)?;
 
                 let client = context.get_client().await?;
                 let read_api = client.read_api();
                 let chain_id = read_api.get_chain_identifier().await?;
                 let active_env = context.get_active_env()?;
-                let mut root_package = load_root_pkg_for_test_publish(
+                let alias = active_env.alias.clone();
+
+                let modes = args.publish_args.build_config.mode_set();
+                let build_env = args.ephemeral.build_env.clone();
+                // We produce a pub file path only once, even for transitive deps.
+                let pubfile_path = args.ephemeral.get_pubfile_path_or_default(&alias);
+
+                // Do a transitive publication for each dependency that is not yet published
+                if args.publish_unpublished_deps {
+                    publish_ephemeral_unpublished_dependencies(
+                        &args,
+                        &chain_id,
+                        build_env.clone(),
+                        pubfile_path.clone(),
+                        modes.clone(),
+                        context,
+                    )
+                    .await?;
+                }
+
+                // Load root package from scratch, as everything needs to be recomputed
+                let mut root_package = load_root_pkg_for_ephemeral_publish_or_upgrade(
                     args.publish_args.package_path.as_path(),
-                    active_env.alias.clone(),
-                    chain_id,
-                    args.build_env,
-                    args.pubfile_path,
-                    args.publish_args.build_config.mode_set(),
+                    &chain_id,
+                    build_env.clone(),
+                    pubfile_path.clone(),
+                    modes.clone(),
                 )
                 .await?;
 
@@ -1234,7 +1132,9 @@ impl SuiClientCommands {
                     .move_call_tx_kind(package, &module, &function, type_args, args)
                     .await?;
 
-                let sender = context.infer_sender(&payment.gas).await?;
+                let sender = processing
+                    .sender
+                    .unwrap_or(context.infer_sender(&payment.gas).await?);
                 let gas_payment = client
                     .transaction_builder()
                     .input_refs(&payment.gas)
@@ -1678,7 +1578,9 @@ impl SuiClientCommands {
                 };
 
                 let client = context.get_client().await?;
-                let sender = context.infer_sender(&payment.gas).await?;
+                let sender = processing
+                    .sender
+                    .unwrap_or(context.infer_sender(&payment.gas).await?);
                 let gas_payment = client
                     .transaction_builder()
                     .input_refs(&payment.gas)
@@ -2042,11 +1944,10 @@ pub(crate) async fn compile_package(
     // This will direct the pkg-system to set all unpublished dependencies to address 0x0
     build_config.set_unpublished_deps_to_zero = with_unpublished_deps;
 
-    let mut stdout = std::io::stdout();
     let package = move_package_alt_compilation::compile_from_root_package::<
-        std::io::Stdout,
+        std::io::Stderr,
         SuiFlavor,
-    >(root_pkg, &build_config, &mut stdout)
+    >(root_pkg, &build_config, &mut std::io::stderr())
     .unwrap();
 
     let published_at = root_pkg
@@ -2157,15 +2058,12 @@ async fn compatibility_checks(
         }
     }
 
-    if !compiled_package.is_system_package()
-        && let Some(already_published) = compiled_package.published_root_module()
-    {
+    if !compiled_package.is_system_package() && compiled_package.published_root_module().is_some() {
         return Err(SuiErrorKind::ModulePublishFailure {
-            error: format!(
-                "Modules must all have 0x0 as their addresses. \
-                 Violated by module {:?}",
-                already_published.self_id(),
-            ),
+            error: "Your package is already published. You have to manually remove the publication entry to publish again.\n \
+            - If you are doing a regular publish, you can remove the entry for your environment from `Published.toml`.\n \
+            - If you are doing a test publish, you can either specify a new file with `--pubfile-path`, \
+            or remove the entry from your existing ephemeral publication file.".to_string(),
         }
         .into());
     }
@@ -3522,27 +3420,24 @@ pub async fn load_root_pkg_for_publish_upgrade(
     path: &Path,
 ) -> anyhow::Result<RootPackage<SuiFlavor>> {
     let env = find_environment(path, build_config.environment.clone(), wallet).await?;
-    Ok(RootPackage::<SuiFlavor>::load(path, env, build_config.mode_set()).await?)
+    Ok(build_config.package_loader(path, &env).load().await?)
 }
 
-async fn load_root_pkg_for_test_publish(
+async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
     package_path: &Path,
-    active_env: String,
-    chain_id: String,
+    chain_id: &str,
     build_env: Option<String>,
-    pubfile_path: Option<PathBuf>,
+    pubfile_path: PathBuf,
     modes: Vec<ModeName>,
 ) -> anyhow::Result<RootPackage<SuiFlavor>> {
-    let pubfile_path =
-        pubfile_path.unwrap_or_else(|| PathBuf::from(format!("Pub.{active_env}.toml")));
-
-    Ok(RootPackage::<SuiFlavor>::load_ephemeral(
+    Ok(PackageLoader::new_ephemeral(
         package_path,
-        build_env,
-        chain_id,
+        build_env.clone(),
+        chain_id.to_string(),
         pubfile_path,
-        modes,
     )
+    .modes(modes)
+    .load()
     .await?)
 }
 
@@ -3612,7 +3507,9 @@ async fn publish_command(
         processing,
     } = args;
 
-    let sender = context.infer_sender(&payment.gas).await?;
+    let sender = processing
+        .sender
+        .unwrap_or(context.infer_sender(&payment.gas).await?);
     let client = context.get_client().await?;
     let read_api = client.read_api();
     let chain_id = read_api.get_chain_identifier().await?;
@@ -3663,7 +3560,7 @@ async fn publish_command(
     let response = if let SuiClientCommandResult::TransactionBlock(ref tx) = result {
         tx
     } else {
-        bail!("Error")
+        return Ok(result);
     };
 
     let publish_data = update_publication(
@@ -3676,6 +3573,266 @@ async fn publish_command(
 
     root_package.write_publish_data(publish_data)?;
     Ok(result)
+}
+
+async fn upgrade_command(
+    args: UpgradeArgs,
+    context: &mut WalletContext,
+    ephemeral_args: Option<EphemeralArgs>,
+) -> Result<SuiClientCommandResult, anyhow::Error> {
+    let UpgradeArgs {
+        package_path,
+        upgrade_capability,
+        mut build_config,
+        skip_dependency_verification,
+        verify_deps,
+        skip_verify_compatibility,
+        with_unpublished_dependencies,
+        payment,
+        gas_data,
+        processing,
+    } = args;
+
+    let sender = processing
+        .sender
+        .unwrap_or(context.infer_sender(&payment.gas).await?);
+    let client = context.get_client().await?;
+    let read_api = client.read_api();
+    let chain_id = read_api.get_chain_identifier().await?;
+
+    // For upgrade, we want to force the root package to have `0x0` as its address
+    build_config.root_as_zero = true;
+
+    check_protocol_version_and_warn(read_api).await?;
+    let package_path =
+        package_path
+            .canonicalize()
+            .map_err(|e| SuiErrorKind::ModulePublishFailure {
+                error: format!("Failed to canonicalize package path: {}", e),
+            })?;
+
+    let mut root_pkg = if let Some(ephemeral_args) = ephemeral_args {
+        let alias = context.get_active_env()?.alias.clone();
+        load_root_pkg_for_ephemeral_publish_or_upgrade(
+            &package_path,
+            &chain_id,
+            ephemeral_args.build_env.clone(),
+            ephemeral_args.get_pubfile_path_or_default(&alias),
+            build_config.mode_set(),
+        )
+        .await?
+    } else {
+        load_root_pkg_for_publish_upgrade(context, &build_config, &package_path).await?
+    };
+
+    let verify = check_dep_verification_flags(skip_dependency_verification, verify_deps)?;
+
+    let upgrade_cap = if let Some(ref upgrade_cap) = upgrade_capability {
+        upgrade_cap
+    } else {
+        &root_pkg.publication().as_ref().ok_or_else(|| {
+                        anyhow!("Cannot determine the publication information. Please pass the upgrade cap with `-c <UPGRADE_CAP>`.")
+                    })?
+                    .metadata.upgrade_capability.ok_or_else(|| {
+                        anyhow!("No upgrade capability found in the published data. Please pass the upgrade cap with `-c <UPGRADE_CAP>`.")
+                    })?
+    };
+
+    // TODO: pkg-alt we should read upgrade cap from published file, but the question
+    // is how do we migrate? During migration we might want to try to find the upgrade
+    // cap?
+    let upgrade_result = upgrade_package(
+        read_api,
+        &root_pkg,
+        build_config.clone(),
+        &package_path,
+        *upgrade_cap,
+        with_unpublished_dependencies,
+        !verify,
+    )
+    .await;
+
+    let (upgrade_policy, compiled_package) = upgrade_result.map_err(|e| anyhow!("{e}"))?;
+
+    let compiled_modules = compiled_package.get_package_bytes(with_unpublished_dependencies);
+    let package_id = compiled_package
+        .published_at
+        .ok_or_else(|| anyhow::anyhow!("Cannot upgrade package without having a published id "))?;
+    let package_digest = compiled_package.get_package_digest(with_unpublished_dependencies);
+    let dep_ids = compiled_package.get_published_dependencies_ids();
+
+    if !skip_verify_compatibility {
+        let protocol_version = read_api.get_protocol_config(None).await?.protocol_version;
+
+        let chain_id = read_api.get_chain_identifier().await.ok();
+        let protocol_config = ProtocolConfig::get_for_version(
+            protocol_version,
+            match chain_id
+                .as_ref()
+                .and_then(ChainIdentifier::from_chain_short_id)
+            {
+                Some(chain_id) => chain_id.chain(),
+                None => Chain::Unknown,
+            },
+        );
+        check_compatibility(
+            read_api,
+            package_id,
+            compiled_package,
+            package_path.clone(),
+            upgrade_policy,
+            protocol_config,
+        )
+        .await?;
+    }
+
+    let tx_kind = client
+        .transaction_builder()
+        .upgrade_tx_kind(
+            package_id,
+            compiled_modules,
+            dep_ids,
+            *upgrade_cap,
+            upgrade_policy,
+            package_digest.to_vec(),
+        )
+        .await?;
+
+    let gas_payment = client
+        .transaction_builder()
+        .input_refs(&payment.gas)
+        .await?;
+
+    let result = dry_run_or_execute_or_serialize(
+        sender,
+        tx_kind,
+        context,
+        gas_payment,
+        gas_data,
+        processing,
+    )
+    .await?;
+
+    let response = if let SuiClientCommandResult::TransactionBlock(ref tx) = result {
+        tx
+    } else {
+        return Ok(result);
+    };
+
+    let publish_data = update_publication(
+        &chain_id,
+        LockCommand::Upgrade,
+        response,
+        &build_config,
+        root_pkg.publication().cloned().as_mut(),
+    )?;
+    root_pkg.write_publish_data(publish_data)?;
+
+    Ok(result)
+}
+
+async fn publish_ephemeral_unpublished_dependencies(
+    args: &TestPublishArgs,
+    chain_id: &str,
+    build_env: Option<String>,
+    pubfile_path: PathBuf,
+    modes: Vec<ModeName>,
+    context: &mut WalletContext,
+) -> Result<(), anyhow::Error> {
+    if !args.publish_unpublished_deps {
+        return Ok(());
+    }
+
+    if args.publish_args.gas_data.gas_sponsor.is_some() {
+        bail!(
+            "Cannot specify gas data when publishing transitively, as it executes multiple transactions."
+        );
+    }
+
+    if !args.publish_args.payment.gas.is_empty() {
+        bail!(
+            "Cannot specify payment when publishing transitively, as it executes multiple transactions."
+        );
+    }
+
+    if args.publish_args.with_unpublished_dependencies {
+        bail!(
+            "You cannot specify both `--publish-unpublished-deps` and `--with-unpublished-dependencies` at the same time."
+        );
+    }
+
+    let root_package = load_root_pkg_for_ephemeral_publish_or_upgrade(
+        args.publish_args.package_path.as_path(),
+        chain_id,
+        build_env.clone(),
+        pubfile_path.clone(),
+        modes.clone(),
+    )
+    .await?;
+
+    if root_package.package_info().published().is_some() {
+        bail!(
+            "The root package is already published in {pubfile_path:?}, consider removing it or using the test-upgrade command"
+        );
+    }
+
+    // Reverse the deps, we want the "deeper" ones first.
+    for dep in root_package.sorted_packages().into_iter().rev() {
+        // skip root package
+        if dep.is_root() {
+            continue;
+        }
+
+        // Skip already ephemerally published packages as well as system packages
+        if dep.published().is_some() {
+            continue;
+        }
+
+        let dep_path = dep.path().path();
+        let mut dep_root_package = load_root_pkg_for_ephemeral_publish_or_upgrade(
+            dep_path,
+            chain_id,
+            build_env.clone(),
+            pubfile_path.clone(),
+            modes.clone(),
+        )
+        .await?;
+
+        let publish_args = PublishArgs {
+            package_path: dep_path.to_path_buf(),
+            build_config: args.publish_args.build_config.clone(),
+            skip_dependency_verification: args.publish_args.skip_dependency_verification,
+            verify_deps: args.publish_args.verify_deps,
+            with_unpublished_dependencies: false,
+            payment: PaymentArgs::default(),
+            gas_data: args.publish_args.gas_data.clone(),
+            processing: args.publish_args.processing.clone(),
+        };
+
+        eprintln!("Publishing transitive dependency: {}", dep.display_name());
+        publish_command(publish_args, &mut dep_root_package, context).await?;
+    }
+
+    Ok(())
+}
+
+/// Make sure we do not have test mode enabled for publish or upgrade
+fn verify_no_test_mode(build_config: &MoveBuildConfig) -> anyhow::Result<()> {
+    if build_config.test_mode {
+        return Err(SuiErrorKind::ModulePublishFailure {
+            error:
+                "The `publish` or `upgrade` subcommand should not be used with the `--test` flag\n\
+                \n\
+                Code in published packages must not depend on test code.\n\
+                In order to fix this and publish or upgrade the package without `--test`, \
+                remove any non-test dependencies on test-only code.\n\
+                You can ensure all test-only dependencies have been removed by \
+                compiling the package normally with `sui move build`."
+                    .to_string(),
+        }
+        .into());
+    }
+    Ok(())
 }
 
 /// Extract the host from a URL string

@@ -1,10 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::{
-    core::{Collector, Desc},
-    proto::{Counter, Gauge, LabelPair, Metric, MetricFamily, MetricType, Summary},
-};
+use prometheus::core::Collector;
+use prometheus::core::Desc;
+use prometheus::proto::Counter;
+use prometheus::proto::Gauge;
+use prometheus::proto::LabelPair;
+use prometheus::proto::Metric;
+use prometheus::proto::MetricFamily;
+use prometheus::proto::MetricType;
+use prometheus::proto::Summary;
 use sui_pg_db::Db;
 
 /// Collects information about the database connection pool.

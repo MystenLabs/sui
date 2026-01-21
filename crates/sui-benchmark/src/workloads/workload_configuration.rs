@@ -20,6 +20,7 @@ use std::sync::Arc;
 use tracing::info;
 
 use super::adversarial::{AdversarialPayloadCfg, AdversarialWorkloadBuilder};
+use super::composite::{CompositeWorkloadBuilder, CompositeWorkloadConfig};
 use super::expected_failure::{ExpectedFailurePayloadCfg, ExpectedFailureWorkloadBuilder};
 use super::randomized_transaction::RandomizedTransactionWorkloadBuilder;
 use super::randomness::RandomnessWorkloadBuilder;
@@ -39,6 +40,7 @@ pub struct WorkloadWeights {
     pub slow: u32,
     pub party: u32,
     pub conflicting_transfer: u32,
+    pub composite: u32,
 }
 
 pub struct WorkloadConfig {
@@ -53,9 +55,11 @@ pub struct WorkloadConfig {
     pub num_shared_counters: Option<u64>,
     pub shared_counter_max_tip: u64,
     pub num_contested_objects: u64,
+    pub randomized_transaction_concurrency: u64,
     pub target_qps: u64,
     pub in_flight_ratio: u64,
     pub duration: Interval,
+    pub composite_config: Option<super::composite::CompositeWorkloadConfig>,
 }
 pub struct WorkloadConfiguration;
 
@@ -83,6 +87,7 @@ impl WorkloadConfiguration {
                 slow,
                 party,
                 conflicting_transfer,
+                composite,
                 shared_counter_hotness_factor,
                 num_shared_counters,
                 shared_counter_max_tip,
@@ -121,6 +126,7 @@ impl WorkloadConfiguration {
                             slow: slow[i],
                             party: party[i],
                             conflicting_transfer: conflicting_transfer[i],
+                            composite: composite[i],
                         },
                         adversarial_cfg: AdversarialPayloadCfg::from_str(&adversarial_cfg[i])
                             .unwrap(),
@@ -133,9 +139,15 @@ impl WorkloadConfiguration {
                         num_shared_counters: num_shared_counters.as_ref().map(|n| n[i]),
                         shared_counter_max_tip: shared_counter_max_tip[i],
                         num_contested_objects: num_contested_objects[i],
+                        randomized_transaction_concurrency: 4,
                         target_qps: target_qps[i],
                         in_flight_ratio: in_flight_ratio[i],
                         duration: duration[i],
+                        composite_config: if composite[i] > 0 {
+                            Some(CompositeWorkloadConfig::balanced())
+                        } else {
+                            None
+                        },
                     };
                     let builders =
                         Self::create_workload_builders(config, system_state_observer.clone()).await;
@@ -208,9 +220,11 @@ impl WorkloadConfiguration {
             num_shared_counters,
             shared_counter_max_tip,
             num_contested_objects,
+            randomized_transaction_concurrency,
             target_qps,
             in_flight_ratio,
             duration,
+            composite_config,
         }: WorkloadConfig,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Option<WorkloadBuilderInfo>> {
@@ -232,7 +246,8 @@ impl WorkloadConfiguration {
             + weights.randomized_transaction
             + weights.slow
             + weights.party
-            + weights.conflicting_transfer;
+            + weights.conflicting_transfer
+            + weights.composite;
         let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let mut workload_builders = vec![];
         let shared_workload = SharedCounterWorkloadBuilder::from(
@@ -328,6 +343,7 @@ impl WorkloadConfiguration {
             reference_gas_price,
             duration,
             group,
+            randomized_transaction_concurrency,
         );
         workload_builders.push(randomized_transaction_workload);
         let slow_workload = SlowWorkloadBuilder::from(
@@ -358,6 +374,19 @@ impl WorkloadConfiguration {
             group,
         );
         workload_builders.push(conflicting_transfer_workload);
+        if let Some(config) = composite_config {
+            let composite_workload = CompositeWorkloadBuilder::from(
+                weights.composite as f32 / total_weight as f32,
+                target_qps,
+                num_workers,
+                in_flight_ratio,
+                config,
+                reference_gas_price,
+                duration,
+                group,
+            );
+            workload_builders.push(composite_workload);
+        }
         workload_builders
     }
 }

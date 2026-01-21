@@ -6,7 +6,6 @@ use std::collections::BTreeMap;
 
 use crate::{
     errors::{FileHandle, PackageResult},
-    flavor::MoveFlavor,
     schema::{PackageID, ParsedLockfile, Pin},
 };
 
@@ -23,7 +22,7 @@ pub struct Lockfiles {
 
 impl Lockfiles {
     /// Read `Move.lock` from `path`; returning [None] if it doesn't exist
-    pub fn read_from_dir<F: MoveFlavor>(
+    pub fn read_from_dir(
         path: &PackagePath,
         mtx: &PackageSystemLock,
     ) -> PackageResult<Option<Self>> {

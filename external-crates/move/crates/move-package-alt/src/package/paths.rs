@@ -63,7 +63,7 @@ pub enum PackagePathError {
     InvalidDirectory { path: PathBuf },
 
     #[error("Package does not have a Move.toml file at `{path}`")]
-    InvalidPackage { path: PathBuf },
+    NoMoveToml { path: PathBuf },
 
     #[error("Path `{path}` does not refer to a file")]
     InvalidFile { path: PathBuf },
@@ -137,7 +137,7 @@ impl PackagePath {
         let result = Self(OutputPath(path));
 
         if !result.manifest_path().exists() {
-            return Err(PackagePathError::InvalidPackage {
+            return Err(PackagePathError::NoMoveToml {
                 path: result.manifest_path(),
             });
         }
@@ -248,11 +248,12 @@ impl OutputPath {
     /// directory at `dir` and that it contains a valid Move package, i.e., it has a `Move.toml`
     /// file.
     pub fn new(dir: PathBuf) -> PackagePathResult<Self> {
-        if !dir.is_dir() {
-            Err(PackagePathError::InvalidDirectory { path: dir.clone() })
-        } else {
-            Ok(Self(dir))
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            debug!("unexpected error creating directory: {e:?}");
+            return Err(PackagePathError::InvalidDirectory { path: dir.clone() });
         }
+
+        Ok(Self(dir))
     }
 
     /// Acquire an exclusive lock for the files in this package
@@ -287,19 +288,6 @@ impl OutputPath {
     pub async fn dump_lockfile(&self, mtx: &PackageSystemLock) -> ParsedLockfile {
         PackagePath(self.clone())
             .read_lockfile(mtx)
-            .unwrap()
-            .unwrap()
-            .1
-    }
-
-    /// Read the contents of the pubfile from the output directory
-    #[cfg(test)]
-    pub async fn dump_pubfile<F: MoveFlavor>(
-        &self,
-        mtx: &PackageSystemLock,
-    ) -> ParsedPublishedFile<F> {
-        PackagePath(self.clone())
-            .read_pubfile(mtx)
             .unwrap()
             .unwrap()
             .1

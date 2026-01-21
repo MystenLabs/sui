@@ -62,7 +62,7 @@ export default function Home() {
               >
                 Getting Started
               </Link>
-              <Link className={styles.cardLink} to="./guides/developer/sui-101">
+              <Link className={styles.cardLink} to="/guides">
                 Sui Developer Basics
               </Link>
               <Link

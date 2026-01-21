@@ -20,11 +20,10 @@ use crate::{
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
-    sync::Arc,
+    sync::{Arc, LazyLock},
 };
 
 //**************************************************************************************************
@@ -632,7 +631,7 @@ impl SyntaxMethodEntry {
     }
 }
 
-static BUILTIN_TYPE_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
+static BUILTIN_TYPE_ALL_NAMES: LazyLock<BTreeSet<Symbol>> = LazyLock::new(|| {
     [
         BuiltinTypeName_::ADDRESS,
         BuiltinTypeName_::SIGNER,
@@ -650,7 +649,7 @@ static BUILTIN_TYPE_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
     .collect()
 });
 
-static BUILTIN_TYPE_NUMERIC: Lazy<BTreeSet<BuiltinTypeName_>> = Lazy::new(|| {
+static BUILTIN_TYPE_NUMERIC: LazyLock<BTreeSet<BuiltinTypeName_>> = LazyLock::new(|| {
     [
         BuiltinTypeName_::U8,
         BuiltinTypeName_::U16,
@@ -663,11 +662,11 @@ static BUILTIN_TYPE_NUMERIC: Lazy<BTreeSet<BuiltinTypeName_>> = Lazy::new(|| {
     .collect()
 });
 
-static BUILTIN_TYPE_BITS: Lazy<BTreeSet<BuiltinTypeName_>> =
-    Lazy::new(|| BUILTIN_TYPE_NUMERIC.clone());
+static BUILTIN_TYPE_BITS: LazyLock<BTreeSet<BuiltinTypeName_>> =
+    LazyLock::new(|| BUILTIN_TYPE_NUMERIC.clone());
 
-static BUILTIN_TYPE_ORDERED: Lazy<BTreeSet<BuiltinTypeName_>> =
-    Lazy::new(|| BUILTIN_TYPE_BITS.clone());
+static BUILTIN_TYPE_ORDERED: LazyLock<BTreeSet<BuiltinTypeName_>> =
+    LazyLock::new(|| BUILTIN_TYPE_BITS.clone());
 
 impl BuiltinTypeName_ {
     pub const ADDRESS: &'static str = "address";
@@ -754,7 +753,7 @@ impl TParamID {
     }
 }
 
-static BUILTIN_FUNCTION_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
+static BUILTIN_FUNCTION_ALL_NAMES: LazyLock<BTreeSet<Symbol>> = LazyLock::new(|| {
     [BuiltinFunction_::FREEZE, BuiltinFunction_::ASSERT_MACRO]
         .into_iter()
         .map(Symbol::from)
@@ -830,10 +829,11 @@ impl TypeName_ {
     }
 }
 
-pub static UNIT_TYPE: Lazy<Type_> = Lazy::new(|| TypeInner::Unit.into());
-pub static ANYTHING_TYPE: Lazy<Type_> = Lazy::new(|| TypeInner::Anything.into());
-pub static VOID_TYPE: Lazy<Type_> = Lazy::new(|| TypeInner::Void.into());
-pub static UNRESOLVED_ERROR_TYPE: Lazy<Type_> = Lazy::new(|| TypeInner::UnresolvedError.into());
+pub static UNIT_TYPE: LazyLock<Type_> = LazyLock::new(|| TypeInner::Unit.into());
+pub static ANYTHING_TYPE: LazyLock<Type_> = LazyLock::new(|| TypeInner::Anything.into());
+pub static VOID_TYPE: LazyLock<Type_> = LazyLock::new(|| TypeInner::Void.into());
+pub static UNRESOLVED_ERROR_TYPE: LazyLock<Type_> =
+    LazyLock::new(|| TypeInner::UnresolvedError.into());
 
 impl Type_ {
     pub fn builtin_(b: BuiltinTypeName, ty_args: Vec<Type>) -> Type_ {

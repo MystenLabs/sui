@@ -3,49 +3,32 @@ title: Passkey
 description: Sui supports the passkey signature scheme that enables you to sign in to apps and sign transactions using a private key stored securely on a passkey authenticator. It uses the WebAuthn standard.
 ---
 
-Passkey provides a secure and user-friendly alternative for submitting transactions to Sui. Built on the **WebAuthn standard**, passkey allows users to authenticate and sign transactions using:
-
-- Hardware security keys, such as YubiKeys  
-- Mobile devices, such as smartphones and tablets  
-- Platform-based authenticators, such as Face ID and Touch ID  
+The passkey signature scheme provides a secure and user-friendly alternative for submitting transactions on Sui. It is built on the WebAuthn standard and allows you to authenticate and sign transactions using hardware security keys such as YubiKeys, mobile devices such as smartphones and tablets, and platform-based authenticators such as Face ID and Touch ID.
 
 Passkey simplifies authentication by removing the need to manage seed phrases or private keys manually. Instead, it relies on device-based authentication and cloud synchronization, allowing seamless, phishing-resistant access across multiple devices. You can also use passkey in a [multisig setup](/concepts/transactions/transaction-auth/multisig.mdx), which provides more flexibility to build secure and recoverable wallet experiences.
 
-By supporting the passkey signature scheme, Sui improves security and accessibility, making it easier for users to manage their accounts with hardened security. Passkey-based wallets are tied to the origin, meaning they cannot be phished or used on a different site. This makes passkey a more secure authentication option.
+By supporting the passkey signature scheme, Sui improves security and accessibility, making it easier for you to manage your accounts with hardened security. Passkey-based wallets are tied to the origin, meaning they cannot be phished or used on a different site. This makes passkey a more secure authentication option.
 
 See the [TypeScript SDK documentation](https://sdk.mystenlabs.com/typescript/cryptography/passkey) to learn how to add passkey support to your application. For the product specification, see [SIP-9](https://github.com/sui-foundation/sips/blob/main/sips/sip-9.md).
 
-:::info
-Passkey support is available in beta in Sui Devnet and Testnet. Mainnet release is not yet scheduled.  
-:::
-
 ## Benefits of using passkey
 
-- **Sign transactions securely:**  
-  Users can sign transactions in Sui using passkey, while the private key stays securely stored within the authenticator. This reduces the risk of key extraction attacks.  
+- Sign transactions securely while the private key stays securely stored within the authenticator. This reduces the risk of key extraction attacks.
 
-- **Authenticate across devices:**  
-  Users can scan a QR code displayed on a desktop browser with a mobile device to approve transactions. Cloud-synchronized passkey (such as those stored in Apple iCloud or Google Password Manager) allows users to authenticate across multiple devices without manual key transfers.  
+- Authenticate across devices by scanning a QR code displayed on a desktop browser with a mobile device to approve transactions. Cloud-synchronized passkey, such as those stored in Apple iCloud or Google Password Manager, allows you to authenticate across multiple devices without manual key transfers.
 
-- **Use hardware security keys:**  
-  Users can sign transactions with external security keys, such as YubiKeys, to add another layer of protection against phishing and unauthorized access.  
+- Use hardware security keys, such as YubiKeys, to add another layer of protection against phishing and unauthorized access.
 
-- **Authenticate with platform-based security:**  
-  Users can sign transactions directly on devices with built-in authenticators, such as Face ID on iPhones or Windows Hello on Windows PCs. This approach allows users to sign transactions natively without needing an external security key.  
+- Authenticate with platform-based security using devices with built-in authenticators, such as Face ID on iPhones or Windows Hello on Windows PCs. This approach allows you to sign transactions natively without needing an external security key.
 
-- **Recover access with cloud-synced passkey:**  
-  Cloud-synced passkey helps users recover access if they lose a device.  
+- Recover access with cloud-synced passkey.
 
-- **Work with multisig wallets:**  
-  Combine passkey with other authentication types to build 2-of-2 or m-of-n [multisig wallets](/concepts/transactions/transaction-auth/multisig.mdx). This enables secure recovery options and shared access patterns.  
+- Work with multisig wallets by combining passkey with other authentication types to build 2-of-2 or m-of-n [multisig wallets](/concepts/transactions/transaction-auth/multisig.mdx). This enables secure recovery options and shared access patterns.
 
 ## Limitations of passkey
 
-- **Functionality varies by authenticator:**  
-  Some security keys do not support biometric authentication, requiring users to enter a PIN instead. Because WebAuthn does not provide access to private keys, users must either store their passkey securely or enable cloud synchronization for recovery.  
+- Functionality varies by authenticator: Some security keys do not support biometric authentication, requiring you to enter a PIN instead. Because WebAuthn does not provide access to private keys, you must either store your passkey securely or enable cloud synchronization for recovery.
 
-- **Cloud synchronization introduces risks:**  
-  Cloud-synced passkey improves accessibility but also creates risks if a cloud provider is compromised or if a user loses access to their cloud account. Users who prefer full self-custody can use hardware-based passkey that does not rely on cloud synchronization.  
+- Cloud-synced passkey improves accessibility but also creates risks if a cloud provider is compromised or if you lose access to your cloud account. If you prefer full self-custody, you can use hardware-based passkey that does not rely on cloud synchronization.
 
-- **Passkey cannot be exported:**  
-  Users cannot transfer a passkey between different authenticators. For example, a passkey created on a security key cannot move to another device unless it syncs through a cloud provider. To avoid losing access, users should set up authentication on multiple devices.
+- You cannot transfer a passkey between different authenticators. For example, a passkey created on a security key cannot move to another device unless it syncs through a cloud provider. To avoid losing access, you should set up authentication on multiple devices.

@@ -1,17 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::{Arc, atomic::AtomicU64};
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
-use prometheus::{
-    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
-    register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
-};
+use prometheus::Histogram;
+use prometheus::HistogramVec;
+use prometheus::IntCounter;
+use prometheus::IntCounterVec;
+use prometheus::IntGauge;
+use prometheus::IntGaugeVec;
+use prometheus::Registry;
+use prometheus::register_histogram_vec_with_registry;
+use prometheus::register_histogram_with_registry;
+use prometheus::register_int_counter_vec_with_registry;
+use prometheus::register_int_counter_with_registry;
+use prometheus::register_int_gauge_vec_with_registry;
+use prometheus::register_int_gauge_with_registry;
 use tracing::warn;
 
-use crate::{ingestion::error::Error, pipeline::Processor};
+use crate::ingestion::error::Error;
+use crate::pipeline::Processor;
 
 /// Histogram buckets for the distribution of checkpoint fetching latencies.
 const INGESTION_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -714,7 +723,7 @@ pub(crate) mod tests {
 
     use prometheus::Registry;
 
-    use super::{IndexerMetrics, IngestionMetrics};
+    use super::*;
 
     /// Construct IndexerMetrics for test purposes.
     pub fn test_metrics() -> Arc<IndexerMetrics> {

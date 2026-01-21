@@ -28,7 +28,8 @@ You can use the `get_amount_out` endpoint to simulate a swap. The function retur
 
 Following are the endpoints that the `Pool` exposes for swaps.
 
-### Swap exact base for quote
+<details>
+<summary>Swap exact base for quote</summary>
 
 Swap exact base quantity without needing a `balance_manager`. DEEP quantity can be overestimated. Returns three `Coin` objects:
 
@@ -49,7 +50,10 @@ You can overestimate the amount of DEEP required. The remaining balance is retur
 	noComments
 />
 
-### Swap exact quote for base
+</details>
+
+<details>
+<summary>Swap exact quote for base</summary>
 
 Swap exact quote quantity without needing a `balance_manager`. You can overestimate DEEP quantity. Returns three `Coin` objects:
 
@@ -68,7 +72,10 @@ Some quote quantity might be left over if the input quantity is not divisible by
 	noComments
 />
 
-### Swap exact quantity
+</details>
+
+<details>
+<summary>Swap exact quantity</summary>
 
 This function is what the previous two functions call with `coin::zero()` set for the third coin. Users can call this directly for base → quote or quote → base as long as base or quote have a zero value.
 
@@ -81,7 +88,10 @@ This function is what the previous two functions call with `coin::zero()` set fo
 	noComments
 />
 
-### Swap exact base for quote with manager
+</details>
+
+<details>
+<summary>Swap exact base for quote with manager</summary>
 
 Swap exact base for quote using a `BalanceManager`. Assumes fees are paid in DEEP. Assumes balance manager has enough DEEP for fees. Returns two `Coin` objects: base and quote.
 
@@ -94,7 +104,10 @@ Swap exact base for quote using a `BalanceManager`. Assumes fees are paid in DEE
 	noComments
 />
 
-### Swap exact quote for base with manager
+</details>
+
+<details>
+<summary>Swap exact quote for base with manager</summary>
 
 Swap exact quote for base using a `BalanceManager`. Assumes fees are paid in DEEP. Assumes balance manager has enough DEEP for fees. Returns two `Coin` objects: base and quote.
 
@@ -107,7 +120,10 @@ Swap exact quote for base using a `BalanceManager`. Assumes fees are paid in DEE
 	noComments
 />
 
-### Swap exact quantity with manager
+</details>
+
+<details>
+<summary>Swap exact quantity with manager</summary>
 
 Swap exact quantity using a `BalanceManager`. This is the underlying function that the two manager-based swap functions call. Assumes fees are paid in DEEP and that the balance manager has sufficient DEEP for fees. Returns two `Coin` objects: base and quote.
 
@@ -119,6 +135,8 @@ Swap exact quantity using a `BalanceManager`. This is the underlying function th
 	fun="swap_exact_quantity_with_manager"
 	noComments
 />
+
+</details>
 
 ## Related links
 

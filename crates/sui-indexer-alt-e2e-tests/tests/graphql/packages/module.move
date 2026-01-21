@@ -54,6 +54,7 @@ module P::O {
 
 fragment M on MoveModule {
   name
+  fullyQualifiedName
   fileFormatVersion
   bytes
   disassembly

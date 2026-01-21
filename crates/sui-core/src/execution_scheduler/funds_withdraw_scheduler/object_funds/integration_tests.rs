@@ -22,13 +22,9 @@ use sui_types::{
     object::Object,
 };
 
-use crate::{
-    accumulators::funds_read::AccountFundsRead,
-    authority::{
-        AuthorityState, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
-        shared_object_version_manager::AssignedVersions,
-        test_authority_builder::TestAuthorityBuilder,
-    },
+use crate::authority::{
+    AuthorityState, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
+    shared_object_version_manager::AssignedVersions, test_authority_builder::TestAuthorityBuilder,
 };
 
 struct TestEnv {
@@ -135,8 +131,9 @@ impl TestEnv {
         let account_id =
             AccumulatorValue::get_field_id(self.vault_obj.into(), &Balance::type_tag(type_tag))
                 .unwrap();
-        let balance_read = self.authority.get_child_object_resolver();
-        balance_read.get_latest_account_amount(&account_id)
+        let balance_read = self.authority.get_account_funds_read();
+        let (balance, _version) = balance_read.get_latest_account_amount(&account_id);
+        balance
     }
 }
 

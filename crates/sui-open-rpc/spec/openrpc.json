@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.64.0"
+    "version": "1.65.0"
   },
   "methods": [
     {
@@ -1264,7 +1264,7 @@
           "name": "Read API"
         }
       ],
-      "description": "Return the protocol config table for the given version number. If the version number is not specified, If none is specified, the node uses the version of the latest epoch it has processed.",
+      "description": "Return the protocol config table for the given version number. If none is specified, the node uses the version of the latest epoch it has processed.",
       "params": [
         {
           "name": "version",
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "106",
+              "maxSupportedProtocolVersion": "109",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1327,15 +1327,18 @@
                 "consensus_round_prober": false,
                 "consensus_round_prober_probe_accepted_rounds": false,
                 "consensus_skip_gced_accept_votes": false,
+                "consensus_skip_gced_blocks_in_direct_finalization": false,
                 "consensus_smart_ancestor_selection": false,
                 "consensus_zstd_compression": false,
                 "convert_type_argument_error": false,
+                "convert_withdrawal_compatibility_ptb_arguments": false,
                 "correct_gas_payment_limit_check": false,
                 "create_root_accumulator_object": false,
                 "debug_fatal_on_move_invariant_violation": false,
                 "dependency_linkage_error": false,
                 "deprecate_global_storage_ops": false,
                 "deprecate_global_storage_ops_during_deserialization": false,
+                "disable_entry_point_signature_check": false,
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disable_preconsensus_locking": false,
                 "disallow_adding_abilities_on_upgrade": false,
@@ -1367,7 +1370,9 @@
                 "enable_vdf": false,
                 "end_of_epoch_transaction_supported": false,
                 "enforce_checkpoint_timestamp_monotonicity": false,
+                "flexible_tx_context_positions": false,
                 "fresh_vm_on_framework_upgrade": false,
+                "gas_rounding_halve_digits": false,
                 "generate_df_type_layouts": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
@@ -3189,7 +3194,8 @@
                 "coinType": "0x2::sui::SUI",
                 "coinObjectCount": 15,
                 "totalBalance": "3000000000",
-                "lockedBalance": {}
+                "lockedBalance": {},
+                "fundsInAddressBalance": "42"
               }
             ]
           }
@@ -3341,7 +3347,8 @@
               "coinType": "0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC",
               "coinObjectCount": 15,
               "totalBalance": "15",
-              "lockedBalance": {}
+              "lockedBalance": {},
+              "fundsInAddressBalance": "42"
             }
           }
         }
@@ -4930,7 +4937,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Send SUI coins to a list of addresses, following a list of amounts. This is for SUI coin only and does not require a separate gas coin object. Specifically, what pay_sui does are: 1. debit each input_coin to create new coin following the order of amounts and assign it to the corresponding recipient. 2. accumulate all residual SUI from input coins left and deposit all SUI to the first input coin, then use the first input coin as the gas coin object. 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost 4. all other input coints other than the first one are deleted.",
+      "description": "Send SUI coins to a list of addresses, following a list of amounts. This is for SUI coin only and does not require a separate gas coin object. Specifically, what pay_sui does are: 1. debit each input_coin to create new coin following the order of amounts and assign it to the corresponding recipient. 2. accumulate all residual SUI from input coins left and deposit all SUI to the first input coin, then use the first input coin as the gas coin object. 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost 4. all other input coins other than the first one are deleted.",
       "params": [
         {
           "name": "signer",
@@ -5188,7 +5195,7 @@
         },
         {
           "name": "coin_object_id",
-          "description": "the coin object to be spilt",
+          "description": "the coin object to be split",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -5248,7 +5255,7 @@
         },
         {
           "name": "coin_object_id",
-          "description": "the coin object to be spilt",
+          "description": "the coin object to be split",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -5535,6 +5542,15 @@
           },
           "coinType": {
             "type": "string"
+          },
+          "fundsInAddressBalance": {
+            "description": "The portion of `total_balance` that resides in the address balance rather than in the coin objects. `total_balance` is the total amount of funds owned by the address. That is, do not add these two fields together.",
+            "default": "0",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint128"
+              }
+            ]
           },
           "lockedBalance": {
             "type": "object",
@@ -9770,12 +9786,6 @@
       },
       "SuiReservation": {
         "oneOf": [
-          {
-            "type": "string",
-            "enum": [
-              "entireBalance"
-            ]
-          },
           {
             "type": "object",
             "required": [

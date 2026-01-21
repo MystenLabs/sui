@@ -2,10 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::BTreeMap,
-    sync::{LazyLock, Mutex},
-};
+use std::collections::BTreeMap;
 
 use derive_where::derive_where;
 use sha2::{Digest as _, Sha256};
@@ -15,11 +12,10 @@ use tracing::debug;
 use super::manifest::Manifest;
 use super::package_lock::PackageSystemLock;
 use super::paths::PackagePath;
-use crate::errors::FileHandle;
 use crate::{
     compatibility::legacy::LegacyData,
     dependency::Pinned,
-    package::manifest::ManifestError,
+    package::{manifest::ManifestError, package_loader::PackageLoader},
     schema::{
         CachedPackageInfo, DefaultDependency, ManifestDependencyInfo, ParsedManifest, Publication,
     },
@@ -30,17 +26,12 @@ use crate::{
     errors::{PackageError, PackageResult},
     flavor::MoveFlavor,
     package::manifest::Digest,
-    schema::{Environment, OriginalID, PackageMetadata, PackageName, PublishedID},
+    schema::{Environment, OriginalID, PackageMetadata, PackageName},
 };
-
-// TODO: is this the right way to handle this?
-static DUMMY_ADDRESSES: LazyLock<Mutex<u16>> = LazyLock::new(|| Mutex::new(0x1000));
+use crate::{errors::FileHandle, package::package_loader::PackageConfig};
 
 pub type EnvironmentName = String;
 pub type EnvironmentID = String;
-
-// pub type PackageName = Identifier;
-pub type AddressInfo = String;
 
 #[derive(Debug)]
 #[derive_where(Clone)]
@@ -82,9 +73,10 @@ impl<F: MoveFlavor> Package<F> {
         dep: Pinned,
         env: &Environment,
         mtx: &PackageSystemLock,
+        config: &PackageConfig,
     ) -> PackageResult<Self> {
         debug!("loading package {:?}", dep);
-        let path = FetchedDependency::fetch(&dep).await?;
+        let path = FetchedDependency::fetch(&dep, config.allow_dirty).await?;
 
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
@@ -110,7 +102,6 @@ impl<F: MoveFlavor> Package<F> {
                 .as_ref()
                 .and_then(|legacy| legacy.publication::<F>(env))
         });
-        let dummy_addr = create_dummy_addr();
 
         // TODO: try to gather dependencies from the modern lockfile
         //   - if it fails (no lockfile / out of date lockfile), compute them from the manifest
@@ -130,6 +121,8 @@ impl<F: MoveFlavor> Package<F> {
 
         // compute the digest (TODO: this should only compute over the environment specific data)
         let digest = Self::compute_digest(&deps);
+
+        let dummy_addr = OriginalID::from(dep.unique_hash() as u16);
 
         let result = Self {
             env: env.name().clone(),
@@ -151,10 +144,10 @@ impl<F: MoveFlavor> Package<F> {
     }
 
     /// Create a copy of this package with the publication information replaced by `publish`
-    pub(crate) fn override_publish(&self, publish: Publication<F>) -> Self {
+    pub(crate) fn override_publish(&self, publish: Option<Publication<F>>) -> Self {
         let mut result = self.clone();
         debug!("updating address to {publish:?}");
-        result.publication = Some(publish);
+        result.publication = publish;
         result
     }
 
@@ -213,13 +206,6 @@ impl<F: MoveFlavor> Package<F> {
     /// [Self::override_publish]).
     pub fn publication(&self) -> Option<&Publication<F>> {
         self.publication.as_ref()
-    }
-
-    /// Tries to get the `published-at` entry for the given package,
-    /// including support for backwards compatibility (legacy packages)
-    pub fn published_at(&self) -> Option<&PublishedID> {
-        self.publication()
-            .map(|publication| &publication.addresses.published_at)
     }
 
     /// Tries to get the `original-id` entry for the given package,
@@ -343,11 +329,17 @@ pub async fn cache_package<F: MoveFlavor>(
         CombinedDependency::from_default(toml_handle, package, env.name().clone(), default_dep);
 
     // pin
-    let root = Pinned::Root(dummy_path);
+    let root = Pinned::Root(dummy_path.clone());
     let deps = PinnedDependencyInfo::pin::<F>(&root, vec![combined], env.id()).await?;
 
     // load
-    let package = Package::<F>::load(deps[0].as_ref().clone(), env, &mtx).await?;
+    let package = Package::<F>::load(
+        deps[0].as_ref().clone(),
+        env,
+        &mtx,
+        PackageLoader::new(dummy_path.path(), env.clone()).config(),
+    )
+    .await?;
 
     // summarize
     Ok(CachedPackageInfo {
@@ -355,14 +347,6 @@ pub async fn cache_package<F: MoveFlavor>(
         addresses: package.publication().map(|p| p.addresses.clone()),
         chain_id: env.id.clone(),
     })
-}
-
-/// Return a fresh OriginalID
-fn create_dummy_addr() -> OriginalID {
-    let lock = DUMMY_ADDRESSES.lock();
-    let mut dummy_addr = lock.unwrap();
-    *dummy_addr += 1;
-    (*dummy_addr).into()
 }
 
 /// Check that `env` is defined in `manifest`, returning an error if it isn't
@@ -413,11 +397,10 @@ fn check_for_environment<F: MoveFlavor>(
 #[cfg(test)]
 mod tests {
     use crate::{
-        flavor::vanilla::{DEFAULT_ENV_ID, DEFAULT_ENV_NAME, Vanilla, default_environment},
-        package::RootPackage,
+        flavor::vanilla::{DEFAULT_ENV_ID, DEFAULT_ENV_NAME, Vanilla},
         schema::{
-            LocalDepInfo, LockfileDependencyInfo, PublishAddresses, ReplacementDependency,
-            SystemDepName,
+            LocalDepInfo, LockfileDependencyInfo, PublishAddresses, PublishedID,
+            ReplacementDependency, SystemDepName,
         },
         test_utils::graph_builder::TestPackageGraph,
     };
@@ -490,6 +473,10 @@ mod tests {
         fn validate_manifest(_: &ParsedManifest) -> Result<(), String> {
             Ok(())
         }
+
+        fn is_system_address(_: &OriginalID) -> bool {
+            false
+        }
     }
 
     /// Loading a package includes the implicit dependencies, and the system dependencies are
@@ -498,13 +485,10 @@ mod tests {
     async fn test_default_implicit_deps() {
         let scenario = TestPackageGraph::new(["root", "foo", "bar", "baz"]).build();
 
-        let root = RootPackage::<TestFlavor>::load(
-            scenario.path_for("root"),
-            default_environment(),
-            vec![],
-        )
-        .await
-        .unwrap();
+        let root = PackageLoader::new(scenario.path_for("root"), Vanilla::default_environment())
+            .load::<TestFlavor>()
+            .await
+            .unwrap();
 
         assert_eq!(
             root.package_info()
@@ -526,6 +510,10 @@ mod tests {
         );
     }
 
+    fn default_environment() -> Environment {
+        Vanilla::default_environment()
+    }
+
     /// Loading a package includes the implicit dependencies, and the system dependencies are
     /// resolved to the right packages
     #[test(tokio::test)]
@@ -534,10 +522,10 @@ mod tests {
             .add_package("a", |a| a.implicit_deps(false))
             .build();
 
-        let root =
-            RootPackage::<TestFlavor>::load(scenario.path_for("a"), default_environment(), vec![])
-                .await
-                .unwrap();
+        let root = PackageLoader::new(scenario.path_for("a"), default_environment())
+            .load::<TestFlavor>()
+            .await
+            .unwrap();
 
         assert!(root.package_info().direct_deps().is_empty());
     }
@@ -549,10 +537,10 @@ mod tests {
             .add_dep("a", "b", |dep| dep.name("foo").rename_from("b"))
             .build();
 
-        let err =
-            RootPackage::<TestFlavor>::load(scenario.path_for("a"), default_environment(), vec![])
-                .await
-                .unwrap_err();
+        let err = PackageLoader::new(scenario.path_for("a"), default_environment())
+            .load::<TestFlavor>()
+            .await
+            .unwrap_err();
 
         let message = err
             .to_string()
@@ -571,7 +559,8 @@ mod tests {
             .add_dep("a", "b", |dep| dep.name("foo").rename_from("b"))
             .build();
 
-        RootPackage::<TestFlavor>::load(scenario.path_for("a"), default_environment(), vec![])
+        PackageLoader::new(scenario.path_for("a"), default_environment())
+            .load::<TestFlavor>()
             .await
             .unwrap();
     }
@@ -609,5 +598,21 @@ mod tests {
         assert_eq!(published_at, PublishedID::from(2));
         assert_eq!(original_id, OriginalID::from(1));
         assert_eq!(chain_id, DEFAULT_ENV_ID);
+    }
+
+    #[test(tokio::test)]
+    async fn test_dummy_addr_determinism() {
+        let scenario = TestPackageGraph::new(["root", "a", "b"])
+            .add_deps([("root", "a"), ("root", "b")])
+            .build();
+
+        let first_load = scenario.root_package("root").await;
+        let first_load_addresses = first_load.package_info().named_addresses().unwrap();
+
+        drop(first_load);
+        let second_load = scenario.root_package("root").await;
+        let second_load_addresses = second_load.package_info().named_addresses().unwrap();
+
+        assert_eq!(first_load_addresses, second_load_addresses);
     }
 }

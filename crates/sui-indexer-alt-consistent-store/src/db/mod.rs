@@ -2,22 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
-use std::{
-    cmp,
-    collections::BTreeMap,
-    marker,
-    ops::{Bound, RangeBounds, RangeInclusive},
-    path::Path,
-    sync::{Arc, RwLock},
-};
+use std::cmp;
+use std::collections::BTreeMap;
+use std::marker;
+use std::ops::Bound;
+use std::ops::RangeBounds;
+use std::ops::RangeInclusive;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 use anyhow::Context;
 use bincode::Encode;
-use rocksdb::{AsColumnFamilyRef, properties};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use rocksdb::AsColumnFamilyRef;
+use rocksdb::properties;
+use serde::Deserialize;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use sui_indexer_alt_framework::store::CommitterWatermark;
 
-use self::error::Error;
+use crate::db::error::Error;
 
 pub(crate) mod config;
 pub(crate) mod error;
@@ -202,7 +206,7 @@ impl Db {
         let i = self.0.read().expect("poisoned");
         let p = key::encode(pipeline.as_bytes());
         batch.put_cf(i.borrow_watermark_cf(), &p, checkpoint);
-        i.borrow_db().write(batch)?;
+        i.borrow_db().write_opt(batch, &sync_write_options())?;
         Ok(())
     }
 
@@ -219,7 +223,9 @@ impl Db {
             }
 
             let Some(existing) = f.db.get_pinned_cf(f.restore_cf, &p)? else {
-                f.db.put_cf(f.restore_cf, &p, bcs::to_bytes(&watermark)?)?;
+                let mut batch = rocksdb::WriteBatch::default();
+                batch.put_cf(f.restore_cf, &p, bcs::to_bytes(&watermark)?);
+                f.db.write_opt(batch, &sync_write_options())?;
                 return Ok(());
             };
 
@@ -251,7 +257,7 @@ impl Db {
 
         let i = self.0.read().expect("poisoned");
         batch.put_cf(i.borrow_restore_cf(), key, []);
-        i.borrow_db().write(batch)?;
+        i.borrow_db().write_opt(batch, &sync_write_options())?;
         Ok(())
     }
 
@@ -303,7 +309,7 @@ impl Db {
             batch.put_cf(f.watermark_cf, &p, &existing);
             batch.delete_range_cf(f.restore_cf, &p[..], q);
 
-            Ok(f.db.write(batch)?)
+            Ok(f.db.write_opt(batch, &sync_write_options())?)
         })
     }
 
@@ -780,18 +786,6 @@ impl From<CommitterWatermark> for Watermark {
     }
 }
 
-/// Retrieves a RocksDB property from db and maps it to a metric value.
-fn cf_property_int_to_metric(
-    db: &rocksdb::DB,
-    cf: &impl AsColumnFamilyRef,
-    property_name: &std::ffi::CStr,
-) -> i64 {
-    match db.property_int_value_cf(cf, property_name) {
-        Ok(Some(value)) => value.min(i64::MAX as u64) as i64,
-        Ok(None) | Err(_) => METRICS_ERROR,
-    }
-}
-
 impl Default for RocksMetrics {
     fn default() -> Self {
         Self {
@@ -812,6 +806,25 @@ impl Default for RocksMetrics {
             num_running_flushes: METRICS_ERROR,
         }
     }
+}
+
+/// Retrieves a RocksDB property from db and maps it to a metric value.
+fn cf_property_int_to_metric(
+    db: &rocksdb::DB,
+    cf: &impl AsColumnFamilyRef,
+    property_name: &std::ffi::CStr,
+) -> i64 {
+    match db.property_int_value_cf(cf, property_name) {
+        Ok(Some(value)) => value.min(i64::MAX as u64) as i64,
+        Ok(None) | Err(_) => METRICS_ERROR,
+    }
+}
+
+/// Returns write options with sync (fsync) enabled for durability.
+fn sync_write_options() -> rocksdb::WriteOptions {
+    let mut opts = rocksdb::WriteOptions::default();
+    opts.set_sync(true);
+    opts
 }
 
 #[cfg(test)]
@@ -1103,7 +1116,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_forward_iteration() {
-        use Bound::{Excluded as E, Unbounded as U};
+        use Bound::Excluded as E;
+        use Bound::Unbounded as U;
 
         let d = tempfile::tempdir().unwrap();
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();
@@ -1399,7 +1413,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_reverse_iteration() {
-        use Bound::{Excluded as E, Unbounded as U};
+        use Bound::Excluded as E;
+        use Bound::Unbounded as U;
 
         let d = tempfile::tempdir().unwrap();
         let db = Db::open(d.path().join("db"), opts(), 4, cfs()).unwrap();

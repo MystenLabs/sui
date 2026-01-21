@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use bytes::Bytes;
-use object_store::{ClientOptions, ObjectStore, path::Path};
+use object_store::ClientOptions;
+use object_store::ObjectStore;
+use object_store::path::Path;
 use url::Url;
 
 /// Interface implemented by storage backends that store byte blobs at paths.

@@ -443,7 +443,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 let selected_num_blocks = max_response_num_blocks.saturating_sub(blocks.len());
                 if selected_num_blocks < missing_ancestors.len() {
                     missing_ancestors = missing_ancestors
-                        .choose_multiple(&mut rand::thread_rng(), selected_num_blocks)
+                        .choose_multiple(&mut mysten_common::random::get_rng(), selected_num_blocks)
                         .copied()
                         .collect::<Vec<_>>();
                 }

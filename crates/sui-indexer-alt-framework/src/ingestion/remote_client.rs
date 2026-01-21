@@ -1,15 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use reqwest::{Client, StatusCode};
 use std::time::Duration;
-use tracing::{debug, error};
+
+use reqwest::Client;
+use reqwest::StatusCode;
+use tracing::debug;
+use tracing::error;
 use url::Url;
 
 use crate::ingestion::Result as IngestionResult;
-use crate::ingestion::ingestion_client::{
-    FetchData, FetchError, FetchResult, IngestionClientTrait,
-};
+use crate::ingestion::ingestion_client::FetchData;
+use crate::ingestion::ingestion_client::FetchError;
+use crate::ingestion::ingestion_client::FetchResult;
+use crate::ingestion::ingestion_client::IngestionClientTrait;
 
 /// Default timeout for remote checkpoint fetches.
 /// This prevents requests from hanging indefinitely due to network issues,
@@ -52,19 +56,19 @@ impl RemoteIngestionClient {
         // SAFETY: The path being joined is statically known to be valid.
         let url = self
             .url
-            .join("/epochs.json")
+            .join("epochs.json")
             .expect("Unexpected invalid URL");
 
         self.client.get(url).send().await
     }
 
     /// Fetch the bytes for a checkpoint by its sequence number.
-    /// The response is the serialized representation of a checkpoint, as raw bytes.
+    /// The response is the zstd-compressed protobuf representation of a checkpoint.
     pub async fn checkpoint(&self, checkpoint: u64) -> reqwest::Result<reqwest::Response> {
         // SAFETY: The path being joined is statically known to be valid.
         let url = self
             .url
-            .join(&format!("/{checkpoint}.chk"))
+            .join(&format!("{checkpoint}.binpb.zst"))
             .expect("Unexpected invalid URL");
 
         self.client.get(url).send().await
@@ -149,18 +153,20 @@ pub(crate) mod tests {
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_ingestion_metrics;
     use axum::http::StatusCode;
-    use std::sync::{
-        Mutex,
-        atomic::{AtomicUsize, Ordering},
-    };
-    use wiremock::{
-        Mock, MockServer, Request, Respond, ResponseTemplate,
-        matchers::{method, path_regex},
-    };
+    use std::sync::Mutex;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::Request;
+    use wiremock::Respond;
+    use wiremock::ResponseTemplate;
+    use wiremock::matchers::method;
+    use wiremock::matchers::path_regex;
 
     pub(crate) async fn respond_with(server: &MockServer, response: impl Respond + 'static) {
         Mock::given(method("GET"))
-            .and(path_regex(r"/\d+.chk"))
+            .and(path_regex(r"/\d+\.binpb\.zst"))
             .respond_with(response)
             .mount(server)
             .await;
@@ -196,12 +202,14 @@ pub(crate) mod tests {
             let mut times = times.lock().unwrap();
             *times += 1;
             match (*times, r.url.path()) {
-                // The first request will trigger a redirect to 0.chk no matter what the original
+                // The first request will trigger a redirect to 0.binpb.zst no matter what the original
                 // request was for -- triggering a request error.
-                (1, _) => status(StatusCode::MOVED_PERMANENTLY).append_header("Location", "/0.chk"),
+                (1, _) => {
+                    status(StatusCode::MOVED_PERMANENTLY).append_header("Location", "/0.binpb.zst")
+                }
 
                 // Set-up checkpoint 0 as an infinite redirect loop.
-                (_, "/0.chk") => {
+                (_, "/0.binpb.zst") => {
                     status(StatusCode::MOVED_PERMANENTLY).append_header("Location", r.url.as_str())
                 }
 

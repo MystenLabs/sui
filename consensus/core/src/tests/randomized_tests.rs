@@ -1,28 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{env, sync::Arc};
+use std::env;
 
-use consensus_config::AuthorityIndex;
-use parking_lot::RwLock;
-use rand::{Rng, SeedableRng, prelude::SliceRandom, rngs::StdRng};
+use rand::{Rng as _, SeedableRng as _, rngs::StdRng};
 
 use crate::{
-    block::{BlockAPI, Slot},
-    block_manager::BlockManager,
-    commit::DecidedLeader,
-    context::Context,
-    dag_state::DagState,
-    leader_schedule::{LeaderSchedule, LeaderSwapTable},
-    storage::mem_store::MemStore,
+    block::Slot,
+    commit_test_fixture::{CommitTestFixture, RandomDag, assert_commit_sequences_match},
     test_dag::create_random_dag,
-    universal_committer::{
-        UniversalCommitter, universal_committer_builder::UniversalCommitterBuilder,
-    },
 };
 
 const NUM_RUNS: u32 = 100;
-const NUM_ROUNDS: u32 = 200;
+const MAX_STEP: u32 = 3;
 
 /// Test builds a randomized dag with the following conditions:
 /// - Links to 2f+1 minimum ancestors
@@ -31,201 +21,103 @@ const NUM_ROUNDS: u32 = 200;
 /// Should result in a direct commit for every round.
 #[tokio::test]
 async fn test_randomized_dag_all_direct_commit() {
-    let mut random_test_setup = random_test_setup();
+    let seed = random_test_seed();
+    let num_authorities = 7;
+    let num_rounds = 1000;
+    let include_leader_percentage = 100;
+
+    let context = CommitTestFixture::context_with_options(num_authorities, 0, Some(6));
+    let dag_builder =
+        create_random_dag(seed, include_leader_percentage, num_rounds, context.clone());
+    let all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
+
+    // Collect finalized commit sequences from each run
+    let mut commit_sequences = vec![];
 
     for _ in 0..NUM_RUNS {
-        let seed = random_test_setup.seeded_rng.gen_range(0..10000);
-        let num_authorities = random_test_setup.seeded_rng.gen_range(4..10);
-        let authority = authority_setup(num_authorities, 0);
-
-        let include_leader_percentage = 100;
-        let dag_builder = create_random_dag(
-            seed,
-            include_leader_percentage,
-            NUM_ROUNDS,
-            authority.context.clone(),
-        );
-
-        dag_builder.persist_all_blocks(authority.dag_state.clone());
-
         tracing::info!(
-            "Running test with committee size {num_authorities} & {NUM_ROUNDS} rounds in the DAG..."
+            "Running test with {num_authorities} authorities & {num_rounds} rounds in the DAG with seed {seed}..."
         );
+
+        let mut fixture = CommitTestFixture::new(context.clone());
+        fixture.add_blocks(all_blocks.clone());
 
         let last_decided = Slot::new_for_test(0, 0);
-        let sequence = authority.committer.try_decide(last_decided);
-        tracing::debug!("Commit sequence: {sequence:#?}");
-
-        assert_eq!(sequence.len(), (NUM_ROUNDS - 2) as usize);
-        for (i, leader_block) in sequence.iter().enumerate() {
-            // First sequenced leader should be in round 1.
-            let leader_round = i as u32 + 1;
-            if let DecidedLeader::Commit(block, _direct) = leader_block {
-                assert_eq!(block.round(), leader_round);
-                assert_eq!(
-                    block.author(),
-                    authority.committer.get_leaders(leader_round)[0]
-                );
-            } else {
-                panic!("Expected a committed leader")
-            };
-        }
+        let (finalized_commits, _) = fixture.try_commit(last_decided).await;
+        commit_sequences.push(finalized_commits);
     }
+
+    let last_commit_sequence = assert_commit_sequences_match(commit_sequences);
+    assert_eq!(last_commit_sequence.len(), (num_rounds - 2) as usize);
 }
 
 /// Test builds a randomized dag with the following conditions:
 /// - Links to 2f+1 minimum ancestors
 /// - Links to leader of previous round 50% of the time.
 ///
-/// Blocks will randomly be fed through BlockManager and after each accepted
-/// block we will try_decide() and if there is a committed sequence we will update
-/// last_decided and continue. We do this from the perspective of two different
+/// Blocks are delivered via RandomDagIterator in a constrained random order based on
+/// quorum rounds, simulating realistic block arrival patterns. After each accepted
+/// block we will try_commit() and if there is a committed sequence we will update
+/// last_decided and continue. We do this from the perspective of different
 /// authorities who receive the blocks in different orders and ensure the resulting
-/// sequence is the same for both authorities. The resulting sequence will include
+/// sequence is the same for all authorities. The resulting sequence will include
 /// Commit & Skip decisions and potentially will stop before coming to a decision
 /// on all waves as we may have an Undecided leader somewhere early in the sequence.
+///
+/// Additionally, this test processes commits through the Linearizer and CommitFinalizer
+/// incrementally after each try_commit() call, similar to the production flow.
 #[tokio::test]
 async fn test_randomized_dag_and_decision_sequence() {
-    let mut random_test_setup = random_test_setup();
+    let seed = random_test_seed();
+    let mut rng = StdRng::seed_from_u64(seed);
+    let num_authorities = 7;
+    let num_rounds = 1000;
+    let include_leader_percentage = 50;
+
+    let context = CommitTestFixture::context_with_options(num_authorities, 0, Some(6));
+    let dag_builder =
+        create_random_dag(seed, include_leader_percentage, num_rounds, context.clone());
+    let all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
+
+    // Create RandomDag from existing blocks for using RandomDagIterator
+    let dag = RandomDag::from_blocks(context.clone(), all_blocks);
+
+    // Collect finalized commit sequences from each run
+    let mut commit_sequences = vec![];
 
     for _ in 0..NUM_RUNS {
-        let seed = random_test_setup.seeded_rng.gen_range(0..10000);
-        let num_authorities = random_test_setup.seeded_rng.gen_range(4..10);
-
-        // Setup for Authority 1
-        let mut authority_1 = authority_setup(num_authorities, 1);
-
-        let include_leader_percentage = 50;
-        let dag_builder = create_random_dag(
-            seed,
-            include_leader_percentage,
-            NUM_ROUNDS,
-            authority_1.context.clone(),
-        );
-
         tracing::info!(
-            "Running test with committee size {num_authorities} & {NUM_ROUNDS} rounds in the DAG..."
+            "Running test with {num_authorities} authorities & {num_rounds} rounds in the DAG with seed {seed}..."
         );
 
-        let mut all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
-        all_blocks.shuffle(&mut random_test_setup.seeded_rng);
-
-        let mut sequenced_leaders_1 = vec![];
+        let mut fixture = CommitTestFixture::new(context.clone());
+        let mut finalized_commits = vec![];
         let mut last_decided = Slot::new_for_test(0, 0);
-        let mut i = 0;
-        while i < all_blocks.len() {
-            let chunk_size = random_test_setup
-                .seeded_rng
-                .gen_range(1..=(all_blocks.len() - i));
-            let chunk = &all_blocks[i..i + chunk_size];
 
-            let _ = authority_1.block_manager.try_accept_blocks(chunk.to_vec());
-            let sequence = authority_1.committer.try_decide(last_decided);
+        // Use RandomDagIterator to deliver blocks in constrained random order
+        for block in dag.random_iter(&mut rng, MAX_STEP) {
+            fixture.try_accept_blocks(vec![block]);
 
-            if !sequence.is_empty() {
-                sequenced_leaders_1.extend(sequence.clone());
-                let leader_status = sequence.last().unwrap();
-                last_decided = Slot::new(leader_status.round(), leader_status.authority());
-            }
-
-            i += chunk_size;
+            let (finalized, new_last_decided) = fixture.try_commit(last_decided).await;
+            finalized_commits.extend(finalized);
+            last_decided = new_last_decided;
         }
 
-        assert!(authority_1.block_manager.is_empty());
-
-        // Setup for Authority 2
-        let mut authority_2 = authority_setup(num_authorities, 2);
-
-        let mut all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
-        all_blocks.shuffle(&mut random_test_setup.seeded_rng);
-
-        let mut sequenced_leaders_2 = vec![];
-        let mut last_decided = Slot::new_for_test(0, 0);
-        let mut i = 0;
-        while i < all_blocks.len() {
-            let chunk_size = random_test_setup
-                .seeded_rng
-                .gen_range(1..=(all_blocks.len() - i));
-            let chunk = &all_blocks[i..i + chunk_size];
-
-            let _ = authority_2.block_manager.try_accept_blocks(chunk.to_vec());
-            let sequence = authority_2.committer.try_decide(last_decided);
-
-            if !sequence.is_empty() {
-                sequenced_leaders_2.extend(sequence.clone());
-                let leader_status = sequence.last().unwrap();
-                last_decided = Slot::new(leader_status.round(), leader_status.authority());
-            }
-
-            i += chunk_size;
-        }
-
-        assert!(authority_2.block_manager.is_empty());
-
-        // Ensure despite the difference in when blocks were received eventually after
-        // receiving all blocks both authorities should return the same sequence of blocks.
-        assert_eq!(sequenced_leaders_1, sequenced_leaders_2);
+        assert!(fixture.has_no_suspended_blocks());
+        commit_sequences.push(finalized_commits);
     }
+
+    assert_commit_sequences_match(commit_sequences);
 }
 
-struct AuthorityTestFixture {
-    context: Arc<Context>,
-    dag_state: Arc<RwLock<DagState>>,
-    committer: UniversalCommitter,
-    block_manager: BlockManager,
-}
-
-fn authority_setup(num_authorities: usize, authority_index: u32) -> AuthorityTestFixture {
-    let context = Arc::new(
-        Context::new_for_test(num_authorities)
-            .0
-            .with_authority_index(AuthorityIndex::new_for_test(authority_index)),
-    );
-    let leader_schedule = Arc::new(LeaderSchedule::new(
-        context.clone(),
-        LeaderSwapTable::default(),
-    ));
-    let dag_state = Arc::new(RwLock::new(DagState::new(
-        context.clone(),
-        Arc::new(MemStore::new()),
-    )));
-
-    // Create committer with pipelining and only 1 leader per leader round
-    let committer =
-        UniversalCommitterBuilder::new(context.clone(), leader_schedule, dag_state.clone())
-            .with_pipeline(true)
-            .build();
-
-    let block_manager = BlockManager::new(context.clone(), dag_state.clone());
-
-    AuthorityTestFixture {
-        context,
-        dag_state,
-        committer,
-        block_manager,
-    }
-}
-
-struct RandomTestFixture {
-    seeded_rng: StdRng,
-}
-
-fn random_test_setup() -> RandomTestFixture {
+fn random_test_seed() -> u64 {
     telemetry_subscribers::init_for_testing();
-    let mut rng = StdRng::from_entropy();
-    let seed = match env::var("DAG_TEST_SEED") {
-        Ok(seed_str) => {
-            if let Ok(seed) = seed_str.parse::<u64>() {
-                seed
-            } else {
-                tracing::warn!("Invalid DAG_TEST_SEED format. Using random seed.");
-                rng.gen_range(0..10000)
-            }
-        }
-        Err(_) => rng.gen_range(0..10000),
-    };
-    tracing::warn!("Using Random Seed: {seed}");
-
-    let seeded_rng = StdRng::seed_from_u64(seed);
-    RandomTestFixture { seeded_rng }
+    let mut seed: u64 = rand::thread_rng().r#gen();
+    if let Ok(seed_str) = env::var("DAG_TEST_SEED")
+        && let Ok(s) = seed_str.parse::<u64>()
+    {
+        seed = s;
+        tracing::info!("Using DAG_TEST_SEED to override random seed: {seed}");
+    }
+    seed
 }

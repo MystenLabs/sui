@@ -1,0 +1,165 @@
+---
+title: Maintainer
+description: Learn about maintainer functions for managing margin pools and system configuration.
+keywords:
+  [
+    maintainer,
+    margin pool admin,
+    pool configuration,
+    interest rates,
+    protocol config,
+    deepbook margin,
+  ]
+---
+
+The maintainer module provides functions for managing margin pools, configuring interest rates, and controlling which DeepBook pools can access margin lending. These functions are restricted to maintainers with the appropriate capabilities.
+
+## API
+
+Following are the different maintainer functions that the `MarginPool` exposes.
+
+<details>
+<summary>Create a margin pool</summary>
+
+Creates and registers a new margin pool for a specific asset. Only one margin pool can exist per asset type.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="create_margin_pool"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Enable or disable DeepBook pools</summary>
+
+Control which DeepBook pools can borrow from this margin pool. Only margin managers associated with enabled pools can take loans.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="enable_deepbook_pool_for_loan,disable_deepbook_pool_for_loan"
+/>
+
+</details>
+
+<details>
+<summary>Update pool parameters</summary>
+
+Update interest rate parameters and margin pool configuration settings.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="update_interest_params,update_margin_pool_config"
+/>
+
+</details>
+
+<details>
+<summary>Withdraw fees</summary>
+
+Withdraw accumulated maintainer and protocol fees from the margin pool.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_pool.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	fun="withdraw_maintainer_fees,withdraw_protocol_fees,admin_withdraw_default_referral_fees"
+/>
+
+</details>
+
+## Events
+
+<details>
+<summary>`MaintainerCapUpdated`</summary>
+
+Emitted when a maintainer capability is updated.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="MaintainerCapUpdated"
+/>
+
+</details>
+
+<details>
+<summary>`PauseCapUpdated`</summary>
+
+Emitted when a pause capability is updated.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="PauseCapUpdated"
+/>
+
+</details>
+
+<details>
+<summary>`DeepbookPoolRegistered`</summary>
+
+Emitted when a DeepBook pool is registered in the margin registry.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="DeepbookPoolRegistered"
+/>
+
+</details>
+
+<details>
+<summary>`DeepbookPoolUpdatedRegistry`</summary>
+
+Emitted when a DeepBook pool's enabled status is updated in the registry.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="DeepbookPoolUpdated"
+/>
+
+</details>
+
+<details>
+<summary>`DeepbookPoolConfigUpdated`</summary>
+
+Emitted when a DeepBook pool's configuration is updated in the registry.
+
+<ImportContent
+	source="packages/deepbook_margin/sources/margin_registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	struct="DeepbookPoolConfigUpdated"
+/>
+
+</details>
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3/tree/main/packages/deepbook_margin"
+	label="DeepBook Margin package"
+	desc="The DeepBook Margin package on GitHub."
+/>

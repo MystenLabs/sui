@@ -27,7 +27,7 @@ use mysten_metrics::{
 use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::{
     SUI_RANDOMNESS_STATE_OBJECT_ID,
     authenticator_state::ActiveJwk,
@@ -575,6 +575,16 @@ impl<C> ConsensusHandler<C> {
         backpressure_subscriber: BackpressureSubscriber,
         traffic_controller: Option<Arc<TrafficController>>,
     ) -> Self {
+        assert!(
+            matches!(
+                epoch_store
+                    .protocol_config()
+                    .per_object_congestion_control_mode(),
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
+            ),
+            "support for congestion control modes other than PerObjectCongestionControlMode::ExecutionTimeEstimate has been removed"
+        );
+
         // Recover last_consensus_stats so it is consistent across validators.
         let mut last_consensus_stats = epoch_store
             .get_last_consensus_stats()
@@ -818,7 +828,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         info!(
             %consensus_commit,
-            "Received consensus output. Rejected transactions: {}",
+            "Received consensus output {}. Rejected transactions {}",
+            consensus_commit.commit_ref(),
             consensus_commit.rejected_transactions_debug_string(),
         );
 
@@ -1023,7 +1034,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let mut deferred_transactions = self
             .epoch_store
             .consensus_output_cache
-            .deferred_transactions_v2
+            .deferred_transactions
             .lock();
         for deleted_deferred_key in state.output.get_deleted_deferred_txn_keys() {
             deferred_transactions.remove(&deleted_deferred_key);
@@ -1184,7 +1195,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             let mut deferred_transactions = self
                 .epoch_store
                 .consensus_output_cache
-                .deferred_transactions_v2
+                .deferred_transactions
                 .lock();
             for (key, txns) in deferred_txns.into_iter() {
                 total_deferred_txns += txns.len();
@@ -1848,8 +1859,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         reconfig_state.close_all_certs();
 
         let commit_has_deferred_txns = state.output.has_deferred_transactions();
-        let previous_commits_have_deferred_txns =
-            !self.epoch_store.deferred_transactions_empty_v2();
+        let previous_commits_have_deferred_txns = !self.epoch_store.deferred_transactions_empty();
 
         if !commit_has_deferred_txns && !previous_commits_have_deferred_txns {
             if !start_state_is_reject_all_tx {

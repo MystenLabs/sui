@@ -5,6 +5,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::annotated_visitor as AV;
 use move_core_types::u256::U256;
+use move_core_types::visitor_default;
 use sui_types::id::ID;
 use sui_types::id::UID;
 
@@ -16,6 +17,9 @@ pub(crate) struct AddressExtractor;
 impl AV::Visitor<'_, '_> for AddressExtractor {
     type Value = Option<AccountAddress>;
     type Error = FormatError;
+
+    visitor_default! { <'_, '_> u8, u16, u32, u64, u128, u256 = Ok(None) }
+    visitor_default! { <'_, '_> bool, signer, vector, variant = Ok(None) }
 
     fn visit_address(
         &mut self,
@@ -56,87 +60,6 @@ impl AV::Visitor<'_, '_> for AddressExtractor {
         }
 
         extract_address(driver).map(Some)
-    }
-
-    // All the other variants are guaranteed not to include an address, return `None` for all of
-    // them.
-
-    fn visit_u8(
-        &mut self,
-        _: &AV::ValueDriver<'_, '_, '_>,
-        _: u8,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_u16(
-        &mut self,
-        _: &AV::ValueDriver<'_, '_, '_>,
-        _: u16,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_u32(
-        &mut self,
-        _: &AV::ValueDriver<'_, '_, '_>,
-        _: u32,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_u64(
-        &mut self,
-        _: &AV::ValueDriver<'_, '_, '_>,
-        _: u64,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_u128(
-        &mut self,
-        _: &AV::ValueDriver<'_, '_, '_>,
-        _: u128,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_u256(
-        &mut self,
-        _: &AV::ValueDriver<'_, '_, '_>,
-        _: U256,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_bool(
-        &mut self,
-        _: &AV::ValueDriver<'_, '_, '_>,
-        _: bool,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_signer(
-        &mut self,
-        _: &AV::ValueDriver<'_, '_, '_>,
-        _: AccountAddress,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_vector(
-        &mut self,
-        _: &mut AV::VecDriver<'_, '_, '_>,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
-    }
-
-    fn visit_variant(
-        &mut self,
-        _: &mut AV::VariantDriver<'_, '_, '_>,
-    ) -> Result<Self::Value, Self::Error> {
-        Ok(None)
     }
 }
 

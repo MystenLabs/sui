@@ -3,7 +3,12 @@
 
 mod handlers;
 
-pub use handlers::{CheckpointBlob, CheckpointBlobPipeline, EpochCheckpoint, EpochsPipeline};
+pub use handlers::BcsCheckpoint;
+pub use handlers::CheckpointBcsPipeline;
+pub use handlers::CheckpointBlob;
+pub use handlers::CheckpointBlobPipeline;
+pub use handlers::EpochCheckpoint;
+pub use handlers::EpochsPipeline;
 
 #[cfg(test)]
 mod tests {

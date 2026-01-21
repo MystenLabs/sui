@@ -8,13 +8,12 @@ use diesel::sql_types::BigInt;
 use sui_pg_db::query::Query;
 use sui_sql_macro::query;
 
-use crate::{
-    api::{scalars::uint53::UInt53, types::checkpoint::filter::checkpoint_bounds},
-    error::RpcError,
-    pagination::Page,
-    scope::Scope,
-    task::watermark::Watermarks,
-};
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::checkpoint::filter::checkpoint_bounds;
+use crate::error::RpcError;
+use crate::pagination::Page;
+use crate::scope::Scope;
+use crate::task::watermark::Watermarks;
 
 pub(crate) trait CheckpointBounds {
     fn after_checkpoint(&self) -> Option<UInt53>;

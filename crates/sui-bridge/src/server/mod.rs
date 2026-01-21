@@ -2,32 +2,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::inconsistent_digit_grouping)]
+use crate::crypto::BridgeAuthorityPublicKeyBytes;
+use crate::error::BridgeError;
+use crate::metrics::BridgeMetrics;
+use crate::server::handler::BridgeRequestHandlerTrait;
+use crate::types::{
+    AddTokensOnEvmAction, AddTokensOnSuiAction, AssetPriceUpdateAction, BlocklistCommitteeAction,
+    BlocklistType, BridgeAction, EmergencyAction, EmergencyActionType, EvmContractUpgradeAction,
+    LimitUpdateAction, SignedBridgeAction,
+};
 use crate::with_metrics;
-use crate::{
-    crypto::BridgeAuthorityPublicKeyBytes,
-    error::BridgeError,
-    metrics::BridgeMetrics,
-    server::handler::BridgeRequestHandlerTrait,
-    types::{
-        AddTokensOnEvmAction, AddTokensOnSuiAction, AssetPriceUpdateAction,
-        BlocklistCommitteeAction, BlocklistType, BridgeAction, EmergencyAction,
-        EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction, SignedBridgeAction,
-    },
-};
-use axum::{
-    Json,
-    extract::{Path, State},
-};
-use axum::{Router, http::StatusCode, routing::get};
-use ethers::types::Address as EthAddress;
+use alloy::primitives::Address as EthAddress;
+use axum::Json;
+use axum::Router;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::routing::get;
 use fastcrypto::ed25519::Ed25519PublicKey;
-use fastcrypto::{
-    encoding::{Encoding, Hex},
-    traits::ToFromBytes,
-};
+use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::traits::ToFromBytes;
+use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
-use std::{net::SocketAddr, str::FromStr};
-use sui_types::{TypeTag, bridge::BridgeChainId};
+use sui_types::TypeTag;
+use sui_types::bridge::BridgeChainId;
 use tracing::{info, instrument};
 
 pub mod governance_verifier;

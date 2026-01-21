@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use anyhow::Result;
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
+use chrono::Utc;
 use scoped_futures::ScopedBoxFuture;
-use std::time::Duration;
 
 /// Represents a database connection that can be used by the indexer framework to manage watermark
 /// operations, agnostic of the underlying store implementation.

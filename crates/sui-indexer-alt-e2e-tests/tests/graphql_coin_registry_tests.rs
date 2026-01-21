@@ -5,20 +5,23 @@ use insta::assert_debug_snapshot;
 use move_core_types::language_storage::StructTag;
 use serde::Deserialize;
 use serde_json::json;
-use sui_indexer_alt_e2e_tests::{
-    FullCluster,
-    coin_registry::{self, LegacyCoinOutputs},
-    find,
-};
-use sui_types::{
-    Identifier, SUI_COIN_REGISTRY_ADDRESS,
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    coin::{CoinMetadata, TreasuryCap},
-    deny_list_v2::DenyCapV2,
-    digests::ObjectDigest,
-    effects::TransactionEffectsAPI,
-    object::Owner,
-};
+use sui_types::Identifier;
+use sui_types::SUI_COIN_REGISTRY_ADDRESS;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::SuiAddress;
+use sui_types::coin::CoinMetadata;
+use sui_types::coin::TreasuryCap;
+use sui_types::deny_list_v2::DenyCapV2;
+use sui_types::digests::ObjectDigest;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::Owner;
+
+use sui_indexer_alt_e2e_tests::FullCluster;
+use sui_indexer_alt_e2e_tests::coin_registry::LegacyCoinOutputs;
+use sui_indexer_alt_e2e_tests::coin_registry::{self};
+use sui_indexer_alt_e2e_tests::find;
 
 const METADATA_QUERY: &str = r#"
 query GetCoinMetadata($coinType: String!) {

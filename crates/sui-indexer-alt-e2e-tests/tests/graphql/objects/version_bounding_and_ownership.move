@@ -374,9 +374,7 @@ module P1::M {
 }
 
 //# run-graphql
-{ # Success - Object at specific checkpoint (including latest) can query owned objects
-
-  # Should show objects owned at checkpoint 1 (first 2 transferred coins)
+{ # Success -- objects owned at checkpoint 1
   cp1: checkpoint(sequenceNumber: 1) {
     query {
       object(address: "@{obj_0_0}") { ...Owned }
@@ -386,8 +384,17 @@ module P1::M {
   atCp1: object(address: "@{obj_0_0}", atCheckpoint: 1) {
     ...Owned
   }
+}
 
-  # At a later checkpoint, should show more coins.
+fragment Owned on IAddressable {
+  objects { nodes { contents { json } } }
+  balances { nodes { coinType { repr } totalBalance } }
+  sui: balance(coinType: "0x2::sui::SUI") { totalBalance }
+  empty: balance(coinType: "0x42::empty::COIN") { totalBalance }
+}
+
+//# run-graphql
+{ # Success -- objects owned at checkpoint 2, more coins
   cp2: checkpoint(sequenceNumber: 2) {
     query {
       object(address: "@{obj_0_0}") {
@@ -399,12 +406,21 @@ module P1::M {
   atCp2: object(address: "@{obj_0_0}", atCheckpoint: 2) {
     ...Owned
   }
+}
 
+fragment Owned on IAddressable {
+  objects { nodes { contents { json } } }
+  balances { nodes { coinType { repr } totalBalance } }
+  sui: balance(coinType: "0x2::sui::SUI") { totalBalance }
+  empty: balance(coinType: "0x42::empty::COIN") { totalBalance }
+}
+
+//# run-graphql
+{ # Success -- objects owned at the latest checkpoint, and nested
   latest: object(address: "@{obj_0_0}") {
     ...Owned
   }
 
-  # The ability to perform ownership queries is preserved by nesting.
   nested: object(address: "@{obj_0_0}") {
     objects {
       nodes {
@@ -413,8 +429,17 @@ module P1::M {
       }
     }
   }
+}
 
-  # Certain nested queries reset the "root version" bound -- like this one
+fragment Owned on IAddressable {
+  objects { nodes { contents { json } } }
+  balances { nodes { coinType { repr } totalBalance } }
+  sui: balance(coinType: "0x2::sui::SUI") { totalBalance }
+  empty: balance(coinType: "0x42::empty::COIN") { totalBalance }
+}
+
+//# run-graphql
+{ # Certain nested queries reset the "root version" bound -- like this one
   # which finds the latest version of the object.
   objectAtReset: object(address: "@{obj_0_0}", version: 2) {
     objectAt { ...Owned }

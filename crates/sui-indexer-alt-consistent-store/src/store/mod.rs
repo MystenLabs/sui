@@ -1,21 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
+use std::sync::Arc;
 use std::sync::OnceLock;
-use std::{path::Path, sync::Arc, time::Duration};
+use std::time::Duration;
 
-use anyhow::{Context as _, anyhow, bail};
+use anyhow::Context as _;
+use anyhow::anyhow;
+use anyhow::bail;
 use prometheus::Registry;
 use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_framework::service::Service;
-use sui_indexer_alt_framework::store::{self, CommitterWatermark, Store as _};
-use synchronizer::Queue;
+use sui_indexer_alt_framework::store::CommitterWatermark;
+use sui_indexer_alt_framework::store::Store as _;
+use sui_indexer_alt_framework::store::{self};
 
+use crate::db::Db;
+use crate::db::Watermark;
 use crate::db::config::DbConfig;
-use crate::db::{Db, Watermark};
 use crate::metrics::ColumnFamilyStatsCollector;
-
-use self::synchronizer::Synchronizer;
+use crate::store::synchronizer::Queue;
+use crate::store::synchronizer::Synchronizer;
 
 pub(crate) mod synchronizer;
 
@@ -230,8 +236,10 @@ mod tests {
     use std::future::Future;
 
     use scoped_futures::ScopedFutureExt;
-    use sui_indexer_alt_framework::store::{Connection as _, TransactionalStore};
-    use tokio::time::{self, error::Elapsed};
+    use sui_indexer_alt_framework::store::Connection as _;
+    use sui_indexer_alt_framework::store::TransactionalStore;
+    use tokio::time::error::Elapsed;
+    use tokio::time::{self};
 
     use crate::db::map::DbMap;
 

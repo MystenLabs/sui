@@ -7,15 +7,16 @@ use anyhow::Context;
 use clap::Parser;
 use futures::TryFutureExt as _;
 use prometheus::Registry;
-use sui_indexer_alt_consistent_store::{
-    args::{Args, Command},
-    config::ServiceConfig,
-    restore::start_restorer,
-    start_service,
-};
 use sui_indexer_alt_framework::service::Error;
-use sui_indexer_alt_metrics::{MetricsService, uptime};
+use sui_indexer_alt_metrics::MetricsService;
+use sui_indexer_alt_metrics::uptime;
 use tokio::fs;
+
+use sui_indexer_alt_consistent_store::args::Args;
+use sui_indexer_alt_consistent_store::args::Command;
+use sui_indexer_alt_consistent_store::config::ServiceConfig;
+use sui_indexer_alt_consistent_store::restore::start_restorer;
+use sui_indexer_alt_consistent_store::start_service;
 
 // Define the `GIT_REVISION` const
 bin_version::git_revision!();

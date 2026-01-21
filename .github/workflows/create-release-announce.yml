@@ -67,7 +67,7 @@ jobs:
 
       - name: Update ${{ inputs.network }} branch
         shell: bash
-        run: |          
+        run: |
           export sui_release_version=$(cat Cargo.toml | grep '^version =' | tr -d '\"' | awk '{ print $3 }')
           echo "sui_release_version=${sui_release_version}" >> $GITHUB_ENV
 
@@ -81,7 +81,7 @@ jobs:
         run: |
           echo "${{ secrets.SUI_CREATE_RELEASE }}" | gh auth login --with-token
           echo "{\"sha\": \"${{ inputs.sui_commit }}\", \"force\": true}" | gh api -X PATCH /repos/MystenLabs/sui/git/refs/heads/framework/${{ inputs.network }} \
-            --header "Accept: application/vnd.github+json" --input -            
+            --header "Accept: application/vnd.github+json" --input -
 
       - name: Create ${{ inputs.network }}-v${{ env.sui_release_version }} release tag
         shell: bash
@@ -135,7 +135,7 @@ jobs:
           RELEASE_TAG: ${{ env.release_tag }}
         working-directory: ./
         run: |
-          SUI_REPO_TOKEN=${{ secrets.GITHUB_TOKEN }} \
+          GH_TOKEN=${{ secrets.GITHUB_TOKEN }} \
           python ./scripts/release_notes.py generate ${{ env.PREVIOUS_COMMIT }} ${{ env.CURRENT_COMMIT }} | tee -a ${{ env.RELEASE_NOTES_FILE }}
           echo "---" >> ${{ env.RELEASE_NOTES_FILE }}
           echo "#### Full Log: https://github.com/MystenLabs/sui/commits/${{ env.RELEASE_TAG }}" >> ${{ env.RELEASE_NOTES_FILE }}

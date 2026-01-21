@@ -1,21 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{
-    Context, SimpleObject,
-    connection::{Connection, CursorType, Edge},
-};
-use sui_indexer_alt_reader::consistent_reader::{self, ConsistentReader};
-use sui_types::{TypeTag, base_types::SuiAddress};
+use anyhow::Context as _;
+use async_graphql::Context;
+use async_graphql::SimpleObject;
+use async_graphql::connection::Connection;
+use async_graphql::connection::CursorType;
+use async_graphql::connection::Edge;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
+use sui_indexer_alt_reader::consistent_reader::proto::Balance as ProtoBalance;
+use sui_indexer_alt_reader::consistent_reader::{self};
+use sui_types::TypeTag;
+use sui_types::base_types::SuiAddress;
 
-use crate::{
-    api::scalars::{big_int::BigInt, cursor},
-    error::{RpcError, bad_user_input, feature_unavailable},
-    pagination::Page,
-    scope::Scope,
-};
-
-use super::move_type::MoveType;
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::cursor;
+use crate::api::types::move_type::MoveType;
+use crate::error::RpcError;
+use crate::error::bad_user_input;
+use crate::error::feature_unavailable;
+use crate::extensions::query_limits;
+use crate::pagination::Page;
+use crate::scope::Scope;
 
 /// The total balance for a particular coin type.
 #[derive(SimpleObject)]
@@ -23,8 +29,14 @@ pub(crate) struct Balance {
     /// Coin type for the balance, such as `0x2::sui::SUI`.
     pub(crate) coin_type: Option<MoveType>,
 
-    /// The total balance across all coin objects of this coin type.
+    /// The sum total of the accumulator balance and individual coin balances owned by the address.
     pub(crate) total_balance: Option<BigInt>,
+
+    /// Total balance across all owned coin objects of the coin type.
+    pub(crate) coin_balance: Option<BigInt>,
+
+    /// The balance as tracked by the accumulator object for the address.
+    pub(crate) address_balance: Option<BigInt>,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -47,6 +59,21 @@ pub(crate) enum Error {
 pub(crate) type Cursor = cursor::BcsCursor<(u64, Vec<u8>)>;
 
 impl Balance {
+    fn try_from_proto(proto: ProtoBalance, scope: Scope) -> Result<Self, RpcError<Error>> {
+        let coin_type: TypeTag = proto
+            .coin_type
+            .context("coin type missing")?
+            .parse()
+            .context("invalid coin type")?;
+
+        Ok(Balance {
+            coin_type: Some(MoveType::from_native(coin_type, scope)),
+            total_balance: Some(BigInt::from(proto.total_balance.unwrap_or(0))),
+            coin_balance: Some(BigInt::from(proto.coin_balance.unwrap_or(0))),
+            address_balance: Some(BigInt::from(proto.address_balance.unwrap_or(0))),
+        })
+    }
+
     /// Fetch the balance for a single coin type owned by the given address, live at the current
     /// checkpoint.
     ///
@@ -60,12 +87,14 @@ impl Balance {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
-        let Some(checkpoint) = scope.checkpoint_viewed_at() else {
+
+        let Some(checkpoint) = scope.root_checkpoint() else {
             return Ok(None);
         };
 
+        query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
-        let (coin_type, total_balance) = consistent_reader
+        let balance = consistent_reader
             .get_balance(
                 checkpoint,
                 address.to_string(),
@@ -74,10 +103,7 @@ impl Balance {
             .await
             .map_err(|e| consistent_error(checkpoint, e))?;
 
-        Ok(Some(Balance {
-            coin_type: Some(MoveType::from_native(coin_type, scope.clone())),
-            total_balance: Some(BigInt::from(total_balance)),
-        }))
+        Ok(Some(Balance::try_from_proto(balance, scope.clone())?))
     }
 
     /// Fetch balances for multiple coin types owned by the given address, live at the current
@@ -91,10 +117,12 @@ impl Balance {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
-        let Some(checkpoint) = scope.checkpoint_viewed_at() else {
+
+        let Some(checkpoint) = scope.root_checkpoint() else {
             return Ok(None);
         };
 
+        query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
         let balances = consistent_reader
             .batch_get_balances(
@@ -111,11 +139,8 @@ impl Balance {
         Ok(Some(
             balances
                 .into_iter()
-                .map(|(coin_type, total_balance)| Balance {
-                    coin_type: Some(MoveType::from_native(coin_type, scope.clone())),
-                    total_balance: Some(BigInt::from(total_balance)),
-                })
-                .collect(),
+                .map(|balance| Balance::try_from_proto(balance, scope.clone()))
+                .collect::<Result<_, _>>()?,
         ))
     }
 
@@ -130,10 +155,12 @@ impl Balance {
         if scope.root_version().is_some() {
             return Err(bad_user_input(Error::RootVersionOwnership));
         }
-        let Some(checkpoint_viewed_at) = scope.checkpoint_viewed_at() else {
+
+        let Some(root_checkpoint) = scope.root_checkpoint() else {
             return Ok(Connection::new(false, false));
         };
 
+        query_limits::rich::debit(ctx)?;
         let consistent_reader: &ConsistentReader = ctx.data()?;
 
         // Figure out which checkpoint to pin results to, based on the pagination cursors and
@@ -144,11 +171,11 @@ impl Balance {
             (Some(a), Some(b)) if a.0 != b.0 => {
                 return Err(bad_user_input(Error::CursorInconsistency(a.0, b.0)));
             }
-            (None, None) => checkpoint_viewed_at,
+            (None, None) => root_checkpoint,
             (Some(c), _) | (_, Some(c)) => c.0,
         };
 
-        let Some(scope) = scope.with_checkpoint_viewed_at(checkpoint) else {
+        let Some(scope) = scope.with_checkpoint_viewed_at(ctx, checkpoint) else {
             return Err(bad_user_input(Error::Future(checkpoint)));
         };
 
@@ -173,13 +200,10 @@ impl Balance {
         conn.has_next_page = balances.has_next_page;
 
         for edge in balances.results {
-            let (coin_type, total_balance) = edge.value;
+            let balance = edge.value;
 
             let cursor = Cursor::new((checkpoint, edge.token));
-            let balance = Balance {
-                coin_type: Some(MoveType::from_native(coin_type, scope.clone())),
-                total_balance: Some(BigInt::from(total_balance)),
-            };
+            let balance = Balance::try_from_proto(balance, scope.clone())?;
 
             conn.edges.push(Edge::new(cursor.encode_cursor(), balance));
         }
