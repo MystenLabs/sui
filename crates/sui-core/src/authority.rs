@@ -134,7 +134,7 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
+use sui_types::error::{ExecutionError, ExecutionErrorTrait, SuiErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionErrorKind;
@@ -1924,7 +1924,8 @@ impl AuthorityState {
         );
 
         let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
-            .execute_transaction_to_effects(
+            // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
+            .execute_transaction_to_effects_and_execution_error(
                 store,
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
@@ -2420,7 +2421,7 @@ impl AuthorityState {
         let execution_error_source = execution_error
             .as_ref()
             .err()
-            .and_then(|e| e.source().as_ref().map(|e| e.to_string()));
+            .and_then(|e| e.source_ref().as_ref().map(|e| e.to_string()));
 
         Ok((
             DryRunTransactionBlockResponse {

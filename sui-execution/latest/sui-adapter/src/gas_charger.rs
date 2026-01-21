@@ -14,6 +14,7 @@ pub mod checked {
     use sui_protocol_config::ProtocolConfig;
     use sui_types::deny_list_v2::CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS;
     use sui_types::digests::TransactionDigest;
+    use sui_types::error::ExecutionErrorTrait;
     use sui_types::gas::{GasCostSummary, SuiGasStatus, deduct_gas};
     use sui_types::gas_model::gas_predicates::{
         charge_upgrades, dont_charge_budget_on_storage_oog,
@@ -330,10 +331,10 @@ pub mod checked {
         ///   re-smash gas, then charge for storage
         /// - if we run out of gas while charging for storage, we have to dump all writes +
         ///   re-smash gas, then charge for storage again
-        pub fn charge_gas<T>(
+        pub fn charge_gas<T, E: ExecutionErrorTrait>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, ExecutionError>,
+            execution_result: &mut Result<T, E>,
         ) -> GasCostSummary {
             // at this point, we have done *all* charging for computation,
             // but have not yet set the storage rebate or storage gas units
@@ -356,7 +357,7 @@ pub mod checked {
                 if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort))
                     && execution_result.is_ok()
                 {
-                    *execution_result = Err(err);
+                    *execution_result = Err(err.into());
                 }
 
                 // On error we need to dump writes, deletes, etc before charging storage gas
@@ -440,10 +441,10 @@ pub mod checked {
         /// v2: we charge (computation + storage costs for input objects - storage_rebates)
         ///     if the gas balance is still insufficient, we fall back to set computation_cost = gas_budget
         ///     so we charge net (gas_budget - storage_rebates)
-        fn compute_storage_and_rebate<T>(
+        fn compute_storage_and_rebate<T, E: ExecutionErrorTrait>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, ExecutionError>,
+            execution_result: &mut Result<T, E>,
         ) {
             if dont_charge_budget_on_storage_oog(self.gas_model_version) {
                 self.handle_storage_and_rebate_v2(temporary_store, execution_result)
@@ -452,10 +453,10 @@ pub mod checked {
             }
         }
 
-        fn handle_storage_and_rebate_v1<T>(
+        fn handle_storage_and_rebate_v1<T, E: ExecutionErrorTrait>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, ExecutionError>,
+            execution_result: &mut Result<T, E>,
         ) {
             if let Err(err) = self.gas_status.charge_storage_and_rebate() {
                 self.reset(temporary_store);
@@ -463,15 +464,15 @@ pub mod checked {
                 temporary_store.ensure_active_inputs_mutated();
                 temporary_store.collect_rebate(self);
                 if execution_result.is_ok() {
-                    *execution_result = Err(err);
+                    *execution_result = Err(err.into());
                 }
             }
         }
 
-        fn handle_storage_and_rebate_v2<T>(
+        fn handle_storage_and_rebate_v2<T, E: ExecutionErrorTrait>(
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, ExecutionError>,
+            execution_result: &mut Result<T, E>,
         ) {
             if let Err(err) = self.gas_status.charge_storage_and_rebate() {
                 // we run out of gas charging storage, reset and try charging for storage again.
@@ -488,10 +489,10 @@ pub mod checked {
                     temporary_store.ensure_active_inputs_mutated();
                     temporary_store.collect_rebate(self);
                     if execution_result.is_ok() {
-                        *execution_result = Err(err);
+                        *execution_result = Err(err.into());
                     }
                 } else if execution_result.is_ok() {
-                    *execution_result = Err(err);
+                    *execution_result = Err(err.into());
                 }
             }
         }
