@@ -469,6 +469,9 @@ impl SuiNode {
         // Initialize metrics to track db usage before creating any stores
         DBMetrics::init(registry_service.clone());
 
+        // Initialize db sync-to-disk setting from config (falls back to env var if not set)
+        typed_store::init_write_sync(config.enable_db_sync_to_disk);
+
         // Initialize Mysten metrics.
         mysten_metrics::init_metrics(&prometheus_registry);
         // Unsupported (because of the use of static variable) and unnecessary in simtests.
