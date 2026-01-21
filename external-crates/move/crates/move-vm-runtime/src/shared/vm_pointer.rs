@@ -3,13 +3,14 @@
 
 #![allow(unsafe_code)]
 
-use std::mem::MaybeUninit;
-
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
 /// An Arena Pointer, which allows conversion to references and const. Equality is defined as
 /// pointer equality, and clone/copy are shallow.
+///
+/// Note that `T` here must not be mutated after initial creation, because of thread safety.
+/// No additionsl should be added to this type that might allow mutation of `T` after creation.
 pub struct VMPointer<T>(*const T);
 
 // -------------------------------------------------------------------------------------------------
@@ -18,44 +19,23 @@ pub struct VMPointer<T>(*const T);
 
 impl<T> VMPointer<T> {
     #[inline]
-    pub fn new(value: *const T) -> Self {
-        VMPointer(value)
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    pub fn to_const(self) -> *const T {
-        self.0
-    }
-
-    #[inline]
-    pub fn to_ref<'a>(&self) -> &'a T {
+    pub(crate) fn to_ref<'a>(&self) -> &'a T {
         to_ref(self.0)
     }
 
     #[inline]
-    pub fn to_mut_ref<'a>(&self) -> &'a mut T {
-        to_mut_ref(self.0)
-    }
-
-    #[inline]
-    pub fn from_ref(t: &T) -> Self {
+    pub(crate) fn from_ref(t: &T) -> Self {
         Self(t as *const T)
     }
 
     #[inline]
-    pub fn ptr_eq(&self, other: &Self) -> bool {
+    pub(crate) fn ptr_eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.0, other.0)
     }
 
     #[inline]
-    pub fn ptr_clone(&self) -> Self {
+    pub(crate) fn ptr_clone(&self) -> Self {
         Self(self.0)
-    }
-
-    #[inline]
-    pub fn replace_ptr(&mut self, other: VMPointer<T>) {
-        self.0 = other.0;
     }
 }
 
@@ -63,52 +43,22 @@ impl<T> VMPointer<T> {
 // Pointer Operations
 // -------------------------------------------------------------------------------------------------
 
-///// Returns a pointer to a slice, but nulled. This must be set before use.
-#[inline]
-pub fn null_ptr<T>() -> *const [T] {
-    unsafe { MaybeUninit::<*const [T]>::zeroed().assume_init() }
-}
-
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[inline]
-pub fn ref_slice<'a, T>(value: *const [T]) -> &'a [T] {
-    unsafe { &*value }
-}
-
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[inline]
-pub fn mut_to_ref_slice<'a, T>(value: *mut [T]) -> &'a [T] {
-    unsafe { &*value }
-}
-
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[inline]
-pub fn to_mut_ref_slice<'a, T>(value: *mut [T]) -> &'a mut [T] {
-    unsafe { &mut *value }
-}
-
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[inline]
-pub fn to_ref<'a, T>(value: *const T) -> &'a T {
+fn to_ref<'a, T>(value: *const T) -> &'a T {
     unsafe { &*value as &T }
-}
-
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[inline]
-pub fn to_mut_ref<'a, T>(value: *const T) -> &'a mut T {
-    unsafe { &mut *(value as *mut T) }
 }
 
 // -------------------------------------------------------------------------------------------------
 // Trait Implementations
 // -------------------------------------------------------------------------------------------------
 
-unsafe impl<T> Send for VMPointer<T> {}
-unsafe impl<T> Sync for VMPointer<T> {}
+unsafe impl<T: Send> Send for VMPointer<T> {}
+unsafe impl<T: Sync> Sync for VMPointer<T> {}
 
 impl<T: ::std::fmt::Debug> ::std::fmt::Debug for VMPointer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ptr->{:p}", to_ref(self.0))
+        write!(f, "ptr->{:p}", self.to_ref())
     }
 }
 
@@ -121,16 +71,6 @@ impl<T: PartialEq> PartialEq for VMPointer<T> {
 
 // VMPointer equality first checks pointer equality, then full equality
 impl<T: Eq> Eq for VMPointer<T> {}
-
-impl<T> From<Box<T>> for VMPointer<T> {
-    fn from(boxed: Box<T>) -> Self {
-        // Use `Box::into_raw` to extract the raw pointer from the box.
-        let raw_ptr: *const T = Box::into_raw(boxed);
-
-        // Create an `ArenaPointer` from the raw pointer.
-        VMPointer(raw_ptr)
-    }
-}
 
 impl<T: PartialOrd> PartialOrd for VMPointer<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
