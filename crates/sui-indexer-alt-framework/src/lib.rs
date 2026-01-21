@@ -92,7 +92,15 @@ pub struct TaskArgs {
     task: Option<String>,
 
     /// The interval in milliseconds at which each of the pipelines on a tasked indexer should
-    /// refetch its main pipeline's reader watermark. This is required when `--task` is set.
+    /// refetch its main pipeline's reader watermark.
+    ///
+    /// This is required when `--task` is set and should should ideally be set to a value that is
+    /// an order of magnitude smaller than the main pipeline's pruning interval, to ensure this
+    /// task pipeline can pick up the new reader watermark before the main pipeline prunes up to
+    /// it.
+    ///
+    /// If the main pipeline does not have pruning enabled, this value can be set to some high
+    /// value, as the tasked pipeline will never see an updated reader watermark.
     #[arg(long, requires = "task")]
     reader_interval_ms: Option<u64>,
 }
