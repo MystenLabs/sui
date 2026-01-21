@@ -729,8 +729,7 @@ impl ToolCommand {
                 let num_parallel_downloads = num_parallel_downloads.unwrap_or(50).min(200);
 
                 // Resolve the effective source (handles legacy args with deprecation warning)
-                let effective_source =
-                    resolve_source(&source, &legacy, network, SnapshotType::Db)?;
+                let effective_source = resolve_source(&source, &legacy, network, SnapshotType::Db)?;
 
                 // Build object store for pre-download checks
                 let snapshot_store = build_object_store(&effective_source, &connection).await?;
