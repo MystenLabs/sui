@@ -1132,7 +1132,9 @@ impl SuiClientCommands {
                     .move_call_tx_kind(package, &module, &function, type_args, args)
                     .await?;
 
-                let sender = context.infer_sender(&payment.gas).await?;
+                let sender = processing
+                    .sender
+                    .unwrap_or(context.infer_sender(&payment.gas).await?);
                 let gas_payment = client
                     .transaction_builder()
                     .input_refs(&payment.gas)
@@ -1576,7 +1578,9 @@ impl SuiClientCommands {
                 };
 
                 let client = context.get_client().await?;
-                let sender = context.infer_sender(&payment.gas).await?;
+                let sender = processing
+                    .sender
+                    .unwrap_or(context.infer_sender(&payment.gas).await?);
                 let gas_payment = client
                     .transaction_builder()
                     .input_refs(&payment.gas)
