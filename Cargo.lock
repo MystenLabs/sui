@@ -9129,6 +9129,7 @@ dependencies = [
  "bcs",
  "better_any",
  "bumpalo",
+ "dashmap 6.1.0",
  "fail",
  "hex",
  "indexmap 2.8.0",
@@ -9143,6 +9144,7 @@ dependencies = [
  "move-vm-profiler",
  "parking_lot 0.11.2",
  "petgraph 0.8.1",
+ "quick_cache",
  "serde",
  "sha2 0.9.9",
  "sha3 0.9.1",
@@ -11412,6 +11414,18 @@ checksum = "165859e9e55f79d67b96c5d96f4e88b6f2695a1972849c15a6a3f5c59fc2c003"
 dependencies = [
  "memchr",
  "serde",
+]
+
+[[package]]
+name = "quick_cache"
+version = "0.6.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ada44a88ef953a3294f6eb55d2007ba44646015e18613d2f213016379203ef3"
+dependencies = [
+ "ahash 0.8.11",
+ "equivalent",
+ "hashbrown 0.16.1",
+ "parking_lot 0.12.3",
 ]
 
 [[package]]
