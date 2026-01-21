@@ -6,6 +6,9 @@
 //! This module provides infrastructure for collecting bytecode execution statistics
 //! to enable profile-guided optimization of the interpreter dispatch loop.
 //!
+//! Bytecode statistics are exposed through the telemetry infrastructure via
+//! `MoveRuntimeTelemetry::bytecode_stats` when the `tracing` feature is enabled.
+//!
 //! # Usage
 //!
 //! Enable the `tracing` feature to collect bytecode frequency data:
@@ -16,8 +19,4 @@
 
 pub mod counters;
 
-pub use crate::shared::constants::{DEFAULT_PROFILE_FILE, SUI_PROFILE_FILE_ENV};
-pub use counters::{
-    BYTECODE_COUNTERS, BytecodeCounters, BytecodeSnapshot, dump_profile_info,
-    dump_profile_info_to_file,
-};
+pub use counters::{BYTECODE_COUNTERS, BytecodeCounters, BytecodeSnapshot};
