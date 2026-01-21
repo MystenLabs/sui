@@ -29,7 +29,7 @@ Response: {
       "U64",
       {
         "Struct": {
-          "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+          "address": "0xf768bf506a79dc79ceb59953f6fa06569307608f29aa841614eabb040ec8169a",
           "module": "M",
           "name": "O",
           "typeArguments": []
@@ -38,7 +38,7 @@ Response: {
       {
         "MutableReference": {
           "Struct": {
-            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "address": "0xf768bf506a79dc79ceb59953f6fa06569307608f29aa841614eabb040ec8169a",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -48,7 +48,7 @@ Response: {
       {
         "Vector": {
           "Struct": {
-            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "address": "0xf768bf506a79dc79ceb59953f6fa06569307608f29aa841614eabb040ec8169a",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -61,7 +61,7 @@ Response: {
       {
         "Reference": {
           "Struct": {
-            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "address": "0xf768bf506a79dc79ceb59953f6fa06569307608f29aa841614eabb040ec8169a",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -70,7 +70,7 @@ Response: {
       },
       {
         "Struct": {
-          "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+          "address": "0xf768bf506a79dc79ceb59953f6fa06569307608f29aa841614eabb040ec8169a",
           "module": "M",
           "name": "O",
           "typeArguments": []
@@ -79,7 +79,7 @@ Response: {
       {
         "Vector": {
           "Struct": {
-            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "address": "0xf768bf506a79dc79ceb59953f6fa06569307608f29aa841614eabb040ec8169a",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -129,7 +129,7 @@ Response: {
       "U64",
       {
         "Struct": {
-          "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+          "address": "0xf768bf506a79dc79ceb59953f6fa06569307608f29aa841614eabb040ec8169a",
           "module": "M",
           "name": "O",
           "typeArguments": []
@@ -138,7 +138,7 @@ Response: {
       {
         "MutableReference": {
           "Struct": {
-            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "address": "0xf768bf506a79dc79ceb59953f6fa06569307608f29aa841614eabb040ec8169a",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -148,7 +148,7 @@ Response: {
       {
         "Vector": {
           "Struct": {
-            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "address": "0xf768bf506a79dc79ceb59953f6fa06569307608f29aa841614eabb040ec8169a",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -161,7 +161,7 @@ Response: {
       {
         "Reference": {
           "Struct": {
-            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "address": "0xf768bf506a79dc79ceb59953f6fa06569307608f29aa841614eabb040ec8169a",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -170,7 +170,7 @@ Response: {
       },
       {
         "Struct": {
-          "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+          "address": "0xf768bf506a79dc79ceb59953f6fa06569307608f29aa841614eabb040ec8169a",
           "module": "M",
           "name": "O",
           "typeArguments": []
@@ -179,7 +179,7 @@ Response: {
       {
         "Vector": {
           "Struct": {
-            "address": "0x03a580e6a364b5a89ddce9fdd023f76b61b5df5c9ff2bbb01525240d4f1438b3",
+            "address": "0xf768bf506a79dc79ceb59953f6fa06569307608f29aa841614eabb040ec8169a",
             "module": "M",
             "name": "O",
             "typeArguments": []
@@ -205,7 +205,7 @@ Response: {
       {
         "Reference": {
           "Struct": {
-            "address": "0xad738da99314f24c84fec6bdb0b1d0df9d64e96e2ab68af6498195e65142ea3c",
+            "address": "0x97aa44675f3292d9090ff0e32c6c9a1e2974b7acc456475f84b210e0cfe722d2",
             "module": "M",
             "name": "O2",
             "typeArguments": []
@@ -264,7 +264,7 @@ Response: {
   "id": 7,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Package not found: 0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+    "message": "Invalid Params: Package not found: 0x1279a1708ba67edf9e73d98e30e2eeec9acb65a6bf8021083e5d83e0fc64f8b5"
   }
 }
 
@@ -275,7 +275,7 @@ Response: {
   "id": 8,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Module not found: 0xad738da99314f24c84fec6bdb0b1d0df9d64e96e2ab68af6498195e65142ea3c::N"
+    "message": "Invalid Params: Module not found: 0x97aa44675f3292d9090ff0e32c6c9a1e2974b7acc456475f84b210e0cfe722d2::N"
   }
 }
 
@@ -286,6 +286,6 @@ Response: {
   "id": 9,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Function not found: 0xad738da99314f24c84fec6bdb0b1d0df9d64e96e2ab68af6498195e65142ea3c::M::qux"
+    "message": "Invalid Params: Function not found: 0x97aa44675f3292d9090ff0e32c6c9a1e2974b7acc456475f84b210e0cfe722d2::M::qux"
   }
 }

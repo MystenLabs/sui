@@ -65,9 +65,9 @@ Response: {
   "result": {
     "status": "VersionFound",
     "details": {
-      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "objectId": "0x214b380450393670c4fa78d319297590788ce0be969cb28a67a816009492200f",
       "version": "2",
-      "digest": "4wV3VBJGNaMCv9zfjSna8c4as6EkuYoqTHHjueS6S745",
+      "digest": "JCWgSrRA1sWGpNEfD1TH9N6efNgUW5TPVhNM8WH6oNUn",
       "owner": {
         "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
       }
@@ -83,9 +83,9 @@ Response: {
   "result": {
     "status": "VersionFound",
     "details": {
-      "objectId": "0xf2945213c986e35d59aae258ef1b094e81ead5cc982b0d1519625bf3f81bee68",
+      "objectId": "0xe4fe530ef9ec365422d875be253bd5f052020dd8b924b2fc73a531fbb925f540",
       "version": "3",
-      "digest": "9wMLcUMLvkbqNFyoPtUJ1GPuVuXVqpLA3GP2DHL2SyL6",
+      "digest": "3hquuYt2qBqTb78vNg5EZ5FLwWFZ2YGMfmrp3xpguojR",
       "owner": {
         "AddressOwner": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
       }
@@ -101,9 +101,9 @@ Response: {
   "result": {
     "status": "VersionFound",
     "details": {
-      "objectId": "0x0918a1917bda4d05f1cb4db824532a63476c57d65c548930406fe02051f22819",
+      "objectId": "0x3d5b6f0287433f298aab6362be48fb95bb8681631c687e41ce3368501184dd73",
       "version": "4",
-      "digest": "8pirmp97ym3pzSCabaPsoPYVPbKYQHfnPqEbCyk32Au2",
+      "digest": "93EEPT5CX8fQWAtEpF2XoxqbTa8R41GPLLbCPLgbwDLU",
       "owner": {
         "Shared": {
           "initial_shared_version": 4
@@ -121,9 +121,9 @@ Response: {
   "result": {
     "status": "VersionFound",
     "details": {
-      "objectId": "0xf079987ab8a34791ae4dd8b2d2a9af3485496a49b382b22239c4ca43902fe18a",
+      "objectId": "0xb4af901d009b72545e6e456b1dfb50348fc1a0cff0d6431c6cf89c863ceb7ad2",
       "version": "5",
-      "digest": "EEF6GF5DCZRZ4zxsubwzaQhYWysCdGJ63sLRLE15d9F",
+      "digest": "79oLFUDmWZgj5SoSWwFoNT5cB3FJ8nyPN1nHuo95EhYH",
       "owner": "Immutable"
     }
   }
@@ -137,11 +137,11 @@ Response: {
   "result": {
     "status": "VersionFound",
     "details": {
-      "objectId": "0x0dfe3bf8505600c374ecc59e9580d3504a37a14f65b53084ef86c5861f39cc3f",
+      "objectId": "0x48e6c0d5999599e782927e00407d3dc589021afa0f3c546a6af9c77f3443c8fe",
       "version": "7",
-      "digest": "9rcnz8P9Eie7KZPUjTWnmTzyUxsBMaJcb9G3ncuG4BiC",
+      "digest": "H5sQTdxmKYM6PVJHeftx6byqxN1sbtL3xJUjTpTctHPu",
       "owner": {
-        "ObjectOwner": "0x2867eee076a7f41efb3dc507f27531c26319dfbf0c9a6d92f6d1fd0f8d9bdeeb"
+        "ObjectOwner": "0xf580072eacc20b556a7780a04666600e4437986a91f5dde778b0ade87bda5902"
       }
     }
   }

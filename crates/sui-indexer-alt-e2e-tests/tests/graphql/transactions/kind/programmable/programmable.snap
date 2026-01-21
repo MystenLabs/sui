@@ -29,7 +29,7 @@ task 4, lines 36-77:
 Response: {
   "data": {
     "programmableTransaction": {
-      "digest": "Cb4FEv3L9zJvp1dKq9LETDYhwNyp6XQHKDm4XqRqET8q",
+      "digest": "8u4mtySjdD6VeVrd9DC7NrCYu2MtQZEEpFSzNNPMQ21M",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -62,7 +62,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0x7906ac3f3569d07d339cd893706dc42f4e7cd052c434831bac8b4e498f2508cd"
+                    "address": "0xd5f58490e33a81a90d0c85b8a17f3a5092e4c2da3501c859a26061c535bbbb5f"
                   },
                   "name": "simple"
                 },
@@ -74,7 +74,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0x7906ac3f3569d07d339cd893706dc42f4e7cd052c434831bac8b4e498f2508cd"
+                    "address": "0xd5f58490e33a81a90d0c85b8a17f3a5092e4c2da3501c859a26061c535bbbb5f"
                   },
                   "name": "simple"
                 },
@@ -96,7 +96,7 @@ task 5, lines 79-120:
 Response: {
   "data": {
     "paginationTest": {
-      "digest": "Cb4FEv3L9zJvp1dKq9LETDYhwNyp6XQHKDm4XqRqET8q",
+      "digest": "8u4mtySjdD6VeVrd9DC7NrCYu2MtQZEEpFSzNNPMQ21M",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -125,7 +125,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0x7906ac3f3569d07d339cd893706dc42f4e7cd052c434831bac8b4e498f2508cd"
+                    "address": "0xd5f58490e33a81a90d0c85b8a17f3a5092e4c2da3501c859a26061c535bbbb5f"
                   },
                   "name": "simple"
                 },
@@ -137,7 +137,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0x7906ac3f3569d07d339cd893706dc42f4e7cd052c434831bac8b4e498f2508cd"
+                    "address": "0xd5f58490e33a81a90d0c85b8a17f3a5092e4c2da3501c859a26061c535bbbb5f"
                   },
                   "name": "simple"
                 },

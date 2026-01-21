@@ -24,7 +24,7 @@ Response: {
       "module": {
         "a": {
           "name": "A",
-          "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::A",
+          "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::A",
           "abilities": [
             "COPY",
             "DROP",
@@ -38,7 +38,7 @@ Response: {
         },
         "e": {
           "name": "E",
-          "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E",
+          "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::E",
           "abilities": [
             "STORE"
           ],
@@ -50,7 +50,7 @@ Response: {
         },
         "s": {
           "name": "S",
-          "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S",
+          "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::S",
           "abilities": [
             "COPY",
             "DROP"
@@ -63,7 +63,7 @@ Response: {
         },
         "t": {
           "name": "T",
-          "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T",
+          "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::T",
           "abilities": [],
           "typeParameters": [
             {
@@ -80,7 +80,7 @@ Response: {
         },
         "v": {
           "name": "V",
-          "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::V",
+          "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::V",
           "abilities": [],
           "typeParameters": [
             {
@@ -108,7 +108,7 @@ Response: {
           "nodes": [
             {
               "name": "A",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::A",
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::A",
               "abilities": [
                 "COPY",
                 "DROP",
@@ -122,7 +122,7 @@ Response: {
             },
             {
               "name": "E",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E",
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::E",
               "abilities": [
                 "STORE"
               ],
@@ -134,7 +134,7 @@ Response: {
             },
             {
               "name": "S",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S",
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::S",
               "abilities": [
                 "COPY",
                 "DROP"
@@ -147,7 +147,7 @@ Response: {
             },
             {
               "name": "T",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T",
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::T",
               "abilities": [],
               "typeParameters": [
                 {
@@ -164,7 +164,7 @@ Response: {
             },
             {
               "name": "V",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::V",
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::V",
               "abilities": [],
               "typeParameters": [
                 {
@@ -200,23 +200,23 @@ Response: {
           "nodes": [
             {
               "name": "A",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::A"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::A"
             },
             {
               "name": "E",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::E"
             },
             {
               "name": "S",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::S"
             },
             {
               "name": "T",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::T"
             },
             {
               "name": "V",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::V"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::V"
             }
           ]
         },
@@ -228,15 +228,15 @@ Response: {
           "nodes": [
             {
               "name": "A",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::A"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::A"
             },
             {
               "name": "E",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::E"
             },
             {
               "name": "S",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::S"
             }
           ]
         },
@@ -248,15 +248,15 @@ Response: {
           "nodes": [
             {
               "name": "S",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::S"
             },
             {
               "name": "T",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::T"
             },
             {
               "name": "V",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::V"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::V"
             }
           ]
         },
@@ -268,15 +268,15 @@ Response: {
           "nodes": [
             {
               "name": "A",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::A"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::A"
             },
             {
               "name": "E",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::E"
             },
             {
               "name": "S",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::S"
             }
           ]
         },
@@ -288,15 +288,15 @@ Response: {
           "nodes": [
             {
               "name": "S",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::S"
             },
             {
               "name": "T",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::T"
             },
             {
               "name": "V",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::V"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::V"
             }
           ]
         },
@@ -308,15 +308,15 @@ Response: {
           "nodes": [
             {
               "name": "E",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::E"
             },
             {
               "name": "S",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::S"
             },
             {
               "name": "T",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::T"
             }
           ]
         },
@@ -328,15 +328,15 @@ Response: {
           "nodes": [
             {
               "name": "E",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::E"
             },
             {
               "name": "S",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::S"
             },
             {
               "name": "T",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::T"
             }
           ]
         },
@@ -348,15 +348,15 @@ Response: {
           "nodes": [
             {
               "name": "E",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::E"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::E"
             },
             {
               "name": "S",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::S"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::S"
             },
             {
               "name": "T",
-              "fullyQualifiedName": "0x6d45f56b9aeaa953777780baa8524de4c0a74ad7fac6f729bac8d8124912832b::M::T"
+              "fullyQualifiedName": "0x9c9e91f5d23d7ff158e55d52bd915d5be8dc20ad7f525882b7c39d32a8902c69::M::T"
             }
           ]
         }

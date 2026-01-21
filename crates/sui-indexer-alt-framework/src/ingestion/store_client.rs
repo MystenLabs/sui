@@ -6,6 +6,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use object_store::Error as ObjectStoreError;
 use object_store::ObjectStore;
+use object_store::ObjectStoreExt;
 use object_store::path::Path as ObjectPath;
 use serde::de::DeserializeOwned;
 use tracing::debug;

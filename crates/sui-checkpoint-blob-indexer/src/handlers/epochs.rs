@@ -6,6 +6,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use bytes::Bytes;
 use object_store::Error as ObjectStoreError;
+use object_store::ObjectStoreExt as _;
 use object_store::PutMode;
 use object_store::PutPayload;
 use object_store::path::Path as ObjectPath;

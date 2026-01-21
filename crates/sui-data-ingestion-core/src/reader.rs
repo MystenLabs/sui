@@ -10,6 +10,7 @@ use mysten_metrics::spawn_monitored_task;
 #[cfg(not(target_os = "macos"))]
 use notify::{RecommendedWatcher, RecursiveMode};
 use object_store::ObjectStore;
+use object_store::ObjectStoreExt;
 use object_store::path::Path;
 use prost::Message;
 use std::collections::BTreeMap;

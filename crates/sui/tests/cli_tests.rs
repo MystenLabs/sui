@@ -3561,6 +3561,7 @@ async fn test_stake_with_u64_amount() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[allow(deprecated)]
 async fn test_with_sui_binary(args: &[&str]) -> Result<(), anyhow::Error> {
     let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
     let args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
@@ -5436,6 +5437,7 @@ fn update_toml_with_localnet_chain_id(package_path: &Path, chain_id: String) -> 
 }
 
 #[tokio::test]
+#[allow(deprecated)] // cargo_bin is deprecated but cargo_bin_cmd! doesn't work with assert_cmd
 async fn test_move_build_dump_bytecode_as_base64() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
@@ -5478,6 +5480,7 @@ async fn test_move_build_dump_bytecode_as_base64() -> Result<(), anyhow::Error> 
 }
 
 #[tokio::test]
+#[allow(deprecated)] // cargo_bin is deprecated but cargo_bin_cmd! doesn't work with assert_cmd
 async fn test_move_build_dump_bytecode_as_base64_with_unpublished_deps() -> Result<(), anyhow::Error>
 {
     let mut test_cluster = TestClusterBuilder::new().build().await;

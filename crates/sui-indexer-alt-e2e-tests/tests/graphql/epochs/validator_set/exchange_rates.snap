@@ -106,23 +106,23 @@ Response: {
                       "nodes": [
                         {
                           "name": {
-                            "json": "0"
-                          },
-                          "value": {
-                            "json": {
-                              "sui_amount": "0",
-                              "pool_token_amount": "0"
-                            }
-                          }
-                        },
-                        {
-                          "name": {
                             "json": "1"
                           },
                           "value": {
                             "json": {
                               "sui_amount": "20000000000000000",
                               "pool_token_amount": "20000000000000000"
+                            }
+                          }
+                        },
+                        {
+                          "name": {
+                            "json": "0"
+                          },
+                          "value": {
+                            "json": {
+                              "sui_amount": "0",
+                              "pool_token_amount": "0"
                             }
                           }
                         }
@@ -156,12 +156,12 @@ Response: {
                         "nodes": [
                           {
                             "name": {
-                              "json": "0"
+                              "json": "1"
                             }
                           },
                           {
                             "name": {
-                              "json": "1"
+                              "json": "0"
                             }
                           }
                         ]
