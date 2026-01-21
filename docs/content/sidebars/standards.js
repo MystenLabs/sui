@@ -70,10 +70,12 @@ const standards = [
 		items: [
 			'standards/deepbook-margin/design',
 			'standards/deepbook-margin/contract-information',
+			'standards/deepbook-margin/risk-ratio',
 			'standards/deepbook-margin/margin-manager',
 			'standards/deepbook-margin/margin-pool',
 			'standards/deepbook-margin/orders',
 			'standards/deepbook-margin/tpsl',
+			'standards/deepbook-margin/supply-referral',
 			'standards/deepbook-margin/maintainer',
 			'standards/deepbook-margin-indexer',
 			{

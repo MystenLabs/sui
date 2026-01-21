@@ -11,9 +11,9 @@ echo "localnet = \"$chain_id\"" >> a/Move.toml
 
 echo "=== real publish ==="
 sui client --client.config $CONFIG publish a \
-  > /dev/null || echo "failed real publish"
+  > out.log 2>&1 || cat out.log
 
 echo "=== ephemeral publish ==="
 sui client --client.config $CONFIG \
   test-publish --build-env localnet --pubfile-path Pub.local.toml a \
-  > /dev/null || echo "failed test publish"
+  > out.log 2>&1 || cat out.log

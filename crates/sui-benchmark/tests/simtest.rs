@@ -4,6 +4,7 @@
 #[cfg(msim)]
 mod test {
     use mysten_common::register_debug_fatal_handler;
+    use prost::Message;
     use rand::{Rng, distributions::uniform::SampleRange, thread_rng};
     use std::collections::BTreeMap;
     use std::collections::HashSet;
@@ -45,9 +46,9 @@ mod test {
         Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
         ProtocolVersion,
     };
+    use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{SimConfig, configs::*};
-    use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
@@ -690,13 +691,16 @@ mod test {
         );
         test_simulated_load(test_cluster, 30).await;
 
-        let checkpoint_files = std::fs::read_dir(path)
+        let checkpoint_files: Vec<_> = std::fs::read_dir(path)
             .map(|entries| {
                 entries
                     .filter_map(Result::ok)
                     .filter(|entry| {
                         entry.path().is_file()
-                            && entry.path().extension() == Some(std::ffi::OsStr::new("chk"))
+                            && entry
+                                .path()
+                                .to_str()
+                                .is_some_and(|s| s.ends_with(".binpb.zst"))
                     })
                     .map(|entry| entry.path())
                     .collect()
@@ -704,9 +708,12 @@ mod test {
             .unwrap_or_else(|_| vec![]);
         assert!(checkpoint_files.len() > 0);
         let bytes = std::fs::read(checkpoint_files.first().unwrap()).unwrap();
-
-        let _checkpoint: CheckpointData =
-            Blob::from_bytes(&bytes).expect("failed to load checkpoint");
+        let decompressed = zstd::decode_all(&bytes[..]).expect("failed to decompress checkpoint");
+        let proto_checkpoint =
+            ProtoCheckpoint::decode(&decompressed[..]).expect("failed to decode checkpoint");
+        let _checkpoint: sui_types::full_checkpoint_content::Checkpoint = (&proto_checkpoint)
+            .try_into()
+            .expect("failed to convert checkpoint");
     }
 
     // Tests the correctness of large consensus commit transaction due to large number

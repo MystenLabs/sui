@@ -1132,7 +1132,9 @@ impl SuiClientCommands {
                     .move_call_tx_kind(package, &module, &function, type_args, args)
                     .await?;
 
-                let sender = context.infer_sender(&payment.gas).await?;
+                let sender = processing
+                    .sender
+                    .unwrap_or(context.infer_sender(&payment.gas).await?);
                 let gas_payment = client
                     .transaction_builder()
                     .input_refs(&payment.gas)
@@ -1576,7 +1578,9 @@ impl SuiClientCommands {
                 };
 
                 let client = context.get_client().await?;
-                let sender = context.infer_sender(&payment.gas).await?;
+                let sender = processing
+                    .sender
+                    .unwrap_or(context.infer_sender(&payment.gas).await?);
                 let gas_payment = client
                     .transaction_builder()
                     .input_refs(&payment.gas)
@@ -1940,11 +1944,10 @@ pub(crate) async fn compile_package(
     // This will direct the pkg-system to set all unpublished dependencies to address 0x0
     build_config.set_unpublished_deps_to_zero = with_unpublished_deps;
 
-    let mut stdout = std::io::stdout();
     let package = move_package_alt_compilation::compile_from_root_package::<
-        std::io::Stdout,
+        std::io::Stderr,
         SuiFlavor,
-    >(root_pkg, &build_config, &mut stdout)
+    >(root_pkg, &build_config, &mut std::io::stderr())
     .unwrap();
 
     let published_at = root_pkg
@@ -3504,7 +3507,9 @@ async fn publish_command(
         processing,
     } = args;
 
-    let sender = context.infer_sender(&payment.gas).await?;
+    let sender = processing
+        .sender
+        .unwrap_or(context.infer_sender(&payment.gas).await?);
     let client = context.get_client().await?;
     let read_api = client.read_api();
     let chain_id = read_api.get_chain_identifier().await?;
@@ -3588,7 +3593,9 @@ async fn upgrade_command(
         processing,
     } = args;
 
-    let sender = context.infer_sender(&payment.gas).await?;
+    let sender = processing
+        .sender
+        .unwrap_or(context.infer_sender(&payment.gas).await?);
     let client = context.get_client().await?;
     let read_api = client.read_api();
     let chain_id = read_api.get_chain_identifier().await?;
