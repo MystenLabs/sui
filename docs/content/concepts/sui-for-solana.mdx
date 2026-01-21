@@ -103,12 +103,12 @@ See [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx
 | IDE | VSCode (Rust Analyzer) | VSCode (Move extension) |
 | Transaction lifecycle | Transaction submitted to RPC, gossipped to leaders, included in block, voted on by validators using Tower BFT. | Two round trips from client to validators to generate transaction certificate (guaranteeing execution), another round trip for shared objects to ensure ordering. |
 | Parallel execution | Sealevel runtime enables parallel execution when transactions don't overlap in account access. Accounts must be declared upfront for scheduling. | Transactions that can be parallel are run in parallel. |
-| Storage fees, storage rebates | Rent-exempt accounts require minimum balance. No rent collection since 2021, no rebates | Low storage fees paid upfront, rebates on destroying objects to incentivize cleanup |
-| Contract immutability | Programs can be marked upgradeable or immutable at deployment time | Native mutable and immutable support using upgrade capabilities as objects |
-| Contract upgrading | Native, programs marked as upgradeable can be upgraded by the upgrade authority | Native, upgrade capability mediated |
-| Composability | Cross-Program Invocations (CPIs) allow programs to call other programs within a transaction. Limited to 4 levels deep. Atomic within transaction boundaries | Call any number of functions within a single transaction using PTBs. Compose by taking output of one call and passing into another. Ensures atomic execution with up to 1,024 commands per PTB |
-| Token royalties | Not directly. Enforced through protocols like MPL Core, or extensions like Token22 | Enforced by the chain through Kiosk and transfer policies |
-| Block time / Finality | ~400ms block time, ~12-13 seconds for economic finality (before Alpenglow upgrade) | Sub-second finality for independent transactions, ~390ms with Mysticeti for shared objects |
+| Storage fees, storage rebates | Rent-exempt accounts require minimum balance. No rent collection since 2021, no rebates. | Low storage fees paid upfront, rebates on destroying objects to incentivize cleanup. |
+| Contract immutability | Programs can be marked upgradeable or immutable at deployment time. | Native mutable and immutable support using upgrade capabilities as objects. |
+| Contract upgrading | Native, programs marked as upgradeable can be upgraded by the upgrade authority. | Native, upgrade capability mediated. |
+| Composability | Cross-Program Invocations (CPIs) allow programs to call other programs within a transaction. Limited to 4 levels deep. Atomic within transaction boundaries. | Call any number of functions within a single transaction using PTBs. Compose by taking output of one call and passing into another. Ensures atomic execution with up to 1,024 commands per PTB. |
+| Token royalties | Not directly. Enforced through protocols like MPL Core, or extensions like Token22. | Enforced by the chain through Kiosk and transfer policies. |
+| Block time and finality | ~400ms block time, ~12-13 seconds for economic finality (before Alpenglow upgrade). | Sub-second finality for independent transactions, ~390ms with Mysticeti for shared objects. |
 
 ## Related links
 
