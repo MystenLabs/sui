@@ -69,7 +69,7 @@ To mutate the data, the owner of the objects needs to call the contract function
 
 ## Programmable transaction blocks
 
-In Rust, if you want to chain together results of multiple program calls, you typically need to create multiple sequential transactions or use Cross-Program Invocations (CPIs) within a program. CPIs allow programs to call other programs atomically within a single transaction, but they're limited to 4 levels deep and require careful account management. Client-side transaction chaining lacks atomicity guarantees—each transaction must complete before the next can be submitted.
+In Rust, if you want to chain together results of multiple program calls, you typically need to create multiple sequential transactions or use Cross-Program Invocations (CPIs) within a program. CPIs allow programs to call other programs atomically within a single transaction, but they're limited to 4 levels deep and require careful account management. Client-side transaction chaining lacks atomicity guarantees because each transaction must complete before the next can be submitted.
 
 In Move, PTBs solve this problem. PTBs give builders the ability to chain contract calls together with atomicity guarantees during runtime. A Sui PTB can have up to 1,024 different contract calls in it, or other actions. PTBs effectively provide a limited scripting language that is straightforward yet expressive, powerful, and secure.
 
