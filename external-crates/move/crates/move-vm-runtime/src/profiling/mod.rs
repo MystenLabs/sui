@@ -8,10 +8,10 @@
 //!
 //! # Usage
 //!
-//! Enable the `profiling` feature to collect bytecode frequency data:
+//! Enable the `tracing` feature to collect bytecode frequency data:
 //!
 //! ```bash
-//! cargo build --features move-vm-runtime/profiling
+//! cargo build --features move-vm-runtime/tracing
 //! ```
 
 pub mod counters;

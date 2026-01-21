@@ -159,7 +159,7 @@ fn step(
     }
     let instruction = &partial_error_to_error(state, run_context, instructions.safe_get(pc))?;
 
-    #[cfg(feature = "profiling")]
+    #[cfg(feature = "tracing")]
     crate::profiling::BYTECODE_COUNTERS.increment((*instruction).into());
 
 

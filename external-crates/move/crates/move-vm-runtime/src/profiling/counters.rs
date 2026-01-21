@@ -10,91 +10,6 @@ use crate::shared::constants::{DEFAULT_PROFILE_FILE, SUI_PROFILE_FILE_ENV};
 use move_binary_format::file_format_common::Opcodes;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Convert a u8 opcode value back to Opcodes enum.
-/// Returns None for invalid/unrecognized opcode values.
-fn opcode_from_u8(val: u8) -> Option<Opcodes> {
-    // Match on known opcode values from file_format_common.rs
-    match val {
-        0x01 => Some(Opcodes::POP),
-        0x02 => Some(Opcodes::RET),
-        0x03 => Some(Opcodes::BR_TRUE),
-        0x04 => Some(Opcodes::BR_FALSE),
-        0x05 => Some(Opcodes::BRANCH),
-        0x06 => Some(Opcodes::LD_U64),
-        0x07 => Some(Opcodes::LD_CONST),
-        0x08 => Some(Opcodes::LD_TRUE),
-        0x09 => Some(Opcodes::LD_FALSE),
-        0x0A => Some(Opcodes::COPY_LOC),
-        0x0B => Some(Opcodes::MOVE_LOC),
-        0x0C => Some(Opcodes::ST_LOC),
-        0x0D => Some(Opcodes::MUT_BORROW_LOC),
-        0x0E => Some(Opcodes::IMM_BORROW_LOC),
-        0x0F => Some(Opcodes::MUT_BORROW_FIELD),
-        0x10 => Some(Opcodes::IMM_BORROW_FIELD),
-        0x11 => Some(Opcodes::CALL),
-        0x12 => Some(Opcodes::PACK),
-        0x13 => Some(Opcodes::UNPACK),
-        0x14 => Some(Opcodes::READ_REF),
-        0x15 => Some(Opcodes::WRITE_REF),
-        0x16 => Some(Opcodes::ADD),
-        0x17 => Some(Opcodes::SUB),
-        0x18 => Some(Opcodes::MUL),
-        0x19 => Some(Opcodes::MOD),
-        0x1A => Some(Opcodes::DIV),
-        0x1B => Some(Opcodes::BIT_OR),
-        0x1C => Some(Opcodes::BIT_AND),
-        0x1D => Some(Opcodes::XOR),
-        0x1E => Some(Opcodes::OR),
-        0x1F => Some(Opcodes::AND),
-        0x20 => Some(Opcodes::NOT),
-        0x21 => Some(Opcodes::EQ),
-        0x22 => Some(Opcodes::NEQ),
-        0x23 => Some(Opcodes::LT),
-        0x24 => Some(Opcodes::GT),
-        0x25 => Some(Opcodes::LE),
-        0x26 => Some(Opcodes::GE),
-        0x27 => Some(Opcodes::ABORT),
-        0x28 => Some(Opcodes::NOP),
-        0x2E => Some(Opcodes::FREEZE_REF),
-        0x2F => Some(Opcodes::SHL),
-        0x30 => Some(Opcodes::SHR),
-        0x31 => Some(Opcodes::LD_U8),
-        0x32 => Some(Opcodes::LD_U128),
-        0x33 => Some(Opcodes::CAST_U8),
-        0x34 => Some(Opcodes::CAST_U64),
-        0x35 => Some(Opcodes::CAST_U128),
-        0x36 => Some(Opcodes::MUT_BORROW_FIELD_GENERIC),
-        0x37 => Some(Opcodes::IMM_BORROW_FIELD_GENERIC),
-        0x38 => Some(Opcodes::CALL_GENERIC),
-        0x39 => Some(Opcodes::PACK_GENERIC),
-        0x3A => Some(Opcodes::UNPACK_GENERIC),
-        0x40 => Some(Opcodes::VEC_PACK),
-        0x41 => Some(Opcodes::VEC_LEN),
-        0x42 => Some(Opcodes::VEC_IMM_BORROW),
-        0x43 => Some(Opcodes::VEC_MUT_BORROW),
-        0x44 => Some(Opcodes::VEC_PUSH_BACK),
-        0x45 => Some(Opcodes::VEC_POP_BACK),
-        0x46 => Some(Opcodes::VEC_UNPACK),
-        0x47 => Some(Opcodes::VEC_SWAP),
-        0x48 => Some(Opcodes::LD_U16),
-        0x49 => Some(Opcodes::LD_U32),
-        0x4A => Some(Opcodes::LD_U256),
-        0x4B => Some(Opcodes::CAST_U16),
-        0x4C => Some(Opcodes::CAST_U32),
-        0x4D => Some(Opcodes::CAST_U256),
-        0x4E => Some(Opcodes::PACK_VARIANT),
-        0x4F => Some(Opcodes::PACK_VARIANT_GENERIC),
-        0x50 => Some(Opcodes::UNPACK_VARIANT),
-        0x51 => Some(Opcodes::UNPACK_VARIANT_IMM_REF),
-        0x52 => Some(Opcodes::UNPACK_VARIANT_MUT_REF),
-        0x53 => Some(Opcodes::UNPACK_VARIANT_GENERIC),
-        0x54 => Some(Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF),
-        0x55 => Some(Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF),
-        0x56 => Some(Opcodes::VARIANT_SWITCH),
-        _ => None,
-    }
-}
-
 /// Number of bytecode variants to track.
 /// This should cover all opcodes defined in `Opcodes`.
 const BYTECODE_COUNT: usize = 128;
@@ -189,7 +104,7 @@ impl BytecodeSnapshot {
     pub fn iter(&self) -> impl Iterator<Item = (Opcodes, u64)> {
         self.counts.iter().enumerate().filter_map(|(idx, &count)| {
             if count > 0 {
-                opcode_from_u8(idx as u8).map(|op| (op, count))
+                Opcodes::from_u8(idx as u8).map(|op| (op, count))
             } else {
                 None
             }

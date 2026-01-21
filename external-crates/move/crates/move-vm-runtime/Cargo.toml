@@ -66,4 +66,3 @@ tiered-gas = []
 tracing = [
     "move-vm-config/tracing",
 ]
-profiling = []
