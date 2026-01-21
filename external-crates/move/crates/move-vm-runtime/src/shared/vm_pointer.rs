@@ -9,8 +9,8 @@
 /// An Arena Pointer, which allows conversion to references and const. Equality is defined as
 /// pointer equality, and clone/copy are shallow.
 ///
-/// Note that `T` here must not be mutated after initial creation, because of thread safety.
-/// No additionsl should be added to this type that might allow mutation of `T` after creation.
+/// [SAFETY] `T` here must not be mutated after initial creation, because of thread safety. No
+/// additionsl operations should be added to this type that might allow mutation of `T`.
 pub struct VMPointer<T>(*const T);
 
 // -------------------------------------------------------------------------------------------------
@@ -53,8 +53,10 @@ fn to_ref<'a, T>(value: *const T) -> &'a T {
 // Trait Implementations
 // -------------------------------------------------------------------------------------------------
 
-unsafe impl<T: Send> Send for VMPointer<T> {}
-unsafe impl<T: Sync> Sync for VMPointer<T> {}
+// [SAFETY] VMPointer<T> is Send and Sync because it only allows immutable access to T.
+
+unsafe impl<T> Send for VMPointer<T> {}
+unsafe impl<T> Sync for VMPointer<T> {}
 
 impl<T: ::std::fmt::Debug> ::std::fmt::Debug for VMPointer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
