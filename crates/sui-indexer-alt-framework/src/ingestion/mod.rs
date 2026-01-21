@@ -28,9 +28,8 @@ use crate::types::full_checkpoint_content::Checkpoint;
 mod broadcaster;
 pub mod error;
 pub mod ingestion_client;
-mod local_client;
-pub mod remote_client;
 mod rpc_client;
+pub mod store_client;
 pub mod streaming_client;
 #[cfg(test)]
 mod test_utils;
@@ -225,14 +224,14 @@ impl Default for IngestionConfig {
 mod tests {
     use std::sync::Mutex;
 
-    use reqwest::StatusCode;
+    use axum::http::StatusCode;
     use sui_futures::task::TaskGuard;
     use url::Url;
     use wiremock::MockServer;
     use wiremock::Request;
 
-    use crate::ingestion::remote_client::tests::respond_with;
-    use crate::ingestion::remote_client::tests::status;
+    use crate::ingestion::store_client::tests::respond_with;
+    use crate::ingestion::store_client::tests::status;
     use crate::ingestion::test_utils::test_checkpoint_data;
 
     use super::*;
