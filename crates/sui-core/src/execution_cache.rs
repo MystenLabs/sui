@@ -46,6 +46,7 @@ use typed_store::rocks::DBBatch;
 
 pub(crate) mod cache_types;
 pub mod metrics;
+pub(crate) mod object_funds_checker;
 mod object_locks;
 pub mod writeback_cache;
 
@@ -73,10 +74,11 @@ pub struct ExecutionCacheTraitPointers {
     pub cache_commit: Arc<dyn ExecutionCacheCommit>,
     pub testing_api: Arc<dyn TestingAPI>,
     pub account_funds_read: Arc<dyn AccountFundsRead>,
+    pub(crate) object_funds_checker_api: Arc<dyn ObjectFundsCheckerAPI>,
 }
 
 impl ExecutionCacheTraitPointers {
-    pub fn new<T>(cache: Arc<T>) -> Self
+    pub(crate) fn new<T>(cache: Arc<T>) -> Self
     where
         T: ObjectCacheRead
             + TransactionCacheRead
@@ -91,6 +93,7 @@ impl ExecutionCacheTraitPointers {
             + ExecutionCacheCommit
             + TestingAPI
             + AccountFundsRead
+            + ObjectFundsCheckerAPI
             + 'static,
     {
         Self {
@@ -108,6 +111,7 @@ impl ExecutionCacheTraitPointers {
             cache_commit: cache.clone(),
             testing_api: cache.clone(),
             account_funds_read: cache.clone(),
+            object_funds_checker_api: cache.clone(),
         }
     }
 }
@@ -706,6 +710,19 @@ pub trait TestingAPI: Send + Sync {
     fn database_for_testing(&self) -> Arc<AuthorityStore>;
 
     fn cache_for_testing(&self) -> &WritebackCache;
+}
+
+pub(crate) use object_funds_checker::ObjectFundsCheckStatus;
+use sui_types::accumulator_root::AccumulatorObjId;
+
+/// Trait for managing pending object funds withdraws.
+pub(crate) trait ObjectFundsCheckerAPI: Send + Sync {
+    fn check_object_funds(
+        &self,
+        object_withdraws: std::collections::BTreeMap<AccumulatorObjId, u64>,
+        accumulator_version: SequenceNumber,
+    ) -> ObjectFundsCheckStatus;
+    fn settle_object_funds(&self, next_accumulator_version: SequenceNumber);
 }
 
 macro_rules! implement_storage_traits {

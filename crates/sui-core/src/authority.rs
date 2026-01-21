@@ -126,8 +126,8 @@ use sui_types::deny_list_v1::check_coin_deny_list_v1;
 use sui_types::digests::ChainIdentifier;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::effects::{
-    InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
-    TransactionEvents, VerifiedSignedTransactionEffects,
+    AccumulatorOperation, AccumulatorValue, InputConsensusObject, SignedTransactionEffects,
+    TransactionEffects, TransactionEffectsAPI, TransactionEvents, VerifiedSignedTransactionEffects,
 };
 use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::event::{Event, EventID};
@@ -178,9 +178,10 @@ use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
+use crate::execution_cache::object_funds_checker::ObjectFundsCheckStatus;
 use crate::execution_cache::{
     CheckpointCache, ExecutionCacheCommit, ExecutionCacheReconfigAPI, ExecutionCacheWrite,
-    ObjectCacheRead, StateSyncAPI,
+    ObjectCacheRead, ObjectFundsCheckerAPI, StateSyncAPI,
 };
 use crate::execution_driver::execution_process;
 use crate::global_state_hasher::{GlobalStateHashStore, GlobalStateHasher, WrappedObject};
@@ -1607,7 +1608,6 @@ impl AuthorityState {
         }
 
         let scheduling_source = execution_env.scheduling_source;
-        let accumulator_version = execution_env.assigned_versions.accumulator_version;
         let mysticeti_fp_outputs = if epoch_store.protocol_config().mysticeti_fastpath() {
             tx_cache_reader.get_mysticeti_fastpath_outputs(tx_digest)
         } else {
@@ -1701,21 +1701,6 @@ impl AuthorityState {
 
                 assert_eq!(sys_jwks, active_jwks);
             }
-        }
-
-        // TODO: We should also settle address funds during execution,
-        // instead of from checkpoint builder. It will improve performance
-        // since we will be settling as soon as we can.
-        if certificate
-            .transaction_data()
-            .kind()
-            .is_accumulator_barrier_settle_tx()
-        {
-            // unwrap safe because we assign accumulator version for every transaction
-            // when accumulator is enabled.
-            let next_accumulator_version = accumulator_version.unwrap().next();
-            self.execution_scheduler
-                .settle_object_funds(next_accumulator_version);
         }
 
         tx_guard.commit_tx();
@@ -2092,15 +2077,12 @@ impl AuthorityState {
                 &mut None,
             );
 
-        if !self
-            .execution_scheduler
-            .should_commit_object_funds_withdraws(
-                certificate,
-                &effects,
-                &execution_env,
-                epoch_store,
-            )
-        {
+        if !self.should_commit_object_funds_withdraws(
+            certificate,
+            &effects,
+            &execution_env,
+            epoch_store,
+        ) {
             return ExecutionOutput::RetryLater;
         }
 
@@ -3732,6 +3714,132 @@ impl AuthorityState {
         &self.execution_cache_trait_pointers.account_funds_read
     }
 
+    pub(crate) fn get_object_funds_checker_api(&self) -> &Arc<dyn ObjectFundsCheckerAPI> {
+        &self.execution_cache_trait_pointers.object_funds_checker_api
+    }
+
+    /// Check if the object funds withdraws in this transaction can be committed.
+    /// Returns true if the effects should be committed, false if the transaction
+    /// should be retried later (in which case this method handles re-enqueuing).
+    #[instrument(level = "debug", skip_all, fields(tx_digest = ?certificate.digest()))]
+    fn should_commit_object_funds_withdraws(
+        &self,
+        certificate: &VerifiedExecutableTransaction,
+        effects: &TransactionEffects,
+        execution_env: &ExecutionEnv,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> bool {
+        if !epoch_store.protocol_config().enable_object_funds_withdraw() {
+            return true;
+        }
+        if effects.status().is_err() {
+            // This transaction already failed. It does not matter any more
+            // whether it has sufficient object funds or not.
+            debug!("Transaction failed, committing effects");
+            return true;
+        }
+        let address_funds_reservations: BTreeSet<_> = certificate
+            .transaction_data()
+            .process_funds_withdrawals_for_execution(epoch_store.get_chain_identifier())
+            .into_keys()
+            .collect();
+        // All withdraws will show up as accumulator events with integer values.
+        // Among them, addresses that do not have funds reservations are object
+        // withdraws.
+        let object_withdraws: BTreeMap<_, _> = effects
+            .accumulator_events()
+            .into_iter()
+            .filter_map(|event| {
+                if address_funds_reservations.contains(&event.accumulator_obj) {
+                    return None;
+                }
+                // Only integer splits are funds withdraws.
+                if let (AccumulatorOperation::Split, AccumulatorValue::Integer(amount)) =
+                    (event.write.operation, event.write.value)
+                {
+                    Some((event.accumulator_obj, amount))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        // If there are no object withdraws, we can skip checking object funds.
+        if object_withdraws.is_empty() {
+            debug!("No object withdraws, committing effects");
+            return true;
+        }
+        let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version else {
+            // Fastpath transactions that perform object funds withdraws
+            // must wait for consensus to assign the accumulator version.
+            // We cannot optimize the scheduling by processing fastpath object withdraws
+            // sooner because these may get reverted, and we don't want them
+            // pollute the tracker state.
+            // TODO: We could however optimize execution by caching
+            // the execution state to avoid re-execution.
+            return false;
+        };
+        let check_status = self
+            .execution_cache_trait_pointers
+            .object_funds_checker_api
+            .check_object_funds(object_withdraws, accumulator_version);
+        match check_status {
+            // Sufficient funds, we can go ahead and commit the execution results as it is.
+            ObjectFundsCheckStatus::SufficientFunds => {
+                debug!("Object funds sufficient, committing effects");
+                true
+            }
+            // Currently insufficient funds. We need to wait until it reach a deterministic state
+            // before we can determine if it is really insufficient (to include potential deposits)
+            // At that time we will have to re-enqueue the transaction for execution again.
+            // Re-enqueue is handled here so the caller does not need to worry about it.
+            ObjectFundsCheckStatus::Pending(receiver) => {
+                let scheduler = self.execution_scheduler.clone();
+                let cert = certificate.clone();
+                let mut execution_env = execution_env.clone();
+                let epoch_store = epoch_store.clone();
+                tokio::task::spawn(async move {
+                    // It is possible that checkpoint executor finished executing
+                    // the current epoch and went ahead with epoch change asynchronously,
+                    // while this is still waiting.
+                    let _ = epoch_store
+                        .within_alive_epoch(async move {
+                            let tx_digest = cert.digest();
+                            match receiver.await {
+                                Ok(FundsWithdrawStatus::MaybeSufficient) => {
+                                    // The withdraw state is now deterministically known,
+                                    // so we can enqueue the transaction again and it will check again
+                                    // whether it is sufficient or not in the next execution.
+                                    // TODO: We should be able to optimize this by avoiding re-execution.
+                                    debug!(?tx_digest, "Object funds possibly sufficient");
+                                }
+                                Ok(FundsWithdrawStatus::Insufficient) => {
+                                    // Re-enqueue with insufficient funds status, so it will be executed
+                                    // in the next execution and fail through early error.
+                                    // FIXME: We need to also track the amount of gas that was used,
+                                    // so that we could charge properly in the next execution when we
+                                    // go through early error. Otherwise we would undercharge.
+                                    execution_env = execution_env.with_insufficient_funds();
+                                    debug!(?tx_digest, "Object funds insufficient");
+                                }
+                                Err(e) => {
+                                    error!("Error receiving funds withdraw status: {:?}", e);
+                                }
+                            }
+                            scheduler.send_transaction_for_execution(
+                                &cert,
+                                execution_env,
+                                // TODO: Should the enqueue_time be the original enqueue time
+                                // of this transaction?
+                                tokio::time::Instant::now(),
+                            );
+                        })
+                        .await;
+                });
+                false
+            }
+        }
+    }
+
     pub fn get_backing_package_store(&self) -> &Arc<dyn BackingPackageStore + Send + Sync> {
         &self.execution_cache_trait_pointers.backing_package_store
     }
@@ -4077,7 +4185,11 @@ impl AuthorityState {
                 funds_changes: balance_changes,
                 next_accumulator_version,
             });
-        // object funds are settled while executing the barrier transaction
+        // Settle object funds - in production this is done by checkpoint executor,
+        // but for testing we need to do it manually here.
+        self.execution_cache_trait_pointers
+            .object_funds_checker_api
+            .settle_object_funds(next_accumulator_version);
     }
 
     /// Advance the epoch store to the next epoch for testing only.

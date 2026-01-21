@@ -90,6 +90,7 @@ use tracing::{debug, info, instrument, trace, warn};
 
 use super::ExecutionCacheAPI;
 use super::cache_types::Ticket;
+use super::object_funds_checker::{ObjectFundsCheckStatus, PendingObjectFundsWithdraws};
 use super::{
     Batch, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheReconfigAPI,
     ExecutionCacheWrite, ObjectCacheRead, StateSyncAPI, TestingAPI, TransactionCacheRead,
@@ -253,10 +254,13 @@ struct UncommittedData {
 
     total_transaction_inserts: AtomicU64,
     total_transaction_commits: AtomicU64,
+
+    // Tracks pending object funds withdraws that have not yet been settled.
+    pending_object_funds_withdraws: PendingObjectFundsWithdraws,
 }
 
 impl UncommittedData {
-    fn new(config: &ExecutionCacheConfig) -> Self {
+    fn new(config: &ExecutionCacheConfig, starting_accumulator_version: SequenceNumber) -> Self {
         Self {
             objects: DashMap::with_shard_amount(2048),
             markers: DashMap::with_shard_amount(2048),
@@ -272,6 +276,9 @@ impl UncommittedData {
             unchanged_loaded_runtime_objects: DashMap::with_shard_amount(2048),
             total_transaction_inserts: AtomicU64::new(0),
             total_transaction_commits: AtomicU64::new(0),
+            pending_object_funds_withdraws: PendingObjectFundsWithdraws::new(
+                starting_accumulator_version,
+            ),
         }
     }
 
@@ -519,13 +526,19 @@ impl WritebackCache {
         metrics: Arc<ExecutionCacheMetrics>,
         backpressure_manager: Arc<BackpressureManager>,
     ) -> Self {
+        // Get the current accumulator version from the store.
+        // If the accumulator object doesn't exist, use MIN as the starting version.
+        let starting_accumulator_version = store
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .map(|obj| obj.version())
+            .unwrap_or(SequenceNumber::MIN);
         let packages = MokaCache::builder(8)
             .max_capacity(randomize_cache_capacity_in_tests(
                 config.package_cache_size(),
             ))
             .build();
         Self {
-            dirty: UncommittedData::new(config),
+            dirty: UncommittedData::new(config, starting_accumulator_version),
             cached: CachedCommittedData::new(config),
             object_by_id_cache: MonotonicCache::new(randomize_cache_capacity_in_tests(
                 config.object_by_id_cache_size(),
@@ -566,6 +579,24 @@ impl WritebackCache {
         self.cached.executed_effects_digests.invalidate(tx_digest);
         self.cached.transaction_events.invalidate(tx_digest);
         self.cached.transactions.invalidate(tx_digest);
+    }
+
+    /// Check if the object funds withdraws are sufficient.
+    pub(crate) fn check_object_funds(
+        &self,
+        object_withdraws: BTreeMap<AccumulatorObjId, u64>,
+        accumulator_version: SequenceNumber,
+    ) -> ObjectFundsCheckStatus {
+        self.dirty
+            .pending_object_funds_withdraws
+            .check(self, object_withdraws, accumulator_version)
+    }
+
+    /// Settle the accumulator version for object funds.
+    pub(crate) fn settle_object_funds(&self, next_accumulator_version: SequenceNumber) {
+        self.dirty
+            .pending_object_funds_withdraws
+            .settle_accumulator_version(next_accumulator_version);
     }
 
     fn write_object_entry(
@@ -1432,6 +1463,20 @@ impl AccountFundsRead for WritebackCache {
         } else {
             0
         }
+    }
+}
+
+impl super::ObjectFundsCheckerAPI for WritebackCache {
+    fn check_object_funds(
+        &self,
+        object_withdraws: BTreeMap<AccumulatorObjId, u64>,
+        accumulator_version: SequenceNumber,
+    ) -> ObjectFundsCheckStatus {
+        self.check_object_funds(object_withdraws, accumulator_version)
+    }
+
+    fn settle_object_funds(&self, next_accumulator_version: SequenceNumber) {
+        self.settle_object_funds(next_accumulator_version);
     }
 }
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Testing the integration of the object funds withdraw scheduler with the execution scheduler.
+//! Testing the integration of the object funds checker with execution.
 
 use std::sync::Arc;
 

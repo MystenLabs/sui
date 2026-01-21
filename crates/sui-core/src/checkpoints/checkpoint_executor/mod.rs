@@ -601,6 +601,10 @@ impl CheckpointExecutor {
 
         finish_stage!(pipeline_handle, WaitForTransactions);
 
+        // Settle object funds for any settlement transactions in this checkpoint.
+        // This must happen after all transactions are executed but before commit.
+        self.settle_object_funds(&tx_data.effects);
+
         if ckpt_state.data.checkpoint.is_last_checkpoint_of_epoch() {
             self.execute_change_epoch_tx(&tx_data).await;
         }
@@ -1026,6 +1030,29 @@ impl CheckpointExecutor {
             &self.metrics.last_executed_checkpoint_age,
             &self.metrics.last_executed_checkpoint_age_ms,
         );
+    }
+
+    /// Settle object funds for settlement transactions in the checkpoint.
+    /// This looks for transactions that modified the accumulator root object,
+    /// which indicates a settlement transaction. For each such transaction,
+    /// it notifies the object funds checker of the new accumulator version.
+    fn settle_object_funds(&self, effects: &[TransactionEffects]) {
+        for effect in effects {
+            // Find if this effect modified the accumulator root object.
+            // If so, this is a settlement transaction and we should settle object funds.
+            let output_version = effect.object_changes().into_iter().find_map(|change| {
+                if change.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID {
+                    change.output_version
+                } else {
+                    None
+                }
+            });
+            if let Some(next_accumulator_version) = output_version {
+                self.state
+                    .get_object_funds_checker_api()
+                    .settle_object_funds(next_accumulator_version);
+            }
+        }
     }
 
     /// If configured, commit the pending index updates for the provided checkpoint as well as

@@ -271,6 +271,12 @@ impl<'a> TestAuthorityBuilder<'a> {
         let backpressure_manager =
             BackpressureManager::new_from_checkpoint_store(&checkpoint_store);
 
+        // Write the epoch_start_configuration to the store before building the cache,
+        // so the cache constructor can read it and initialize the pending object funds tracker.
+        authority_store
+            .set_epoch_start_configuration(&epoch_start_configuration)
+            .expect("db error");
+
         let cache_traits = build_execution_cache(
             &Default::default(),
             &registry,
