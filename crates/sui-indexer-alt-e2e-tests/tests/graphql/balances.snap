@@ -63,7 +63,7 @@ Response: {
           },
           {
             "coinType": {
-              "repr": "0xbaa3060844f46b8ac670ce4945a2abc6aae36b9d9514d51bde88bec13447bf1c::test::TEST"
+              "repr": "0x37d5b103ff1b7d4413ea820b3b0736f9073c54d2004b75405e76964be215a526::test::TEST"
             },
             "totalBalance": "1002000",
             "coinBalance": "2000",

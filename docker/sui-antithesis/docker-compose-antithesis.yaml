@@ -17,6 +17,7 @@ services:
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
       - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
+      - SUI_DB_SYNC_TO_DISK=true
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator1-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -47,6 +48,7 @@ services:
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
       - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
+      - SUI_DB_SYNC_TO_DISK=true
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator2-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -77,6 +79,7 @@ services:
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
       - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
+      - SUI_DB_SYNC_TO_DISK=true
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator3-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -107,6 +110,7 @@ services:
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
       - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
+      - SUI_DB_SYNC_TO_DISK=true
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator4-8080.yaml:/opt/sui/config/validator.yaml:ro

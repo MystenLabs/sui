@@ -201,6 +201,12 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_db_write_stall: Option<bool>,
 
+    /// If set, determines whether database writes are synced to disk (fsync).
+    /// Provides stronger durability at the cost of write performance.
+    /// Falls back to SUI_DB_SYNC_TO_DISK env var if not set. Default: disabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_db_sync_to_disk: Option<bool>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
 
