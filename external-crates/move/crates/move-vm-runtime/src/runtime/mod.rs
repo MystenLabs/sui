@@ -17,8 +17,11 @@ use crate::{
     validation::{validate_for_publish, validate_for_vm_execution, verification::ast as verif_ast},
 };
 
-use move_binary_format::errors::VMResult;
-use move_core_types::resolver::{ModuleResolver, SerializedPackage};
+use move_binary_format::errors::{Location, PartialVMError, VMResult};
+use move_core_types::{
+    resolver::{ModuleResolver, SerializedPackage},
+    vm_status::StatusCode,
+};
 use move_vm_config::runtime::VMConfig;
 
 use std::{collections::BTreeMap, sync::Arc};
@@ -103,6 +106,7 @@ impl MoveRuntime {
     ///
     /// The resuling map of vtables _must_ be closed under the static dependency graph of the root
     /// package w.r.t, to the current linkage context in `data_store`.
+    #[inline]
     pub fn make_vm<'extensions>(
         &self,
         package_store: impl ModuleResolver,
@@ -125,31 +129,36 @@ impl MoveRuntime {
             let total_timer = txn_telemetry.make_timer(crate::runtime::telemetry::TimerKind::Total);
 
             let instance = try_block! {
-                let all_packages = link_context.all_packages()?;
-                let packages = package_resolution::resolve_packages(
-                    package_store,
-                    txn_telemetry,
-                    &self.cache,
-                    &self.natives,
-                    all_packages,
-                )?;
+                let linkage_hash = link_context.to_linkage_hash();
 
-                let validation_packages = packages
-                    .iter()
-                    .map(|(id, pkg)| (*id, &*pkg.verified))
-                    .collect();
-                validate_for_vm_execution(validation_packages)?;
+                let virtual_tables = if let Some(vtables) =
+                    self.cache.cached_linkage_tables_at(&linkage_hash)  {
+                    vtables
+                } else {
+                    self.load_and_cache_vtables(
+                        package_store, txn_telemetry, &link_context, linkage_hash
+                    )?
+                };
 
-                let runtime_packages = packages
-                    .into_values()
-                    .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
-                    .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
+                // This is more a sanity check than anything else. The VMDispatchTables should
+                // never have precomputed type depths, as those are computed on-demand.
+                if !virtual_tables.type_depths.is_empty() {
+                    return Err(
+                        PartialVMError::new(
+                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("VMDispatchTables has precomputed type depths".to_string())
+                        .finish(Location::Undefined)
+                    );
+                }
 
-                let virtual_tables = VMDispatchTables::new(
-                    self.vm_config.clone(),
-                    self.cache.interner.clone(),
-                    runtime_packages,
-                )?;
+                if link_context != *virtual_tables.link_context {
+                    return Err(
+                        PartialVMError::new(
+                            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("Cached VMDispatchTables linkage did not match hashed linkage".to_string())
+                        .finish(Location::Undefined)
+                    );
+                }
 
                 // Called and checked linkage, etc.
                 let instance = MoveVM {
@@ -165,6 +174,51 @@ impl MoveRuntime {
             txn_telemetry.report_time(total_timer);
             instance
         })
+    }
+
+    /// Load and cache VTables for the provided linkage context
+    /// .
+    /// This will:
+    /// - Load (or retrieve from the cache) all packages in the linkage context,
+    /// - Perform cross-package verification,
+    /// - Construct VTables for them,
+    /// - Cache the VTables for future use,
+    /// - and Return the VTables.
+    ///
+    /// If there is an error loading or verifying the packages, an error is returned instead.
+    fn load_and_cache_vtables(
+        &self,
+        package_store: impl ModuleResolver,
+        txn_telemetry: &mut crate::runtime::telemetry::TransactionTelemetryContext,
+        link_context: &LinkageContext,
+        linkage_hash: crate::shared::linkage_context::LinkageHash,
+    ) -> Result<VMDispatchTables, move_binary_format::errors::VMError> {
+        let all_packages = link_context.all_packages()?;
+        let packages = package_resolution::resolve_packages(
+            package_store,
+            txn_telemetry,
+            &self.cache,
+            &self.natives,
+            all_packages,
+        )?;
+        let validation_packages = packages
+            .iter()
+            .map(|(id, pkg)| (*id, &*pkg.verified))
+            .collect();
+        validate_for_vm_execution(validation_packages)?;
+        let runtime_packages = packages
+            .into_values()
+            .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
+            .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
+        let vtables = VMDispatchTables::new(
+            self.vm_config.clone(),
+            self.cache.interner.clone(),
+            link_context.clone(),
+            runtime_packages,
+        )?;
+        self.cache
+            .add_linkage_tables_to_cache(linkage_hash, vtables.clone());
+        Ok(vtables)
     }
 
     /// Publish a package.
@@ -245,6 +299,7 @@ impl MoveRuntime {
                 let virtual_tables = VMDispatchTables::new(
                     self.vm_config.clone(),
                     self.cache.interner.clone(),
+                    link_context.clone(),
                     runtime_packages,
                 )?;
 

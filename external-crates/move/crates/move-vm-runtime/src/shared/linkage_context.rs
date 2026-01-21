@@ -10,7 +10,7 @@ use crate::shared::types::{OriginalId, VersionId};
 
 /// An execution context that remaps the modules referred to at runtime according to a linkage
 /// table, allowing the same module in storage to be run against different dependencies.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkageContext {
     // Linkage Table. This is a table indicating, for a given Address, how it should be linked.
     // This is purely for versioning. Assume some Package P is published at V1 and V2 as:
@@ -21,6 +21,12 @@ pub struct LinkageContext {
     // 0xDEAD for this purpose.
     pub linkage_table: BTreeMap<OriginalId, VersionId>,
 }
+
+/// A hashable representation of a linkage context, for caching purposes.
+// This actually just holds the linkage for now, but in the future other implementations may
+// replace it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct LinkageHash(BTreeMap<OriginalId, VersionId>);
 
 impl LinkageContext {
     pub fn new(linkage_table: BTreeMap<OriginalId, VersionId>) -> Self {
@@ -106,5 +112,9 @@ impl LinkageContext {
             .filter(|id| *id != &except)
             .cloned()
             .collect::<BTreeSet<_>>())
+    }
+
+    pub(crate) fn to_linkage_hash(&self) -> LinkageHash {
+        LinkageHash(self.linkage_table.clone())
     }
 }
