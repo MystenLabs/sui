@@ -46,4 +46,4 @@ aliases[X] = {Y}
 
 To be valid, the transaction `T` would require a signature from either `A` or `B`, *and* a signature from `Y`.
 
-The transaction "acts as" its `sender` for the purposes of execution. In the example above, even if the transaction had signatures from `[B, Y]` and not from `A`, during execution it would nonetheless have access to everything owned by `A`, and during Move call execution its `TxContext::sender` would be `A`.
+The transaction acts as its `sender` for the purposes of execution. In this example, even if the transaction had signatures from `[B, Y]` and not from `A`, during execution it would nonetheless have access to everything owned by `A`, and during Move call execution its `TxContext::sender` would be `A`.
