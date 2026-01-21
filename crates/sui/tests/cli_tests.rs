@@ -68,6 +68,7 @@ use sui_types::crypto::{
 };
 use sui_types::error::SuiObjectResponseError;
 use sui_types::move_package::{MovePackage, UpgradeInfo};
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -1547,7 +1548,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
 
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("tto");
+    package_path.push("to");
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1599,7 +1600,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     // Start and then receive the object
     let start_call_result = SuiClientCommands::Call {
         package: package_id.object_id,
-        module: "tto".to_string(),
+        module: "to".to_string(),
         function: "start".to_string(),
         type_args: vec![],
         args: vec![],
@@ -1640,7 +1641,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
 
     let receive_result = SuiClientCommands::Call {
         package: package_id.object_id,
-        module: "tto".to_string(),
+        module: "to".to_string(),
         function: "receiver".to_string(),
         type_args: vec![],
         args: vec![
@@ -1694,7 +1695,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
 
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("tto");
+    package_path.push("to");
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1746,7 +1747,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     // Start and then receive the object
     let start_call_result = SuiClientCommands::Call {
         package: package_id.object_id,
-        module: "tto".to_string(),
+        module: "to".to_string(),
         function: "start".to_string(),
         type_args: vec![],
         args: vec![],
@@ -1787,7 +1788,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
 
     let receive_result = SuiClientCommands::Call {
         package: package_id.object_id,
-        module: "tto".to_string(),
+        module: "to".to_string(),
         function: "invalid_call_immut_ref".to_string(),
         type_args: vec![],
         args: vec![
@@ -1841,7 +1842,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
 
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("tto");
+    package_path.push("to");
     let build_config = BuildConfig::new_for_testing().config;
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1893,7 +1894,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     // Start and then receive the object
     let start_call_result = SuiClientCommands::Call {
         package: package_id.object_id,
-        module: "tto".to_string(),
+        module: "to".to_string(),
         function: "start".to_string(),
         type_args: vec![],
         args: vec![],
@@ -1934,7 +1935,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
 
     let receive_result = SuiClientCommands::Call {
         package: package_id.object_id,
-        module: "tto".to_string(),
+        module: "to".to_string(),
         function: "invalid_call_mut_ref".to_string(),
         type_args: vec![],
         args: vec![
@@ -2296,6 +2297,75 @@ async fn test_package_publish_empty() -> Result<(), anyhow::Error> {
     "#]];
 
     expect.assert_debug_eq(&result);
+    Ok(())
+}
+
+#[sim_test]
+async fn test_call_verify_first_success_and_failure() -> Result<(), anyhow::Error> {
+    use sui_types::base_types::ObjectID;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    // Extract needed immutable info before taking mutable borrow of wallet to avoid E0502
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let sender = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    // Grab one gas coin
+    let client = context.get_client().await?;
+    let owned = client
+        .read_api()
+        .get_owned_objects(sender, None, None, None)
+        .await?
+        .data;
+    let gas_obj_id: ObjectID = owned.first().unwrap().object().unwrap().object_id;
+
+    // Failure case: intentionally set an impossibly low gas budget to trigger dry run failure under --verify-first
+    let fail = SuiClientCommands::TransferSui {
+        to: KeyIdentity::Address(sender),
+        sui_coin_object_id: gas_obj_id,
+        amount: Some(1),
+        gas_data: GasDataArgs {
+            gas_budget: Some(1), // too low -> dry run should fail
+            ..Default::default()
+        },
+        processing: TxProcessingArgs {
+            verify_first: true,
+            ..Default::default()
+        },
+    }
+    .execute(context)
+    .await;
+    let err_s = fail
+        .expect_err("expected verify-first failure due to low gas budget")
+        .to_string();
+    assert!(
+        err_s.contains("--verify-first dry run failed"),
+        "unexpected err: {err_s}"
+    );
+
+    // Success case: use a simple transfer-sui (implemented via SuiClientCommands::TransferSui) is simpler, but we test call path.
+    // We verify success path on another command (TransferSui) since verify-first logic is generic.
+    let success = SuiClientCommands::TransferSui {
+        to: KeyIdentity::Address(sender), // self-transfer minimal amount
+        sui_coin_object_id: gas_obj_id,
+        amount: Some(1),
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs {
+            verify_first: true,
+            ..Default::default()
+        },
+    }
+    .execute(context)
+    .await?;
+    match success {
+        SuiClientCommandResult::TransactionBlock(resp) => {
+            assert_eq!(resp.effects.unwrap().status(), &SuiExecutionStatus::Success);
+        }
+        other => panic!("Expected TransactionBlock result, got {:?}", other),
+    }
+
     Ok(())
 }
 
@@ -5234,7 +5304,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_3() -> Result<(), anyhow:
     let _ = update_toml_with_localnet_chain_id(&test.package_path("L"), chain_id.clone());
     let _ = update_toml_with_localnet_chain_id(&test.package_path("M"), chain_id.clone());
 
-    // This test is identic to #2, except it uses the old test-transaction-builder infrastructure
+    // This test is identical to #2, except it uses the old test-transaction-builder infrastructure
     // to publish a package without tree shaking. It is also unaware of automated address mgmt,
     // so this test sets up the published file manually.
 
