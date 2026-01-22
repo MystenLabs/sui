@@ -16,7 +16,7 @@ use tracing::{debug, info};
 use crate::ValidatorProxy;
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionResult};
+use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionStatus};
 use crate::workloads::workload::WorkloadBuilder;
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN, Workload,
@@ -87,10 +87,10 @@ impl Payload for SoftBundleConflictingTransferPayload {
         let mut retriable_error_count = 0;
 
         for (i, result) in results.results.iter().enumerate() {
-            match result {
-                SoftBundleTransactionResult::Success { effects } => {
+            match &result.status {
+                SoftBundleTransactionStatus::Success { effects } => {
                     success_count += 1;
-                    debug!("Transaction {} executed successfully", i);
+                    debug!("Transaction {} ({}) executed successfully", i, result.digest);
 
                     // Update gas object ref
                     let gas_ref = effects.gas_object().0;
@@ -105,25 +105,26 @@ impl Payload for SoftBundleConflictingTransferPayload {
                         self.transfer_object = *obj_ref;
                     }
                 }
-                SoftBundleTransactionResult::RetriableFailure { error } => {
+                SoftBundleTransactionStatus::RetriableFailure { error } => {
                     // Retriable errors (epoch change, expired) - the bundle wasn't fully processed
                     retriable_error_count += 1;
-                    debug!("Transaction {} rejected with retriable error: {}", i, error);
+                    debug!("Transaction {} ({}) rejected with retriable error: {}", i, result.digest, error);
                 }
-                SoftBundleTransactionResult::PermanentFailure { error } => {
+                SoftBundleTransactionStatus::PermanentFailure { error } => {
                     // Check if it's an ObjectLockConflict
                     let is_lock_conflict = error.contains("ObjectLockConflict");
 
                     if is_lock_conflict {
                         conflict_count += 1;
                         debug!(
-                            "Transaction {} rejected with ObjectLockConflict (expected)",
-                            i
+                            "Transaction {} ({}) rejected with ObjectLockConflict (expected)",
+                            i,
+                            result.digest
                         );
                     } else {
                         debug!(
-                            "Transaction {} rejected with non-retriable error: {}",
-                            i, error
+                            "Transaction {} ({}) rejected with non-retriable error: {}",
+                            i, result.digest, error
                         );
                     }
                 }

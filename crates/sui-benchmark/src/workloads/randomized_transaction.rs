@@ -4,7 +4,7 @@
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
-use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionResult};
+use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionStatus};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder,
 };
@@ -349,8 +349,8 @@ impl Payload for RandomizedTransactionPayload {
         let mut retriable_count = 0;
 
         for (i, result) in results.results.iter().enumerate() {
-            match result {
-                SoftBundleTransactionResult::Success { effects } => {
+            match &result.status {
+                SoftBundleTransactionStatus::Success { effects } => {
                     success_count += 1;
                     // Update gas object ref
                     self.gas_objects[i].0 = effects.gas_object().0;
@@ -375,21 +375,22 @@ impl Payload for RandomizedTransactionPayload {
                         "Immutable object should not be in mutated objects"
                     );
                 }
-                SoftBundleTransactionResult::PermanentFailure { error } => {
+                SoftBundleTransactionStatus::PermanentFailure { error } => {
                     // Check if it's an ObjectLockConflict (expected when owned object is included)
                     if error.contains("ObjectLockConflict") {
                         lock_conflict_count += 1;
                         tracing::debug!(
-                            "Transaction {} rejected with ObjectLockConflict (expected)",
-                            i
+                            "Transaction {} ({}) rejected with ObjectLockConflict (expected)",
+                            i,
+                            result.digest
                         );
                     } else {
-                        tracing::debug!("Transaction {} failed with error: {:?}", i, error);
+                        tracing::debug!("Transaction {} ({}) failed with error: {:?}", i, result.digest, error);
                     }
                 }
-                SoftBundleTransactionResult::RetriableFailure { error } => {
+                SoftBundleTransactionStatus::RetriableFailure { error } => {
                     retriable_count += 1;
-                    tracing::debug!("Transaction {} had retriable failure: {:?}", i, error);
+                    tracing::debug!("Transaction {} ({}) had retriable failure: {:?}", i, result.digest, error);
                 }
             }
         }

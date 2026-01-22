@@ -3,6 +3,7 @@
 
 use crate::{ExecutionEffects, workloads::ExpectedFailureType};
 use std::{fmt::Display, num::NonZeroUsize};
+use sui_types::digests::TransactionDigest;
 use sui_types::transaction::Transaction;
 
 /// Results from executing a soft bundle of transactions.
@@ -13,7 +14,16 @@ pub struct SoftBundleExecutionResults {
 
 /// Result for a single transaction within a soft bundle.
 #[derive(Debug)]
-pub enum SoftBundleTransactionResult {
+pub struct SoftBundleTransactionResult {
+    /// The transaction digest associated with this result.
+    pub digest: TransactionDigest,
+    /// The status/outcome of the transaction.
+    pub status: SoftBundleTransactionStatus,
+}
+
+/// Status of a single transaction within a soft bundle.
+#[derive(Debug)]
+pub enum SoftBundleTransactionStatus {
     /// Transaction executed successfully.
     Success {
         /// The execution effects from the successful transaction.
@@ -34,26 +44,27 @@ pub enum SoftBundleTransactionResult {
 impl SoftBundleTransactionResult {
     /// Returns true if this result represents a successful transaction.
     pub fn is_success(&self) -> bool {
-        matches!(self, Self::Success { .. })
+        matches!(self.status, SoftBundleTransactionStatus::Success { .. })
     }
 
     /// Returns true if this result represents a retriable failure.
     pub fn is_retriable(&self) -> bool {
-        matches!(self, Self::RetriableFailure { .. })
+        matches!(self.status, SoftBundleTransactionStatus::RetriableFailure { .. })
     }
 
     /// Returns the error message if this is a failure, None if success.
     pub fn error(&self) -> Option<&str> {
-        match self {
-            Self::Success { .. } => None,
-            Self::PermanentFailure { error } | Self::RetriableFailure { error } => Some(error),
+        match &self.status {
+            SoftBundleTransactionStatus::Success { .. } => None,
+            SoftBundleTransactionStatus::PermanentFailure { error }
+            | SoftBundleTransactionStatus::RetriableFailure { error } => Some(error),
         }
     }
 
     /// Returns the effects if this is a success, None if failure.
     pub fn effects(&self) -> Option<&ExecutionEffects> {
-        match self {
-            Self::Success { effects } => Some(effects),
+        match &self.status {
+            SoftBundleTransactionStatus::Success { effects } => Some(effects),
             _ => None,
         }
     }

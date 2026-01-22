@@ -29,7 +29,9 @@ use tokio_util::sync::CancellationToken;
 use crate::drivers::HistogramWrapper;
 use crate::drivers::driver::Driver;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionResult};
+use crate::workloads::payload::{
+    Payload, SoftBundleExecutionResults, SoftBundleTransactionResult, SoftBundleTransactionStatus,
+};
 use crate::workloads::workload::ExpectedFailureType;
 use crate::workloads::{GroupID, WorkloadInfo};
 use crate::{ExecutionEffects, ValidatorProxy};
@@ -1067,10 +1069,17 @@ async fn run_bench_worker(
                                 .into_iter()
                                 .map(|(start_idx, bundle_txs)| {
                                     let proxy = proxy.clone_new();
-                                    let bundle_size = bundle_txs.len();
+                                    let digests: Vec<TransactionDigest> =
+                                        bundle_txs.iter().map(|tx| *tx.digest()).collect();
                                     async move {
+                                        info!("executing bundle {:?}", digests);
                                         let result = proxy.execute_soft_bundle(bundle_txs).await;
-                                        (start_idx, bundle_size, result)
+                                        if let Ok(results) = &result {
+                                            info!("results for bundle {:?}", results.iter().map(|(digest, _)| format!("{}", digest)).collect::<Vec<_>>());
+                                        } else {
+                                            error!("error for bundle");
+                                        }
+                                        (start_idx, digests, result)
                                     }
                                 })
                                 .collect();
@@ -1194,7 +1203,7 @@ async fn run_bench_worker(
 
 type BundleResults = Vec<(
     usize,
-    usize,
+    Vec<TransactionDigest>,
     anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>>,
 )>;
 
@@ -1210,11 +1219,11 @@ fn process_bundle_results(
         Vec::with_capacity(num_txs);
     let mut had_bundle_error = false;
 
-    for (start_idx, bundle_size, result) in bundle_results {
+    for (start_idx, digests, result) in bundle_results {
         match result {
             Ok(results) => {
-                for (offset, (_digest, response)) in results.into_iter().enumerate() {
-                    let tx_result = match response {
+                for (offset, (digest, response)) in results.into_iter().enumerate() {
+                    let status = match response {
                         WaitForEffectsResponse::Executed { details, .. } => {
                             let effects = details.map(|d| {
                                 let epoch = d.effects.executed_epoch();
@@ -1235,11 +1244,11 @@ fn process_bundle_results(
                                         payload,
                                         effects.status()
                                     );
-                                    SoftBundleTransactionResult::Success {
+                                    SoftBundleTransactionStatus::Success {
                                         effects: Box::new(effects),
                                     }
                                 }
-                                None => SoftBundleTransactionResult::PermanentFailure {
+                                None => SoftBundleTransactionStatus::PermanentFailure {
                                     error: "Executed but no effects returned".to_string(),
                                 },
                             }
@@ -1253,18 +1262,21 @@ fn process_bundle_results(
                                 .map(|e| format!("{:?}", e))
                                 .unwrap_or_else(|| "Unknown rejection".to_string());
                             if is_retriable {
-                                SoftBundleTransactionResult::RetriableFailure { error: error_str }
+                                SoftBundleTransactionStatus::RetriableFailure { error: error_str }
                             } else {
-                                SoftBundleTransactionResult::PermanentFailure { error: error_str }
+                                SoftBundleTransactionStatus::PermanentFailure { error: error_str }
                             }
                         }
                         WaitForEffectsResponse::Expired { epoch, round } => {
-                            SoftBundleTransactionResult::RetriableFailure {
+                            SoftBundleTransactionStatus::RetriableFailure {
                                 error: format!("Expired at epoch {}, round {:?}", epoch, round),
                             }
                         }
                     };
-                    indexed_results.push((start_idx + offset, tx_result));
+                    indexed_results.push((
+                        start_idx + offset,
+                        SoftBundleTransactionResult { digest, status },
+                    ));
                 }
             }
             Err(err) => {
@@ -1274,11 +1286,14 @@ fn process_bundle_results(
                 );
                 had_bundle_error = true;
                 // Mark all transactions in this bundle as permanent failures
-                for offset in 0..bundle_size {
+                for (offset, digest) in digests.into_iter().enumerate() {
                     indexed_results.push((
                         start_idx + offset,
-                        SoftBundleTransactionResult::PermanentFailure {
-                            error: format!("Bundle submission failed: {:?}", err),
+                        SoftBundleTransactionResult {
+                            digest,
+                            status: SoftBundleTransactionStatus::PermanentFailure {
+                                error: format!("Bundle submission failed: {:?}", err),
+                            },
                         },
                     ));
                 }
