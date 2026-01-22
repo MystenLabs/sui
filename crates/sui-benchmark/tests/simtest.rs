@@ -1579,17 +1579,17 @@ mod test {
         .await;
 
         let metrics = metrics.lock().unwrap();
-        let total_txns = metrics.total_transactions_all();
-        let total_successes = metrics.total_successes_all();
-        let cancellation_rate = metrics.overall_cancellation_rate();
-        let distinct_op_sets = metrics.distinct_operation_sets_count();
 
-        assert!(total_txns > 0);
-        assert!(total_successes > 0);
-        assert!(cancellation_rate < 0.75);
-        assert!(distinct_op_sets >= 2);
+        let metrics_sum = metrics.sum_all();
 
-        println!("metrics: {:#?}", metrics);
+        // make sure the test did stuff
+        assert!(metrics_sum.signed_and_sent_count > 500);
+        assert!(metrics_sum.success_count > 200);
+        assert!(metrics_sum.permanent_failure_count > 100);
+        assert!(metrics_sum.cancellation_count > 100);
+        assert!(metrics_sum.insufficient_funds_count > 5);
+
+        println!("metrics: {:#?}", metrics.sum_all());
     }
 
     #[sim_test(config = "test_config()")]

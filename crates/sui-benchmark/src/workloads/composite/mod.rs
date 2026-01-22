@@ -3,6 +3,7 @@
 
 mod operations;
 
+use derive_more::Add;
 pub use operations::{
     ALL_OPERATIONS, AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw,
     ObjectBalanceDeposit, ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead,
@@ -38,7 +39,7 @@ use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
 use sui_types::transaction::{Argument, Command, ObjectArg, SharedObjectMutability, Transaction};
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 
 use super::MultiGas;
 
@@ -102,8 +103,9 @@ impl Default for OperationSet {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Add, Copy, Clone)]
 pub struct OperationSetStats {
+    pub signed_and_sent_count: u64,
     pub success_count: u64,
     pub abort_count: u64,
     pub permanent_failure_count: u64,
@@ -120,6 +122,21 @@ pub struct CompositionMetrics {
 impl CompositionMetrics {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn sum_all(&self) -> OperationSetStats {
+        let mut stats = OperationSetStats::default();
+        for stat in self.stats.values() {
+            stats = stats + *stat;
+        }
+        stats
+    }
+
+    pub fn record_signed_and_sent(&mut self, op_set: OperationSet) {
+        self.stats
+            .entry(op_set.raw())
+            .or_default()
+            .signed_and_sent_count += 1;
     }
 
     pub fn record_success(&mut self, op_set: OperationSet) {
@@ -446,17 +463,23 @@ impl Payload for CompositePayload {
             for op in &ops {
                 current_op_set = current_op_set.with(op.operation_flag());
             }
+            self.metrics
+                .lock()
+                .unwrap()
+                .record_signed_and_sent(current_op_set);
             self.current_batch_op_sets.push(current_op_set);
 
             let op_names: Vec<&str> = ops.iter().map(|op| op.name()).collect();
-            tracing::debug!(
-                "Building composite transaction with operations: {:?}",
-                op_names
-            );
 
             let use_address_balance_gas = self
                 .rng
                 .gen_bool(self.config.address_balance_gas_probability as f64);
+
+            tracing::debug!(
+                ?use_address_balance_gas,
+                "Building composite transaction with operations: {:?}",
+                op_names
+            );
 
             let pool = self.pool.read().unwrap();
 
@@ -484,7 +507,13 @@ impl Payload for CompositePayload {
             }
             transactions.push(tx_builder.build_and_sign(keypair.as_ref()));
         }
-
+        debug!(
+            "built batch: {:?}",
+            transactions
+                .iter()
+                .map(|tx| tx.digest())
+                .collect::<Vec<_>>()
+        );
         transactions
     }
 
@@ -497,10 +526,8 @@ impl Payload for CompositePayload {
 
         let mut gas = self.gas.lock().unwrap();
         for (i, result) in results.results.iter().enumerate() {
+            trace!("result: {}", result.description());
             assert!(i < gas.0.len(), "result should correspond to a gas coin");
-            if i >= self.current_batch_op_sets.len() {
-                break;
-            }
             let op_set = self.current_batch_op_sets[i];
             match &result.status {
                 BatchedTransactionStatus::Success { effects } => {

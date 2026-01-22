@@ -10,7 +10,7 @@ use std::{
 use anyhow::bail;
 use async_trait::async_trait;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
-use mysten_common::random::get_rng;
+use mysten_common::{fatal, random::get_rng};
 use prometheus::Registry;
 use rand::{Rng, seq::IteratorRandom};
 use sui_config::genesis::Genesis;
@@ -65,7 +65,7 @@ use sui_types::{
     execution_status::ExecutionFailureStatus,
 };
 use tokio::time::sleep;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, instrument, warn};
 
 use crate::drivers::bench_driver::ClientType;
 
@@ -523,6 +523,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     }
 }
 
+#[instrument(level = "debug", skip_all, fields(digests = ?txs.iter().map(|tx| *tx.digest()).collect::<Vec<_>>()))]
 async fn execute_soft_bundle_with_retries(
     td: &TransactionDriver<NetworkAuthorityClient>,
     txs: Vec<Transaction>,
@@ -546,8 +547,6 @@ async fn execute_soft_bundle_with_retries(
     }
 }
 
-/// Helper function to execute a soft bundle via gRPC.
-/// Shared by both LocalValidatorAggregatorProxy and FullNodeProxy.
 async fn execute_soft_bundle_impl(
     td: &TransactionDriver<NetworkAuthorityClient>,
     txs: &[Transaction],
@@ -556,78 +555,192 @@ async fn execute_soft_bundle_impl(
 
     let digests: Vec<_> = txs.iter().map(|tx| *tx.digest()).collect();
 
-    let request = RawSubmitTxRequest {
-        transactions: txs
-            .iter()
-            .map(|tx| bcs::to_bytes(tx).unwrap().into())
-            .collect(),
-        submit_type: SubmitTxType::SoftBundle.into(),
-    };
+    let mut retry_cnt = 0;
+    let max_retries = 10;
 
-    // Get a validator client - use grpc client directly for soft bundle
-    let auth_agg = td.authority_aggregator().load();
-    let safe_client = auth_agg
-        .authority_clients
-        .values()
-        .choose(&mut get_rng())
-        .unwrap();
+    loop {
+        let request = RawSubmitTxRequest {
+            transactions: txs
+                .iter()
+                .map(|tx| bcs::to_bytes(tx).unwrap().into())
+                .collect(),
+            submit_type: SubmitTxType::SoftBundle.into(),
+        };
 
-    let mut validator_client = safe_client.authority_client().get_client_for_testing()?;
+        // Get a validator client - use grpc client directly for soft bundle
+        // Re-select on each retry in case the previous validator is halting
+        let auth_agg = td.authority_aggregator().load();
+        let safe_client = auth_agg
+            .authority_clients
+            .values()
+            .choose(&mut get_rng())
+            .unwrap();
 
-    // Submit the soft bundle via grpc
-    let result = validator_client
-        .submit_transaction(request.into_request())
-        .await
-        .map(sui_network::tonic::Response::into_inner)?;
-
-    if result.results.len() != txs.len() {
-        bail!(
-            "Expected {} results, got {}",
-            txs.len(),
-            result.results.len()
-        );
-    }
-
-    // Extract consensus positions from submission results
-    let mut consensus_positions = Vec::new();
-    for (i, raw_result) in result.results.iter().enumerate() {
-        let submit_result: SubmitTxResult = raw_result.clone().try_into()?;
-        match submit_result {
-            SubmitTxResult::Submitted { consensus_position } => {
-                consensus_positions.push(consensus_position);
+        let mut validator_client = match safe_client.authority_client().get_client_for_testing() {
+            Ok(client) => client,
+            Err(err) => {
+                // Check if this is a retriable error before retrying
+                if err.is_retryable().0 && retry_cnt < max_retries {
+                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
+                    warn!(
+                        ?digests,
+                        retry_cnt,
+                        "Failed to get validator client with retriable error: {:?}. Sleeping for {:?} ...",
+                        err,
+                        delay,
+                    );
+                    retry_cnt += 1;
+                    sleep(delay).await;
+                    continue;
+                }
+                return Err(err.into());
             }
-            SubmitTxResult::Executed { .. } => {
-                bail!("Transaction {} was already executed during submission", i);
+        };
+
+        debug!("submitting soft bundle via grpc");
+
+        // Submit the soft bundle via grpc
+        let result = match validator_client
+            .submit_transaction(request.into_request())
+            .await
+        {
+            Ok(response) => response.into_inner(),
+            Err(err) => {
+                debug!("error submitting soft bundle via grpc: {:?}", err);
+                // Convert tonic error to SuiError to check if retriable
+                let sui_error: sui_types::error::SuiError = err.into();
+                if sui_error.is_retryable().0 && retry_cnt < max_retries {
+                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
+                    warn!(
+                        ?digests,
+                        retry_cnt,
+                        "Soft bundle submission failed with retriable error: {:?}. Sleeping for {:?} ...",
+                        sui_error,
+                        delay,
+                    );
+                    retry_cnt += 1;
+                    sleep(delay).await;
+                    continue;
+                }
+                return Err(sui_error.into());
             }
-            SubmitTxResult::Rejected { error } => {
-                bail!("Transaction {} was rejected: {:?}", i, error);
+        };
+
+        if result.results.len() != txs.len() {
+            fatal!(
+                "Expected {} results, got {}",
+                txs.len(),
+                result.results.len()
+            );
+        }
+
+        // Extract consensus positions from submission results
+        // Track which transactions were submitted vs rejected/executed
+        // Index -> Either consensus position (for waiting) or immediate response
+        enum SubmissionOutcome {
+            Submitted(sui_types::messages_consensus::ConsensusPosition),
+            ImmediateResponse(WaitForEffectsResponse),
+        }
+        let mut outcomes: Vec<SubmissionOutcome> = Vec::with_capacity(txs.len());
+        let mut should_retry = false;
+        let mut last_error = None;
+
+        for raw_result in result.results.iter() {
+            let submit_result: SubmitTxResult = raw_result.clone().try_into()?;
+            match submit_result {
+                SubmitTxResult::Submitted { consensus_position } => {
+                    outcomes.push(SubmissionOutcome::Submitted(consensus_position));
+                }
+                SubmitTxResult::Executed {
+                    effects_digest,
+                    details,
+                    fast_path,
+                } => {
+                    // Transaction was already executed - return the effects directly
+                    outcomes.push(SubmissionOutcome::ImmediateResponse(
+                        WaitForEffectsResponse::Executed {
+                            effects_digest,
+                            details,
+                            fast_path,
+                        },
+                    ));
+                }
+                SubmitTxResult::Rejected { error } => {
+                    // Check if this is a retriable error (e.g., ValidatorHaltedAtEpochEnd)
+                    // If ANY transaction has a retriable error, retry the whole bundle
+                    if error.is_retryable().0 && retry_cnt < max_retries {
+                        should_retry = true;
+                        last_error = Some(error);
+                        break;
+                    }
+                    // Non-retriable rejection - record as rejected response
+                    outcomes.push(SubmissionOutcome::ImmediateResponse(
+                        WaitForEffectsResponse::Rejected { error: Some(error) },
+                    ));
+                }
             }
         }
-    }
 
-    // Wait for effects using consensus positions
-    let wait_futures: Vec<_> = digests
-        .iter()
-        .zip(consensus_positions.iter())
-        .map(|(digest, position)| {
-            let request = WaitForEffectsRequest {
-                transaction_digest: Some(*digest),
-                consensus_position: Some(*position),
-                include_details: true,
-                ping_type: None,
+        if should_retry {
+            let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
+            warn!(
+                ?digests,
+                retry_cnt,
+                "Soft bundle rejected with retriable error: {:?}. Sleeping for {:?} ...",
+                last_error,
+                delay,
+            );
+            retry_cnt += 1;
+            sleep(delay).await;
+            continue;
+        }
+
+        // Collect indices and consensus positions for transactions that need to wait for effects
+        let wait_indices: Vec<usize> = outcomes
+            .iter()
+            .enumerate()
+            .filter_map(|(i, outcome)| match outcome {
+                SubmissionOutcome::Submitted(_) => Some(i),
+                SubmissionOutcome::ImmediateResponse(_) => None,
+            })
+            .collect();
+
+        let wait_futures: Vec<_> = wait_indices
+            .iter()
+            .map(|&i| {
+                let consensus_position = match &outcomes[i] {
+                    SubmissionOutcome::Submitted(pos) => pos,
+                    _ => unreachable!(),
+                };
+                let request = WaitForEffectsRequest {
+                    transaction_digest: Some(digests[i]),
+                    consensus_position: Some(*consensus_position),
+                    include_details: true,
+                    ping_type: None,
+                };
+                safe_client.wait_for_effects(request, None)
+            })
+            .collect();
+
+        let wait_responses = futures::future::join_all(wait_futures).await;
+
+        // Build final results by combining immediate responses with waited responses
+        let mut wait_response_iter = wait_responses.into_iter();
+        let mut results = Vec::with_capacity(digests.len());
+
+        for (i, outcome) in outcomes.into_iter().enumerate() {
+            let response = match outcome {
+                SubmissionOutcome::Submitted(_) => {
+                    // Get the next waited response
+                    wait_response_iter.next().unwrap()?
+                }
+                SubmissionOutcome::ImmediateResponse(resp) => resp,
             };
-            safe_client.wait_for_effects(request, None)
-        })
-        .collect();
+            results.push((digests[i], response));
+        }
 
-    let responses = futures::future::join_all(wait_futures).await;
-
-    let mut results = Vec::with_capacity(digests.len());
-    for (digest, response) in digests.into_iter().zip(responses.into_iter()) {
-        results.push((digest, response?));
+        return Ok(results);
     }
-
-    Ok(results)
 }
 
 pub struct FullNodeProxy {
