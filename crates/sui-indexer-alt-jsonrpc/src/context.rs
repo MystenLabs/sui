@@ -7,13 +7,13 @@ use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::bigtable_reader::BigtableReader;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
+use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
-use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
-use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_package_resolver::Resolver;
 use url::Url;
 
