@@ -1422,7 +1422,9 @@ fn check_visibility_modifiers(
     }
 
     // Emit any errors.
-    if public_package_usage.is_some() && friend_usage.is_some() {
+    if let Some(public_package_usage) = public_package_usage
+        && let Some(friend_usage) = friend_usage
+    {
         let friend_error_msg = format!(
             "Cannot define 'friend' modules and use '{}' visibility in the same module",
             E::Visibility::PACKAGE
@@ -1432,10 +1434,7 @@ fn check_visibility_modifiers(
             context.add_diag(diag!(
                 Declarations::InvalidVisibilityModifier,
                 (friend.loc, friend_error_msg.clone()),
-                (
-                    public_package_usage.unwrap(),
-                    package_definition_msg.clone()
-                )
+                (public_package_usage, package_definition_msg.clone())
             ));
         }
         let package_error_msg = format!(
@@ -1454,10 +1453,7 @@ fn check_visibility_modifiers(
                     context.add_diag(diag!(
                         Declarations::InvalidVisibilityModifier,
                         (loc, friend_error_msg.clone()),
-                        (
-                            public_package_usage.unwrap(),
-                            package_definition_msg.clone()
-                        )
+                        (public_package_usage, package_definition_msg.clone())
                     ));
                 }
                 E::Visibility::Package(loc) => {
@@ -1465,7 +1461,7 @@ fn check_visibility_modifiers(
                         Declarations::InvalidVisibilityModifier,
                         (loc, package_error_msg.clone()),
                         (
-                            friend_usage.unwrap(),
+                            friend_usage,
                             &format!("'{}' visibility used here", E::Visibility::FRIEND_IDENT)
                         )
                     ));

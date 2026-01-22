@@ -1396,7 +1396,7 @@ mod test {
             .collect();
 
         // Round 11 blocks.
-        let round_11 = vec![
+        let round_11 = [
             // This will connect to round 12.
             VerifiedBlock::new_for_test(
                 TestBlock::new(11, 0)
@@ -1448,7 +1448,7 @@ mod test {
             round_11[1].reference(),
             round_11[5].reference(),
         ];
-        let round_12 = vec![
+        let round_12 = [
             VerifiedBlock::new_for_test(
                 TestBlock::new(12, 0)
                     .set_timestamp_ms(1200)
@@ -1476,7 +1476,7 @@ mod test {
             round_12[2].reference(),
             round_11[2].reference(),
         ];
-        let round_13 = vec![
+        let round_13 = [
             VerifiedBlock::new_for_test(
                 TestBlock::new(12, 1)
                     .set_timestamp_ms(1300)
