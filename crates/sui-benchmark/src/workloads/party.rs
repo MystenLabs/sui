@@ -287,7 +287,8 @@ impl Workload<dyn Payload> for PartyWorkload {
             let system_state_observer = system_state_observer.clone();
             let execution_proxy = execution_proxy.clone();
             futures.push(async move {
-                let (_, execution_result) = execution_proxy.execute_transaction_block(transaction).await;
+                let (_, execution_result) =
+                    execution_proxy.execute_transaction_block(transaction).await;
                 let effects = execution_result.unwrap();
                 let (
                     obj_ref,
@@ -332,7 +333,8 @@ impl Workload<dyn Payload> for PartyWorkload {
             let system_state_observer = system_state_observer.clone();
             let execution_proxy = execution_proxy.clone();
             futures.push(async move {
-                let (_, execution_result) = execution_proxy.execute_transaction_block(transaction).await;
+                let (_, execution_result) =
+                    execution_proxy.execute_transaction_block(transaction).await;
                 let effects = execution_result.unwrap();
                 let (obj_ref, Owner::AddressOwner(owner)) = effects.created()[0] else {
                     panic!("create_fastpath should always create an AddressOwner object");

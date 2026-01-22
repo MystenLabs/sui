@@ -10,6 +10,7 @@ use std::{
 use anyhow::bail;
 use async_trait::async_trait;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
+use mysten_common::random::get_rng;
 use prometheus::Registry;
 use rand::{Rng, seq::IteratorRandom};
 use sui_config::genesis::Genesis;
@@ -203,6 +204,25 @@ impl ExecutionEffects {
         }
     }
 
+    pub fn is_insufficient_funds(&self) -> bool {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                match effects.data().status() {
+                    sui_types::execution_status::ExecutionStatus::Success => false,
+                    sui_types::execution_status::ExecutionStatus::Failure {
+                        error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
+                        ..
+                    } => true,
+                    _ => false,
+                }
+            }
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                let status = format!("{}", sui_tx_effects.status());
+                status.contains("InsufficientFundsForWithdraw")
+            }
+        }
+    }
+
     pub fn is_invalid_transaction(&self) -> bool {
         match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
@@ -296,6 +316,8 @@ impl ExecutionEffects {
 #[async_trait]
 pub trait ValidatorProxy {
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error>;
+
+    async fn get_sui_address_balance(&self, address: SuiAddress) -> Result<u64, anyhow::Error>;
 
     async fn get_owned_objects(
         &self,
@@ -425,6 +447,10 @@ impl LocalValidatorAggregatorProxy {
 
 #[async_trait]
 impl ValidatorProxy for LocalValidatorAggregatorProxy {
+    async fn get_sui_address_balance(&self, _: SuiAddress) -> Result<u64, anyhow::Error> {
+        unimplemented!("Not available for LocalValidatorAggregatorProxy");
+    }
+
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
         let auth_agg = self.td.authority_aggregator().load();
         Ok(auth_agg
@@ -543,7 +569,7 @@ async fn execute_soft_bundle_impl(
     let safe_client = auth_agg
         .authority_clients
         .values()
-        .choose(&mut mysten_common::random::get_rng())
+        .choose(&mut get_rng())
         .unwrap();
 
     let mut validator_client = safe_client.authority_client().get_client_for_testing()?;
@@ -695,6 +721,16 @@ impl FullNodeProxy {
 
 #[async_trait]
 impl ValidatorProxy for FullNodeProxy {
+    async fn get_sui_address_balance(&self, address: SuiAddress) -> Result<u64, anyhow::Error> {
+        let response = self
+            .sui_client
+            .coin_read_api()
+            .get_balance(address, None)
+            .await?;
+
+        Ok(u64::try_from(response.funds_in_address_balance).unwrap())
+    }
+
     async fn get_object(&self, object_id: ObjectID) -> Result<Object, anyhow::Error> {
         let response = self
             .sui_client

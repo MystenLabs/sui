@@ -4,11 +4,12 @@
 mod operations;
 
 pub use operations::{
-    ALL_OPERATIONS, AddressBalanceDeposit, AddressBalanceWithdraw, ObjectBalanceDeposit,
-    ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead, SharedCounterIncrement,
-    SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw, TestCoinMint,
-    TestCoinObjectWithdraw, describe_flags,
+    ALL_OPERATIONS, AddressBalanceDeposit, AddressBalanceOverdraw, AddressBalanceWithdraw,
+    ObjectBalanceDeposit, ObjectBalanceWithdraw, OperationDescriptor, RandomnessRead,
+    SharedCounterIncrement, SharedCounterRead, TestCoinAddressDeposit, TestCoinAddressWithdraw,
+    TestCoinMint, TestCoinObjectWithdraw, describe_flags,
 };
+use rand::seq::SliceRandom;
 
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
@@ -31,7 +32,7 @@ use std::sync::{Arc, Mutex};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::TypeTag;
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
@@ -108,6 +109,7 @@ pub struct OperationSetStats {
     pub permanent_failure_count: u64,
     pub retriable_failure_count: u64,
     pub cancellation_count: u64,
+    pub insufficient_funds_count: u64,
 }
 
 #[derive(Debug, Default)]
@@ -147,6 +149,13 @@ impl CompositionMetrics {
             .entry(op_set.raw())
             .or_default()
             .cancellation_count += 1;
+    }
+
+    pub fn record_insufficient_funds(&mut self, op_set: OperationSet) {
+        self.stats
+            .entry(op_set.raw())
+            .or_default()
+            .insufficient_funds_count += 1;
     }
 
     pub fn get_stats(&self, op_set: OperationSet) -> Option<&OperationSetStats> {
@@ -236,6 +245,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(TestCoinAddressDeposit::FLAG, 0.1);
         probabilities.insert(TestCoinAddressWithdraw::FLAG, 0.1);
         probabilities.insert(TestCoinObjectWithdraw::FLAG, 0.1);
+        probabilities.insert(AddressBalanceOverdraw::FLAG, 0.1);
         Self {
             probabilities,
             ..Default::default()
@@ -324,6 +334,7 @@ impl OperationPool {
 
 pub struct CompositePayload {
     config: Arc<CompositeWorkloadConfig>,
+    fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
     pool: Arc<RwLock<OperationPool>>,
     gas: Mutex<MultiGas>,
     current_batch_op_sets: Vec<OperationSet>,
@@ -393,6 +404,7 @@ impl CompositePayload {
     }
 }
 
+#[async_trait]
 impl Payload for CompositePayload {
     fn make_new_payload(&mut self, _: &ExecutionEffects) {
         unimplemented!();
@@ -406,7 +418,7 @@ impl Payload for CompositePayload {
         true
     }
 
-    fn make_transaction_batch(&mut self) -> Vec<Transaction> {
+    async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         let batch_size = self.rng.gen_range(1..=MAX_BATCH_SIZE);
 
         let system_state = self.system_state_observer.state.borrow().clone();
@@ -424,6 +436,8 @@ impl Payload for CompositePayload {
 
         self.current_batch_op_sets.clear();
         let mut transactions = Vec::with_capacity(batch_size);
+
+        let account_state = AccountState::new(sender, &self.fullnode_proxies).await;
 
         for gas in current_batch_gas.iter().take(batch_size) {
             let ops = self.sample_operations();
@@ -456,7 +470,7 @@ impl Payload for CompositePayload {
                         &self.config,
                         &mut self.rng,
                     );
-                    op.apply(builder, &resources, &mut self.rng);
+                    op.apply(builder, &resources, &mut self.rng, &account_state);
                 }
             }
 
@@ -492,6 +506,8 @@ impl Payload for CompositePayload {
                 BatchedTransactionStatus::Success { effects } => {
                     if effects.is_cancelled() {
                         metrics.record_cancellation(op_set);
+                    } else if effects.is_insufficient_funds() {
+                        metrics.record_insufficient_funds(op_set);
                     } else if effects.is_ok() {
                         metrics.record_success(op_set);
                     } else {
@@ -520,6 +536,25 @@ impl Payload for CompositePayload {
             }
         }
         self.current_batch_op_sets.clear();
+    }
+}
+
+pub struct AccountState {
+    pub sender: SuiAddress,
+    pub sui_balance: u64,
+}
+
+impl AccountState {
+    pub async fn new(
+        sender: SuiAddress,
+        fullnode_proxies: &Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
+    ) -> Self {
+        let proxy = fullnode_proxies.choose(&mut thread_rng()).unwrap();
+        let sui_balance = proxy.get_sui_address_balance(sender).await.unwrap();
+        Self {
+            sender,
+            sui_balance,
+        }
     }
 }
 
@@ -1076,7 +1111,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
     async fn make_test_payloads(
         &self,
         _execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
-        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
+        fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         info!("Creating composite workload payloads...");
@@ -1113,6 +1148,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             let gas = self.payload_gas[i as usize].clone();
             payloads.push(Box::new(CompositePayload {
                 config: config.clone(),
+                fullnode_proxies: fullnode_proxies.clone(),
                 pool: operation_pool.clone(),
                 gas: Mutex::new(gas),
                 current_batch_op_sets: vec![],

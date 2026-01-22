@@ -1564,7 +1564,8 @@ mod test {
         .with_probability(TestCoinMint::FLAG, 0.1)
         .with_probability(TestCoinAddressDeposit::FLAG, 0.1)
         .with_probability(TestCoinAddressWithdraw::FLAG, 0.05)
-        .with_probability(TestCoinObjectWithdraw::FLAG, 0.05);
+        .with_probability(TestCoinObjectWithdraw::FLAG, 0.05)
+        .with_probability(AddressBalanceOverdraw::FLAG, 0.1);
 
         test_simulated_load_with_test_config(
             test_cluster,
@@ -1587,6 +1588,8 @@ mod test {
         assert!(total_successes > 0);
         assert!(cancellation_rate < 0.75);
         assert!(distinct_op_sets >= 2);
+
+        println!("metrics: {:#?}", metrics);
     }
 
     #[sim_test(config = "test_config()")]

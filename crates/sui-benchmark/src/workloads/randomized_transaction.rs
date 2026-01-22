@@ -216,6 +216,7 @@ impl RandomizedTransactionPayload {
     }
 }
 
+#[async_trait]
 impl Payload for RandomizedTransactionPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() {
@@ -276,7 +277,7 @@ impl Payload for RandomizedTransactionPayload {
         true
     }
 
-    fn make_transaction_batch(&mut self) -> Vec<Transaction> {
+    async fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         let rgp = self
             .system_state_observer
             .state
@@ -624,7 +625,8 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                     ],
                 )
                 .build_and_sign(keypair.as_ref());
-            let (_, execution_result) = execution_proxy.execute_transaction_block(transaction).await;
+            let (_, execution_result) =
+                execution_proxy.execute_transaction_block(transaction).await;
             let effects = execution_result.expect("Failed to create immutable object");
             let created_obj = effects.created()[0].0;
             current_gas = effects.gas_object().0;
@@ -639,7 +641,8 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                     vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(created_obj))],
                 )
                 .build_and_sign(keypair.as_ref());
-            let (_, execution_result) = execution_proxy.execute_transaction_block(transaction).await;
+            let (_, execution_result) =
+                execution_proxy.execute_transaction_block(transaction).await;
             let effects = execution_result.expect("Failed to freeze object");
 
             // After freezing, the object becomes immutable - find it in mutated objects

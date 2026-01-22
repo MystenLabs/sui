@@ -1048,7 +1048,7 @@ async fn run_bench_worker(
 
                     // Check if this is a batched payload
                     if payload.is_batched() {
-                        let txs = payload.make_transaction_batch();
+                        let txs = payload.make_transaction_batch().await;
                         let max_bundles = payload.max_soft_bundles();
 
                         let num_txs = txs.len();

@@ -190,7 +190,9 @@ impl WorkloadConfiguration {
             let fullnode_proxies = bank.fullnode_proxies.clone();
             let observer = system_state_observer.clone();
             async move {
-                workload.init(execution_proxy, fullnode_proxies, observer).await;
+                workload
+                    .init(execution_proxy, fullnode_proxies, observer)
+                    .await;
                 workload
             }
         });
