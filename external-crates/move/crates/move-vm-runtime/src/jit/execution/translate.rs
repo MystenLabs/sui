@@ -292,11 +292,12 @@ fn modules(
 
         while let Some(cur_id) = stack.pop() {
             let cur_state = *state.get(&cur_id).unwrap_or(&State::NotVisited);
-            let cur_key = package_context.interner.intern_ident_str(cur_id.name())?;
 
             match cur_state {
                 State::Visited => {
-                    debug_assert!(package_context.loaded_modules.contains_key(&cur_key));
+                    debug_assert!(package_context
+                        .loaded_modules
+                        .contains_key(&package_context.interner.intern_ident_str(cur_id.name())?));
                     continue;
                 }
                 State::Visiting => {
@@ -311,6 +312,7 @@ fn modules(
                     })?;
                     let loaded_module =
                         module(package_context, package_context.version_id, input_module)?;
+                    let cur_key = package_context.interner.intern_ident_str(cur_id.name())?;
                     if package_context
                         .loaded_modules
                         .insert(cur_key, loaded_module)
@@ -353,6 +355,7 @@ fn modules(
                         // All dependencies are loaded, we are ready to load.
                         let loaded_module =
                             module(package_context, package_context.version_id, input_module)?;
+                        let cur_key = package_context.interner.intern_ident_str(cur_id.name())?;
                         if package_context
                             .loaded_modules
                             .insert(cur_key, loaded_module)
@@ -366,6 +369,9 @@ fn modules(
                         state.insert(cur_id, State::Visited);
                     } else {
                         // Has unvisited dependencies: mark as Visiting and process deps first.
+                        // Note: We don't intern cur_key here since it's not needed until the
+                        // module is actually loaded (when state becomes Visiting or when
+                        // all deps are already visited).
                         if state.insert(cur_id.clone(), State::Visiting).is_some() {
                             return Err(make_invariant_violation!(format!(
                                 "Module {} added to load queue as unvisited twice",
