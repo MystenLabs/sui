@@ -226,23 +226,24 @@ pub struct StateSyncConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_content_timeout_max_ms: Option<u64>,
 
-    /// Throughput threshold (bytes/sec) for classifying a peer as "fast".
-    ///
-    /// If unspecified, this will default to `1,000,000` (1 MB/s).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub peer_good_throughput_threshold: Option<u64>,
-
-    /// Number of failures within the scoring window before a peer is marked as "failing".
-    ///
-    /// If unspecified, this will default to `3`.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub peer_failure_threshold: Option<usize>,
-
     /// Time window for peer scoring samples.
     ///
     /// If unspecified, this will default to `60,000` milliseconds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub peer_scoring_window_ms: Option<u64>,
+
+    /// Probability of selecting an unknown peer to explore its throughput.
+    ///
+    /// If unspecified, this will default to `0.1`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exploration_probability: Option<f64>,
+
+    /// Failure rate threshold for marking a peer as failing.
+    /// A peer is marked as failing if its failure rate exceeds this threshold.
+    ///
+    /// If unspecified, this will default to `0.3` (30%).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_failure_rate: Option<f64>,
 }
 
 impl StateSyncConfig {
@@ -345,7 +346,7 @@ impl StateSyncConfig {
     }
 
     pub fn checkpoint_content_timeout_min(&self) -> Duration {
-        const DEFAULT: Duration = Duration::from_secs(10);
+        const DEFAULT: Duration = Duration::from_secs(5);
         self.checkpoint_content_timeout_min_ms
             .map(Duration::from_millis)
             .unwrap_or(DEFAULT)
@@ -358,23 +359,21 @@ impl StateSyncConfig {
             .unwrap_or(DEFAULT)
     }
 
-    pub fn peer_good_throughput_threshold(&self) -> f64 {
-        const DEFAULT: f64 = 1_000_000.0; // 1 MB/s
-        self.peer_good_throughput_threshold
-            .map(|v| v as f64)
-            .unwrap_or(DEFAULT)
-    }
-
-    pub fn peer_failure_threshold(&self) -> usize {
-        const DEFAULT: usize = 3;
-        self.peer_failure_threshold.unwrap_or(DEFAULT)
-    }
-
     pub fn peer_scoring_window(&self) -> Duration {
         const DEFAULT: Duration = Duration::from_secs(60);
         self.peer_scoring_window_ms
             .map(Duration::from_millis)
             .unwrap_or(DEFAULT)
+    }
+
+    pub fn exploration_probability(&self) -> f64 {
+        const DEFAULT: f64 = 0.1;
+        self.exploration_probability.unwrap_or(DEFAULT)
+    }
+
+    pub fn peer_failure_rate(&self) -> f64 {
+        const DEFAULT: f64 = 0.3;
+        self.peer_failure_rate.unwrap_or(DEFAULT)
     }
 
     pub fn randomized_for_testing() -> Self {

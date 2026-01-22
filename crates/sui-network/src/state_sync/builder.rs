@@ -153,10 +153,10 @@ where
             wait_interval_when_no_peer_to_sync_content: config
                 .wait_interval_when_no_peer_to_sync_content(),
             peer_scoring_window: config.peer_scoring_window(),
-            peer_failure_threshold: config.peer_failure_threshold(),
-            peer_good_throughput_threshold: config.peer_good_throughput_threshold(),
+            peer_failure_rate: config.peer_failure_rate(),
             checkpoint_content_timeout_min: config.checkpoint_content_timeout_min(),
             checkpoint_content_timeout_max: config.checkpoint_content_timeout_max(),
+            exploration_probability: config.exploration_probability(),
         }
         .pipe(RwLock::new)
         .pipe(Arc::new);

@@ -134,29 +134,35 @@ pub(super) fn compute_adaptive_timeout(
     max_timeout: Duration,
 ) -> Duration {
     const MAX_TRANSACTIONS_PER_CHECKPOINT: u64 = 10_000;
+    const JITTER_FRACTION: f64 = 0.1;
 
     let ratio = (tx_count as f64 / MAX_TRANSACTIONS_PER_CHECKPOINT as f64).min(1.0);
     let extra = Duration::from_secs_f64((max_timeout - min_timeout).as_secs_f64() * ratio);
-    min_timeout + extra
+    let base = min_timeout + extra;
+
+    let jitter_range = base.as_secs_f64() * JITTER_FRACTION;
+    let jitter = rand::thread_rng().gen_range(-jitter_range..jitter_range);
+    Duration::from_secs_f64((base.as_secs_f64() + jitter).max(min_timeout.as_secs_f64()))
 }
 
 #[cfg_attr(test, derive(Debug))]
 pub(super) struct PeerScore {
-    successes: VecDeque<(Instant, u64, Duration)>,
+    successes: VecDeque<(Instant, u64 /* response_size_bytes */, Duration)>,
     failures: VecDeque<Instant>,
     window: Duration,
-    failure_threshold: usize,
+    failure_rate: f64,
 }
 
 impl PeerScore {
     const MAX_SAMPLES: usize = 20;
+    const MIN_SAMPLES_FOR_FAILURE: usize = 10;
 
-    pub(super) fn new(window: Duration, failure_threshold: usize) -> Self {
+    pub(super) fn new(window: Duration, failure_rate: f64) -> Self {
         Self {
             successes: VecDeque::new(),
             failures: VecDeque::new(),
             window,
-            failure_threshold,
+            failure_rate,
         }
     }
 
@@ -183,7 +189,19 @@ impl PeerScore {
             .iter()
             .filter(|ts| now.duration_since(**ts) < self.window)
             .count();
-        recent_failures >= self.failure_threshold
+        let recent_successes = self
+            .successes
+            .iter()
+            .filter(|(ts, _, _)| now.duration_since(*ts) < self.window)
+            .count();
+
+        let total = recent_failures + recent_successes;
+        if total < Self::MIN_SAMPLES_FOR_FAILURE {
+            return false;
+        }
+
+        let rate = recent_failures as f64 / total as f64;
+        rate >= self.failure_rate
     }
 
     pub(super) fn effective_throughput(&self) -> Option<f64> {
@@ -201,7 +219,7 @@ impl PeerScore {
         }
 
         if total_time.is_zero() {
-            return Some(f64::MAX);
+            return None;
         }
 
         Some(total_size as f64 / total_time.as_secs_f64())
@@ -217,10 +235,10 @@ struct PeerHeights {
 
     wait_interval_when_no_peer_to_sync_content: Duration,
     peer_scoring_window: Duration,
-    peer_failure_threshold: usize,
-    peer_good_throughput_threshold: f64,
+    peer_failure_rate: f64,
     checkpoint_content_timeout_min: Duration,
     checkpoint_content_timeout_max: Duration,
+    exploration_probability: f64,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -393,18 +411,14 @@ impl PeerHeights {
     pub fn record_success(&mut self, peer_id: PeerId, size: u64, response_time: Duration) {
         self.scores
             .entry(peer_id)
-            .or_insert_with(|| {
-                PeerScore::new(self.peer_scoring_window, self.peer_failure_threshold)
-            })
+            .or_insert_with(|| PeerScore::new(self.peer_scoring_window, self.peer_failure_rate))
             .record_success(size, response_time);
     }
 
     pub fn record_failure(&mut self, peer_id: PeerId) {
         self.scores
             .entry(peer_id)
-            .or_insert_with(|| {
-                PeerScore::new(self.peer_scoring_window, self.peer_failure_threshold)
-            })
+            .or_insert_with(|| PeerScore::new(self.peer_scoring_window, self.peer_failure_rate))
             .record_failure();
     }
 
@@ -420,26 +434,20 @@ impl PeerHeights {
             .map(|s| s.is_failing())
             .unwrap_or(false)
     }
-
-    pub fn peer_good_throughput_threshold(&self) -> f64 {
-        self.peer_good_throughput_threshold
-    }
-
-    pub fn checkpoint_content_timeout_min(&self) -> Duration {
-        self.checkpoint_content_timeout_min
-    }
-
-    pub fn checkpoint_content_timeout_max(&self) -> Duration {
-        self.checkpoint_content_timeout_max
-    }
 }
 
-// PeerBalancer is an Iterator that selects peers based on RTT with some added randomness.
+// PeerBalancer selects peers using weighted random selection:
+// - Most of the time: select from known peers, weighted by throughput
+// - With configured probability: select from unknown peers (to explore)
+// - Failing peers: only as last resort
 #[derive(Clone)]
 struct PeerBalancer {
-    peers: VecDeque<(anemo::Peer, PeerStateSyncInfo)>,
+    known_peers: Vec<(anemo::Peer, PeerStateSyncInfo, f64)>,
+    unknown_peers: Vec<(anemo::Peer, PeerStateSyncInfo, f64)>,
+    failing_peers: Vec<(anemo::Peer, PeerStateSyncInfo)>,
     requested_checkpoint: Option<CheckpointSequenceNumber>,
     request_type: PeerCheckpointRequestType,
+    exploration_probability: f64,
 }
 
 #[derive(Clone)]
@@ -455,45 +463,41 @@ impl PeerBalancer {
         request_type: PeerCheckpointRequestType,
     ) -> Self {
         let peer_heights_guard = peer_heights.read().unwrap();
-        let good_throughput_threshold = peer_heights_guard.peer_good_throughput_threshold();
-        let mut peers: Vec<_> = peer_heights_guard
-            .peers_on_same_chain()
-            .filter_map(|(peer_id, info)| {
-                network.peer(*peer_id).map(|peer| {
-                    let rtt_secs = peer.connection_rtt().as_secs_f64();
 
-                    let is_failing = peer_heights_guard.is_failing(peer_id);
-                    let sort_key = if is_failing {
-                        (3, 0.0)
-                    } else {
-                        match peer_heights_guard.get_throughput(peer_id) {
-                            Some(throughput) if throughput >= good_throughput_threshold => {
-                                (0, throughput)
-                            }
-                            None => (1, -rtt_secs), // lower RTT = less negative = sorted first
-                            Some(throughput) => (2, throughput),
-                        }
-                    };
-                    (sort_key, peer, *info)
-                })
-            })
-            .collect();
-        drop(peer_heights_guard);
-        peers.sort_by(|((tier_a, val_a), _, _), ((tier_b, val_b), _, _)| {
-            match tier_a.cmp(tier_b) {
-                std::cmp::Ordering::Equal => val_b
-                    .partial_cmp(val_a)
-                    .unwrap_or(std::cmp::Ordering::Equal),
-                other => other,
+        let mut known_peers = Vec::new();
+        let mut unknown_peers = Vec::new();
+        let mut failing_peers = Vec::new();
+        let exploration_probability = peer_heights_guard.exploration_probability;
+
+        for (peer_id, info) in peer_heights_guard.peers_on_same_chain() {
+            let Some(peer) = network.peer(*peer_id) else {
+                continue;
+            };
+            let rtt_secs = peer.connection_rtt().as_secs_f64();
+
+            if peer_heights_guard.is_failing(peer_id) {
+                failing_peers.push((peer, *info));
+            } else if let Some(throughput) = peer_heights_guard.get_throughput(peer_id) {
+                known_peers.push((peer, *info, throughput));
+            } else {
+                unknown_peers.push((peer, *info, rtt_secs));
             }
+        }
+        drop(peer_heights_guard);
+
+        unknown_peers.sort_by(|(_, _, rtt_a), (_, _, rtt_b)| {
+            rtt_a
+                .partial_cmp(rtt_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
+
         Self {
-            peers: peers
-                .into_iter()
-                .map(|(_, peer, info)| (peer, info))
-                .collect(),
+            known_peers,
+            unknown_peers,
+            failing_peers,
             requested_checkpoint: None,
             request_type,
+            exploration_probability,
         }
     }
 
@@ -501,32 +505,92 @@ impl PeerBalancer {
         self.requested_checkpoint = Some(checkpoint);
         self
     }
+
+    fn is_eligible(&self, info: &PeerStateSyncInfo) -> bool {
+        let requested = self.requested_checkpoint.unwrap_or(0);
+        match &self.request_type {
+            PeerCheckpointRequestType::Summary => info.height >= requested,
+            PeerCheckpointRequestType::Content => {
+                info.height >= requested && info.lowest <= requested
+            }
+        }
+    }
+
+    fn select_by_throughput(&mut self) -> Option<(anemo::Peer, PeerStateSyncInfo)> {
+        let eligible: Vec<_> = self
+            .known_peers
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, info, _))| self.is_eligible(info))
+            .map(|(i, (_, _, t))| (i, *t))
+            .collect();
+
+        if eligible.is_empty() {
+            return None;
+        }
+
+        let total: f64 = eligible.iter().map(|(_, t)| t).sum();
+        let mut pick = rand::thread_rng().gen_range(0.0..total);
+
+        for (idx, throughput) in &eligible {
+            pick -= throughput;
+            if pick <= 0.0 {
+                let (peer, info, _) = self.known_peers.remove(*idx);
+                return Some((peer, info));
+            }
+        }
+
+        let (idx, _) = eligible.last().unwrap();
+        let (peer, info, _) = self.known_peers.remove(*idx);
+        Some((peer, info))
+    }
+
+    fn select_by_rtt(&mut self) -> Option<(anemo::Peer, PeerStateSyncInfo)> {
+        let pos = self
+            .unknown_peers
+            .iter()
+            .position(|(_, info, _)| self.is_eligible(info))?;
+        let (peer, info, _) = self.unknown_peers.remove(pos);
+        Some((peer, info))
+    }
+
+    fn select_failing(&mut self) -> Option<(anemo::Peer, PeerStateSyncInfo)> {
+        let pos = self
+            .failing_peers
+            .iter()
+            .position(|(_, info)| self.is_eligible(info))?;
+        Some(self.failing_peers.remove(pos))
+    }
 }
 
 impl Iterator for PeerBalancer {
     type Item = StateSyncClient<anemo::Peer>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while !self.peers.is_empty() {
-            const SELECTION_WINDOW: usize = 2;
-            let idx =
-                rand::thread_rng().gen_range(0..std::cmp::min(SELECTION_WINDOW, self.peers.len()));
-            let (peer, info) = self.peers.remove(idx).unwrap();
-            let requested_checkpoint = self.requested_checkpoint.unwrap_or(0);
-            match &self.request_type {
-                // Summary will never be pruned
-                PeerCheckpointRequestType::Summary if info.height >= requested_checkpoint => {
-                    return Some(StateSyncClient::new(peer));
-                }
-                PeerCheckpointRequestType::Content
-                    if info.height >= requested_checkpoint
-                        && info.lowest <= requested_checkpoint =>
-                {
-                    return Some(StateSyncClient::new(peer));
-                }
-                _ => {}
-            }
+        let has_eligible_known = self
+            .known_peers
+            .iter()
+            .any(|(_, info, _)| self.is_eligible(info));
+        let has_eligible_unknown = self
+            .unknown_peers
+            .iter()
+            .any(|(_, info, _)| self.is_eligible(info));
+
+        let explore = has_eligible_unknown
+            && (!has_eligible_known || rand::thread_rng().gen_bool(self.exploration_probability));
+
+        if explore && let Some((peer, _)) = self.select_by_rtt() {
+            return Some(StateSyncClient::new(peer));
         }
+
+        if has_eligible_known && let Some((peer, _)) = self.select_by_throughput() {
+            return Some(StateSyncClient::new(peer));
+        }
+
+        if let Some((peer, _)) = self.select_failing() {
+            return Some(StateSyncClient::new(peer));
+        }
+
         None
     }
 }
@@ -1236,6 +1300,10 @@ where
                             "peer returned checkpoint with wrong sequence number: expected {next}, got {}",
                             checkpoint.sequence_number()
                         );
+                        peer_heights
+                            .write()
+                            .unwrap()
+                            .mark_peer_as_not_on_same_chain(peer_id);
                         continue;
                     }
 
@@ -1586,8 +1654,8 @@ where
     let (timeout_min, timeout_max) = {
         let ph = peer_heights.read().unwrap();
         (
-            ph.checkpoint_content_timeout_min(),
-            ph.checkpoint_content_timeout_max(),
+            ph.checkpoint_content_timeout_min,
+            ph.checkpoint_content_timeout_max,
         )
     };
     let timeout = compute_adaptive_timeout(tx_count, timeout_min, timeout_max);

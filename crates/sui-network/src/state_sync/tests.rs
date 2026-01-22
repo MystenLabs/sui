@@ -1117,8 +1117,8 @@ fn test_peer_score_throughput_calculation() {
     use super::PeerScore;
 
     let window = Duration::from_secs(60);
-    let failure_threshold = 3;
-    let mut score = PeerScore::new(window, failure_threshold);
+    let failure_rate = 0.3;
+    let mut score = PeerScore::new(window, failure_rate);
 
     // No samples - should return None
     assert!(score.effective_throughput().is_none());
@@ -1147,18 +1147,31 @@ fn test_peer_score_failure_tracking() {
     use super::PeerScore;
 
     let window = Duration::from_secs(60);
-    let failure_threshold = 3;
-    let mut score = PeerScore::new(window, failure_threshold);
+    let failure_rate = 0.3;
+    let mut score = PeerScore::new(window, failure_rate);
 
-    // Initially not failing
+    // Initially not failing (no samples)
     assert!(!score.is_failing());
 
-    // Record 2 failures - still not failing (threshold is 3)
+    // Record 7 successes
+    for _ in 0..7 {
+        score.record_success(100, Duration::from_secs(1));
+    }
+
+    // Record 2 failures: 2/9 = 22% < 30%, and below min samples (10)
     score.record_failure();
     score.record_failure();
     assert!(!score.is_failing());
 
-    // Third failure crosses threshold
+    // Record 1 more success to reach 10 samples: 2/10 = 20% < 30%, not failing
+    score.record_success(100, Duration::from_secs(1));
+    assert!(!score.is_failing());
+
+    // Record 1 more failure: 3/11 = 27% < 30%, not failing
+    score.record_failure();
+    assert!(!score.is_failing());
+
+    // Record 1 more failure: 4/12 = 33% >= 30%, is_failing
     score.record_failure();
     assert!(score.is_failing());
 }
@@ -1175,10 +1188,10 @@ fn test_peer_heights_score_recording() {
         scores: HashMap::new(),
         wait_interval_when_no_peer_to_sync_content: Duration::from_secs(1),
         peer_scoring_window: Duration::from_secs(60),
-        peer_failure_threshold: 3,
-        peer_good_throughput_threshold: 1_000_000.0,
+        peer_failure_rate: 0.3,
         checkpoint_content_timeout_min: Duration::from_secs(10),
         checkpoint_content_timeout_max: Duration::from_secs(30),
+        exploration_probability: 0.1,
     };
 
     let peer_id = PeerId([1; 32]);
@@ -1198,10 +1211,18 @@ fn test_peer_heights_score_recording() {
     // 300 bytes / 2 seconds = 150 bytes/sec
     assert!((throughput - 150.0).abs() < 0.01);
 
-    // Record failures
+    // Record more successes to reach 8 total
+    for _ in 0..6 {
+        peer_heights.record_success(peer_id, 100, Duration::from_secs(1));
+    }
+
+    // Record 2 failures: 2/10 = 20% < 30%, not failing
     peer_heights.record_failure(peer_id);
     peer_heights.record_failure(peer_id);
     assert!(!peer_heights.is_failing(&peer_id));
+
+    // Record 2 more failures: 4/12 = 33% >= 30%, is_failing
+    peer_heights.record_failure(peer_id);
     peer_heights.record_failure(peer_id);
     assert!(peer_heights.is_failing(&peer_id));
 }
@@ -1228,10 +1249,10 @@ async fn test_peer_balancer_sorts_by_throughput() {
         scores: HashMap::new(),
         wait_interval_when_no_peer_to_sync_content: Duration::from_secs(1),
         peer_scoring_window: Duration::from_secs(60),
-        peer_failure_threshold: 3,
-        peer_good_throughput_threshold: 500.0, // Set low so 1000 bytes/sec is "fast"
+        peer_failure_rate: 0.3,
         checkpoint_content_timeout_min: Duration::from_secs(10),
         checkpoint_content_timeout_max: Duration::from_secs(30),
+        exploration_probability: 0.1,
     };
 
     let peer_2_id = network_2.peer_id();
@@ -1280,19 +1301,34 @@ fn test_adaptive_timeout_calculation() {
     let min_timeout = Duration::from_secs(10);
     let max_timeout = Duration::from_secs(30);
 
-    // Empty checkpoint - base timeout only (10s)
+    // Helper to check timeout is within expected range (base ± 10% jitter)
+    let assert_in_range = |timeout: Duration, expected_base: f64| {
+        let timeout_secs = timeout.as_secs_f64();
+        let jitter_range = expected_base * 0.1;
+        let min_expected = (expected_base - jitter_range).max(min_timeout.as_secs_f64());
+        let max_expected = expected_base + jitter_range;
+        assert!(
+            timeout_secs >= min_expected && timeout_secs <= max_expected,
+            "timeout {} not in range [{}, {}]",
+            timeout_secs,
+            min_expected,
+            max_expected
+        );
+    };
+
+    // Empty checkpoint - base timeout only (10s ± 10%)
     let timeout = compute_adaptive_timeout(0, min_timeout, max_timeout);
-    assert_eq!(timeout, Duration::from_secs(10));
+    assert_in_range(timeout, 10.0);
 
-    // Medium checkpoint with 1000 txns: 10s + (1000/10000) * 20s = 12s
+    // Medium checkpoint with 1000 txns: base 12s ± 10%
     let timeout = compute_adaptive_timeout(1000, min_timeout, max_timeout);
-    assert_eq!(timeout, Duration::from_secs(12));
+    assert_in_range(timeout, 12.0);
 
-    // Half-full checkpoint with 5000 txns: 10s + 10s = 20s
+    // Half-full checkpoint with 5000 txns: base 20s ± 10%
     let timeout = compute_adaptive_timeout(5000, min_timeout, max_timeout);
-    assert_eq!(timeout, Duration::from_secs(20));
+    assert_in_range(timeout, 20.0);
 
-    // Max checkpoint with 10000 txns: 10s + 20s = 30s
+    // Max checkpoint with 10000 txns: base 30s ± 10%
     let timeout = compute_adaptive_timeout(10000, min_timeout, max_timeout);
-    assert_eq!(timeout, Duration::from_secs(30));
+    assert_in_range(timeout, 30.0);
 }
