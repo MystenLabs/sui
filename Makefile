@@ -2,6 +2,11 @@
 
 .DEFAULT_GOAL := help
 
+# Cargo profile for builds. Default is debug for faster compilation.
+# Override with: make build PROFILE=release
+PROFILE ?= debug
+CARGO_PROFILE_FLAG := $(if $(filter release,$(PROFILE)),--release,)
+
 ##@ Help
 
 .PHONY: help
@@ -15,13 +20,13 @@ check: ## Check code without building (fast).
 	cargo check
 
 .PHONY: build
-build: ## Build the entire project.
-	cargo build
+build: ## Build the entire project (PROFILE=debug|release).
+	cargo build $(CARGO_PROFILE_FLAG)
 
 .PHONY: build-p
-build-p: ## Build a specific package (P=<package>).
+build-p: ## Build a specific package (P=<package>, PROFILE=debug|release).
 	@if [ -z "$(P)" ]; then echo "Usage: make build-p P=<package>"; exit 1; fi
-	cargo build -p $(P)
+	cargo build -p $(P) $(CARGO_PROFILE_FLAG)
 
 ##@ Test
 
