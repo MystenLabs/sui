@@ -77,6 +77,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+pub use sui_crypto;
+pub use sui_rpc;
+pub use sui_sdk_types;
+
 use async_trait::async_trait;
 use base64::Engine;
 use jsonrpsee::core::client::ClientT;
