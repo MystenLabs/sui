@@ -30,7 +30,7 @@ use crate::drivers::HistogramWrapper;
 use crate::drivers::driver::Driver;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::{
-    Payload, SoftBundleExecutionResults, SoftBundleTransactionResult, SoftBundleTransactionStatus,
+    BatchExecutionResults, BatchedTransactionResult, Payload, BatchedTransactionStatus,
 };
 use crate::workloads::workload::ExpectedFailureType;
 use crate::workloads::{GroupID, WorkloadInfo};
@@ -1039,10 +1039,10 @@ async fn run_bench_worker(
                     num_in_flight += 1;
                     num_submitted += 1;
 
-                    // Check if this is a soft bundle payload
-                    if payload.is_soft_bundle() {
-                        let txs = payload.make_soft_bundle_transactions();
-                        let max_bundles = payload.max_bundles();
+                    // Check if this is a batched payload
+                    if payload.is_batched() {
+                        let txs = payload.make_transaction_batch();
+                        let max_bundles = payload.max_soft_bundles();
 
                         let num_txs = txs.len();
                         let start = Arc::new(Instant::now());
@@ -1215,8 +1215,7 @@ fn process_bundle_results(
     bundle_results: BundleResults,
 ) -> NextOp {
     // Reassemble results in original transaction order
-    let mut indexed_results: Vec<(usize, SoftBundleTransactionResult)> =
-        Vec::with_capacity(num_txs);
+    let mut indexed_results: Vec<(usize, BatchedTransactionResult)> = Vec::with_capacity(num_txs);
     let mut had_bundle_error = false;
 
     for (start_idx, digests, result) in bundle_results {
@@ -1244,11 +1243,11 @@ fn process_bundle_results(
                                         payload,
                                         effects.status()
                                     );
-                                    SoftBundleTransactionStatus::Success {
+                                    BatchedTransactionStatus::Success {
                                         effects: Box::new(effects),
                                     }
                                 }
-                                None => SoftBundleTransactionStatus::PermanentFailure {
+                                None => BatchedTransactionStatus::PermanentFailure {
                                     error: "Executed but no effects returned".to_string(),
                                 },
                             }
@@ -1262,20 +1261,20 @@ fn process_bundle_results(
                                 .map(|e| format!("{:?}", e))
                                 .unwrap_or_else(|| "Unknown rejection".to_string());
                             if is_retriable {
-                                SoftBundleTransactionStatus::RetriableFailure { error: error_str }
+                                BatchedTransactionStatus::RetriableFailure { error: error_str }
                             } else {
-                                SoftBundleTransactionStatus::PermanentFailure { error: error_str }
+                                BatchedTransactionStatus::PermanentFailure { error: error_str }
                             }
                         }
                         WaitForEffectsResponse::Expired { epoch, round } => {
-                            SoftBundleTransactionStatus::RetriableFailure {
+                            BatchedTransactionStatus::RetriableFailure {
                                 error: format!("Expired at epoch {}, round {:?}", epoch, round),
                             }
                         }
                     };
                     indexed_results.push((
                         start_idx + offset,
-                        SoftBundleTransactionResult { digest, status },
+                        BatchedTransactionResult { digest, status },
                     ));
                 }
             }
@@ -1289,9 +1288,9 @@ fn process_bundle_results(
                 for (offset, digest) in digests.into_iter().enumerate() {
                     indexed_results.push((
                         start_idx + offset,
-                        SoftBundleTransactionResult {
+                        BatchedTransactionResult {
                             digest,
-                            status: SoftBundleTransactionStatus::PermanentFailure {
+                            status: BatchedTransactionStatus::PermanentFailure {
                                 error: format!("Bundle submission failed: {:?}", err),
                             },
                         },
@@ -1314,15 +1313,15 @@ fn process_bundle_results(
 
     // Sort by original index and extract results
     indexed_results.sort_by_key(|(idx, _)| *idx);
-    let soft_bundle_results: Vec<_> = indexed_results.into_iter().map(|(_, r)| r).collect();
+    let batch_results: Vec<_> = indexed_results.into_iter().map(|(_, r)| r).collect();
 
     // Compute summary statistics from results
-    let any_success = soft_bundle_results.iter().any(|r| r.is_success());
-    let any_retriable = soft_bundle_results.iter().any(|r| r.is_retriable());
+    let any_success = batch_results.iter().any(|r| r.is_success());
+    let any_retriable = batch_results.iter().any(|r| r.is_retriable());
 
     // Let the payload handle the results
-    payload.handle_soft_bundle_results(&SoftBundleExecutionResults {
-        results: soft_bundle_results,
+    payload.handle_batch_results(&BatchExecutionResults {
+        results: batch_results,
     });
 
     if any_success {
@@ -1337,7 +1336,7 @@ fn process_bundle_results(
             payload,
         }
     } else if any_retriable {
-        debug!("Soft bundle had retriable error(s), returning payload for retry");
+        debug!("Batch had retriable error(s), returning payload for retry");
         NextOp::Response {
             latency,
             num_commands: 0,

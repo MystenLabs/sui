@@ -16,7 +16,7 @@ use tracing::{debug, info};
 use crate::ValidatorProxy;
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionStatus};
+use crate::workloads::payload::{BatchExecutionResults, BatchedTransactionStatus, Payload};
 use crate::workloads::workload::WorkloadBuilder;
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN, Workload,
@@ -53,27 +53,27 @@ pub struct SoftBundleConflictingTransferPayload {
 
 impl Payload for SoftBundleConflictingTransferPayload {
     fn make_new_payload(&mut self, _effects: &crate::ExecutionEffects) {
-        // State updates are handled in handle_soft_bundle_results()
+        // State updates are handled in handle_batch_results()
     }
 
     fn make_transaction(&mut self) -> Transaction {
-        // This is called as a fallback but shouldn't be used for soft bundles.
+        // This is called as a fallback but shouldn't be used for batched payloads.
         // Return a single transfer transaction.
         self.create_transfer_transaction(0)
     }
 
-    fn is_soft_bundle(&self) -> bool {
+    fn is_batched(&self) -> bool {
         true
     }
 
-    fn make_soft_bundle_transactions(&mut self) -> Vec<Transaction> {
+    fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         // Create N transactions all trying to transfer the same object
         let transactions: Vec<Transaction> = (0..self.gas_objects.len())
             .map(|i| self.create_transfer_transaction(i))
             .collect();
 
         debug!(
-            "Creating {} conflicting transactions as soft bundle for object {:?}",
+            "Creating batch of {} conflicting transactions for object {:?}",
             transactions.len(),
             self.transfer_object.0
         );
@@ -81,16 +81,19 @@ impl Payload for SoftBundleConflictingTransferPayload {
         transactions
     }
 
-    fn handle_soft_bundle_results(&mut self, results: &SoftBundleExecutionResults) {
+    fn handle_batch_results(&mut self, results: &BatchExecutionResults) {
         let mut success_count = 0;
         let mut conflict_count = 0;
         let mut retriable_error_count = 0;
 
         for (i, result) in results.results.iter().enumerate() {
             match &result.status {
-                SoftBundleTransactionStatus::Success { effects } => {
+                BatchedTransactionStatus::Success { effects } => {
                     success_count += 1;
-                    debug!("Transaction {} ({}) executed successfully", i, result.digest);
+                    debug!(
+                        "Transaction {} ({}) executed successfully",
+                        i, result.digest
+                    );
 
                     // Update gas object ref
                     let gas_ref = effects.gas_object().0;
@@ -105,12 +108,15 @@ impl Payload for SoftBundleConflictingTransferPayload {
                         self.transfer_object = *obj_ref;
                     }
                 }
-                SoftBundleTransactionStatus::RetriableFailure { error } => {
+                BatchedTransactionStatus::RetriableFailure { error } => {
                     // Retriable errors (epoch change, expired) - the bundle wasn't fully processed
                     retriable_error_count += 1;
-                    debug!("Transaction {} ({}) rejected with retriable error: {}", i, result.digest, error);
+                    debug!(
+                        "Transaction {} ({}) rejected with retriable error: {}",
+                        i, result.digest, error
+                    );
                 }
-                SoftBundleTransactionStatus::PermanentFailure { error } => {
+                BatchedTransactionStatus::PermanentFailure { error } => {
                     // Check if it's an ObjectLockConflict
                     let is_lock_conflict = error.contains("ObjectLockConflict");
 
@@ -118,8 +124,7 @@ impl Payload for SoftBundleConflictingTransferPayload {
                         conflict_count += 1;
                         debug!(
                             "Transaction {} ({}) rejected with ObjectLockConflict (expected)",
-                            i,
-                            result.digest
+                            i, result.digest
                         );
                     } else {
                         debug!(
@@ -157,7 +162,7 @@ impl Payload for SoftBundleConflictingTransferPayload {
         );
 
         debug!(
-            "Soft bundle validation passed: {success_count} success, {conflict_count} conflicts, {retriable_error_count} retriable errors"
+            "Batch validation passed: {success_count} success, {conflict_count} conflicts, {retriable_error_count} retriable errors"
         );
     }
 }

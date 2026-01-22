@@ -4,7 +4,7 @@
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
-use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionStatus};
+use crate::workloads::payload::{Payload, BatchExecutionResults, BatchedTransactionStatus};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder,
 };
@@ -272,11 +272,11 @@ impl Payload for RandomizedTransactionPayload {
         Some(ExpectedFailureType::NoFailure)
     }
 
-    fn is_soft_bundle(&self) -> bool {
+    fn is_batched(&self) -> bool {
         true
     }
 
-    fn make_soft_bundle_transactions(&mut self) -> Vec<Transaction> {
+    fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         let rgp = self
             .system_state_observer
             .state
@@ -343,14 +343,14 @@ impl Payload for RandomizedTransactionPayload {
         transactions
     }
 
-    fn handle_soft_bundle_results(&mut self, results: &SoftBundleExecutionResults) {
+    fn handle_batch_results(&mut self, results: &BatchExecutionResults) {
         let mut success_count = 0;
         let mut lock_conflict_count = 0;
         let mut retriable_count = 0;
 
         for (i, result) in results.results.iter().enumerate() {
             match &result.status {
-                SoftBundleTransactionStatus::Success { effects } => {
+                BatchedTransactionStatus::Success { effects } => {
                     success_count += 1;
                     // Update gas object ref
                     self.gas_objects[i].0 = effects.gas_object().0;
@@ -375,7 +375,7 @@ impl Payload for RandomizedTransactionPayload {
                         "Immutable object should not be in mutated objects"
                     );
                 }
-                SoftBundleTransactionStatus::PermanentFailure { error } => {
+                BatchedTransactionStatus::PermanentFailure { error } => {
                     // Check if it's an ObjectLockConflict (expected when owned object is included)
                     if error.contains("ObjectLockConflict") {
                         lock_conflict_count += 1;
@@ -385,18 +385,28 @@ impl Payload for RandomizedTransactionPayload {
                             result.digest
                         );
                     } else {
-                        tracing::debug!("Transaction {} ({}) failed with error: {:?}", i, result.digest, error);
+                        tracing::debug!(
+                            "Transaction {} ({}) failed with error: {:?}",
+                            i,
+                            result.digest,
+                            error
+                        );
                     }
                 }
-                SoftBundleTransactionStatus::RetriableFailure { error } => {
+                BatchedTransactionStatus::RetriableFailure { error } => {
                     retriable_count += 1;
-                    tracing::debug!("Transaction {} ({}) had retriable failure: {:?}", i, result.digest, error);
+                    tracing::debug!(
+                        "Transaction {} ({}) had retriable failure: {:?}",
+                        i,
+                        result.digest,
+                        error
+                    );
                 }
             }
         }
 
         tracing::debug!(
-            "Soft bundle results: {} success, {} lock conflicts, {} retriable out of {} transactions",
+            "Batch results: {} success, {} lock conflicts, {} retriable out of {} transactions",
             success_count,
             lock_conflict_count,
             retriable_count,

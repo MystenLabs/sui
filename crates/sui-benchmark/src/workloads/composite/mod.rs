@@ -12,7 +12,7 @@ pub use operations::{
 
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
-use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionStatus};
+use crate::workloads::payload::{BatchExecutionResults, BatchedTransactionStatus, Payload};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COUNTER, Workload,
     WorkloadBuilder,
@@ -35,9 +35,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::crypto::{AccountKeyPair, get_key_pair};
 use sui_types::gas_coin::GAS;
 use sui_types::object::Owner;
-use sui_types::transaction::{
-    Argument, Command, ObjectArg, SharedObjectMutability, Transaction, 
-};
+use sui_types::transaction::{Argument, Command, ObjectArg, SharedObjectMutability, Transaction};
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
 use tracing::{debug, info};
 
@@ -402,11 +400,11 @@ impl Payload for CompositePayload {
         unimplemented!()
     }
 
-    fn is_soft_bundle(&self) -> bool {
+    fn is_batched(&self) -> bool {
         true
     }
 
-    fn make_soft_bundle_transactions(&mut self) -> Vec<Transaction> {
+    fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         let batch_size = self.rng.gen_range(1..=4);
 
         let system_state = self.system_state_observer.state.borrow().clone();
@@ -474,9 +472,9 @@ impl Payload for CompositePayload {
         transactions
     }
 
-    fn handle_soft_bundle_results(&mut self, results: &SoftBundleExecutionResults) {
+    fn handle_batch_results(&mut self, results: &BatchExecutionResults) {
         debug!(
-            "Handling soft bundle results: {:?}",
+            "Handling batch results: {:?}",
             results.results.iter().map(|r| r.digest).collect::<Vec<_>>()
         );
         let mut metrics = self.metrics.lock().unwrap();
@@ -489,7 +487,7 @@ impl Payload for CompositePayload {
             }
             let op_set = self.current_batch_op_sets[i];
             match &result.status {
-                SoftBundleTransactionStatus::Success { effects } => {
+                BatchedTransactionStatus::Success { effects } => {
                     if effects.is_cancelled() {
                         metrics.record_cancellation(op_set);
                     } else if effects.is_ok() {
@@ -499,7 +497,7 @@ impl Payload for CompositePayload {
                     }
                     update_gas!(&mut gas.0[i], effects);
                 }
-                SoftBundleTransactionStatus::PermanentFailure { error } => {
+                BatchedTransactionStatus::PermanentFailure { error } => {
                     metrics.record_permanent_failure(op_set);
                     tracing::debug!(
                         "Transaction {} ({}) rejected with error: {:?}",
@@ -508,7 +506,7 @@ impl Payload for CompositePayload {
                         error
                     );
                 }
-                SoftBundleTransactionStatus::RetriableFailure { error } => {
+                BatchedTransactionStatus::RetriableFailure { error } => {
                     metrics.record_retriable_failure(op_set);
                     tracing::debug!(
                         "Transaction {} ({}) had retriable failure: {:?}",
