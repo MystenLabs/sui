@@ -14373,8 +14373,6 @@ dependencies = [
  "sui-bridge",
  "sui-bridge-schema",
  "sui-config",
- "sui-data-ingestion-core",
- "sui-indexer-builder",
  "sui-json-rpc-types",
  "sui-pg-db",
  "sui-sdk",
@@ -14423,7 +14421,6 @@ dependencies = [
  "strum 0.27.1",
  "strum_macros 0.27.1",
  "sui-field-count",
- "sui-indexer-builder",
 ]
 
 [[package]]
@@ -15500,25 +15497,6 @@ dependencies = [
  "sui-field-count",
  "sui-protocol-config",
  "sui-types",
-]
-
-[[package]]
-name = "sui-indexer-builder"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "futures",
- "mysten-metrics",
- "prometheus",
- "sui-data-ingestion-core",
- "sui-indexer-builder",
- "sui-sdk",
- "sui-types",
- "tap",
- "telemetry-subscribers",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -16713,12 +16691,15 @@ dependencies = [
  "serde_with",
  "shared-crypto",
  "sui-config",
+ "sui-crypto",
  "sui-json",
  "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-macros",
  "sui-protocol-config",
+ "sui-rpc",
+ "sui-sdk-types",
  "sui-simulator",
  "sui-transaction-builder",
  "sui-types",
