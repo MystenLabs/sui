@@ -1179,9 +1179,14 @@ mod test {
             )
         };
 
-        let bank = BenchmarkBank::new(execution_proxy.clone(), fullnode_proxies.clone(), primary_coin);
+        let bank = BenchmarkBank::new(
+            execution_proxy.clone(),
+            fullnode_proxies.clone(),
+            primary_coin,
+        );
         let system_state_observer = {
-            let mut system_state_observer = SystemStateObserver::new(execution_proxy.clone());
+            let mut system_state_observer =
+                SystemStateObserver::new_from_test_cluster(&test_cluster);
             if let Ok(_) = system_state_observer.state.changed().await {
                 info!(
                     "Got the new state (reference gas price and/or protocol config) from system state object"
