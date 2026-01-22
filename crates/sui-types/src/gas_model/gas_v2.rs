@@ -392,19 +392,15 @@ mod checked {
 
         fn bucketize_computation(&mut self, aborted: Option<bool>) -> Result<(), ExecutionError> {
             let gas_used = self.gas_status.gas_used_pre_gas_price();
-            let effective_gas_price = if self
+            let effective_gas_price = if let Some(max_gas_price_rgp_factor_for_aborted_txs) = self
                 .cost_table
                 .max_gas_price_rgp_factor_for_aborted_transactions
-                .is_some()
                 && aborted.unwrap_or(false)
             {
                 // For aborts, cap at max but don't exceed user's price
                 // This minimizes the risk of competing for priority execution in the case that the txn may be aborted.
-                let max_gas_price_for_aborted_txns = self
-                    .cost_table
-                    .max_gas_price_rgp_factor_for_aborted_transactions
-                    .unwrap()
-                    * self.reference_gas_price;
+                let max_gas_price_for_aborted_txns =
+                    max_gas_price_rgp_factor_for_aborted_txs * self.reference_gas_price;
                 self.gas_price.min(max_gas_price_for_aborted_txns)
             } else {
                 // For all other cases, use the user's gas price

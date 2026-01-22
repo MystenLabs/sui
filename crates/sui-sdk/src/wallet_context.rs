@@ -187,8 +187,7 @@ impl WalletContext {
         force_recache: bool,
     ) -> Result<String, anyhow::Error> {
         let env = self.get_active_env()?;
-        if !force_recache && env.chain_id.is_some() {
-            let chain_id = env.chain_id.as_ref().unwrap();
+        if !force_recache && let Some(chain_id) = &env.chain_id {
             info!("Found cached chain ID for env {}: {}", env.alias, chain_id);
             return Ok(chain_id.clone());
         }
