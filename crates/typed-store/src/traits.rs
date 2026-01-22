@@ -100,3 +100,12 @@ pub struct TableSummary {
     pub key_hist: hdrhistogram::Histogram<u64>,
     pub value_hist: hdrhistogram::Histogram<u64>,
 }
+
+pub trait TableDumper {
+    fn dump(
+        &self,
+        table_name: &str,
+        page_size: u16,
+        page_number: usize,
+    ) -> eyre::Result<std::collections::BTreeMap<String, String>>;
+}

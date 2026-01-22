@@ -349,6 +349,16 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 Ok(())
             }
         }
+
+        impl <
+                #(
+                    #generics_names: #generics_bounds_token,
+                )*
+            > typed_store::traits::TableDumper for #secondary_db_map_struct_name #generics {
+            fn dump(&self, cf_name: &str, page_size: u16, page_number: usize) -> eyre::Result<std::collections::BTreeMap<String, String>> {
+                self.dump(cf_name, page_size, page_number)
+            }
+        }
     };
 
     if is_tidehunter {

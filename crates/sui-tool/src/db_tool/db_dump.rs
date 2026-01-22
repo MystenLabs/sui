@@ -277,39 +277,28 @@ pub fn dump_table(
     page_size: u16,
     page_number: usize,
 ) -> anyhow::Result<BTreeMap<String, String>> {
-    match store_name {
+    let store: Box<dyn typed_store::traits::TableDumper> = match store_name {
         StoreName::Validator => {
             let epoch_tables = AuthorityEpochTables::describe_tables();
             if epoch_tables.contains_key(table_name) {
                 let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
-                AuthorityEpochTables::open_readonly(epoch, &db_path).dump(
-                    table_name,
-                    page_size,
-                    page_number,
-                )
+                Box::new(AuthorityEpochTables::open_readonly(epoch, &db_path))
             } else {
                 let perpetual_tables = AuthorityPerpetualTables::describe_tables();
                 assert!(perpetual_tables.contains_key(table_name));
-                AuthorityPerpetualTables::open_readonly(&db_path).dump(
-                    table_name,
-                    page_size,
-                    page_number,
-                )
+                Box::new(AuthorityPerpetualTables::open_readonly(&db_path))
             }
         }
         StoreName::Index => {
-            IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default()).dump(
-                table_name,
-                page_size,
-                page_number,
-            )
+            Box::new(IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default()))
         }
         StoreName::Epoch => {
-            CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
-                .dump(table_name, page_size, page_number)
+            Box::new(CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default()))
         }
-    }
-    .map_err(|err| anyhow!(err.to_string()))
+    };
+
+    store.dump(table_name, page_size, page_number)
+        .map_err(|err| anyhow!(err.to_string()))
 }
 
 #[cfg(test)]

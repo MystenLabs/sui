@@ -22,7 +22,7 @@ use sui_config::{Config, NodeConfig, PersistedConfig, local_ip_utils};
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockResponseOptions};
 use sui_keys::keypair_file::read_keypair_from_file;
 use sui_sdk::{SuiClient, SuiClientBuilder, rpc_types::SuiTransactionBlockEffectsAPI};
-use sui_types::base_types::{ObjectRef, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{SuiKeyPair, generate_proof_of_possession, get_key_pair};
 use sui_types::multiaddr::{Multiaddr, Protocol};
 use sui_types::transaction::{
@@ -99,23 +99,7 @@ async fn run_metadata_rotation(metadata_rotation: MetadataRotation) -> anyhow::R
     Ok(())
 }
 
-// TODO move this to a shared lib
-pub async fn get_gas_obj_ref(
-    sui_address: SuiAddress,
-    sui_client: &SuiClient,
-    minimal_gas_balance: u64,
-) -> anyhow::Result<ObjectRef> {
-    let coins = sui_client
-        .coin_read_api()
-        .get_coins(sui_address, Some("0x2::sui::SUI".into()), None, None)
-        .await?
-        .data;
-    let gas_obj = coins.iter().find(|c| c.balance >= minimal_gas_balance);
-    if gas_obj.is_none() {
-        bail!("Validator doesn't have enough Sui coins to cover transaction fees.");
-    }
-    Ok(gas_obj.unwrap().object_ref())
-}
+
 
 async fn update_next_epoch_metadata(
     sui_node_config_path: &Path,
@@ -308,7 +292,16 @@ async fn update_metadata_on_chain(
     sui_client: &SuiClient,
 ) -> anyhow::Result<()> {
     let sui_address = SuiAddress::from(&account_key.public());
-    let gas_obj_ref = get_gas_obj_ref(sui_address, sui_client, 10000 * 100).await?;
+    let gas_obj_ref = sui_client
+        .coin_read_api()
+        .get_first_coin_with_balance_greater_than_or_equal(
+            sui_address,
+            10000 * 100,
+            Some("0x2::sui::SUI".into()),
+        )
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Validator doesn't have enough Sui coins to cover transaction fees."))?
+        .object_ref();
     let rgp = sui_client
         .governance_api()
         .get_reference_gas_price()

@@ -27,7 +27,6 @@ use sui_types::{
 };
 use tap::tap::TapOptional;
 
-use crate::fire_drill::get_gas_obj_ref;
 use clap::*;
 use colored::Colorize;
 use fastcrypto::traits::ToFromBytes;
@@ -932,7 +931,16 @@ async fn construct_unsigned_0x5_txn(
         .get_reference_gas_price()
         .await?;
 
-    let gas_obj_ref = get_gas_obj_ref(sender, &sui_client, gas_budget).await?;
+    let gas_obj_ref = sui_client
+        .coin_read_api()
+        .get_first_coin_with_balance_greater_than_or_equal(
+            sender,
+            gas_budget,
+            Some("0x2::sui::SUI".into()),
+        )
+        .await?
+        .ok_or_else(|| anyhow!("Validator doesn't have enough Sui coins to cover transaction fees."))?
+        .object_ref();
     TransactionData::new_move_call(
         sender,
         SUI_SYSTEM_PACKAGE_ID,

@@ -775,6 +775,36 @@ impl CoinReadApi {
             .get_coins(owner, coin_type, cursor, limit)
             .await?)
     }
+
+    /// Return the first coin with a balance greater than or equal to `minimal_balance`, or `None` if not found.
+    /// This function iterates through the pages of coins until a suitable coin is found or all coins are checked.
+    pub async fn get_first_coin_with_balance_greater_than_or_equal(
+        &self,
+        owner: SuiAddress,
+        minimal_balance: u64,
+        coin_type: Option<String>,
+    ) -> SuiRpcResult<Option<Coin>> {
+        let mut cursor = None;
+        loop {
+            let coins = self
+                .get_coins(owner, coin_type.clone(), cursor, None)
+                .await?;
+
+            if let Some(coin) = coins
+                .data
+                .into_iter()
+                .find(|c| c.balance >= minimal_balance)
+            {
+                return Ok(Some(coin));
+            }
+
+            if !coins.has_next_page {
+                return Ok(None);
+            }
+            cursor = coins.next_cursor;
+        }
+    }
+
     /// Return a paginated response with all the coins for the given address, or an error upon failure.
     ///
     /// This function includes all coins. If needed to filter by coin type, use the `get_coins` method instead.
