@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::shared::constants::IDENTIFIER_INTERNER_SIZE_LIMIT;
+
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     identifier::{IdentStr, Identifier},
@@ -17,10 +19,6 @@ use lasso::{Spur, ThreadedRodeo};
 #[derive(Debug)]
 pub struct IdentifierInterner(ThreadedRodeo);
 
-/// Maximum number of identifiers we can ever intern.
-/// FIXME: Set to 1 billion, but should be experimentally determined based on actual run data.
-const IDENTIFIER_SLOTS: usize = 10_000_000_000;
-
 // Note: these are not hashable or orderable -- their ordering is unstable, so they should not be
 // used as keys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -34,7 +32,7 @@ pub(crate) struct IdentifierKey(Spur);
 
 impl IdentifierInterner {
     pub fn new() -> Self {
-        let memory_limits = lasso::MemoryLimits::new(IDENTIFIER_SLOTS);
+        let memory_limits = lasso::MemoryLimits::new(IDENTIFIER_INTERNER_SIZE_LIMIT);
         let rodeo = ThreadedRodeo::with_memory_limits(memory_limits);
         Self(rodeo)
     }
