@@ -614,8 +614,12 @@ public(package) macro fun test_lossless_div<$T>($max: $T, $cases: vector<$T>) {
         assert_eq!(case.lossless_div(case), option::some(1));
 
         // case * i / i should be lossless if case * i doesn't overflow
-        (1: $T).range_do!(10, |i| {
-            if (case <= max / i) assert_eq!((case * i).lossless_div(i), option::some(case));
+        (2: $T).range_do!(10, |i| {
+            if (case <= max / i) {
+                let res = (case * i).lossless_div(i);
+                assert_eq!(res, option::some(case));
+                assert_eq!(res.destroy_some() * i, case * i);
+            }
         });
         if (case_pred != case && case_pred != 0) {
             assert_eq!(case_pred.lossless_div(case), option::none());
