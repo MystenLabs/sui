@@ -1,0 +1,69 @@
+---
+title: Interest Rates
+description: Learn how interest rates are calculated for margin pool borrowing.
+keywords:
+  [
+    interest rate,
+    borrow rate,
+    utilization rate,
+    margin pool,
+    deepbook margin,
+    APR,
+  ]
+---
+
+Margin pools use a kinked interest rate model where the borrow rate increases gradually up to an optimal utilization point, then rises sharply to discourage excessive borrowing and maintain liquidity for withdrawals.
+
+## Borrow interest formula
+
+The formula for the borrow interest rate (APR) is:
+
+```
+if utilization < optimalUtilization:
+    borrowRate = baseRate + utilization × baseSlope
+else:
+    borrowRate = baseRate + optimalUtilization × baseSlope + (utilization - optimalUtilization) × excessSlope
+```
+
+Where:
+- **utilization**: The ratio of total borrowed assets to total supplied assets
+- **baseRate**: The minimum interest rate when utilization is 0%
+- **baseSlope**: The rate of increase in interest below optimal utilization
+- **optimalUtilization**: The target utilization rate (typically 80%)
+- **excessSlope**: The steep rate of increase above optimal utilization
+
+## Current parameters
+
+| Asset | Base Rate | Base Slope | Optimal Utilization | Excess Slope | Max Utilization |
+| ----- | --------- | ---------- | ------------------- | ------------ | --------------- |
+| USDC  | 10%       | 15%        | 80%                 | 500%         | 80%             |
+| SUI   | 10%       | 20%        | 80%                 | 500%         | 80%             |
+| DEEP  | 15%       | 20%        | 80%                 | 500%         | 80%             |
+| WAL   | 15%       | 20%        | 80%                 | 500%         | 80%             |
+
+The **Max Utilization** rate caps how much of the pool's liquidity can be borrowed, ensuring suppliers can always withdraw a portion of their funds.
+
+## Examples
+
+**At 50% utilization in the USDC pool:**
+```
+borrowRate = 10% + 50% × 15% = 10% + 7.5% = 17.5% APR
+```
+
+**At 80% utilization (at optimal, which is also the max):**
+```
+borrowRate = 10% + 80% × 15% = 10% + 12% = 22% APR
+```
+
+## Related links
+
+<RelatedLink
+	href="./margin-pool"
+	label="Margin Pool"
+	desc="Learn about margin pools and how they enable liquidity for leveraged trading."
+/>
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3/tree/main/packages/deepbook_margin"
+	label="DeepBook Margin package"
+	desc="The DeepBook Margin package on GitHub."
+/>

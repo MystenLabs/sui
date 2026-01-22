@@ -81,39 +81,6 @@ Withdraw supplied assets from the margin pool. You can specify an exact amount o
 
 </details>
 
-## Interest rates
-
-Margin pools use a kinked interest rate model where the borrow rate increases gradually up to an optimal utilization point, then rises sharply to discourage excessive borrowing. The formula for the borrow interest rate (APR) is:
-
-```
-if utilization < optimalUtilization:
-    borrowRate = baseRate + utilization × baseSlope
-else:
-    borrowRate = baseRate + optimalUtilization × baseSlope + (utilization - optimalUtilization) × excessSlope
-```
-
-Where:
-- **utilization**: The ratio of total borrowed assets to total supplied assets
-- **baseRate**: The minimum interest rate when utilization is 0%
-- **baseSlope**: The rate of increase in interest below optimal utilization
-- **optimalUtilization**: The target utilization rate (typically 80%)
-- **excessSlope**: The steep rate of increase above optimal utilization
-
-### Current parameters
-
-| Asset | Base Rate | Base Slope | Optimal Utilization | Excess Slope |
-| ----- | --------- | ---------- | ------------------- | ------------ |
-| USDC  | 10%       | 15%        | 80%                 | 500%         |
-| SUI   | 10%       | 20%        | 80%                 | 500%         |
-| DEEP  | 15%       | 20%        | 80%                 | 500%         |
-| WAL   | 15%       | 20%        | 80%                 | 500%         |
-
-For example, at 50% utilization in the USDC pool:
-- `borrowRate = 10% + 50% × 15% = 10% + 7.5% = 17.5% APR`
-
-At 90% utilization (above optimal):
-- `borrowRate = 10% + 80% × 15% + (90% - 80%) × 500% = 10% + 12% + 50% = 72% APR`
-
 ## Events
 
 <details>
@@ -268,6 +235,11 @@ Emitted when protocol fees are accrued from interest payments.
 
 ## Related links
 
+<RelatedLink
+	href="./interest-rates"
+	label="Interest Rates"
+	desc="Learn how interest rates are calculated for margin pool borrowing."
+/>
 <RelatedLink
 	href="./supply-referral"
 	label="Supply Referral"
