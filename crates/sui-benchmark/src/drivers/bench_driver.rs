@@ -338,7 +338,11 @@ impl BenchDriver {
         }
         let mut payloads = workload_info
             .workload
-            .make_test_payloads(execution_proxy.clone(), fullnode_proxies, system_state_observer.clone())
+            .make_test_payloads(
+                execution_proxy.clone(),
+                fullnode_proxies,
+                system_state_observer.clone(),
+            )
             .await;
         let mut total_workers = workload_info.workload_params.num_workers;
         while total_workers > 0 {

@@ -173,7 +173,11 @@ impl BenchmarkSetup {
         Ok(BenchmarkSetup {
             server_handle: join_handle,
             shutdown_notifier: sender,
-            bank: BenchmarkBank::new(execution_proxy.clone(), fullnode_proxies.clone(), current_gas),
+            bank: BenchmarkBank::new(
+                execution_proxy.clone(),
+                fullnode_proxies.clone(),
+                current_gas,
+            ),
             execution_proxies,
             fullnode_proxies,
         })
