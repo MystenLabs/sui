@@ -93,13 +93,6 @@ impl CertBuffer {
     }
 }
 
-// Signed data cache is also keyed on alias versions so that signatures are re-verified
-// if aliases change.
-type SignedDataCacheKey = (
-    SenderSignedDataDigest,
-    Vec<(SuiAddress, Option<SequenceNumber>)>,
-);
-
 /// Verifies signatures in ways that faster than verifying each signature individually.
 /// - BLS signatures - caching and batch verification.
 /// - User signed data - caching.
@@ -107,7 +100,7 @@ pub struct SignatureVerifier {
     committee: Arc<Committee>,
     object_store: Arc<dyn ObjectStore + Send + Sync>,
     certificate_cache: VerifiedDigestCache<CertificateDigest>,
-    signed_data_cache: VerifiedDigestCache<SignedDataCacheKey>,
+    signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest>,
     zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
 
     /// Map from JwkId (iss, kid) to the fetched JWK for that key.
@@ -456,7 +449,7 @@ impl SignatureVerifier {
             }
         }
 
-        self.verify_tx(signed_tx, versions.clone(), aliases)?;
+        self.verify_tx(signed_tx, &versions, aliases)?;
         Ok(NonEmpty::from_vec(versions).expect("must have at least one required_signer"))
     }
 
@@ -473,12 +466,11 @@ impl SignatureVerifier {
     fn verify_tx(
         &self,
         signed_tx: &SenderSignedData,
-        alias_versions: Vec<(SuiAddress, Option<SequenceNumber>)>,
+        alias_versions: &Vec<(SuiAddress, Option<SequenceNumber>)>,
         aliased_addresses: Vec<(SuiAddress, NonEmpty<SuiAddress>)>,
     ) -> SuiResult {
-        let cache_key = (signed_tx.full_message_digest(), alias_versions);
         self.signed_data_cache.is_verified(
-            cache_key,
+            signed_tx.full_message_digest_with_alias_versions(alias_versions),
             || {
                 let jwks = self.jwks.read().clone();
                 let verify_params = VerifyParams::new(
