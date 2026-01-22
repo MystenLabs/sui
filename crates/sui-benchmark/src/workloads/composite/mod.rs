@@ -696,14 +696,15 @@ impl CompositeWorkload {
 impl Workload<dyn Payload> for CompositeWorkload {
     async fn init(
         &mut self,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) {
         if self.package_id.is_some() {
             return;
         }
 
-        self.chain_identifier = Some(proxy.get_chain_identifier());
+        self.chain_identifier = Some(execution_proxy.get_chain_identifier());
         info!("Chain identifier: {:?}", self.chain_identifier);
 
         let gas_price = system_state_observer.state.borrow().reference_gas_price;
@@ -719,7 +720,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             .publish_async(path)
             .await
             .build_and_sign(head.2.as_ref());
-        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let (_, execution_result) = execution_proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.expect("Package publish should succeed");
 
         let mut treasury_cap_ref = None;
@@ -737,7 +738,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             }
         }
         for obj_ref in owned_refs {
-            if let Ok(obj) = proxy.get_object(obj_ref.0).await {
+            if let Ok(obj) = execution_proxy.get_object(obj_ref.0).await {
                 let obj_type = obj.type_().map(|t| t.to_string()).unwrap_or_default();
                 if obj_type.contains("TreasuryCap") {
                     treasury_cap_ref = Some(obj.compute_object_reference());
@@ -753,7 +754,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             let transaction = TestTransactionBuilder::new(*sender, *gas, gas_price)
                 .call_counter_create(self.package_id.unwrap())
                 .build_and_sign(keypair.as_ref());
-            let proxy_ref = proxy.clone();
+            let proxy_ref = execution_proxy.clone();
             futures.push(async move {
                 let (_, execution_result) = proxy_ref.execute_transaction_block(transaction).await;
                 let (obj_ref, owner) = execution_result.unwrap().created()[0].clone();
@@ -769,7 +770,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
         self.shared_counters = join_all(futures).await;
         info!("Created {} shared counters", self.shared_counters.len());
 
-        let obj = proxy
+        let obj = execution_proxy
             .get_object(SUI_RANDOMNESS_STATE_OBJECT_ID)
             .await
             .expect("Failed to get randomness object");
@@ -829,7 +830,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 }
                 let tx = tx_builder.build_and_sign(keypair.as_ref());
 
-                let proxy_ref = proxy.clone();
+                let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
                     let (_, execution_result) = proxy_ref.execute_transaction_block(tx).await;
                     let effects = execution_result.expect("Seed deposit should succeed");
@@ -852,7 +853,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 .move_call(self.package_id.unwrap(), "balance_pool", "create", vec![])
                 .build_and_sign(keypair.as_ref());
 
-            let (_, execution_result) = proxy.execute_transaction_block(tx).await;
+            let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
             let effects = execution_result.expect("Balance pool creation should succeed");
 
             update_gas!(gas, effects);
@@ -909,7 +910,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             }
             let tx = tx_builder.build_and_sign(keypair.as_ref());
 
-            let (_, execution_result) = proxy.execute_transaction_block(tx).await;
+            let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
             let effects = execution_result.expect("Balance pool seed should succeed");
             update_gas!(gas, effects);
             info!("Seeded balance pool");
@@ -928,7 +929,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     )
                     .build_and_sign(keypair.as_ref());
 
-                let (_, execution_result) = proxy.execute_transaction_block(tx).await;
+                let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
                 let effects = execution_result.expect("TestCoinCap creation should succeed");
 
                 self.init_gas[0].0 = effects.gas_object().0;
@@ -995,7 +996,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     }
                     let tx = tx_builder.build_and_sign(keypair.as_ref());
 
-                    let (_, execution_result) = proxy.execute_transaction_block(tx).await;
+                    let (_, execution_result) = execution_proxy.execute_transaction_block(tx).await;
                     let effects = execution_result.expect("TEST_COIN seed deposit should succeed");
                     update_gas!(gas, effects);
                 }
@@ -1014,7 +1015,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
             for (idx, (gas_coins, sender, keypair)) in self.payload_gas.iter().enumerate() {
                 assert_eq!(gas_coins.len(), 1);
                 let gas = gas_coins[0];
-                let gas_obj = proxy
+                let gas_obj = execution_proxy
                     .get_object(gas.0)
                     .await
                     .expect("Gas object should exist");
@@ -1039,7 +1040,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     builder.transfer_args(*sender, new_coin_args);
                 }
                 let tx = tx_builder.build_and_sign(keypair.as_ref());
-                let proxy_ref = proxy.clone();
+                let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
                     let (_, execution_result) = proxy_ref.execute_transaction_block(tx).await;
                     let effects = execution_result.expect("Seed deposit should succeed");
@@ -1074,7 +1075,8 @@ impl Workload<dyn Payload> for CompositeWorkload {
 
     async fn make_test_payloads(
         &self,
-        _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         info!("Creating composite workload payloads...");

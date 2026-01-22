@@ -1157,12 +1157,17 @@ mod test {
         let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
 
         let registry = prometheus::Registry::new();
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
-            Arc::new(
-                FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url, &registry)
-                    .await
-                    .unwrap(),
-            )
+        // Create fullnode proxy for RPC reads
+        let fullnode_proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url, &registry)
+                .await
+                .unwrap(),
+        );
+        let fullnode_proxies = vec![fullnode_proxy.clone()];
+
+        // Create execution proxy - either fullnode or validator aggregator
+        let execution_proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
+            fullnode_proxy.clone()
         } else {
             Arc::new(
                 LocalValidatorAggregatorProxy::from_genesis(
@@ -1174,9 +1179,9 @@ mod test {
             )
         };
 
-        let bank = BenchmarkBank::new(proxy.clone(), primary_coin);
+        let bank = BenchmarkBank::new(execution_proxy.clone(), fullnode_proxies.clone(), primary_coin);
         let system_state_observer = {
-            let mut system_state_observer = SystemStateObserver::new(proxy.clone());
+            let mut system_state_observer = SystemStateObserver::new(execution_proxy.clone());
             if let Ok(_) = system_state_observer.state.changed().await {
                 info!(
                     "Got the new state (reference gas price and/or protocol config) from system state object"
@@ -1279,7 +1284,8 @@ mod test {
             let show_progress = interval.is_unbounded();
             let (benchmark_stats, _) = driver
                 .run(
-                    vec![proxy],
+                    vec![execution_proxy],
+                    fullnode_proxies,
                     workloads,
                     system_state_observer,
                     &registry,

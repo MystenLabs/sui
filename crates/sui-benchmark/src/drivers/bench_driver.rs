@@ -262,7 +262,7 @@ pub struct BenchWorker {
     pub id: u64,
     pub target_qps: u64,
     pub payload: Vec<Box<dyn Payload>>,
-    pub proxy: Arc<dyn ValidatorProxy + Send + Sync>,
+    pub execution_proxy: Arc<dyn ValidatorProxy + Send + Sync>,
     pub group: u32,
     pub duration: Interval,
 }
@@ -327,7 +327,8 @@ impl BenchDriver {
         &self,
         id: &mut u64,
         workload_info: &WorkloadInfo,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<BenchWorker> {
         let mut workers = vec![];
@@ -337,7 +338,7 @@ impl BenchDriver {
         }
         let mut payloads = workload_info
             .workload
-            .make_test_payloads(proxy.clone(), system_state_observer.clone())
+            .make_test_payloads(execution_proxy.clone(), fullnode_proxies, system_state_observer.clone())
             .await;
         let mut total_workers = workload_info.workload_params.num_workers;
         while total_workers > 0 {
@@ -349,7 +350,7 @@ impl BenchDriver {
                     id: *id,
                     target_qps,
                     payload: payloads,
-                    proxy: proxy.clone(),
+                    execution_proxy: execution_proxy.clone(),
                     group: workload_info.workload_params.group,
                     duration: workload_info.workload_params.duration,
                 });
@@ -378,7 +379,8 @@ async fn ctrl_c() -> std::io::Result<()> {
 impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
     async fn run(
         &self,
-        proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
+        execution_proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
+        fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
         workloads_by_group_id: BTreeMap<GroupID, Vec<WorkloadInfo>>,
         system_state_observer: Arc<SystemStateObserver>,
         registry: &Registry,
@@ -402,14 +404,15 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
             let mut workers = vec![];
 
             for workload in workloads {
-                let proxy = proxies
+                let execution_proxy = execution_proxies
                     .choose(&mut rand::thread_rng())
-                    .context("Failed to get proxy for bench driver")?;
+                    .context("Failed to get execution proxy for bench driver")?;
                 workers.extend(
                     self.make_workers(
                         &mut worker_id,
                         workload,
-                        proxy.clone(),
+                        execution_proxy.clone(),
+                        fullnode_proxies.clone(),
                         system_state_observer.clone(),
                     )
                     .await,
@@ -1018,10 +1021,10 @@ async fn run_bench_worker(
                     num_submitted += 1;
                     let metrics = Arc::clone(&metrics);
                     // TODO: clone committee for each request is not ideal.
-                    let committee = worker.proxy.clone_committee();
+                    let committee = worker.execution_proxy.clone_committee();
                     let start = Arc::new(Instant::now());
                     let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
-                    let res = worker.proxy
+                    let res = worker.execution_proxy
                         .execute_transaction_block(tx.clone())
                         .then(|(client_type, res)| async move  {
                             metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();
@@ -1047,7 +1050,7 @@ async fn run_bench_worker(
                         let num_txs = txs.len();
                         let start = Arc::new(Instant::now());
                         let metrics_clone = Arc::clone(&metrics);
-                        let proxy = worker.proxy.clone_new();
+                        let proxy = worker.execution_proxy.clone_new();
 
                         // Partition transactions into random bundles
                         let bundles = partition_into_random_bundles(txs, max_bundles);
@@ -1114,8 +1117,8 @@ async fn run_bench_worker(
                         let metrics = Arc::clone(&metrics);
                         let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
                         // TODO: clone committee for each request is not ideal.
-                        let committee = worker.proxy.clone_committee();
-                        let res = worker.proxy
+                        let committee = worker.execution_proxy.clone_committee();
+                        let res = worker.execution_proxy
                             .execute_transaction_block(tx.clone())
                         .then(|(client_type, res)| async move {
                             metrics.num_submitted.with_label_values(&[&payload.to_string(), &client_type.to_string()]).inc();

@@ -186,10 +186,11 @@ impl WorkloadConfiguration {
             )
             .await?;
         let init_futures = workloads.into_iter().map(|mut workload| {
-            let proxy = bank.proxy.clone();
+            let execution_proxy = bank.execution_proxy.clone();
+            let fullnode_proxies = bank.fullnode_proxies.clone();
             let observer = system_state_observer.clone();
             async move {
-                workload.init(proxy, observer).await;
+                workload.init(execution_proxy, fullnode_proxies, observer).await;
                 workload
             }
         });
