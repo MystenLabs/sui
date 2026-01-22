@@ -71,8 +71,8 @@ impl IdentifierInterner {
     }
 
     fn get_or_intern_str_internal(&self, string: &str) -> IdentifierKey {
-        // Prefer to panic here rather than propagate OOM errors throughout the VM---they could
-        // cause consesus errors elsewhere.
+        // Prefer to panic here rather than propagate OOM errors throughout the VM---reporting an
+        // invariant violation during an OOM could result in a consensus issue.
         match self.0.try_get_or_intern(string) {
             Ok(result) => IdentifierKey(result),
             Err(err) => panic!("Identifier interner OOM: {err:?}"),
