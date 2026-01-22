@@ -13,13 +13,6 @@ use sui::vec_map::{Self, VecMap};
 /// migrating all V1 displays into V2.
 const SYSTEM_MIGRATION_ADDRESS: address = @0xf00;
 
-/// The version of the Display language that is currently supported.
-const DISPLAY_VERSION_2: u16 = 2;
-
-/// The current language version for Display. That helps parsers
-/// decide how to process display fields.
-const LANGUAGE_VERSION: u16 = DISPLAY_VERSION_2;
-
 #[error(code = 0)]
 const ENotSystemAddress: vector<u8> = b"This is only callable from system address.";
 #[error(code = 1)]
@@ -48,11 +41,6 @@ public struct Display<phantom T> has key {
     id: UID,
     /// All the (key,value) entries for a given display object.
     fields: VecMap<String, String>,
-    /// The "template" version of display. This dictates the language
-    /// that the display parser needs to use, and enables permissionless on-chain
-    /// upgrades to the language.
-    /// This is not related to the `legacy` version field, which is deprecated.
-    language_version: u16,
     /// The capability object ID. It's `Option` because legacy Displays will need claiming.
     cap_id: Option<ID>,
 }
@@ -62,7 +50,7 @@ public struct DisplayCap<phantom T> has key, store { id: UID }
 
 /// The key used for deriving the instance of `Display`. Contains the version of
 /// the Display language in it to separate concerns.
-public struct DisplayKey<phantom T>(u16) has copy, drop, store;
+public struct DisplayKey<phantom T>() has copy, drop, store;
 
 /// Create a new Display object for a given type `T` using `internal::Permit` to
 /// prove type ownership.
@@ -71,12 +59,11 @@ public fun new<T>(
     _: internal::Permit<T>,
     ctx: &mut TxContext,
 ): (Display<T>, DisplayCap<T>) {
-    let key = DisplayKey<T>(LANGUAGE_VERSION);
+    let key = DisplayKey<T>();
     assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
     let display = Display<T> {
         id: derived_object::claim(&mut registry.id, key),
         fields: vec_map::empty(),
-        language_version: LANGUAGE_VERSION,
         cap_id: option::none(),
     };
     let cap = DisplayCap<T> { id: object::new(ctx) };
@@ -89,7 +76,7 @@ public fun new_with_publisher<T>(
     publisher: &Publisher,
     ctx: &mut TxContext,
 ): (Display<T>, DisplayCap<T>) {
-    let key = DisplayKey<T>(LANGUAGE_VERSION);
+    let key = DisplayKey<T>();
 
     assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
     assert!(publisher.from_package<T>(), ENotValidPublisher);
@@ -97,7 +84,6 @@ public fun new_with_publisher<T>(
     let display = Display<T> {
         id: derived_object::claim(&mut registry.id, key),
         fields: vec_map::empty(),
-        language_version: LANGUAGE_VERSION,
         cap_id: option::some(cap.id.to_inner()),
     };
     (display, cap)
@@ -165,14 +151,13 @@ public fun migrate_v1_to_v2_with_system_migration_cap<T: key>(
 ) {
     // System migration is only possible for V1 to V2.
     // Should it keep V1 in Display originally?
-    let key = DisplayKey<T>(DISPLAY_VERSION_2);
+    let key = DisplayKey<T>();
 
     assert!(!derived_object::exists(&registry.id, key), EDisplayAlreadyExists);
 
     transfer::share_object(Display<T> {
         id: derived_object::claim(&mut registry.id, key),
         fields,
-        language_version: DISPLAY_VERSION_2,
         cap_id: option::none(),
     });
 }
