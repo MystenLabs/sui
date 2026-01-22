@@ -29,7 +29,7 @@ pub struct VerifiedDigestCache<D> {
     cache_evictions_counter: IntCounter,
 }
 
-impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
+impl<D: Hash + Eq + Clone> VerifiedDigestCache<D> {
     pub fn new(
         cache_hits_counter: IntCounter,
         cache_misses_counter: IntCounter,
@@ -58,7 +58,7 @@ impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
 
     pub fn cache_digest(&self, digest: D) {
         let mut inner = self.inner.write();
-        if let Some(old) = inner.push(digest, ())
+        if let Some(old) = inner.push(digest.clone(), ())
             && old.0 != digest
         {
             self.cache_evictions_counter.inc();
@@ -68,7 +68,7 @@ impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
     pub fn cache_digests(&self, digests: Vec<D>) {
         let mut inner = self.inner.write();
         digests.into_iter().for_each(|d| {
-            if let Some(old) = inner.push(d, ())
+            if let Some(old) = inner.push(d.clone(), ())
                 && old.0 != d
             {
                 self.cache_evictions_counter.inc();
