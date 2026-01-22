@@ -2,7 +2,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-#[allow(unused_imports)]
 use crate::{
     execution::values::{Reference, VMValueCast, Value},
     jit::execution::ast::Type,
@@ -119,7 +118,6 @@ fn native_print_stack_trace_nop(
     Ok(NativeResult::ok(gas_params.base_cost, smallvec![]))
 }
 
-#[allow(unused_variables)]
 #[inline]
 fn native_print_stack_trace(
     gas_params: &PrintStackTraceGasParameters,
