@@ -17,11 +17,11 @@ pub enum Token {
     Command,
     /// -[a-zA-Z0-9]
     Flag,
-    /// [a-zA-Z_][a-zA-Z0-9_-]*
+    /// `[a-zA-Z_][a-zA-Z0-9_-\]*`
     Ident,
-    /// [1-9][0-9_]*
+    /// `[1-9][0-9_]*`
     Number,
-    /// 0x[0-9a-fA-F][0-9a-fA-F_]*
+    /// `0x[0-9a-fA-F][0-9a-fA-F_]*`
     HexNumber,
     /// "..." | '...'
     String,

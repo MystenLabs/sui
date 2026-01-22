@@ -673,7 +673,7 @@ mod tests {
 
         let action2 = get_test_eth_to_sui_bridge_action(None, None, None, None);
         store
-            .insert_pending_actions(&vec![action1.clone(), action2.clone()])
+            .insert_pending_actions(&[action1.clone(), action2.clone()])
             .unwrap();
 
         // start orchestrator with gRPC
@@ -732,7 +732,7 @@ mod tests {
 
         let action2 = get_test_eth_to_sui_bridge_action(None, None, None, None);
         store
-            .insert_pending_actions(&vec![action1.clone(), action2.clone()])
+            .insert_pending_actions(&[action1.clone(), action2.clone()])
             .unwrap();
 
         // start orchestrator

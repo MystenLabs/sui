@@ -237,7 +237,7 @@ mod tests {
         store.remove_pending_actions(&[action1.digest()]).unwrap();
 
         store
-            .insert_pending_actions(&vec![action1.clone(), action2.clone()])
+            .insert_pending_actions(&[action1.clone(), action2.clone()])
             .unwrap();
 
         let actions = store.get_all_pending_actions();

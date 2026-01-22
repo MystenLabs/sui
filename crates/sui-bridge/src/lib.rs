@@ -75,7 +75,6 @@ macro_rules! retry_with_max_elapsed_time {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::time::Duration;
 
     async fn example_func_ok() -> anyhow::Result<()> {

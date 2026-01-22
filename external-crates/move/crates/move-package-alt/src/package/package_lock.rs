@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use tracing::{debug, error};
+use tracing::debug;
 
 use crate::git::get_cache_path;
 use crate::logging::user_error;

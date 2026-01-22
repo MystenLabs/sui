@@ -1885,7 +1885,7 @@ mod tests {
     )> {
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
-        let observation_keys = vec![
+        let observation_keys = [
             ExecutionTimeObservationKey::MoveEntryPoint {
                 package: ObjectID::from_hex_literal("0x1").unwrap(),
                 module: "coin".to_string(),
