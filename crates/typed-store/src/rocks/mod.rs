@@ -16,8 +16,10 @@ use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 use crate::tidehunter_util::{
     apply_range_bounds, transform_th_iterator, transform_th_key, typed_store_error_from_th_error,
 };
-use crate::util::{be_fix_int_ser, iterator_bounds, iterator_bounds_with_range};
-use crate::{DbIterator, TypedStoreError};
+use crate::util::{
+    be_fix_int_ser, ensure_database_type, iterator_bounds, iterator_bounds_with_range,
+};
+use crate::{DbIterator, StorageType, TypedStoreError};
 use crate::{
     metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
     traits::{Map, TableSummary},
@@ -1775,6 +1777,8 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     opt_cfs: &[(&str, rocksdb::Options)],
 ) -> Result<Arc<Database>, TypedStoreError> {
     let path = path.as_ref();
+    ensure_database_type(path, StorageType::Rocks)
+        .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
     // In the simulator, we intercept the wall clock in the test thread only. This causes problems
     // because rocksdb uses the simulated clock when creating its background threads, but then
     // those threads see the real wall clock (because they are not the test thread), which causes
@@ -1845,6 +1849,11 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
             s.push("SECONDARY");
             s.as_path().to_path_buf()
         });
+
+        ensure_database_type(&primary_path, StorageType::Rocks)
+            .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
+        ensure_database_type(&secondary_path, StorageType::Rocks)
+            .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
 
         let rocksdb = {
             options.create_if_missing(true);
