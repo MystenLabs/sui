@@ -1592,6 +1592,7 @@ mod test {
             num_shared_counters: 1,
             shared_counter_hotness: 1.0,
             address_balance_amount: 0,
+            address_balance_gas_probability: 0.0,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
@@ -1620,7 +1621,7 @@ mod test {
 
             if has_shared_mutation && has_randomness {
                 shared_plus_randomness_txns +=
-                    stats.success_count + stats.failure_count + stats.cancellation_count;
+                    stats.success_count + stats.abort_count + stats.cancellation_count;
                 shared_plus_randomness_cancellations += stats.cancellation_count;
             }
         }

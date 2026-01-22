@@ -84,6 +84,17 @@ pub enum ExecutionEffects {
 }
 
 impl ExecutionEffects {
+    pub fn digest(&self) -> TransactionDigest {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                *effects.data().transaction_digest()
+            }
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                *sui_tx_effects.transaction_digest()
+            }
+        }
+    }
+
     pub fn mutated(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
