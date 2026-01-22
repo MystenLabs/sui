@@ -11,6 +11,13 @@ import argparse
 import threading
 import tempfile
 import shutil
+import fcntl
+
+def reset_stdout_blocking():
+    """Reset stdout to blocking mode (child processes may set it non-blocking)."""
+    fd = sys.stdout.fileno()
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    fcntl.fcntl(fd, fcntl.F_SETFL, flags & ~os.O_NONBLOCK)
 
 print_lock = threading.Lock()
 def safe_print(*args, **kwargs):
@@ -19,7 +26,9 @@ def safe_print(*args, **kwargs):
             print(*args, **kwargs)
             sys.stdout.flush()
         except BlockingIOError:
-            sys.exit(1)
+            reset_stdout_blocking()
+            print(*args, **kwargs)
+            sys.stdout.flush()
 
 def collect_satisfied_assertions(log_dir):
     """Collect all satisfied assertions from log files in the directory.
@@ -212,6 +221,9 @@ if __name__ == "__main__":
 
     try:
         all_passed = main(commands)
+
+        # Reset stdout to blocking mode (child processes may have changed it)
+        reset_stdout_blocking()
 
         # Collect and report reachability results
         if reach_log_dir:
