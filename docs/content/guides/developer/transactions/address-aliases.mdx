@@ -13,7 +13,9 @@ You can use address aliases to:
 
 :::warning
 
-All aliases for a given address have the ability to individually sign transactions acting as that address, and to control all resources owned by it. Be extremely careful when making any changes to your aliases.
+All aliases for a given address have the ability to **unilaterally control or take** all coins, balances, and other resources owned by the address.
+
+Be extremely careful when making any changes to your aliases! Any new alias you add effectively becomes a joint owner of your address.
 
 :::
 
@@ -46,4 +48,4 @@ aliases[X] = {Y}
 
 To be valid, the transaction `T` would require a signature from either `A` or `B`, *and* a signature from `Y`.
 
-The transaction acts as its `sender` for the purposes of execution. In this example, even if the transaction had signatures from `[B, Y]` and not from `A`, during execution it would nonetheless have access to everything owned by `A`, and during Move call execution its `TxContext::sender` would be `A`.
+In this example, even if the transaction had signatures from `[B, Y]` and not from `A`, during execution it would nonetheless have access to everything owned by `A`, and during Move call execution its `TxContext::sender` would be `A`.
