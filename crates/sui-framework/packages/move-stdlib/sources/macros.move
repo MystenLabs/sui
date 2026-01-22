@@ -24,7 +24,7 @@ public(package) macro fun num_diff<$T>($x: $T, $y: $T): $T {
     if (x > y) x - y else y - x
 }
 
-public(package) macro fun num_divide_and_round_up<$T>($x: $T, $y: $T): $T {
+public(package) macro fun num_div_ceil<$T>($x: $T, $y: $T): $T {
     let x = $x;
     let y = $y;
     if (x % y == 0) x / y else x / y + 1
