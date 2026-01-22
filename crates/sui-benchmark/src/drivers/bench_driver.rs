@@ -30,7 +30,7 @@ use crate::drivers::HistogramWrapper;
 use crate::drivers::driver::Driver;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::{
-    BatchExecutionResults, BatchedTransactionResult, Payload, BatchedTransactionStatus,
+    BatchExecutionResults, BatchedTransactionResult, BatchedTransactionStatus, Payload,
 };
 use crate::workloads::workload::ExpectedFailureType;
 use crate::workloads::{GroupID, WorkloadInfo};

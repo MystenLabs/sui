@@ -41,6 +41,8 @@ use tracing::{debug, info};
 
 use super::MultiGas;
 
+const MAX_BATCH_SIZE: usize = 4;
+
 macro_rules! update_gas {
     ($gas:expr, $effects:expr) => {{
         let new_gas_ref = $effects.gas_object().0;
@@ -405,7 +407,7 @@ impl Payload for CompositePayload {
     }
 
     fn make_transaction_batch(&mut self) -> Vec<Transaction> {
-        let batch_size = self.rng.gen_range(1..=4);
+        let batch_size = self.rng.gen_range(1..=MAX_BATCH_SIZE);
 
         let system_state = self.system_state_observer.state.borrow().clone();
         let rgp = system_state.reference_gas_price;
@@ -1018,7 +1020,7 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     .expect("Gas object should exist");
                 // take original gas coin, split the remaining balance into 4 equal parts
                 let gas_balance = gas_obj.as_coin_maybe().unwrap().balance.value();
-                let split_amount = gas_balance / 4;
+                let split_amount = gas_balance / MAX_BATCH_SIZE as u64;
 
                 let mut tx_builder = TestTransactionBuilder::new(*sender, gas, gas_price);
                 {
@@ -1031,8 +1033,8 @@ impl Workload<dyn Payload> for CompositeWorkload {
                     let Argument::Result(coin_idx) = coin else {
                         panic!("SplitCoins should return Result");
                     };
-                    let new_coin_args = (0..3)
-                        .map(|i| Argument::NestedResult(coin_idx, i))
+                    let new_coin_args = (0..MAX_BATCH_SIZE - 1)
+                        .map(|i| Argument::NestedResult(coin_idx, i as u16))
                         .collect();
                     builder.transfer_args(*sender, new_coin_args);
                 }
@@ -1061,9 +1063,12 @@ impl Workload<dyn Payload> for CompositeWorkload {
                 }
             }
             for multi_gas in self.payload_gas.iter_mut() {
-                assert_eq!(multi_gas.0.len(), 4);
+                assert_eq!(multi_gas.0.len(), MAX_BATCH_SIZE);
             }
-            info!("Split remaining gas coins into 4 equal parts");
+            info!(
+                "Split remaining gas coins into {} equal parts",
+                MAX_BATCH_SIZE
+            );
         }
     }
 
