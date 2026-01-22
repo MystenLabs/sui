@@ -201,7 +201,7 @@ impl VMDispatchTables {
                 .with_message(format!("Package {} not found", package))
         })?;
 
-        let interned = self.interner.intern_identifier(module_id)?;
+        let interned = self.interner.intern_identifier(module_id);
 
         package
             .loaded_modules
@@ -288,14 +288,8 @@ impl VMDispatchTables {
                         ))
                         .finish(Location::Undefined)
                 })?;
-                let module_name = self
-                    .interner
-                    .intern_identifier(&struct_tag.module)
-                    .map_err(|e| e.finish(Location::Undefined))?;
-                let member_name = self
-                    .interner
-                    .intern_identifier(&struct_tag.name)
-                    .map_err(|e| e.finish(Location::Undefined))?;
+                let module_name = self.interner.intern_identifier(&struct_tag.module);
+                let member_name = self.interner.intern_identifier(&struct_tag.name);
                 let key = VirtualTableKey {
                     package_key,
                     inner_pkg_key: IntraPackageKey {
