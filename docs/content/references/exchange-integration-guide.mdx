@@ -116,14 +116,14 @@ Sui supports both addresses with and without a 0x prefix. Sui recommends that yo
 
 ## Track balance changes for an address {#track-balance-changes}
 
-You can track balance changes by calling `sui_getBalance` at predefined intervals. This call returns the total balance for an address. The total includes any coin or token type, but this document focuses on SUI. You can track changes in the total balance for an address between subsequent `sui_getBalance` requests.
+You can track balance changes by calling `suix_getBalance` at predefined intervals. This call returns the total balance for an address. The total includes any coin or token type, but this document focuses on SUI. You can track changes in the total balance for an address between subsequent `suix_getBalance` requests.
 
-The following bash example demonstrates how to use `sui_getBalance` for address 0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate full node.
+The following bash example demonstrates how to use `suix_getBalance` for address 0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate full node.
 
 ```sh
 rpc="https://fullnode.devnet.sui.io:443"
 address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
-data="{\"jsonrpc\": \"2.0\", \"method\": \"sui_getBalance\", \"id\": 1, \"params\": [\"$address\"]}"
+data="{\"jsonrpc\": \"2.0\", \"method\": \"suix_getBalance\", \"id\": 1, \"params\": {\"owner\": \"$owner\"}}"
 curl -X POST -H 'Content-type: application/json' --data-raw "$data" $rpc
 ```
 
@@ -142,7 +142,7 @@ The response is a JSON object that includes the totalBalance for the address:
 }
 ```
 
-The following example demonstrates using sui_getBalance in Rust:
+The following example demonstrates using suix_getBalance in Rust:
 
 ```rust
 use std::str::FromStr;

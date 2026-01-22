@@ -50,13 +50,13 @@ Tom decides to send 1 SUI coin to Alice. In this case, Object A is the input to 
 - Object A with 4 SUI coins that still belongs to Tom.
 - New Object C that contains 1 SUI coin and belongs to Alice.
 
-At the same time, John decides to send 2 SUI coins to Anna. The output of this transaction is:
+At the same time, John decides to send 2 SUI coins to Alice. The output of this transaction is:
 
 - Object B that contains 2 SUI coins and now belongs to Alice. 
 
 Because both transactions interact with different objects, the second transaction executes in parallel with the first transaction that sends coins from Tom to Alice. 
 
-After receiving 2 SUI coins, Anna sends them to Tom. Now Tom has 6 SUI coins, 4 from Object A and 2 from Object B.
+After receiving 2 SUI coins, Alice sends them to Tom. Now Tom has 6 SUI coins, 4 from Object A and 2 from Object B.
 
 Finally, Tom sends all of his SUI coins to John. For this transaction, the input is both Object A and Object B. Object B is destroyed, and its value is added to Object A. As a result, the transaction's output is only Object A with a value of 6 SUI.
 ```mermaid
@@ -75,7 +75,7 @@ flowchart LR
     fa:fa-person John):::object-b;
     id5(Object B
     fa:fa-coins 2 SUI
-    fa:fa-person Anna):::object-b;
+    fa:fa-person Alice):::object-b;
     id6(Object B
     fa:fa-coins 2 SUI
     fa:fa-person Tom):::object-b;
