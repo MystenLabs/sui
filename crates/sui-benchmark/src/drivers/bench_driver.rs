@@ -1073,7 +1073,25 @@ async fn run_bench_worker(
                                         bundle_txs.iter().map(|tx| *tx.digest()).collect();
                                     async move {
                                         info!("executing bundle {:?}", digests);
-                                        let result = proxy.execute_soft_bundle(bundle_txs).await;
+                                        // For single-transaction bundles, randomly use execute_transaction_block
+                                        let result = if bundle_txs.len() == 1
+                                            && rand::thread_rng().gen_bool(0.5)
+                                        {
+                                            let tx = bundle_txs.into_iter().next().unwrap();
+                                            let digest = *tx.digest();
+                                            let (_, exec_result) =
+                                                proxy.execute_transaction_block(tx).await;
+                                            exec_result.map(|effects| {
+                                                vec![(digest, BundleItemResponse::DirectEffects(effects))]
+                                            })
+                                        } else {
+                                            proxy.execute_soft_bundle(bundle_txs).await.map(|results| {
+                                                results
+                                                    .into_iter()
+                                                    .map(|(d, r)| (d, BundleItemResponse::WaitForEffects(r)))
+                                                    .collect()
+                                            })
+                                        };
                                         if let Ok(results) = &result {
                                             info!("results for bundle {:?}", results.iter().map(|(digest, _)| format!("{}", digest)).collect::<Vec<_>>());
                                         } else {
@@ -1201,10 +1219,17 @@ async fn run_bench_worker(
     Some(worker)
 }
 
+/// Response type for bundle item results that can come from either soft bundle
+/// (WaitForEffectsResponse) or direct execution (ExecutionEffects).
+enum BundleItemResponse {
+    WaitForEffects(WaitForEffectsResponse),
+    DirectEffects(ExecutionEffects),
+}
+
 type BundleResults = Vec<(
     usize,
     Vec<TransactionDigest>,
-    anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>>,
+    anyhow::Result<Vec<(TransactionDigest, BundleItemResponse)>>,
 )>;
 
 fn process_bundle_results(
@@ -1223,54 +1248,68 @@ fn process_bundle_results(
             Ok(results) => {
                 for (offset, (digest, response)) in results.into_iter().enumerate() {
                     let status = match response {
-                        WaitForEffectsResponse::Executed { details, .. } => {
-                            let effects = details.map(|d| {
-                                let epoch = d.effects.executed_epoch();
-                                ExecutionEffects::FinalizedTransactionEffects(
-                                    sui_types::transaction_driver_types::FinalizedEffects {
-                                        effects: d.effects,
-                                        finality_info: sui_types::transaction_driver_types::EffectsFinalityInfo::QuorumExecuted(epoch),
-                                    },
-                                    d.events.unwrap_or_default(),
-                                )
-                            });
-                            match effects {
-                                Some(effects) => {
-                                    assert!(
-                                        !effects.is_invalid_transaction(),
-                                        "Invalid transaction error indicates a bug in benchmark code. \
-                                                                 Payload: {}. Status: {:?}",
-                                        payload,
-                                        effects.status()
-                                    );
-                                    BatchedTransactionStatus::Success {
-                                        effects: Box::new(effects),
+                        BundleItemResponse::DirectEffects(effects) => {
+                            assert!(
+                                !effects.is_invalid_transaction(),
+                                "Invalid transaction error indicates a bug in benchmark code. \
+                                                         Payload: {}. Status: {:?}",
+                                payload,
+                                effects.status()
+                            );
+                            BatchedTransactionStatus::Success {
+                                effects: Box::new(effects),
+                            }
+                        }
+                        BundleItemResponse::WaitForEffects(wait_response) => match wait_response {
+                            WaitForEffectsResponse::Executed { details, .. } => {
+                                let effects = details.map(|d| {
+                                    let epoch = d.effects.executed_epoch();
+                                    ExecutionEffects::FinalizedTransactionEffects(
+                                        sui_types::transaction_driver_types::FinalizedEffects {
+                                            effects: d.effects,
+                                            finality_info: sui_types::transaction_driver_types::EffectsFinalityInfo::QuorumExecuted(epoch),
+                                        },
+                                        d.events.unwrap_or_default(),
+                                    )
+                                });
+                                match effects {
+                                    Some(effects) => {
+                                        assert!(
+                                            !effects.is_invalid_transaction(),
+                                            "Invalid transaction error indicates a bug in benchmark code. \
+                                                                     Payload: {}. Status: {:?}",
+                                            payload,
+                                            effects.status()
+                                        );
+                                        BatchedTransactionStatus::Success {
+                                            effects: Box::new(effects),
+                                        }
                                     }
+                                    None => BatchedTransactionStatus::PermanentFailure {
+                                        error: "Executed but no effects returned".to_string(),
+                                    },
                                 }
-                                None => BatchedTransactionStatus::PermanentFailure {
-                                    error: "Executed but no effects returned".to_string(),
-                                },
                             }
-                        }
-                        WaitForEffectsResponse::Rejected { error } => {
-                            let is_retriable = error
-                                .as_ref()
-                                .map(|e| e.individual_error_indicates_epoch_change())
-                                .unwrap_or(true);
-                            let error_str = error
-                                .map(|e| format!("{:?}", e))
-                                .unwrap_or_else(|| "Unknown rejection".to_string());
-                            if is_retriable {
-                                BatchedTransactionStatus::RetriableFailure { error: error_str }
-                            } else {
-                                BatchedTransactionStatus::PermanentFailure { error: error_str }
+                            WaitForEffectsResponse::Rejected { error } => {
+                                let is_retriable = error
+                                    .as_ref()
+                                    .map(|e| e.individual_error_indicates_epoch_change())
+                                    .unwrap_or(true);
+                                let error_str = error
+                                    .map(|e| format!("{:?}", e))
+                                    .unwrap_or_else(|| "Unknown rejection".to_string());
+                                if is_retriable {
+                                    BatchedTransactionStatus::RetriableFailure { error: error_str }
+                                } else {
+                                    BatchedTransactionStatus::PermanentFailure { error: error_str }
+                                }
                             }
-                        }
-                        WaitForEffectsResponse::Expired { epoch, round } => {
-                            BatchedTransactionStatus::RetriableFailure {
-                                error: format!("Expired at epoch {}, round {:?}", epoch, round),
+                            WaitForEffectsResponse::Expired { epoch, round } => {
+                                BatchedTransactionStatus::RetriableFailure {
+                                    error: format!("Expired at epoch {}, round {:?}", epoch, round),
+                                }
                             }
-                        }
+                        },
                     };
                     indexed_results.push((
                         start_idx + offset,
