@@ -205,22 +205,27 @@ impl<'d> RpcService<'d> {
                 .await;
         }
 
+        // Create a Service to be attached as secondary to the main service
+        let mut readiness_checks = Service::new();
+
         for (name, ready) in service_futures {
             health_reporter
                 .set_service_status(name, ServingStatus::NotServing)
                 .await;
 
             let reporter = health_reporter.clone();
-            tokio::spawn(async move {
+            readiness_checks = readiness_checks.spawn(async move {
                 ready.await;
                 reporter
                     .set_service_status(name, ServingStatus::Serving)
                     .await;
                 info!("gRPC service {name} is now SERVING");
+                Ok(())
             });
         }
 
         let mut service = Service::new();
+        service = service.attach(readiness_checks);
 
         // Start HTTPS server if TLS is configured
         if let (Some(listen_address), Some(config)) = (rpc_tls_listen_address, tls_config) {
