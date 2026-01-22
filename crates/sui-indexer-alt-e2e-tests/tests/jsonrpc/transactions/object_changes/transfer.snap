@@ -36,19 +36,8 @@ Response: {
   "jsonrpc": "2.0",
   "id": 0,
   "result": {
-    "digest": "CrVRtSGQYfefzNWfU6a6ZHmZzU2WMoCKn7nqHw4X2QBp",
+    "digest": "6GGBtH9pcdwJaPk7c1uq3FjUhKQgF9EUz6bjt84mRLbj",
     "objectChanges": [
-      {
-        "type": "transferred",
-        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-        "recipient": {
-          "AddressOwner": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
-        },
-        "objectType": "0x1a5a31900509d00c257cef365edcbba723be53e2083ccbfda4e0a2ea0b284203::M::O",
-        "objectId": "0x00d176adb885597c7871d9e9ca7442c533dec70083b6275c03374be06b9b503f",
-        "version": "3",
-        "digest": "JAK8Ws8AWQcHjd8xsfBRXe9FKXVnp6Ei56CtTjqCjiah"
-      },
       {
         "type": "mutated",
         "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
@@ -56,10 +45,21 @@ Response: {
           "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
         },
         "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
-        "objectId": "0x2834d85dbfefdcd66f04811231ba818893793e83a895d53402fd99e132e36562",
+        "objectId": "0x269e52118e2bb7d562895724291039a937e3fcdf7fa4e3a5dd3e21a9bee9ed52",
         "version": "3",
         "previousVersion": "2",
-        "digest": "GNoT9p5mUDUpCiAs4enq3HKjFZE8DjnKfC5xZyFZwgdR"
+        "digest": "44V7e1wUYhZjGJwehcn4Bdi9Yevtfxa5YPhF7qVrKXBL"
+      },
+      {
+        "type": "transferred",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "recipient": {
+          "AddressOwner": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+        },
+        "objectType": "0xf0029f5f3e73eba7713821f1c0fb28d6a9670e9a39df54e5b49c2c7879ea6523::M::O",
+        "objectId": "0xba166341db52d48ecbe86e7d0c1419017f2c448c86bdadbeaf1744d7e63e56f0",
+        "version": "3",
+        "digest": "E3VveSsT8C7WzAUaaNb8x7uDW6byPxhJ4iPT9qAEj6h9"
       }
     ],
     "timestampMs": "0",

@@ -40,27 +40,27 @@ Response: {
   "result": {
     "status": "VersionFound",
     "details": {
-      "objectId": "0xb1d114770bfc9968a2ad3da9c6d5bcbf32e4bcf3d0bf3eba674df5d907a83e73",
+      "objectId": "0x3b798ce03faf0000b18cc1030fe6900f0cb61f41310fd0ce008b7e2676974885",
       "version": "1",
-      "digest": "Sgp59rDKZRKoSZ2ZJKKcc5YQ7MrhEHDxbZLqqFjywcq",
+      "digest": "BsQCKMVYhgatP4qqeH8acXY6YB5f695c7Xhg87rduuNL",
       "content": {
         "dataType": "package",
         "disassembled": {
-          "mod": "// Move bytecode v6\nmodule b1d114770bfc9968a2ad3da9c6d5bcbf32e4bcf3d0bf3eba674df5d907a83e73.mod {\nuse 0000000000000000000000000000000000000000000000000000000000000002::object;\nuse 0000000000000000000000000000000000000000000000000000000000000002::tx_context;\n\nstruct Foo has store, key {\n\tid: UID\n}\n\npublic new(Arg0: &mut TxContext): Foo {\nB0:\n\t0: MoveLoc[0](Arg0: &mut TxContext)\n\t1: Call object::new(&mut TxContext): UID\n\t2: Pack[0](Foo)\n\t3: Ret\n}\n\n}\n"
+          "mod": "// Move bytecode v6\nmodule 3b798ce03faf0000b18cc1030fe6900f0cb61f41310fd0ce008b7e2676974885.mod {\nuse 0000000000000000000000000000000000000000000000000000000000000002::object;\nuse 0000000000000000000000000000000000000000000000000000000000000002::tx_context;\n\nstruct Foo has store, key {\n\tid: UID\n}\n\npublic new(Arg0: &mut TxContext): Foo {\nB0:\n\t0: MoveLoc[0](Arg0: &mut TxContext)\n\t1: Call object::new(&mut TxContext): UID\n\t2: Pack[0](Foo)\n\t3: Ret\n}\n\n}\n"
         }
       },
       "bcs": {
         "dataType": "package",
-        "id": "0xb1d114770bfc9968a2ad3da9c6d5bcbf32e4bcf3d0bf3eba674df5d907a83e73",
+        "id": "0x3b798ce03faf0000b18cc1030fe6900f0cb61f41310fd0ce008b7e2676974885",
         "version": 1,
         "moduleMap": {
-          "mod": "oRzrCwYAAAAIAQAGAgYMAxIKBRwLBycvCFZACpYBBgycAQ0ABAEGAQcAAAwAAQIEAAIBAgAABQABAAEFAAMAAQcIAgEIAAABCAEDRm9vCVR4Q29udGV4dANVSUQCaWQDbW9kA25ldwZvYmplY3QKdHhfY29udGV4dLHRFHcL/Jlooq09qcbVvL8y5Lzz0L8+umdN9dkHqD5zAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAgEDCAEAAQAAAgQLABEBEgACAA=="
+          "mod": "oRzrCwYAAAAIAQAGAgYMAxIKBRwLBycvCFZACpYBBgycAQ0ABAEGAQcAAAwAAQIEAAIBAgAABQABAAEFAAMAAQcIAgEIAAABCAEDRm9vCVR4Q29udGV4dANVSUQCaWQDbW9kA25ldwZvYmplY3QKdHhfY29udGV4dDt5jOA/rwAAsYzBAw/mkA8Mth9BMQ/QzgCLfiZ2l0iFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAgEDCAEAAQAAAgQLABEBEgACAA=="
         },
         "typeOriginTable": [
           {
             "module_name": "mod",
             "datatype_name": "Foo",
-            "package": "0xb1d114770bfc9968a2ad3da9c6d5bcbf32e4bcf3d0bf3eba674df5d907a83e73"
+            "package": "0x3b798ce03faf0000b18cc1030fe6900f0cb61f41310fd0ce008b7e2676974885"
           }
         ],
         "linkageTable": {
@@ -86,25 +86,25 @@ Response: {
   "result": {
     "status": "VersionFound",
     "details": {
-      "objectId": "0x5736caa914301b5f6bc2734fdd6ef4c0097ebf6f0b346ec0ce1119f3a86c8c37",
+      "objectId": "0xc021aa4467b3506fe00fffdd15ec7406db4a42da5302698658d3ca2549a81741",
       "version": "2",
-      "digest": "6pd5G7cgCu3ShFTxpyo7xJTsq5EwzbAnrmfNeR55roUH",
+      "digest": "DZMR4ciAu7GRQiqtfrt9gU88RzM5NF8mJj25CvcRQdzo",
       "content": {
         "dataType": "moveObject",
-        "type": "0xb1d114770bfc9968a2ad3da9c6d5bcbf32e4bcf3d0bf3eba674df5d907a83e73::mod::Foo",
+        "type": "0x3b798ce03faf0000b18cc1030fe6900f0cb61f41310fd0ce008b7e2676974885::mod::Foo",
         "hasPublicTransfer": true,
         "fields": {
           "id": {
-            "id": "0x5736caa914301b5f6bc2734fdd6ef4c0097ebf6f0b346ec0ce1119f3a86c8c37"
+            "id": "0xc021aa4467b3506fe00fffdd15ec7406db4a42da5302698658d3ca2549a81741"
           }
         }
       },
       "bcs": {
         "dataType": "moveObject",
-        "type": "0xb1d114770bfc9968a2ad3da9c6d5bcbf32e4bcf3d0bf3eba674df5d907a83e73::mod::Foo",
+        "type": "0x3b798ce03faf0000b18cc1030fe6900f0cb61f41310fd0ce008b7e2676974885::mod::Foo",
         "hasPublicTransfer": true,
         "version": 2,
-        "bcsBytes": "VzbKqRQwG19rwnNP3W70wAl+v28LNG7AzhEZ86hsjDc="
+        "bcsBytes": "wCGqRGezUG/gD//dFex0BttKQtpTAmmGWNPKJUmoF0E="
       }
     }
   }
@@ -118,9 +118,9 @@ Response: {
   "result": {
     "status": "VersionFound",
     "details": {
-      "objectId": "0xf2a6833ec5d2dd77e656a3fe62bdd4e4609b23fa0739312e384fdbb06080155e",
+      "objectId": "0xe1add385a5aa9c33bf39bc5a33ac16e374d1eeab4ac190719b4fd165cca37109",
       "version": "3",
-      "digest": "AeAb1PukmXSZNcUMrQmqqWeEwSwyoKXhSGogxN37Wdym",
+      "digest": "76Pk1EoQmEW9htKhzTGxtCsJkms1z9js1sxKxehRqJyp",
       "content": {
         "dataType": "moveObject",
         "type": "0x2::coin::Coin<0x2::sui::SUI>",
@@ -128,7 +128,7 @@ Response: {
         "fields": {
           "balance": "42",
           "id": {
-            "id": "0xf2a6833ec5d2dd77e656a3fe62bdd4e4609b23fa0739312e384fdbb06080155e"
+            "id": "0xe1add385a5aa9c33bf39bc5a33ac16e374d1eeab4ac190719b4fd165cca37109"
           }
         }
       },
@@ -137,7 +137,7 @@ Response: {
         "type": "0x2::coin::Coin<0x2::sui::SUI>",
         "hasPublicTransfer": true,
         "version": 3,
-        "bcsBytes": "8qaDPsXS3XfmVqP+Yr3U5GCbI/oHOTEuOE/bsGCAFV4qAAAAAAAAAA=="
+        "bcsBytes": "4a3ThaWqnDO/ObxaM6wW43TR7qtKwZBxm0/RZcyjcQkqAAAAAAAAAA=="
       }
     }
   }

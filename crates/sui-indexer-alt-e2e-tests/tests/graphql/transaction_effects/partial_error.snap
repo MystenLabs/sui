@@ -24,7 +24,7 @@ Response: {
     "transactionEffects": {
       "status": "SUCCESS",
       "lamportVersion": 2,
-      "effectsDigest": "FiubPwB9XVPgZpXcZnCmjwSEvpu9Qk2AdrJspCoRGfqh",
+      "effectsDigest": "6znLhUZP5ie3xxvgQk83Eceott4YQ55Bk5xRYMAQ2hMy",
       "events": null
     }
   },

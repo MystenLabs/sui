@@ -50,7 +50,7 @@ Response: {
         "epoch": {
           "epochId": 0
         },
-        "signature": "sqTHHfkSR11Z+F1hT87Kq6omvXa6VgddqwTlq7kkS20vBM0XEMQsqq+YjSLf31fZ",
+        "signature": "oarEfYz6gerPMhhdW7C7YIz5xtJEQy3cwSPPtrVnnYxfz8oXAfw5ED2jFEvPl/GC",
         "signersMap": [
           0
         ]
@@ -62,7 +62,7 @@ Response: {
         "epoch": {
           "epochId": 0
         },
-        "signature": "mZ3gH6ld4/ek2dSX7tWFFrLZIDqhxZTP0mkW+IYNmQ/D1S/FuZG8wxGV2fPBzS4K",
+        "signature": "pNYOHkFPAKySAf8aogYO/4467GQubhOSySZFbEbXEYvS3ihfWDAYu+iAFfT8kkaA",
         "signersMap": [
           0
         ]
@@ -74,7 +74,7 @@ Response: {
         "epoch": {
           "epochId": 1
         },
-        "signature": "isAJamTkmi0wLAgXFq3KrflcFnmFgrQR0KMu8JNewbX4tqcnGDNATFTiyuBw3i4f",
+        "signature": "mT2cHZ9VCUNHjcqzfbpzn8uj3lojHdkcwXT0HcCWJ1p7BNgvwyOGfX8F2Kd86X8M",
         "signersMap": [
           0
         ]
@@ -87,7 +87,7 @@ Response: {
           "epoch": {
             "epochId": 0
           },
-          "signature": "sqTHHfkSR11Z+F1hT87Kq6omvXa6VgddqwTlq7kkS20vBM0XEMQsqq+YjSLf31fZ",
+          "signature": "oarEfYz6gerPMhhdW7C7YIz5xtJEQy3cwSPPtrVnnYxfz8oXAfw5ED2jFEvPl/GC",
           "signersMap": [
             0
           ]
@@ -99,7 +99,7 @@ Response: {
           "epoch": {
             "epochId": 0
           },
-          "signature": "mZ3gH6ld4/ek2dSX7tWFFrLZIDqhxZTP0mkW+IYNmQ/D1S/FuZG8wxGV2fPBzS4K",
+          "signature": "pNYOHkFPAKySAf8aogYO/4467GQubhOSySZFbEbXEYvS3ihfWDAYu+iAFfT8kkaA",
           "signersMap": [
             0
           ]
@@ -111,7 +111,7 @@ Response: {
           "epoch": {
             "epochId": 1
           },
-          "signature": "isAJamTkmi0wLAgXFq3KrflcFnmFgrQR0KMu8JNewbX4tqcnGDNATFTiyuBw3i4f",
+          "signature": "mT2cHZ9VCUNHjcqzfbpzn8uj3lojHdkcwXT0HcCWJ1p7BNgvwyOGfX8F2Kd86X8M",
           "signersMap": [
             0
           ]
@@ -140,7 +140,7 @@ Response: {
           "epoch": {
             "epochId": 1
           },
-          "signature": "isAJamTkmi0wLAgXFq3KrflcFnmFgrQR0KMu8JNewbX4tqcnGDNATFTiyuBw3i4f",
+          "signature": "mT2cHZ9VCUNHjcqzfbpzn8uj3lojHdkcwXT0HcCWJ1p7BNgvwyOGfX8F2Kd86X8M",
           "signersMap": [
             0
           ]
@@ -153,7 +153,7 @@ Response: {
           "epoch": {
             "epochId": 0
           },
-          "signature": "sqTHHfkSR11Z+F1hT87Kq6omvXa6VgddqwTlq7kkS20vBM0XEMQsqq+YjSLf31fZ",
+          "signature": "oarEfYz6gerPMhhdW7C7YIz5xtJEQy3cwSPPtrVnnYxfz8oXAfw5ED2jFEvPl/GC",
           "signersMap": [
             0
           ]

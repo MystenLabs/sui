@@ -17,6 +17,7 @@ use anyhow::Result;
 use anyhow::anyhow;
 use object_store::Error as ObjectStoreError;
 use object_store::ObjectStore;
+use object_store::ObjectStoreExt as _;
 use object_store::PutMode;
 use object_store::PutOptions;
 use object_store::PutPayload;

@@ -31,12 +31,12 @@ Response: {
         {
           "module": "M",
           "struct": "S1",
-          "definingId": "0x64f698dbaa0f8a2f061a417a6310dc7787b03e32a2d7429dc6909360731a4e9a"
+          "definingId": "0x555957d11e5e4e40c17a84441fbc6cb381dbbbd1c0f9b033dda6c3ed09a74223"
         },
         {
           "module": "M",
           "struct": "S2",
-          "definingId": "0xa0ac404709b0d0366e01570209e69c7900a53851544f6937504f911eaf9e2fd3"
+          "definingId": "0x5522f863dd117e0a78eb6d0c18f33678ecf22e64290ac1863a0e22ee47889ee4"
         }
       ]
     }
