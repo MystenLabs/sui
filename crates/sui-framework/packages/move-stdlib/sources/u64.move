@@ -43,8 +43,8 @@ public fun mul_div_ceil(x: u64, y: u64, z: u64): u64 {
 }
 
 /// Calculate x / y, but round up the result.
-public fun divide_and_round_up(x: u64, y: u64): u64 {
-    std::macros::num_divide_and_round_up!(x, y)
+public fun div_ceil(x: u64, y: u64): u64 {
+    std::macros::num_div_ceil!(x, y)
 }
 
 /// Return the value of a base raised to a power
@@ -195,4 +195,11 @@ public macro fun do<$R: drop>($stop: u64, $f: |u64| -> $R) {
 /// Loops applying `$f` to each number from `0` to `$stop` (inclusive)
 public macro fun do_eq<$R: drop>($stop: u64, $f: |u64| -> $R) {
     std::macros::do_eq!($stop, $f)
+}
+
+// === Deprecated ===
+
+#[deprecated(note = b"Renamed to `div_ceil` for consistency")]
+public fun divide_and_round_up(x: u64, y: u64): u64 {
+    x.div_ceil(y)
 }
