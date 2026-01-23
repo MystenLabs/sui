@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::shared::constants::IDENTIFIER_INTERNER_SIZE_LIMIT;
+
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     identifier::{IdentStr, Identifier},
@@ -17,10 +19,6 @@ use lasso::{Spur, ThreadedRodeo};
 #[derive(Debug)]
 pub struct IdentifierInterner(ThreadedRodeo);
 
-/// Maximum number of identifiers we can ever intern.
-/// FIXME: Set to 1 billion, but should be experimentally determined based on actual run data.
-const IDENTIFIER_SLOTS: usize = 1_000_000_000;
-
 // Note: these are not hashable or orderable -- their ordering is unstable, so they should not be
 // used as keys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -34,7 +32,8 @@ pub(crate) struct IdentifierKey(Spur);
 
 impl IdentifierInterner {
     pub fn new() -> Self {
-        let rodeo = ThreadedRodeo::with_capacity(lasso::Capacity::for_strings(IDENTIFIER_SLOTS));
+        let memory_limits = lasso::MemoryLimits::new(IDENTIFIER_INTERNER_SIZE_LIMIT);
+        let rodeo = ThreadedRodeo::with_memory_limits(memory_limits);
         Self(rodeo)
     }
 
@@ -61,32 +60,22 @@ impl IdentifierInterner {
 
     /// Get the interned identifier value. This may raise an invariant error if `try_get_or_intern`
     /// fails, but that's likely a serious OOM issue.
-    pub(crate) fn intern_identifier(&self, ident: &Identifier) -> PartialVMResult<IdentifierKey> {
+    pub(crate) fn intern_identifier(&self, ident: &Identifier) -> IdentifierKey {
         self.get_or_intern_str_internal(ident.borrow_str())
     }
 
     /// Get the interned identifier string value. This may raise an invariant error if
     /// `get_or_intern` fails, but that's likely a serious OOM issue.
-    pub(crate) fn intern_ident_str(&self, ident_str: &IdentStr) -> PartialVMResult<IdentifierKey> {
+    pub(crate) fn intern_ident_str(&self, ident_str: &IdentStr) -> IdentifierKey {
         self.get_or_intern_str_internal(ident_str.borrow_str())
     }
 
-    /// Get the interned identifier value, using `key_type` in the error case. This may raise an
-    /// invariant error if `try_get_or_intern` fails, but that's likely a serious OOM issue.
-    pub(crate) fn intern_identifier_with_msg(
-        &self,
-        ident: &Identifier,
-        key_type: &str,
-    ) -> PartialVMResult<IdentifierKey> {
-        self.get_or_intern_str_internal(ident.borrow_str())
-            .map_err(|err| err.with_message(format!("While attempting to intern {key_type}")))
-    }
-
-    fn get_or_intern_str_internal(&self, string: &str) -> PartialVMResult<IdentifierKey> {
+    fn get_or_intern_str_internal(&self, string: &str) -> IdentifierKey {
+        // Prefer to panic here rather than propagate OOM errors throughout the VM---reporting an
+        // invariant violation during an OOM could result in a consensus issue.
         match self.0.try_get_or_intern(string) {
-            Ok(result) => Ok(IdentifierKey(result)),
-            Err(err) => Err(PartialVMError::new(StatusCode::INTERNER_LIMIT_REACHED)
-                .with_message(format!("Failed to intern {string} ident; error: {err:?}."))),
+            Ok(result) => IdentifierKey(result),
+            Err(err) => panic!("Identifier interner OOM: {err:?}"),
         }
     }
 

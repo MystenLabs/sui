@@ -37,3 +37,7 @@ pub const TYPE_DEPTH_LRU_SIZE: usize = 16_384;
 /// This number is currently 1 GB / 128 bytes (size of VMDispatchTables), giving approximately
 /// a gigabytes of storage to VTables (though this disregards key and LRU overhead).
 pub const VIRTUAL_DISPATCH_TABLE_CACHE_SIZE: usize = 1_000_000;
+
+/// Maximum number of identifiers we can ever intern.
+/// TODO Set to 10 billion, but should be experimentally determined based on actual run data.
+pub const IDENTIFIER_INTERNER_SIZE_LIMIT: usize = 10_000_000_000;
