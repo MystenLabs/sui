@@ -4467,7 +4467,7 @@ impl ProtocolConfig {
                         .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
                     cfg.feature_flags
                         .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
-                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
