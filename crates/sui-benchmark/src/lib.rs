@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use anyhow::bail;
 use async_trait::async_trait;
@@ -485,7 +489,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         &self,
         txs: Vec<Transaction>,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-        execute_soft_bundle_impl(&self.td, txs).await
+        execute_soft_bundle_with_retries(&self.td, txs).await
     }
 
     fn get_chain_identifier(&self) -> ChainIdentifier {
@@ -493,11 +497,34 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     }
 }
 
+async fn execute_soft_bundle_with_retries(
+    td: &TransactionDriver<NetworkAuthorityClient>,
+    txs: Vec<Transaction>,
+) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
+    let start = Instant::now();
+    let mut retry_cnt = 0;
+    loop {
+        match execute_soft_bundle_impl(td, &txs).await {
+            Ok(results) => {
+                return Ok(results);
+            }
+            Err(e) => {
+                if retry_cnt < 10 || start.elapsed() < Duration::from_secs(60) {
+                    retry_cnt += 1;
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+    }
+}
+
 /// Helper function to execute a soft bundle via gRPC.
 /// Shared by both LocalValidatorAggregatorProxy and FullNodeProxy.
 async fn execute_soft_bundle_impl(
     td: &TransactionDriver<NetworkAuthorityClient>,
-    txs: Vec<Transaction>,
+    txs: &[Transaction],
 ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
     use sui_network::tonic::IntoRequest;
 
@@ -743,8 +770,9 @@ impl ValidatorProxy for FullNodeProxy {
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
         let tx_digest = *tx.digest();
+        let start = Instant::now();
         let mut retry_cnt = 0;
-        while retry_cnt < 10 {
+        while retry_cnt < 10 || start.elapsed() < Duration::from_secs(60) {
             // Fullnode could time out after WAIT_FOR_FINALITY_TIMEOUT (30s) in TransactionOrchestrator
             // SuiClient times out after 60s
             match self
@@ -820,7 +848,7 @@ impl ValidatorProxy for FullNodeProxy {
         &self,
         txs: Vec<Transaction>,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-        execute_soft_bundle_impl(&self.td, txs).await
+        execute_soft_bundle_with_retries(&self.td, txs).await
     }
 
     fn get_chain_identifier(&self) -> ChainIdentifier {
