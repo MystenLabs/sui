@@ -1170,7 +1170,7 @@ fn code(
             .into_iter(),
     )?;
 
-    // Retunr the final bytecode and jump tables
+    // Return the final bytecode and jump tables
     Ok((final_bytecode, final_jump_tables))
 }
 
