@@ -21,6 +21,7 @@ use sui_rpc::proto::sui::rpc::v2::UserSignature;
 use sui_rpc::proto::timestamp_ms_to_proto;
 use sui_sdk_types::Digest;
 
+pub const MAX_BATCH_REQUESTS: usize = 200;
 pub const READ_MASK_DEFAULT: &str = "digest";
 
 #[tracing::instrument(skip(service))]
@@ -99,6 +100,13 @@ pub fn batch_get_transactions(
             })?;
         FieldMaskTree::from(read_mask)
     };
+
+    if digests.len() > MAX_BATCH_REQUESTS {
+        return Err(RpcError::new(
+            tonic::Code::InvalidArgument,
+            format!("number of batch requests exceed limit of {MAX_BATCH_REQUESTS}"),
+        ));
+    }
 
     let latest_checkpoint = service
         .reader
