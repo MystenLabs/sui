@@ -148,7 +148,7 @@ impl EventStreamState {
             .fetch_and_verify_stream_head(self.stream_object_id, up_to_checkpoint)
             .await?;
 
-        if new_stream_head.checkpoint_seq < old_head.checkpoint_seq {
+        if new_stream_head.checkpoint_seq <= old_head.checkpoint_seq {
             return Err(ClientError::VerificationError(format!(
                 "MMR verification failed: checkpoint went backwards from {} to {}",
                 old_head.checkpoint_seq, new_stream_head.checkpoint_seq
@@ -168,6 +168,13 @@ impl EventStreamState {
             return Err(ClientError::VerificationError(format!(
                 "MMR verification failed: computed event count {} does not match EventStreamHead count {}",
                 computed_head.num_events, new_stream_head.num_events
+            )));
+        }
+
+        if new_stream_head.checkpoint_seq != up_to_checkpoint {
+            return Err(ClientError::VerificationError(format!(
+                "MMR verification failed: stream head checkpoint {} does not match expected checkpoint {}",
+                new_stream_head.checkpoint_seq, up_to_checkpoint
             )));
         }
 

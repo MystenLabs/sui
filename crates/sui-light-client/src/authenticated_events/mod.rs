@@ -29,7 +29,7 @@ use tonic::transport::Channel;
 
 /// A cryptographically verified event.
 ///
-/// Each `AuthenticatedEvent` has been verified against the EventStreamHead's MMR
+/// Each `AuthenticatedEvent` can be verified using the EventStreamHead's MMR
 /// (Merkle Mountain Range) commitment, ensuring its authenticity and inclusion
 /// at the specified checkpoint.
 #[derive(Debug, Clone)]
@@ -537,7 +537,7 @@ impl AuthenticatedEventsClient {
             Ok(resp) => resp.into_inner(),
             Err(status) if status.code() == tonic::Code::FailedPrecondition => {
                 return Err(ClientError::InternalError(format!(
-                    "Cannot resume from checkpoint {}: EventStreamHead was not updated at this checkpoint (no events were emitted)",
+                    "EventStreamHead was not updated at checkpoint {} (no events were emitted)",
                     checkpoint
                 )));
             }

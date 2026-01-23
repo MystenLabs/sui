@@ -444,8 +444,7 @@ async fn test_client_resume_from_checkpoint_without_events() {
     };
 
     assert!(
-        msg.contains("Cannot resume from checkpoint")
-            && msg.contains("EventStreamHead was not updated at this checkpoint"),
+        msg.contains("EventStreamHead was not updated at checkpoint"),
         "Expected error message to explain that EventStreamHead was not updated, got: {}",
         msg
     );
