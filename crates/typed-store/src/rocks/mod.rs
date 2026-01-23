@@ -61,6 +61,14 @@ fn write_sync_enabled() -> bool {
         .get_or_init(|| std::env::var("SUI_DB_SYNC_TO_DISK").is_ok_and(|v| v == "1" || v == "true"))
 }
 
+/// Initialize the write sync setting from config.
+/// Must be called before any database writes occur.
+pub fn init_write_sync(enabled: Option<bool>) {
+    if let Some(value) = enabled {
+        let _ = WRITE_SYNC_ENABLED.set(value);
+    }
+}
+
 #[cfg(test)]
 mod tests;
 
