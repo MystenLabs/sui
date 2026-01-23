@@ -10,24 +10,59 @@ mod consensus_dag_tests {
     use rand::{SeedableRng as _, rngs::StdRng};
     use sui_macros::sim_test;
 
-    const NUM_RUNS: u32 = 100;
-    const MAX_STEP: u32 = 3;
-
     #[sim_test]
-    async fn test_randomized_dag_with_4_authorities() {
-        test_randomized_dag_with_reject_votes(4, 6000, 10).await;
+    async fn test_randomized_dag_with_num_authorities_4_step_1() {
+        test_randomized_dag_with_reject_votes(RandomizedDagTestConfig {
+            num_runs: 100,
+            num_authorities: 4,
+            num_rounds: 6000,
+            reject_percentage: 10,
+            max_step: 1,
+        })
+        .await;
     }
 
     #[sim_test]
-    async fn test_randomized_dag_with_7_authorities() {
-        test_randomized_dag_with_reject_votes(7, 2000, 5).await;
+    async fn test_randomized_dag_with_num_authorities_4_step_2() {
+        test_randomized_dag_with_reject_votes(RandomizedDagTestConfig {
+            num_runs: 100,
+            num_authorities: 4,
+            num_rounds: 6000,
+            reject_percentage: 10,
+            max_step: 2,
+        })
+        .await;
     }
 
-    async fn test_randomized_dag_with_reject_votes(
+    #[sim_test]
+    async fn test_randomized_dag_with_num_authorities_7_step_1() {
+        test_randomized_dag_with_reject_votes(RandomizedDagTestConfig {
+            num_runs: 100,
+            num_authorities: 7,
+            num_rounds: 2000,
+            reject_percentage: 5,
+            max_step: 1,
+        })
+        .await;
+    }
+
+    struct RandomizedDagTestConfig {
+        num_runs: usize,
         num_authorities: usize,
         num_rounds: Round,
         reject_percentage: u8,
-    ) {
+        max_step: Round,
+    }
+
+    async fn test_randomized_dag_with_reject_votes(config: RandomizedDagTestConfig) {
+        let RandomizedDagTestConfig {
+            num_runs,
+            num_authorities,
+            num_rounds,
+            reject_percentage,
+            max_step,
+        } = config;
+
         let mut rng = StdRng::from_entropy();
         let num_transactions: u32 = 5;
 
@@ -48,13 +83,13 @@ mod consensus_dag_tests {
         // Collect finalized commit sequences from each run.
         let mut commit_sequences = vec![];
 
-        for i in 0..NUM_RUNS {
+        for i in 0..num_runs {
             tracing::info!("Run {i} of randomized test...");
             let mut fixture = CommitTestFixture::new(context.clone());
             let mut finalized_commits = vec![];
             let mut last_decided = Slot::new_for_test(0, 0);
 
-            for block in dag.random_iter(&mut rng, MAX_STEP) {
+            for block in dag.random_iter(&mut rng, max_step) {
                 fixture.try_accept_blocks(vec![block]);
 
                 let (finalized, new_last_decided) = fixture.try_commit(last_decided).await;

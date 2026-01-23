@@ -222,6 +222,10 @@ pub fn assert_commit_sequences_match(
         .expect("commit_sequences should not be empty");
 
     for (run, commit_sequence) in commit_sequences.iter().enumerate() {
+        // Since INDIRECT_REJECT_DEPTH is 3, the maximum number of commits buffered in CommitFinalizer is 3.
+        // And because of the direct finalization optimization, it might happen the last 3 commits are pending in
+        // one run but all finalized in another.
+        // TODO: verify this edge case can indeed happen.
         assert!(
             commit_sequence.len() <= shortest_sequence.len() + 3,
             "Commit sequence at run {run} is more than 3 commits longer than shortest (run {shortest_idx}): {} vs {}",

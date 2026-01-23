@@ -623,9 +623,10 @@ impl TestBlock {
     }
 
     /// Sorts then sets ancestors in the TestBlock.
+    /// Author's own block is always first, which is expected by BlockVerifier and
+    /// the rest of the system.
     pub fn set_ancestors(mut self, mut ancestors: Vec<BlockRef>) -> Self {
         ancestors.sort_by(|a, b| {
-            // Put own authority ancestor at the front.
             if a.author == self.block.author {
                 return std::cmp::Ordering::Less;
             }
