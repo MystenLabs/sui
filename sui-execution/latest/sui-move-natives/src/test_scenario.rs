@@ -815,7 +815,7 @@ fn most_recent_at_ty_opt(
     ty: MoveObjectType,
 ) -> Option<Value> {
     let s = inv.get(&ty)?;
-    let most_recent_id = s.iter().filter(|id| !taken.contains_key(id)).next_back()?;
+    let most_recent_id = s.iter().rfind(|id| !taken.contains_key(id))?;
     Some(pack_id(*most_recent_id))
 }
 

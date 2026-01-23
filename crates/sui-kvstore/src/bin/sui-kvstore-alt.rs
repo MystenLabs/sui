@@ -34,6 +34,10 @@ struct Args {
     #[arg(long, default_value = "1m", value_parser = humantime::parse_duration)]
     watermark_interval: Duration,
 
+    /// BigTable app profile ID
+    #[arg(long)]
+    app_profile_id: Option<String>,
+
     #[command(flatten)]
     metrics_args: MetricsArgs,
 
@@ -60,7 +64,7 @@ async fn main() -> Result<()> {
         None,
         "sui-kvstore-alt".to_string(),
         None,
-        None,
+        args.app_profile_id,
     )
     .await?;
 

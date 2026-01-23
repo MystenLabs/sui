@@ -39,7 +39,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0x420124fb85be0b2f889d7db3bc2dbd1c4cd85a0b2d23e8b7ef5fb741d944fd53"
+                    "address": "0x6047fa3b70e8e7128d38f0735540d3b967e61ef07dc107b01db31c0fccfbec73"
                   },
                   "name": "move_call_test"
                 },
@@ -56,7 +56,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0x420124fb85be0b2f889d7db3bc2dbd1c4cd85a0b2d23e8b7ef5fb741d944fd53"
+                    "address": "0x6047fa3b70e8e7128d38f0735540d3b967e61ef07dc107b01db31c0fccfbec73"
                   },
                   "name": "move_call_test"
                 },
@@ -74,7 +74,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0x420124fb85be0b2f889d7db3bc2dbd1c4cd85a0b2d23e8b7ef5fb741d944fd53"
+                    "address": "0x6047fa3b70e8e7128d38f0735540d3b967e61ef07dc107b01db31c0fccfbec73"
                   },
                   "name": "move_call_test"
                 },
@@ -92,7 +92,7 @@ Response: {
               "function": {
                 "module": {
                   "package": {
-                    "address": "0x420124fb85be0b2f889d7db3bc2dbd1c4cd85a0b2d23e8b7ef5fb741d944fd53"
+                    "address": "0x6047fa3b70e8e7128d38f0735540d3b967e61ef07dc107b01db31c0fccfbec73"
                   },
                   "name": "move_call_test"
                 },

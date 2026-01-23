@@ -46,44 +46,44 @@ Response: {
   "data": {
     "c0": {
       "sequenceNumber": 0,
-      "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
+      "digest": "4Kxh38MGZSf9fVqjtQtELiTE7f2WrY7JfN6Gh1rGQBL3",
       "previousCheckpointDigest": null
     },
     "c1": {
       "sequenceNumber": 1,
-      "digest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P",
-      "previousCheckpointDigest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C"
+      "digest": "HWbdaxd9NeQwrAdmsswYaBnKWo8jhhTo4XULVvHnm87m",
+      "previousCheckpointDigest": "4Kxh38MGZSf9fVqjtQtELiTE7f2WrY7JfN6Gh1rGQBL3"
     },
     "c2": {
       "sequenceNumber": 2,
-      "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
-      "previousCheckpointDigest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P"
+      "digest": "JDjUMQ9EcQwHV8seq7EheoyD2fF47FEWzKx1zwzUUqdS",
+      "previousCheckpointDigest": "HWbdaxd9NeQwrAdmsswYaBnKWo8jhhTo4XULVvHnm87m"
     },
     "c3": {
       "sequenceNumber": 3,
-      "digest": "5MPMJ8CDUt35cXKebu3AbzQNg8sLXNtX5nhggxZSnDpj",
-      "previousCheckpointDigest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R"
+      "digest": "27DN3nyj4eZYmiTn8XaFJNEmEqZDfga1asoxM3TFX8bp",
+      "previousCheckpointDigest": "JDjUMQ9EcQwHV8seq7EheoyD2fF47FEWzKx1zwzUUqdS"
     },
     "multiGetCheckpoints": [
       {
         "sequenceNumber": 0,
-        "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
+        "digest": "4Kxh38MGZSf9fVqjtQtELiTE7f2WrY7JfN6Gh1rGQBL3",
         "previousCheckpointDigest": null
       },
       {
         "sequenceNumber": 1,
-        "digest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P",
-        "previousCheckpointDigest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C"
+        "digest": "HWbdaxd9NeQwrAdmsswYaBnKWo8jhhTo4XULVvHnm87m",
+        "previousCheckpointDigest": "4Kxh38MGZSf9fVqjtQtELiTE7f2WrY7JfN6Gh1rGQBL3"
       },
       {
         "sequenceNumber": 2,
-        "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
-        "previousCheckpointDigest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P"
+        "digest": "JDjUMQ9EcQwHV8seq7EheoyD2fF47FEWzKx1zwzUUqdS",
+        "previousCheckpointDigest": "HWbdaxd9NeQwrAdmsswYaBnKWo8jhhTo4XULVvHnm87m"
       },
       {
         "sequenceNumber": 3,
-        "digest": "5MPMJ8CDUt35cXKebu3AbzQNg8sLXNtX5nhggxZSnDpj",
-        "previousCheckpointDigest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R"
+        "digest": "27DN3nyj4eZYmiTn8XaFJNEmEqZDfga1asoxM3TFX8bp",
+        "previousCheckpointDigest": "JDjUMQ9EcQwHV8seq7EheoyD2fF47FEWzKx1zwzUUqdS"
       }
     ]
   }
@@ -104,13 +104,13 @@ Response: {
     "multiGetCheckpoints": [
       {
         "sequenceNumber": 2,
-        "digest": "2HqixJnQgrp9A74ddZLxNFaJfUeqCci5hUws5pUN7d1R",
-        "previousCheckpointDigest": "6KC42LBjuKZP3F9Nfmdz8nC3nvXtMYsX8cEDeMQBkE6P"
+        "digest": "JDjUMQ9EcQwHV8seq7EheoyD2fF47FEWzKx1zwzUUqdS",
+        "previousCheckpointDigest": "HWbdaxd9NeQwrAdmsswYaBnKWo8jhhTo4XULVvHnm87m"
       },
       null,
       {
         "sequenceNumber": 0,
-        "digest": "EznTSQyzQqRf8tuPhLWZDdhny9jgA7Rw81nWB486rW8C",
+        "digest": "4Kxh38MGZSf9fVqjtQtELiTE7f2WrY7JfN6Gh1rGQBL3",
         "previousCheckpointDigest": null
       },
       null

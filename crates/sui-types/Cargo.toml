@@ -87,7 +87,7 @@ sui-rpc.workspace = true
 ciborium.workspace = true
 x509-parser.workspace = true
 p384.workspace = true
-rustls-pemfile.workspace = true
+rustls-pki-types.workspace = true
 
 [dev-dependencies]
 base64.workspace = true

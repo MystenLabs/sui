@@ -131,3 +131,38 @@ fun test_checked_mul() {
 fun test_checked_div() {
     integer_tests::test_checked_div!(MAX, CASES);
 }
+
+#[test]
+fun test_saturating_add() {
+    integer_tests::test_saturating_add!(MAX, CASES);
+}
+
+#[test]
+fun test_saturating_sub() {
+    integer_tests::test_saturating_sub!(MAX, CASES);
+}
+
+#[test]
+fun test_saturating_mul() {
+    integer_tests::test_saturating_mul!(MAX, CASES);
+}
+
+#[test]
+fun test_checked_shl() {
+    integer_tests::test_checked_shl!(MAX, BIT_SIZE);
+}
+
+#[test]
+fun test_checked_shr() {
+    integer_tests::test_checked_shr!(MAX, BIT_SIZE);
+}
+
+#[test]
+fun test_lossless_shl() {
+    integer_tests::test_lossless_shl!(MAX, BIT_SIZE);
+}
+
+#[test]
+fun test_lossless_shr() {
+    integer_tests::test_lossless_shr!(MAX, BIT_SIZE);
+}

@@ -18,7 +18,7 @@ use crate::{
     },
 };
 use futures::stream::{FuturesUnordered, StreamExt};
-use mysten_common::debug_fatal;
+use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
 use std::{
@@ -28,7 +28,7 @@ use std::{
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-    base_types::{FullObjectID, ObjectID},
+    base_types::{FullObjectID, ObjectID, SequenceNumber},
     digests::TransactionDigest,
     effects::{AccumulatorOperation, AccumulatorValue, TransactionEffects, TransactionEffectsAPI},
     error::SuiResult,
@@ -389,6 +389,7 @@ impl ExecutionScheduler {
                 match result {
                     Ok(result) => match result.status {
                         ScheduleStatus::InsufficientFunds => {
+                            assert_reachable!("tx cancelled, insufficient funds");
                             let tx_digest = result.tx_digest;
                             debug!(
                                 ?tx_digest,
@@ -399,12 +400,14 @@ impl ExecutionScheduler {
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
                         ScheduleStatus::SufficientFunds => {
+                            assert_reachable!("tx scheduled, sufficient funds");
                             let tx_digest = result.tx_digest;
                             debug!(?tx_digest, "Funds withdraw scheduling result: Success");
                             let (cert, env) = cert_map.remove(&tx_digest).expect("cert must exist");
                             scheduler.enqueue_transactions(vec![(cert, env)], &epoch_store);
                         }
                         ScheduleStatus::SkipSchedule => {
+                            assert_reachable!("tx withdrawal scheduling skipped");
                             let tx_digest = result.tx_digest;
                             debug!(?tx_digest, "Skip scheduling funds withdraw");
                         }
@@ -634,18 +637,20 @@ impl ExecutionScheduler {
             .inc_by(already_executed_certs_num);
     }
 
-    pub fn settle_funds(&self, settlement: FundsSettlement) {
-        if let Some(object_funds_withdraw_scheduler) =
-            self.object_funds_withdraw_scheduler.lock().as_ref()
-        {
-            object_funds_withdraw_scheduler
-                .settle_accumulator_version(settlement.next_accumulator_version);
-        }
+    pub fn settle_address_funds(&self, settlement: FundsSettlement) {
         self.address_funds_withdraw_scheduler
             .lock()
             .as_ref()
             .expect("Funds withdraw scheduler must be enabled if there are settlements")
             .settle_funds(settlement);
+    }
+
+    pub fn settle_object_funds(&self, next_accumulator_version: SequenceNumber) {
+        if let Some(object_funds_withdraw_scheduler) =
+            self.object_funds_withdraw_scheduler.lock().as_ref()
+        {
+            object_funds_withdraw_scheduler.settle_accumulator_version(next_accumulator_version);
+        }
     }
 
     /// Reconfigure internal state at epoch start. This resets the funds withdraw scheduler

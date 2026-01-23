@@ -69,7 +69,7 @@ mod store;
 /// Set-up and run the Indexer and RPC service, using the provided arguments (expected to be
 /// extracted from the command-line).
 ///
-/// `path` is the path to the RocksDB database,which will be created if it does not exist.
+/// `path` is the path to the RocksDB database, which will be created if it does not exist.
 /// `indexer_args` and `client_args` control the behavior of the Indexer, while `rpc_args` controls
 /// the behavior of the RPC service.
 ///
@@ -121,7 +121,14 @@ pub async fn start_service(
     let rpc = RpcService::new(rpc_args, version, registry)
         .await?
         .register_encoded_file_descriptor_set(proto::rpc::consistent::v1alpha::FILE_DESCRIPTOR_SET)
-        .add_service(ConsistentServiceServer::new(state.clone()));
+        .add_service(ConsistentServiceServer::new(state.clone()), {
+            let db = indexer.store().db().clone();
+            async move {
+                while db.snapshots() < 1 {
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
+            }
+        });
 
     macro_rules! add_sequential {
         ($handler:expr, $config:expr) => {

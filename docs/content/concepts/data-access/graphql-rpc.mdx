@@ -435,6 +435,24 @@ In addition to rate limits, queries are also validated against a number of rules
 }
 ```
 
+### Rich queries
+
+Rich queries require a dedicated request to a backing store. There is a limit on the number of rich queries you can perform in a single GraphQL request, which can also be queries from the `serviceConfig`:
+
+```graphql
+{
+  serviceConfig {
+    maxRichQueries
+  }
+}
+```
+
+If a request performs more rich queries than the allowed limit, excess rich queries are arbitrarily replaced by a `"RESOURCE_EXHAUSTED"` error. Rich queries include:
+
+- Paginating owned object queries, such as `IAddressable.objects`, `IAddressable.balances`, and `IMoveObject.dynamicFields`.
+- Paginating historical queries, such as `Query.transactions`, and `Query.events`.
+- Paginating through versions of packages and objects, such as `Query.objectVersions`, `IObject.objectVersionsAfter`, or `IObject.objectVersionsBefore`.
+
 ## Retention
 
 Different queries are subject to their own retention policies. For example, live object set queries work only for recent checkpoints (measured in minutes or hours), while transaction pagination might be available only back to certain checkpoints (measured in weeks or months), depending on the filters applied. Data outside these ranges is pruned. You can query the upper and lower bounds of that range for your query as follows:

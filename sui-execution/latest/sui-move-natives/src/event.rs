@@ -153,8 +153,8 @@ fn emit_impl(
     }
 
     // Get the type tag before getting the mutable reference to avoid borrowing issues
-    let stream_head_type_tag = if stream_ref.is_some() {
-        Some(context.type_to_type_tag(&stream_ref.as_ref().unwrap().stream_head_ty)?)
+    let stream_head_type_tag = if let Some(stream_ref) = &stream_ref {
+        Some(context.type_to_type_tag(&stream_ref.stream_head_ty)?)
     } else {
         None
     };

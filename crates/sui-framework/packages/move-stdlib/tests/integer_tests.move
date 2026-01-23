@@ -415,3 +415,176 @@ public(package) macro fun test_checked_div<$T>($max: $T, $cases: vector<$T>) {
         assert_eq!(case_succ.checked_div(0), option::none());
     });
 }
+
+public(package) macro fun test_saturating_add<$T>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    // basic cases
+    assert_eq!((0: $T).saturating_add(0), 0);
+    assert_eq!((0: $T).saturating_add(1), 1);
+    assert_eq!((1: $T).saturating_add(0), 1);
+    assert_eq!((0: $T).saturating_add(max), max);
+    assert_eq!(max.saturating_add(0), max);
+    // saturation cases
+    assert_eq!(max.saturating_add(1), max);
+    assert_eq!((1: $T).saturating_add(max), max);
+    assert_eq!(max.saturating_add(max), max);
+    // case iteration
+    cases!(max, cases, |case_pred, case, case_succ| {
+        assert_eq!(case.saturating_add(0), case);
+        assert_eq!((0: $T).saturating_add(case), case);
+        if (case <= max - 1) {
+            assert_eq!(case.saturating_add(1), case + 1);
+        } else {
+            assert_eq!(case.saturating_add(1), max);
+        };
+        if (case <= max - case) {
+            assert_eq!(case.saturating_add(case), case + case);
+        } else {
+            assert_eq!(case.saturating_add(case), max);
+        };
+        if (case_pred <= max - case_succ) {
+            assert_eq!(case_pred.saturating_add(case_succ), case_pred + case_succ);
+        } else {
+            assert_eq!(case_pred.saturating_add(case_succ), max);
+        };
+    });
+}
+
+public(package) macro fun test_saturating_sub<$T>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    // basic cases
+    assert_eq!((0: $T).saturating_sub(0), 0);
+    assert_eq!((1: $T).saturating_sub(0), 1);
+    assert_eq!((1: $T).saturating_sub(1), 0);
+    assert_eq!(max.saturating_sub(0), max);
+    assert_eq!(max.saturating_sub(max), 0);
+    // saturation cases
+    assert_eq!((0: $T).saturating_sub(1), 0);
+    assert_eq!((0: $T).saturating_sub(max), 0);
+    assert_eq!((1: $T).saturating_sub(2), 0);
+    assert_eq!((1: $T).saturating_sub(max), 0);
+    // case iteration
+    cases!(max, cases, |case_pred, case, case_succ| {
+        assert_eq!(case.saturating_sub(0), case);
+        assert_eq!(case.saturating_sub(case), 0);
+        assert_eq!(case_succ.saturating_sub(case), case_succ - case);
+        assert_eq!(case_succ.saturating_sub(case_pred), case_succ - case_pred);
+        assert_eq!(case.saturating_sub(case_pred), case - case_pred);
+        assert_eq!(case_pred.saturating_sub(case_succ), 0);
+    });
+}
+
+public(package) macro fun test_saturating_mul<$T>($max: $T, $cases: vector<$T>) {
+    let max = $max;
+    let cases = $cases;
+    // basic cases
+    assert_eq!((0: $T).saturating_mul(0), 0);
+    assert_eq!((0: $T).saturating_mul(1), 0);
+    assert_eq!((1: $T).saturating_mul(0), 0);
+    assert_eq!((1: $T).saturating_mul(1), 1);
+    assert_eq!((0: $T).saturating_mul(max), 0);
+    assert_eq!(max.saturating_mul(0), 0);
+    assert_eq!(max.saturating_mul(1), max);
+    assert_eq!((1: $T).saturating_mul(max), max);
+    // saturation cases
+    assert_eq!(max.saturating_mul(2), max);
+    assert_eq!((2: $T).saturating_mul(max), max);
+    assert_eq!(max.saturating_mul(max), max);
+    // case iteration
+    cases!(max, cases, |case_pred, case, case_succ| {
+        assert_eq!(case.saturating_mul(0), 0);
+        assert_eq!((0: $T).saturating_mul(case), 0);
+        assert_eq!(case.saturating_mul(1), case);
+        assert_eq!((1: $T).saturating_mul(case), case);
+        if (case != 0 && case <= max / 2) {
+            assert_eq!(case.saturating_mul(2), case * 2);
+        } else if (case != 0) {
+            assert_eq!(case.saturating_mul(2), max);
+        };
+        if (case != 0 && case <= max / case) {
+            assert_eq!(case.saturating_mul(case), case * case);
+        } else if (case != 0) {
+            assert_eq!(case.saturating_mul(case), max);
+        };
+        if (case_pred != 0 && case_succ <= max / case_pred) {
+            assert_eq!(case_pred.saturating_mul(case_succ), case_pred * case_succ);
+        } else if (case_pred != 0) {
+            assert_eq!(case_pred.saturating_mul(case_succ), max);
+        };
+    });
+}
+
+public(package) macro fun test_checked_shl<$T>($max: $T, $bit_size: u8) {
+    let max = $max;
+    let bit_size = $bit_size;
+    // valid shifts
+    assert_eq!((0: $T).checked_shl(0), option::some(0));
+    assert_eq!((1: $T).checked_shl(0), option::some(1));
+    assert_eq!((1: $T).checked_shl(1), option::some(2));
+    assert_eq!((1: $T).checked_shl(bit_size - 1), option::some(1 << (bit_size - 1)));
+    assert_eq!(max.checked_shl(0), option::some(max));
+    // invalid shifts (>= bit_size)
+    assert_eq!((0: $T).checked_shl(bit_size), option::none());
+    assert_eq!((1: $T).checked_shl(bit_size), option::none());
+    assert_eq!(max.checked_shl(bit_size), option::none());
+    assert_eq!((1: $T).checked_shl(bit_size + 1), option::none());
+}
+
+public(package) macro fun test_checked_shr<$T>($max: $T, $bit_size: u8) {
+    let max = $max;
+    let bit_size = $bit_size;
+    // valid shifts
+    assert_eq!((0: $T).checked_shr(0), option::some(0));
+    assert_eq!((1: $T).checked_shr(0), option::some(1));
+    assert_eq!((2: $T).checked_shr(1), option::some(1));
+    assert_eq!(max.checked_shr(0), option::some(max));
+    assert_eq!(max.checked_shr(bit_size - 1), option::some(1));
+    // invalid shifts (>= bit_size)
+    assert_eq!((0: $T).checked_shr(bit_size), option::none());
+    assert_eq!((1: $T).checked_shr(bit_size), option::none());
+    assert_eq!(max.checked_shr(bit_size), option::none());
+    assert_eq!((1: $T).checked_shr(bit_size + 1), option::none());
+}
+
+public(package) macro fun test_lossless_shl<$T>($max: $T, $bit_size: u8) {
+    let max = $max;
+    let bit_size = $bit_size;
+    // exact shifts (no bits lost)
+    assert_eq!((0: $T).lossless_shl(0), option::some(0));
+    assert_eq!((0: $T).lossless_shl(bit_size - 1), option::some(0));
+    assert_eq!((1: $T).lossless_shl(0), option::some(1));
+    assert_eq!((1: $T).lossless_shl(1), option::some(2));
+    assert_eq!((1: $T).lossless_shl(bit_size - 1), option::some(1 << (bit_size - 1)));
+    // inexact shifts (bits lost)
+    assert_eq!((0: $T).lossless_shl(bit_size), option::none());
+    assert_eq!((1: $T).lossless_shl(bit_size), option::none());
+    assert_eq!(max.lossless_shl(bit_size), option::none());
+    assert_eq!((1: $T).lossless_shl(bit_size + 1), option::none());
+    assert_eq!((1 << (bit_size - 1): $T).lossless_shl(1), option::none());
+    // high bit set, any shift loses it
+    let high_bit = (1: $T) << (bit_size - 1);
+    assert_eq!(high_bit.lossless_shl(1), option::none());
+}
+
+public(package) macro fun test_lossless_shr<$T>($max: $T, $bit_size: u8) {
+    let max = $max;
+    let bit_size = $bit_size;
+    // exact shifts (no bits lost)
+    assert_eq!((0: $T).lossless_shr(0), option::some(0));
+    assert_eq!((0: $T).lossless_shr(bit_size - 1), option::some(0));
+    assert_eq!((1: $T).lossless_shr(0), option::some(1));
+    assert_eq!((2: $T).lossless_shr(1), option::some(1));
+    assert_eq!((4: $T).lossless_shr(2), option::some(1));
+    let high_bit = (1: $T) << (bit_size - 1);
+    assert_eq!(high_bit.lossless_shr(bit_size - 1), option::some(1));
+    // inexact shifts (bits lost)
+    assert_eq!((0: $T).lossless_shr(bit_size), option::none());
+    assert_eq!((1: $T).lossless_shr(bit_size), option::none());
+    assert_eq!(max.lossless_shr(bit_size), option::none());
+    assert_eq!((1: $T).lossless_shr(bit_size + 1), option::none());
+    // low bit set, any shift loses it
+    assert_eq!((1: $T).lossless_shr(1), option::none());
+    assert_eq!((3: $T).lossless_shr(1), option::none())
+}

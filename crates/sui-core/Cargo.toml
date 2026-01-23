@@ -77,8 +77,10 @@ telemetry-subscribers.workspace = true
 typed-store.workspace = true
 
 mysten-metrics.workspace = true
+prost.workspace = true
 shared-crypto.workspace = true
 sui-config.workspace = true
+sui-rpc.workspace = true
 sui-authority-aggregation.workspace = true
 sui-execution.workspace = true
 sui-framework.workspace = true
@@ -94,6 +96,7 @@ sui-storage.workspace = true
 sui-tls.workspace = true
 sui-types.workspace = true
 nonempty.workspace = true
+zstd.workspace = true
 
 [dev-dependencies]
 sui-move-build.workspace = true

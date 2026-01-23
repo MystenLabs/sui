@@ -5,7 +5,7 @@ use itertools::Itertools;
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use sui_keys::keystore::AccountKeystore;
-use sui_light_client::mmr::apply_stream_updates;
+use sui_light_client::authenticated_events::mmr::apply_stream_updates;
 use sui_light_client::proof::base::{Proof, ProofContents, ProofTarget, ProofVerifier};
 use sui_light_client::proof::committee::extract_new_committee_info;
 use sui_light_client::proof::ocs::{OCSInclusionProof, OCSProof, OCSTarget};

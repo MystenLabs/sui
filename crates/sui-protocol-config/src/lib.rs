@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 108;
+const MAX_PROTOCOL_VERSION: u64 = 109;
 
 // Record history of protocol version allocations here:
 //
@@ -290,6 +290,8 @@ const MAX_PROTOCOL_VERSION: u64 = 108;
 //              Disable entry point signature check.
 //              Enable address aliases on testnet.
 //              Enable poseidon_bn254 on mainnet.
+// Version 109: Enable parsing on all nonzero custom pcrs in nitro attestation parsing native
+//              function on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -349,17 +351,14 @@ impl std::ops::Add<u64> for ProtocolVersion {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum)]
+#[derive(
+    Clone, Serialize, Deserialize, Debug, Default, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum,
+)]
 pub enum Chain {
     Mainnet,
     Testnet,
+    #[default]
     Unknown,
-}
-
-impl Default for Chain {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 impl Chain {
@@ -4462,6 +4461,12 @@ impl ProtocolConfig {
                     }
 
                     cfg.feature_flags.enable_poseidon = true;
+                }
+                109 => {
+                    cfg.feature_flags
+                        .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
+                    cfg.feature_flags
+                        .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
                 }
                 // Use this template when making changes:
                 //

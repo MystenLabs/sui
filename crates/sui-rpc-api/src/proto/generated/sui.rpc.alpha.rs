@@ -406,6 +406,9 @@ pub struct GetObjectInclusionProofResponse {
     /// BCS-encoded object data.
     #[prost(bytes = "vec", optional, tag = "3")]
     pub object_data: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
+    /// BCS-encoded checkpoint summary needed to verify the proof.
+    #[prost(bytes = "vec", optional, tag = "4")]
+    pub checkpoint_summary: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
 }
 /// Generated client implementations.
 pub mod proof_service_client {

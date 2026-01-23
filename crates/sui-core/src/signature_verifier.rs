@@ -449,7 +449,7 @@ impl SignatureVerifier {
             }
         }
 
-        self.verify_tx(signed_tx, aliases)?;
+        self.verify_tx(signed_tx, &versions, aliases)?;
         Ok(NonEmpty::from_vec(versions).expect("must have at least one required_signer"))
     }
 
@@ -466,10 +466,11 @@ impl SignatureVerifier {
     fn verify_tx(
         &self,
         signed_tx: &SenderSignedData,
+        alias_versions: &Vec<(SuiAddress, Option<SequenceNumber>)>,
         aliased_addresses: Vec<(SuiAddress, NonEmpty<SuiAddress>)>,
     ) -> SuiResult {
         self.signed_data_cache.is_verified(
-            signed_tx.full_message_digest(),
+            signed_tx.full_message_digest_with_alias_versions(alias_versions),
             || {
                 let jwks = self.jwks.read().clone();
                 let verify_params = VerifyParams::new(

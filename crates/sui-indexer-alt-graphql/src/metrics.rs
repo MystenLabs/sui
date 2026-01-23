@@ -49,7 +49,8 @@ pub struct RpcMetrics {
     pub query_latency: Histogram,
     pub queries_received: IntCounter,
     pub queries_succeeded: IntCounter,
-    pub queries_failed: IntCounterVec,
+    pub queries_failed: IntCounter,
+    pub query_errors: IntCounterVec,
     pub queries_cancelled: IntCounter,
     pub queries_panicked: IntCounter,
     pub queries_in_flight: IntGauge,
@@ -152,9 +153,15 @@ impl RpcMetrics {
             )
             .unwrap(),
 
-            queries_failed: register_int_counter_vec_with_registry!(
+            queries_failed: register_int_counter_with_registry!(
                 "graphql_queries_failed",
-                "Number of read requests that have completed with at least one error",
+                "Number of read requests that have failed with an error",
+                registry,
+            ).unwrap(),
+
+            query_errors: register_int_counter_vec_with_registry!(
+                "graphql_query_errors",
+                "Count of graphql query failures by error code",
                 &["code"],
                 registry,
             )

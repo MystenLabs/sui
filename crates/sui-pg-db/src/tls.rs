@@ -23,6 +23,7 @@ use rustls::client::danger::ServerCertVerifier;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::ServerName;
 use rustls::pki_types::UnixTime;
+use rustls::pki_types::pem::PemObject;
 use tokio_postgres_rustls::MakeRustlsConnect;
 use tracing::debug;
 use tracing::error;
@@ -92,10 +93,13 @@ impl ServerCertVerifier for SkipServerCertCheck {
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        rustls::client::WebPkiServerVerifier::builder(Arc::new(root_certs()))
-            .build()
-            .unwrap()
-            .supported_verify_schemes()
+        rustls::client::WebPkiServerVerifier::builder_with_provider(
+            Arc::new(root_certs()),
+            Arc::new(rustls::crypto::ring::default_provider()),
+        )
+        .build()
+        .unwrap()
+        .supported_verify_schemes()
     }
 }
 
@@ -163,8 +167,12 @@ pub(crate) fn build_tls_config(
     tls_verify_cert: bool,
     tls_ca_cert_path: Option<PathBuf>,
 ) -> anyhow::Result<ClientConfig> {
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = ClientConfig::builder_with_provider(provider)
+        .with_protocol_versions(rustls::DEFAULT_VERSIONS)?;
+
     if !tls_verify_cert {
-        return Ok(ClientConfig::builder()
+        return Ok(config
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(SkipServerCertCheck))
             .with_no_client_auth());
@@ -182,7 +190,7 @@ pub(crate) fn build_tls_config(
         })?;
 
         let certs = if ca_cert_bytes.starts_with(b"-----BEGIN CERTIFICATE-----") {
-            rustls_pemfile::certs(&mut ca_cert_bytes.as_slice())
+            CertificateDer::pem_slice_iter(&ca_cert_bytes)
                 .collect::<Result<Vec<_>, _>>()
                 .with_context(|| {
                     format!(
@@ -203,7 +211,7 @@ pub(crate) fn build_tls_config(
         }
     }
 
-    Ok(ClientConfig::builder()
+    Ok(config
         .with_root_certificates(root_certs)
         .with_no_client_auth())
 }

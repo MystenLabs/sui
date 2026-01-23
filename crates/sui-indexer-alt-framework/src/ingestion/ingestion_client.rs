@@ -10,10 +10,18 @@ use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use backoff::backoff::Constant;
 use bytes::Bytes;
+use object_store::ClientOptions;
+use object_store::ObjectStore;
+use object_store::aws::AmazonS3Builder;
+use object_store::azure::MicrosoftAzureBuilder;
+use object_store::gcp::GoogleCloudStorageBuilder;
+use object_store::http::HttpBuilder;
+use object_store::local::LocalFileSystem;
+use prost::Message;
 use sui_futures::future::with_slow_future_monitor;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
-use sui_storage::blob::Blob;
+use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
 use tracing::debug;
 use tracing::error;
 use tracing::warn;
@@ -22,12 +30,10 @@ use url::Url;
 use crate::ingestion::Error as IngestionError;
 use crate::ingestion::MAX_GRPC_MESSAGE_SIZE_BYTES;
 use crate::ingestion::Result as IngestionResult;
-use crate::ingestion::local_client::LocalIngestionClient;
-use crate::ingestion::remote_client::RemoteIngestionClient;
+use crate::ingestion::store_client::StoreIngestionClient;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IngestionMetrics;
 use crate::types::full_checkpoint_content::Checkpoint;
-use crate::types::full_checkpoint_content::CheckpointData;
 
 /// Wait at most this long between retries for transient errors.
 const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
@@ -44,30 +50,89 @@ pub(crate) trait IngestionClientTrait: Send + Sync {
     async fn fetch(&self, checkpoint: u64) -> FetchResult;
 }
 
-#[derive(clap::Args, Clone, Debug, Default)]
+#[derive(clap::Args, Clone, Debug)]
 #[group(required = true)]
 pub struct IngestionClientArgs {
-    /// Remote Store to fetch checkpoints from.
-    #[clap(long, group = "source")]
+    /// Remote Store to fetch checkpoints from over HTTP.
+    #[arg(long, group = "source")]
     pub remote_store_url: Option<Url>,
 
+    /// Fetch checkpoints from AWS S3. Provide the bucket name or endpoint-and-bucket.
+    /// (env: AWS_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION)
+    #[arg(long, group = "source")]
+    pub remote_store_s3: Option<String>,
+
+    /// Fetch checkpoints from Google Cloud Storage. Provide the bucket name.
+    /// (env: GOOGLE_SERVICE_ACCOUNT_PATH)
+    #[arg(long, group = "source")]
+    pub remote_store_gcs: Option<String>,
+
+    /// Fetch checkpoints from Azure Blob Storage. Provide the container name.
+    /// (env: AZURE_STORAGE_ACCOUNT_NAME, AZURE_STORAGE_ACCESS_KEY)
+    #[arg(long, group = "source")]
+    pub remote_store_azure: Option<String>,
+
     /// Path to the local ingestion directory.
-    /// If both remote_store_url and local_ingestion_path are provided, remote_store_url will be used.
-    #[clap(long, group = "source")]
+    #[arg(long, group = "source")]
     pub local_ingestion_path: Option<PathBuf>,
 
     /// Sui fullnode gRPC url to fetch checkpoints from.
-    /// If all remote_store_url, local_ingestion_path and rpc_api_url are provided, remote_store_url will be used.
-    #[clap(long, env, group = "source")]
+    #[arg(long, group = "source")]
     pub rpc_api_url: Option<Url>,
 
     /// Optional username for the gRPC service.
-    #[clap(long, env)]
+    #[arg(long, env)]
     pub rpc_username: Option<String>,
 
     /// Optional password for the gRPC service.
-    #[clap(long, env)]
+    #[arg(long, env)]
     pub rpc_password: Option<String>,
+
+    /// How long to wait for a checkpoint file to be downloaded (milliseconds). Set to 0 to disable
+    /// the timeout.
+    #[arg(long, default_value_t = Self::default().checkpoint_timeout_ms)]
+    pub checkpoint_timeout_ms: u64,
+
+    /// How long to wait while establishing a connection to the checkpoint store (milliseconds).
+    /// Set to 0 to disable the timeout.
+    #[arg(long, default_value_t = Self::default().checkpoint_connection_timeout_ms)]
+    pub checkpoint_connection_timeout_ms: u64,
+}
+
+impl Default for IngestionClientArgs {
+    fn default() -> Self {
+        Self {
+            remote_store_url: None,
+            remote_store_s3: None,
+            remote_store_gcs: None,
+            remote_store_azure: None,
+            local_ingestion_path: None,
+            rpc_api_url: None,
+            rpc_username: None,
+            rpc_password: None,
+            checkpoint_timeout_ms: 120_000,
+            checkpoint_connection_timeout_ms: 120_000,
+        }
+    }
+}
+
+impl IngestionClientArgs {
+    fn client_options(&self) -> ClientOptions {
+        let mut options = ClientOptions::default();
+        options = if self.checkpoint_timeout_ms == 0 {
+            options.with_timeout_disabled()
+        } else {
+            let timeout = Duration::from_millis(self.checkpoint_timeout_ms);
+            options.with_timeout(timeout)
+        };
+        options = if self.checkpoint_connection_timeout_ms == 0 {
+            options.with_connect_timeout_disabled()
+        } else {
+            let timeout = Duration::from_millis(self.checkpoint_connection_timeout_ms);
+            options.with_connect_timeout(timeout)
+        };
+        options
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -110,49 +175,65 @@ impl IngestionClient {
     pub fn new(args: IngestionClientArgs, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
         // TODO: Support stacking multiple ingestion clients for redundancy/failover.
         let client = if let Some(url) = args.remote_store_url.as_ref() {
-            IngestionClient::new_remote(url.clone(), metrics.clone())?
+            let store = HttpBuilder::new()
+                .with_url(url.to_string())
+                .with_client_options(args.client_options().with_allow_http(true))
+                .build()
+                .map(Arc::new)?;
+            IngestionClient::with_store(store, metrics.clone())?
+        } else if let Some(bucket) = args.remote_store_s3.as_ref() {
+            let store = AmazonS3Builder::from_env()
+                .with_client_options(args.client_options())
+                .with_imdsv1_fallback()
+                .with_bucket_name(bucket)
+                .build()
+                .map(Arc::new)?;
+            IngestionClient::with_store(store, metrics.clone())?
+        } else if let Some(bucket) = args.remote_store_gcs.as_ref() {
+            let store = GoogleCloudStorageBuilder::from_env()
+                .with_client_options(args.client_options())
+                .with_bucket_name(bucket)
+                .build()
+                .map(Arc::new)?;
+            IngestionClient::with_store(store, metrics.clone())?
+        } else if let Some(container) = args.remote_store_azure.as_ref() {
+            let store = MicrosoftAzureBuilder::from_env()
+                .with_client_options(args.client_options())
+                .with_container_name(container)
+                .build()
+                .map(Arc::new)?;
+            IngestionClient::with_store(store, metrics.clone())?
         } else if let Some(path) = args.local_ingestion_path.as_ref() {
-            IngestionClient::new_local(path.clone(), metrics.clone())
+            let store = LocalFileSystem::new_with_prefix(path).map(Arc::new)?;
+            IngestionClient::with_store(store, metrics.clone())?
         } else if let Some(rpc_api_url) = args.rpc_api_url.as_ref() {
-            IngestionClient::new_rpc(
+            IngestionClient::with_grpc(
                 rpc_api_url.clone(),
                 args.rpc_username,
                 args.rpc_password,
                 metrics.clone(),
             )?
         } else {
-            panic!("One of remote_store_url, local_ingestion_path or rpc_api_url must be provided");
+            panic!(
+                "One of remote_store_url, remote_store_s3, remote_store_gcs, remote_store_azure, \
+                local_ingestion_path or rpc_api_url must be provided"
+            );
         };
 
         Ok(client)
     }
 
-    /// An ingestion client that fetches checkpoints from a remote store (an object store, over
-    /// HTTP).
-    pub fn new_remote(url: Url, metrics: Arc<IngestionMetrics>) -> IngestionResult<Self> {
-        let client = Arc::new(RemoteIngestionClient::new(url)?);
-        Ok(Self::new_impl(client, metrics))
-    }
-
-    /// An ingestion client that fetches checkpoints from a remote store (an object store, over
-    /// HTTP), with a configured request timeout.
-    pub fn new_remote_with_timeout(
-        url: Url,
-        timeout: std::time::Duration,
+    /// An ingestion client that fetches checkpoints from a remote object store.
+    pub fn with_store(
+        store: Arc<dyn ObjectStore>,
         metrics: Arc<IngestionMetrics>,
     ) -> IngestionResult<Self> {
-        let client = Arc::new(RemoteIngestionClient::new_with_timeout(url, timeout)?);
+        let client = Arc::new(StoreIngestionClient::new(store));
         Ok(Self::new_impl(client, metrics))
-    }
-
-    /// An ingestion client that fetches checkpoints from a local directory.
-    pub fn new_local(path: PathBuf, metrics: Arc<IngestionMetrics>) -> Self {
-        let client = Arc::new(LocalIngestionClient::new(path));
-        Self::new_impl(client, metrics)
     }
 
     /// An ingestion client that fetches checkpoints from a fullnode, over gRPC.
-    pub fn new_rpc(
+    pub fn with_grpc(
         url: Url,
         username: Option<String>,
         password: Option<String>,
@@ -259,14 +340,31 @@ impl IngestionClient {
                 Ok::<Checkpoint, backoff::Error<IngestionError>>(match fetch_data {
                     FetchData::Raw(bytes) => {
                         self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
-                        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).map_err(|e| {
+
+                        let decompressed = zstd::decode_all(&bytes[..]).map_err(|e| {
                             self.metrics.inc_retry(
                                 checkpoint,
-                                "deserialization",
-                                IngestionError::DeserializationError(checkpoint, e),
+                                "decompression",
+                                IngestionError::DeserializationError(checkpoint, e.into()),
                             )
                         })?;
-                        checkpoint.into()
+
+                        let proto_checkpoint =
+                            ProtoCheckpoint::decode(&decompressed[..]).map_err(|e| {
+                                self.metrics.inc_retry(
+                                    checkpoint,
+                                    "deserialization",
+                                    IngestionError::DeserializationError(checkpoint, e.into()),
+                                )
+                            })?;
+
+                        Checkpoint::try_from(&proto_checkpoint).map_err(|e| {
+                            self.metrics.inc_retry(
+                                checkpoint,
+                                "proto_conversion",
+                                IngestionError::DeserializationError(checkpoint, e.into()),
+                            )
+                        })?
                     }
                     FetchData::Checkpoint(data) => {
                         // We are not recording size metric for Checkpoint data (from RPC client).
@@ -406,11 +504,9 @@ mod tests {
     async fn test_fetch_checkpoint_success() {
         let (client, mock) = setup_test();
 
-        // Create test data using test_checkpoint
-        let bytes = test_checkpoint_data(1);
-        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).unwrap();
-        mock.checkpoints
-            .insert(1, FetchData::Checkpoint(checkpoint.into()));
+        // Create test data - now returns zstd-compressed protobuf
+        let bytes = Bytes::from(test_checkpoint_data(1));
+        mock.checkpoints.insert(1, FetchData::Raw(bytes));
 
         // Fetch and verify
         let result = client.fetch(1).await.unwrap();
@@ -431,12 +527,10 @@ mod tests {
         let (client, mock) = setup_test();
 
         // Create test data using test_checkpoint
-        let bytes = test_checkpoint_data(1);
-        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+        let bytes = Bytes::from(test_checkpoint_data(1));
 
         // Add checkpoint to mock with 2 transient failures
-        mock.checkpoints
-            .insert(1, FetchData::Checkpoint(checkpoint.clone().into()));
+        mock.checkpoints.insert(1, FetchData::Raw(bytes));
         mock.transient_failures.insert(1, 2);
 
         // Fetch and verify it succeeds after retries
@@ -456,13 +550,11 @@ mod tests {
     async fn test_wait_for_checkpoint_with_retry() {
         let (client, mock) = setup_test();
 
-        // Create test data using test_checkpoint
-        let bytes = test_checkpoint_data(1);
-        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+        // Create test data - now returns zstd-compressed protobuf
+        let bytes = Bytes::from(test_checkpoint_data(1));
 
         // Add checkpoint to mock with 1 not_found failures
-        mock.checkpoints
-            .insert(1, FetchData::Checkpoint(checkpoint.into()));
+        mock.checkpoints.insert(1, FetchData::Raw(bytes));
         mock.not_found_failures.insert(1, 1);
 
         // Wait for checkpoint with short retry interval
@@ -479,12 +571,10 @@ mod tests {
         let (client, mock) = setup_test();
 
         // Create test data using test_checkpoint
-        let bytes = test_checkpoint_data(1);
-        let checkpoint: CheckpointData = Blob::from_bytes(&bytes).unwrap();
+        let bytes = Bytes::from(test_checkpoint_data(1));
 
         // Add checkpoint to mock with no failures - data should be available immediately
-        mock.checkpoints
-            .insert(1, FetchData::Checkpoint(checkpoint.into()));
+        mock.checkpoints.insert(1, FetchData::Raw(bytes));
 
         // Wait for checkpoint with short retry interval
         let result = client.wait_for(1, Duration::from_millis(50)).await.unwrap();

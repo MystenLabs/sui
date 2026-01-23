@@ -47,7 +47,7 @@ move-bytecode-utils.workspace = true
 sui-json-rpc-types.workspace = true
 sui-package-resolver.workspace = true
 arrow.workspace = true
-gcp-bigquery-client = "0.25.0"
+gcp-bigquery-client = "0.27.0"
 snowflake-api.workspace = true
 tap.workspace = true
 serde_yaml.workspace = true
@@ -60,8 +60,11 @@ sui-indexer-alt-object-store.workspace = true
 sui-indexer-alt-metrics.workspace = true
 
 [dev-dependencies]
+prost.workspace = true
+sui-rpc.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }
+zstd.workspace = true
 
 [[bin]]
 name = "sui-analytics-indexer"

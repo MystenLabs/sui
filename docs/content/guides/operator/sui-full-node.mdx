@@ -84,7 +84,7 @@ cmake
 
 You must enable gRPC support on your full nodes. JSON-RPC is **deprecated**. Refer to [Sui's data serving roadmap](/concepts/data-access/data-serving.mdx#grpc-api) for guidance on the overall transition plan.
 
-To serve the [gRPC API](/concepts/data-access/graphql-rpc.mdx), you must enable it on your full node by indexing gRPC-specific data. During the initial gRPC indexing phase, your full node may not be able to handle other traffic, including the [**deprecated** JSON-RPC](/references/sui-api.mdx) requests. Plan your rollout carefully (such as using the `rolling upgrade` mechanism), and communicate any downtime to your customers and partners in advance. The time required to sync gRPC indexes depends on your full node's hardware and software configuration.
+To serve the [gRPC API](/concepts/data-access/grpc), you must enable it on your full node by indexing gRPC-specific data. During the initial gRPC indexing phase, your full node may not be able to handle other traffic, including the [**deprecated** JSON-RPC](/references/sui-api.mdx) requests. Plan your rollout carefully (such as using the `rolling upgrade` mechanism), and communicate any downtime to your customers and partners in advance. The time required to sync gRPC indexes depends on your full node's hardware and software configuration.
 
 Enable gRPC indexing on your full node by adding the following entry to the `fullnode.yaml` configuration:
 
@@ -117,7 +117,7 @@ Adjust the gRPC data retention period based on your full node’s resource profi
 
 ## Running a full node {#running-a-full-node}
 
-Instructions for building, installing, or downloading the `sui-node` binary are available at [Sui Install](/guides/developer/getting-started/sui-install.mdx). 
+Instructions for building, installing, or downloading the `sui-node` binary are available in the [Install from Binaries](/guides/developer/getting-started/install-binaries.mdx) guide. 
 These install instructions are specific to the `sui` CLI, but apply to the `sui-node` binary as well.
 
 There are many ways to run a Sui full node (bare metal, virtual machine, Kubernetes StatefulSet, and so on), and the solution that you choose depends on your specific needs as well as the infrastructure that you have available.

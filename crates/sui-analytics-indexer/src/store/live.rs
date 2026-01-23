@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use object_store::ObjectStore;
+use object_store::ObjectStoreExt as _;
 use object_store::path::Path as ObjectPath;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_storage::object_store::util::find_all_dirs_with_epoch_prefix;
@@ -175,13 +176,12 @@ mod tests {
 
     fn test_config(object_store: Arc<dyn object_store::ObjectStore>) -> IndexerConfig {
         IndexerConfig {
-            rest_url: "http://localhost".to_string(),
             client_metric_host: "127.0.0.1".to_string(),
             client_metric_port: 8081,
             output_store: OutputStoreConfig::Custom(object_store),
             remote_store_url: None,
             streaming_url: None,
-            rpc_api_url: None,
+            rpc_api_url: "http://localhost".to_string(),
             rpc_username: None,
             rpc_password: None,
             work_dir: None,

@@ -16,6 +16,13 @@ This module holds shared implementation of macros used in <code>std</code>
 -  [Macro function `num_checked_sub`](#std_macros_num_checked_sub)
 -  [Macro function `num_checked_mul`](#std_macros_num_checked_mul)
 -  [Macro function `num_checked_div`](#std_macros_num_checked_div)
+-  [Macro function `num_saturating_add`](#std_macros_num_saturating_add)
+-  [Macro function `num_saturating_sub`](#std_macros_num_saturating_sub)
+-  [Macro function `num_saturating_mul`](#std_macros_num_saturating_mul)
+-  [Macro function `num_checked_shl`](#std_macros_num_checked_shl)
+-  [Macro function `num_checked_shr`](#std_macros_num_checked_shr)
+-  [Macro function `num_lossless_shl`](#std_macros_num_lossless_shl)
+-  [Macro function `num_lossless_shr`](#std_macros_num_lossless_shr)
 -  [Macro function `range_do`](#std_macros_range_do)
 -  [Macro function `range_do_eq`](#std_macros_range_do_eq)
 -  [Macro function `do`](#std_macros_do)
@@ -44,7 +51,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_max">num_max</a>&lt;$T&gt;($x: $T, $y: $T): $T
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_max">num_max</a>&lt;$T&gt;($x: $T, $y: $T): $T
 </code></pre>
 
 
@@ -53,7 +60,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_max">num_max</a>&lt;$T&gt;($x: $T, $y: $T): $T {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_max">num_max</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>if</b> (x &gt; y) x <b>else</b> y
@@ -70,7 +77,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_min">num_min</a>&lt;$T&gt;($x: $T, $y: $T): $T
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_min">num_min</a>&lt;$T&gt;($x: $T, $y: $T): $T
 </code></pre>
 
 
@@ -79,7 +86,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_min">num_min</a>&lt;$T&gt;($x: $T, $y: $T): $T {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_min">num_min</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>if</b> (x &lt; y) x <b>else</b> y
@@ -96,7 +103,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_diff">num_diff</a>&lt;$T&gt;($x: $T, $y: $T): $T
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_diff">num_diff</a>&lt;$T&gt;($x: $T, $y: $T): $T
 </code></pre>
 
 
@@ -105,7 +112,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_diff">num_diff</a>&lt;$T&gt;($x: $T, $y: $T): $T {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_diff">num_diff</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>if</b> (x &gt; y) x - y <b>else</b> y - x
@@ -122,7 +129,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_divide_and_round_up">num_divide_and_round_up</a>&lt;$T&gt;($x: $T, $y: $T): $T
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_divide_and_round_up">num_divide_and_round_up</a>&lt;$T&gt;($x: $T, $y: $T): $T
 </code></pre>
 
 
@@ -131,7 +138,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_divide_and_round_up">num_divide_and_round_up</a>&lt;$T&gt;($x: $T, $y: $T): $T {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_divide_and_round_up">num_divide_and_round_up</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>if</b> (x % y == 0) x / y <b>else</b> x / y + 1
@@ -148,7 +155,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_pow">num_pow</a>($base: _, $exponent: <a href="../std/u8.md#std_u8">u8</a>): _
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_pow">num_pow</a>($base: _, $exponent: <a href="../std/u8.md#std_u8">u8</a>): _
 </code></pre>
 
 
@@ -157,7 +164,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_pow">num_pow</a>($base: _, $exponent: <a href="../std/u8.md#std_u8">u8</a>): _ {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_pow">num_pow</a>($base: _, $exponent: <a href="../std/u8.md#std_u8">u8</a>): _ {
     <b>let</b> <b>mut</b> base = $base;
     <b>let</b> <b>mut</b> exponent = $exponent;
     <b>let</b> <b>mut</b> res = 1;
@@ -184,7 +191,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_sqrt">num_sqrt</a>&lt;$T, $U&gt;($x: $T, $bitsize: <a href="../std/u8.md#std_u8">u8</a>): $T
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_sqrt">num_sqrt</a>&lt;$T, $U&gt;($x: $T, $bitsize: <a href="../std/u8.md#std_u8">u8</a>): $T
 </code></pre>
 
 
@@ -193,7 +200,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_sqrt">num_sqrt</a>&lt;$T, $U&gt;($x: $T, $bitsize: <a href="../std/u8.md#std_u8">u8</a>): $T {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_sqrt">num_sqrt</a>&lt;$T, $U&gt;($x: $T, $bitsize: <a href="../std/u8.md#std_u8">u8</a>): $T {
     <b>let</b> x = $x;
     <b>let</b> <b>mut</b> bit = (1: $U) &lt;&lt; $bitsize;
     <b>let</b> <b>mut</b> res = (0: $U);
@@ -221,7 +228,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_to_string">num_to_string</a>($x: _): <a href="../std/string.md#std_string_String">std::string::String</a>
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_to_string">num_to_string</a>($x: _): <a href="../std/string.md#std_string_String">std::string::String</a>
 </code></pre>
 
 
@@ -230,7 +237,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_to_string">num_to_string</a>($x: _): String {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_to_string">num_to_string</a>($x: _): String {
     <b>let</b> <b>mut</b> x = $x;
     <b>if</b> (x == 0) {
         <b>return</b> b"0".to_string()
@@ -255,7 +262,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_add">num_checked_add</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_add">num_checked_add</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
 </code></pre>
 
 
@@ -264,7 +271,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_add">num_checked_add</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): Option&lt;$T&gt; {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_add">num_checked_add</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): Option&lt;$T&gt; {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>let</b> max_t = $max_t;
@@ -282,7 +289,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_sub">num_checked_sub</a>&lt;$T&gt;($x: $T, $y: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_sub">num_checked_sub</a>&lt;$T&gt;($x: $T, $y: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
 </code></pre>
 
 
@@ -291,7 +298,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_sub">num_checked_sub</a>&lt;$T&gt;($x: $T, $y: $T): Option&lt;$T&gt; {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_sub">num_checked_sub</a>&lt;$T&gt;($x: $T, $y: $T): Option&lt;$T&gt; {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>if</b> (x &lt; y) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x - y)
@@ -308,7 +315,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_mul">num_checked_mul</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_mul">num_checked_mul</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
 </code></pre>
 
 
@@ -317,7 +324,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_mul">num_checked_mul</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): Option&lt;$T&gt; {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_mul">num_checked_mul</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): Option&lt;$T&gt; {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>let</b> max_t = $max_t;
@@ -337,7 +344,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_div">num_checked_div</a>&lt;$T&gt;($x: $T, $y: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_div">num_checked_div</a>&lt;$T&gt;($x: $T, $y: $T): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
 </code></pre>
 
 
@@ -346,10 +353,208 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_div">num_checked_div</a>&lt;$T&gt;($x: $T, $y: $T): Option&lt;$T&gt; {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_div">num_checked_div</a>&lt;$T&gt;($x: $T, $y: $T): Option&lt;$T&gt; {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>if</b> (y == 0) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x / y)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_saturating_add"></a>
+
+## Macro function `num_saturating_add`
+
+
+
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_saturating_add">num_saturating_add</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): $T
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_saturating_add">num_saturating_add</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): $T {
+    <b>let</b> x = $x;
+    <b>let</b> y = $y;
+    <b>let</b> max_t = $max_t;
+    <b>if</b> (y &gt; max_t - x) max_t <b>else</b> x + y
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_saturating_sub"></a>
+
+## Macro function `num_saturating_sub`
+
+
+
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_saturating_sub">num_saturating_sub</a>&lt;$T&gt;($x: $T, $y: $T): $T
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_saturating_sub">num_saturating_sub</a>&lt;$T&gt;($x: $T, $y: $T): $T {
+    <b>let</b> x = $x;
+    <b>let</b> y = $y;
+    <b>if</b> (x &lt; y) 0 <b>else</b> x - y
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_saturating_mul"></a>
+
+## Macro function `num_saturating_mul`
+
+
+
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_saturating_mul">num_saturating_mul</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): $T
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_saturating_mul">num_saturating_mul</a>&lt;$T&gt;($x: $T, $y: $T, $max_t: $T): $T {
+    <b>let</b> x = $x;
+    <b>let</b> y = $y;
+    <b>let</b> max_t = $max_t;
+    <b>if</b> (x == 0 || y == 0) 0
+    <b>else</b> <b>if</b> (y &gt; max_t / x) max_t
+    <b>else</b> x * y
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_checked_shl"></a>
+
+## Macro function `num_checked_shl`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_shl">num_checked_shl</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_shl">num_checked_shl</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> shift = $shift;
+    <b>let</b> bit_size = $bit_size;
+    <b>if</b> (shift &gt;= bit_size) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x &lt;&lt; shift)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_checked_shr"></a>
+
+## Macro function `num_checked_shr`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_shr">num_checked_shr</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_checked_shr">num_checked_shr</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> shift = $shift;
+    <b>let</b> bit_size = $bit_size;
+    <b>if</b> (shift &gt;= bit_size) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x &gt;&gt; shift)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_lossless_shl"></a>
+
+## Macro function `num_lossless_shl`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_lossless_shl">num_lossless_shl</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_lossless_shl">num_lossless_shl</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> shift = $shift;
+    <b>let</b> bit_size = $bit_size;
+    <b>if</b> (shift &gt;= bit_size) <a href="../std/option.md#std_option_none">option::none</a>()
+    <b>else</b> {
+        <b>let</b> result = x &lt;&lt; shift;
+        <b>if</b> (result &gt;&gt; shift == x) <a href="../std/option.md#std_option_some">option::some</a>(result) <b>else</b> <a href="../std/option.md#std_option_none">option::none</a>()
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_num_lossless_shr"></a>
+
+## Macro function `num_lossless_shr`
+
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_lossless_shr">num_lossless_shr</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_lossless_shr">num_lossless_shr</a>&lt;$T&gt;($x: $T, $shift: <a href="../std/u8.md#std_u8">u8</a>, $bit_size: <a href="../std/u8.md#std_u8">u8</a>): Option&lt;$T&gt; {
+    <b>let</b> x = $x;
+    <b>let</b> shift = $shift;
+    <b>let</b> bit_size = $bit_size;
+    <b>if</b> (shift &gt;= bit_size) <a href="../std/option.md#std_option_none">option::none</a>()
+    <b>else</b> {
+        <b>let</b> result = x &gt;&gt; shift;
+        <b>if</b> (result &lt;&lt; shift == x) <a href="../std/option.md#std_option_some">option::some</a>(result) <b>else</b> <a href="../std/option.md#std_option_none">option::none</a>()
+    }
 }
 </code></pre>
 
@@ -475,7 +680,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u8">try_as_u8</a>($x: _): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u8">try_as_u8</a>($x: _): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;
 </code></pre>
 
 
@@ -484,7 +689,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u8">try_as_u8</a>($x: _): Option&lt;<a href="../std/u8.md#std_u8">u8</a>&gt; {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u8">try_as_u8</a>($x: _): Option&lt;<a href="../std/u8.md#std_u8">u8</a>&gt; {
     <b>let</b> x = $x;
     <b>if</b> (x &gt; 0xFF) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u8.md#std_u8">u8</a>)
 }
@@ -500,7 +705,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u16">try_as_u16</a>($x: _): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/u16.md#std_u16">u16</a>&gt;
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u16">try_as_u16</a>($x: _): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/u16.md#std_u16">u16</a>&gt;
 </code></pre>
 
 
@@ -509,7 +714,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u16">try_as_u16</a>($x: _): Option&lt;<a href="../std/u16.md#std_u16">u16</a>&gt; {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u16">try_as_u16</a>($x: _): Option&lt;<a href="../std/u16.md#std_u16">u16</a>&gt; {
     <b>let</b> x = $x;
     <b>if</b> (x &gt; 0xFFFF) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u16.md#std_u16">u16</a>)
 }
@@ -525,7 +730,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u32">try_as_u32</a>($x: _): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/u32.md#std_u32">u32</a>&gt;
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u32">try_as_u32</a>($x: _): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/u32.md#std_u32">u32</a>&gt;
 </code></pre>
 
 
@@ -534,7 +739,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u32">try_as_u32</a>($x: _): Option&lt;<a href="../std/u32.md#std_u32">u32</a>&gt; {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u32">try_as_u32</a>($x: _): Option&lt;<a href="../std/u32.md#std_u32">u32</a>&gt; {
     <b>let</b> x = $x;
     <b>if</b> (x &gt; 0xFFFF_FFFF) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u32.md#std_u32">u32</a>)
 }
@@ -550,7 +755,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u64">try_as_u64</a>($x: _): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/u64.md#std_u64">u64</a>&gt;
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u64">try_as_u64</a>($x: _): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/u64.md#std_u64">u64</a>&gt;
 </code></pre>
 
 
@@ -559,7 +764,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u64">try_as_u64</a>($x: _): Option&lt;<a href="../std/u64.md#std_u64">u64</a>&gt; {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u64">try_as_u64</a>($x: _): Option&lt;<a href="../std/u64.md#std_u64">u64</a>&gt; {
     <b>let</b> x = $x;
     <b>if</b> (x &gt; 0xFFFF_FFFF_FFFF_FFFF) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u64.md#std_u64">u64</a>)
 }
@@ -575,7 +780,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u128">try_as_u128</a>($x: _): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/u128.md#std_u128">u128</a>&gt;
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u128">try_as_u128</a>($x: _): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/u128.md#std_u128">u128</a>&gt;
 </code></pre>
 
 
@@ -584,7 +789,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u128">try_as_u128</a>($x: _): Option&lt;<a href="../std/u128.md#std_u128">u128</a>&gt; {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_try_as_u128">try_as_u128</a>($x: _): Option&lt;<a href="../std/u128.md#std_u128">u128</a>&gt; {
     <b>let</b> x = $x;
     <b>if</b> (x &gt; 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF) <a href="../std/option.md#std_option_none">option::none</a>() <b>else</b> <a href="../std/option.md#std_option_some">option::some</a>(x <b>as</b> <a href="../std/u128.md#std_u128">u128</a>)
 }
@@ -607,7 +812,7 @@ plus fractional).
 <code>$fractional_bits</code> is the number of fractional bits in the fixed-point value.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_from_quotient">uq_from_quotient</a>&lt;$T, $U&gt;($numerator: $T, $denominator: $T, $max_t: $T, $t_bits: <a href="../std/u8.md#std_u8">u8</a>, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>, $abort_denominator: _, $abort_quotient_too_small: _, $abort_quotient_too_large: _): $T
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_from_quotient">uq_from_quotient</a>&lt;$T, $U&gt;($numerator: $T, $denominator: $T, $max_t: $T, $t_bits: <a href="../std/u8.md#std_u8">u8</a>, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>, $abort_denominator: _, $abort_quotient_too_small: _, $abort_quotient_too_large: _): $T
 </code></pre>
 
 
@@ -616,7 +821,7 @@ plus fractional).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_from_quotient">uq_from_quotient</a>&lt;$T, $U&gt;(
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_from_quotient">uq_from_quotient</a>&lt;$T, $U&gt;(
     $numerator: $T,
     $denominator: $T,
     $max_t: $T,
@@ -654,7 +859,7 @@ plus fractional).
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_from_int">uq_from_int</a>&lt;$T, $U&gt;($integer: $T, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>): $U
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_from_int">uq_from_int</a>&lt;$T, $U&gt;($integer: $T, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>): $U
 </code></pre>
 
 
@@ -663,7 +868,7 @@ plus fractional).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_from_int">uq_from_int</a>&lt;$T, $U&gt;($integer: $T, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>): $U {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_from_int">uq_from_int</a>&lt;$T, $U&gt;($integer: $T, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>): $U {
     ($integer <b>as</b> $U) &lt;&lt; $fractional_bits
 }
 </code></pre>
@@ -678,7 +883,7 @@ plus fractional).
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_add">uq_add</a>&lt;$T, $U&gt;($a: $T, $b: $T, $max_t: $T, $abort_overflow: _): $T
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_add">uq_add</a>&lt;$T, $U&gt;($a: $T, $b: $T, $max_t: $T, $abort_overflow: _): $T
 </code></pre>
 
 
@@ -687,7 +892,7 @@ plus fractional).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_add">uq_add</a>&lt;$T, $U&gt;($a: $T, $b: $T, $max_t: $T, $abort_overflow: _): $T {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_add">uq_add</a>&lt;$T, $U&gt;($a: $T, $b: $T, $max_t: $T, $abort_overflow: _): $T {
     <b>let</b> sum = $a <b>as</b> $U + ($b <b>as</b> $U);
     <b>if</b> (sum &gt; $max_t <b>as</b> $U) $abort_overflow;
     sum <b>as</b> $T
@@ -704,7 +909,7 @@ plus fractional).
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_sub">uq_sub</a>&lt;$T&gt;($a: $T, $b: $T, $abort_overflow: _): $T
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_sub">uq_sub</a>&lt;$T&gt;($a: $T, $b: $T, $abort_overflow: _): $T
 </code></pre>
 
 
@@ -713,7 +918,7 @@ plus fractional).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_sub">uq_sub</a>&lt;$T&gt;($a: $T, $b: $T, $abort_overflow: _): $T {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_sub">uq_sub</a>&lt;$T&gt;($a: $T, $b: $T, $abort_overflow: _): $T {
     <b>let</b> a = $a;
     <b>let</b> b = $b;
     <b>if</b> (a &lt; b) $abort_overflow;
@@ -731,7 +936,7 @@ plus fractional).
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_to_int">uq_to_int</a>&lt;$T, $U&gt;($a: $U, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>): $T
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_to_int">uq_to_int</a>&lt;$T, $U&gt;($a: $U, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>): $T
 </code></pre>
 
 
@@ -740,7 +945,7 @@ plus fractional).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_to_int">uq_to_int</a>&lt;$T, $U&gt;($a: $U, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>): $T {
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_to_int">uq_to_int</a>&lt;$T, $U&gt;($a: $U, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>): $T {
     ($a &gt;&gt; $fractional_bits) <b>as</b> $T
 }
 </code></pre>
@@ -755,7 +960,7 @@ plus fractional).
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_int_mul">uq_int_mul</a>&lt;$T, $U&gt;($val: $T, $multiplier: $T, $max_t: $T, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>, $abort_overflow: _): $T
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_int_mul">uq_int_mul</a>&lt;$T, $U&gt;($val: $T, $multiplier: $T, $max_t: $T, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>, $abort_overflow: _): $T
 </code></pre>
 
 
@@ -764,7 +969,7 @@ plus fractional).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_int_mul">uq_int_mul</a>&lt;$T, $U&gt;(
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_int_mul">uq_int_mul</a>&lt;$T, $U&gt;(
     $val: $T,
     $multiplier: $T,
     $max_t: $T,
@@ -794,7 +999,7 @@ plus fractional).
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_int_div">uq_int_div</a>&lt;$T, $U&gt;($val: $T, $divisor: $T, $max_t: $T, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>, $abort_division_by_zero: _, $abort_overflow: _): $T
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_int_div">uq_int_div</a>&lt;$T, $U&gt;($val: $T, $divisor: $T, $max_t: $T, $fractional_bits: <a href="../std/u8.md#std_u8">u8</a>, $abort_division_by_zero: _, $abort_overflow: _): $T
 </code></pre>
 
 
@@ -803,7 +1008,7 @@ plus fractional).
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_int_div">uq_int_div</a>&lt;$T, $U&gt;(
+<pre><code><b>public</b>(package) <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_uq_int_div">uq_int_div</a>&lt;$T, $U&gt;(
     $val: $T,
     $divisor: $T,
     $max_t: $T,

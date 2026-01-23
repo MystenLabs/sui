@@ -221,6 +221,8 @@ where
         } else {
             let codes = error_codes(&resp);
 
+            ext.metrics.queries_failed.inc();
+
             // Log internal errors, timeouts, and unknown errors at a higher log level than other errors.
             if is_loud_query(&codes) {
                 warn!(%uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
@@ -232,13 +234,13 @@ where
 
             if codes.is_empty() {
                 ext.metrics
-                    .queries_failed
+                    .query_errors
                     .with_label_values(&["<UNKNOWN>"])
                     .inc();
             }
 
             for code in &codes {
-                ext.metrics.queries_failed.with_label_values(&[code]).inc();
+                ext.metrics.query_errors.with_label_values(&[code]).inc();
             }
         }
 
@@ -303,7 +305,7 @@ mod tests {
         assert_eq!(metrics.queries_received.get(), 1);
         assert_eq!(
             metrics
-                .queries_failed
+                .query_errors
                 .with_label_values(&[code::GRAPHQL_PARSE_FAILED])
                 .get(),
             1
@@ -332,10 +334,41 @@ mod tests {
         assert_eq!(metrics.queries_received.get(), 1);
         assert_eq!(
             metrics
-                .queries_failed
+                .query_errors
                 .with_label_values(&[code::GRAPHQL_VALIDATION_FAILED])
                 .get(),
             1
+        );
+    }
+
+    #[tokio::test]
+    async fn multiple_error_codes_single_request_failed() {
+        let registry = Registry::new();
+        let metrics = RpcMetrics::new(&registry);
+
+        let request = Request::from("{ undefined1 undefined2 undefined3 }")
+            .data(Session::new("0.0.0.0:0".parse().unwrap()));
+
+        let response = Schema::build(Query, EmptyMutation, EmptySubscription)
+            .extension(Logging(metrics.clone()))
+            .finish()
+            .execute(request)
+            .await;
+
+        assert!(response.is_err());
+
+        // Should have multiple errors
+        let codes = error_codes(&response);
+        assert_eq!(codes.len(), 3);
+
+        assert_eq!(metrics.queries_received.get(), 1);
+        assert_eq!(metrics.queries_failed.get(), 1);
+        assert_eq!(
+            metrics
+                .query_errors
+                .with_label_values(&[code::GRAPHQL_VALIDATION_FAILED])
+                .get(),
+            3,
         );
     }
 }

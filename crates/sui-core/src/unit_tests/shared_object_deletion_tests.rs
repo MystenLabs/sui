@@ -1017,7 +1017,7 @@ async fn test_shifting_mutate_and_deletes_multiple_objects() {
     // Tx_8
     let tx_8 = runner.mutate_shared_obj_tx(so2, so2_isv).await;
 
-    let txs = vec![tx_1, tx_2, tx_3, tx_4, tx_5, tx_6, tx_7, tx_8];
+    let txs = [tx_1, tx_2, tx_3, tx_4, tx_5, tx_6, tx_7, tx_8];
     let mut certs = vec![];
     for tx in txs.iter() {
         let (cert, assigned_versions) = runner

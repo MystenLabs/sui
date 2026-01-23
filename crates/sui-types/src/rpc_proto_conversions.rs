@@ -2149,10 +2149,9 @@ impl From<crate::transaction::TransactionKind> for TransactionKind {
             K::ConsensusCommitPrologueV4(prologue) => message
                 .with_consensus_commit_prologue(prologue)
                 .with_kind(Kind::ConsensusCommitPrologueV4),
-            K::ProgrammableSystemTransaction(_) => message,
-            // TODO support ProgrammableSystemTransaction
-            // .with_programmable_transaction(ptb)
-            // .with_kind(Kind::ProgrammableSystemTransaction),
+            K::ProgrammableSystemTransaction(ptb) => message
+                .with_programmable_transaction(ptb)
+                .with_kind(Kind::ProgrammableSystemTransaction),
         }
     }
 }
@@ -2424,9 +2423,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             K::CoinRegistryCreate => message.with_kind(Kind::CoinRegistryCreate),
             K::DisplayRegistryCreate => message.with_kind(Kind::DisplayRegistryCreate),
             K::AddressAliasStateCreate => message.with_kind(Kind::AddressAliasStateCreate),
-            K::WriteAccumulatorStorageCost(_) => {
-                todo!("WriteAccumulatorStorageCost needs to be added to proto in sui-apis")
-            }
+            K::WriteAccumulatorStorageCost(storage_cost) => message
+                .with_kind(Kind::WriteAccumulatorStorageCost)
+                .with_storage_cost(storage_cost.storage_cost),
         }
     }
 }

@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::Task;
+use crate::indexer_builder::{DataMapper, DataSender, Datasource};
 use crate::metrics::BridgeIndexerMetrics;
+use crate::metrics::IndexerMetricProvider;
 use crate::{
     BridgeDataSource, GovernanceAction, ProcessedTxnData, TokenTransfer, TokenTransferData,
     TokenTransferStatus,
@@ -30,9 +33,6 @@ use sui_bridge::retry_with_max_elapsed_time;
 use sui_bridge::types::{EthEvent, RawEthLog};
 use sui_bridge::utils::{EthProvider, EthWsProvider, get_eth_provider, get_eth_ws_provider};
 use sui_bridge_schema::models::GovernanceActionType;
-use sui_indexer_builder::Task;
-use sui_indexer_builder::indexer_builder::{DataMapper, DataSender, Datasource};
-use sui_indexer_builder::metrics::IndexerMetricProvider;
 use tap::tap::TapFallible;
 use tokio::select;
 use tokio::task::JoinHandle;

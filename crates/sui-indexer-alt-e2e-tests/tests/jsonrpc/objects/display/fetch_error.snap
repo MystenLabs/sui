@@ -31,9 +31,9 @@ Response: {
   "id": 0,
   "result": {
     "data": {
-      "objectId": "0xb1d114770bfc9968a2ad3da9c6d5bcbf32e4bcf3d0bf3eba674df5d907a83e73",
+      "objectId": "0x3b798ce03faf0000b18cc1030fe6900f0cb61f41310fd0ce008b7e2676974885",
       "version": "1",
-      "digest": "Sgp59rDKZRKoSZ2ZJKKcc5YQ7MrhEHDxbZLqqFjywcq",
+      "digest": "BsQCKMVYhgatP4qqeH8acXY6YB5f695c7Xhg87rduuNL",
       "display": {
         "data": null,
         "error": {
@@ -52,14 +52,14 @@ Response: {
   "id": 1,
   "result": {
     "data": {
-      "objectId": "0x5736caa914301b5f6bc2734fdd6ef4c0097ebf6f0b346ec0ce1119f3a86c8c37",
+      "objectId": "0xc021aa4467b3506fe00fffdd15ec7406db4a42da5302698658d3ca2549a81741",
       "version": "2",
-      "digest": "6pd5G7cgCu3ShFTxpyo7xJTsq5EwzbAnrmfNeR55roUH",
+      "digest": "DZMR4ciAu7GRQiqtfrt9gU88RzM5NF8mJj25CvcRQdzo",
       "display": {
         "data": null,
         "error": {
           "code": "displayError",
-          "error": "Display format not found for 0xb1d114770bfc9968a2ad3da9c6d5bcbf32e4bcf3d0bf3eba674df5d907a83e73::mod::Foo"
+          "error": "Display format not found for 0x3b798ce03faf0000b18cc1030fe6900f0cb61f41310fd0ce008b7e2676974885::mod::Foo"
         }
       }
     }

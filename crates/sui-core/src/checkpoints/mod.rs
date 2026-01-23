@@ -27,7 +27,7 @@ use diffy::create_patch;
 use itertools::Itertools;
 use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::{CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME, NotifyRead};
-use mysten_common::{assert_reachable, debug_fatal, fatal};
+use mysten_common::{assert_reachable, debug_fatal, fatal, in_antithesis};
 use mysten_metrics::{MonitoredFutureExt, monitored_scope, spawn_monitored_task};
 use nonempty::NonEmpty;
 use parking_lot::Mutex;
@@ -1193,7 +1193,7 @@ impl CheckpointStateHasher {
 }
 
 #[derive(Debug)]
-pub(crate) enum CheckpointBuilderError {
+pub enum CheckpointBuilderError {
     ChangeEpochTxAlreadyExecuted,
     SystemPackagesMissing,
     Retry(anyhow::Error),
@@ -1207,7 +1207,7 @@ impl<SuiError: std::error::Error + Send + Sync + 'static> From<SuiError>
     }
 }
 
-pub(crate) type CheckpointBuilderResult<T = ()> = Result<T, CheckpointBuilderError>;
+pub type CheckpointBuilderResult<T = ()> = Result<T, CheckpointBuilderError>;
 
 pub struct CheckpointBuilder {
     state: Arc<AuthorityState>,
@@ -1589,7 +1589,9 @@ impl CheckpointBuilder {
             funds_changes,
         };
 
-        self.state.execution_scheduler().settle_funds(settlements);
+        self.state
+            .execution_scheduler()
+            .settle_address_funds(settlements);
 
         (tx_key, settlement_effects)
     }
@@ -2486,8 +2488,14 @@ async fn wait_for_effects_with_retry(
     digests: &[TransactionDigest],
     tx_key: TransactionKey,
 ) -> Vec<TransactionEffects> {
+    let delay = if in_antithesis() {
+        // antithesis has aggressive thread pausing, 5 seconds causes false positives
+        15
+    } else {
+        5
+    };
     loop {
-        match tokio::time::timeout(Duration::from_secs(5), async {
+        match tokio::time::timeout(Duration::from_secs(delay), async {
             effects_store
                 .notify_read_executed_effects(task_name, digests)
                 .await

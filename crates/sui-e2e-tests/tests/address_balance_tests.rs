@@ -11,7 +11,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
-use sui_core::accumulators::balances::get_currency_types_for_owner;
+use sui_core::accumulators::balances::get_all_balances_for_owner;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::*;
@@ -400,11 +400,10 @@ async fn test_deposits() {
 
 
         // Verify the accumulator object count after settlement.
-        // 1 account (recipient) with SUI balance = 5 objects.
         let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
             .expect("read cannot fail")
             .expect("accumulator object count should exist after settlement");
-        assert_eq!(object_count, 5);
+        assert_eq!(object_count, 1);
     });
 
     test_env.trigger_reconfiguration().await;
@@ -452,11 +451,11 @@ async fn test_multiple_settlement_txns() {
         }
 
         // Verify the accumulator object count after settlement.
-        // 21 accounts (20 from first tx + 1 from second tx), each with 5 objects = 105.
+        // 21 accounts (20 from first tx + 1 from second tx)
         let object_count = get_accumulator_object_count(state.get_object_store().as_ref())
             .expect("read cannot fail")
             .expect("accumulator object count should exist after settlement");
-        assert_eq!(object_count, 105);
+        assert_eq!(object_count, 21);
     });
 
     test_env.trigger_reconfiguration().await;
@@ -487,8 +486,7 @@ async fn test_deposit_and_withdraw() {
         .build();
     test_env.exec_tx_directly(tx).await.unwrap();
     // Verify the accumulator object count after settlement.
-    // 1 account (sender) with SUI balance = 5 objects.
-    test_env.verify_accumulator_object_count(5);
+    test_env.verify_accumulator_object_count(1);
     test_env.verify_accumulator_removed(sender);
     test_env.trigger_reconfiguration().await;
 }
@@ -521,8 +519,8 @@ async fn test_deposit_and_withdraw_with_larger_reservation() {
     // Verify that the accumulator still exists, as the entire balance was not withdrawn
     test_env.verify_accumulator_exists(sender, 200);
     // Verify the accumulator object count after settlement.
-    // 2 accounts (sender with 200, dbg_addr(2) with 800), each with 5 objects = 10.
-    test_env.verify_accumulator_object_count(10);
+    // 2 accounts (sender with 200, dbg_addr(2) with 800)
+    test_env.verify_accumulator_object_count(2);
     test_env.trigger_reconfiguration().await;
 }
 
@@ -639,8 +637,7 @@ async fn test_address_balance_gas() {
 
     test_env.verify_accumulator_exists(sender, 10_000_000);
     // Verify the accumulator object count after settlement.
-    // 1 account (sender) with SUI balance = 5 objects.
-    test_env.verify_accumulator_object_count(5);
+    test_env.verify_accumulator_object_count(1);
 
     // check that a transaction with a zero gas budget is rejected
     {
@@ -1690,8 +1687,7 @@ async fn test_address_balance_gas_charged_on_move_abort() {
 
     test_env.verify_accumulator_exists(sender, 10_000_000);
     // Verify the accumulator object count after settlement.
-    // 1 account (sender) with SUI balance = 5 objects.
-    test_env.verify_accumulator_object_count(5);
+    test_env.verify_accumulator_object_count(1);
 
     let abort_tx = create_abort_test_transaction_address_balance(
         sender,
@@ -2744,19 +2740,17 @@ async fn test_get_all_balances() {
     test_cluster.fullnode_handle.sui_node.with(|node| {
         let state = node.state();
         let indexes = state.indexes.clone().unwrap();
-        let index_tables = indexes.tables();
         let child_object_resolver = state.get_child_object_resolver().as_ref();
 
-        let types =
-            get_currency_types_for_owner(sender, child_object_resolver, index_tables, 10, None)
-                .unwrap();
-        assert_eq!(types.len(), 2);
+        let balances = get_all_balances_for_owner(sender, child_object_resolver, &indexes).unwrap();
+
+        assert_eq!(balances.len(), 2);
         assert!(
-            types
+            balances
                 .iter()
-                .any(|t| t.to_canonical_string(true).contains("::sui::SUI"))
+                .any(|(t, _)| t.to_canonical_string(true).contains("::sui::SUI"))
         );
-        assert!(types.iter().any(|t| {
+        assert!(balances.iter().any(|(t, _)| {
             t.to_canonical_string(true)
                 .contains("::trusted_coin::TRUSTED_COIN")
         }));

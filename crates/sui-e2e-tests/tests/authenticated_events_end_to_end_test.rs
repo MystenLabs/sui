@@ -4,7 +4,7 @@
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse};
 use sui_keys::keystore::AccountKeystore;
-use sui_light_client::mmr::apply_stream_updates;
+use sui_light_client::authenticated_events::mmr::apply_stream_updates;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::accumulator_root::EventCommitment;

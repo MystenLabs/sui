@@ -34,7 +34,7 @@ Response: {
   "id": 1,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Invalid type 0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a::M::Key<u64>: Package not found: 0xbff5e96a4a5c0f7348259c7abfdfd999405c02b9e9c0d0d59ec669a53b104c7a"
+    "message": "Invalid Params: Invalid type 0x1279a1708ba67edf9e73d98e30e2eeec9acb65a6bf8021083e5d83e0fc64f8b5::M::Key<u64>: Package not found: 0x1279a1708ba67edf9e73d98e30e2eeec9acb65a6bf8021083e5d83e0fc64f8b5"
   }
 }
 
@@ -45,7 +45,7 @@ Response: {
   "id": 2,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Invalid type 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::N::Key<u64>: Module not found: 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::N"
+    "message": "Invalid Params: Invalid type 0xd41379f7e2fd36c562588307dfb57317441d0a832bd2a250b5c838adf749c2d5::N::Key<u64>: Module not found: 0xd41379f7e2fd36c562588307dfb57317441d0a832bd2a250b5c838adf749c2d5::N"
   }
 }
 
@@ -56,7 +56,7 @@ Response: {
   "id": 3,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Invalid type 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::M::DoesntExist<u64>: Datatype not found: 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::M::DoesntExist"
+    "message": "Invalid Params: Invalid type 0xd41379f7e2fd36c562588307dfb57317441d0a832bd2a250b5c838adf749c2d5::M::DoesntExist<u64>: Datatype not found: 0xd41379f7e2fd36c562588307dfb57317441d0a832bd2a250b5c838adf749c2d5::M::DoesntExist"
   }
 }
 
@@ -67,7 +67,7 @@ Response: {
   "id": 4,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Invalid type 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::M::Key<u64, u32>: Expected 1 type parameters, but got 2"
+    "message": "Invalid Params: Invalid type 0xd41379f7e2fd36c562588307dfb57317441d0a832bd2a250b5c838adf749c2d5::M::Key<u64, u32>: Expected 1 type parameters, but got 2"
   }
 }
 
@@ -89,6 +89,6 @@ Response: {
   "id": 6,
   "error": {
     "code": -32602,
-    "message": "Invalid Params: Could not serialize dynamic field name as 0x24c71c206e1857249568d0e0dcafcf6bae30d7d791906b56f4a1e90785fdca62::M::Key<u64>: Unable to convert hello, world to unsigned int."
+    "message": "Invalid Params: Could not serialize dynamic field name as 0xd41379f7e2fd36c562588307dfb57317441d0a832bd2a250b5c838adf749c2d5::M::Key<u64>: Unable to convert hello, world to unsigned int."
   }
 }
