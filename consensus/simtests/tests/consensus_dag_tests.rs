@@ -11,37 +11,23 @@ mod consensus_dag_tests {
     use sui_macros::sim_test;
 
     #[sim_test]
-    async fn test_randomized_dag_with_num_authorities_4_step_1() {
+    async fn test_randomized_dag_with_4_authorities() {
         test_randomized_dag_with_reject_votes(RandomizedDagTestConfig {
             num_runs: 100,
             num_authorities: 4,
             num_rounds: 6000,
             reject_percentage: 10,
-            max_step: 1,
         })
         .await;
     }
 
     #[sim_test]
-    async fn test_randomized_dag_with_num_authorities_4_step_2() {
-        test_randomized_dag_with_reject_votes(RandomizedDagTestConfig {
-            num_runs: 100,
-            num_authorities: 4,
-            num_rounds: 6000,
-            reject_percentage: 10,
-            max_step: 2,
-        })
-        .await;
-    }
-
-    #[sim_test]
-    async fn test_randomized_dag_with_num_authorities_7_step_1() {
+    async fn test_randomized_dag_with_7_authorities() {
         test_randomized_dag_with_reject_votes(RandomizedDagTestConfig {
             num_runs: 100,
             num_authorities: 7,
             num_rounds: 2000,
             reject_percentage: 5,
-            max_step: 1,
         })
         .await;
     }
@@ -51,7 +37,6 @@ mod consensus_dag_tests {
         num_authorities: usize,
         num_rounds: Round,
         reject_percentage: u8,
-        max_step: Round,
     }
 
     async fn test_randomized_dag_with_reject_votes(config: RandomizedDagTestConfig) {
@@ -60,7 +45,6 @@ mod consensus_dag_tests {
             num_authorities,
             num_rounds,
             reject_percentage,
-            max_step,
         } = config;
 
         let mut rng = StdRng::from_entropy();
@@ -89,7 +73,7 @@ mod consensus_dag_tests {
             let mut finalized_commits = vec![];
             let mut last_decided = Slot::new_for_test(0, 0);
 
-            for block in dag.random_iter(&mut rng, max_step) {
+            for block in dag.random_iter(&mut rng) {
                 fixture.try_accept_blocks(vec![block]);
 
                 let (finalized, new_last_decided) = fixture.try_commit(last_decided).await;

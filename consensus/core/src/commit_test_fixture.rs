@@ -4,6 +4,7 @@
 //! Shared test fixture for commit-related tests.
 //! Used by both commit_finalizer.rs tests and randomized_tests.rs.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use consensus_config::{AuthorityIndex, Stake};
@@ -225,7 +226,6 @@ pub fn assert_commit_sequences_match(
         // Since INDIRECT_REJECT_DEPTH is 3, the maximum number of commits buffered in CommitFinalizer is 3.
         // And because of the direct finalization optimization, it might happen the last 3 commits are pending in
         // one run but all finalized in another.
-        // TODO: verify this edge case can indeed happen.
         assert!(
             commit_sequence.len() <= shortest_sequence.len() + 3,
             "Commit sequence at run {run} is more than 3 commits longer than shortest (run {shortest_idx}): {} vs {}",
@@ -292,29 +292,18 @@ pub fn assert_commit_sequences_match(
 
 /// A randomly generated DAG for testing commit patterns with reject votes.
 pub struct RandomDag {
-    context: Arc<Context>,
     pub blocks: Vec<VerifiedBlock>,
-    num_rounds: Round,
 }
 
 impl RandomDag {
     /// Creates a RandomDag from existing blocks.
-    pub fn from_blocks(context: Arc<Context>, blocks: Vec<VerifiedBlock>) -> Self {
-        let num_rounds = blocks.iter().map(|b| b.round()).max().unwrap_or(0);
-        RandomDag {
-            context,
-            blocks,
-            num_rounds,
-        }
+    pub fn from_blocks(blocks: Vec<VerifiedBlock>) -> Self {
+        RandomDag { blocks }
     }
 
-    /// Creates an iterator yielding blocks out of order.
-    pub fn random_iter<'a>(
-        &'a self,
-        rng: &'a mut StdRng,
-        max_step: Round,
-    ) -> RandomDagIterator<'a> {
-        RandomDagIterator::new(self, rng, max_step)
+    /// Creates an iterator yielding blocks in dependency-respecting random order.
+    pub fn random_iter<'a>(&'a self, rng: &'a mut StdRng) -> RandomDagIterator<'a> {
+        RandomDagIterator::new(self, rng)
     }
 }
 
@@ -487,64 +476,65 @@ impl RandomDag {
             last_round_blocks = current_round_blocks;
         }
 
-        RandomDag {
-            context,
-            blocks,
-            num_rounds,
-        }
+        RandomDag { blocks }
     }
 }
 
-/// Per-round state for iteration.
-#[derive(Clone, Default)]
-struct RoundState {
-    // Total stake of visited blocks in this round.
-    visited_stake: Stake,
-    // Indices of unvisited blocks in this round.
-    unvisited: Vec<usize>,
-}
-
-/// Iterator yielding blocks in constrained random order. Selects from rounds
-/// `completed_round + 1` to `quorum_round + max_step`, simulating arrival with delays.
+/// Iterator yielding blocks in dependency-respecting random order.
+/// A block becomes a candidate only after all its ancestors have been selected.
 pub struct RandomDagIterator<'a> {
-    dag: &'a RandomDag,
     rng: &'a mut StdRng,
-    quorum_threshold: Stake,
-    max_step: Round,
-    // Highest round where all prior rounds have quorum stake visited.
-    quorum_round: Round,
-    // Highest round where all prior rounds have all blocks visited.
-    completed_round: Round,
-    // State of each round.
-    round_states: Vec<RoundState>,
-    // Number of blocks remaining to visit.
-    num_remaining: usize,
+    // Map from BlockRef to VerifiedBlock for lookup.
+    blocks: BTreeMap<BlockRef, VerifiedBlock>,
+    // Blocks ready to be selected (all ancestors already selected).
+    candidates: Vec<BlockRef>,
+    // Map: block -> set of unselected ancestors it's waiting for.
+    pending: BTreeMap<BlockRef, BTreeSet<BlockRef>>,
+    // Reverse map: block -> blocks that have this block as an ancestor.
+    dependents: BTreeMap<BlockRef, Vec<BlockRef>>,
 }
 
 impl<'a> RandomDagIterator<'a> {
-    fn new(dag: &'a RandomDag, rng: &'a mut StdRng, max_step: Round) -> Self {
-        let num_rounds = dag.num_rounds as usize;
-        let committee = &dag.context.committee;
-        let quorum_threshold = committee.quorum_threshold();
+    fn new(dag: &'a RandomDag, rng: &'a mut StdRng) -> Self {
+        let mut blocks = BTreeMap::new();
+        let mut candidates = Vec::new();
+        let mut pending = BTreeMap::new();
+        let mut dependents: BTreeMap<BlockRef, Vec<BlockRef>> = BTreeMap::new();
 
-        let mut round_states: Vec<RoundState> = vec![RoundState::default(); num_rounds + 1];
-
-        for (idx, block) in dag.blocks.iter().enumerate() {
-            let round = block.round() as usize;
-            round_states[round].unvisited.push(idx);
+        // Build block map.
+        for block in &dag.blocks {
+            blocks.insert(block.reference(), block.clone());
         }
 
-        let num_remaining = dag.blocks.len();
+        // Initialize candidates and pending based on ancestors.
+        for block in &dag.blocks {
+            let block_ref = block.reference();
+            // Collect non-genesis ancestors that are in the DAG.
+            let unselected_ancestors: BTreeSet<BlockRef> = block
+                .ancestors()
+                .iter()
+                .filter(|a| a.round > 0 && blocks.contains_key(a))
+                .copied()
+                .collect();
+
+            if unselected_ancestors.is_empty() {
+                // Round 1 blocks (or blocks with only genesis ancestors) are candidates.
+                candidates.push(block_ref);
+            } else {
+                // Register this block as a dependent of each ancestor.
+                for ancestor in &unselected_ancestors {
+                    dependents.entry(*ancestor).or_default().push(block_ref);
+                }
+                pending.insert(block_ref, unselected_ancestors);
+            }
+        }
 
         Self {
-            dag,
             rng,
-            max_step,
-            quorum_round: 0,
-            completed_round: 0,
-            quorum_threshold,
-            round_states,
-            num_remaining,
+            blocks,
+            candidates,
+            pending,
+            dependents,
         }
     }
 }
@@ -553,67 +543,27 @@ impl Iterator for RandomDagIterator<'_> {
     type Item = VerifiedBlock;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.num_remaining == 0 {
+        if self.candidates.is_empty() {
             return None;
         }
 
-        // Eligible rounds: from first unvisited to quorum_round + max_step.
-        let min_round = self.completed_round as usize + 1;
-        let max_round =
-            ((self.quorum_round + self.max_step) as usize).min(self.round_states.len() - 1);
-        let eligible_rounds = min_round..=max_round;
+        // Randomly select a candidate.
+        let idx = self.rng.gen_range(0..self.candidates.len());
+        let selected_ref = self.candidates.swap_remove(idx);
+        let block = self.blocks.remove(&selected_ref)?;
 
-        let total_candidates: usize = eligible_rounds
-            .clone()
-            .map(|r| self.round_states[r].unvisited.len())
-            .sum();
-
-        if total_candidates == 0 {
-            return None;
-        }
-
-        // Select random candidate by index across eligible rounds.
-        let mut selection = self.rng.gen_range(0..total_candidates);
-        let mut selected_round = 0;
-        let mut selected_pos = 0;
-
-        for r in eligible_rounds {
-            let count = self.round_states[r].unvisited.len();
-            if selection < count {
-                selected_round = r;
-                selected_pos = selection;
-                break;
+        // Update dependents: for each block waiting on this one, remove from its pending set.
+        if let Some(waiting_blocks) = self.dependents.remove(&selected_ref) {
+            for dependent_ref in waiting_blocks {
+                if let Some(ancestors) = self.pending.get_mut(&dependent_ref) {
+                    ancestors.remove(&selected_ref);
+                    if ancestors.is_empty() {
+                        // All ancestors selected, move to candidates.
+                        self.pending.remove(&dependent_ref);
+                        self.candidates.push(dependent_ref);
+                    }
+                }
             }
-            selection -= count;
-        }
-
-        // Get block index and remove from unvisited.
-        let block_idx = self.round_states[selected_round]
-            .unvisited
-            .swap_remove(selected_pos);
-        let block = self.dag.blocks[block_idx].clone();
-
-        // Update visited stake for this round.
-        let stake = self.dag.context.committee.stake(block.author());
-        self.round_states[selected_round].visited_stake += stake;
-        self.num_remaining -= 1;
-
-        // Advance completed_round while next round has all blocks visited.
-        while self
-            .round_states
-            .get(self.completed_round as usize + 1)
-            .is_some_and(|s| s.unvisited.is_empty())
-        {
-            self.completed_round += 1;
-        }
-
-        // Advance quorum_round while next round has quorum stake visited.
-        while self
-            .round_states
-            .get(self.quorum_round as usize + 1)
-            .is_some_and(|s| s.visited_stake >= self.quorum_threshold)
-        {
-            self.quorum_round += 1;
         }
 
         Some(block)
