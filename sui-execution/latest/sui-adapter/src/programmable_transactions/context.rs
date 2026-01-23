@@ -1533,6 +1533,11 @@ mod checked {
             .collect();
 
         let mut receiving_funds_type_and_owners = BTreeMap::new();
+        // Tracks the total amount of withdraws for each accumulator account in this transaction.
+        // We need this separately to ensure that there are sufficient amount of funds to withdraw
+        // from this account in this transaction, without considering any new deposits to this account.
+        // Without doing so we would essentially provide a way to perform flash loans without funding source.
+        let mut accumulator_total_withdraws = BTreeMap::new();
         let accumulator_events = accumulator_events
             .into_iter()
             .try_fold(
@@ -1578,6 +1583,10 @@ mod checked {
             )?
             .into_iter()
             .map(|(obj_id, writes)| {
+                let total_withdraws = writes.iter().filter_map(|write| write.get_fund_withdraw_amount()).sum::<u128>();
+                if total_withdraws > 0 {
+                    accumulator_total_withdraws.insert(AccumulatorObjId::new_unchecked(obj_id), total_withdraws);
+                }
                 AccumulatorEvent::new(
                     AccumulatorObjId::new_unchecked(obj_id),
                     AccumulatorWriteV1::merge(writes),
@@ -1614,6 +1623,7 @@ mod checked {
             deleted_object_ids: deleted_object_ids.into_iter().collect(),
             user_events,
             accumulator_events,
+            accumulator_total_withdraws,
             settlement_input_sui,
             settlement_output_sui,
         }))

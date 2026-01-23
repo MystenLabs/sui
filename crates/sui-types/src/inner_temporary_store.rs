@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::accumulator_event::AccumulatorEvent;
+use crate::accumulator_root::AccumulatorObjId;
 use crate::base_types::{FullObjectID, SequenceNumber, VersionDigest};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::error::SuiResult;
@@ -36,6 +37,7 @@ pub struct InnerTemporaryStore {
     pub binary_config: BinaryConfig,
     pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, PackageObject>,
     pub lamport_version: SequenceNumber,
+    pub accumulator_total_withdraws: BTreeMap<AccumulatorObjId, u128>,
 }
 
 impl InnerTemporaryStore {
