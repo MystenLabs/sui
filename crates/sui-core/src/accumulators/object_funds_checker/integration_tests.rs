@@ -294,4 +294,109 @@ async fn test_object_withdraw_multiple_withdraws() {
     );
 }
 
-// FIXME: More tests coming.
+#[tokio::test]
+async fn test_object_withdraw_and_deposit_same_transaction() {
+    telemetry_subscribers::init_for_testing();
+    let env = TestEnv::new().await;
+    env.fund_address(env.vault_obj.into(), 2).await;
+
+    // In the same transaction, we are withdrawing from the object account
+    // and depositing back to the same object account.
+    // The max net withdraws for this account should be 3, because at any given moment,
+    // the net withdraws is at most 3.
+    // Since the account has a balance of 2, the transaction should fail.
+    let gas = env.oref(&env.gas_obj).await;
+    let tx = TestTransactionBuilder::new(env.sender, gas, env.rgp())
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(env.package_id, env.oref(&env.vault_obj).await),
+            vec![(3, env.vault_obj.into())],
+        )
+        .build();
+    let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
+    let digest = *cert.digest();
+    let accumulator_version = env.oref(&SUI_ACCUMULATOR_ROOT_OBJECT_ID).await.1;
+    let output = env
+        .authority
+        .try_execute_immediately(
+            &cert,
+            ExecutionEnv::new()
+                .with_assigned_versions(AssignedVersions::new(vec![], Some(accumulator_version))),
+            &env.epoch_store,
+        )
+        .await;
+    assert!(matches!(output, ExecutionOutput::RetryLater));
+    let effects = env
+        .authority
+        .notify_read_effects("test", digest)
+        .await
+        .unwrap();
+    assert!(matches!(
+        effects.status(),
+        ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
+            ..
+        }
+    ));
+
+    let gas = env.oref(&env.gas_obj).await;
+    // Now we try with withdraw 2 and deposit 2, which should be sufficient,
+    // even if we do it twice.
+    let tx = TestTransactionBuilder::new(env.sender, gas, env.rgp())
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(env.package_id, env.oref(&env.vault_obj).await),
+            vec![(2, env.vault_obj.into())],
+        )
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(env.package_id, env.oref(&env.vault_obj).await),
+            vec![(2, env.vault_obj.into())],
+        )
+        .build();
+    let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
+    let effects = env
+        .authority
+        .try_execute_immediately(
+            &cert,
+            ExecutionEnv::new()
+                .with_assigned_versions(AssignedVersions::new(vec![], Some(accumulator_version))),
+            &env.epoch_store,
+        )
+        .await
+        .unwrap()
+        .0;
+    assert!(effects.status().is_ok());
+
+    // Now try to withdraw 1 and deposit 1. Since the previous
+    // transaction has a pending withdraw of 2, there is no more balance available.
+    // This should fail.
+    let gas = env.oref(&env.gas_obj).await;
+    let tx = TestTransactionBuilder::new(env.sender, gas, env.rgp())
+        .transfer_sui_to_address_balance(
+            FundSource::object_fund_owned(env.package_id, env.oref(&env.vault_obj).await),
+            vec![(1, env.vault_obj.into())],
+        )
+        .build();
+    let cert = VerifiedExecutableTransaction::new_for_testing(tx, &env.keypair);
+    let digest = *cert.digest();
+    let output = env
+        .authority
+        .try_execute_immediately(
+            &cert,
+            ExecutionEnv::new()
+                .with_assigned_versions(AssignedVersions::new(vec![], Some(accumulator_version))),
+            &env.epoch_store,
+        )
+        .await;
+    assert!(matches!(output, ExecutionOutput::RetryLater));
+    let effects = env
+        .authority
+        .notify_read_effects("test", digest)
+        .await
+        .unwrap();
+    assert!(matches!(
+        effects.status(),
+        ExecutionStatus::Failure {
+            error: ExecutionFailureStatus::InsufficientFundsForWithdraw,
+            ..
+        }
+    ));
+}
