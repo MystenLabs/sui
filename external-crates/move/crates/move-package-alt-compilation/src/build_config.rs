@@ -111,7 +111,7 @@ pub struct BuildConfig {
     pub root_as_zero: bool,
 
     #[clap(
-        long = "environment",
+        long = "build-env",
         short = 'e',
         global = true,
         help = "Environment to use for building packages"
