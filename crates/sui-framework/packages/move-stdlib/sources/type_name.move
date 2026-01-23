@@ -9,6 +9,8 @@ use std::ascii::{Self, String};
 
 /// ASCII Character code for the `:` (colon) symbol.
 const ASCII_COLON: u8 = 58;
+/// ASCII Character code for the `<` (less than) symbol.
+const ASCII_LESS_THAN: u8 = 60;
 
 /// ASCII Character code for the `v` (lowercase v) symbol.
 const ASCII_V: u8 = 118;
@@ -123,6 +125,40 @@ public fun module_string(self: &TypeName): String {
     };
 
     ascii::string(module_name)
+}
+
+/// Get name of the datatype (struct or enum).
+/// Aborts if given a primitive type.
+public fun datatype_string(self: &TypeName): String {
+    assert!(!self.is_primitive(), ENonModuleType);
+
+    // Starts after address and a double colon: `<addr as HEX>::`
+    let mut i = address::length() * 2 + 2;
+    let str_bytes = self.name.as_bytes();
+    let str_bytes_len = str_bytes.length();
+    let colon = ASCII_COLON;
+
+    // Skip past the `<module_name>::` to the datatype name.
+    // The asserts should never fail, since all non-primitive types should have two colons.
+    while (&str_bytes[i] != &colon) i = i + 1;
+    i = i + 1;
+    assert!(&str_bytes[i] == &colon);
+    i = i + 1;
+    assert!(&str_bytes[i] != &colon);
+
+    // Take all characters until the type parameters start at `<`, or until the end of the string.
+    let mut datatype_name = vector[];
+    let lt = ASCII_LESS_THAN;
+    loop {
+        let char = &str_bytes[i];
+        if (char == &lt) break;
+
+        datatype_name.push_back(*char);
+        i = i + 1;
+        if (i >= str_bytes_len) break;
+    };
+
+    ascii::string(datatype_name)
 }
 
 /// Convert `self` into its inner String

@@ -115,7 +115,7 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
             );
             let transaction = ConsensusTransaction::new_checkpoint_signature_message_v2(message);
             self.sender
-                .submit_to_consensus(&vec![transaction], epoch_store)?;
+                .submit_to_consensus(&[transaction], epoch_store)?;
             self.metrics
                 .last_sent_checkpoint_signature
                 .set(checkpoint_seq as i64);

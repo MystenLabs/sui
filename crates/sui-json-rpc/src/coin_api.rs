@@ -12,7 +12,7 @@ use jsonrpsee::core::RpcResult;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_core::jsonrpc_index::TotalBalance;
 use tap::TapFallible;
-use tracing::{debug, instrument};
+use tracing::instrument;
 
 use sui_core::authority::AuthorityState;
 use sui_json_rpc_api::{CoinReadApiOpenRpc, CoinReadApiServer, JsonRpcMetrics, cap_page_limit};

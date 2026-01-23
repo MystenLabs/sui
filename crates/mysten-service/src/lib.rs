@@ -28,8 +28,6 @@ macro_rules! package_version {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn package_name_works() {
         assert_eq!(package_name!(), "mysten-service");

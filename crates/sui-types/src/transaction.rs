@@ -3239,9 +3239,14 @@ impl SenderSignedData {
         &mut self.inner_mut().tx_signatures
     }
 
-    pub fn full_message_digest(&self) -> SenderSignedDataDigest {
+    /// Includes alias_versions to ensure cache invalidation when aliases change.
+    pub fn full_message_digest_with_alias_versions(
+        &self,
+        alias_versions: &Vec<(SuiAddress, Option<SequenceNumber>)>,
+    ) -> SenderSignedDataDigest {
         let mut digest = DefaultHash::default();
         bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
+        bcs::serialize_into(&mut digest, alias_versions).expect("serialization should not fail");
         let hash = digest.finalize();
         SenderSignedDataDigest::new(hash.into())
     }

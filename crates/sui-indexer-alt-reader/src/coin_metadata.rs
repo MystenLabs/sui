@@ -30,6 +30,7 @@ impl Loader<CoinMetadataKey> for PgReader {
     type Value = StoredObjInfo;
     type Error = Error;
 
+    #[allow(clippy::double_parens)]
     async fn load(
         &self,
         keys: &[CoinMetadataKey],
