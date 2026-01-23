@@ -157,6 +157,7 @@ pub async fn run_move_unit_tests<F: MoveFlavor, V: VMTestSetup + Sync, W: Write 
     let mut test_plan = None;
     build_config.test_mode = true;
     build_config.save_disassembly = save_disassembly;
+    build_config.root_as_zero = true;
 
     // Load the package (package graph diagnostics are only needed for CLI commands so
     // ignore them by passing a vector as the writer)
