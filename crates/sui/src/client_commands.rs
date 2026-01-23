@@ -3423,7 +3423,7 @@ pub async fn load_root_pkg_for_publish_upgrade(
     Ok(build_config.package_loader(path, &env).load().await?)
 }
 
-async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
+pub async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
     package_path: &Path,
     chain_id: &str,
     build_env: Option<String>,

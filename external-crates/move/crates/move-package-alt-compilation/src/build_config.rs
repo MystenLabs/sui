@@ -121,6 +121,11 @@ pub struct BuildConfig {
     /// If set, any dependencies that are not published will have their address set to 0x0.
     #[clap(skip)]
     pub set_unpublished_deps_to_zero: bool,
+
+    /// Path to ephemeral publication file. When provided, uses ephemeral addresses for
+    /// compilation instead of addresses from the lock file.
+    #[clap(long, global = true)]
+    pub pubfile_path: Option<PathBuf>,
 }
 
 impl BuildConfig {
