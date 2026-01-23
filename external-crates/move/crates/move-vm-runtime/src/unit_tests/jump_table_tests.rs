@@ -1,18 +1,26 @@
-use crate::cache::identifier_interner::IdentifierInterner;
-use crate::shared::vm_pointer::VMPointer;
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
+    cache::identifier_interner::IdentifierInterner,
     jit::execution::translate::*,
     jit::optimization::ast as input,
     natives::functions::NativeFunctions,
     shared::types::{OriginalId, VersionId},
 };
-use indexmap::IndexMap;
+
 use move_binary_format::file_format::{
     AddressIdentifierIndex, IdentifierIndex, ModuleHandle, empty_module,
 };
 use move_core_types::resolver::IntraPackageName;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+
+use indexmap::IndexMap;
 use std::collections::BTreeMap;
+
+// -------------------------------------------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------------------------------------------
 
 fn create_test_natives() -> NativeFunctions {
     NativeFunctions::empty_for_testing().unwrap()
@@ -40,6 +48,10 @@ fn create_test_input_package() -> input::Package {
         linkage_table: BTreeMap::from([(original_id, version_id)]),
     }
 }
+
+// -------------------------------------------------------------------------------------------------
+// Tests
+// -------------------------------------------------------------------------------------------------
 
 #[test]
 fn test_package_empty() {
@@ -178,10 +190,12 @@ fn test_package_error_handling_invalid_identifier() {
 #[test]
 fn test_flatten_and_renumber_blocks_empty() {
     let blocks = BTreeMap::new();
-    let mut jump_tables = vec![];
+    let jump_tables = vec![];
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
-    assert!(result.is_empty());
+    let (bytecode, jump_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables).unwrap();
+    assert!(bytecode.is_empty());
+    assert!(jump_tables.is_empty());
 }
 
 #[test]
@@ -190,12 +204,14 @@ fn test_flatten_and_renumber_blocks_single_block() {
 
     let mut blocks = BTreeMap::new();
     blocks.insert(0u16, vec![input::Bytecode::LdU64(42), input::Bytecode::Pop]);
-    let mut jump_tables = vec![];
+    let jump_tables = vec![];
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
-    assert_eq!(result.len(), 2);
-    assert!(matches!(result[0], input::Bytecode::LdU64(42)));
-    assert!(matches!(result[1], input::Bytecode::Pop));
+    let (bytecode, jump_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables).unwrap();
+    assert_eq!(bytecode.len(), 2);
+    assert!(matches!(bytecode[0], input::Bytecode::LdU64(42)));
+    assert!(matches!(bytecode[1], input::Bytecode::Pop));
+    assert!(jump_tables.is_empty());
 }
 
 #[test]
@@ -212,16 +228,18 @@ fn test_flatten_and_renumber_blocks_multiple_blocks() {
             input::Bytecode::Ret,
         ],
     );
-    let mut jump_tables = vec![];
+    let jump_tables = vec![];
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
-    assert_eq!(result.len(), 5);
+    let (bytecode, jump_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables).unwrap();
+    assert_eq!(bytecode.len(), 5);
     // Verify the blocks were flattened in order
-    assert!(matches!(result[0], input::Bytecode::LdU64(42)));
-    assert!(matches!(result[1], input::Bytecode::Pop));
-    assert!(matches!(result[2], input::Bytecode::LdTrue));
-    assert!(matches!(result[3], input::Bytecode::Pop));
-    assert!(matches!(result[4], input::Bytecode::Ret));
+    assert!(matches!(bytecode[0], input::Bytecode::LdU64(42)));
+    assert!(matches!(bytecode[1], input::Bytecode::Pop));
+    assert!(matches!(bytecode[2], input::Bytecode::LdTrue));
+    assert!(matches!(bytecode[3], input::Bytecode::Pop));
+    assert!(matches!(bytecode[4], input::Bytecode::Ret));
+    assert!(jump_tables.is_empty());
 }
 
 #[test]
@@ -237,60 +255,56 @@ fn test_flatten_and_renumber_blocks_branch_targets() {
         10u16,
         vec![input::Bytecode::LdU64(42), input::Bytecode::Ret],
     );
-    let mut jump_tables = vec![];
+    let jump_tables = vec![];
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
-    assert_eq!(result.len(), 4);
+    let (bytecode, jump_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables).unwrap();
+    assert_eq!(bytecode.len(), 4);
 
     // Verify that branch targets were renumbered
-    match &result[1] {
+    match &bytecode[1] {
         input::Bytecode::BrTrue(target) => assert_eq!(*target, 2), // Should point to offset 2
         _ => panic!("Expected BrTrue with renumbered target"),
     }
+    assert!(jump_tables.is_empty());
 }
 
 #[test]
 fn test_flatten_and_renumber_blocks_with_jump_table() {
-    use crate::cache::arena::Arena;
     use crate::jit::optimization::ast as input;
 
-    let arena = Arena::new_bounded();
     // Create a jump table that points to block offsets 0, 10, 20
-    let jump_table = arena.alloc_vec([0u16, 10u16, 20u16].into_iter()).unwrap();
-    let jump_table_ptr = VMPointer::from_ref(&jump_table);
-    let mut jump_tables = vec![jump_table_ptr];
+    let jump_tables = vec![vec![0u16, 10u16, 20u16]];
 
     let mut blocks = BTreeMap::new();
     blocks.insert(0u16, vec![input::Bytecode::LdU64(1)]);
     blocks.insert(10u16, vec![input::Bytecode::LdU64(2)]);
     blocks.insert(20u16, vec![input::Bytecode::LdU64(3)]);
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
+    let (bytecode, updated_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables).unwrap();
 
     // Verify the bytecode was flattened correctly
-    assert_eq!(result.len(), 3);
-    assert!(matches!(result[0], input::Bytecode::LdU64(1)));
-    assert!(matches!(result[1], input::Bytecode::LdU64(2)));
-    assert!(matches!(result[2], input::Bytecode::LdU64(3)));
+    assert_eq!(bytecode.len(), 3);
+    assert!(matches!(bytecode[0], input::Bytecode::LdU64(1)));
+    assert!(matches!(bytecode[1], input::Bytecode::LdU64(2)));
+    assert!(matches!(bytecode[2], input::Bytecode::LdU64(3)));
 
     // Verify the jump table was updated
+    assert_eq!(updated_tables.len(), 1); // One jump table still
     // Block 0 -> offset 0, block 10 -> offset 1, block 20 -> offset 2
-    let updated_table = jump_tables[0].to_ref();
-    assert_eq!(updated_table[0], 0); // Block 0 maps to offset 0
-    assert_eq!(updated_table[1], 1); // Block 10 maps to offset 1
-    assert_eq!(updated_table[2], 2); // Block 20 maps to offset 2
+    assert_eq!(updated_tables[0].len(), 3); // Table has 3 entries
+    assert_eq!(updated_tables[0][0], 0); // Block 0 maps to offset 0
+    assert_eq!(updated_tables[0][1], 1); // Block 10 maps to offset 1
+    assert_eq!(updated_tables[0][2], 2); // Block 20 maps to offset 2
 }
 
 #[test]
 fn test_flatten_and_renumber_blocks_variant_switch() {
-    use crate::cache::arena::Arena;
     use crate::jit::optimization::ast as input;
 
-    let arena = Arena::new_bounded();
     // Create a jump table for variant switch
-    let jump_table = arena.alloc_vec([0u16, 5u16, 10u16].into_iter()).unwrap();
-    let jump_table_ptr = VMPointer::from_ref(&jump_table);
-    let mut jump_tables = vec![jump_table_ptr];
+    let jump_tables = vec![vec![0u16, 5u16, 10u16]];
 
     let mut blocks = BTreeMap::new();
     blocks.insert(
@@ -305,17 +319,19 @@ fn test_flatten_and_renumber_blocks_variant_switch() {
     blocks.insert(5u16, vec![input::Bytecode::LdU64(100)]);
     blocks.insert(10u16, vec![input::Bytecode::LdU64(200)]);
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables).unwrap();
+    let (bytecode, jump_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables).unwrap();
 
     // Verify flattening
-    assert_eq!(result.len(), 4);
-    assert!(matches!(result[0], input::Bytecode::LdU8(0)));
-    assert!(matches!(result[1], input::Bytecode::VariantSwitch(_)));
-    assert!(matches!(result[2], input::Bytecode::LdU64(100)));
-    assert!(matches!(result[3], input::Bytecode::LdU64(200)));
+    assert_eq!(bytecode.len(), 4);
+    assert!(matches!(bytecode[0], input::Bytecode::LdU8(0)));
+    assert!(matches!(bytecode[1], input::Bytecode::VariantSwitch(_)));
+    assert!(matches!(bytecode[2], input::Bytecode::LdU64(100)));
+    assert!(matches!(bytecode[3], input::Bytecode::LdU64(200)));
 
     // Verify jump table was updated
-    let updated_table = jump_tables[0].to_ref();
+    assert_eq!(jump_tables.len(), 1);
+    let updated_table = &jump_tables[0];
     assert_eq!(updated_table[0], 0); // Block 0 -> offset 0
     assert_eq!(updated_table[1], 2); // Block 5 -> offset 2
     assert_eq!(updated_table[2], 3); // Block 10 -> offset 3
@@ -331,9 +347,9 @@ fn test_flatten_and_renumber_blocks_overflow_protection() {
     let large_vec = vec![input::Bytecode::Nop; (u16::MAX as usize) + 1];
     blocks.insert(0u16, large_vec);
 
-    let mut jump_tables = vec![];
+    let jump_tables = vec![];
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+    let result = flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables);
     assert!(result.is_err());
 
     let err = result.unwrap_err();
@@ -354,9 +370,9 @@ fn test_flatten_and_renumber_blocks_offset_overflow_protection() {
     blocks.insert(0u16, block1);
     blocks.insert(1u16, block2);
 
-    let mut jump_tables = vec![];
+    let jump_tables = vec![];
 
-    let result = flatten_and_renumber_blocks(blocks, &mut jump_tables);
+    let result = flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables);
     assert!(result.is_err());
 
     let err = result.unwrap_err();

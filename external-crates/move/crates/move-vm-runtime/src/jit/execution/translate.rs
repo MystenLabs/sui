@@ -20,7 +20,6 @@ use crate::{
         vm_pointer::VMPointer,
     },
 };
-use indexmap::IndexMap;
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
@@ -32,6 +31,9 @@ use move_core_types::{
     identifier::Identifier, language_storage::ModuleId, resolver::IntraPackageName,
     vm_status::StatusCode,
 };
+
+use indexmap::IndexMap;
+
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 // -------------------------------------------------------------------------------------------------
@@ -1035,8 +1037,10 @@ fn function_bodies(
             code: opt_code,
         } = opt_fun;
         if let Some(opt_code) = opt_code {
-            let mut jump_table_ptrs = fun.jump_tables.to_ptrs();
-            fun.code = code(&mut module_context, &mut jump_table_ptrs, opt_code.code)?;
+            let (code, jump_tables) =
+                code(&mut module_context, opt_code.jump_tables, opt_code.code)?;
+            fun.code = code;
+            fun.jump_tables = jump_tables;
         }
     }
 
@@ -1052,18 +1056,6 @@ fn alloc_function(
     index: FunctionDefinitionIndex,
     def: &FunctionDefinition,
 ) -> PartialVMResult<Function> {
-    fn jump_table(
-        context: &PackageContext,
-        table: &FF::VariantJumpTable,
-    ) -> PartialVMResult<VariantJumpTable> {
-        match &table.jump_table {
-            FF::JumpTableInner::Full(items) => {
-                let jump_table = context.arena_vec(items.clone().into_iter())?;
-                Ok(jump_table)
-            }
-        }
-    }
-
     let handle = module.function_handle_at(def.function);
     let name_ident_str = module.identifier_at(handle.name);
     let module_id = module.self_id();
@@ -1101,7 +1093,7 @@ fn alloc_function(
         .collect::<PartialVMResult<Vec<_>>>()?;
     let parameters = context.arena_vec(parameters.into_iter())?;
     // Native functions do not have a code unit
-    let (locals_len, locals, jump_tables) = match &def.code {
+    let (locals_len, locals) = match &def.code {
         Some(code) => {
             let locals_len = parameters.len() + module.signature_at(code.locals).0.len();
             let locals = context.arena_vec(
@@ -1113,15 +1105,9 @@ fn alloc_function(
                     .collect::<PartialVMResult<Vec<_>>>()?
                     .into_iter(),
             )?;
-            let jump_tables = code
-                .jump_tables
-                .iter()
-                .map(|table| jump_table(context, table))
-                .collect::<PartialVMResult<Vec<_>>>()?;
-            let jump_tables = context.package_arena.alloc_vec(jump_tables.into_iter())?;
-            (locals_len, locals, jump_tables)
+            (locals_len, locals)
         }
-        None => (0, ArenaVec::empty(), ArenaVec::empty()),
+        None => (0, ArenaVec::empty()),
     };
     let return_ = module
         .signature_at(handle.return_)
@@ -1136,8 +1122,6 @@ fn alloc_function(
         index,
         is_entry,
         visibility: def.visibility,
-        // replaced in the next step of compilation
-        code: ArenaVec::empty(),
         parameters,
         locals,
         return_,
@@ -1146,7 +1130,9 @@ fn alloc_function(
         def_is_native,
         name,
         locals_len,
-        jump_tables,
+        // replaced in the next step of compilation
+        code: ArenaVec::empty(),
+        jump_tables: ArenaVec::empty(),
     };
     Ok(fun)
 }
@@ -1154,27 +1140,52 @@ fn alloc_function(
 // [ALLOC] Bytecode result is allocated in the arena
 fn code(
     context: &mut FunctionContext,
-    jump_tables: &mut [VMPointer<VariantJumpTable>],
+    jump_tables: Vec<FF::VariantJumpTable>,
     blocks: BTreeMap<u16, Vec<input::Bytecode>>,
-) -> PartialVMResult<ArenaVec<Bytecode>> {
-    let function_bytecode = flatten_and_renumber_blocks(blocks, jump_tables)?;
-    let result = context.package_context.package_arena.alloc_vec(
-        function_bytecode
+) -> PartialVMResult<(ArenaVec<Bytecode>, ArenaVec<VariantJumpTable>)> {
+    // Compute the initial jump tables
+    let jump_tables = jump_tables.iter().map(jump_table).collect::<Vec<_>>();
+
+    // Flatten and renumber any changed jump tables and bytecode blocks
+    let (fn_bytecode, jump_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables)?;
+
+    // Grab an arena for the jump tables
+    let arena_jump_tables = jump_tables
+        .into_iter()
+        .map(|jt| context.package_context.arena_vec(jt.into_iter()))
+        .collect::<PartialVMResult<Vec<_>>>()?;
+    let final_jump_tables = context
+        .package_context
+        .arena_vec(arena_jump_tables.into_iter())?;
+
+    // Generate the final bytecode with jump table pointers
+    let jump_table_ptrs = final_jump_tables.to_ptrs();
+    let final_bytecode = context.package_context.package_arena.alloc_vec(
+        fn_bytecode
             .into_iter()
-            .map(|bc| bytecode(context, jump_tables, bc))
+            .map(|bc| bytecode(context, &jump_table_ptrs, bc))
             .collect::<PartialVMResult<Vec<Bytecode>>>()?
             .into_iter(),
     )?;
-    Ok(result)
+
+    // Return the final bytecode and jump tables
+    Ok((final_bytecode, final_jump_tables))
 }
 
-pub(crate) fn flatten_and_renumber_blocks(
+fn jump_table(table: &FF::VariantJumpTable) -> Vec<FF::CodeOffset> {
+    match &table.jump_table {
+        FF::JumpTableInner::Full(items) => items.clone(),
+    }
+}
+
+pub(crate) fn flatten_and_renumber_input_bytcode_and_jumptables(
     blocks: BTreeMap<u16, Vec<input::Bytecode>>,
-    jump_tables: &mut [VMPointer<VariantJumpTable>],
-) -> PartialVMResult<Vec<input::Bytecode>> {
+    jump_tables: Vec<Vec<FF::CodeOffset>>,
+) -> PartialVMResult<(Vec<input::Bytecode>, Vec<Vec<FF::CodeOffset>>)> {
     dbg_println!("Input: {:#?}", blocks);
     let mut offset_map = BTreeMap::new(); // Map line name (u16) -> new bytecode offset
-    let mut concatenated = Vec::new();
+    let mut concatenated_bytecode = Vec::new();
 
     // Calculate new offsets and build concatenated bytecode
     let mut current_offset: u16 = 0;
@@ -1199,42 +1210,154 @@ pub(crate) fn flatten_and_renumber_blocks(
                 )
             })?;
 
-        concatenated.extend_from_slice(bytecodes);
+        concatenated_bytecode.extend_from_slice(bytecodes);
     }
-    dbg_println!("Concatenated: {:#?}", concatenated);
+    dbg_println!("Concatenated: {:#?}", concatenated_bytecode);
 
-    // Update the jump tables to match the new layout
-    for jump_table in jump_tables {
-        let jump_table_mut = jump_table.to_mut_ref();
-        // Update each CodeOffset in the jump table to use the new offsets
-        for code_offset in jump_table_mut.iter_mut() {
-            if let Some(&new_offset) = offset_map.get(code_offset) {
-                *code_offset = new_offset;
-            }
+    // Rewrite jump tables with new offsets
+    let jump_tables = compute_renumbered_jump_tables(jump_tables, &offset_map)?;
+
+    // Rewrite branch instructions with new offsets
+    let byte_code = compute_renumbered_bytecode(&offset_map, concatenated_bytecode)?;
+
+    Ok((byte_code, jump_tables))
+}
+
+fn compute_renumbered_jump_tables(
+    jump_tables: Vec<Vec<FF::CodeOffset>>,
+    offset_map: &BTreeMap<FF::CodeOffset, FF::CodeOffset>,
+) -> PartialVMResult<Vec<Vec<FF::CodeOffset>>> {
+    jump_tables
+        .into_iter()
+        .map(|table| {
+            table
+                .into_iter()
+                .map(|target| match offset_map.get(&target) {
+                    Some(&new_offset) => Ok(new_offset),
+                    None => Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(format!("Invalid jump table offset {}", target)),
+                    ),
+                })
+                .collect::<PartialVMResult<Vec<_>>>()
+        })
+        .collect::<PartialVMResult<Vec<_>>>()
+}
+
+fn compute_renumbered_bytecode(
+    offset_map: &BTreeMap<FF::CodeOffset, FF::CodeOffset>,
+    bytecode: Vec<input::Bytecode>,
+) -> PartialVMResult<Vec<input::Bytecode>> {
+    fn find_new_offset(
+        offset_map: &BTreeMap<FF::CodeOffset, FF::CodeOffset>,
+        target: FF::CodeOffset,
+    ) -> PartialVMResult<FF::CodeOffset> {
+        match offset_map.get(&target) {
+            Some(&new_offset) => Ok(new_offset),
+            None => Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Invalid branch target {}", target)),
+            ),
         }
     }
 
-    // Rewrite branch instructions with new offsets
-    Ok(concatenated
-        .into_iter()
-        .map(|bytecode| match bytecode {
+    fn update_bytecode_offset(
+        offset_map: &BTreeMap<FF::CodeOffset, FF::CodeOffset>,
+        instr: input::Bytecode,
+    ) -> PartialVMResult<input::Bytecode> {
+        match instr {
             input::Bytecode::BrFalse(target) => {
-                input::Bytecode::BrFalse(*offset_map.get(&target).expect("Invalid branch target"))
+                let new_target = find_new_offset(offset_map, target)?;
+                Ok(input::Bytecode::BrFalse(new_target))
             }
             input::Bytecode::BrTrue(target) => {
-                input::Bytecode::BrTrue(*offset_map.get(&target).expect("Invalid branch target"))
+                let new_target = find_new_offset(offset_map, target)?;
+                Ok(input::Bytecode::BrTrue(new_target))
             }
             input::Bytecode::Branch(target) => {
-                input::Bytecode::Branch(*offset_map.get(&target).expect("Invalid branch target"))
+                let new_target = find_new_offset(offset_map, target)?;
+                Ok(input::Bytecode::Branch(new_target))
             }
-            input::Bytecode::VariantSwitch(table_ndx) => {
-                // VariantSwitch bytecode doesn't need target adjustment here since the
-                // jump table itself has already been updated above
-                input::Bytecode::VariantSwitch(table_ndx)
-            }
-            other => other,
-        })
-        .collect())
+            instr @ (input::Bytecode::Pop
+            | input::Bytecode::Ret
+            | input::Bytecode::LdU8(_)
+            | input::Bytecode::LdU64(_)
+            | input::Bytecode::LdU128(_)
+            | input::Bytecode::CastU8
+            | input::Bytecode::CastU64
+            | input::Bytecode::CastU128
+            | input::Bytecode::LdConst(..)
+            | input::Bytecode::LdTrue
+            | input::Bytecode::LdFalse
+            | input::Bytecode::CopyLoc(_)
+            | input::Bytecode::MoveLoc(_)
+            | input::Bytecode::StLoc(_)
+            | input::Bytecode::Call(..)
+            | input::Bytecode::CallGeneric(..)
+            | input::Bytecode::Pack(..)
+            | input::Bytecode::PackGeneric(..)
+            | input::Bytecode::Unpack(..)
+            | input::Bytecode::UnpackGeneric(..)
+            | input::Bytecode::ReadRef
+            | input::Bytecode::WriteRef
+            | input::Bytecode::FreezeRef
+            | input::Bytecode::MutBorrowLoc(_)
+            | input::Bytecode::ImmBorrowLoc(_)
+            | input::Bytecode::MutBorrowField(..)
+            | input::Bytecode::MutBorrowFieldGeneric(..)
+            | input::Bytecode::ImmBorrowField(..)
+            | input::Bytecode::ImmBorrowFieldGeneric(..)
+            | input::Bytecode::Add
+            | input::Bytecode::Sub
+            | input::Bytecode::Mul
+            | input::Bytecode::Mod
+            | input::Bytecode::Div
+            | input::Bytecode::BitOr
+            | input::Bytecode::BitAnd
+            | input::Bytecode::Xor
+            | input::Bytecode::Or
+            | input::Bytecode::And
+            | input::Bytecode::Not
+            | input::Bytecode::Eq
+            | input::Bytecode::Neq
+            | input::Bytecode::Lt
+            | input::Bytecode::Gt
+            | input::Bytecode::Le
+            | input::Bytecode::Ge
+            | input::Bytecode::Abort
+            | input::Bytecode::Nop
+            | input::Bytecode::Shl
+            | input::Bytecode::Shr
+            | input::Bytecode::VecPack(..)
+            | input::Bytecode::VecLen(..)
+            | input::Bytecode::VecImmBorrow(..)
+            | input::Bytecode::VecMutBorrow(..)
+            | input::Bytecode::VecPushBack(..)
+            | input::Bytecode::VecPopBack(..)
+            | input::Bytecode::VecUnpack(..)
+            | input::Bytecode::VecSwap(..)
+            | input::Bytecode::LdU16(_)
+            | input::Bytecode::LdU32(_)
+            | input::Bytecode::LdU256(..)
+            | input::Bytecode::CastU16
+            | input::Bytecode::CastU32
+            | input::Bytecode::CastU256
+            | input::Bytecode::PackVariant(..)
+            | input::Bytecode::PackVariantGeneric(..)
+            | input::Bytecode::UnpackVariant(..)
+            | input::Bytecode::UnpackVariantImmRef(..)
+            | input::Bytecode::UnpackVariantMutRef(..)
+            | input::Bytecode::UnpackVariantGeneric(..)
+            | input::Bytecode::UnpackVariantGenericImmRef(..)
+            | input::Bytecode::UnpackVariantGenericMutRef(..)
+            | input::Bytecode::VariantSwitch(..)) => Ok(instr),
+        }
+    }
+
+    bytecode
+        .into_iter()
+        .map(|instr| update_bytecode_offset(offset_map, instr))
+        .collect::<PartialVMResult<Vec<_>>>()
 }
 
 fn bytecode(
