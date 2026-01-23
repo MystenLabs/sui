@@ -301,11 +301,14 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                     .concat_space(D::text("="))
                     .concat_space(recur(context, exp))
             }
+            Exp::Unstructured(nodes) => {
+                D::text("unstructured").concat_space(unstructured_block(context, nodes))
+            }
         }
     }
 
     fn e_block(context: &Context, e: &Exp) -> Doc {
-        // If it’s already a block/seq, print its statements;
+        // If it's already a block/seq, print its statements;
         // otherwise, treat the single expression as a statement.
         match e {
             Exp::Seq(vs) => {
@@ -324,6 +327,24 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                 }
                 braces_block(body)
             }
+        }
+    }
+
+    fn unstructured_block(context: &Context, nodes: &[ast::UnstructuredNode]) -> Doc {
+        let nodes_doc = D::intersperse(
+            nodes.iter().map(|node| unstructured_node(context, node)),
+            D::line(),
+        );
+        braces_block(nodes_doc)
+    }
+
+    fn unstructured_node(context: &Context, node: &ast::UnstructuredNode) -> Doc {
+        match node {
+            ast::UnstructuredNode::Labeled(label, body) => {
+                D::text(format!("'label_{}:", label)).concat_space(e_block(context, body))
+            }
+            ast::UnstructuredNode::Statement(exp) => recur(context, exp),
+            ast::UnstructuredNode::Goto(label) => D::text(format!("goto 'label_{};", label)),
         }
     }
 
