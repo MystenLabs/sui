@@ -1,0 +1,204 @@
+---
+title: SuiLink
+description: Use SuiLink to connect wallets across different chains.
+keywords: [ wallet, wallets, sui, playtron, cross-chain, ethereum, solana, link, connect ]
+---
+
+[SuiLink](https://www.suilink.io/) is a Mysten Labs product that connects wallets across multiple blockchain networks, enabling cross-chain wallet verification, asset ownership verification, and asset distributions. This guide explains how SuiLink works and how to integrate it into your application.
+
+## What is SuiLink
+
+SuiLink allows you to securely link wallet addresses from different blockchain networks to your Sui wallet. When you create a SuiLink, you receive a soulbound NFT that serves as authenticated proof of ownership for your connected wallets.
+
+### Key features
+
+SuiLink provides the following capabilities:
+
+- **Cross-chain identity verification**: Link wallets from Ethereum, Solana, and other Sui addresses to your primary Sui wallet.
+- **Soulbound proof of ownership**: Receive a non-transferable NFT that cryptographically verifies wallet ownership.
+- **Enhanced discoverability**: Projects in the Sui ecosystem can discover you based on your activity across all connected wallets.
+- **Reward eligibility**: Unlock opportunities for cross-chain rewards, priority features, and exclusive events within the Sui network.
+
+## Supported networks
+
+SuiLink currently supports the following cross-chain wallet links:
+
+- Sui to Ethereum
+- Sui to Solana
+- Sui to Sui
+
+Additionally, you can connect multiple wallets from the same network to a single Sui address.
+
+## How SuiLink works
+
+When you create a SuiLink, the system performs the following steps:
+
+1. Connects your Sui wallet.
+2. Authenticates ownership of the wallet you want to link from another blockchain.
+3. Creates a cryptographic proof of ownership.
+4. Generates a soulbound NFT in your Sui wallet containing the linked wallet information.
+
+The SuiLink NFT remains in your Sui wallet as proof of ownership and cannot be transferred.
+
+## Creating a SuiLink
+
+To create a SuiLink:
+
+1. Visit [https://www.suilink.io/](https://www.suilink.io/)
+2. Click **Connect Sui Wallet** to connect your Sui wallet
+3. Select the blockchain network you want to link (Ethereum, Solana, or another Sui address)
+4. Follow the prompts to authenticate and connect the wallet you wish to link
+5. Complete the transaction to mint your SuiLink NFT
+
+Creating a SuiLink requires a small gas fee on the Sui network to mint the NFT. Ensure you have some SUI tokens in your wallet to complete the connection.
+
+## Managing SuiLink
+
+You can link the same Sui wallet address to multiple wallets from Ethereum, Solana, and other Sui addresses. Each connection creates a separate SuiLink NFT in your Sui wallet.
+
+To manage your linked addresses:
+
+1. View your SuiLink NFTs in your Sui wallet
+2. Check the `network_address` field to see which wallets are linked
+3. Review the timestamp to see when each link was created
+
+You can permanently unlink a wallet by burning the corresponding NFT pass.
+
+## Integrating SuiLink
+
+If you are building an application on Sui, you can integrate SuiLink to verify cross-chain ownership.
+
+### Prerequisites
+
+Before integrating SuiLink, ensure you have:
+
+- The Sui dApp Kit SDK installed in your project
+- A configured Sui client instance
+- The SuiLink package IDs for your target network
+
+### Package IDs
+
+SuiLink uses different package IDs depending on the network and chain type:
+
+| **Network** | **SUILINK_PACKAGE_ID_ETH_SOL** | **SUILINK_PACKAGE_ID_SUI** |
+| ------- | ------------------ | --------------------- |
+| Testnet | `0x0025bafa2e6afa511c19bd4e95626c897e798fde629b4782fe061bdc8bd65c8a` | `0x0025bafa2e6afa511c19bd4e95626c897e798fde629b4782fe061bdc8bd65c8a` |
+| Mainnet | `0xf857fa9df5811e6df2a0240a1029d365db24b5026896776ddd1c3c70803bccd3` | `0x73f5ab2461c5993408fff21354fa9831d4f4a66cc81382419ec29e3c80c384b5` |
+
+### Querying SuiLink objects
+
+To retrieve a user's SuiLink connections, use the following dApp Kit SDK query:
+
+```typescript
+const ethSolSuiLinks = suiClient.getOwnedObjects({
+  owner: suiAddress,
+  filter: {
+    Package: SUILINK_PACKAGE_ID_ETH_SOL,
+  },
+  options: {
+    showContent: true,
+    showType: true,
+  },
+});
+
+const suiSuiLinks = suiClient.getOwnedObjects({
+  owner: suiAddress,
+  filter: {
+    Package: SUILINK_PACKAGE_ID_SUI,
+  },
+  options: {
+    showContent: true,
+    showType: true,
+  },
+});
+```
+
+This returns all SuiLink NFTs owned by the specified Sui address. Each NFT contains information about the linked wallet.
+
+### SuiLink NFT structure
+
+Each SuiLink NFT contains the following fields:
+
+```typescript
+{
+  id: {
+    id: "0xcafe"
+  },
+  network_address: "0xdecaf",
+  timestamp_ms: "1751541273947"
+}
+```
+
+The NFT type indicates which blockchain network the wallet is linked to:
+
+```typescript
+// Sui to Sui SuiLink (Mainnet)
+0xf857fa9df5811e6df2a0240a1029d365db24b5026896776ddd1c3c70803bccd3::suilink::SuiLink<0x73f5ab2461c5993408fff21354fa9831d4f4a66cc81382419ec29e3c80c384b5::sui::Sui>
+
+// Sui to Ethereum SuiLink (Testnet)
+0x0025bafa2e6afa511c19bd4e95626c897e798fde629b4782fe061bdc8bd65c8a::suilink::SuiLink<0x0025bafa2e6afa511c19bd4e95626c897e798fde629b4782fe061bdc8bd65c8a::ethereum::Ethereum>
+
+// Sui to Solana SuiLink (Testnet)
+0x0025bafa2e6afa511c19bd4e95626c897e798fde629b4782fe061bdc8bd65c8a::suilink::SuiLink<0x0025bafa2e6afa511c19bd4e95626c897e798fde629b4782fe061bdc8bd65c8a::solana::Solana>
+```
+
+### Verifying cross-chain asset ownership
+
+After retrieving a user's SuiLink objects, you can verify their ownership of specific assets on the linked blockchain:
+
+1. Extract the `network_address` from the SuiLink NFT
+2. Use the appropriate blockchain API to query assets at that address
+3. Verify the presence of the required asset
+4. Attribute benefits to the user through their Sui wallet
+
+For example, to verify Ethereum assets:
+
+```typescript
+// Get the user's SuiLink objects
+const suilinks = await suiClient.getOwnedObjects({
+  owner: userSuiAddress,
+  filter: { Package: SUILINK_PACKAGE_ID_ETH_SOL },
+  options: { showContent: true, showType: true },
+});
+
+// Extract linked Ethereum addresses
+const ethereumAddresses = suilinks.data
+  .filter(obj => obj.type.includes('ethereum::Ethereum'))
+  .map(obj => obj.fields.network_address);
+
+// Query Ethereum blockchain for assets at these addresses
+for (const ethAddress of ethereumAddresses) {
+  const assets = await fetchEthereumAssets(ethAddress); // Use Alchemy or similar
+  
+  if (assets.includes(requiredNFT)) {
+    // Grant benefit to user through their Sui wallet
+    grantBenefit(userSuiAddress);
+  }
+}
+```
+
+## SuiPlay0X1 integration
+
+The [Playtron companion wallet app](https://wallet.playtron.one/) uses SuiLink to enable linking wallets that could contain soulbound assets in their other Sui mnemonic or zkLogin wallets, or their Solana or Ethereum wallets. This offers an improved user experience as users won’t need to transfer over all of their assets to their Playtron wallet to get the benefits these assets attribute to them.
+
+:::info
+
+You can prove ownership of another wallet or asset and link it to your Playtron wallet (thereby allowing the game to read those assets), but you can't transact with these assets. For operations that require transactions to occur from the Playtron wallet, assets need to be transferred.
+
+:::
+
+### Read-only versus transactional access
+
+When using SuiLink with the Playtron wallet:
+
+- **Read access**: Games can verify ownership of assets in linked wallets without requiring transfers.
+- **Transactional access**: Users must transfer assets from linked wallets to their Playtron wallet to use them in transactions.
+
+## Related links
+
+- [SuiLink](https://www.suilink.io/): SuiLink main product page
+- [Playtron GameOS SDK](https://github.com/playtron-os/playtron-sdk): The official Playtron OS SDK repository on GitHub
+- [Sui dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit): React components and hooks for building Sui dApps
+- [SuiPlay0X1 Discord](https://discord.gg/suiplay): Community discussions and announcements
+- [Companion web application](https://wallet.playtron.one): Link the Playtron wallet to other wallets using SuiLink
+- [Wallet Integration Options](/guides/suiplay0x1/wallet-integration): Comprehensive guide on wallet strategies for SuiPlay0X1
