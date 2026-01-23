@@ -93,10 +93,13 @@ impl ServerCertVerifier for SkipServerCertCheck {
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        rustls::client::WebPkiServerVerifier::builder(Arc::new(root_certs()))
-            .build()
-            .unwrap()
-            .supported_verify_schemes()
+        rustls::client::WebPkiServerVerifier::builder_with_provider(
+            Arc::new(root_certs()),
+            Arc::new(rustls::crypto::ring::default_provider()),
+        )
+        .build()
+        .unwrap()
+        .supported_verify_schemes()
     }
 }
 
