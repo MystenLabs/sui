@@ -29,5 +29,9 @@ version = 1
 EOF
 
 # Build with --dump using the ephemeral pubfile
-# Use --no-tree-shaking since the ephemeral packages don't exist on-chain
-sui move --client.config "$CONFIG" build -p main_pkg --dump --pubfile-path Pub.test.toml -e testnet --no-tree-shaking
+sui move --client.config "$CONFIG" build -p main_pkg --dump --pubfile-path Pub.test.toml -e testnet --no-tree-shaking > output.json
+
+# Extract the base64 module, decode to .mv file, and disassemble
+# The modules array contains base64-encoded bytecode
+cat output.json | sed 's/.*"modules":\["\([^"]*\)".*/\1/' | base64 -d > main.mv
+sui move disassemble main.mv 2>&1 | grep -q "cafe0001" && echo "PASS: ephemeral original-id cafe0001 found in disassembly"
