@@ -192,7 +192,8 @@ fn test_flatten_and_renumber_blocks_empty() {
     let blocks = BTreeMap::new();
     let jump_tables = vec![];
 
-    let (bytecode, jump_tables) = flatten_and_renumber_blocks(blocks, jump_tables).unwrap();
+    let (bytecode, jump_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables).unwrap();
     assert!(bytecode.is_empty());
     assert!(jump_tables.is_empty());
 }
@@ -205,7 +206,8 @@ fn test_flatten_and_renumber_blocks_single_block() {
     blocks.insert(0u16, vec![input::Bytecode::LdU64(42), input::Bytecode::Pop]);
     let jump_tables = vec![];
 
-    let (bytecode, jump_tables) = flatten_and_renumber_blocks(blocks, jump_tables).unwrap();
+    let (bytecode, jump_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables).unwrap();
     assert_eq!(bytecode.len(), 2);
     assert!(matches!(bytecode[0], input::Bytecode::LdU64(42)));
     assert!(matches!(bytecode[1], input::Bytecode::Pop));
@@ -228,7 +230,8 @@ fn test_flatten_and_renumber_blocks_multiple_blocks() {
     );
     let jump_tables = vec![];
 
-    let (bytecode, jump_tables) = flatten_and_renumber_blocks(blocks, jump_tables).unwrap();
+    let (bytecode, jump_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables).unwrap();
     assert_eq!(bytecode.len(), 5);
     // Verify the blocks were flattened in order
     assert!(matches!(bytecode[0], input::Bytecode::LdU64(42)));
@@ -254,7 +257,8 @@ fn test_flatten_and_renumber_blocks_branch_targets() {
     );
     let jump_tables = vec![];
 
-    let (bytecode, jump_tables) = flatten_and_renumber_blocks(blocks, jump_tables).unwrap();
+    let (bytecode, jump_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables).unwrap();
     assert_eq!(bytecode.len(), 4);
 
     // Verify that branch targets were renumbered
@@ -277,7 +281,8 @@ fn test_flatten_and_renumber_blocks_with_jump_table() {
     blocks.insert(10u16, vec![input::Bytecode::LdU64(2)]);
     blocks.insert(20u16, vec![input::Bytecode::LdU64(3)]);
 
-    let (bytecode, updated_tables) = flatten_and_renumber_blocks(blocks, jump_tables).unwrap();
+    let (bytecode, updated_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables).unwrap();
 
     // Verify the bytecode was flattened correctly
     assert_eq!(bytecode.len(), 3);
@@ -314,7 +319,8 @@ fn test_flatten_and_renumber_blocks_variant_switch() {
     blocks.insert(5u16, vec![input::Bytecode::LdU64(100)]);
     blocks.insert(10u16, vec![input::Bytecode::LdU64(200)]);
 
-    let (bytecode, jump_tables) = flatten_and_renumber_blocks(blocks, jump_tables).unwrap();
+    let (bytecode, jump_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables).unwrap();
 
     // Verify flattening
     assert_eq!(bytecode.len(), 4);
@@ -343,7 +349,7 @@ fn test_flatten_and_renumber_blocks_overflow_protection() {
 
     let jump_tables = vec![];
 
-    let result = flatten_and_renumber_blocks(blocks, jump_tables);
+    let result = flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables);
     assert!(result.is_err());
 
     let err = result.unwrap_err();
@@ -366,7 +372,7 @@ fn test_flatten_and_renumber_blocks_offset_overflow_protection() {
 
     let jump_tables = vec![];
 
-    let result = flatten_and_renumber_blocks(blocks, jump_tables);
+    let result = flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables);
     assert!(result.is_err());
 
     let err = result.unwrap_err();

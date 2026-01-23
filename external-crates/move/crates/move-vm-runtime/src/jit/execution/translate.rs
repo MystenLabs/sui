@@ -20,7 +20,6 @@ use crate::{
         vm_pointer::VMPointer,
     },
 };
-use indexmap::IndexMap;
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
@@ -32,6 +31,9 @@ use move_core_types::{
     identifier::Identifier, language_storage::ModuleId, resolver::IntraPackageName,
     vm_status::StatusCode,
 };
+
+use indexmap::IndexMap;
+
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 // -------------------------------------------------------------------------------------------------
@@ -1149,10 +1151,11 @@ fn code(
     let jump_tables = jump_tables.iter().map(jump_table).collect::<Vec<_>>();
 
     // Flatten and renumber any changed jump tables and bytecode blocks
-    let (fn_bytecode, fn_jumptables) = flatten_and_renumber_blocks(blocks, jump_tables)?;
+    let (fn_bytecode, jump_tables) =
+        flatten_and_renumber_input_bytcode_and_jumptables(blocks, jump_tables)?;
 
     // Grab an arena for the jump tables
-    let arena_jump_tables = fn_jumptables
+    let arena_jump_tables = jump_tables
         .into_iter()
         .map(|jt| context.package_context.arena_vec(jt.into_iter()))
         .collect::<PartialVMResult<Vec<_>>>()?;
@@ -1180,13 +1183,13 @@ fn jump_table(table: &FF::VariantJumpTable) -> Vec<FF::CodeOffset> {
     }
 }
 
-pub(crate) fn flatten_and_renumber_blocks(
+pub(crate) fn flatten_and_renumber_input_bytcode_and_jumptables(
     blocks: BTreeMap<u16, Vec<input::Bytecode>>,
     jump_tables: Vec<Vec<FF::CodeOffset>>,
 ) -> PartialVMResult<(Vec<input::Bytecode>, Vec<Vec<FF::CodeOffset>>)> {
     dbg_println!("Input: {:#?}", blocks);
     let mut offset_map = BTreeMap::new(); // Map line name (u16) -> new bytecode offset
-    let mut concatenated = Vec::new();
+    let mut concatenated_bytecode = Vec::new();
 
     // Calculate new offsets and build concatenated bytecode
     let mut current_offset: u16 = 0;
@@ -1211,47 +1214,75 @@ pub(crate) fn flatten_and_renumber_blocks(
                 )
             })?;
 
-        concatenated.extend_from_slice(bytecodes);
+        concatenated_bytecode.extend_from_slice(bytecodes);
     }
-    dbg_println!("Concatenated: {:#?}", concatenated);
+    dbg_println!("Concatenated: {:#?}", concatenated_bytecode);
 
     // Rewrite jump tables with new offsets
-    let jump_tables = jump_tables
+    let jump_tables = compute_renumbered_jump_tables(jump_tables, &offset_map)?;
+
+    // Rewrite branch instructions with new offsets
+    let byte_code = compute_renumbered_bytecode(&offset_map, concatenated_bytecode)?;
+
+    Ok((byte_code, jump_tables))
+}
+
+fn compute_renumbered_jump_tables(
+    jump_tables: Vec<Vec<FF::CodeOffset>>,
+    offset_map: &BTreeMap<FF::CodeOffset, FF::CodeOffset>,
+) -> PartialVMResult<Vec<Vec<FF::CodeOffset>>> {
+    jump_tables
         .into_iter()
         .map(|table| {
             table
                 .into_iter()
-                .map(|offset| {
-                    if let Some(&new_offset) = offset_map.get(&offset) {
-                        Ok(new_offset)
-                    } else {
-                        Err(
-                            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                                .with_message(format!("Invalid jump table offset {}", offset)),
-                        )
-                    }
+                .map(|target| match offset_map.get(&target) {
+                    Some(&new_offset) => Ok(new_offset),
+                    None => Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(format!("Invalid jump table offset {}", target)),
+                    ),
                 })
                 .collect::<PartialVMResult<Vec<_>>>()
         })
-        .collect::<PartialVMResult<Vec<_>>>()?;
+        .collect::<PartialVMResult<Vec<_>>>()
+}
 
-    let mut byte_code = concatenated;
+fn compute_renumbered_bytecode(
+    offset_map: &BTreeMap<FF::CodeOffset, FF::CodeOffset>,
+    bytecode: Vec<input::Bytecode>,
+) -> PartialVMResult<Vec<input::Bytecode>> {
+    fn find_new_offset(
+        offset_map: &BTreeMap<FF::CodeOffset, FF::CodeOffset>,
+        target: FF::CodeOffset,
+    ) -> PartialVMResult<FF::CodeOffset> {
+        match offset_map.get(&target) {
+            Some(&new_offset) => Ok(new_offset),
+            None => Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message(format!("Invalid branch target {}", target)),
+            ),
+        }
+    }
 
-    // Rewrite branch instructions with new offsets
-    for instr in byte_code.iter_mut() {
+    fn update_bytecode_offset(
+        offset_map: &BTreeMap<FF::CodeOffset, FF::CodeOffset>,
+        instr: input::Bytecode,
+    ) -> PartialVMResult<input::Bytecode> {
         match instr {
-            input::Bytecode::BrFalse(target)
-            | input::Bytecode::BrTrue(target)
-            | input::Bytecode::Branch(target) => {
-                let Some(&new_offset) = offset_map.get(target) else {
-                    return Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(format!("Invalid branch target {}", target)),
-                    );
-                };
-                *target = new_offset;
+            input::Bytecode::BrFalse(target) => {
+                let new_target = find_new_offset(offset_map, target)?;
+                Ok(input::Bytecode::BrFalse(new_target))
             }
-            input::Bytecode::Pop
+            input::Bytecode::BrTrue(target) => {
+                let new_target = find_new_offset(offset_map, target)?;
+                Ok(input::Bytecode::BrTrue(new_target))
+            }
+            input::Bytecode::Branch(target) => {
+                let new_target = find_new_offset(offset_map, target)?;
+                Ok(input::Bytecode::Branch(new_target))
+            }
+            instr @ (input::Bytecode::Pop
             | input::Bytecode::Ret
             | input::Bytecode::LdU8(_)
             | input::Bytecode::LdU64(_)
@@ -1323,11 +1354,14 @@ pub(crate) fn flatten_and_renumber_blocks(
             | input::Bytecode::UnpackVariantGeneric(..)
             | input::Bytecode::UnpackVariantGenericImmRef(..)
             | input::Bytecode::UnpackVariantGenericMutRef(..)
-            | input::Bytecode::VariantSwitch(..) => { /* No action needed */ }
+            | input::Bytecode::VariantSwitch(..)) => Ok(instr),
         }
     }
 
-    Ok((byte_code, jump_tables))
+    bytecode
+        .into_iter()
+        .map(|instr| update_bytecode_offset(offset_map, instr))
+        .collect::<PartialVMResult<Vec<_>>>()
 }
 
 fn bytecode(
