@@ -191,9 +191,9 @@ enum NextOp {
     Response {
         /// Time taken to execute the tx and produce effects
         latency: Duration,
-        /// Number of commands in the executed transction
+        /// Number of commands in the executed transaction
         num_commands: u16,
-        /// Gas used in the executed transction
+        /// Gas used in the executed transaction
         gas_used: u64,
         /// The payload updated with the effects of the transaction
         payload: Box<dyn Payload>,

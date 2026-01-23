@@ -490,7 +490,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_eth_watcher_task() {
-        // Note: this test may fail beacuse of the following reasons:
+        // Note: this test may fail because of the following reasons:
         // 1. Log and BridgeAction returned from `get_test_log_and_action` are not in sync
         // 2. Log returned from `get_test_log_and_action` is not parseable log (not abigen!, check abi.rs)
 
