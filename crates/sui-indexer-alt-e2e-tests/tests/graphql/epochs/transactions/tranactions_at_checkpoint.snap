@@ -59,7 +59,7 @@ Response: {
           {
             "cursor": "MA==",
             "node": {
-              "digest": "G6JweuSUhMSJvPUTCgTpvf37aLGrv887XFKBZyVLpP5M",
+              "digest": "9SSXusUFMCT7nVFXQA8kMyG1p38Uze9APuQtFFKWS4AK",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 0,
@@ -73,7 +73,7 @@ Response: {
           {
             "cursor": "MQ==",
             "node": {
-              "digest": "REZjsEkDFhaJ8jE4tJKn7JE8VxtATeZMYMY7bkcLv8f",
+              "digest": "GtHkWEVdLDkA1QeXAhPuJBYbUEGPLAGKheGcsguXwoMo",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 1,
@@ -94,7 +94,7 @@ Response: {
           {
             "cursor": "MA==",
             "node": {
-              "digest": "G6JweuSUhMSJvPUTCgTpvf37aLGrv887XFKBZyVLpP5M",
+              "digest": "9SSXusUFMCT7nVFXQA8kMyG1p38Uze9APuQtFFKWS4AK",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 0,
@@ -115,13 +115,13 @@ Response: {
       }
     },
     "epoch1AtCheckpoint2": {
-      "totalTransactions": 3,
+      "totalTransactions": 5,
       "transactions": {
         "edges": [
           {
             "cursor": "Mg==",
             "node": {
-              "digest": "Duk2S2TEyyftHPZvMVbJkWncpmMttnwtYcvreJQeMQbS",
+              "digest": "6X6RhKgJ6oqrNtbKCiJY85oMnMHAnwUaPZCZxu5HMXzc",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,
@@ -135,7 +135,21 @@ Response: {
           {
             "cursor": "Mw==",
             "node": {
-              "digest": "57ibdXBvMvtatvjnwgGJGbJegYoQz9szZSyzhLohmQoQ",
+              "digest": "FojKmHAbqgHVG2azbfKv6keTY6xb1n2pLYXr5UHeZeZo",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 2,
+                  "epoch": {
+                    "epochId": 1
+                  }
+                }
+              }
+            }
+          },
+          {
+            "cursor": "NA==",
+            "node": {
+              "digest": "5QdTEu1h7fuRih364SecoELKZ8BQvetNyZHhrGV8YF2i",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,

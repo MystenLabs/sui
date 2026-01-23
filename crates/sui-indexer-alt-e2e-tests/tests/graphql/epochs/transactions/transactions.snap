@@ -129,13 +129,13 @@ task 15, lines 65-79:
 Response: {
   "data": {
     "epoch": {
-      "totalTransactions": 6,
+      "totalTransactions": 9,
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": false,
           "hasNextPage": false,
           "startCursor": "Mg==",
-          "endCursor": "Nw=="
+          "endCursor": "MTA="
         },
         "edges": [
           {
@@ -173,7 +173,7 @@ Response: {
             "node": {
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 3
+                  "sequenceNumber": 2
                 }
               }
             }
@@ -183,13 +183,43 @@ Response: {
             "node": {
               "effects": {
                 "checkpoint": {
-                  "sequenceNumber": 5
+                  "sequenceNumber": 3
                 }
               }
             }
           },
           {
             "cursor": "Nw==",
+            "node": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 3
+                }
+              }
+            }
+          },
+          {
+            "cursor": "OA==",
+            "node": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 4
+                }
+              }
+            }
+          },
+          {
+            "cursor": "OQ==",
+            "node": {
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 5
+                }
+              }
+            }
+          },
+          {
+            "cursor": "MTA=",
             "node": {
               "effects": {
                 "checkpoint": {

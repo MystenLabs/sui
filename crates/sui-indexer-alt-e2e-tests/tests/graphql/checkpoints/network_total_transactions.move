@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A B --simulator
+//# init --protocol-version 108 --accounts A B --simulator
 
 //# run-graphql
 { # Check Checkpoint: 0, it should have network_total_transactions of 1

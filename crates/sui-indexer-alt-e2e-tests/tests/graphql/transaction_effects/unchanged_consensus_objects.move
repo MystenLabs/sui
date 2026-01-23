@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // TODO(DVX-1168): Support tests for ConsensusStreamEnded, Cancelled and PerEpochConfig
-//# init --protocol-version 70 --accounts A B --addresses test=0x0 --simulator
+//# init --protocol-version 108 --accounts A B --addresses test=0x0 --simulator
 
 //# publish
 module test::shared_object_tests {
