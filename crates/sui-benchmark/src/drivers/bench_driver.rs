@@ -1295,17 +1295,21 @@ fn process_bundle_results(
                                 }
                             }
                             WaitForEffectsResponse::Rejected { error } => {
-                                let is_retriable = error
-                                    .as_ref()
-                                    .map(|e| e.individual_error_indicates_epoch_change())
-                                    .unwrap_or(true);
-                                let error_str = error
-                                    .map(|e| format!("{:?}", e))
-                                    .unwrap_or_else(|| "Unknown rejection".to_string());
-                                if is_retriable {
-                                    BatchedTransactionStatus::RetriableFailure { error: error_str }
+                                if let Some(error) = error {
+                                    let is_retriable =
+                                        error.individual_error_indicates_epoch_change();
+                                    let error_str = format!("{:?}", error);
+                                    if is_retriable {
+                                        BatchedTransactionStatus::RetriableFailure {
+                                            error: error_str,
+                                        }
+                                    } else {
+                                        BatchedTransactionStatus::PermanentFailure {
+                                            error: error_str,
+                                        }
+                                    }
                                 } else {
-                                    BatchedTransactionStatus::PermanentFailure { error: error_str }
+                                    BatchedTransactionStatus::UnknownRejection
                                 }
                             }
                             WaitForEffectsResponse::Expired { epoch, round } => {

@@ -403,6 +403,15 @@ impl Payload for RandomizedTransactionPayload {
                         error
                     );
                 }
+                // we treat unknown rejections as retriable for now
+                BatchedTransactionStatus::UnknownRejection => {
+                    retriable_count += 1;
+                    tracing::debug!(
+                        "Transaction {} ({}) had unknown rejection",
+                        i,
+                        result.digest
+                    );
+                }
             }
         }
 

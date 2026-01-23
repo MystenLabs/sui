@@ -40,6 +40,9 @@ pub enum BatchedTransactionStatus {
         /// Error message describing the failure.
         error: String,
     },
+    /// We didn't get a specific error message, so the failure could be
+    /// retriable or permanent.
+    UnknownRejection,
 }
 
 impl BatchedTransactionResult {
@@ -62,6 +65,7 @@ impl BatchedTransactionResult {
             BatchedTransactionStatus::Success { .. } => None,
             BatchedTransactionStatus::PermanentFailure { error }
             | BatchedTransactionStatus::RetriableFailure { error } => Some(error),
+            BatchedTransactionStatus::UnknownRejection => Some("unknown rejection"),
         }
     }
 
@@ -83,6 +87,9 @@ impl BatchedTransactionResult {
             }
             BatchedTransactionStatus::RetriableFailure { error } => {
                 format!("{}: retriable failure: {}", self.digest, error)
+            }
+            BatchedTransactionStatus::UnknownRejection => {
+                format!("{}: unknown rejection", self.digest)
             }
         }
     }

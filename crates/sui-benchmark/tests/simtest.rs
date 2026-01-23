@@ -1169,10 +1169,12 @@ mod test {
         let execution_proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
             fullnode_proxy.clone()
         } else {
+            // Use a separate registry because FullNodeProxy already registered SafeClientMetrics
+            let validator_registry = prometheus::Registry::new();
             Arc::new(
                 LocalValidatorAggregatorProxy::from_genesis(
                     &genesis,
-                    &registry,
+                    &validator_registry,
                     &test_cluster.fullnode_handle.rpc_url,
                 )
                 .await,
