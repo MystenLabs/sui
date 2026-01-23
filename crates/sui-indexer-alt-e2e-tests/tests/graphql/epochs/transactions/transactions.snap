@@ -124,12 +124,13 @@ Response: {
   }
 }
 
-task 15, lines 65-79:
+task 15, lines 65-80:
 //# run-graphql
 Response: {
   "data": {
     "epoch": {
       "totalTransactions": 9,
+      "totalCheckpoints": 4,
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": false,
@@ -234,7 +235,7 @@ Response: {
   }
 }
 
-task 16, lines 81-95:
+task 16, lines 82-96:
 //# run-graphql
 Response: {
   "data": {

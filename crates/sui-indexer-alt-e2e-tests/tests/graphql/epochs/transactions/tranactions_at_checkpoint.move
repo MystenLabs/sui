@@ -12,6 +12,7 @@
 //# programmable --sender A --inputs 43 @A
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: TransferObjects([Result(0)], Input(1))
+
 //# create-checkpoint
 
 //# programmable --sender A --inputs 1
@@ -29,26 +30,32 @@
   epoch0AllTransactions: epoch(epochId: 0) {
         totalTransactions
         transactions( first: 3) {
-            edges { cursor node { ...TransactionFragment } } 
+            edges { cursor node { ...TransactionFragment } }
         }
   }
   epoch0AtCheckpoint0: epoch(epochId: 0) {
     totalTransactions
     transactions( first: 3, filter: { atCheckpoint: 0 }) {
-      edges { cursor node { ...TransactionFragment } } 
+      edges { cursor node { ...TransactionFragment } }
     }
   }
   # Test filtering for a checkpoint that does not exist in an epoch
   epochWithNonexistentCheckpoint: epoch(epochId: 0) {
     totalTransactions
     transactions( first: 3, filter: { atCheckpoint: 10 }) {
-      edges { cursor node { ...TransactionFragment } } 
+      edges { cursor node { ...TransactionFragment } }
     }
   }
-  epoch1AtCheckpoint2: epoch(epochId: 1) {
+  epoch1AtCheckpoint2SentFilter: epoch(epochId: 1) {
+    totalTransactions
+    transactions( first: 3, filter: { atCheckpoint: 2 sentAddress: "@{A}" }) {
+      edges { cursor node { ...TransactionFragment } }
+    }
+  }
+    epoch1AtCheckpoint2All: epoch(epochId: 1) {
     totalTransactions
     transactions( first: 3, filter: { atCheckpoint: 2 }) {
-      edges { cursor node { ...TransactionFragment } } 
+      edges { cursor node { ...TransactionFragment } }
     }
   }
 }

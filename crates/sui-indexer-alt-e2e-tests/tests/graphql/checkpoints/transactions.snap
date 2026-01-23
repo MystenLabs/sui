@@ -86,7 +86,7 @@ task 9, line 49:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 10, lines 51-66:
+task 10, lines 51-75:
 //# run-graphql
 Response: {
   "data": {
@@ -96,7 +96,7 @@ Response: {
       "transactions": {
         "pageInfo": {
           "hasPreviousPage": false,
-          "hasNextPage": true,
+          "hasNextPage": false,
           "startCursor": "MQ==",
           "endCursor": "NQ=="
         },
@@ -147,12 +147,74 @@ Response: {
             }
           }
         ]
+      },
+      "allTransactions": {
+        "pageInfo": {
+          "hasPreviousPage": false,
+          "hasNextPage": false,
+          "startCursor": "MQ==",
+          "endCursor": "Ng=="
+        },
+        "edges": [
+          {
+            "cursor": "MQ==",
+            "node": {
+              "digest": "J6iVd9qP3eojDsLsxXwvkssRe3N7M1oUZNbscmNwvp4b",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          },
+          {
+            "cursor": "Mg==",
+            "node": {
+              "digest": "3pbP38TetVcFiXaFwPtQHAX86j3GycTsktavdPxKeb3h",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          },
+          {
+            "cursor": "Mw==",
+            "node": {
+              "digest": "6pLRkvz5aKhs4R3heMPNg6HFN17Ujw1CBwvc6fHy66BU",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          },
+          {
+            "cursor": "NA==",
+            "node": {
+              "digest": "NkZ3De14nDiWinjmboEQyFqo4fgbG9NJ8t5BTv748nL",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          },
+          {
+            "cursor": "NQ==",
+            "node": {
+              "digest": "7haBSoW7wEi7TP2iaNiiiRHPo6bUXSLoJDf62TvLUKsv",
+              "sender": {
+                "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+              }
+            }
+          },
+          {
+            "cursor": "Ng==",
+            "node": {
+              "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
+              "sender": null
+            }
+          }
+        ]
       }
     }
   }
 }
 
-task 11, lines 68-83:
+task 11, lines 77-92:
 //# run-graphql --cursors 1
 Response: {
   "data": {
@@ -182,7 +244,7 @@ Response: {
   }
 }
 
-task 12, lines 85-100:
+task 12, lines 94-109:
 //# run-graphql --cursors 1 5
 Response: {
   "data": {
@@ -221,7 +283,7 @@ Response: {
   }
 }
 
-task 13, lines 102-117:
+task 13, lines 111-126:
 //# run-graphql --cursors 1 5
 Response: {
   "data": {
@@ -260,7 +322,7 @@ Response: {
   }
 }
 
-task 14, lines 119-134:
+task 14, lines 128-143:
 //# run-graphql --cursors 3
 Response: {
   "data": {
@@ -299,8 +361,8 @@ Response: {
   }
 }
 
-task 15, lines 136-151:
-//# run-graphql --cursors 5
+task 15, lines 145-160:
+//# run-graphql --cursors 6
 Response: {
   "data": {
     "checkpoint": {
@@ -308,26 +370,18 @@ Response: {
       "digest": "9coL2DwXoNR51F8zBJkmoRdR4EFdy8uC56mxm9DKnk8L",
       "transactions": {
         "pageInfo": {
-          "hasPreviousPage": true,
+          "hasPreviousPage": false,
           "hasNextPage": false,
-          "startCursor": "Ng==",
-          "endCursor": "Ng=="
+          "startCursor": null,
+          "endCursor": null
         },
-        "edges": [
-          {
-            "cursor": "Ng==",
-            "node": {
-              "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
-              "sender": null
-            }
-          }
-        ]
+        "edges": []
       }
     }
   }
 }
 
-task 16, lines 153-168:
+task 16, lines 162-177:
 //# run-graphql
 Response: {
   "data": {

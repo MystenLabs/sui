@@ -16,14 +16,14 @@
 //# create-checkpoint
 
 //# run-graphql
-{ # Check Checkpoint: 1, it should have network_total_transactions of 2
+{ # Check Checkpoint: 1, it should have network_total_transactions of 2 + 1 ProgrammbleSystemTransaction
   c1: checkpoint(sequenceNumber: 1) { networkTotalTransactions }
 }
 
 //# create-checkpoint
 
 //# run-graphql
-{ # Check Checkpoint: 2, it should have network_total_transactions of 2
+{ # Check Checkpoint: 2, it should have network_total_transactions of 3 + 1 ProgrammbleSystemTransaction
   c2: checkpoint(sequenceNumber: 2) { networkTotalTransactions }
 }
 
@@ -38,12 +38,12 @@
 //# create-checkpoint
 
 //# run-graphql
-{ # Check Checkpoint: 3, it should have network_total_transactions of 4
+{ # Check Checkpoint: 3, it should have network_total_transactions of 7
   c3: checkpoint(sequenceNumber: 3) { networkTotalTransactions }
 }
 
 //# run-graphql
-{ # Check Checkpoint: 4, non-existent 
+{ # Check Checkpoint: 4, non-existent
   c4: checkpoint(sequenceNumber: 4) { networkTotalTransactions }
 }
 

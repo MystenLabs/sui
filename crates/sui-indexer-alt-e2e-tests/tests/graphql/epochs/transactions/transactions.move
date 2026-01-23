@@ -57,15 +57,16 @@
         startCursor
         endCursor
       }
-      edges { cursor node { effects { checkpoint { sequenceNumber } } } } 
+      edges { cursor node { effects { checkpoint { sequenceNumber } } } }
     }
   }
 }
 
 //# run-graphql
-{ # Fetch an epoch and its transactions
+{ # Fetch an epoch and its transactions: 5 programmable + 4 from SystemProgrammableTransaction per checkpoint
   epoch(epochId: 1) {
     totalTransactions
+    totalCheckpoints
     transactions(first: 10) {
       pageInfo {
         hasPreviousPage
@@ -73,7 +74,7 @@
         startCursor
         endCursor
       }
-      edges { cursor node { effects { checkpoint { sequenceNumber } } } } 
+      edges { cursor node { effects { checkpoint { sequenceNumber } } } }
     }
   }
 }
@@ -89,7 +90,7 @@
         startCursor
         endCursor
       }
-      edges { cursor node { digest, sender { address } } } 
+      edges { cursor node { digest, sender { address } } }
     }
   }
 }
