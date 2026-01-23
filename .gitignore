@@ -4,7 +4,8 @@
 **/.idea/
 **/CLAUDE-local.md
 **/CLAUDE.local.md
-**/.claude/
+**/.claude/*
+!**/.claude/skills/
 **/.opencode/
 
 # OSX
