@@ -13,19 +13,19 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::{debug, info};
 
-use crate::ValidatorProxy;
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::{Payload, SoftBundleExecutionResults, SoftBundleTransactionResult};
 use crate::workloads::workload::WorkloadBuilder;
 use crate::workloads::workload::{
-    ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN, Workload,
+    Workload, ESTIMATED_COMPUTATION_COST, MAX_GAS_FOR_TESTING, STORAGE_COST_PER_COIN,
 };
 use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
+use crate::ValidatorProxy;
 use sui_core::test_utils::make_transfer_object_transaction;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
-    crypto::{AccountKeyPair, get_key_pair},
+    crypto::{get_key_pair, AccountKeyPair},
     transaction::Transaction,
 };
 
@@ -49,6 +49,8 @@ pub struct SoftBundleConflictingTransferPayload {
     recipient: SuiAddress,
     /// Reference gas price
     reference_gas_price: u64,
+    /// Batch attempt counter for debugging
+    batch_attempt: u64,
 }
 
 impl Payload for SoftBundleConflictingTransferPayload {
@@ -67,6 +69,12 @@ impl Payload for SoftBundleConflictingTransferPayload {
     }
 
     fn make_soft_bundle_transactions(&mut self) -> Vec<Transaction> {
+        self.batch_attempt += 1;
+        info!(
+            "PAYLOAD {:?} batch attempt #{} (owner={:?}, transfer_obj={:?})",
+            self.transfer_object.0, self.batch_attempt, self.owner, self.transfer_object
+        );
+
         // Create N transactions all trying to transfer the same object
         let transactions: Vec<Transaction> = (0..self.gas_objects.len())
             .map(|i| self.create_transfer_transaction(i))
@@ -155,8 +163,10 @@ impl Payload for SoftBundleConflictingTransferPayload {
             total_transactions - 1
         );
 
-        debug!(
-            "Soft bundle validation passed: {success_count} success, {conflict_count} conflicts, {retriable_error_count} retriable errors"
+        info!(
+            "PAYLOAD {:?} batch #{} validation passed: {success_count} success, {conflict_count} conflicts, {retriable_error_count} retriable errors",
+            self.transfer_object.0,
+            self.batch_attempt
         );
     }
 }
@@ -321,6 +331,7 @@ impl Workload<dyn Payload> for ConflictingTransferWorkload {
                 gas_objects,
                 recipient,
                 reference_gas_price,
+                batch_attempt: 0,
             }));
         }
 
