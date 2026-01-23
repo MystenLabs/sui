@@ -1,0 +1,40 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Test sui move build --dump with Published.toml (non-ephemeral publication)
+#
+# This test verifies that when building with --dump, the dependency's original-id
+# from Published.toml appears in the compiled bytecode.
+
+# Get the chain ID from the network
+chain_id=$(sui client --client.config $CONFIG chain-identifier)
+
+# Generate Published.toml for dep_pkg with the chain ID
+cat > dep_pkg/Published.toml <<EOF
+[published.testnet]
+chain-id = "$chain_id"
+published-at = "0x00000000000000000000000000000000000000000000000000000000DEADBEEF"
+original-id = "0x00000000000000000000000000000000000000000000000000000000DEAD0001"
+version = 1
+EOF
+
+# Build with --dump (no --pubfile-path, uses Published.toml)
+sui move --client.config "$CONFIG" build -p main_pkg --dump -e testnet --no-tree-shaking > output.json
+
+# Extract the base64 module, decode to .mv file, and disassemble
+cat output.json | sed 's/.*"modules":\["\([^"]*\)".*/\1/' | base64 -d > main.mv
+sui move disassemble main.mv 2>&1 | grep -q "dead0001" && echo "PASS: published original-id dead0001 found in disassembly"
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+PASS: published original-id dead0001 found in disassembly
+
+----- stderr -----
+INCLUDING DEPENDENCY dep_pkg
+BUILDING main_pkg
