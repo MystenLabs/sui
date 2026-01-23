@@ -593,6 +593,17 @@ impl SuiCommand {
                         Ok(())
                     }
                     sui_move::Command::Build(ref build) if build.dump_bytecode_as_base64 => {
+                        // Resolve pubfile_path to absolute before reroot_path changes CWD
+                        let pubfile_path = build_config.pubfile_path.as_ref().map(|p| {
+                            if p.is_absolute() {
+                                p.clone()
+                            } else {
+                                std::env::current_dir()
+                                    .expect("failed to get current directory")
+                                    .join(p)
+                            }
+                        });
+
                         let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
 
                         let with_unpublished_deps = build.with_unpublished_dependencies;
@@ -603,7 +614,7 @@ impl SuiCommand {
                         )
                         .await?;
 
-                        let mut root_pkg = if let Some(pubfile_path) = &build_config.pubfile_path {
+                        let mut root_pkg = if let Some(pubfile_path) = pubfile_path {
                             let client = context.get_client().await?;
                             let chain_id = client.read_api().get_chain_identifier().await?;
                             let modes = build_config.mode_set();
@@ -611,7 +622,7 @@ impl SuiCommand {
                                 &rerooted_path,
                                 &chain_id,
                                 build_config.environment.clone(),
-                                pubfile_path.clone(),
+                                pubfile_path,
                                 modes,
                             )
                             .await?
