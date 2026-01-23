@@ -87,6 +87,19 @@ trait Refine {
             E::VecUnpack(_, e) => self.refine(e),
             E::Unpack(_, _, e) => self.refine(e),
             E::UnpackVariant(_, _, _, e) => self.refine(e),
+            E::Unstructured(nodes) => {
+                use crate::ast::UnstructuredNode;
+                let mut changed = false;
+                for node in nodes.iter_mut() {
+                    match node {
+                        UnstructuredNode::Labeled(_, body) | UnstructuredNode::Statement(body) => {
+                            changed |= self.refine(body);
+                        }
+                        UnstructuredNode::Goto(_) => {}
+                    }
+                }
+                changed
+            }
         }
     }
 
