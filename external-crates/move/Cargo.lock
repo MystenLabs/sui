@@ -2695,6 +2695,7 @@ name = "move-regex-borrow-graph"
 version = "0.0.1"
 dependencies = [
  "datatest-stable",
+ "indexmap 2.8.0",
  "insta",
  "itertools 0.10.5",
  "move-binary-format",

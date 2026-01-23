@@ -5,9 +5,11 @@ use crate::{
     Result, bail,
     collections::{Path, Paths},
     error,
+    graph_map::NodeIndex,
     regex::Regex,
 };
 use std::{
+    borrow::Cow,
     collections::BTreeMap,
     fmt::{self, Debug},
 };
@@ -23,9 +25,9 @@ pub struct Ref(Ref_);
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 enum Ref_ {
     /// A canonicalized reference--this lets join operate over the same domain
-    Canonical(usize),
+    Canonical(u32),
     /// A reference specific to this block
-    Fresh(usize),
+    Fresh(u32),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -37,7 +39,7 @@ pub(crate) struct Edge<Loc, Lbl: Ord> {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Node {
     is_mutable: bool,
-    pub(crate) abstract_size: usize,
+    node_index: NodeIndex,
 }
 
 //**************************************************************************************************
@@ -45,7 +47,7 @@ pub(crate) struct Node {
 //**************************************************************************************************
 
 impl Ref {
-    pub(crate) fn fresh(id: usize) -> Self {
+    pub(crate) fn fresh(id: u32) -> Self {
         Self(Ref_::Fresh(id))
     }
 }
@@ -68,15 +70,19 @@ impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
 }
 
 impl Node {
-    pub(crate) fn new(is_mutable: bool) -> Self {
+    pub(crate) fn new(is_mutable: bool, node_index: NodeIndex) -> Self {
         Self {
             is_mutable,
-            abstract_size: 1,
+            node_index,
         }
     }
 
     pub(crate) fn is_mutable(&self) -> bool {
         self.is_mutable
+    }
+
+    pub(crate) fn node_index(&self) -> NodeIndex {
+        self.node_index
     }
 }
 
@@ -84,15 +90,16 @@ impl Node {
 // extension
 //**************************************************************************************************
 
-impl<Loc, Lbl: Ord> Edge<Loc, Lbl> {
-    pub(crate) fn insert(&mut self, loc: Loc, regex: Regex<Lbl>) -> usize {
+impl<Loc, Lbl: Ord + Clone> Edge<Loc, Lbl> {
+    /// returns the abstract size increase if the regex was not already present
+    pub(crate) fn insert(&mut self, loc: Loc, regex: Cow<'_, Regex<Lbl>>) -> usize {
         if self.regexes.contains_key(&regex) {
             // already present, no change in size
             return 0;
         }
 
         let regex_size = regex.abstract_size();
-        self.regexes.insert(regex, loc);
+        self.regexes.insert(regex.into_owned(), loc);
         self.abstract_size = self.abstract_size.saturating_add(regex_size);
         regex_size
     }
@@ -132,7 +139,7 @@ impl Ref {
         }
     }
 
-    pub fn canonicalize(self, remapping: &BTreeMap<Ref, usize>) -> Result<Self> {
+    pub fn canonicalize(self, remapping: &BTreeMap<Ref, u32>) -> Result<Self> {
         match self.0 {
             Ref_::Canonical(_) => bail!("should never canonicalize a cnonical ref"),
             Ref_::Fresh(_) => {
@@ -144,7 +151,7 @@ impl Ref {
         }
     }
 
-    pub(crate) fn fresh_id(&self) -> Result<usize> {
+    pub(crate) fn fresh_id(&self) -> Result<u32> {
         match self.0 {
             Ref_::Fresh(id) => Ok(id),
             Ref_::Canonical(_) => bail!("should never get fresh_id from a canonical ref"),
@@ -160,10 +167,10 @@ impl<Loc: Copy, Lbl: Ord + Clone> Edge<Loc, Lbl> {
     // adds all edges in other to self, where the successor/predecessor is in mask
     pub(crate) fn join(&mut self, other: &Self) -> usize {
         let mut size_increase = 0usize;
-        for (regex, loc) in &other.regexes {
-            size_increase = size_increase.saturating_add(self.insert(*loc, regex.clone()));
+        for (other_regex, loc) in &other.regexes {
+            size_increase =
+                size_increase.saturating_add(self.insert(*loc, Cow::Borrowed(other_regex)));
         }
-
         size_increase
     }
 }
