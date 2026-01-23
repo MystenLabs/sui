@@ -1082,7 +1082,7 @@ async fn run_bench_worker(
                                             let (_, exec_result) =
                                                 proxy.execute_transaction_block(tx).await;
                                             exec_result.map(|effects| {
-                                                vec![(digest, BundleItemResponse::DirectEffects(effects))]
+                                                vec![(digest, BundleItemResponse::DirectEffects(effects.into()))]
                                             })
                                         } else {
                                             proxy.execute_soft_bundle(bundle_txs).await.map(|results| {
@@ -1223,7 +1223,7 @@ async fn run_bench_worker(
 /// (WaitForEffectsResponse) or direct execution (ExecutionEffects).
 enum BundleItemResponse {
     WaitForEffects(WaitForEffectsResponse),
-    DirectEffects(ExecutionEffects),
+    DirectEffects(Box<ExecutionEffects>),
 }
 
 type BundleResults = Vec<(
@@ -1256,9 +1256,7 @@ fn process_bundle_results(
                                 payload,
                                 effects.status()
                             );
-                            BatchedTransactionStatus::Success {
-                                effects: Box::new(effects),
-                            }
+                            BatchedTransactionStatus::Success { effects }
                         }
                         BundleItemResponse::WaitForEffects(wait_response) => match wait_response {
                             WaitForEffectsResponse::Executed { details, .. } => {
