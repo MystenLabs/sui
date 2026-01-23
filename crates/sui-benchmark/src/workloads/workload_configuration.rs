@@ -14,6 +14,7 @@ use crate::workloads::slow::SlowWorkloadBuilder;
 use crate::workloads::transfer_object::TransferObjectWorkloadBuilder;
 use crate::workloads::{ExpectedFailureType, GroupID, WorkloadBuilderInfo, WorkloadInfo};
 use anyhow::Result;
+use futures::future::join_all;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -178,19 +179,22 @@ impl WorkloadConfiguration {
             .flatten()
             .map(|x| (x.workload_params, x.workload_builder))
             .unzip();
-        let mut workloads = bank
+        let workloads = bank
             .generate(
                 workload_builders,
                 reference_gas_price,
                 gas_request_chunk_size,
             )
             .await?;
-        for workload in workloads.iter_mut() {
-            workload
-                .init(bank.proxy.clone(), system_state_observer.clone())
-                .await;
-        }
-
+        let init_futures = workloads.into_iter().map(|mut workload| {
+            let proxy = bank.proxy.clone();
+            let observer = system_state_observer.clone();
+            async move {
+                workload.init(proxy, observer).await;
+                workload
+            }
+        });
+        let workloads: Vec<_> = join_all(init_futures).await;
         let all_workloads = workloads.into_iter().zip(workload_params).fold(
             BTreeMap::<GroupID, Vec<WorkloadInfo>>::new(),
             |mut acc, (workload, workload_params)| {

@@ -18,7 +18,6 @@ mod test {
     use sui_benchmark::system_state_observer::SystemStateObserver;
     use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
     use sui_benchmark::workloads::benchmark_move_base_dir;
-    use sui_benchmark::workloads::composite::CompositeWorkload;
     use sui_benchmark::workloads::composite::CompositeWorkloadConfig;
     use sui_benchmark::workloads::expected_failure::ExpectedFailurePayloadCfg;
     use sui_benchmark::workloads::workload::ExpectedFailureType;
@@ -1160,7 +1159,7 @@ mod test {
         let registry = prometheus::Registry::new();
         let proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
             Arc::new(
-                FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url)
+                FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url, &registry)
                     .await
                     .unwrap(),
             )
@@ -1593,6 +1592,7 @@ mod test {
             num_shared_counters: 1,
             shared_counter_hotness: 1.0,
             address_balance_amount: 0,
+            address_balance_gas_probability: 0.0,
             metrics: Some(metrics.clone()),
             ..Default::default()
         }
@@ -1621,7 +1621,7 @@ mod test {
 
             if has_shared_mutation && has_randomness {
                 shared_plus_randomness_txns +=
-                    stats.success_count + stats.failure_count + stats.cancellation_count;
+                    stats.success_count + stats.abort_count + stats.cancellation_count;
                 shared_plus_randomness_cancellations += stats.cancellation_count;
             }
         }

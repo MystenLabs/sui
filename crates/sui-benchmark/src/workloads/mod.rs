@@ -51,6 +51,11 @@ pub struct WorkloadInfo {
 }
 
 pub type Gas = (ObjectRef, SuiAddress, Arc<AccountKeyPair>);
+pub type MultiGas = (Vec<ObjectRef>, SuiAddress, Arc<AccountKeyPair>);
+
+pub fn gas_to_multi_gas(gas: Gas) -> MultiGas {
+    (vec![gas.0], gas.1, gas.2)
+}
 
 #[derive(Clone)]
 pub struct GasCoinConfig {
