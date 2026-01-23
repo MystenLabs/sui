@@ -910,6 +910,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::Upgrade(args) => {
                 verify_no_test_mode(&args.build_config)?;
+                verify_no_pubfile_path(&args.build_config, "upgrade")?;
                 let _ = context.cache_chain_id().await?;
                 upgrade_command(args, context, None).await?
             }
@@ -921,6 +922,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::Publish(args) => {
                 verify_no_test_mode(&args.build_config)?;
+                verify_no_pubfile_path(&args.build_config, "publish")?;
                 let _ = context.cache_chain_id().await?;
                 let mut root_package = load_root_pkg_for_publish_upgrade(
                     context,
@@ -3663,6 +3665,21 @@ fn verify_no_test_mode(build_config: &MoveBuildConfig) -> anyhow::Result<()> {
                 You can ensure all test-only dependencies have been removed by \
                 compiling the package normally with `sui move build`."
                     .to_string(),
+        }
+        .into());
+    }
+    Ok(())
+}
+
+/// Make sure --pubfile-path is not used with publish or upgrade (use test-publish/test-upgrade instead)
+fn verify_no_pubfile_path(build_config: &MoveBuildConfig, command: &str) -> anyhow::Result<()> {
+    if build_config.pubfile_path.is_some() {
+        return Err(SuiErrorKind::ModulePublishFailure {
+            error: format!(
+                "The `{command}` subcommand should not be used with the `--pubfile-path` flag.\n\
+                \n\
+                Use `test-{command}` instead for ephemeral publication."
+            ),
         }
         .into());
     }
