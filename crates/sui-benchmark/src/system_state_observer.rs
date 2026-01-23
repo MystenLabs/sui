@@ -5,7 +5,7 @@ use crate::ValidatorProxy;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-use sui_types::{base_types::EpochId, sui_system_state::SuiSystemStateTrait};
+use sui_types::{base_types::EpochId, sui_system_state::{SuiSystemState, SuiSystemStateTrait}};
 use test_cluster::TestCluster;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
@@ -67,27 +67,33 @@ impl SystemStateObserver {
     }
 
     pub fn new_from_test_cluster(test_cluster: &TestCluster) -> Self {
-        let (tx, rx) = watch::channel(SystemState {
-            reference_gas_price: 1u64,
-            protocol_config: None,
-            epoch: 0,
-        });
+        fn convert_system_state(system_state: SuiSystemState) -> SystemState {
+            SystemState {
+                reference_gas_price: system_state.reference_gas_price(),
+                protocol_config: Some(ProtocolConfig::get_for_version(
+                    ProtocolVersion::new(system_state.protocol_version()),
+                    Chain::Unknown,
+                )),
+                epoch: system_state.epoch(),
+            }
+        }
+
+        let initial_system_state = convert_system_state(test_cluster.get_sui_system_state());
+        let (tx, rx) = watch::channel(initial_system_state.clone());
         let mut receiver = test_cluster.subscribe_to_epoch_change();
+        tx.send_modify(move |state| *state = initial_system_state);
+
         tokio::task::spawn(async move {
             loop {
                 let Ok(system_state) = receiver.recv().await else {
                     info!("Epoch change receiver closed, exiting task");
                     break;
                 };
+                let system_state = convert_system_state(system_state);
                 // send new system state only if the epoch has changed
                 tx.send_if_modified(|state| {
-                    if state.epoch != system_state.epoch() {
-                        state.epoch = system_state.epoch();
-                        state.reference_gas_price = system_state.reference_gas_price();
-                        state.protocol_config = Some(ProtocolConfig::get_for_version(
-                            ProtocolVersion::new(system_state.protocol_version()),
-                            Chain::Unknown,
-                        ));
+                    if state.epoch != system_state.epoch {
+                        *state = system_state;
                         true
                     } else {
                         false
