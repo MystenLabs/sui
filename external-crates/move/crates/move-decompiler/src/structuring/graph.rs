@@ -118,6 +118,13 @@ impl Graph {
             .map(|(node_id, _)| *node_id);
 
         for latch_node in latch_nodes {
+            // Handle self-loops: if the latch node is the same as the start node,
+            // just add the start node to loop_nodes
+            if latch_node == node_start {
+                loop_nodes.insert(node_start);
+                continue;
+            }
+
             let paths = petgraph::algo::all_simple_paths::<Vec<_>, _, RandomState>(
                 &self.cfg, node_start, latch_node, 0, None,
             )
@@ -154,7 +161,20 @@ impl Graph {
             .get(loop_header)
             .all_children()
             .collect::<HashSet<_>>();
+
+        let max_iterations = self.cfg.node_count() * 2;
+        let mut iterations = 0;
+
         while succ_nodes.len() > 1 && !new_nodes.is_empty() {
+            iterations += 1;
+            if iterations > max_iterations {
+                eprintln!(
+                    "Warning: refine_loop_nodes exceeded {} iterations for loop header {:?}, stopping refinement",
+                    max_iterations, loop_header
+                );
+                break;
+            }
+
             new_nodes.clear();
             for node in succ_nodes.clone() {
                 if self
@@ -170,8 +190,8 @@ impl Graph {
                         .filter(|node| !loop_nodes.contains(node) && dom_nodes.contains(node));
                     new_nodes.extend(nodes);
                 }
-                succ_nodes.extend(new_nodes.iter().cloned());
             }
+            succ_nodes.extend(new_nodes.iter().cloned());
         }
         (loop_nodes, succ_nodes)
     }
