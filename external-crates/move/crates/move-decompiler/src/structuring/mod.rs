@@ -181,7 +181,7 @@ fn insert_breaks(
             LatchKind::Break => DS::Break,
             LatchKind::InLoop => DS::Seq(vec![]),
             LatchKind::Latch => DS::Jump(next),
-            LatchKind::OtherLoop => todo!(),
+            LatchKind::OtherLoop => DS::Jump(next),
         };
         Box::new(conseq)
     }
@@ -236,9 +236,7 @@ fn insert_breaks(
                 (LatchKind::Break, LatchKind::Break) => DS::Break,
                 (LatchKind::Latch, LatchKind::Latch) => DS::JumpIf(code, next, other),
                 (LatchKind::InLoop, LatchKind::InLoop) => unreachable!(),
-                // TODO handle otherloop cases
-                (LatchKind::OtherLoop, _) | (_, LatchKind::OtherLoop) => todo!(),
-                // Mixed cases
+                // Mixed cases (including OtherLoop)
                 (conseq_lk, alt_lk) => {
                     let conseq = lower_conseq(conseq_lk, next);
                     let alt = lower_alt(alt_lk, other);
