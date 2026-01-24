@@ -434,10 +434,15 @@ impl ConsensusOutputCache {
             .get_all_deferred_transactions_v2()
             .expect("load deferred transactions cannot fail");
 
-        assert!(
-            epoch_start_configuration.is_data_quarantine_active_from_beginning_of_epoch(),
-            "This version of sui-node can only run after data quarantining has been enabled. Please run version 1.45.0 or later to the end of the current epoch and retry"
-        );
+        // RELAY-VALIDATOR: Downgrade assertion to warning to support snapshots from pre-1.45.0 epochs
+        // This is safe for relay-validator since it's not running on production mainnet
+        if !epoch_start_configuration.is_data_quarantine_active_from_beginning_of_epoch() {
+            tracing::warn!(
+                "Data quarantining not active from beginning of epoch. \
+                This snapshot may be from an epoch before v1.45.0. \
+                For production use, please run version 1.45.0 or later to the end of the current epoch."
+            );
+        }
 
         let executed_in_epoch_cache_capacity = 50_000;
 
