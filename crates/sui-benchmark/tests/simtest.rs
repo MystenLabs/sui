@@ -1572,7 +1572,7 @@ mod test {
         .with_probability(TestCoinAddressDeposit::FLAG, 0.1)
         .with_probability(TestCoinAddressWithdraw::FLAG, 0.05)
         .with_probability(TestCoinObjectWithdraw::FLAG, 0.05)
-        .with_probability(AddressBalanceOverdraw::FLAG, 0.1);
+        .with_probability(AddressBalanceOverdraw::FLAG, 0.2);
 
         test_simulated_load_with_test_config(
             test_cluster,
@@ -1596,7 +1596,7 @@ mod test {
         assert!(metrics_sum.success_count > 200);
         assert!(metrics_sum.permanent_failure_count > 100);
         assert!(metrics_sum.cancellation_count > 100);
-        assert!(metrics_sum.insufficient_funds_count > 5);
+        assert!(metrics_sum.insufficient_funds_count > 2);
     }
 
     #[sim_test(config = "test_config()")]

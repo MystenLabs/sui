@@ -893,7 +893,9 @@ impl Operation for AddressBalanceOverdraw {
             // reservations of zero are invalid, so the transaction will be rejected.
             0
         } else {
-            get_rng().gen_range(1..=account_state.sui_balance)
+            // withdraw at least half the balance
+            let half_balance = std::cmp::max(1, account_state.sui_balance / 2);
+            get_rng().gen_range(half_balance..=account_state.sui_balance)
         };
 
         let withdrawal = FundsWithdrawalArg::balance_from_sender(withdraw_amount, GAS::type_tag());
