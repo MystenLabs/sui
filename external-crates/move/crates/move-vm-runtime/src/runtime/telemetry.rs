@@ -7,6 +7,8 @@ use std::{
 };
 
 use crate::cache::move_cache::MoveCache;
+#[cfg(feature = "tracing")]
+use crate::profiling::BytecodeSnapshot;
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -69,6 +71,9 @@ pub struct MoveRuntimeTelemetry {
     /// Total Count -- Records all interactions with the runtime, including loading for publish; VM
     /// creation; and invocation.
     pub total_count: u64,
+    /// Bytecode execution counts snapshot.
+    #[cfg(feature = "tracing")]
+    pub bytecode_stats: BytecodeSnapshot,
 }
 
 // -----------------------------------------------
@@ -319,6 +324,8 @@ impl TelemetryContext {
             interpreter_count,
             total_time,
             total_count,
+            #[cfg(feature = "tracing")]
+            bytecode_stats: crate::profiling::BYTECODE_COUNTERS.snapshot(),
         }
     }
 }

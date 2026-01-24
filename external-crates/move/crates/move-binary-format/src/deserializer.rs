@@ -1671,7 +1671,7 @@ fn load_code(cursor: &mut VersionedCursor, code: &mut Vec<Bytecode>) -> BinaryLo
         let byte = cursor.read_u8().map_err(|_| {
             PartialVMError::new(StatusCode::MALFORMED).with_message("Unexpected EOF".to_string())
         })?;
-        let opcode = Opcodes::from_u8(byte)?;
+        let opcode = load_opcode(byte)?;
         // version checking
         match opcode {
             Opcodes::VEC_PACK
@@ -2020,98 +2020,8 @@ impl SerializedJumpTableFlag {
     }
 }
 
-impl Opcodes {
-    fn from_u8(value: u8) -> BinaryLoaderResult<Opcodes> {
-        match value {
-            0x01 => Ok(Opcodes::POP),
-            0x02 => Ok(Opcodes::RET),
-            0x03 => Ok(Opcodes::BR_TRUE),
-            0x04 => Ok(Opcodes::BR_FALSE),
-            0x05 => Ok(Opcodes::BRANCH),
-            0x06 => Ok(Opcodes::LD_U64),
-            0x07 => Ok(Opcodes::LD_CONST),
-            0x08 => Ok(Opcodes::LD_TRUE),
-            0x09 => Ok(Opcodes::LD_FALSE),
-            0x0A => Ok(Opcodes::COPY_LOC),
-            0x0B => Ok(Opcodes::MOVE_LOC),
-            0x0C => Ok(Opcodes::ST_LOC),
-            0x0D => Ok(Opcodes::MUT_BORROW_LOC),
-            0x0E => Ok(Opcodes::IMM_BORROW_LOC),
-            0x0F => Ok(Opcodes::MUT_BORROW_FIELD),
-            0x10 => Ok(Opcodes::IMM_BORROW_FIELD),
-            0x11 => Ok(Opcodes::CALL),
-            0x12 => Ok(Opcodes::PACK),
-            0x13 => Ok(Opcodes::UNPACK),
-            0x14 => Ok(Opcodes::READ_REF),
-            0x15 => Ok(Opcodes::WRITE_REF),
-            0x16 => Ok(Opcodes::ADD),
-            0x17 => Ok(Opcodes::SUB),
-            0x18 => Ok(Opcodes::MUL),
-            0x19 => Ok(Opcodes::MOD),
-            0x1A => Ok(Opcodes::DIV),
-            0x1B => Ok(Opcodes::BIT_OR),
-            0x1C => Ok(Opcodes::BIT_AND),
-            0x1D => Ok(Opcodes::XOR),
-            0x1E => Ok(Opcodes::OR),
-            0x1F => Ok(Opcodes::AND),
-            0x20 => Ok(Opcodes::NOT),
-            0x21 => Ok(Opcodes::EQ),
-            0x22 => Ok(Opcodes::NEQ),
-            0x23 => Ok(Opcodes::LT),
-            0x24 => Ok(Opcodes::GT),
-            0x25 => Ok(Opcodes::LE),
-            0x26 => Ok(Opcodes::GE),
-            0x27 => Ok(Opcodes::ABORT),
-            0x28 => Ok(Opcodes::NOP),
-            0x29 => Ok(Opcodes::EXISTS_DEPRECATED),
-            0x2A => Ok(Opcodes::MUT_BORROW_GLOBAL_DEPRECATED),
-            0x2B => Ok(Opcodes::IMM_BORROW_GLOBAL_DEPRECATED),
-            0x2C => Ok(Opcodes::MOVE_FROM_DEPRECATED),
-            0x2D => Ok(Opcodes::MOVE_TO_DEPRECATED),
-            0x2E => Ok(Opcodes::FREEZE_REF),
-            0x2F => Ok(Opcodes::SHL),
-            0x30 => Ok(Opcodes::SHR),
-            0x31 => Ok(Opcodes::LD_U8),
-            0x32 => Ok(Opcodes::LD_U128),
-            0x33 => Ok(Opcodes::CAST_U8),
-            0x34 => Ok(Opcodes::CAST_U64),
-            0x35 => Ok(Opcodes::CAST_U128),
-            0x36 => Ok(Opcodes::MUT_BORROW_FIELD_GENERIC),
-            0x37 => Ok(Opcodes::IMM_BORROW_FIELD_GENERIC),
-            0x38 => Ok(Opcodes::CALL_GENERIC),
-            0x39 => Ok(Opcodes::PACK_GENERIC),
-            0x3A => Ok(Opcodes::UNPACK_GENERIC),
-            0x3B => Ok(Opcodes::EXISTS_GENERIC_DEPRECATED),
-            0x3C => Ok(Opcodes::MUT_BORROW_GLOBAL_GENERIC_DEPRECATED),
-            0x3D => Ok(Opcodes::IMM_BORROW_GLOBAL_GENERIC_DEPRECATED),
-            0x3E => Ok(Opcodes::MOVE_FROM_GENERIC_DEPRECATED),
-            0x3F => Ok(Opcodes::MOVE_TO_GENERIC_DEPRECATED),
-            0x40 => Ok(Opcodes::VEC_PACK),
-            0x41 => Ok(Opcodes::VEC_LEN),
-            0x42 => Ok(Opcodes::VEC_IMM_BORROW),
-            0x43 => Ok(Opcodes::VEC_MUT_BORROW),
-            0x44 => Ok(Opcodes::VEC_PUSH_BACK),
-            0x45 => Ok(Opcodes::VEC_POP_BACK),
-            0x46 => Ok(Opcodes::VEC_UNPACK),
-            0x47 => Ok(Opcodes::VEC_SWAP),
-            0x48 => Ok(Opcodes::LD_U16),
-            0x49 => Ok(Opcodes::LD_U32),
-            0x4A => Ok(Opcodes::LD_U256),
-            0x4B => Ok(Opcodes::CAST_U16),
-            0x4C => Ok(Opcodes::CAST_U32),
-            0x4D => Ok(Opcodes::CAST_U256),
-            0x4E => Ok(Opcodes::PACK_VARIANT),
-            0x4F => Ok(Opcodes::PACK_VARIANT_GENERIC),
-            0x50 => Ok(Opcodes::UNPACK_VARIANT),
-            0x51 => Ok(Opcodes::UNPACK_VARIANT_IMM_REF),
-            0x52 => Ok(Opcodes::UNPACK_VARIANT_MUT_REF),
-            0x53 => Ok(Opcodes::UNPACK_VARIANT_GENERIC),
-            0x54 => Ok(Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF),
-            0x55 => Ok(Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF),
-            0x56 => Ok(Opcodes::VARIANT_SWITCH),
-            _ => Err(PartialVMError::new(StatusCode::UNKNOWN_OPCODE)),
-        }
-    }
+fn load_opcode(value: u8) -> BinaryLoaderResult<Opcodes> {
+    Opcodes::from_u8(value).ok_or_else(|| PartialVMError::new(StatusCode::UNKNOWN_OPCODE))
 }
 
 //
