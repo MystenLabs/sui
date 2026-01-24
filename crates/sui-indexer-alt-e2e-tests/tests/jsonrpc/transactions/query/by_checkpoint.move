@@ -172,7 +172,7 @@
   ]
 }
 
-//# run-jsonrpc --cursors 3
+//# run-jsonrpc --cursors 6
 {
   "method": "suix_queryTransactionBlocks",
   "params": [
@@ -181,7 +181,7 @@
   ]
 }
 
-//# run-jsonrpc --cursors 3
+//# run-jsonrpc --cursors 6
 {
   "method": "suix_queryTransactionBlocks",
   "params": [
@@ -199,7 +199,7 @@
   ]
 }
 
-//# run-jsonrpc --cursors 6
+//# run-jsonrpc --cursors 9
 {
   "method": "suix_queryTransactionBlocks",
   "params": [
@@ -217,7 +217,7 @@
   ]
 }
 
-//# run-jsonrpc --cursors 6
+//# run-jsonrpc --cursors 9
 {
   "method": "suix_queryTransactionBlocks",
   "params": [

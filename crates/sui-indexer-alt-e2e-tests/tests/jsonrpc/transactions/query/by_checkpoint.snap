@@ -453,36 +453,47 @@ Response: {
 }
 
 task 25, lines 175-182:
-//# run-jsonrpc --cursors 3
+//# run-jsonrpc --cursors 6
 Response: {
   "jsonrpc": "2.0",
   "id": 16,
   "result": {
     "data": [
       {
-        "digest": "FojKmHAbqgHVG2azbfKv6keTY6xb1n2pLYXr5UHeZeZo",
+        "digest": "D8QTKMUY2SiGqHveBRitaTTiiRPtHnEca92iJ8iHxMzv",
         "timestampMs": "0",
         "checkpoint": "3"
       },
       {
-        "digest": "EvxyDQBngs4Y1b9kY4U8eJfQAAGJ9jmRV3oLkzGP2kj",
+        "digest": "GvJUfeVXR9rGHPhuq6Fju2MmNBTtxZhkZMyJgaSDYXQN",
         "timestampMs": "0",
         "checkpoint": "3"
       }
     ],
-    "nextCursor": "NQ==",
-    "hasNextPage": true
+    "nextCursor": "OA==",
+    "hasNextPage": false
   }
 }
 
 task 26, lines 184-191:
-//# run-jsonrpc --cursors 3
+//# run-jsonrpc --cursors 6
 Response: {
   "jsonrpc": "2.0",
   "id": 17,
   "result": {
-    "data": [],
-    "nextCursor": "Mw==",
+    "data": [
+      {
+        "digest": "EvxyDQBngs4Y1b9kY4U8eJfQAAGJ9jmRV3oLkzGP2kj",
+        "timestampMs": "0",
+        "checkpoint": "3"
+      },
+      {
+        "digest": "FojKmHAbqgHVG2azbfKv6keTY6xb1n2pLYXr5UHeZeZo",
+        "timestampMs": "0",
+        "checkpoint": "3"
+      }
+    ],
+    "nextCursor": "NA==",
     "hasNextPage": false
   }
 }
@@ -511,24 +522,13 @@ Response: {
 }
 
 task 28, lines 202-209:
-//# run-jsonrpc --cursors 6
+//# run-jsonrpc --cursors 9
 Response: {
   "jsonrpc": "2.0",
   "id": 19,
   "result": {
-    "data": [
-      {
-        "digest": "D8QTKMUY2SiGqHveBRitaTTiiRPtHnEca92iJ8iHxMzv",
-        "timestampMs": "0",
-        "checkpoint": "3"
-      },
-      {
-        "digest": "GvJUfeVXR9rGHPhuq6Fju2MmNBTtxZhkZMyJgaSDYXQN",
-        "timestampMs": "0",
-        "checkpoint": "3"
-      }
-    ],
-    "nextCursor": "OA==",
+    "data": [],
+    "nextCursor": "OQ==",
     "hasNextPage": false
   }
 }
@@ -546,24 +546,24 @@ Response: {
 }
 
 task 30, lines 220-227:
-//# run-jsonrpc --cursors 6
+//# run-jsonrpc --cursors 9
 Response: {
   "jsonrpc": "2.0",
   "id": 21,
   "result": {
     "data": [
       {
-        "digest": "EvxyDQBngs4Y1b9kY4U8eJfQAAGJ9jmRV3oLkzGP2kj",
+        "digest": "GvJUfeVXR9rGHPhuq6Fju2MmNBTtxZhkZMyJgaSDYXQN",
         "timestampMs": "0",
         "checkpoint": "3"
       },
       {
-        "digest": "FojKmHAbqgHVG2azbfKv6keTY6xb1n2pLYXr5UHeZeZo",
+        "digest": "D8QTKMUY2SiGqHveBRitaTTiiRPtHnEca92iJ8iHxMzv",
         "timestampMs": "0",
         "checkpoint": "3"
       }
     ],
-    "nextCursor": "NA==",
-    "hasNextPage": false
+    "nextCursor": "Nw==",
+    "hasNextPage": true
   }
 }
