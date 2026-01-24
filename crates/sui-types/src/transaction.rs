@@ -2378,6 +2378,35 @@ impl TransactionData {
         )
     }
 
+    pub fn new_programmable_with_address_balance_gas(
+        sender: SuiAddress,
+        pt: ProgrammableTransaction,
+        gas_budget: u64,
+        gas_price: u64,
+        chain_identifier: ChainIdentifier,
+        current_epoch: EpochId,
+        nonce: u32,
+    ) -> Self {
+        TransactionData::V1(TransactionDataV1 {
+            kind: TransactionKind::ProgrammableTransaction(pt),
+            sender,
+            gas_data: GasData {
+                payment: vec![],
+                owner: sender,
+                price: gas_price,
+                budget: gas_budget,
+            },
+            expiration: TransactionExpiration::ValidDuring {
+                min_epoch: Some(current_epoch),
+                max_epoch: Some(current_epoch + 1),
+                min_timestamp: None,
+                max_timestamp: None,
+                chain: chain_identifier,
+                nonce,
+            },
+        })
+    }
+
     pub fn message_version(&self) -> u64 {
         match self {
             TransactionData::V1(_) => 1,
