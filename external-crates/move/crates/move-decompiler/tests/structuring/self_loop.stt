@@ -1,0 +1,11 @@
+// Self-loop test: a node that loops back to itself
+// This tests the fix for infinite hang in all_simple_paths when called with start == end
+//
+//     ->0
+//    |  |\
+//    ----1
+//
+// Node 0 conditionally loops to itself (true branch) or exits to node 1 (false branch)
+
+cond,0,0,1
+code,1
