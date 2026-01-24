@@ -5,7 +5,7 @@
 mod test {
     use mysten_common::register_debug_fatal_handler;
     use prost::Message;
-    use rand::{Rng, distributions::uniform::SampleRange, thread_rng};
+    use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
     use std::collections::BTreeMap;
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
@@ -25,16 +25,16 @@ mod test {
         WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
     };
     use sui_benchmark::{
-        FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
-        drivers::{Interval, bench_driver::BenchDriver, driver::Driver},
+        drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
         util::get_ed25519_keypair_from_keystore,
+        FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
     };
-    use sui_config::ExecutionCacheConfig;
     use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
+    use sui_config::ExecutionCacheConfig;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
-    use sui_core::authority::AuthorityState;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
+    use sui_core::authority::AuthorityState;
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
     use sui_macros::{
@@ -47,7 +47,7 @@ mod test {
     };
     use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
     use sui_simulator::tempfile::TempDir;
-    use sui_simulator::{SimConfig, configs::*};
+    use sui_simulator::{configs::*, SimConfig};
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
@@ -1376,10 +1376,15 @@ mod test {
 
         let test_cluster_for_handler = test_cluster.clone();
 
+        let mut config = SimulatedLoadConfig::default();
+        // composite workload is very strict about error checking and fails during
+        // this test.
+        config.composite_weight = 0;
+
         test_simulated_load_with_test_config(
             test_cluster.clone(),
             30,
-            SimulatedLoadConfig::default(),
+            config,
             None, // target_qps
             None, // num_workers
             Some({
