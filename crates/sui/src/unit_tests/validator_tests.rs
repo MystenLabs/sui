@@ -65,3 +65,90 @@ async fn test_print_raw_rgp_txn() -> Result<(), anyhow::Error> {
     assert_eq!(summary.next_epoch_gas_price, 42);
     Ok(())
 }
+
+#[tokio::test]
+async fn test_serialize_unsigned_transaction() -> Result<(), anyhow::Error> {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let keypair: &SuiKeyPair = test_cluster
+        .swarm
+        .config()
+        .validator_configs
+        .first()
+        .unwrap()
+        .account_key_pair
+        .keypair();
+    let validator_address: SuiAddress = SuiAddress::from(&keypair.public());
+    let mut context = test_cluster.wallet;
+    let sui_client = context.get_client().await?;
+    let (_, summary) = get_validator_summary(&sui_client, validator_address)
+        .await?
+        .unwrap();
+    let operation_cap_id = summary.operation_cap_id;
+
+    // Test UpdateGasPrice serialization
+    let response = SuiValidatorCommand::UpdateGasPrice {
+        operation_cap_id: Some(operation_cap_id),
+        gas_price: 100,
+        tx_args: crate::validator_commands::TxProcessingArgs {
+            serialize_unsigned_transaction: true,
+            gas_budget: None,
+        },
+    }
+    .execute(&mut context)
+    .await?;
+
+    if let SuiValidatorCommandResponse::UpdateGasPrice {
+        response: _,
+        serialized_unsigned_transaction,
+    } = response
+    {
+        assert!(serialized_unsigned_transaction.is_some());
+        // Verify we can deserialize it back
+        let serialized_data = serialized_unsigned_transaction.unwrap();
+        let _deserialized_data =
+            bcs::from_bytes::<TransactionData>(&Base64::decode(&serialized_data).unwrap())?;
+    } else {
+        panic!("Expected UpdateGasPrice response with serialized transaction");
+    }
+
+    // Test ReportValidator serialization
+    // We need another validator address to report
+    let other_validator_address: SuiAddress = SuiAddress::from(
+        &test_cluster
+            .swarm
+            .config()
+            .validator_configs
+            .get(1)
+            .unwrap()
+            .account_key_pair
+            .keypair()
+            .public(),
+    );
+
+    let response = SuiValidatorCommand::ReportValidator {
+        operation_cap_id: Some(operation_cap_id),
+        reportee_address: other_validator_address,
+        undo_report: None,
+        tx_args: crate::validator_commands::TxProcessingArgs {
+            serialize_unsigned_transaction: true,
+            gas_budget: None,
+        },
+    }
+    .execute(&mut context)
+    .await?;
+
+    if let SuiValidatorCommandResponse::ReportValidator {
+        response: _,
+        serialized_unsigned_transaction,
+    } = response
+    {
+        assert!(serialized_unsigned_transaction.is_some());
+        let serialized_data = serialized_unsigned_transaction.unwrap();
+        let _deserialized_data =
+            bcs::from_bytes::<TransactionData>(&Base64::decode(&serialized_data).unwrap())?;
+    } else {
+        panic!("Expected ReportValidator response with serialized transaction");
+    }
+
+    Ok(())
+}
