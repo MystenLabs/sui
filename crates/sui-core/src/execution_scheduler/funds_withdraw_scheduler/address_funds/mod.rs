@@ -13,13 +13,11 @@ mod naive_scheduler;
 pub(crate) mod scheduler;
 
 #[cfg(test)]
-mod naive_scheduler_tests;
-
-#[cfg(test)]
-mod common_tests;
-
-#[cfg(test)]
 mod e2e_tests;
+#[cfg(test)]
+mod naive_scheduler_tests;
+#[cfg(test)]
+mod test_scheduler;
 
 /// The status of scheduling the funds withdraw reservations for a transaction.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
