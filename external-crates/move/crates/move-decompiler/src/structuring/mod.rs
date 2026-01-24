@@ -283,11 +283,13 @@ fn structure_acyclic(
         let result =
             structure_acyclic_region(config, graph, structured_blocks, input, node, inside_loop);
         structured_blocks.insert(node, result);
-    } else {
-        assert!(matches!(&input[&node], D::Input::Code(..)));
-        let code_node = input.remove(&node).unwrap();
+    } else if let Some(code_node) = input.remove(&node) {
+        assert!(matches!(&code_node, D::Input::Code(..)));
         let result = structure_code_node(config, graph, structured_blocks, node, code_node);
         structured_blocks.insert(node, result);
+    } else {
+        // Empty function with no input - create empty sequence
+        structured_blocks.insert(node, D::Structured::Seq(vec![]));
     }
 }
 

@@ -44,6 +44,11 @@ impl Graph {
             }
         }
 
+        // For empty input (trivial functions with no basic blocks), ensure start_node exists
+        while cfg.node_count() <= start_node.index() {
+            cfg.add_node(());
+        }
+
         // Add all edges from the input
         for edge in input.values().flat_map(|value| value.edges()) {
             cfg.add_edge(edge.0, edge.1, ());
