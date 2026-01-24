@@ -29,6 +29,7 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::TypeTag;
@@ -642,12 +643,23 @@ impl AccountState {
         sender: SuiAddress,
         fullnode_proxies: &Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
     ) -> Self {
-        let proxy = fullnode_proxies.choose(&mut get_rng()).unwrap();
-        let sui_balance = proxy.get_sui_address_balance(sender).await.unwrap();
-        Self {
-            sender,
-            sui_balance,
+        let mut retries = 0;
+        while retries < 3 {
+            let proxy = fullnode_proxies.choose(&mut get_rng()).unwrap();
+            let Ok(sui_balance) = proxy.get_sui_address_balance(sender).await else {
+                info!("Failed to get sui balance for address {sender}");
+                retries += 1;
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                continue;
+            };
+            return Self {
+                sender,
+                sui_balance,
+            };
         }
+        // If this panic happens in practice, we could just return a zero balance,
+        // it wouldn't hurt the test suite overall unles it is happening every time
+        panic!("Failed to get sui balance for address {sender} - return zero balance");
     }
 }
 
