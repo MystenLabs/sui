@@ -28,6 +28,11 @@ pub(crate) fn structure(
     mut input: BTreeMap<D::Label, D::Input>,
     entry_node: D::Label,
 ) -> D::Structured {
+    // Native functions have empty basic blocks - return early to avoid panicking in Graph::new
+    if input.is_empty() {
+        return D::Structured::Seq(vec![]);
+    }
+
     let mut graph = Graph::new(config, &input, entry_node);
 
     let mut structured_blocks: BTreeMap<D::Label, D::Structured> = BTreeMap::new();
