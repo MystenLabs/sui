@@ -1190,8 +1190,8 @@ impl AstDebug for LValue_ {
 fn typing_ast_sizes() {
     assert_eq!(
         std::mem::size_of::<UnannotatedExp>(),
-        416,
+        240,
         "UnannotatedExp size changed"
     );
-    assert_eq!(std::mem::size_of::<Exp>(), 464, "Exp size changed");
+    assert_eq!(std::mem::size_of::<Exp>(), 272, "Exp size changed");
 }
