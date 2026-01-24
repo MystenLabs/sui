@@ -134,26 +134,6 @@ impl FundsWithdrawScheduler {
         }
     }
 
-    #[cfg(test)]
-    pub fn get_current_accumulator_version(&self) -> SequenceNumber {
-        let versions: Vec<_> = self
-            .innards
-            .iter()
-            .map(|(name, scheduler)| (name, scheduler.get_current_accumulator_version()))
-            .collect();
-
-        let first_version = versions[0].1;
-        for (name, version) in versions.iter().skip(1) {
-            assert_eq!(
-                *version, first_version,
-                "Scheduler '{}' has version {:?}, but expected {:?}",
-                name, version, first_version
-            );
-        }
-
-        first_version
-    }
-
     async fn process_withdraw_task(self, mut withdraw_receiver: UnboundedReceiver<WithdrawEvent>) {
         while let Some(event) = withdraw_receiver.recv().await {
             let WithdrawEvent {

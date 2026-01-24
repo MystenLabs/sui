@@ -222,10 +222,12 @@ async fn test_account_version_ahead_of_schedule() {
         SequenceNumber::from_u64(0),
         BTreeMap::from([(account, 100)]),
     ));
-    funds_read.settle_funds_changes(
-        BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 1)]),
-        SequenceNumber::from_u64(1),
-    );
+    funds_read
+        .settle_funds_changes(
+            BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 1)]),
+            SequenceNumber::from_u64(1),
+        )
+        .await;
     let scheduler =
         NaiveObjectFundsWithdrawScheduler::new(funds_read.clone(), SequenceNumber::from_u64(0));
     let result = scheduler.schedule(
