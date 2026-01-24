@@ -42,7 +42,6 @@ use quick_cache::unsync::Cache as QCache;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    num::NonZeroUsize,
     sync::Arc,
 };
 
@@ -490,13 +489,10 @@ impl VMDispatchTables {
         let mut formula = DepthFormula::normalize(formulas);
         // add 1 for the struct/variant itself
         formula.add(1);
-        let prev = self.type_depths.put(datatype_name.clone(), formula.clone());
-        if prev.is_some() {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Recursive type?".to_owned()),
-            );
-        }
+        // Insert without checking if it was already present; this is a pure optmization, so we do
+        // not care about overwriting.
+        self.type_depths
+            .insert(datatype_name.clone(), formula.clone());
         Ok(formula)
     }
 

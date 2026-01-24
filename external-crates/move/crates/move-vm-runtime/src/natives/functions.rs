@@ -149,7 +149,6 @@ impl NativeResult {
     }
 }
 
-
 /// Make a table of native functions associated with a module and member name.
 /// Each name must be a valid Identifier, or this function will panic.
 pub fn make_table<S: Into<Box<str>>>(

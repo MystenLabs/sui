@@ -19,10 +19,7 @@ use crate::{
     },
 };
 use move_binary_format::errors::*;
-use move_core_types::{
-    language_storage::TypeTag,
-    vm_status::{StatusCode, StatusType},
-};
+use move_core_types::{language_storage::TypeTag, vm_status::StatusCode};
 
 use std::{fmt::Write, sync::Arc};
 
@@ -470,20 +467,20 @@ impl TypeView for ResolvableType<'_, '_> {
 
 impl std::fmt::Display for MachineState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Call stack:\n")?;
+        writeln!(f, "Call stack:")?;
         for (i, frame) in self.call_stack.frames.iter().enumerate() {
             let fun = frame.function();
-            write!(
+            writeln!(
                 f,
-                " frame #{}: {} [pc = {}]\n",
+                " frame #{}: {} [pc = {}]",
                 i,
                 fun.pretty_string(&self.interner),
                 frame.pc
             )?;
         }
-        write!(
+        writeln!(
             f,
-            "*frame #{}: {} [pc = {}]:\n",
+            "*frame #{}: {} [pc = {}]:",
             self.call_stack.frames.len(),
             self.call_stack
                 .current_frame
@@ -502,22 +499,18 @@ impl std::fmt::Display for MachineState {
                 // prefix "i> " then the formatted instruction
                 write!(f, "{}> ", i)?;
                 bytecode.fmt(f, interner)?;
-                write!(f, "\n")?;
+                writeln!(f)?;
             }
 
             write!(f, "{}* ", pc)?;
             let _ = &code[pc].fmt(f, interner)?;
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
 
-        write!(
-            f,
-            "Locals:\n{}\n",
-            self.call_stack.current_frame.stack_frame
-        )?;
-        write!(f, "Operand Stack:\n")?;
+        writeln!(f, "Locals:\n{}", self.call_stack.current_frame.stack_frame)?;
+        writeln!(f, "Operand Stack:")?;
         for value in &self.operand_stack.value {
-            write!(f, "{}\n", value)?;
+            writeln!(f, "{}", value)?;
         }
         Ok(())
     }

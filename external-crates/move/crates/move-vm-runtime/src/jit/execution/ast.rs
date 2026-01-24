@@ -928,7 +928,7 @@ impl Function {
             // checking those at module loading time.
             self.native.as_deref().ok_or_else(|| {
                 PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
-                    .with_message(format!("Missing Native Function"))
+                    .with_message("Missing Native Function".to_string())
             })
         } else {
             // Otherwise this error should not happen, hence UNREACHABLE
@@ -1023,6 +1023,8 @@ impl ModuleIdKey {
     }
 
     pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
+        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
+        // should never happen in a well-formed module. This is as good a time to panic as any.
         interner
             .resolve_ident(&self.name, "module name")
             .expect("Uninterned key")
