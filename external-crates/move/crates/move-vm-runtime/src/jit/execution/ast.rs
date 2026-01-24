@@ -852,7 +852,11 @@ impl Function {
     }
 
     pub fn module_id(&self, interner: &IdentifierInterner) -> ModuleId {
-        self.name.module_id(interner).unwrap()
+        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
+        // should never happen in a well-formed module. This is as good a time to panic as any.
+        self.name
+            .module_id(interner)
+            .expect("Identifier interner error: module id not found")
     }
 
     pub fn index(&self) -> FunctionDefinitionIndex {
@@ -876,7 +880,11 @@ impl Function {
     }
 
     pub fn name(&self, interner: &IdentifierInterner) -> Identifier {
-        self.name.member_name(interner).unwrap()
+        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
+        // should never happen in a well-formed module. This is as good a time to panic as any.
+        self.name
+            .member_name(interner)
+            .expect("Identifier interner error: function name not found")
     }
 
     pub(crate) fn code(&self) -> &[Bytecode] {
@@ -892,11 +900,19 @@ impl Function {
     }
 
     pub fn pretty_string(&self, interner: &IdentifierInterner) -> String {
-        self.name.to_string(interner).unwrap()
+        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
+        // should never happen in a well-formed module. This is as good a time to panic as any.
+        self.name
+            .to_string(interner)
+            .expect("Identifier interner error: function virtual name not found")
     }
 
     pub fn pretty_short_string(&self, interner: &IdentifierInterner) -> String {
-        self.name.to_short_string(interner).unwrap()
+        // [SAFETY] If this is an error, that means we have an uninterned identifier key, which
+        // should never happen in a well-formed module. This is as good a time to panic as any.
+        self.name
+            .to_short_string(interner)
+            .expect("Identifier interner error: function short name not found")
     }
 
     pub fn is_native(&self) -> bool {
@@ -905,16 +921,14 @@ impl Function {
 
     pub fn get_native(
         &self,
-        interner: &IdentifierInterner,
+        _interner: &IdentifierInterner,
     ) -> PartialVMResult<&UnboxedNativeFunction> {
         if cfg!(feature = "lazy_natives") {
             // If lazy_natives is configured, this is a MISSING_DEPENDENCY error, as we skip
             // checking those at module loading time.
             self.native.as_deref().ok_or_else(|| {
-                PartialVMError::new(StatusCode::MISSING_DEPENDENCY).with_message(format!(
-                    "Missing Native Function `{}`",
-                    self.name.member_name(interner).unwrap()
-                ))
+                PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
+                    .with_message(format!("Missing Native Function"))
             })
         } else {
             // Otherwise this error should not happen, hence UNREACHABLE

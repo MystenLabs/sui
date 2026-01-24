@@ -25,7 +25,6 @@ use move_core_types::{
 };
 
 use std::{fmt::Write, sync::Arc};
-use tracing::error;
 
 macro_rules! debug_write {
     ($($toks: tt)*) => {
@@ -172,30 +171,6 @@ impl MachineState {
     // Debugging and logging helpers.
     //
 
-    /// Given an `VMStatus` generate a core dump if the error is an `InvariantViolation`. Uses the
-    /// `current_frame` on the state to perform the core dump.
-    pub fn maybe_core_dump(&self, err: VMError) -> VMError {
-        let err = if err.status_type() == StatusType::Verification {
-            error!("Verification error during runtime: {:?}", err);
-            let new_err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR);
-            let new_err = match err.message() {
-                None => new_err.with_message("No message provided for core dump".to_owned()),
-                Some(msg) => new_err.with_message(msg.to_owned()),
-            };
-            new_err.finish(err.location().clone())
-        } else {
-            err
-        };
-        if err.status_type() == StatusType::InvariantViolation {
-            let state = self.internal_state_str();
-            error!(
-                "Error: {:?}\nCORE DUMP: >>>>>>>>>>>>\n{}\n<<<<<<<<<<<<\n",
-                err, state,
-            );
-        }
-        err
-    }
-
     #[allow(dead_code)]
     pub(super) fn debug_print_frame<B: Write>(
         &self,
@@ -304,64 +279,6 @@ impl MachineState {
             debug_writeln!(buf)?;
         }
         Ok(())
-    }
-
-    /// Generate a string which is the status of the interpreter: call stack, current bytecode
-    /// stream, locals and operand stack.
-    ///
-    /// It is used when generating a core dump but can be used for debugging of the interpreter.
-    /// It will be exposed via a debug module to give developers a way to print the internals
-    /// of an execution.
-    fn internal_state_str(&self) -> String {
-        let mut internal_state = String::from("Call stack:\n");
-
-        for (i, frame) in self.call_stack.frames.iter().enumerate() {
-            let fun = frame.function();
-            internal_state.push_str(&format!(
-                " frame #{}: {} [pc = {}]\n",
-                i,
-                fun.pretty_string(&self.interner),
-                frame.pc
-            ));
-        }
-
-        internal_state.push_str(&format!(
-            "*frame #{}: {} [pc = {}]:\n",
-            self.call_stack.frames.len(),
-            self.call_stack
-                .current_frame
-                .function()
-                .pretty_string(&self.interner),
-            self.call_stack.current_frame.pc
-        ));
-
-        let code = self.call_stack.current_frame.function().code();
-        let pc = self.call_stack.current_frame.pc as usize;
-
-        if pc < code.len() {
-            let interner = &self.interner;
-
-            for (i, bytecode) in code[..pc].iter().enumerate() {
-                // prefix "i> " then the formatted instruction
-                write!(internal_state, "{}> ", i).unwrap();
-                bytecode.fmt(&mut internal_state, interner).unwrap();
-                internal_state.push('\n');
-            }
-
-            write!(internal_state, "{}* ", pc).unwrap();
-            let _ = &code[pc].fmt(&mut internal_state, interner).unwrap();
-            internal_state.push('\n');
-        }
-
-        internal_state.push_str(&format!(
-            "Locals:\n{}\n",
-            self.call_stack.current_frame.stack_frame
-        ));
-        internal_state.push_str("Operand Stack:\n");
-        for value in &self.operand_stack.value {
-            internal_state.push_str(&format!("{}\n", value));
-        }
-        internal_state
     }
 
     pub(super) fn set_location(&self, err: PartialVMError) -> VMError {
@@ -548,6 +465,61 @@ impl CallFrame {
 impl TypeView for ResolvableType<'_, '_> {
     fn to_type_tag(&self) -> TypeTag {
         self.vtables.type_to_type_tag(self.ty).unwrap()
+    }
+}
+
+impl std::fmt::Display for MachineState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Call stack:\n")?;
+        for (i, frame) in self.call_stack.frames.iter().enumerate() {
+            let fun = frame.function();
+            write!(
+                f,
+                " frame #{}: {} [pc = {}]\n",
+                i,
+                fun.pretty_string(&self.interner),
+                frame.pc
+            )?;
+        }
+        write!(
+            f,
+            "*frame #{}: {} [pc = {}]:\n",
+            self.call_stack.frames.len(),
+            self.call_stack
+                .current_frame
+                .function()
+                .pretty_string(&self.interner),
+            self.call_stack.current_frame.pc
+        )?;
+
+        let code = self.call_stack.current_frame.function().code();
+        let pc = self.call_stack.current_frame.pc as usize;
+
+        if pc < code.len() {
+            let interner = &self.interner;
+
+            for (i, bytecode) in code[..pc].iter().enumerate() {
+                // prefix "i> " then the formatted instruction
+                write!(f, "{}> ", i)?;
+                bytecode.fmt(f, interner)?;
+                write!(f, "\n")?;
+            }
+
+            write!(f, "{}* ", pc)?;
+            let _ = &code[pc].fmt(f, interner)?;
+            write!(f, "\n")?;
+        }
+
+        write!(
+            f,
+            "Locals:\n{}\n",
+            self.call_stack.current_frame.stack_frame
+        )?;
+        write!(f, "Operand Stack:\n")?;
+        for value in &self.operand_stack.value {
+            write!(f, "{}\n", value)?;
+        }
+        Ok(())
     }
 }
 

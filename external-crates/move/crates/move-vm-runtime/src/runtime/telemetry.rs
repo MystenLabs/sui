@@ -369,15 +369,27 @@ impl TransactionTelemetryContext {
         timer.reported = true;
         match timer.kind {
             TimerKind::Load => {
-                let count = timer.count.expect("Load timer must have count");
+                debug_assert!(
+                    timer.count.is_some(),
+                    "Load timer must have a count associated with it"
+                );
+                let Some(count) = timer.count else { return };
                 self.record_load_time(duration, count);
             }
             TimerKind::Validation => {
-                let count = timer.count.expect("Validation timer must have count");
+                debug_assert!(
+                    timer.count.is_some(),
+                    "Validation timer must have a count associated with it"
+                );
+                let Some(count) = timer.count else { return };
                 self.record_validation_time(duration, count);
             }
             TimerKind::JIT => {
-                let count = timer.count.expect("JIT timer must have count");
+                debug_assert!(
+                    timer.count.is_some(),
+                    "JIT timer must have a count associated with it"
+                );
+                let Some(count) = timer.count else { return };
                 self.record_jit_time(duration, count);
             }
             TimerKind::Execution => {
