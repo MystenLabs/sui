@@ -6,7 +6,6 @@ use crate::drivers::Interval;
 use crate::options::{Opts, RunSpec};
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::batch_payment::BatchPaymentWorkloadBuilder;
-use crate::workloads::conflicting_transfer::ConflictingTransferWorkloadBuilder;
 use crate::workloads::delegation::DelegationWorkloadBuilder;
 use crate::workloads::party::PartyWorkloadBuilder;
 use crate::workloads::shared_counter::SharedCounterWorkloadBuilder;
@@ -223,7 +222,7 @@ impl WorkloadConfiguration {
             shared_counter_hotness_factor,
             num_shared_counters,
             shared_counter_max_tip,
-            num_contested_objects,
+            num_contested_objects: _,
             randomized_transaction_concurrency,
             target_qps,
             in_flight_ratio,
@@ -368,16 +367,6 @@ impl WorkloadConfiguration {
             group,
         );
         workload_builders.push(party_workload);
-        let conflicting_transfer_workload = ConflictingTransferWorkloadBuilder::from(
-            weights.conflicting_transfer as f32 / total_weight as f32,
-            target_qps,
-            num_workers,
-            in_flight_ratio,
-            num_contested_objects,
-            duration,
-            group,
-        );
-        workload_builders.push(conflicting_transfer_workload);
         if let Some(config) = composite_config {
             let composite_workload = CompositeWorkloadBuilder::from(
                 weights.composite as f32 / total_weight as f32,
