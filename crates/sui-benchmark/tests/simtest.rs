@@ -5,7 +5,7 @@
 mod test {
     use mysten_common::register_debug_fatal_handler;
     use prost::Message;
-    use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
+    use rand::{Rng, distributions::uniform::SampleRange, thread_rng};
     use std::collections::BTreeMap;
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
@@ -25,16 +25,16 @@ mod test {
         WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
     };
     use sui_benchmark::{
-        drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
-        util::get_ed25519_keypair_from_keystore,
         FullNodeProxy, LocalValidatorAggregatorProxy, ValidatorProxy,
+        drivers::{Interval, bench_driver::BenchDriver, driver::Driver},
+        util::get_ed25519_keypair_from_keystore,
     };
-    use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
     use sui_config::ExecutionCacheConfig;
+    use sui_config::node::{AuthorityOverloadConfig, ForkCrashBehavior, ForkRecoveryConfig};
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
+    use sui_core::authority::AuthorityState;
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
-    use sui_core::authority::AuthorityState;
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
     use sui_macros::{
@@ -47,7 +47,7 @@ mod test {
     };
     use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
     use sui_simulator::tempfile::TempDir;
-    use sui_simulator::{configs::*, SimConfig};
+    use sui_simulator::{SimConfig, configs::*};
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
@@ -1589,14 +1589,14 @@ mod test {
 
         let metrics_sum = metrics.sum_all();
 
+        println!("metrics: {:#?}", metrics.sum_all());
+
         // make sure the test did stuff
         assert!(metrics_sum.signed_and_sent_count > 500);
         assert!(metrics_sum.success_count > 200);
         assert!(metrics_sum.permanent_failure_count > 100);
         assert!(metrics_sum.cancellation_count > 100);
         assert!(metrics_sum.insufficient_funds_count > 5);
-
-        println!("metrics: {:#?}", metrics.sum_all());
     }
 
     #[sim_test(config = "test_config()")]
