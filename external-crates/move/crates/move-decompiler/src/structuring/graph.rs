@@ -249,10 +249,24 @@ fn compute_post_dominators<N, E>(
     graph: &petgraph::Graph<N, E>,
     input: &BTreeMap<D::Label, D::Input>,
 ) -> (NodeIndex, Dominators<NodeIndex>) {
-    // Make an empty, reversed version of the graph
-    let mut graph = petgraph::graph::DiGraph::<(), ()>::from_edges(
-        graph.edge_references().map(|e| (e.target(), e.source())),
-    );
+    // Collect node count and edges before creating reversed graph
+    let node_count = graph.node_count();
+    let edges: Vec<_> = graph.edge_references().map(|e| (e.target(), e.source())).collect();
+
+    // Create reversed graph, preserving all nodes (even those with no edges)
+    let mut graph = petgraph::graph::DiGraph::<(), ()>::new();
+
+    // First, add all nodes from the original graph
+    for _ in 0..node_count {
+        graph.add_node(());
+    }
+
+    // Then, add all reversed edges
+    for (target, source) in edges {
+        graph.add_edge(target, source, ());
+    }
+
+    // Add the synthetic return node
     let return_: NodeIndex = graph.add_node(());
     if config.debug_print.control_flow_graph {
         println!("Return node: {return_:?}");
