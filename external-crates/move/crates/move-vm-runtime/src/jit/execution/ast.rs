@@ -921,14 +921,14 @@ impl Function {
 
     pub fn get_native(
         &self,
-        _interner: &IdentifierInterner,
+        interner: &IdentifierInterner,
     ) -> PartialVMResult<&UnboxedNativeFunction> {
         if cfg!(feature = "lazy_natives") {
             // If lazy_natives is configured, this is a MISSING_DEPENDENCY error, as we skip
             // checking those at module loading time.
             self.native.as_deref().ok_or_else(|| {
                 PartialVMError::new(StatusCode::MISSING_DEPENDENCY)
-                    .with_message("Missing Native Function".to_string())
+                    .with_message(format!("Missing Native Function {:?}", self.name(interner)))
             })
         } else {
             // Otherwise this error should not happen, hence UNREACHABLE

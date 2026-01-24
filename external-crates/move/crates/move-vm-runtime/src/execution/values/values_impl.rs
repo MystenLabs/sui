@@ -1968,24 +1968,33 @@ impl VectorRef {
         Ok(())
     }
 
-    pub fn as_bytes_ref(&self) -> std::cell::Ref<'_, Vec<u8>> {
-        std::cell::Ref::map(self.0.borrow(), |value| match value {
-            Value::PrimVec(PrimVec::VecU8(vec)) => vec,
-            Value::PrimVec(_)
-            | Value::Invalid
-            | Value::U8(_)
-            | Value::U16(_)
-            | Value::U32(_)
-            | Value::U64(_)
-            | Value::U128(_)
-            | Value::U256(_)
-            | Value::Bool(_)
-            | Value::Address(_)
-            | Value::Vec(_)
-            | Value::Struct(_)
-            | Value::Variant(_)
-            | Value::Reference(_) => panic!("can only be called on vector<u8>"),
-        })
+    pub fn as_bytes_ref(&self) -> PartialVMResult<std::cell::Ref<'_, Vec<u8>>> {
+        fn as_bytes_ref_internal(v: &VectorRef) -> std::cell::Ref<'_, Vec<u8>> {
+            std::cell::Ref::map(v.0.borrow(), |value| match value {
+                Value::PrimVec(PrimVec::VecU8(vec)) => vec,
+                Value::PrimVec(_)
+                | Value::Invalid
+                | Value::U8(_)
+                | Value::U16(_)
+                | Value::U32(_)
+                | Value::U64(_)
+                | Value::U128(_)
+                | Value::U256(_)
+                | Value::Bool(_)
+                | Value::Address(_)
+                | Value::Vec(_)
+                | Value::Struct(_)
+                | Value::Variant(_)
+                | Value::Reference(_) => unreachable!("can only be called on vector<u8>"),
+            })
+        }
+
+        let value = &*self.0.borrow();
+        match value {
+            Value::PrimVec(PrimVec::VecU8(_)) => Ok(as_bytes_ref_internal(self)),
+            _ => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message("can only be called on vector<u8>".to_string())),
+        }
     }
 
     pub fn pop(&self, type_param: &Type) -> PartialVMResult<Value> {
@@ -2387,7 +2396,11 @@ impl Display for Reference {
             Reference::Indexed(index_ref) => {
                 let (vec, ndx) = index_ref.as_ref();
                 let Value::PrimVec(vec) = &*vec.borrow() else {
-                    unreachable!()
+                    write!(
+                        f,
+                        "Error(\"Invalid Reference -- expected primv vec for index ref\")"
+                    )?;
+                    return Ok(());
                 };
                 match_prim_vec!(vec, vec, write!(f, "{}", vec[*ndx]))
             }
@@ -3260,13 +3273,6 @@ impl Variant {
 }
 
 impl Vector {
-    pub fn elem_len(&self) -> usize {
-        self.0
-            .vector_ref()
-            .unwrap_or_else(|_| panic!("Expected a vector, got {:?}", self))
-            .len()
-    }
-
     #[allow(clippy::needless_lifetimes)]
     pub fn elem_views<'a>(&'a self) -> impl ExactSizeIterator<Item = impl ValueView + 'a> {
         struct ElemView<'b> {
@@ -3489,19 +3495,19 @@ use move_core_types::runtime_value::{
 };
 
 impl Value {
-    pub fn as_move_value(&self, layout: &MoveTypeLayout) -> RuntimeValue {
+    pub fn as_move_value(&self, layout: &MoveTypeLayout) -> PartialVMResult<RuntimeValue> {
         use MoveTypeLayout as L;
         use PrimVec as PV;
 
         match (layout, self) {
-            (L::U8, Value::U8(x)) => RuntimeValue::U8(*x),
-            (L::U16, Value::U16(x)) => RuntimeValue::U16(*x),
-            (L::U32, Value::U32(x)) => RuntimeValue::U32(*x),
-            (L::U64, Value::U64(x)) => RuntimeValue::U64(*x),
-            (L::U128, Value::U128(x)) => RuntimeValue::U128(**x),
-            (L::U256, Value::U256(x)) => RuntimeValue::U256(**x),
-            (L::Bool, Value::Bool(x)) => RuntimeValue::Bool(*x),
-            (L::Address, Value::Address(x)) => RuntimeValue::Address(**x),
+            (L::U8, Value::U8(x)) => Ok(RuntimeValue::U8(*x)),
+            (L::U16, Value::U16(x)) => Ok(RuntimeValue::U16(*x)),
+            (L::U32, Value::U32(x)) => Ok(RuntimeValue::U32(*x)),
+            (L::U64, Value::U64(x)) => Ok(RuntimeValue::U64(*x)),
+            (L::U128, Value::U128(x)) => Ok(RuntimeValue::U128(**x)),
+            (L::U256, Value::U256(x)) => Ok(RuntimeValue::U256(**x)),
+            (L::Bool, Value::Bool(x)) => Ok(RuntimeValue::Bool(*x)),
+            (L::Address, Value::Address(x)) => Ok(RuntimeValue::Address(**x)),
 
             // Enum variant case with dereferencing the Box.
             (L::Enum(enum_layout), Value::Variant(entry)) => {
@@ -3511,32 +3517,35 @@ impl Value {
                 let field_layouts = &variants[tag as usize];
                 let mut fields = vec![];
                 for (v, field_layout) in values.iter().zip(field_layouts) {
-                    fields.push(v.borrow().as_move_value(field_layout));
+                    fields.push(v.borrow().as_move_value(field_layout)?);
                 }
-                RuntimeValue::Variant(RuntimeVariant { tag, fields })
+                Ok(RuntimeValue::Variant(RuntimeVariant { tag, fields }))
             }
 
             // Struct case with direct access to Box
             (L::Struct(struct_layout), Value::Struct(values)) => {
                 let mut fields = vec![];
                 for (v, field_layout) in values.iter().zip(struct_layout.fields().iter()) {
-                    fields.push(v.borrow().as_move_value(field_layout));
+                    fields.push(v.borrow().as_move_value(field_layout)?);
                 }
-                RuntimeValue::Struct(RuntimeStruct::new(fields))
+                Ok(RuntimeValue::Struct(RuntimeStruct::new(fields)))
             }
 
             // Vector case with handling different container types
-            (L::Vector(inner_layout), Value::Vec(values)) => RuntimeValue::Vector(
-                values
-                    .iter()
-                    .map(|v| v.borrow().as_move_value(inner_layout.as_ref()))
-                    .collect(),
-            ),
+            (L::Vector(inner_layout), Value::Vec(values)) => {
+                let vec = RuntimeValue::Vector(
+                    values
+                        .iter()
+                        .map(|v| v.borrow().as_move_value(inner_layout.as_ref()))
+                        .collect::<PartialVMResult<_>>()?,
+                );
+                Ok(vec)
+            }
             (L::Vector(inner_layout), Value::PrimVec(values)) => {
                 use RuntimeValue as MV;
                 macro_rules! make_vec {
                     ($xs:expr, $ctor:ident) => {
-                        MV::Vector($xs.iter().map(|x| MV::$ctor(*x)).collect())
+                        Ok(MV::Vector($xs.iter().map(|x| MV::$ctor(*x)).collect()))
                     };
                 }
                 match (inner_layout.as_ref(), values) {
@@ -3558,30 +3567,47 @@ impl Value {
                         | L::U32
                         | L::U256),
                         vec,
-                    ) => {
-                        panic!("Mismatched type {:?} for primitive vector {:?}", ty, vec);
-                    }
-                    (L::Signer | L::Vector(_) | L::Struct(_) | L::Enum(_), _) => {
-                        panic!(
-                            "Expected a primitive type for the primitive vector, got {:?}",
-                            inner_layout.as_ref()
-                        );
-                    }
+                    ) => Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(format!(
+                                "Mismatched type {:?} for primitive vector {:?}",
+                                ty, vec
+                            )),
+                    ),
+                    (L::Signer | L::Vector(_) | L::Struct(_) | L::Enum(_), _) => Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(format!(
+                                "Expected a primitive type for the primitive vector, got {:?}",
+                                inner_layout.as_ref()
+                            )),
+                    ),
                 }
             }
 
             // Signer case: just dereferencing the box and checking for address
             (L::Signer, Value::Struct(values)) => {
                 if values.len() != 1 {
-                    panic!("Unexpected signer layout: {:?}", values);
+                    return Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(format!("Unexpected signer layout: {:?}", values)),
+                    );
                 }
                 match &*values[0].borrow() {
-                    Value::Address(a) => RuntimeValue::Signer(**a),
-                    v => panic!("Unexpected non-address while converting signer: {:?}", v),
+                    Value::Address(a) => Ok(RuntimeValue::Signer(**a)),
+                    v => Err(
+                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                            .with_message(format!(
+                                "Unexpected non-address while converting signer: {:?}",
+                                v
+                            )),
+                    ),
                 }
             }
 
-            (layout, val) => panic!("Cannot convert value {:?} as {:?}", val, layout),
+            (layout, val) => Err(PartialVMError::new(
+                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            )
+            .with_message(format!("Cannot convert value {:?} as {:?}", val, layout))),
         }
     }
 }
@@ -3726,10 +3752,12 @@ impl Reference {
                                     Some(AV::Vector(xs.iter().map(|a| AV::Address(*a)).collect()))
                                 }
                                 (ty, vec) => {
-                                    panic!(
+                                    debug_assert!(
+                                        false,
                                         "Mismatched type {:?} for primitive vector {:?}",
                                         ty, vec
-                                    )
+                                    );
+                                    None
                                 }
                             },
                             _ => None,

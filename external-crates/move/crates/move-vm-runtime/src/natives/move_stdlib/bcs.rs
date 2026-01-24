@@ -12,7 +12,7 @@ use crate::{
     },
     pop_arg,
 };
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, safe_unwrap};
 use move_core_types::{
     gas_algebra::{InternalGas, InternalGasPerByte, NumBytes},
     vm_status::sub_status::NFE_BCS_SERIALIZATION_FAILURE,
@@ -50,7 +50,7 @@ fn native_to_bytes(
 
     // pop type and value
     let ref_to_val = pop_arg!(args, Reference);
-    let arg_type = ty_args.pop().unwrap();
+    let arg_type = safe_unwrap!(ty_args.pop());
 
     // get type layout
     let layout = match context.type_to_type_layout(&arg_type)? {

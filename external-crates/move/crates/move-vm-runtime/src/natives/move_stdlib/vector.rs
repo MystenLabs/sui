@@ -13,7 +13,10 @@ use crate::{
     pop_arg,
     shared::views::{SizeConfig, ValueView},
 };
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::{
+    errors::{PartialVMError, PartialVMResult},
+    safe_unwrap,
+};
 use move_core_types::{
     gas_algebra::{InternalGas, InternalGasPerAbstractMemoryUnit},
     vm_status::StatusCode,
@@ -113,10 +116,7 @@ pub fn native_push_back(
 
     native_charge_gas_early_exit!(context, gas_params.base);
 
-    let Some(e) = args.pop_back() else {
-        return Err(PartialVMError::new(StatusCode::VECTOR_OPERATION_ERROR)
-            .with_message("Internal error: missing argument in native push_back".to_string()));
-    };
+    let e = safe_unwrap!(args.pop_back());
 
     let r = pop_arg!(args, VectorRef);
 

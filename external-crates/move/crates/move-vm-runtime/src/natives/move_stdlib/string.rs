@@ -47,7 +47,7 @@ fn native_check_utf8(
     debug_assert!(args.len() == 1);
 
     let s_arg = pop_arg!(args, VectorRef);
-    let s_ref = s_arg.as_bytes_ref();
+    let s_ref = s_arg.as_bytes_ref()?;
     let cost = gas_params.base + gas_params.per_byte * NumBytes::new(s_ref.as_slice().len() as u64);
     // Charge before doing work
     native_charge_gas_early_exit!(context, cost);
@@ -91,7 +91,7 @@ fn native_is_char_boundary(
 
     let i = pop_arg!(args, u64);
     let s_arg = pop_arg!(args, VectorRef);
-    let s_ref = s_arg.as_bytes_ref();
+    let s_ref = s_arg.as_bytes_ref()?;
     let ok = unsafe {
         // This is safe because we guarantee the bytes to be utf8.
         std::str::from_utf8_unchecked(s_ref.as_slice()).is_char_boundary(i as usize)
@@ -143,7 +143,7 @@ fn native_sub_string(
     native_charge_gas_early_exit!(context, cost);
 
     let s_arg = pop_arg!(args, VectorRef);
-    let s_ref = s_arg.as_bytes_ref();
+    let s_ref = s_arg.as_bytes_ref()?;
     let s_str = unsafe {
         // This is safe because we guarantee the bytes to be utf8.
         std::str::from_utf8_unchecked(s_ref.as_slice())
@@ -186,7 +186,7 @@ fn native_index_of(
     native_charge_gas_early_exit!(context, gas_params.base);
 
     let r_arg = pop_arg!(args, VectorRef);
-    let r_ref = r_arg.as_bytes_ref();
+    let r_ref = r_arg.as_bytes_ref()?;
     let r_str = unsafe { std::str::from_utf8_unchecked(r_ref.as_slice()) };
     // Charge pattern fee
     native_charge_gas_early_exit!(
@@ -195,7 +195,7 @@ fn native_index_of(
     );
 
     let s_arg = pop_arg!(args, VectorRef);
-    let s_ref = s_arg.as_bytes_ref();
+    let s_ref = s_arg.as_bytes_ref()?;
     let s_str = unsafe { std::str::from_utf8_unchecked(s_ref.as_slice()) };
     let pos = match s_str.find(r_str) {
         Some(size) => size,

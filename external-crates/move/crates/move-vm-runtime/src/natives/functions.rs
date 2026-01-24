@@ -155,6 +155,7 @@ pub fn make_table<S: Into<Box<str>>>(
     addr: AccountAddress,
     elems: impl IntoIterator<Item = (S, S, NativeFunction)>,
 ) -> NativeFunctionTable {
+    #[allow(clippy::unwrap_used)]
     // [SAEFTY] This is done during creation, and crashing at startup due to bad natives is
     // preferable to launching with invalid nativs.
     elems

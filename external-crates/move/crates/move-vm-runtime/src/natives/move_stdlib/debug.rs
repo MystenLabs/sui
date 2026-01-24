@@ -11,7 +11,7 @@ use crate::{
         make_module_natives,
     },
 };
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::{errors::PartialVMResult, safe_unwrap};
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use smallvec::smallvec;
 use std::{collections::VecDeque, sync::Arc};
@@ -48,8 +48,8 @@ fn native_print(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
 
-    let _val = args.pop_back().unwrap();
-    let _ty = ty_args.pop().unwrap();
+    let _val = safe_unwrap!(args.pop_back());
+    let _ty = safe_unwrap!(ty_args.pop());
 
     // No-op if the feature flag is not present.
     #[cfg(feature = "testing")]
@@ -188,6 +188,7 @@ pub fn make_all(
 }
 
 #[cfg(feature = "testing")]
+#[allow(clippy::unwrap_used)]
 mod testing {
     use crate::{
         execution::values::{VMValueCast, Value},
@@ -373,7 +374,7 @@ mod testing {
                     // vector<T> to a MoveValue and print it.
                     _ => {
                         let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
-                        let mv = val.as_move_value(&ty_layout).decorate(&ann_ty_layout);
+                        let mv = val.as_move_value(&ty_layout)?.decorate(&ann_ty_layout);
                         print_move_value(
                             out,
                             mv,
@@ -388,7 +389,7 @@ mod testing {
             }
             // For a struct, we convert it to a MoveValue annotated with its field names and types and print it
             R::MoveTypeLayout::Struct(_) => {
-                let move_struct = match val.as_move_value(&ty_layout) {
+                let move_struct = match val.as_move_value(&ty_layout)? {
                     R::MoveValue::Struct(s) => s,
                     _ => {
                         return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
@@ -415,7 +416,7 @@ mod testing {
                 )?;
             }
             R::MoveTypeLayout::Enum(_) => {
-                let move_struct = match val.as_move_value(&ty_layout) {
+                let move_struct = match val.as_move_value(&ty_layout)? {
                     R::MoveValue::Variant(v) => v,
                     _ => {
                         return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
@@ -446,7 +447,7 @@ mod testing {
                 let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
                 print_move_value(
                     out,
-                    val.as_move_value(&ty_layout).decorate(&ann_ty_layout),
+                    val.as_move_value(&ty_layout)?.decorate(&ann_ty_layout),
                     move_std_addr,
                     depth,
                     canonicalize,
