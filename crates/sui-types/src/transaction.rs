@@ -3143,20 +3143,20 @@ impl<'de> Deserialize<'de> for SenderSignedTransaction {
 }
 
 impl SenderSignedTransaction {
+    /// Returns a mapping from signer address to the signature and its index in `tx_signatures`.
     pub(crate) fn get_signer_sig_mapping(
         &self,
         verify_legacy_zklogin_address: bool,
-    ) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
+    ) -> SuiResult<BTreeMap<SuiAddress, (u8, &GenericSignature)>> {
         let mut mapping = BTreeMap::new();
-        for sig in &self.tx_signatures {
-            if verify_legacy_zklogin_address {
+        for (idx, sig) in self.tx_signatures.iter().enumerate() {
+            if verify_legacy_zklogin_address && let GenericSignature::ZkLoginAuthenticator(z) = sig
+            {
                 // Try deriving the address from the legacy padded way.
-                if let GenericSignature::ZkLoginAuthenticator(z) = sig {
-                    mapping.insert(SuiAddress::try_from_padded(&z.inputs)?, sig);
-                };
+                mapping.insert(SuiAddress::try_from_padded(&z.inputs)?, (idx as u8, sig));
             }
             let address = sig.try_into()?;
-            mapping.insert(address, sig);
+            mapping.insert(address, (idx as u8, sig));
         }
         Ok(mapping)
     }
@@ -3202,7 +3202,7 @@ impl SenderSignedData {
     pub(crate) fn get_signer_sig_mapping(
         &self,
         verify_legacy_zklogin_address: bool,
-    ) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
+    ) -> SuiResult<BTreeMap<SuiAddress, (u8, &GenericSignature)>> {
         self.inner()
             .get_signer_sig_mapping(verify_legacy_zklogin_address)
     }
@@ -3654,7 +3654,8 @@ impl Transaction {
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
             vec![],
-        )
+        )?;
+        Ok(())
     }
 
     pub fn try_into_verified_for_testing(
@@ -3762,11 +3763,11 @@ pub type TrustedCertificate = TrustedEnvelope<SenderSignedData, AuthorityStrongQ
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WithAliases<T>(
     T,
-    #[serde(with = "nonempty_as_vec")] NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
+    #[serde(with = "nonempty_as_vec")] NonEmpty<(u8, Option<SequenceNumber>)>,
 );
 
 impl<T> WithAliases<T> {
-    pub fn new(tx: T, aliases: NonEmpty<(SuiAddress, Option<SequenceNumber>)>) -> Self {
+    pub fn new(tx: T, aliases: NonEmpty<(u8, Option<SequenceNumber>)>) -> Self {
         Self(tx, aliases)
     }
 
@@ -3774,7 +3775,7 @@ impl<T> WithAliases<T> {
         &self.0
     }
 
-    pub fn aliases(&self) -> &NonEmpty<(SuiAddress, Option<SequenceNumber>)> {
+    pub fn aliases(&self) -> &NonEmpty<(u8, Option<SequenceNumber>)> {
         &self.1
     }
 
@@ -3782,11 +3783,11 @@ impl<T> WithAliases<T> {
         self.0
     }
 
-    pub fn into_aliases(self) -> NonEmpty<(SuiAddress, Option<SequenceNumber>)> {
+    pub fn into_aliases(self) -> NonEmpty<(u8, Option<SequenceNumber>)> {
         self.1
     }
 
-    pub fn into_inner(self) -> (T, NonEmpty<(SuiAddress, Option<SequenceNumber>)>) {
+    pub fn into_inner(self) -> (T, NonEmpty<(u8, Option<SequenceNumber>)>) {
         (self.0, self.1)
     }
 }
@@ -3799,24 +3800,38 @@ impl<T: Message, S> WithAliases<VerifiedEnvelope<T, S>> {
 }
 
 impl<S> WithAliases<Envelope<SenderSignedData, S>> {
+    /// Creates a WithAliases where each required signer is mapped to its corresponding
+    /// signature index (assuming 1:1 correspondence) with no alias object version.
     pub fn no_aliases(tx: Envelope<SenderSignedData, S>) -> Self {
-        let no_aliases = tx
-            .intent_message()
-            .value
-            .required_signers()
-            .map(|s| (s, None));
-        Self::new(tx, no_aliases)
+        let required_signers = tx.intent_message().value.required_signers();
+        assert_eq!(required_signers.len(), tx.tx_signatures().len());
+        let no_aliases = required_signers
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| (idx as u8, None))
+            .collect::<Vec<_>>();
+        Self::new(
+            tx,
+            NonEmpty::from_vec(no_aliases).expect("must have at least one required_signer"),
+        )
     }
 }
 
 impl<S> WithAliases<VerifiedEnvelope<SenderSignedData, S>> {
+    /// Creates a WithAliases where each required signer is mapped to its corresponding
+    /// signature index (assuming 1:1 correspondence) with no alias object version.
     pub fn no_aliases(tx: VerifiedEnvelope<SenderSignedData, S>) -> Self {
-        let no_aliases = tx
-            .intent_message()
-            .value
-            .required_signers()
-            .map(|s| (s, None));
-        Self::new(tx, no_aliases)
+        let required_signers = tx.intent_message().value.required_signers();
+        assert_eq!(required_signers.len(), tx.tx_signatures().len());
+        let no_aliases = required_signers
+            .iter()
+            .enumerate()
+            .map(|(idx, _)| (idx as u8, None))
+            .collect::<Vec<_>>();
+        Self::new(
+            tx,
+            NonEmpty::from_vec(no_aliases).expect("must have at least one required_signer"),
+        )
     }
 }
 
@@ -3904,8 +3919,8 @@ mod nonempty_as_vec {
 /// 3. The consensus handler can use deterministically
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransactionClaim {
-    /// Address aliases used for signature verification.
-    /// Maps addresses to their alias object versions (if any).
+    /// DEPRECATED. Do not use.
+    #[deprecated(note = "Use AddressAliasesV2")]
     AddressAliases(
         #[serde(with = "nonempty_as_vec")] NonEmpty<(SuiAddress, Option<SequenceNumber>)>,
     ),
@@ -3913,6 +3928,11 @@ pub enum TransactionClaim {
     /// Object IDs that are claimed to be immutable.
     /// Used to filter out immutable objects from lock acquisition in consensus handler.
     ImmutableInputObjects(Vec<ObjectID>),
+
+    /// Address aliases used for signature verification.
+    /// Length must equal the number of `required_signers`. Each element maps the corresponding
+    /// signer to the signature index and alias object version (if any) used to verify it.
+    AddressAliasesV2(#[serde(with = "nonempty_as_vec")] NonEmpty<(u8, Option<SequenceNumber>)>),
 }
 
 /// A transaction with attached claims that have been verified by voting validators.
@@ -3928,10 +3948,10 @@ impl<T> TransactionWithClaims<T> {
     }
 
     /// Create from a transaction with only address aliases.
-    pub fn from_aliases(tx: T, aliases: NonEmpty<(SuiAddress, Option<SequenceNumber>)>) -> Self {
+    pub fn from_aliases(tx: T, aliases: NonEmpty<(u8, Option<SequenceNumber>)>) -> Self {
         Self {
             tx,
-            claims: vec![TransactionClaim::AddressAliases(aliases)],
+            claims: vec![TransactionClaim::AddressAliasesV2(aliases)],
         }
     }
 
@@ -3949,11 +3969,11 @@ impl<T> TransactionWithClaims<T> {
     }
 
     /// Get the address aliases claim. Differentiate between empty and not present for validation.
-    pub fn aliases(&self) -> Option<NonEmpty<(SuiAddress, Option<SequenceNumber>)>> {
+    pub fn aliases(&self) -> Option<NonEmpty<(u8, Option<SequenceNumber>)>> {
         self.claims
             .iter()
             .find_map(|c| match c {
-                TransactionClaim::AddressAliases(aliases) => Some(aliases),
+                TransactionClaim::AddressAliasesV2(aliases) => Some(aliases),
                 _ => None,
             })
             .cloned()

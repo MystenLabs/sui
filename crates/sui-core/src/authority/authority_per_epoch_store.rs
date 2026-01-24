@@ -3081,15 +3081,20 @@ impl AuthorityPerEpochStore {
     ) {
         let sigs: Vec<_> = txs
             .filter_map(|s| match s {
-                Schedulable::Transaction(tx) => Some((
-                    *tx.tx().digest(),
-                    tx.tx()
-                        .tx_signatures()
+                Schedulable::Transaction(tx) => {
+                    let tx_signatures = tx.tx().tx_signatures();
+                    // aliases contains (sig_idx, alias_version) for each required signer.
+                    // Use the index to look up the corresponding signature.
+                    let sigs_with_versions: Vec<_> = tx
+                        .aliases()
                         .iter()
-                        .cloned()
-                        .zip(tx.aliases().iter().map(|(_, seq)| *seq))
-                        .collect(),
-                )),
+                        .map(|(sig_idx, seq)| {
+                            let sig = tx_signatures[*sig_idx as usize].clone();
+                            (sig, *seq)
+                        })
+                        .collect();
+                    Some((*tx.tx().digest(), sigs_with_versions))
+                }
                 Schedulable::RandomnessStateUpdate(_, _) => None,
                 Schedulable::AccumulatorSettlement(_, _) => None,
                 Schedulable::ConsensusCommitPrologue(_, _, _) => None,

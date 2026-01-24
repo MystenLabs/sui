@@ -885,7 +885,7 @@ impl ValidatorService {
 
                 let (tx, aliases) = verified_transaction.into_inner();
                 if epoch_store.protocol_config().address_aliases() {
-                    claims.push(TransactionClaim::AddressAliases(aliases));
+                    claims.push(TransactionClaim::AddressAliasesV2(aliases));
                 }
 
                 let tx_with_claims = TransactionWithClaims::new(tx.into(), claims);
