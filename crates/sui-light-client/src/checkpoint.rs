@@ -249,8 +249,7 @@ pub async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
     let object_store = SuiObjectStore::new(config)?;
     for ckp_id in &checkpoints_list.checkpoints {
         // check if there is a file with this name ckp_id.yaml in the checkpoint_summary_dir
-        let mut checkpoint_path = config.checkpoint_summary_dir.clone();
-        checkpoint_path.push(format!("{}.yaml", ckp_id));
+        let checkpoint_path = config.checkpoint_path(*ckp_id, None);
 
         // If file exists read the file otherwise download it from the server
         let summary = if checkpoint_path.exists() {
@@ -262,7 +261,7 @@ pub async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
                 .download_checkpoint_summary(*ckp_id)
                 .await
                 .map_err(|e| anyhow!(format!("Cannot download summary: {e}")))?;
-            summary.clone().try_into_verified(&prev_committee)?;
+            summary.verify_authority_signatures(&prev_committee)?;
             // Write the checkpoint summary to a file
             write_checkpoint(config, &summary)?;
             summary
