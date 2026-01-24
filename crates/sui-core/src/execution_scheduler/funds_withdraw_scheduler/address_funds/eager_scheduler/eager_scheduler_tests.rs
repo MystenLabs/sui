@@ -137,12 +137,12 @@ async fn test_schedule_settle() {
         tx_digest: TransactionDigest::random(),
         reservations: BTreeMap::from([(AccumulatorObjId::new_unchecked(account), 101)]),
     };
-    let results = test.schedule_withdraws(v1, vec![withdraw.clone()]);
-    let ScheduleResult::Pending(receiver) = results.get(&withdraw.tx_digest).unwrap() else {
+    let mut results = test.schedule_withdraws(v1, vec![withdraw.clone()]);
+    let ScheduleResult::Pending(receiver) = results.remove(&withdraw.tx_digest).unwrap() else {
         panic!("Expected a pending result");
     };
     test.settle_funds_changes(v1, BTreeMap::from([(account, 1)]))
         .await;
-    let result = receiver.try_recv().unwrap();
+    let result = receiver.await.unwrap();
     assert_eq!(result, ScheduleStatus::SufficientFunds);
 }
