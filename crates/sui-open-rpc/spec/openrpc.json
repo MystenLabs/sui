@@ -1430,6 +1430,7 @@
                 "use_mfp_txns_in_load_initial_object_debts": false,
                 "use_new_commit_handler": false,
                 "validate_identifier_inputs": false,
+                "validate_zklogin_public_identifier": false,
                 "variant_nodes": false,
                 "verify_legacy_zklogin_address": false,
                 "zklogin_auth": false
