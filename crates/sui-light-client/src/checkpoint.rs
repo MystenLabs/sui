@@ -238,9 +238,7 @@ pub async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
     // Load the genesis committee
     let mut genesis_path = config.checkpoint_summary_dir.clone();
     genesis_path.push(&config.genesis_filename);
-    let genesis_committee = Genesis::load(&genesis_path)?
-        .committee()
-        .map_err(|e| anyhow!(format!("Cannot load Genesis: {e}")))?;
+    let genesis_committee = Genesis::load(&genesis_path)?.committee();
 
     // Check the signatures of all checkpoints
     // And download any missing ones

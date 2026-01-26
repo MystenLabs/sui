@@ -194,8 +194,8 @@ fn create_test_authority_aggregator_with_rgp(
         mock_authorities.push(mock_authority);
     }
 
-    let mut aggregator = AuthorityAggregatorBuilder::from_committee(committee)
-        .build_custom_clients(authority_clients);
+    let mut aggregator = AuthorityAggregatorBuilder::from_committee(committee.clone())
+        .build_custom_clients(&committee, authority_clients);
     aggregator.reference_gas_price = reference_gas_price;
     (aggregator, mock_authorities)
 }

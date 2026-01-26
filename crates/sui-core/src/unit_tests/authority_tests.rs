@@ -2850,7 +2850,7 @@ async fn test_authority_persist() {
 
     let seed = [1u8; 32];
     let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
-    let committee = genesis.committee().unwrap();
+    let committee = genesis.committee();
 
     // Create a random directory to store the DB
     let dir = env::temp_dir();
@@ -2883,7 +2883,7 @@ async fn test_authority_persist() {
     // Reopen the same authority with the same path
     let seed = [1u8; 32];
     let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
-    let committee = genesis.committee().unwrap();
+    let committee = genesis.committee();
     let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(&path, None, None));
     let store =
         AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis)

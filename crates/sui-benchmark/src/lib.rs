@@ -346,7 +346,7 @@ impl LocalValidatorAggregatorProxy {
         let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
             .with_registry(registry)
             .build_network_clients();
-        let committee = genesis.committee().unwrap();
+        let committee = genesis.committee();
         let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
         Self::new_impl(
             aggregator,
