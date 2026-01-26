@@ -22,9 +22,6 @@ use crate::pagination::Page;
 /// Multiplier to page limit to adjust for bloom filter false positives.
 const OVERFETCH_MULTIPLIER: f64 = 1.2;
 
-/// Number of checkpoints per checkpoint block (must match cp_bloom_blocks::CP_BLOCK_SIZE).
-const CP_BLOCK_SIZE: i64 = cp_bloom_blocks::CP_BLOCK_SIZE as i64;
-
 #[derive(QueryableByName)]
 struct CpResult {
     #[diesel(sql_type = BigInt)]
@@ -105,9 +102,9 @@ pub(super) async fn candidate_cps(
         LIMIT {BigInt}
         "#,
         cp_bloom_blocks_condition,
-        CP_BLOCK_SIZE,
-        CP_BLOCK_SIZE,
-        CP_BLOCK_SIZE,
+        cp_bloom_blocks::CP_BLOCK_SIZE as i64,
+        cp_bloom_blocks::CP_BLOCK_SIZE as i64,
+        cp_bloom_blocks::CP_BLOCK_SIZE as i64,
         page.order_by_direction(),
         fpr_adjusted_limit,
         cp_lo as i64,
