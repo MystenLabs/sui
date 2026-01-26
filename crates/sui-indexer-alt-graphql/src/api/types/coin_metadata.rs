@@ -172,20 +172,24 @@ impl CoinMetadata {
     }
 
     /// The structured representation of the object's contents.
-    pub(crate) async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, RpcError> {
-        self.super_.contents(ctx).await
+    pub(crate) async fn contents(&self, ctx: &Context<'_>) -> Option<Result<MoveValue, RpcError>> {
+        self.super_.contents(ctx).await.ok()?
     }
 
     /// Number of decimal places the coin uses.
-    pub(crate) async fn decimals(&self, ctx: &Context<'_>) -> Result<Option<u8>, RpcError> {
-        let Some(contents) = self.metadata_contents(ctx).await? else {
-            return Ok(None);
-        };
+    pub(crate) async fn decimals(&self, ctx: &Context<'_>) -> Option<Result<u8, RpcError>> {
+        async {
+            let Some(contents) = self.metadata_contents(ctx).await? else {
+                return Ok(None);
+            };
 
-        Ok(Some(match &contents.native {
-            NativeContents::Metadata(metadata) => metadata.decimals,
-            NativeContents::Registry(currency) => currency.decimals,
-        }))
+            Ok(Some(match &contents.native {
+                NativeContents::Metadata(metadata) => metadata.decimals,
+                NativeContents::Registry(currency) => currency.decimals,
+            }))
+        }
+        .await
+        .transpose()
     }
 
     /// The domain explicitly configured as the default Name Service name for this address.
@@ -197,15 +201,19 @@ impl CoinMetadata {
     }
 
     /// Description of the coin.
-    pub(crate) async fn description(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
-        let Some(contents) = self.metadata_contents(ctx).await? else {
-            return Ok(None);
-        };
+    pub(crate) async fn description(&self, ctx: &Context<'_>) -> Option<Result<&str, RpcError>> {
+        async {
+            let Some(contents) = self.metadata_contents(ctx).await? else {
+                return Ok(None);
+            };
 
-        Ok(Some(match &contents.native {
-            NativeContents::Metadata(metadata) => &metadata.description,
-            NativeContents::Registry(currency) => &currency.description,
-        }))
+            Ok(Some(match &contents.native {
+                NativeContents::Metadata(metadata) => metadata.description.as_str(),
+                NativeContents::Registry(currency) => currency.description.as_str(),
+            }))
+        }
+        .await
+        .transpose()
     }
 
     /// Access a dynamic field on an object using its type and BCS-encoded name.
@@ -215,8 +223,8 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
-        self.super_.dynamic_field(ctx, name).await
+    ) -> Option<Result<DynamicField, RpcError<dynamic_field::Error>>> {
+        self.super_.dynamic_field(ctx, name).await.ok()?
     }
 
     /// Dynamic fields owned by this object.
@@ -229,10 +237,11 @@ impl CoinMetadata {
         after: Option<CLive>,
         last: Option<u64>,
         before: Option<CLive>,
-    ) -> Result<Option<Connection<String, DynamicField>>, RpcError<object::Error>> {
+    ) -> Option<Result<Connection<String, DynamicField>, RpcError<object::Error>>> {
         self.super_
             .dynamic_fields(ctx, first, after, last, before)
             .await
+            .ok()?
     }
 
     /// Access a dynamic object field on an object using its type and BCS-encoded name.
@@ -242,8 +251,8 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
-        self.super_.dynamic_object_field(ctx, name).await
+    ) -> Option<Result<DynamicField, RpcError<dynamic_field::Error>>> {
+        self.super_.dynamic_object_field(ctx, name).await.ok()?
     }
 
     /// Whether this object can be transfered using the `TransferObjects` Programmable Transaction Command or `sui::transfer::public_transfer`.
@@ -252,20 +261,24 @@ impl CoinMetadata {
     pub(crate) async fn has_public_transfer(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<bool>, RpcError> {
-        self.super_.has_public_transfer(ctx).await
+    ) -> Option<Result<bool, RpcError>> {
+        self.super_.has_public_transfer(ctx).await.ok()?
     }
 
     /// URL for the coin logo.
-    pub(crate) async fn icon_url(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
-        let Some(contents) = self.metadata_contents(ctx).await? else {
-            return Ok(None);
-        };
+    pub(crate) async fn icon_url(&self, ctx: &Context<'_>) -> Option<Result<&str, RpcError>> {
+        async {
+            let Some(contents) = self.metadata_contents(ctx).await? else {
+                return Ok(None);
+            };
 
-        Ok(match &contents.native {
-            NativeContents::Metadata(metadata) => metadata.icon_url.as_deref(),
-            NativeContents::Registry(currency) => Some(&currency.icon_url),
-        })
+            Ok(match &contents.native {
+                NativeContents::Metadata(metadata) => metadata.icon_url.as_deref(),
+                NativeContents::Registry(currency) => Some(&currency.icon_url),
+            })
+        }
+        .await
+        .transpose()
     }
 
     /// Access dynamic fields on an object using their types and BCS-encoded names.
@@ -294,8 +307,8 @@ impl CoinMetadata {
     pub(crate) async fn move_object_bcs(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<Base64>, RpcError> {
-        self.super_.move_object_bcs(ctx).await
+    ) -> Option<Result<Base64, RpcError>> {
+        self.super_.move_object_bcs(ctx).await.ok()?
     }
 
     /// Fetch the total balances keyed by coin types (e.g. `0x2::sui::SUI`) owned by this address.
@@ -310,15 +323,19 @@ impl CoinMetadata {
     }
 
     /// Name for the coin.
-    pub(crate) async fn name(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
-        let Some(contents) = self.metadata_contents(ctx).await? else {
-            return Ok(None);
-        };
+    pub(crate) async fn name(&self, ctx: &Context<'_>) -> Option<Result<&str, RpcError>> {
+        async {
+            let Some(contents) = self.metadata_contents(ctx).await? else {
+                return Ok(None);
+            };
 
-        Ok(Some(match &contents.native {
-            NativeContents::Metadata(metadata) => &metadata.name,
-            NativeContents::Registry(currency) => &currency.name,
-        }))
+            Ok(Some(match &contents.native {
+                NativeContents::Metadata(metadata) => metadata.name.as_str(),
+                NativeContents::Registry(currency) => currency.name.as_str(),
+            }))
+        }
+        .await
+        .transpose()
     }
 
     /// Fetch the object with the same ID, at a different version, root version bound, or checkpoint.
@@ -612,15 +629,19 @@ impl CoinMetadata {
     }
 
     /// Symbol for the coin.
-    pub(crate) async fn symbol(&self, ctx: &Context<'_>) -> Result<Option<&str>, RpcError> {
-        let Some(contents) = self.metadata_contents(ctx).await? else {
-            return Ok(None);
-        };
+    pub(crate) async fn symbol(&self, ctx: &Context<'_>) -> Option<Result<&str, RpcError>> {
+        async {
+            let Some(contents) = self.metadata_contents(ctx).await? else {
+                return Ok(None);
+            };
 
-        Ok(Some(match &contents.native {
-            NativeContents::Metadata(metadata) => &metadata.symbol,
-            NativeContents::Registry(currency) => &currency.symbol,
-        }))
+            Ok(Some(match &contents.native {
+                NativeContents::Metadata(metadata) => metadata.symbol.as_str(),
+                NativeContents::Registry(currency) => currency.symbol.as_str(),
+            }))
+        }
+        .await
+        .transpose()
     }
 }
 
