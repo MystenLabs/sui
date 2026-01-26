@@ -30,7 +30,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_sdk::{SuiClient, SuiClientBuilder, error::Error as SuiSdkError};
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::Argument;
 use sui_types::transaction::CallArg;
@@ -515,7 +515,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         &self,
         txs: Vec<Transaction>,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-        execute_soft_bundle_with_retries(&self.td, txs).await
+        execute_soft_bundle_with_retries(&self.td, &txs).await
     }
 
     fn get_chain_identifier(&self) -> ChainIdentifier {
@@ -526,29 +526,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
 #[instrument(level = "debug", skip_all, fields(digests = ?txs.iter().map(|tx| *tx.digest()).collect::<Vec<_>>()))]
 async fn execute_soft_bundle_with_retries(
     td: &TransactionDriver<NetworkAuthorityClient>,
-    txs: Vec<Transaction>,
-) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-    let start = Instant::now();
-    let mut retry_cnt = 0;
-    loop {
-        match execute_soft_bundle_impl(td, &txs).await {
-            Ok(results) => {
-                return Ok(results);
-            }
-            Err(e) => {
-                if retry_cnt < 10 || start.elapsed() < Duration::from_secs(60) {
-                    retry_cnt += 1;
-                    continue;
-                } else {
-                    return Err(e);
-                }
-            }
-        }
-    }
-}
-
-async fn execute_soft_bundle_impl(
-    td: &TransactionDriver<NetworkAuthorityClient>,
     txs: &[Transaction],
 ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
     use sui_network::tonic::IntoRequest;
@@ -557,6 +534,8 @@ async fn execute_soft_bundle_impl(
 
     let mut retry_cnt = 0;
     let max_retries = 10;
+    let min_retry_duration = Duration::from_secs(60);
+    let start = Instant::now();
 
     loop {
         let request = RawSubmitTxRequest {
@@ -580,7 +559,9 @@ async fn execute_soft_bundle_impl(
             Ok(client) => client,
             Err(err) => {
                 // Check if this is a retriable error before retrying
-                if err.is_retryable().0 && retry_cnt < max_retries {
+                if err.is_retryable().0
+                    && (retry_cnt < max_retries || start.elapsed() < min_retry_duration)
+                {
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
                     warn!(
                         ?digests,
@@ -609,7 +590,9 @@ async fn execute_soft_bundle_impl(
                 debug!("error submitting soft bundle via grpc: {:?}", err);
                 // Convert tonic error to SuiError to check if retriable
                 let sui_error: sui_types::error::SuiError = err.into();
-                if sui_error.is_retryable().0 && retry_cnt < max_retries {
+                if sui_error.is_retryable().0
+                    && (retry_cnt < max_retries || start.elapsed() < min_retry_duration)
+                {
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
                     warn!(
                         ?digests,
@@ -668,7 +651,9 @@ async fn execute_soft_bundle_impl(
                 SubmitTxResult::Rejected { error } => {
                     // Check if this is a retriable error (e.g., ValidatorHaltedAtEpochEnd)
                     // If ANY transaction has a retriable error, retry the whole bundle
-                    if error.is_retryable().0 && retry_cnt < max_retries {
+                    if error.is_retryable().0
+                        && (retry_cnt < max_retries || start.elapsed() < min_retry_duration)
+                    {
                         should_retry = true;
                         last_error = Some(error);
                         break;
@@ -832,6 +817,14 @@ impl FullNodeProxy {
     }
 }
 
+fn is_retryable_sdk_error(err: &SuiSdkError) -> bool {
+    let err_str = format!("{:?}", err);
+    !(err_str.contains("Error checking transaction input objects")
+        || err_str.contains("Transaction Expired")
+        || err_str.contains("already locked by a different transaction")
+        || err_str.contains("is not available for consumption"))
+}
+
 #[async_trait]
 impl ValidatorProxy for FullNodeProxy {
     async fn get_sui_address_balance(&self, address: SuiAddress) -> Result<u64, anyhow::Error> {
@@ -943,6 +936,16 @@ impl ValidatorProxy for FullNodeProxy {
                     );
                 }
                 Err(err) => {
+                    if !is_retryable_sdk_error(&err) {
+                        return (
+                            ClientType::QuorumDriver,
+                            Err(anyhow::anyhow!(
+                                "Transaction {:?} failed with non-retriable error: {:?}",
+                                tx_digest,
+                                err
+                            )),
+                        );
+                    }
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
                     warn!(
                         ?tx_digest,
@@ -997,7 +1000,7 @@ impl ValidatorProxy for FullNodeProxy {
         &self,
         txs: Vec<Transaction>,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-        execute_soft_bundle_with_retries(&self.td, txs).await
+        execute_soft_bundle_with_retries(&self.td, &txs).await
     }
 
     fn get_chain_identifier(&self) -> ChainIdentifier {

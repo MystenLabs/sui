@@ -64,6 +64,7 @@ use super::{BenchmarkStats, StressStats};
 fn partition_into_random_bundles<T>(
     items: Vec<T>,
     max_bundles: NonZeroUsize,
+    max_bundle_size: usize,
 ) -> Vec<(usize, Vec<T>)> {
     if items.is_empty() {
         return vec![];
@@ -79,10 +80,15 @@ fn partition_into_random_bundles<T>(
         let bundle_size = if remaining == 1 {
             1
         } else if remaining_bundles == 1 {
+            assert!(
+                remaining <= max_bundle_size,
+                "Remaining items is greater than max bundle size"
+            );
             remaining
         } else {
             rng.gen_range(1..=remaining)
         };
+        let bundle_size = std::cmp::min(bundle_size, max_bundle_size);
         remaining_bundles -= 1;
 
         let mut bundle = Vec::with_capacity(bundle_size);
@@ -1056,8 +1062,9 @@ async fn run_bench_worker(
                         let metrics_clone = Arc::clone(&metrics);
                         let proxy = worker.execution_proxy.clone_new();
 
+                        let max_bundle_size = payload.max_soft_bundle_size().get();
                         // Partition transactions into random bundles
-                        let bundles = partition_into_random_bundles(txs, max_bundles);
+                        let bundles = partition_into_random_bundles(txs, max_bundles, max_bundle_size);
                         let num_bundles = bundles.len();
                         debug!(
                             "Partitioned {} transactions into {} bundles (max_bundles={})",
@@ -1295,17 +1302,21 @@ fn process_bundle_results(
                                 }
                             }
                             WaitForEffectsResponse::Rejected { error } => {
-                                let is_retriable = error
-                                    .as_ref()
-                                    .map(|e| e.individual_error_indicates_epoch_change())
-                                    .unwrap_or(true);
-                                let error_str = error
-                                    .map(|e| format!("{:?}", e))
-                                    .unwrap_or_else(|| "Unknown rejection".to_string());
-                                if is_retriable {
-                                    BatchedTransactionStatus::RetriableFailure { error: error_str }
+                                if let Some(error) = error {
+                                    let is_retriable =
+                                        error.individual_error_indicates_epoch_change();
+                                    let error_str = format!("{:?}", error);
+                                    if is_retriable {
+                                        BatchedTransactionStatus::RetriableFailure {
+                                            error: error_str,
+                                        }
+                                    } else {
+                                        BatchedTransactionStatus::PermanentFailure {
+                                            error: error_str,
+                                        }
+                                    }
                                 } else {
-                                    BatchedTransactionStatus::PermanentFailure { error: error_str }
+                                    BatchedTransactionStatus::UnknownRejection
                                 }
                             }
                             WaitForEffectsResponse::Expired { epoch, round } => {

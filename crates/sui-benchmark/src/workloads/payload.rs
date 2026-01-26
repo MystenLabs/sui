@@ -40,6 +40,9 @@ pub enum BatchedTransactionStatus {
         /// Error message describing the failure.
         error: String,
     },
+    /// We didn't get a specific error message, so the failure could be
+    /// retriable or permanent.
+    UnknownRejection,
 }
 
 impl BatchedTransactionResult {
@@ -62,6 +65,7 @@ impl BatchedTransactionResult {
             BatchedTransactionStatus::Success { .. } => None,
             BatchedTransactionStatus::PermanentFailure { error }
             | BatchedTransactionStatus::RetriableFailure { error } => Some(error),
+            BatchedTransactionStatus::UnknownRejection => Some("unknown rejection"),
         }
     }
 
@@ -83,6 +87,9 @@ impl BatchedTransactionResult {
             }
             BatchedTransactionStatus::RetriableFailure { error } => {
                 format!("{}: retriable failure: {}", self.digest, error)
+            }
+            BatchedTransactionStatus::UnknownRejection => {
+                format!("{}: unknown rejection", self.digest)
             }
         }
     }
@@ -114,8 +121,12 @@ pub trait Payload: Send + Sync + std::fmt::Debug + Display {
         NonZeroUsize::MAX
     }
 
-    // TODO: Implement this to allow limiting the size of each soft bundle.
-    // fn max_soft_bundle_size(&self) -> NonZeroUsize
+    /// Maximum size of any individual soft bundle.
+    fn max_soft_bundle_size(&self) -> NonZeroUsize {
+        // TODO: we could get this from the protocol config but a) its unlikely to change
+        // b) it would be very hard to do that
+        NonZeroUsize::new(5).unwrap()
+    }
 
     /// Creates a batch of transactions for concurrent execution.
     /// Only called when `is_batched()` returns true.

@@ -152,6 +152,14 @@ impl TestCluster {
             .with(|node| node.state().epoch_store_for_testing().committee().clone())
     }
 
+    pub fn get_sui_system_state(&self) -> SuiSystemState {
+        self.fullnode_handle.sui_node.with(|node| {
+            node.state()
+                .get_sui_system_state_object_for_testing()
+                .unwrap()
+        })
+    }
+
     /// Convenience method to start a new fullnode in the test cluster.
     pub async fn spawn_new_fullnode(&mut self) -> FullNodeHandle {
         self.start_fullnode_from_config(
