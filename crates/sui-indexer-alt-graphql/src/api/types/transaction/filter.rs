@@ -79,12 +79,12 @@ pub(crate) struct TransactionScanFilterValidator;
 
 impl CustomValidator<TransactionFilter> for TransactionScanFilterValidator {
     fn check(&self, filter: &TransactionFilter) -> Result<(), InputValueError<TransactionFilter>> {
-        let has_filter = filter.function.is_some()
+        let has_bloom_filter = filter.function.is_some()
             || filter.affected_address.is_some()
             || filter.affected_object.is_some()
             || filter.sent_address.is_some();
 
-        if !has_filter {
+        if !has_bloom_filter {
             return Err(InputValueError::custom(
                 "transactionsScan requires at least one of: function, affectedAddress, affectedObject, or sentAddress",
             ));
