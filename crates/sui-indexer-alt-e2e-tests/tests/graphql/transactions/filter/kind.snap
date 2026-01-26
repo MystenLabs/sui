@@ -32,7 +32,7 @@ task 5, line 27:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 6, lines 29-57:
+task 6, lines 29-58:
 //# run-graphql
 Response: {
   "data": {
@@ -48,6 +48,9 @@ Response: {
           "cursor": "MQ==",
           "node": {
             "digest": "58mQ5rDsUZRjs4m28graiKUEmd5HurSwPtafbCnc2gHV",
+            "kind": {
+              "__typename": "ProgrammableTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 1,
@@ -60,6 +63,9 @@ Response: {
           "cursor": "Mw==",
           "node": {
             "digest": "Aqmqdaarwh66v7JMYZWpv5Ym4qoQzj4tsg1p5SrvaexW",
+            "kind": {
+              "__typename": "ProgrammableTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 2,
@@ -72,6 +78,9 @@ Response: {
           "cursor": "NA==",
           "node": {
             "digest": "DmQibQeaVLbDs22SWF2dkLpN3hrHBwrz4eBDWGq981US",
+            "kind": {
+              "__typename": "ProgrammableTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 2,
@@ -94,6 +103,9 @@ Response: {
           "cursor": "Mw==",
           "node": {
             "digest": "Aqmqdaarwh66v7JMYZWpv5Ym4qoQzj4tsg1p5SrvaexW",
+            "kind": {
+              "__typename": "ProgrammableTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 2,
@@ -106,6 +118,9 @@ Response: {
           "cursor": "NA==",
           "node": {
             "digest": "DmQibQeaVLbDs22SWF2dkLpN3hrHBwrz4eBDWGq981US",
+            "kind": {
+              "__typename": "ProgrammableTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 2,
@@ -137,6 +152,9 @@ Response: {
           "cursor": "MA==",
           "node": {
             "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
+            "kind": {
+              "__typename": "GenesisTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 0,
@@ -149,6 +167,9 @@ Response: {
           "cursor": "Mg==",
           "node": {
             "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
+            "kind": {
+              "__typename": "ProgrammableSystemTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 1,
@@ -161,6 +182,9 @@ Response: {
           "cursor": "NQ==",
           "node": {
             "digest": "2iEZQGAgJYgzmcNC2eLrbNejeTJHJxY4Xy4yKj7R3D8g",
+            "kind": {
+              "__typename": "ProgrammableSystemTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 2,

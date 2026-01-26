@@ -46,6 +46,7 @@ fragment TX on TransactionConnection {
     cursor
     node {
       digest
+      kind { __typename }
       effects {
         checkpoint {
           sequenceNumber
