@@ -635,7 +635,10 @@ impl TestTransactionBuilder {
         } else {
             TransactionData::new_programmable(
                 self.sender,
-                vec![self.gas_object.expect("gas_object required when not using address_balance_gas")],
+                vec![
+                    self.gas_object
+                        .expect("gas_object required when not using address_balance_gas"),
+                ],
                 pt,
                 gas_budget,
                 self.gas_price,

@@ -1589,7 +1589,7 @@ mod test {
 
         let metrics_sum = metrics.sum_all();
 
-        println!("metrics: {:#?}", metrics.sum_all());
+        info!("metrics: {:#?}", metrics.sum_all());
 
         // make sure the test did stuff
         assert!(metrics_sum.signed_and_sent_count > 500);

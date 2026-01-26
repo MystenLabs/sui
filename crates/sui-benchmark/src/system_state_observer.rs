@@ -5,7 +5,10 @@ use crate::ValidatorProxy;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-use sui_types::{base_types::EpochId, sui_system_state::{SuiSystemState, SuiSystemStateTrait}};
+use sui_types::{
+    base_types::EpochId,
+    sui_system_state::{SuiSystemState, SuiSystemStateTrait},
+};
 use test_cluster::TestCluster;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
