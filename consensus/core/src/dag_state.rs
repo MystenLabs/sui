@@ -790,6 +790,21 @@ impl DagState {
             .committed
     }
 
+    /// Returns true if any block at the given slot has been committed.
+    /// This is used to prevent double-commit of equivocating blocks where
+    /// two blocks have the same (Round, Author) but different digests.
+    pub(crate) fn is_any_block_at_slot_committed(&self, slot: Slot) -> bool {
+        for (_block_ref, block_info) in self.recent_blocks.range((
+            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
+            Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
+        )) {
+            if block_info.committed {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Recursively sets blocks in the causal history of the root block as hard linked, including the root block itself.
     /// Returns the list of blocks that are newly linked.
     /// The returned blocks are guaranteed to be above the GC round.
