@@ -13,7 +13,7 @@ Response: {
   "id": 0,
   "result": {
     "epoch": "0",
-    "protocolVersion": "70",
+    "protocolVersion": "108",
     "systemStateVersion": "1",
     "storageFundTotalObjectStorageRebates": "0",
     "storageFundNonRefundableBalance": "0",
@@ -61,13 +61,13 @@ Response: {
         "nextEpochPrimaryAddress": null,
         "nextEpochWorkerAddress": null,
         "votingPower": "10000",
-        "operationCapId": "0xb51e032653a6fbcdd24b62743168e7f30fb64da772d1eb7b40a79b6e96611f98",
+        "operationCapId": "0x51640d7cc42e1702888103df85d01150c246cf18d2432f6bd4b87a11d9926c78",
         "gasPrice": "1000",
         "commissionRate": "200",
         "nextEpochStake": "20000000000000000",
         "nextEpochGasPrice": "1000",
         "nextEpochCommissionRate": "200",
-        "stakingPoolId": "0x5e3275c6a03a10436fbe85049a49d8739c4bf9b61638bf710e65a06bf7291fa3",
+        "stakingPoolId": "0xacda9295fa6077073b2adb7470ba058ffa7ce4487be411e2610d2c87f9ce3e96",
         "stakingPoolActivationEpoch": "0",
         "stakingPoolDeactivationEpoch": null,
         "stakingPoolSuiBalance": "20000000000000000",
@@ -76,18 +76,18 @@ Response: {
         "pendingStake": "0",
         "pendingTotalSuiWithdraw": "0",
         "pendingPoolTokenWithdraw": "0",
-        "exchangeRatesId": "0x92a2dbb6c4c42780ecd846c91b979478d86b6b85b29df5ab0de830d171d654b7",
+        "exchangeRatesId": "0xb62ff674c9c560439d7aab37e51691b3b0f311c17c2f9638c9375ad38cf35963",
         "exchangeRatesSize": "1"
       }
     ],
-    "pendingActiveValidatorsId": "0xb198ba4c66ad10c427a55df5de491374b8485a07be53c9f1d258a014bebc1558",
+    "pendingActiveValidatorsId": "0x465c2a189dcbc4f7f150cf57d26d291f2897448b9bc01d43ba2e7115c75b35df",
     "pendingActiveValidatorsSize": "0",
     "pendingRemovals": [],
-    "stakingPoolMappingsId": "0xd2e39b1dcdc5afc37bf7ed981b877c5bfe4d0db379ce7f8b62183d555440fa20",
+    "stakingPoolMappingsId": "0x4d02708f6850adfa71567c2eaff59aaa3ab59d40b3a3f27452eb7b2ca25e0e84",
     "stakingPoolMappingsSize": "1",
-    "inactivePoolsId": "0xab8ab23ee77ff7ba0d364e56da1caaef3eb5880fd61be928e4bc58e2acfa8ec8",
+    "inactivePoolsId": "0xa1c8458f15908b6f8cda2afab3679810d7895e143c5f5f27e55740d651dd5ad5",
     "inactivePoolsSize": "0",
-    "validatorCandidatesId": "0x7b512e15342cfec3fe18e24ce465dcd59292e5edc62fd4a994021626af34042c",
+    "validatorCandidatesId": "0x99ae8894b1f3265a97c22b01745fa08ed1c691783bdf2a1d8096bb63082a240c",
     "validatorCandidatesSize": "0",
     "atRiskValidators": [],
     "validatorReportRecords": []
@@ -98,7 +98,7 @@ task 2, lines 12-14:
 //# programmable --sender A --inputs 1000000000 object(0x5) @validator_0
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> 1: sui_system::sui_system::request_add_stake(Input(1), Result(0), Input(2))
-events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: A, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [94, 50, 117, 198, 160, 58, 16, 67, 111, 190, 133, 4, 154, 73, 216, 115, 156, 75, 249, 182, 22, 56, 191, 113, 14, 101, 160, 107, 247, 41, 31, 163, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 202, 154, 59, 0, 0, 0, 0] }
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: A, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("StakingRequestEvent"), type_params: [] }, contents: [172, 218, 146, 149, 250, 96, 119, 7, 59, 42, 219, 116, 112, 186, 5, 143, 250, 124, 228, 72, 123, 228, 17, 226, 97, 13, 44, 135, 249, 206, 62, 150, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 202, 154, 59, 0, 0, 0, 0] }
 created: object(2,0), object(2,1)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0)
 deleted: object(_)
@@ -115,7 +115,7 @@ Response: {
   "id": 1,
   "result": {
     "epoch": "0",
-    "protocolVersion": "70",
+    "protocolVersion": "108",
     "systemStateVersion": "2",
     "storageFundTotalObjectStorageRebates": "0",
     "storageFundNonRefundableBalance": "0",
@@ -163,13 +163,13 @@ Response: {
         "nextEpochPrimaryAddress": null,
         "nextEpochWorkerAddress": null,
         "votingPower": "10000",
-        "operationCapId": "0xb51e032653a6fbcdd24b62743168e7f30fb64da772d1eb7b40a79b6e96611f98",
+        "operationCapId": "0x51640d7cc42e1702888103df85d01150c246cf18d2432f6bd4b87a11d9926c78",
         "gasPrice": "1000",
         "commissionRate": "200",
         "nextEpochStake": "20000001000000000",
         "nextEpochGasPrice": "1000",
         "nextEpochCommissionRate": "200",
-        "stakingPoolId": "0x5e3275c6a03a10436fbe85049a49d8739c4bf9b61638bf710e65a06bf7291fa3",
+        "stakingPoolId": "0xacda9295fa6077073b2adb7470ba058ffa7ce4487be411e2610d2c87f9ce3e96",
         "stakingPoolActivationEpoch": "0",
         "stakingPoolDeactivationEpoch": null,
         "stakingPoolSuiBalance": "20000000000000000",
@@ -178,18 +178,18 @@ Response: {
         "pendingStake": "1000000000",
         "pendingTotalSuiWithdraw": "0",
         "pendingPoolTokenWithdraw": "0",
-        "exchangeRatesId": "0x92a2dbb6c4c42780ecd846c91b979478d86b6b85b29df5ab0de830d171d654b7",
+        "exchangeRatesId": "0xb62ff674c9c560439d7aab37e51691b3b0f311c17c2f9638c9375ad38cf35963",
         "exchangeRatesSize": "1"
       }
     ],
-    "pendingActiveValidatorsId": "0xb198ba4c66ad10c427a55df5de491374b8485a07be53c9f1d258a014bebc1558",
+    "pendingActiveValidatorsId": "0x465c2a189dcbc4f7f150cf57d26d291f2897448b9bc01d43ba2e7115c75b35df",
     "pendingActiveValidatorsSize": "0",
     "pendingRemovals": [],
-    "stakingPoolMappingsId": "0xd2e39b1dcdc5afc37bf7ed981b877c5bfe4d0db379ce7f8b62183d555440fa20",
+    "stakingPoolMappingsId": "0x4d02708f6850adfa71567c2eaff59aaa3ab59d40b3a3f27452eb7b2ca25e0e84",
     "stakingPoolMappingsSize": "1",
-    "inactivePoolsId": "0xab8ab23ee77ff7ba0d364e56da1caaef3eb5880fd61be928e4bc58e2acfa8ec8",
+    "inactivePoolsId": "0xa1c8458f15908b6f8cda2afab3679810d7895e143c5f5f27e55740d651dd5ad5",
     "inactivePoolsSize": "0",
-    "validatorCandidatesId": "0x7b512e15342cfec3fe18e24ce465dcd59292e5edc62fd4a994021626af34042c",
+    "validatorCandidatesId": "0x99ae8894b1f3265a97c22b01745fa08ed1c691783bdf2a1d8096bb63082a240c",
     "validatorCandidatesSize": "0",
     "atRiskValidators": [],
     "validatorReportRecords": []
@@ -207,7 +207,7 @@ Response: {
   "id": 2,
   "result": {
     "epoch": "1",
-    "protocolVersion": "70",
+    "protocolVersion": "108",
     "systemStateVersion": "2",
     "storageFundTotalObjectStorageRebates": "15108800",
     "storageFundNonRefundableBalance": "0",
@@ -255,13 +255,13 @@ Response: {
         "nextEpochPrimaryAddress": null,
         "nextEpochWorkerAddress": null,
         "votingPower": "10000",
-        "operationCapId": "0xb51e032653a6fbcdd24b62743168e7f30fb64da772d1eb7b40a79b6e96611f98",
+        "operationCapId": "0x51640d7cc42e1702888103df85d01150c246cf18d2432f6bd4b87a11d9926c78",
         "gasPrice": "1000",
         "commissionRate": "200",
         "nextEpochStake": "20000001001000000",
         "nextEpochGasPrice": "1000",
         "nextEpochCommissionRate": "200",
-        "stakingPoolId": "0x5e3275c6a03a10436fbe85049a49d8739c4bf9b61638bf710e65a06bf7291fa3",
+        "stakingPoolId": "0xacda9295fa6077073b2adb7470ba058ffa7ce4487be411e2610d2c87f9ce3e96",
         "stakingPoolActivationEpoch": "0",
         "stakingPoolDeactivationEpoch": null,
         "stakingPoolSuiBalance": "20000001001000000",
@@ -270,18 +270,18 @@ Response: {
         "pendingStake": "0",
         "pendingTotalSuiWithdraw": "0",
         "pendingPoolTokenWithdraw": "0",
-        "exchangeRatesId": "0x92a2dbb6c4c42780ecd846c91b979478d86b6b85b29df5ab0de830d171d654b7",
+        "exchangeRatesId": "0xb62ff674c9c560439d7aab37e51691b3b0f311c17c2f9638c9375ad38cf35963",
         "exchangeRatesSize": "2"
       }
     ],
-    "pendingActiveValidatorsId": "0xb198ba4c66ad10c427a55df5de491374b8485a07be53c9f1d258a014bebc1558",
+    "pendingActiveValidatorsId": "0x465c2a189dcbc4f7f150cf57d26d291f2897448b9bc01d43ba2e7115c75b35df",
     "pendingActiveValidatorsSize": "0",
     "pendingRemovals": [],
-    "stakingPoolMappingsId": "0xd2e39b1dcdc5afc37bf7ed981b877c5bfe4d0db379ce7f8b62183d555440fa20",
+    "stakingPoolMappingsId": "0x4d02708f6850adfa71567c2eaff59aaa3ab59d40b3a3f27452eb7b2ca25e0e84",
     "stakingPoolMappingsSize": "1",
-    "inactivePoolsId": "0xab8ab23ee77ff7ba0d364e56da1caaef3eb5880fd61be928e4bc58e2acfa8ec8",
+    "inactivePoolsId": "0xa1c8458f15908b6f8cda2afab3679810d7895e143c5f5f27e55740d651dd5ad5",
     "inactivePoolsSize": "0",
-    "validatorCandidatesId": "0x7b512e15342cfec3fe18e24ce465dcd59292e5edc62fd4a994021626af34042c",
+    "validatorCandidatesId": "0x99ae8894b1f3265a97c22b01745fa08ed1c691783bdf2a1d8096bb63082a240c",
     "validatorCandidatesSize": "0",
     "atRiskValidators": [],
     "validatorReportRecords": []
@@ -291,7 +291,7 @@ Response: {
 task 8, lines 34-35:
 //# programmable --sender A --inputs object(0x5) object(2,1)
 //> 0: sui_system::sui_system::request_withdraw_stake(Input(0), Input(1))
-events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: A, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("UnstakingRequestEvent"), type_params: [] }, contents: [94, 50, 117, 198, 160, 58, 16, 67, 111, 190, 133, 4, 154, 73, 216, 115, 156, 75, 249, 182, 22, 56, 191, 113, 14, 101, 160, 107, 247, 41, 31, 163, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 202, 154, 59, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: A, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("UnstakingRequestEvent"), type_params: [] }, contents: [172, 218, 146, 149, 250, 96, 119, 7, 59, 42, 219, 116, 112, 186, 5, 143, 250, 124, 228, 72, 123, 228, 17, 226, 97, 13, 44, 135, 249, 206, 62, 150, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 202, 154, 59, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
 created: object(8,0)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0), object(2,0)
 deleted: object(2,1)
@@ -308,7 +308,7 @@ Response: {
   "id": 3,
   "result": {
     "epoch": "1",
-    "protocolVersion": "70",
+    "protocolVersion": "108",
     "systemStateVersion": "2",
     "storageFundTotalObjectStorageRebates": "15108800",
     "storageFundNonRefundableBalance": "0",
@@ -356,13 +356,13 @@ Response: {
         "nextEpochPrimaryAddress": null,
         "nextEpochWorkerAddress": null,
         "votingPower": "10000",
-        "operationCapId": "0xb51e032653a6fbcdd24b62743168e7f30fb64da772d1eb7b40a79b6e96611f98",
+        "operationCapId": "0x51640d7cc42e1702888103df85d01150c246cf18d2432f6bd4b87a11d9926c78",
         "gasPrice": "1000",
         "commissionRate": "200",
         "nextEpochStake": "20000000001000000",
         "nextEpochGasPrice": "1000",
         "nextEpochCommissionRate": "200",
-        "stakingPoolId": "0x5e3275c6a03a10436fbe85049a49d8739c4bf9b61638bf710e65a06bf7291fa3",
+        "stakingPoolId": "0xacda9295fa6077073b2adb7470ba058ffa7ce4487be411e2610d2c87f9ce3e96",
         "stakingPoolActivationEpoch": "0",
         "stakingPoolDeactivationEpoch": null,
         "stakingPoolSuiBalance": "20000001001000000",
@@ -371,18 +371,18 @@ Response: {
         "pendingStake": "0",
         "pendingTotalSuiWithdraw": "1000000000",
         "pendingPoolTokenWithdraw": "999999999",
-        "exchangeRatesId": "0x92a2dbb6c4c42780ecd846c91b979478d86b6b85b29df5ab0de830d171d654b7",
+        "exchangeRatesId": "0xb62ff674c9c560439d7aab37e51691b3b0f311c17c2f9638c9375ad38cf35963",
         "exchangeRatesSize": "2"
       }
     ],
-    "pendingActiveValidatorsId": "0xb198ba4c66ad10c427a55df5de491374b8485a07be53c9f1d258a014bebc1558",
+    "pendingActiveValidatorsId": "0x465c2a189dcbc4f7f150cf57d26d291f2897448b9bc01d43ba2e7115c75b35df",
     "pendingActiveValidatorsSize": "0",
     "pendingRemovals": [],
-    "stakingPoolMappingsId": "0xd2e39b1dcdc5afc37bf7ed981b877c5bfe4d0db379ce7f8b62183d555440fa20",
+    "stakingPoolMappingsId": "0x4d02708f6850adfa71567c2eaff59aaa3ab59d40b3a3f27452eb7b2ca25e0e84",
     "stakingPoolMappingsSize": "1",
-    "inactivePoolsId": "0xab8ab23ee77ff7ba0d364e56da1caaef3eb5880fd61be928e4bc58e2acfa8ec8",
+    "inactivePoolsId": "0xa1c8458f15908b6f8cda2afab3679810d7895e143c5f5f27e55740d651dd5ad5",
     "inactivePoolsSize": "0",
-    "validatorCandidatesId": "0x7b512e15342cfec3fe18e24ce465dcd59292e5edc62fd4a994021626af34042c",
+    "validatorCandidatesId": "0x99ae8894b1f3265a97c22b01745fa08ed1c691783bdf2a1d8096bb63082a240c",
     "validatorCandidatesSize": "0",
     "atRiskValidators": [],
     "validatorReportRecords": []
@@ -400,7 +400,7 @@ Response: {
   "id": 4,
   "result": {
     "epoch": "2",
-    "protocolVersion": "70",
+    "protocolVersion": "108",
     "systemStateVersion": "2",
     "storageFundTotalObjectStorageRebates": "14804800",
     "storageFundNonRefundableBalance": "151088",
@@ -448,13 +448,13 @@ Response: {
         "nextEpochPrimaryAddress": null,
         "nextEpochWorkerAddress": null,
         "votingPower": "10000",
-        "operationCapId": "0xb51e032653a6fbcdd24b62743168e7f30fb64da772d1eb7b40a79b6e96611f98",
+        "operationCapId": "0x51640d7cc42e1702888103df85d01150c246cf18d2432f6bd4b87a11d9926c78",
         "gasPrice": "1000",
         "commissionRate": "200",
         "nextEpochStake": "20000000002000000",
         "nextEpochGasPrice": "1000",
         "nextEpochCommissionRate": "200",
-        "stakingPoolId": "0x5e3275c6a03a10436fbe85049a49d8739c4bf9b61638bf710e65a06bf7291fa3",
+        "stakingPoolId": "0xacda9295fa6077073b2adb7470ba058ffa7ce4487be411e2610d2c87f9ce3e96",
         "stakingPoolActivationEpoch": "0",
         "stakingPoolDeactivationEpoch": null,
         "stakingPoolSuiBalance": "20000000002000000",
@@ -463,18 +463,18 @@ Response: {
         "pendingStake": "0",
         "pendingTotalSuiWithdraw": "0",
         "pendingPoolTokenWithdraw": "0",
-        "exchangeRatesId": "0x92a2dbb6c4c42780ecd846c91b979478d86b6b85b29df5ab0de830d171d654b7",
+        "exchangeRatesId": "0xb62ff674c9c560439d7aab37e51691b3b0f311c17c2f9638c9375ad38cf35963",
         "exchangeRatesSize": "3"
       }
     ],
-    "pendingActiveValidatorsId": "0xb198ba4c66ad10c427a55df5de491374b8485a07be53c9f1d258a014bebc1558",
+    "pendingActiveValidatorsId": "0x465c2a189dcbc4f7f150cf57d26d291f2897448b9bc01d43ba2e7115c75b35df",
     "pendingActiveValidatorsSize": "0",
     "pendingRemovals": [],
-    "stakingPoolMappingsId": "0xd2e39b1dcdc5afc37bf7ed981b877c5bfe4d0db379ce7f8b62183d555440fa20",
+    "stakingPoolMappingsId": "0x4d02708f6850adfa71567c2eaff59aaa3ab59d40b3a3f27452eb7b2ca25e0e84",
     "stakingPoolMappingsSize": "1",
-    "inactivePoolsId": "0xab8ab23ee77ff7ba0d364e56da1caaef3eb5880fd61be928e4bc58e2acfa8ec8",
+    "inactivePoolsId": "0xa1c8458f15908b6f8cda2afab3679810d7895e143c5f5f27e55740d651dd5ad5",
     "inactivePoolsSize": "0",
-    "validatorCandidatesId": "0x7b512e15342cfec3fe18e24ce465dcd59292e5edc62fd4a994021626af34042c",
+    "validatorCandidatesId": "0x99ae8894b1f3265a97c22b01745fa08ed1c691783bdf2a1d8096bb63082a240c",
     "validatorCandidatesSize": "0",
     "atRiskValidators": [],
     "validatorReportRecords": []

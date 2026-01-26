@@ -39,7 +39,7 @@ Response: {
     "genesisTransaction": {
       "nodes": [
         {
-          "digest": "En49Y24o8stk1LsmKi7Ev7or7C7bSrz9D8YxPejW1nLt",
+          "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
           "effects": {
             "dependencies": {
               "pageInfo": {
@@ -60,7 +60,7 @@ task 6, lines 58-75:
 Response: {
   "data": {
     "systemTransactionDependencies": {
-      "digest": "Di1itKPuqe3xrirBcuRBCqZBPeic2jPPtCwAAASnx8y",
+      "digest": "3sUDK6rMz1XeKVywbeUsMjL7er3RJPu4W5288LhFU9dL",
       "dependencies": {
         "pageInfo": {
           "hasNextPage": false,
@@ -68,14 +68,14 @@ Response: {
         },
         "nodes": [
           {
-            "digest": "A6NgoVunXZqMBG5hW2feGtzgKxpcWNch1BnfkNUMKsYo",
+            "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
+            "sender": null
+          },
+          {
+            "digest": "C1ZSjt7X14pTQZJ2eGruDe4mpdDFxDbyMPhfLaaTRLyz",
             "sender": {
               "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
             }
-          },
-          {
-            "digest": "En49Y24o8stk1LsmKi7Ev7or7C7bSrz9D8YxPejW1nLt",
-            "sender": null
           }
         ]
       }
@@ -88,7 +88,7 @@ task 7, lines 77-101:
 Response: {
   "data": {
     "userTransactionDependencies": {
-      "digest": "AGft3Cv9i2F9Nzru8YYRzFezq9yKWU1C9cUKtCNNznRT",
+      "digest": "5eQsg9EekGQCrsZ8KQLrxBempFzNvg1VDrqsMVcigMvF",
       "dependencies": {
         "pageInfo": {
           "hasNextPage": false,
@@ -96,7 +96,7 @@ Response: {
         },
         "nodes": [
           {
-            "digest": "Di1itKPuqe3xrirBcuRBCqZBPeic2jPPtCwAAASnx8y",
+            "digest": "3sUDK6rMz1XeKVywbeUsMjL7er3RJPu4W5288LhFU9dL",
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
@@ -109,7 +109,7 @@ Response: {
             }
           },
           {
-            "digest": "A6NgoVunXZqMBG5hW2feGtzgKxpcWNch1BnfkNUMKsYo",
+            "digest": "C1ZSjt7X14pTQZJ2eGruDe4mpdDFxDbyMPhfLaaTRLyz",
             "sender": {
               "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
             },
@@ -132,7 +132,7 @@ task 8, lines 103-142:
 Response: {
   "data": {
     "paginationTest": {
-      "digest": "AGft3Cv9i2F9Nzru8YYRzFezq9yKWU1C9cUKtCNNznRT",
+      "digest": "5eQsg9EekGQCrsZ8KQLrxBempFzNvg1VDrqsMVcigMvF",
       "dependencies": {
         "pageInfo": {
           "hasNextPage": true,
@@ -142,7 +142,7 @@ Response: {
           {
             "cursor": "MA==",
             "node": {
-              "digest": "Di1itKPuqe3xrirBcuRBCqZBPeic2jPPtCwAAASnx8y",
+              "digest": "3sUDK6rMz1XeKVywbeUsMjL7er3RJPu4W5288LhFU9dL",
               "sender": {
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               }
@@ -152,7 +152,7 @@ Response: {
       }
     },
     "backwardPaginationTest": {
-      "digest": "AGft3Cv9i2F9Nzru8YYRzFezq9yKWU1C9cUKtCNNznRT",
+      "digest": "5eQsg9EekGQCrsZ8KQLrxBempFzNvg1VDrqsMVcigMvF",
       "dependencies": {
         "pageInfo": {
           "hasNextPage": false,
@@ -162,7 +162,7 @@ Response: {
           {
             "cursor": "MQ==",
             "node": {
-              "digest": "A6NgoVunXZqMBG5hW2feGtzgKxpcWNch1BnfkNUMKsYo",
+              "digest": "C1ZSjt7X14pTQZJ2eGruDe4mpdDFxDbyMPhfLaaTRLyz",
               "sender": {
                 "address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
               }
