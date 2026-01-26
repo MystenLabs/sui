@@ -4,7 +4,7 @@
 // Test partial error behavior: when one field errors, other fields should still return data.
 // This tests the Option<Result<T, E>> pattern for partial errors.
 
-//# init --protocol-version 70 --accounts A --simulator
+//# init --protocol-version 108 --accounts A --simulator
 
 //# programmable --sender A --inputs 1
 //> SplitCoins(Gas, [Input(0)]);

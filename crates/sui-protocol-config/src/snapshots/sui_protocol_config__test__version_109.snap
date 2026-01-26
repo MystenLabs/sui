@@ -145,6 +145,7 @@ feature_flags:
   gas_rounding_halve_digits: true
   flexible_tx_context_positions: true
   disable_entry_point_signature_check: true
+  restrict_hot_or_not_entry_functions: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -175,6 +176,8 @@ binary_function_defs: 1000
 binary_field_handles: 500
 binary_field_instantiations: 250
 binary_friend_decls: 100
+binary_variant_handles: 1024
+binary_variant_instantiation_handles: 1024
 max_move_object_size: 256000
 max_move_package_size: 102400
 max_publish_or_upgrade_per_ptb: 5

@@ -15,6 +15,8 @@ use sui_rpc_api::{
 };
 use sui_types::storage::ObjectKey;
 
+pub const MAX_BATCH_REQUESTS: usize = 1000;
+
 pub(crate) async fn get_object(
     mut client: BigTableClient,
     GetObjectRequest {
@@ -52,6 +54,13 @@ pub(crate) async fn batch_get_objects(
         ..
     }: BatchGetObjectsRequest,
 ) -> Result<BatchGetObjectsResponse, RpcError> {
+    if requests.len() > MAX_BATCH_REQUESTS {
+        return Err(RpcError::new(
+            tonic::Code::InvalidArgument,
+            format!("number of batch requests exceed limit of {MAX_BATCH_REQUESTS}"),
+        ));
+    }
+
     // only batch requests with `object_id` and `exact_version` are supported by the KV store
     if requests.iter().any(|r| r.version.is_none()) {
         return Err(FieldViolation::new("version")

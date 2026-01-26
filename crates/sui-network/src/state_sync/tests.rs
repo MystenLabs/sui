@@ -1111,3 +1111,224 @@ async fn sync_with_max_lookahead_rejection() {
         );
     }
 }
+
+#[test]
+fn test_peer_score_throughput_calculation() {
+    use super::PeerScore;
+
+    let window = Duration::from_secs(60);
+    let failure_rate = 0.3;
+    let mut score = PeerScore::new(window, failure_rate);
+
+    // No samples - should return None
+    assert!(score.effective_throughput().is_none());
+    assert!(!score.is_failing());
+
+    // Single sample: 100 units in 1 second = 100 throughput
+    score.record_success(100, Duration::from_secs(1));
+    let throughput = score.effective_throughput().unwrap();
+    assert!((throughput - 100.0).abs() < 0.01);
+
+    // Add another sample: 200 units in 2 seconds = 100 throughput
+    // Combined: 300 units in 3 seconds = 100 throughput
+    score.record_success(200, Duration::from_secs(2));
+    let throughput = score.effective_throughput().unwrap();
+    assert!((throughput - 100.0).abs() < 0.01);
+
+    // Add a faster sample: 500 units in 1 second
+    // Combined: 800 units in 4 seconds = 200 throughput
+    score.record_success(500, Duration::from_secs(1));
+    let throughput = score.effective_throughput().unwrap();
+    assert!((throughput - 200.0).abs() < 0.01);
+}
+
+#[test]
+fn test_peer_score_failure_tracking() {
+    use super::PeerScore;
+
+    let window = Duration::from_secs(60);
+    let failure_rate = 0.3;
+    let mut score = PeerScore::new(window, failure_rate);
+
+    // Initially not failing (no samples)
+    assert!(!score.is_failing());
+
+    // Record 7 successes
+    for _ in 0..7 {
+        score.record_success(100, Duration::from_secs(1));
+    }
+
+    // Record 2 failures: 2/9 = 22% < 30%, and below min samples (10)
+    score.record_failure();
+    score.record_failure();
+    assert!(!score.is_failing());
+
+    // Record 1 more success to reach 10 samples: 2/10 = 20% < 30%, not failing
+    score.record_success(100, Duration::from_secs(1));
+    assert!(!score.is_failing());
+
+    // Record 1 more failure: 3/11 = 27% < 30%, not failing
+    score.record_failure();
+    assert!(!score.is_failing());
+
+    // Record 1 more failure: 4/12 = 33% >= 30%, is_failing
+    score.record_failure();
+    assert!(score.is_failing());
+}
+
+#[test]
+fn test_peer_heights_score_recording() {
+    use super::PeerHeights;
+    use anemo::PeerId;
+
+    let mut peer_heights = PeerHeights {
+        peers: HashMap::new(),
+        unprocessed_checkpoints: HashMap::new(),
+        sequence_number_to_digest: HashMap::new(),
+        scores: HashMap::new(),
+        wait_interval_when_no_peer_to_sync_content: Duration::from_secs(1),
+        peer_scoring_window: Duration::from_secs(60),
+        peer_failure_rate: 0.3,
+        checkpoint_content_timeout_min: Duration::from_secs(10),
+        checkpoint_content_timeout_max: Duration::from_secs(30),
+        exploration_probability: 0.1,
+    };
+
+    let peer_id = PeerId([1; 32]);
+
+    // Initially no throughput data and not failing
+    assert!(peer_heights.get_throughput(&peer_id).is_none());
+    assert!(!peer_heights.is_failing(&peer_id));
+
+    // Record some successes
+    peer_heights.record_success(peer_id, 100, Duration::from_secs(1));
+    let throughput = peer_heights.get_throughput(&peer_id).unwrap();
+    assert!((throughput - 100.0).abs() < 0.01);
+
+    // Record more successes
+    peer_heights.record_success(peer_id, 200, Duration::from_secs(1));
+    let throughput = peer_heights.get_throughput(&peer_id).unwrap();
+    // 300 bytes / 2 seconds = 150 bytes/sec
+    assert!((throughput - 150.0).abs() < 0.01);
+
+    // Record more successes to reach 8 total
+    for _ in 0..6 {
+        peer_heights.record_success(peer_id, 100, Duration::from_secs(1));
+    }
+
+    // Record 2 failures: 2/10 = 20% < 30%, not failing
+    peer_heights.record_failure(peer_id);
+    peer_heights.record_failure(peer_id);
+    assert!(!peer_heights.is_failing(&peer_id));
+
+    // Record 2 more failures: 4/12 = 33% >= 30%, is_failing
+    peer_heights.record_failure(peer_id);
+    peer_heights.record_failure(peer_id);
+    assert!(peer_heights.is_failing(&peer_id));
+}
+
+#[tokio::test]
+async fn test_peer_balancer_sorts_by_throughput() {
+    use super::{PeerBalancer, PeerCheckpointRequestType, PeerHeights, PeerStateSyncInfo};
+    use std::sync::{Arc, RwLock};
+
+    let committee = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let (ordered_checkpoints, _, _, _) = committee.make_empty_checkpoints(2, None);
+
+    let network_1 = build_network(|r| r);
+    let network_2 = build_network(|r| r);
+    let network_3 = build_network(|r| r);
+
+    network_1.connect(network_2.local_addr()).await.unwrap();
+    network_1.connect(network_3.local_addr()).await.unwrap();
+
+    let mut peer_heights = PeerHeights {
+        peers: HashMap::new(),
+        unprocessed_checkpoints: HashMap::new(),
+        sequence_number_to_digest: HashMap::new(),
+        scores: HashMap::new(),
+        wait_interval_when_no_peer_to_sync_content: Duration::from_secs(1),
+        peer_scoring_window: Duration::from_secs(60),
+        peer_failure_rate: 0.3,
+        checkpoint_content_timeout_min: Duration::from_secs(10),
+        checkpoint_content_timeout_max: Duration::from_secs(30),
+        exploration_probability: 0.1,
+    };
+
+    let peer_2_id = network_2.peer_id();
+    let peer_3_id = network_3.peer_id();
+
+    peer_heights.peers.insert(
+        peer_2_id,
+        PeerStateSyncInfo {
+            genesis_checkpoint_digest: *ordered_checkpoints[0].digest(),
+            on_same_chain_as_us: true,
+            height: 10,
+            lowest: 0,
+        },
+    );
+    peer_heights.peers.insert(
+        peer_3_id,
+        PeerStateSyncInfo {
+            genesis_checkpoint_digest: *ordered_checkpoints[0].digest(),
+            on_same_chain_as_us: true,
+            height: 10,
+            lowest: 0,
+        },
+    );
+
+    // peer_2: slow (10 bytes/sec)
+    peer_heights.record_success(peer_2_id, 100, Duration::from_secs(10));
+    // peer_3: fast (1000 bytes/sec)
+    peer_heights.record_success(peer_3_id, 1000, Duration::from_secs(1));
+
+    let peer_heights = Arc::new(RwLock::new(peer_heights));
+
+    let balancer = PeerBalancer::new(&network_1, peer_heights, PeerCheckpointRequestType::Summary);
+
+    let peers: Vec<_> = balancer.collect();
+
+    // Both peers should be present, fast peer first
+    assert_eq!(peers.len(), 2);
+    assert_eq!(peers[0].inner().peer_id(), peer_3_id);
+    assert_eq!(peers[1].inner().peer_id(), peer_2_id);
+}
+
+#[test]
+fn test_adaptive_timeout_calculation() {
+    use super::compute_adaptive_timeout;
+
+    let min_timeout = Duration::from_secs(10);
+    let max_timeout = Duration::from_secs(30);
+
+    // Helper to check timeout is within expected range (base ± 10% jitter)
+    let assert_in_range = |timeout: Duration, expected_base: f64| {
+        let timeout_secs = timeout.as_secs_f64();
+        let jitter_range = expected_base * 0.1;
+        let min_expected = (expected_base - jitter_range).max(min_timeout.as_secs_f64());
+        let max_expected = expected_base + jitter_range;
+        assert!(
+            timeout_secs >= min_expected && timeout_secs <= max_expected,
+            "timeout {} not in range [{}, {}]",
+            timeout_secs,
+            min_expected,
+            max_expected
+        );
+    };
+
+    // Empty checkpoint - base timeout only (10s ± 10%)
+    let timeout = compute_adaptive_timeout(0, min_timeout, max_timeout);
+    assert_in_range(timeout, 10.0);
+
+    // Medium checkpoint with 1000 txns: base 12s ± 10%
+    let timeout = compute_adaptive_timeout(1000, min_timeout, max_timeout);
+    assert_in_range(timeout, 12.0);
+
+    // Half-full checkpoint with 5000 txns: base 20s ± 10%
+    let timeout = compute_adaptive_timeout(5000, min_timeout, max_timeout);
+    assert_in_range(timeout, 20.0);
+
+    // Max checkpoint with 10000 txns: base 30s ± 10%
+    let timeout = compute_adaptive_timeout(10000, min_timeout, max_timeout);
+    assert_in_range(timeout, 30.0);
+}

@@ -42,8 +42,8 @@ pub fn run_parsing_analysis(
     let mut parsing_symbolicator = parsing_analysis::ParsingAnalysisContext {
         mod_outer_defs: &mut computation_data.mod_outer_defs,
         files: &compiled_pkg_info.mapped_files,
+        def_info: &computation_data.def_info,
         references: &mut computation_data.references,
-        def_info: &mut computation_data.def_info,
         use_defs: &mut computation_data.use_defs,
         current_mod_ident_str: None,
         alias_lengths: BTreeMap::new(),
@@ -137,7 +137,13 @@ fn add_member_use_def(
         .or_else(|| mod_defs.structs.get(member_def_name))
         .or_else(|| mod_defs.enums.get(member_def_name))
     {
-        let member_info = def_info.get(&member_def.name_loc).unwrap();
+        let Some(member_info) = def_info.get(&member_def.name_loc) else {
+            // TODO: This can happen with module extensions as currently we don't
+            // have a way to recognize that these are part of a dependent package
+            // and they are filtered out when creating cached dependencies.
+            // Clearly this needs to be fixed but let's at least not crash for now...
+            return None;
+        };
         // type def location exists only for structs and enums (and not for functions)
         let ident_type_def_loc = match member_info {
             DefInfo::Struct(_, name, ..) | DefInfo::Enum(_, name, ..) => {

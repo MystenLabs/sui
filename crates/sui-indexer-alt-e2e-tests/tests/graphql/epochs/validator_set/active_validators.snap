@@ -47,29 +47,29 @@ Response: {
                     "next_epoch_primary_address": null,
                     "next_epoch_worker_address": null,
                     "extra_fields": {
-                      "id": "0xc22e88d00f40b0ded8bc16f3db6f5d2270f352ab2f547968e7ab945794d3b84b",
+                      "id": "0x90ff817433c2d744e76ca14db2b133b111f547e76060835598d8788fa602ed58",
                       "size": "0"
                     }
                   },
                   "voting_power": "10000",
-                  "operation_cap_id": "0xb51e032653a6fbcdd24b62743168e7f30fb64da772d1eb7b40a79b6e96611f98",
+                  "operation_cap_id": "0x51640d7cc42e1702888103df85d01150c246cf18d2432f6bd4b87a11d9926c78",
                   "gas_price": "1000",
                   "staking_pool": {
-                    "id": "0x5e3275c6a03a10436fbe85049a49d8739c4bf9b61638bf710e65a06bf7291fa3",
+                    "id": "0xacda9295fa6077073b2adb7470ba058ffa7ce4487be411e2610d2c87f9ce3e96",
                     "activation_epoch": "0",
                     "deactivation_epoch": null,
                     "sui_balance": "20000000000000000",
                     "rewards_pool": "0",
                     "pool_token_balance": "20000000000000000",
                     "exchange_rates": {
-                      "id": "0x92a2dbb6c4c42780ecd846c91b979478d86b6b85b29df5ab0de830d171d654b7",
+                      "id": "0xb62ff674c9c560439d7aab37e51691b3b0f311c17c2f9638c9375ad38cf35963",
                       "size": "1"
                     },
                     "pending_stake": "0",
                     "pending_total_sui_withdraw": "0",
                     "pending_pool_token_withdraw": "0",
                     "extra_fields": {
-                      "id": "0xdc6985af27609c3588ccba0cff7379a1ec2b50dd3c88d1576b65c00c107281b1",
+                      "id": "0x86888d657f144258d2f9f0256243d5abced0607a66e851c2cbb7a34b8c40fec4",
                       "size": "0"
                     }
                   },
@@ -78,7 +78,7 @@ Response: {
                   "next_epoch_gas_price": "1000",
                   "next_epoch_commission_rate": "200",
                   "extra_fields": {
-                    "id": "0x15336f658175e2a8b4b90effbfec9f07fe4b99ce2a43f9ca99d0b1a7da34d8e7",
+                    "id": "0x9b7eb7191a170c5cc8c41d5c290eb89815585b4c230b814314cc40307e9307fe",
                     "size": "0"
                   }
                 },
@@ -102,7 +102,7 @@ Response: {
                               "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
                             },
                             "json": {
-                              "id": "0xac4ff15a2ca1485c080d1dc61ac7fb1b99571ee620247500204ac26eb4ce4763",
+                              "id": "0x5900ab3d6e625f06712a79084ea59b12841bf10987ba3bd74a3fb8b8d2de8c87",
                               "balance": "30000000000000000"
                             }
                           }
@@ -113,8 +113,8 @@ Response: {
                               "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui"
                             },
                             "json": {
-                              "id": "0x971fcf73b31ef84ea672d3f321f162cb878b8ea3854f7148f9e88a4571264f3c",
-                              "pool_id": "0x5e3275c6a03a10436fbe85049a49d8739c4bf9b61638bf710e65a06bf7291fa3",
+                              "id": "0x4f63d8c5aa5317a25ede62436f82a9739358e2ba69bf7eec55d98181f17efad5",
+                              "pool_id": "0xacda9295fa6077073b2adb7470ba058ffa7ce4487be411e2610d2c87f9ce3e96",
                               "stake_activation_epoch": "0",
                               "principal": "20000000000000000"
                             }
@@ -126,7 +126,7 @@ Response: {
                               "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::validator_cap::UnverifiedValidatorOperationCap"
                             },
                             "json": {
-                              "id": "0xb51e032653a6fbcdd24b62743168e7f30fb64da772d1eb7b40a79b6e96611f98",
+                              "id": "0x51640d7cc42e1702888103df85d01150c246cf18d2432f6bd4b87a11d9926c78",
                               "authorizer_validator_address": "0xda83166d01afd7ddcf8af5f844f45aaa53f48548e5117c23f5a2978cfd422244"
                             }
                           }

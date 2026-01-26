@@ -70,7 +70,7 @@ Response: {
   "result": {
     "epoch": "0",
     "sequenceNumber": "0",
-    "digest": "4Kxh38MGZSf9fVqjtQtELiTE7f2WrY7JfN6Gh1rGQBL3",
+    "digest": "6cronpZMrLFsLQY6vJ2JmmzXivRwaNN8C9wCXZWhgdGN",
     "networkTotalTransactions": "1",
     "epochRollingGasCostSummary": {
       "computationCost": "0",
@@ -80,10 +80,10 @@ Response: {
     },
     "timestampMs": "0",
     "transactions": [
-      "G6JweuSUhMSJvPUTCgTpvf37aLGrv887XFKBZyVLpP5M"
+      "9SSXusUFMCT7nVFXQA8kMyG1p38Uze9APuQtFFKWS4AK"
     ],
     "checkpointCommitments": [],
-    "validatorSignature": "oarEfYz6gerPMhhdW7C7YIz5xtJEQy3cwSPPtrVnnYxfz8oXAfw5ED2jFEvPl/GC"
+    "validatorSignature": "oPgdHuyr7Jol02dD4i5s4mtnp3N5O8JhmOfxQurm8hT8qA82BEV7ne1Awt0efHlO"
   }
 }
 
@@ -95,9 +95,9 @@ Response: {
   "result": {
     "epoch": "0",
     "sequenceNumber": "1",
-    "digest": "BPZRDCbCspSVAhrdGAzYrQAGKzuEHsLydnDhyk89vQfM",
-    "networkTotalTransactions": "2",
-    "previousDigest": "4Kxh38MGZSf9fVqjtQtELiTE7f2WrY7JfN6Gh1rGQBL3",
+    "digest": "B1Z2EmMquiYTJyqY3pS6fBr29wGoeh42b9JVo7nVJxre",
+    "networkTotalTransactions": "3",
+    "previousDigest": "6cronpZMrLFsLQY6vJ2JmmzXivRwaNN8C9wCXZWhgdGN",
     "epochRollingGasCostSummary": {
       "computationCost": "1000000",
       "storageCost": "1976000",
@@ -106,10 +106,11 @@ Response: {
     },
     "timestampMs": "0",
     "transactions": [
-      "8QeT5WujnZc3cP26rXxcp7pK4ebgzrWibkUdW8dxakdG"
+      "GeuBXcdK9Va3qh7kuZsjw1vfntH7Syjg1xeGxjsH2YA2",
+      "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm"
     ],
     "checkpointCommitments": [],
-    "validatorSignature": "rHrVl75AhnsfIDSQEQ8UzodEVwaN3eKOtlq6StQMHJ6/YtrFALEjQNSeg0O71dBH"
+    "validatorSignature": "of7R+FfKsU2hyFPmzRG/BpoF1MX0v2jDK3ZPiLgAZPkmz6XDQgFbKaV0wqucLXqc"
   }
 }
 
@@ -121,9 +122,9 @@ Response: {
   "result": {
     "epoch": "0",
     "sequenceNumber": "2",
-    "digest": "EHqLHvY7UW7vpThodQR25VZn2ey8fUB4pcgbU9kfTspY",
-    "networkTotalTransactions": "4",
-    "previousDigest": "BPZRDCbCspSVAhrdGAzYrQAGKzuEHsLydnDhyk89vQfM",
+    "digest": "86sw13N6SQuyKUvS7nMhyd6iypAEE8iA6mGzwFCjHsSH",
+    "networkTotalTransactions": "6",
+    "previousDigest": "B1Z2EmMquiYTJyqY3pS6fBr29wGoeh42b9JVo7nVJxre",
     "epochRollingGasCostSummary": {
       "computationCost": "2000000",
       "storageCost": "3952000",
@@ -133,10 +134,11 @@ Response: {
     "timestampMs": "1000",
     "transactions": [
       "8DFy3oTHn2RoG1nW7f6YNYrt4Hbrf6sQmDAAk8t9mFPi",
-      "DqJgExxYq446juHgJ5rzBeNK1kBse2QvQgFeu3xb67iu"
+      "8CxborVQfr4VZ1bEtna9nJcYRqiYaw38FU3A2roVyXx2",
+      "2iEZQGAgJYgzmcNC2eLrbNejeTJHJxY4Xy4yKj7R3D8g"
     ],
     "checkpointCommitments": [],
-    "validatorSignature": "mOr4JRJR37B1qljNlnwOBsg3FEEE2rRWT/hKj1ZYBfigzSNw5fVfS6yTtjbbnLHM"
+    "validatorSignature": "q3tDzJl16+0JJfetWEanYEB4ItzLdWWp1QIyxygwOZQWxPGaYkBzvDkZl0eKMRbj"
   }
 }
 
@@ -148,9 +150,9 @@ Response: {
   "result": {
     "epoch": "0",
     "sequenceNumber": "3",
-    "digest": "BV58CNoj72dwNLBDcPXHH4bAPMivstL3ABBdh2tGF2oj",
-    "networkTotalTransactions": "5",
-    "previousDigest": "EHqLHvY7UW7vpThodQR25VZn2ey8fUB4pcgbU9kfTspY",
+    "digest": "BN9kYY4YRyn2kmv79Vd1LanuW6NAw7uc6ckfS6JrDpvu",
+    "networkTotalTransactions": "7",
+    "previousDigest": "86sw13N6SQuyKUvS7nMhyd6iypAEE8iA6mGzwFCjHsSH",
     "epochRollingGasCostSummary": {
       "computationCost": "2000000",
       "storageCost": "3952000",
@@ -165,14 +167,14 @@ Response: {
           "10000"
         ]
       ],
-      "nextEpochProtocolVersion": "70",
+      "nextEpochProtocolVersion": "108",
       "epochCommitments": []
     },
     "transactions": [
-      "gzaBALyrgTTckbYkCedU6srqRv8v1eV6PB75uxy6koH"
+      "MmJ7zf79bAW3uxEq5SMjPJNk3FbaXJ5RrBuYhmNjr1u"
     ],
     "checkpointCommitments": [],
-    "validatorSignature": "pyeq3yY24QqtpEQFkvW+pCba+aZStHfcuotmrmEM6w5BqoRI9ve0ANl2MCWeRlzZ"
+    "validatorSignature": "gaEsRY532USL0KLds5M/ZU2U79/+1FZsc2mXGchon7NN9RWVYlr1TXAc+gio+FtK"
   }
 }
 
@@ -184,9 +186,9 @@ Response: {
   "result": {
     "epoch": "1",
     "sequenceNumber": "4",
-    "digest": "7Z6zipB5o21ko49zY7wVLwywzmrFygzRcBeugbzqpiXW",
-    "networkTotalTransactions": "8",
-    "previousDigest": "BV58CNoj72dwNLBDcPXHH4bAPMivstL3ABBdh2tGF2oj",
+    "digest": "4DwmVwt3QTYALEkzPFTnWKMSrumVJq2o1jVupWuErX46",
+    "networkTotalTransactions": "11",
+    "previousDigest": "BN9kYY4YRyn2kmv79Vd1LanuW6NAw7uc6ckfS6JrDpvu",
     "epochRollingGasCostSummary": {
       "computationCost": "3000000",
       "storageCost": "5928000",
@@ -195,11 +197,12 @@ Response: {
     },
     "timestampMs": "1000",
     "transactions": [
-      "Dpc6z7Y5aa1AQ1AnpzyctnuBUub6h9nSxCX9tv9WGyaZ",
-      "9X31mz49Ug9JGAQB1vb6N4VEogLbTpUaHfPsF8JsP9bN",
-      "2ZakTB51Hc25Fnkn94rW3HvWKa2qptrsqyjJ3sheRYf6"
+      "7vfsCVUvFVFgFyvt4EeGR6hhKhcrpDJ9tofJjJoSXRFp",
+      "8uzpQoEZGEWwDBQSzqwPTSCyEPnRJH8AjbWeTPoJ7uBW",
+      "EnL35u6H64MAtQyAr1YHtHp2ucgakcRp2QR5citGsND",
+      "9Jgpen4tvpn3ZjDhQyZoykZG2VF4bmJ2uZsjV9jWbACU"
     ],
     "checkpointCommitments": [],
-    "validatorSignature": "iiLcFaMOheDFDnj5F7hdYKNcW0KGUoXQkCg2KpurfMN59fpJFYmvWgjQvrR3K5ii"
+    "validatorSignature": "mYo1zXiWM7okAsbmwaVTMKJIRNR6DsLfw2AczacZ2sPDHg3h5qLTYIV10Vc/qAe5"
   }
 }

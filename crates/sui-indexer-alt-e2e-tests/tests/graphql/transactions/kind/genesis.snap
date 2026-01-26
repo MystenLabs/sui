@@ -23,7 +23,7 @@ task 3, lines 12-27:
 Response: {
   "data": {
     "nonGenesisTransaction": {
-      "digest": "E7tw6MvZXgsKsAxpZEWHNNHjQzWeCL3X3eUzBNVXqZ5z",
+      "digest": "BRkEX8WQkc2pZR4ozzYB6s7dQhdMCE7ftaKFbwusU9Sn",
       "kind": {}
     }
   }
@@ -36,7 +36,7 @@ Response: {
     "genesisTransaction": {
       "nodes": [
         {
-          "digest": "En49Y24o8stk1LsmKi7Ev7or7C7bSrz9D8YxPejW1nLt",
+          "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
           "kind": {
             "__typename": "GenesisTransaction",
             "objects": {
@@ -74,11 +74,23 @@ Response: {
                   "version": 0
                 },
                 {
+                  "address": "0x000000000000000000000000000000000000000000000000000000000000000a",
+                  "version": 0
+                },
+                {
                   "address": "0x000000000000000000000000000000000000000000000000000000000000000b",
                   "version": 1
                 },
                 {
+                  "address": "0x000000000000000000000000000000000000000000000000000000000000000c",
+                  "version": 0
+                },
+                {
                   "address": "0x0000000000000000000000000000000000000000000000000000000000000403",
+                  "version": 0
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000acc",
                   "version": 0
                 },
                 {
@@ -86,11 +98,15 @@ Response: {
                   "version": 1
                 },
                 {
-                  "address": "0x269e52118e2bb7d562895724291039a937e3fcdf7fa4e3a5dd3e21a9bee9ed52",
+                  "address": "0x123e2f4619de917f6b1b886d84aabdeeffe08a4467752a4ae58f8d88e7666f2a",
                   "version": 0
                 },
                 {
-                  "address": "0x3e20a2624d513b51423897be2562cafe8fd36a5520b6feb8c062a8830717d618",
+                  "address": "0x1ae2c1a294270839e81d4bfa9c90889fede927fdef1ccfece1083e301f521552",
+                  "version": 0
+                },
+                {
+                  "address": "0x37cf3a6d7bfb547e9eaf95377bde64a81d8a954a38fcb37595663d5ab3c878c8",
                   "version": 0
                 },
                 {
@@ -98,19 +114,31 @@ Response: {
                   "version": 0
                 },
                 {
-                  "address": "0x9837ac314b2e1b10340e638485658248a209a1b1cb1143afb29b0d59f17de508",
+                  "address": "0x737aa8f345f5f8ae79fab666f720b71f19607ef80e90336109524c375f6dac5d",
                   "version": 0
                 },
                 {
-                  "address": "0x99c1996faaaf61c7fdaf0da72a3da0a7a34786dc08f3a751cdb00bd4c0fb5ce5",
+                  "address": "0x768a62c10c4f75e202b4377544c68efd6be89f9a10bee69fb6648962b016d653",
                   "version": 0
                 },
                 {
-                  "address": "0x9bde1abfb4462ba9e0fbf46422aee9e876628e0e5549da092a7471310f2192b0",
+                  "address": "0x7c9a6012a7d65af9b84cd75aeed3ca4786d616454f78b41177c757ea677d6d59",
                   "version": 0
                 },
                 {
-                  "address": "0xc6496fb6bafa261b8b714ff43ffe28a4ba9fbe048c249da89f171fc8d94202d1",
+                  "address": "0x9ee6d05e9e9dfaf5ce0abb33c6dc97f37eee35de65eac62ddc30670e5ba8595e",
+                  "version": 0
+                },
+                {
+                  "address": "0xb7d0fec617f45634ef747c9d3cb65fb368b6a2a6772b2819ec8257a3b7b0d771",
+                  "version": 0
+                },
+                {
+                  "address": "0xbae5470e01bf9dcbb59739712a26efc03044f659d32bdc9be81c2ceff3905b64",
+                  "version": 0
+                },
+                {
+                  "address": "0xbcde811682ab9251ca97ecf5cd08c9a5f51dd67146cbb002fffdfccd352c4b06",
                   "version": 0
                 },
                 {
@@ -118,27 +146,11 @@ Response: {
                   "version": 0
                 },
                 {
-                  "address": "0xd7bf8e5939b86483f09bed7307937a334ce1b53a616af3aa4dcc409477912803",
+                  "address": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
                   "version": 0
                 },
                 {
-                  "address": "0xe0ee83642d7749aa37ef9c9631c9ab7a4f882bdc70749e5b528983e016293c55",
-                  "version": 0
-                },
-                {
-                  "address": "0xe70a717589b0eeb484436481c0b17f0f0dee7046d7328efde9ad3d7a9574a70d",
-                  "version": 0
-                },
-                {
-                  "address": "0xf0dab2823e1d19ee96011f375a260d90a43ea8d806bac8b969dc3e81b5cc7487",
-                  "version": 0
-                },
-                {
-                  "address": "0xf6083a1fca9a045438a394c987423241fa4dcfe99354b3ac08e45a8649acb787",
-                  "version": 0
-                },
-                {
-                  "address": "0xfe84e8147688f8bdc16b1c19a37989c3ba06ed3c3e707d5f71ee7ca15ba79f01",
+                  "address": "0xe2d46870f9c26aec4ff92ac403b254c4b7c1cf39a4048ec038d647c5f95db239",
                   "version": 0
                 }
               ]
@@ -157,7 +169,7 @@ Response: {
     "paginationTest": {
       "nodes": [
         {
-          "digest": "En49Y24o8stk1LsmKi7Ev7or7C7bSrz9D8YxPejW1nLt",
+          "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
           "kind": {
             "__typename": "GenesisTransaction",
             "objects": {
@@ -183,21 +195,21 @@ Response: {
     "backwardPaginationTest": {
       "nodes": [
         {
-          "digest": "En49Y24o8stk1LsmKi7Ev7or7C7bSrz9D8YxPejW1nLt",
+          "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
           "kind": {
             "__typename": "GenesisTransaction",
             "objects": {
               "nodes": [
                 {
-                  "address": "0xf0dab2823e1d19ee96011f375a260d90a43ea8d806bac8b969dc3e81b5cc7487",
+                  "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
                   "version": 0
                 },
                 {
-                  "address": "0xf6083a1fca9a045438a394c987423241fa4dcfe99354b3ac08e45a8649acb787",
+                  "address": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
                   "version": 0
                 },
                 {
-                  "address": "0xfe84e8147688f8bdc16b1c19a37989c3ba06ed3c3e707d5f71ee7ca15ba79f01",
+                  "address": "0xe2d46870f9c26aec4ff92ac403b254c4b7c1cf39a4048ec038d647c5f95db239",
                   "version": 0
                 }
               ]
@@ -216,7 +228,7 @@ Response: {
     "paginationAfterCursor": {
       "nodes": [
         {
-          "digest": "En49Y24o8stk1LsmKi7Ev7or7C7bSrz9D8YxPejW1nLt",
+          "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
           "kind": {
             "__typename": "GenesisTransaction",
             "objects": {
@@ -264,7 +276,7 @@ Response: {
     "paginationBeforeCursor": {
       "nodes": [
         {
-          "digest": "En49Y24o8stk1LsmKi7Ev7or7C7bSrz9D8YxPejW1nLt",
+          "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
           "kind": {
             "__typename": "GenesisTransaction",
             "objects": {

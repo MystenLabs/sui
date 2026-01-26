@@ -32,10 +32,10 @@ pub struct ParsingAnalysisContext<'a> {
     pub mod_outer_defs: &'a mut BTreeMap<String, ModuleDefs>,
     /// Mapped file information for translating locations into positions
     pub files: &'a MappedFiles,
+    /// Additional information about definitions
+    pub def_info: &'a DefMap,
     /// Associates uses for a given definition to allow displaying all references
     pub references: &'a mut References,
-    /// Additional information about definitions
-    pub def_info: &'a mut DefMap,
     /// A UseDefMap for a given file
     pub use_defs: &'a mut BTreeMap<FileHash, UseDefMap>,
     /// Current module identifier string (needs to be appropriately set before the module

@@ -36,23 +36,28 @@ Where:
 
 | Asset | Base Rate | Base Slope | Optimal Utilization | Excess Slope | Max Utilization |
 | ----- | --------- | ---------- | ------------------- | ------------ | --------------- |
-| USDC  | 10%       | 15%        | 80%                 | 500%         | 80%             |
-| SUI   | 10%       | 20%        | 80%                 | 500%         | 80%             |
-| DEEP  | 15%       | 20%        | 80%                 | 500%         | 80%             |
-| WAL   | 15%       | 20%        | 80%                 | 500%         | 80%             |
+| USDC  | 0%        | 15%        | 80%                 | 500%         | 90%             |
+| SUI   | 3%        | 20%        | 80%                 | 500%         | 90%             |
+| DEEP  | 5%        | 25%        | 80%                 | 500%         | 90%             |
+| WAL   | 5%        | 25%        | 80%                 | 500%         | 90%             |
 
 The **Max Utilization** rate caps how much of the pool's liquidity can be borrowed, ensuring suppliers can always withdraw a portion of their funds.
 
 ## Examples
 
-**At 50% utilization in the USDC pool:**
+**At 50% utilization in the USDC pool (below optimal):**
 ```
-borrowRate = 10% + 50% × 15% = 10% + 7.5% = 17.5% APR
+borrowRate = 0% + 50% × 15% = 0% + 7.5% = 7.5% APR
 ```
 
-**At 80% utilization (at optimal, which is also the max):**
+**At 80% utilization (at optimal):**
 ```
-borrowRate = 10% + 80% × 15% = 10% + 12% = 22% APR
+borrowRate = 0% + 80% × 15% = 0% + 12% = 12% APR
+```
+
+**At 85% utilization (above optimal, below max):**
+```
+borrowRate = 0% + 80% × 15% + (85% - 80%) × 500% = 0% + 12% + 25% = 37% APR
 ```
 
 ## Related links

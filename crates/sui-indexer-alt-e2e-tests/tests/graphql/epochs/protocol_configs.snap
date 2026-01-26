@@ -15,11 +15,11 @@ task 2, lines 8-20:
 Response: {
   "data": {
     "before": {
-      "protocolVersion": 69,
+      "protocolVersion": 107,
       "configs": []
     },
     "after": {
-      "protocolVersion": 71,
+      "protocolVersion": 109,
       "configs": []
     }
   }
@@ -47,7 +47,7 @@ task 4, lines 30-33:
 Response: {
   "data": {
     "protocolConfigs": {
-      "protocolVersion": 70
+      "protocolVersion": 108
     }
   }
 }
@@ -58,11 +58,11 @@ Response: {
   "data": {
     "epoch": {
       "protocolConfigs": {
-        "protocolVersion": 70
+        "protocolVersion": 108
       }
     },
     "protocolConfigs": {
-      "protocolVersion": 70
+      "protocolVersion": 108
     }
   }
 }

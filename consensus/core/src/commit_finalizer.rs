@@ -283,6 +283,11 @@ impl CommitFinalizer {
             .dag_state
             .read()
             .calculate_gc_round(commit_state.commit.leader.round + INDIRECT_REJECT_DEPTH);
+        tracing::debug!(
+            "Trying to direct finalize commit {} using vote GC round {}",
+            commit_state.commit.commit_ref,
+            vote_gc_round,
+        );
 
         // Each commit can only try direct finalization once.
         assert!(!commit_state.pending_blocks.is_empty());
@@ -509,6 +514,10 @@ impl CommitFinalizer {
     }
 
     async fn try_indirect_finalize_pending_transactions_in_first_commit(&mut self) {
+        tracing::debug!(
+            "Trying to indirectly finalize pending transactions in first commit {}",
+            self.pending_commits[0].commit.commit_ref,
+        );
         let _scope = monitored_scope(
             "CommitFinalizer::try_indirect_finalize_pending_transactions_in_first_commit",
         );
