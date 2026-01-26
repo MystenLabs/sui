@@ -576,6 +576,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
         create_temp_dir_with_framework_packages("ptb_complex_args_test_functions", Some(chain_id))?;
 
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -842,6 +843,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("move_call_args_linter");
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1110,6 +1112,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
         create_temp_dir_with_framework_packages("dummy_modules_publish", Some(chain_id))?;
 
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1249,6 +1252,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("sod");
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1357,6 +1361,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("tto");
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1482,6 +1487,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("tto");
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1607,6 +1613,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("tto");
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1734,6 +1741,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds()
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency");
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1799,6 +1807,7 @@ async fn test_package_publish_command_with_unpublished_dependency_fails()
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency");
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let result = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1850,6 +1859,7 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_failure_invalid");
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let result = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1898,6 +1908,7 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
     let mut build_config: MoveBuildConfig = BuildConfig::new_for_testing().config;
     // this would have been the result of calling `sui client publish --test`
     build_config.test_mode = true;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
 
     let result = SuiClientCommands::TestPublish(TestPublishArgs {
@@ -1952,6 +1963,7 @@ async fn test_package_publish_empty() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("empty");
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let result = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -3978,6 +3990,7 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("clever_errors");
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -4803,6 +4816,7 @@ async fn test_publish_sender_flag_respected_in_serialized_transaction() -> Resul
         create_temp_dir_with_framework_packages("dummy_modules_publish", Some(chain_id))?;
 
     let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.environment = Some("testnet".to_string());
     build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
 
     // Call publish with serialize_unsigned_transaction and a specified sender
