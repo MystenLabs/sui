@@ -198,7 +198,7 @@ impl<'a> TestAuthorityBuilder<'a> {
         }
         let local_network_config = local_network_config_builder.build();
         let genesis = &self.genesis.unwrap_or(&local_network_config.genesis);
-        let genesis_committee = genesis.committee().unwrap();
+        let genesis_committee = genesis.committee();
         let path = self.store_base_path.unwrap_or_else(|| {
             let dir = std::env::temp_dir();
             let store_base_path =
