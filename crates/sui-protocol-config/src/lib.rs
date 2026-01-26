@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 109;
+const MAX_PROTOCOL_VERSION: u64 = 110;
 
 // Record history of protocol version allocations here:
 //
@@ -292,6 +292,7 @@ const MAX_PROTOCOL_VERSION: u64 = 109;
 //              Enable poseidon_bn254 on mainnet.
 // Version 109: Enable parsing on all nonzero custom pcrs in nitro attestation parsing native
 //              function on mainnet.
+// Version 110: split_checkpoints_in_consensus_handler in devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -955,6 +956,10 @@ struct FeatureFlags {
     // If true, convert withdrawal compatibility PTB arguments to coins at the start of the PTB.
     #[serde(skip_serializing_if = "is_false")]
     convert_withdrawal_compatibility_ptb_arguments: bool,
+
+    // If true, split checkpoints in consensus handler.
+    #[serde(skip_serializing_if = "is_false")]
+    split_checkpoints_in_consensus_handler: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2527,6 +2532,10 @@ impl ProtocolConfig {
     pub fn convert_withdrawal_compatibility_ptb_arguments(&self) -> bool {
         self.feature_flags
             .convert_withdrawal_compatibility_ptb_arguments
+    }
+
+    pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
+        self.feature_flags.split_checkpoints_in_consensus_handler
     }
 }
 
@@ -4468,6 +4477,11 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
                 }
+                110 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4856,6 +4870,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_object_funds_withdraw_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_object_funds_withdraw = val;
+    }
+
+    pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
+        self.feature_flags.split_checkpoints_in_consensus_handler = val;
     }
 }
 
