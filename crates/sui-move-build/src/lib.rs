@@ -102,6 +102,7 @@ impl BuildConfig {
             install_dir: Some(install_dir),
             silence_warnings: true,
             lint_flag: move_package_alt_compilation::lint_flag::LintFlag::LEVEL_NONE,
+            environment: Some("testnet".to_string()),
             ..MoveBuildConfig::default()
         };
         BuildConfig {

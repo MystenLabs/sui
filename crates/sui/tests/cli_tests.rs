@@ -16,8 +16,7 @@ use futures::TryStreamExt;
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use sui::client_commands::{
-    EphemeralArgs, GasDataArgs, PaymentArgs, PublishArgs, TestPublishArgs, TxProcessingArgs,
-    UpgradeArgs,
+    GasDataArgs, PaymentArgs, PublishArgs, TestPublishArgs, TxProcessingArgs, UpgradeArgs,
 };
 use sui::client_ptb::ptb::PTB;
 use sui::sui_commands::RpcArgs;
@@ -307,8 +306,9 @@ async fn test_publish_package(
 ) -> Result<(ObjectID, ObjectID), anyhow::Error> {
     let mut build_config = BuildConfig::new_for_testing().config;
     build_config.install_dir = None;
+    build_config.environment = Some("testnet".to_string());
+    build_config.pubfile_path = Some(pubfile.unwrap_or(package_path.join("localnet.toml")));
 
-    let pubfile_path = pubfile.unwrap_or(package_path.join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path: package_path.clone(),
@@ -324,10 +324,6 @@ async fn test_publish_package(
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(pubfile_path),
         },
         publish_unpublished_deps: false,
     })
@@ -579,7 +575,8 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
     let (_tmp, pkg_path) =
         create_temp_dir_with_framework_packages("ptb_complex_args_test_functions", Some(chain_id))?;
 
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path: pkg_path.clone(),
@@ -595,10 +592,6 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -848,7 +841,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let gas_obj_id = object_refs.first().unwrap().id();
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("move_call_args_linter");
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path,
@@ -864,10 +858,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -1119,7 +1109,8 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let (_tmp, package_path) =
         create_temp_dir_with_framework_packages("dummy_modules_publish", Some(chain_id))?;
 
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path,
@@ -1135,10 +1126,6 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -1261,7 +1248,8 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("sod");
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path,
@@ -1277,10 +1265,6 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -1372,7 +1356,8 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("tto");
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path,
@@ -1388,10 +1373,6 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -1500,7 +1481,8 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("tto");
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path,
@@ -1516,10 +1498,6 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -1628,7 +1606,8 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("tto");
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path,
@@ -1644,10 +1623,6 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -1758,7 +1733,8 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds()
 
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency");
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path,
@@ -1774,10 +1750,6 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds()
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -1826,7 +1798,8 @@ async fn test_package_publish_command_with_unpublished_dependency_fails()
 
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_with_unpublished_dependency");
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let result = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path,
@@ -1842,10 +1815,6 @@ async fn test_package_publish_command_with_unpublished_dependency_fails()
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -1880,7 +1849,8 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
 
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("module_publish_failure_invalid");
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let result = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path,
@@ -1896,10 +1866,6 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -1932,6 +1898,7 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
     let mut build_config: MoveBuildConfig = BuildConfig::new_for_testing().config;
     // this would have been the result of calling `sui client publish --test`
     build_config.test_mode = true;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
 
     let result = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
@@ -1948,10 +1915,6 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -1988,7 +1951,8 @@ async fn test_package_publish_empty() -> Result<(), anyhow::Error> {
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("empty");
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let result = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path,
@@ -2004,10 +1968,6 @@ async fn test_package_publish_empty() -> Result<(), anyhow::Error> {
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -4017,7 +3977,8 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
     // Provide path to well formed package sources
     let mut package_path = PathBuf::from(TEST_DATA_DIR);
     package_path.push("clever_errors");
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
     let resp = SuiClientCommands::TestPublish(TestPublishArgs {
         publish_args: PublishArgs {
             package_path: package_path.clone(),
@@ -4033,10 +3994,6 @@ async fn test_clever_errors() -> Result<(), anyhow::Error> {
                 ..Default::default()
             },
             processing: TxProcessingArgs::default(),
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
@@ -4845,7 +4802,8 @@ async fn test_publish_sender_flag_respected_in_serialized_transaction() -> Resul
     let (_tmp, package_path) =
         create_temp_dir_with_framework_packages("dummy_modules_publish", Some(chain_id))?;
 
-    let build_config = BuildConfig::new_for_testing().config;
+    let mut build_config = BuildConfig::new_for_testing().config;
+    build_config.pubfile_path = Some(tempdir()?.path().join("localnet.toml"));
 
     // Call publish with serialize_unsigned_transaction and a specified sender
     // The active address is address_0, but we specify address_1 as sender
@@ -4863,10 +4821,6 @@ async fn test_publish_sender_flag_respected_in_serialized_transaction() -> Resul
                 sender: Some(specified_sender), // Use --sender flag with address_1
                 ..Default::default()
             },
-        },
-        ephemeral: EphemeralArgs {
-            build_env: Some("testnet".to_string()),
-            pubfile_path: Some(tempdir()?.path().join("localnet.toml")),
         },
         publish_unpublished_deps: false,
     })
