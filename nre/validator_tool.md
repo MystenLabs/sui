@@ -182,7 +182,7 @@ $SUI_BINARY validator leave-committee
 Then you will be removed from committee starting from next epoch.
 
 #### Offline Signing
-For security reasons, you may want to sign transactions on a separate machine (e.g., an air-gapped machine). You can use the `--serialize-unsigned-transaction` flag with the following commands to get the base64 encoded transaction data without executing it:
+For security reasons, you may want to sign transactions on a separate machine (e.g., an air-gapped machine). You can use the `--serialize-unsigned-transaction` and `--sender` flags with the following commands to get the base64 encoded transaction data without executing it:
 - `become-candidate`
 - `join-committee`
 - `leave-committee`
@@ -192,7 +192,7 @@ For security reasons, you may want to sign transactions on a separate machine (e
 
 Example:
 ```bash
-$SUI_BINARY validator update-gas-price 1000 --serialize-unsigned-transaction
+$SUI_BINARY validator update-gas-price 1000 --serialize-unsigned-transaction --sender $ACCOUNT_ADDRESS
 ```
 Output:
 ```
