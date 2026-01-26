@@ -73,7 +73,7 @@ fn validate_bounds(
         return Ok(None);
     }
 
-    let scan_range = cp_hi.saturating_sub(cp_lo);
+    let scan_range = cp_hi.saturating_sub(cp_lo).saturating_add(1);
     if scan_range > limits.max_scan_limit {
         return Err(bad_user_input(ScanError::LimitExceeded {
             requested: scan_range,
