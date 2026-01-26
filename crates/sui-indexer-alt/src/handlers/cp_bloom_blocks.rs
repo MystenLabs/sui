@@ -82,9 +82,6 @@ impl Handler for CpBloomBlocks {
     type Store = Db;
     type Batch = BTreeMap<i64, CpBlockBatch>;
 
-    const MIN_EAGER_ROWS: usize = 100;
-    const MAX_PENDING_ROWS: usize = 1000;
-
     fn batch(
         &self,
         batch: &mut Self::Batch,
