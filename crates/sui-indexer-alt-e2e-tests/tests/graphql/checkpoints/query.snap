@@ -112,7 +112,9 @@ task 9, lines 64-74:
 Response: {
   "data": {
     "checkpoint": {
-      "query": null
+      "query": {
+        "atCheckpoint": null
+      }
     }
   },
   "errors": [

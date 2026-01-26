@@ -125,7 +125,9 @@ Response: {
 task 11, lines 123-126:
 //# run-graphql
 Response: {
-  "data": null,
+  "data": {
+    "future": null
+  },
   "errors": [
     {
       "message": "Checkpoint 3 in the future",

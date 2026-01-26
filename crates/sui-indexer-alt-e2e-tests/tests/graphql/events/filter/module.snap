@@ -625,7 +625,9 @@ Response: {
 task 9, lines 141-148:
 //# run-graphql
 Response: {
-  "data": null,
+  "data": {
+    "eventsByModuleAndTypeIsUnavailable": null
+  },
   "errors": [
     {
       "message": "Filtering by both emitting module and event type is not supported not available",
