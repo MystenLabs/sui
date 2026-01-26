@@ -745,30 +745,17 @@ pub struct UpgradeArgs {
     pub processing: TxProcessingArgs,
 }
 
-#[derive(Args, Debug, Default, Clone)]
-pub struct EphemeralArgs {
-    /// The build environment
-    #[clap(long)]
-    pub build_env: Option<String>,
-    /// Path to publication file
-    #[clap(long)]
-    pub pubfile_path: Option<PathBuf>,
-}
-
-impl EphemeralArgs {
-    pub fn get_pubfile_path_or_default(&self, alias: &str) -> PathBuf {
-        self.pubfile_path
-            .clone()
-            .unwrap_or_else(|| PathBuf::from(format!("Pub.{alias}.toml")))
-    }
+/// Returns the pubfile path, or a default based on the environment alias if not specified
+fn get_pubfile_path_or_default(pubfile_path: Option<&PathBuf>, alias: &str) -> PathBuf {
+    pubfile_path
+        .cloned()
+        .unwrap_or_else(|| PathBuf::from(format!("Pub.{alias}.toml")))
 }
 
 #[derive(Args, Debug, Default)]
 pub struct TestPublishArgs {
     #[clap(flatten)]
     pub publish_args: PublishArgs,
-    #[clap(flatten)]
-    pub ephemeral: EphemeralArgs,
     #[clap(long, default_value = "false")]
     /// Publishes transitive dependencies that have not already been published.
     pub publish_unpublished_deps: bool,
@@ -778,8 +765,6 @@ pub struct TestPublishArgs {
 pub struct TestUpgradeArgs {
     #[clap(flatten)]
     pub upgrade_args: UpgradeArgs,
-    #[clap(flatten)]
-    pub ephemeral: EphemeralArgs,
 }
 #[derive(serde::Deserialize, Debug)]
 struct FaucetResponse {
@@ -912,12 +897,12 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "upgrade")?;
                 let _ = context.cache_chain_id().await?;
-                upgrade_command(args, context, None).await?
+                upgrade_command(args, context, false).await?
             }
 
             SuiClientCommands::TestUpgrade(args) => {
                 verify_no_test_mode(&args.upgrade_args.build_config)?;
-                upgrade_command(args.upgrade_args, context, Some(args.ephemeral)).await?
+                upgrade_command(args.upgrade_args, context, true).await?
             }
 
             SuiClientCommands::Publish(args) => {
@@ -943,9 +928,12 @@ impl SuiClientCommands {
                 let alias = active_env.alias.clone();
 
                 let modes = args.publish_args.build_config.mode_set();
-                let build_env = args.ephemeral.build_env.clone();
+                let build_env = args.publish_args.build_config.environment.clone();
                 // We produce a pub file path only once, even for transitive deps.
-                let pubfile_path = args.ephemeral.get_pubfile_path_or_default(&alias);
+                let pubfile_path = get_pubfile_path_or_default(
+                    args.publish_args.build_config.pubfile_path.as_ref(),
+                    &alias,
+                );
 
                 // Do a transitive publication for each dependency that is not yet published
                 if args.publish_unpublished_deps {
@@ -3419,7 +3407,7 @@ async fn publish_command(
 async fn upgrade_command(
     args: UpgradeArgs,
     context: &mut WalletContext,
-    ephemeral_args: Option<EphemeralArgs>,
+    is_ephemeral: bool,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let UpgradeArgs {
         package_path,
@@ -3451,13 +3439,14 @@ async fn upgrade_command(
                 error: format!("Failed to canonicalize package path: {}", e),
             })?;
 
-    let mut root_pkg = if let Some(ephemeral_args) = ephemeral_args {
+    let mut root_pkg = if is_ephemeral {
         let alias = context.get_active_env()?.alias.clone();
+        let pubfile_path = get_pubfile_path_or_default(build_config.pubfile_path.as_ref(), &alias);
         load_root_pkg_for_ephemeral_publish_or_upgrade(
             &package_path,
             &chain_id,
-            ephemeral_args.build_env.clone(),
-            ephemeral_args.get_pubfile_path_or_default(&alias),
+            build_config.environment.clone(),
+            pubfile_path,
             build_config.mode_set(),
         )
         .await?
