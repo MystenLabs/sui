@@ -47,6 +47,14 @@ pub fn hash(value: &[u8], seed: u128) -> (usize, impl Iterator<Item = usize>) {
     blocked::hash::<BLOOM_BLOCK_BYTES, NUM_BLOOM_BLOCKS, NUM_HASHES>(value, seed)
 }
 
+/// `BlockedBloomProbe`s using `CpBlockedBloomFilter` dimensions for SQL membership checks.
+pub fn probe(
+    values: impl IntoIterator<Item = impl AsRef<[u8]>>,
+    seed: u128,
+) -> Vec<blocked::BlockedBloomProbe> {
+    blocked::probe::<BLOOM_BLOCK_BYTES, NUM_BLOOM_BLOCKS, NUM_HASHES>(values, seed)
+}
+
 /// The block a checkpoint belongs to. Checkpoints in a block share the same bloom filter and the block
 /// id is used as the seed for the blocked bloom filter hash functions.
 pub fn cp_block_id(cp_num: u64) -> i64 {
