@@ -181,11 +181,11 @@ impl TransactionFilter {
 
 impl TransactionFilter {
     pub(crate) fn matches(&self, transaction: &NativeTransactionContents) -> bool {
-        let data = || transaction.data().ok();
-        let effects = || transaction.effects().ok();
+        let data = transaction.data().ok();
+        let effects = transaction.effects().ok();
 
         if let Some(function) = &self.function {
-            let has_match = data().is_some_and(|d| {
+            let has_match = data.as_ref().is_some_and(|d| {
                 d.move_calls().into_iter().any(|(_, p, m, f)| {
                     SuiAddress::from(*p) == function.package()
                         && function.module().is_none_or(|module| m == module)
@@ -198,28 +198,31 @@ impl TransactionFilter {
         }
 
         if let Some(sent_address) = &self.sent_address
-            && data().is_none_or(|d| SuiAddress::from(d.sender()) != *sent_address)
+            && data
+                .as_ref()
+                .is_none_or(|d| SuiAddress::from(d.sender()) != *sent_address)
         {
             return false;
         }
 
         if let Some(affected_address) = &self.affected_address {
-            let in_changed_objects = effects().is_some_and(|e| {
+            let in_changed_objects = effects.as_ref().is_some_and(|e| {
                 e.all_changed_objects().iter().any(|(_, owner, _)| {
                     owner
                         .get_address_owner_address()
                         .is_ok_and(|addr| SuiAddress::from(addr) == *affected_address)
                 })
             });
-            let is_sender =
-                data().is_some_and(|d| SuiAddress::from(d.sender()) == *affected_address);
+            let is_sender = data
+                .as_ref()
+                .is_some_and(|d| SuiAddress::from(d.sender()) == *affected_address);
             if !in_changed_objects && !is_sender {
                 return false;
             }
         }
 
         if let Some(affected_object) = &self.affected_object {
-            let has_match = effects().is_some_and(|e| {
+            let has_match = effects.as_ref().is_some_and(|e| {
                 e.object_changes()
                     .iter()
                     .any(|obj_change| SuiAddress::from(obj_change.id) == *affected_object)
@@ -230,7 +233,7 @@ impl TransactionFilter {
         }
 
         if let Some(kind) = &self.kind {
-            let matches_kind = data().is_some_and(|d| {
+            let matches_kind = data.as_ref().is_some_and(|d| {
                 let is_programmable = matches!(
                     d.kind(),
                     sui_types::transaction::TransactionKind::ProgrammableTransaction(_)
