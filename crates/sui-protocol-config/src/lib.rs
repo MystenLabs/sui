@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 108;
+const MAX_PROTOCOL_VERSION: u64 = 109;
 
 // Record history of protocol version allocations here:
 //
@@ -290,7 +290,7 @@ const MAX_PROTOCOL_VERSION: u64 = 108;
 //              Disable entry point signature check.
 //              Enable address aliases on testnet.
 //              Enable poseidon_bn254 on mainnet.
-// Version 109: New framework.
+// Version 109: Update where we set bounds for some binary tables to be a bit more idiomatic.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -957,6 +957,10 @@ struct FeatureFlags {
     // If true, convert withdrawal compatibility PTB arguments to coins at the start of the PTB.
     #[serde(skip_serializing_if = "is_false")]
     convert_withdrawal_compatibility_ptb_arguments: bool,
+
+    // If true, additional restrictions for hot or not entry functions are enforced.
+    #[serde(skip_serializing_if = "is_false")]
+    restrict_hot_or_not_entry_functions: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2529,6 +2533,10 @@ impl ProtocolConfig {
     pub fn convert_withdrawal_compatibility_ptb_arguments(&self) -> bool {
         self.feature_flags
             .convert_withdrawal_compatibility_ptb_arguments
+    }
+
+    pub fn restrict_hot_or_not_entry_functions(&self) -> bool {
+        self.feature_flags.restrict_hot_or_not_entry_functions
     }
 }
 
@@ -4463,6 +4471,11 @@ impl ProtocolConfig {
                     }
 
                     cfg.feature_flags.enable_poseidon = true;
+                }
+                109 => {
+                    cfg.binary_variant_handles = Some(1024);
+                    cfg.binary_variant_instantiation_handles = Some(1024);
+                    cfg.feature_flags.restrict_hot_or_not_entry_functions = true;
                 }
                 // Use this template when making changes:
                 //
