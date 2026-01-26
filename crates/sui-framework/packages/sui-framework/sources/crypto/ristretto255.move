@@ -1,0 +1,128 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/// Group operations of BLS12-381.
+module sui::ristretto255;
+
+use sui::group_ops::{Self, Element};
+
+/////////////////////////////////////////////
+////// Elliptic curve operations //////
+
+public struct Scalar {}
+public struct Point {}
+
+// Const elements.
+const SCALAR_ZERO_BYTES: vector<u8> =
+    x"0000000000000000000000000000000000000000000000000000000000000000";
+const SCALAR_ONE_BYTES: vector<u8> =
+    x"0000000000000000000000000000000000000000000000000000000000000001";
+const IDENTITY_BYTES: vector<u8> =
+    x"0000000000000000000000000000000000000000000000000000000000000000";
+const GENERATOR_BYTES: vector<u8> =
+    x"0000000000000000000000000000000000000000000000000000000000000000";
+
+// Internal types used by group_ops' native functions.
+const SCALAR_TYPE: u8 = 5;
+const POINT_TYPE: u8 = 6;
+
+///////////////////////////////
+////// Scalar operations //////
+
+public fun scalar_from_bytes(bytes: &vector<u8>): Element<Scalar> {
+    group_ops::from_bytes(SCALAR_TYPE, *bytes, false)
+}
+
+public fun scalar_from_u64(x: u64): Element<Scalar> {
+    let mut bytes = SCALAR_ZERO_BYTES;
+    group_ops::set_as_prefix(x, true, &mut bytes);
+    group_ops::from_bytes(SCALAR_TYPE, bytes, true)
+}
+
+public fun scalar_zero(): Element<Scalar> {
+    group_ops::from_bytes(SCALAR_TYPE, SCALAR_ZERO_BYTES, true)
+}
+
+public fun scalar_one(): Element<Scalar> {
+    group_ops::from_bytes(SCALAR_TYPE, SCALAR_ONE_BYTES, true)
+}
+
+public fun scalar_add(e1: &Element<Scalar>, e2: &Element<Scalar>): Element<Scalar> {
+    group_ops::add(SCALAR_TYPE, e1, e2)
+}
+
+public fun scalar_sub(e1: &Element<Scalar>, e2: &Element<Scalar>): Element<Scalar> {
+    group_ops::sub(SCALAR_TYPE, e1, e2)
+}
+
+public fun scalar_mul(e1: &Element<Scalar>, e2: &Element<Scalar>): Element<Scalar> {
+    group_ops::mul(SCALAR_TYPE, e1, e2)
+}
+
+/// Returns e2/e1, fails if a is zero.
+public fun scalar_div(e1: &Element<Scalar>, e2: &Element<Scalar>): Element<Scalar> {
+    group_ops::div(SCALAR_TYPE, e1, e2)
+}
+
+public fun scalar_neg(e: &Element<Scalar>): Element<Scalar> {
+    scalar_sub(&scalar_zero(), e)
+}
+
+// Fails if e is zero.
+public fun scalar_inv(e: &Element<Scalar>): Element<Scalar> {
+    scalar_div(e, &scalar_one())
+}
+
+public fun hash_to_scalar(m: &vector<u8>): Element<Point> {
+    group_ops::hash_to(SCALAR_TYPE, m)
+}
+
+/////////////////////////////////
+////// Point operations //////
+
+public fun point_from_bytes(bytes: &vector<u8>): Element<Point> {
+    group_ops::from_bytes(POINT_TYPE, *bytes, false)
+}
+
+public fun identity(): Element<Point> {
+    group_ops::from_bytes(POINT_TYPE, IDENTITY_BYTES, true)
+}
+
+public fun generator(): Element<Point> {
+    group_ops::from_bytes(POINT_TYPE, GENERATOR_BYTES, true)
+}
+
+public fun point_add(e1: &Element<Point>, e2: &Element<Point>): Element<Point> {
+    group_ops::add(POINT_TYPE, e1, e2)
+}
+
+public fun point_sub(e1: &Element<Point>, e2: &Element<Point>): Element<Point> {
+    group_ops::sub(POINT_TYPE, e1, e2)
+}
+
+public fun point_mul(e1: &Element<Scalar>, e2: &Element<Point>): Element<Point> {
+    group_ops::mul(POINT_TYPE, e1, e2)
+}
+
+/// Returns e2 / e1, fails if scalar is zero.
+public fun point_div(e1: &Element<Scalar>, e2: &Element<Point>): Element<Point> {
+    group_ops::div(POINT_TYPE, e1, e2)
+}
+
+public fun point_neg(e: &Element<Point>): Element<Point> {
+    point_sub(&identity(), e)
+}
+
+public fun hash_to_point(m: &vector<u8>): Element<Point> {
+    group_ops::hash_to(POINT_TYPE, m)
+}
+
+/// Let 'scalars' be the vector [s1, s2, ..., sn] and 'elements' be the vector [e1, e2, ..., en].
+/// Returns s1*e1 + s2*e2 + ... + sn*en.
+/// Aborts with `EInputTooLong` if the vectors are larger than 32 (may increase in the future).
+public fun multi_scalar_multiplication(
+    scalars: &vector<Element<Scalar>>,
+    elements: &vector<Element<Point>>,
+): Element<Point> {
+    group_ops::multi_scalar_multiplication(POINT_TYPE, scalars, elements)
+}

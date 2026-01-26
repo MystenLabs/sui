@@ -751,6 +751,23 @@ impl NativesCostTable {
                     .map(Into::into),
                 bls12381_uncompressed_g1_sum_max_terms: protocol_config
                     .group_ops_bls12381_uncompressed_g1_sum_max_terms_as_option(),
+                ristretto_decode_scalar_cost: protocol_config.group_ops_ristretto_decode_scalar_cost_as_option().map(Into::into),
+                ristretto_decode_point_cost: protocol_config.group_ops_ristretto_decode_point_cost_as_option().map(Into::into),
+                ristretto_scalar_add_cost: protocol_config.group_ops_ristretto_scalar_add_cost_as_option().map(Into::into),
+                ristretto_point_add_cost: protocol_config.group_ops_ristretto_point_add_cost_as_option().map(Into::into),
+                ristretto_scalar_sub_cost: protocol_config.group_ops_ristretto_scalar_sub_cost_as_option().map(Into::into),
+                ristretto_point_sub_cost: protocol_config.group_ops_ristretto_point_sub_cost_as_option().map(Into::into),
+                ristretto_scalar_mul_cost: protocol_config.group_ops_ristretto_scalar_mul_cost_as_option().map(Into::into),
+                ristretto_point_mul_cost: protocol_config.group_ops_ristretto_point_mul_cost_as_option().map(Into::into),
+                ristretto_scalar_div_cost: protocol_config.group_ops_ristretto_scalar_div_cost_as_option().map(Into::into),
+                ristretto_point_div_cost: protocol_config.group_ops_ristretto_point_div_cost_as_option().map(Into::into),
+                ristretto_scalar_hash_to_base_cost: protocol_config.group_ops_ristretto_scalar_hash_to_base_cost_as_option().map(Into::into),
+                ristretto_scalar_hash_to_cost_per_byte: protocol_config.group_ops_ristretto_scalar_hash_to_cost_per_byte_as_option().map(Into::into),
+                ristretto_point_hash_to_base_cost: protocol_config.group_ops_ristretto_point_hash_to_base_cost_as_option().map(Into::into),
+                ristretto_point_hash_to_cost_per_byte: protocol_config.group_ops_ristretto_point_hash_to_cost_per_byte_as_option().map(Into::into),
+                ristretto_msm_base_cost: protocol_config.group_ops_ristretto_msm_base_cost_as_option().map(Into::into),
+                ristretto_msm_base_cost_per_input: protocol_config.group_ops_ristretto_msm_base_cost_per_input_as_option().map(Into::into),
+                ristretto_msm_max_len: protocol_config.group_ops_ristretto_msm_max_len_as_option(),
             },
             vdf_cost_params: VDFCostParams {
                 vdf_verify_cost: protocol_config

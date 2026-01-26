@@ -6,6 +6,7 @@ use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::groups::{
     FromTrustedByteArray, GroupElement, HashToGroupElement, MultiScalarMul, Pairing,
     bls12381 as bls,
+    ristretto255 as ristretto,
 };
 use fastcrypto::serde_helpers::ToFromByteArray;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -127,6 +128,32 @@ pub struct GroupOpsCostParams {
     pub bls12381_uncompressed_g1_sum_cost_per_term: Option<InternalGas>,
     // limit the number of terms in a sum
     pub bls12381_uncompressed_g1_sum_max_terms: Option<u64>,
+
+    pub ristretto_decode_scalar_cost: Option<InternalGas>,
+    pub ristretto_decode_point_cost: Option<InternalGas>,
+    // costs for decode, add, and encode output
+    pub ristretto_scalar_add_cost: Option<InternalGas>,
+    pub ristretto_point_add_cost: Option<InternalGas>,
+    // costs for decode, sub, and encode output
+    pub ristretto_scalar_sub_cost: Option<InternalGas>,
+    pub ristretto_point_sub_cost: Option<InternalGas>,
+    // costs for decode, mul, and encode output
+    pub ristretto_scalar_mul_cost: Option<InternalGas>,
+    pub ristretto_point_mul_cost: Option<InternalGas>,
+    // costs for decode, div, and encode output
+    pub ristretto_scalar_div_cost: Option<InternalGas>,
+    pub ristretto_point_div_cost: Option<InternalGas>,
+    // costs for hashing
+    pub ristretto_scalar_hash_to_base_cost: Option<InternalGas>,
+    pub ristretto_scalar_hash_to_cost_per_byte: Option<InternalGas>,
+    pub ristretto_point_hash_to_base_cost: Option<InternalGas>,
+    pub ristretto_point_hash_to_cost_per_byte: Option<InternalGas>,
+    // costs for encoding the output + base cost for MSM (the |q| doublings) but not decoding
+    pub ristretto_msm_base_cost: Option<InternalGas>,
+    // cost that is multiplied with the approximated number of additions
+    pub ristretto_msm_base_cost_per_input: Option<InternalGas>,
+    // limit the length of the input vectors for MSM
+    pub ristretto_msm_max_len: Option<u64>,
 }
 
 macro_rules! native_charge_gas_early_exit_option {
@@ -151,6 +178,8 @@ enum Groups {
     BLS12381G2 = 2,
     BLS12381GT = 3,
     BLS12381UncompressedG1 = 4,
+    RistrettoScalar = 5,
+    RistrettoPoint = 6,
 }
 
 impl Groups {
@@ -161,6 +190,8 @@ impl Groups {
             2 => Some(Groups::BLS12381G2),
             3 => Some(Groups::BLS12381GT),
             4 => Some(Groups::BLS12381UncompressedG1),
+            5 => Some(Groups::RistrettoScalar),
+            6 => Some(Groups::RistrettoPoint),
             _ => None,
         }
     }
@@ -248,6 +279,14 @@ pub fn internal_validate(
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_decode_g2_cost);
             parse_untrusted::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(&bytes).is_ok()
         }
+        Some(Groups::RistrettoScalar) => {
+            native_charge_gas_early_exit_option!(context, cost_params.ristretto_decode_scalar_cost);
+            parse_untrusted::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(&bytes).is_ok()
+        }
+        Some(Groups::RistrettoPoint) => {
+            native_charge_gas_early_exit_option!(context, cost_params.ristretto_decode_point_cost);
+            parse_untrusted::<ristretto::RistrettoPoint, { ristretto::RISTRETTO_POINT_BYTE_LENGTH }>(&bytes).is_ok()
+        }
         _ => false,
     };
 
@@ -302,6 +341,14 @@ pub fn internal_add(
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_gt_add_cost);
             binary_op::<bls::GTElement, { bls::GTElement::BYTE_LENGTH }>(|a, b| Ok(a + b), &e1, &e2)
         }
+        Some(Groups::RistrettoScalar) => {
+            native_charge_gas_early_exit_option!(context, cost_params.ristretto_scalar_add_cost);
+            binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(|a, b| Ok(a + b), &e1, &e2)
+        }
+        Some(Groups::RistrettoPoint) => {
+            native_charge_gas_early_exit_option!(context, cost_params.ristretto_point_add_cost);
+            binary_op::<ristretto::RistrettoPoint, { ristretto::RISTRETTO_POINT_BYTE_LENGTH }>(|a, b| Ok(a + b), &e1, &e2)
+        }
         _ => Err(FastCryptoError::InvalidInput),
     };
 
@@ -352,6 +399,14 @@ pub fn internal_sub(
         Some(Groups::BLS12381GT) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_gt_sub_cost);
             binary_op::<bls::GTElement, { bls::GTElement::BYTE_LENGTH }>(|a, b| Ok(a - b), &e1, &e2)
+        }
+        Some(Groups::RistrettoScalar) => {
+            native_charge_gas_early_exit_option!(context, cost_params.ristretto_scalar_sub_cost);
+            binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(|a, b| Ok(a - b), &e1, &e2)
+        }
+        Some(Groups::RistrettoPoint) => {
+            native_charge_gas_early_exit_option!(context, cost_params.ristretto_point_sub_cost);
+            binary_op::<ristretto::RistrettoPoint, { ristretto::RISTRETTO_POINT_BYTE_LENGTH }>(|a, b| Ok(a - b), &e1, &e2)
         }
         _ => Err(FastCryptoError::InvalidInput),
     };
@@ -417,6 +472,19 @@ pub fn internal_mul(
                 bls::GTElement,
                 { bls::Scalar::BYTE_LENGTH },
                 { bls::GTElement::BYTE_LENGTH },
+            >(|a, b| Ok(b * a), &e1, &e2)
+        }
+        Some(Groups::RistrettoScalar) => {
+            native_charge_gas_early_exit_option!(context, cost_params.ristretto_scalar_mul_cost);
+            binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(|a, b| Ok(b * a), &e1, &e2)
+        }
+        Some(Groups::RistrettoPoint) => {
+            native_charge_gas_early_exit_option!(context, cost_params.ristretto_point_mul_cost);
+            binary_op_diff::<
+                ristretto::RistrettoScalar,
+                ristretto::RistrettoPoint,
+                { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH },
+                { ristretto::RISTRETTO_POINT_BYTE_LENGTH },
             >(|a, b| Ok(b * a), &e1, &e2)
         }
         _ => Err(FastCryptoError::InvalidInput),
@@ -485,6 +553,19 @@ pub fn internal_div(
                 { bls::GTElement::BYTE_LENGTH },
             >(|a, b| b / a, &e1, &e2)
         }
+        Some(Groups::RistrettoScalar) => {
+            native_charge_gas_early_exit_option!(context, cost_params.ristretto_scalar_div_cost);
+            binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(|a, b| Ok(b * a), &e1, &e2)
+        }
+        Some(Groups::RistrettoPoint) => {
+            native_charge_gas_early_exit_option!(context, cost_params.ristretto_point_mul_cost);
+            binary_op_diff::<
+                ristretto::RistrettoScalar,
+                ristretto::RistrettoPoint,
+                { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH },
+                { ristretto::RISTRETTO_POINT_BYTE_LENGTH },
+            >(|a, b| Ok(b * a), &e1, &e2)
+        }
         _ => Err(FastCryptoError::InvalidInput),
     };
 
@@ -546,6 +627,32 @@ pub fn internal_hash_to(
                         .map(|per_byte| base_cost + per_byte * (m.len() as u64).into()))
             );
             Ok(bls::G2Element::hash_to_group_element(&m)
+                .to_byte_array()
+                .to_vec())
+        }
+        Some(Groups::RistrettoScalar) => {
+            native_charge_gas_early_exit_option!(
+                context,
+                cost_params
+                    .ristretto_scalar_hash_to_base_cost
+                    .and_then(|base_cost| cost_params
+                        .ristretto_scalar_hash_to_cost_per_byte
+                        .map(|per_byte| base_cost + per_byte * (m.len() as u64).into()))
+            );
+            Ok(ristretto::RistrettoScalar::hash_to_group_element(&m)
+                .to_byte_array()
+                .to_vec())
+        }
+        Some(Groups::RistrettoPoint) => {
+            native_charge_gas_early_exit_option!(
+                context,
+                cost_params
+                    .ristretto_point_hash_to_base_cost
+                    .and_then(|base_cost| cost_params
+                        .ristretto_point_hash_to_cost_per_byte
+                        .map(|per_byte| base_cost + per_byte * (m.len() as u64).into()))
+            );
+            Ok(ristretto::RistrettoPoint::hash_to_group_element(&m)
                 .to_byte_array()
                 .to_vec())
         }
@@ -706,6 +813,20 @@ pub fn internal_multi_scalar_mul(
             cost_params.bls12381_decode_g2_cost,
             cost_params.bls12381_g2_msm_base_cost,
             cost_params.bls12381_g2_msm_base_cost_per_input,
+            max_len,
+            scalars.as_ref(),
+            elements.as_ref(),
+        ),
+        Some(Groups::RistrettoPoint) => multi_scalar_mul::<
+            ristretto::RistrettoPoint,
+            { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH },
+            { ristretto::RISTRETTO_POINT_BYTE_LENGTH },
+        >(
+            context,
+            cost_params.ristretto_decode_scalar_cost,
+            cost_params.ristretto_decode_point_cost,
+            cost_params.ristretto_msm_base_cost,
+            cost_params.ristretto_msm_base_cost_per_input,
             max_len,
             scalars.as_ref(),
             elements.as_ref(),
