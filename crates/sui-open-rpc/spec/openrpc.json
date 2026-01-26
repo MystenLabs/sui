@@ -1414,6 +1414,7 @@
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,
                 "resolve_type_input_ids_to_defining_id": false,
+                "restrict_hot_or_not_entry_functions": false,
                 "rethrow_serialization_type_layout_errors": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,

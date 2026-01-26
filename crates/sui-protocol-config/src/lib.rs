@@ -290,9 +290,11 @@ const MAX_PROTOCOL_VERSION: u64 = 110;
 //              Disable entry point signature check.
 //              Enable address aliases on testnet.
 //              Enable poseidon_bn254 on mainnet.
-// Version 109: Enable parsing on all nonzero custom pcrs in nitro attestation parsing native
+// Version 109: Update where we set bounds for some binary tables to be a bit more idiomatic.
+// Version 110: Enable parsing on all nonzero custom pcrs in nitro attestation parsing native
 //              function on mainnet.
-// Version 110: split_checkpoints_in_consensus_handler in devnet
+//              New framework.
+//              split_checkpoints_in_consensus_handler in devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -956,6 +958,10 @@ struct FeatureFlags {
     // If true, convert withdrawal compatibility PTB arguments to coins at the start of the PTB.
     #[serde(skip_serializing_if = "is_false")]
     convert_withdrawal_compatibility_ptb_arguments: bool,
+
+    // If true, additional restrictions for hot or not entry functions are enforced.
+    #[serde(skip_serializing_if = "is_false")]
+    restrict_hot_or_not_entry_functions: bool,
 
     // If true, split checkpoints in consensus handler.
     #[serde(skip_serializing_if = "is_false")]
@@ -2532,6 +2538,10 @@ impl ProtocolConfig {
     pub fn convert_withdrawal_compatibility_ptb_arguments(&self) -> bool {
         self.feature_flags
             .convert_withdrawal_compatibility_ptb_arguments
+    }
+
+    pub fn restrict_hot_or_not_entry_functions(&self) -> bool {
+        self.feature_flags.restrict_hot_or_not_entry_functions
     }
 
     pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
@@ -4472,12 +4482,15 @@ impl ProtocolConfig {
                     cfg.feature_flags.enable_poseidon = true;
                 }
                 109 => {
+                    cfg.binary_variant_handles = Some(1024);
+                    cfg.binary_variant_instantiation_handles = Some(1024);
+                    cfg.feature_flags.restrict_hot_or_not_entry_functions = true;
+                }
+                110 => {
                     cfg.feature_flags
                         .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
                     cfg.feature_flags
                         .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
-                }
-                110 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
                     }
