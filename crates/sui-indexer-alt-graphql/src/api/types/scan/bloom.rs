@@ -47,15 +47,15 @@ pub(crate) async fn candidate_cps<C>(
     let cp_block_lo = cp_block_id(cp_lo);
     let cp_block_hi = cp_block_id(cp_hi);
 
-    let block_probes: Vec<_> = (cp_block_lo..=cp_block_hi)
-        .flat_map(|id| {
-            cp_bloom_blocks::probe(filter_values, id as u128)
-                .into_iter()
-                .map(move |probe| (id, probe))
-        })
-        .collect();
+    // Block ID and probe for each block in the range. Seeds vary per block, so we must
+    // construct probes for each block.
+    let block_probes = (cp_block_lo..=cp_block_hi).flat_map(|id| {
+        cp_bloom_blocks::probe(filter_values, id as u128)
+            .into_iter()
+            .map(move |probe| (id, probe))
+    });
 
-    let cp_bloom_blocks_condition = cp_bloom_block_probes_fragment(&block_probes);
+    let cp_bloom_blocks_condition = cp_bloom_block_probes_fragment(block_probes);
     let cp_bloom_condition = cp_bloom_condition_fragment(&cp_blooms::probe(filter_values));
 
     let fpr_adjusted_limit = (page.limit_with_overhead() as f64 * OVERFETCH_MULTIPLIER) as i64;
@@ -125,9 +125,10 @@ pub(crate) async fn candidate_cps<C>(
 
 /// SQL VALUES clause specifying which block_id and bloom blocks to check and which bits must be set.
 /// Uses parallel arrays of byte offsets and bit masks for efficient bloom_contains checks.
-fn cp_bloom_block_probes_fragment(probes: &[(i64, BlockedBloomProbe)]) -> Query<'static> {
+fn cp_bloom_block_probes_fragment(
+    probes: impl Iterator<Item = (i64, BlockedBloomProbe)>,
+) -> Query<'static> {
     let values = probes
-        .iter()
         .map(|(cp_block_id, (block_idx, byte_offsets, bit_masks))| {
             format!(
                 "({}::BIGINT, {}::SMALLINT, ARRAY[{}]::INT[], ARRAY[{}]::INT[])",
