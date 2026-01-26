@@ -294,7 +294,8 @@ const MAX_PROTOCOL_VERSION: u64 = 110;
 // Version 110: Enable parsing on all nonzero custom pcrs in nitro attestation parsing native
 //              function on mainnet.
 //              New framework.
-//              split_checkpoints_in_consensus_handler in devnet
+//              split_checkpoints_in_consensus_handler in testnet
+//              authenticated_events in testnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4491,8 +4492,9 @@ impl ProtocolConfig {
                         .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
                     cfg.feature_flags
                         .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    if chain != Chain::Mainnet {
                         cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
+                        cfg.feature_flags.enable_authenticated_event_streams = true;
                     }
                 }
                 // Use this template when making changes:
