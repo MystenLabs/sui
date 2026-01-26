@@ -37,7 +37,7 @@ bool, u8, u16, u32, u64, u128, u256, address, vector<T>
 Within a module, these are automatically available:
 
 - `Self` - alias for the current module
-- All defined structs, enums, functions, and constants by their simple name
+- All defined structs, enums, functions, and constants by their name
 
 ```move
 module example::demo;
@@ -58,25 +58,26 @@ public fun create(ctx: &mut TxContext): MyObject {  // TxContext is implicit
 
 ## 2. Naming Rules
 
-| Element          | Rule                             | Example                         |
-| ---------------- | -------------------------------- | ------------------------------- |
-| Variables        | Start with `a-z` or `_`          | `let count = 0;`                |
-| Functions        | Start with `a-z`, no leading `_` | `public fun transfer()`         |
-| Structs/Enums    | Start with `A-Z`                 | `public struct Coin { }`        |
-| Constants        | Start with `A-Z`                 | `const MAX_SUPPLY: u64 = 1000;` |
-| Type Parameters  | Start with `A-Z`                 | `public struct Box<T> { }`      |
-| Macro Parameters | Must start with `$`              | `macro fun m($x: u64)`          |
+| Element               | Rule                             | Example                         |
+| --------------------- | -------------------------------- | ------------------------------- |
+| Variables             | Start with `a-z` or `_`          | `let count = 0;`                |
+| Functions             | Start with `a-z`, no leading `_` | `public fun transfer()`         |
+| Structs/Enums         | Start with `A-Z`                 | `public struct Coin { }`        |
+| Constants             | Start with `A-Z`                 | `const MAX_SUPPLY: u64 = 1000;` |
+| Type Parameters       | Start with `A-Z`                 | `public struct Box<T> { }`      |
+| Macro Parameters      | Must start with `$`              | `macro fun m($x: u64)`          |
+| Macro Type Parameters | Must start with `$`              | `macro fun m<$T>(x: $T)`        |
 
 ## 2. Ability System
 
 Every type in Move has a set of abilities that control how values can be used:
 
-| Ability | Meaning                                       |
-| ------- | --------------------------------------------- |
-| `copy`  | Value can be copied                           |
-| `drop`  | Value can be implicitly discarded             |
-| `store` | Value can be stored in global storage         |
-| `key`   | Value can be a top-level storage object (Sui) |
+| Ability | Meaning                                        |
+| ------- | ---------------------------------------------- |
+| `copy`  | Value can be copied                            |
+| `drop`  | Value can be implicitly discarded              |
+| `store` | Value can be used as a field of a `key` struct |
+| `key`   | Value can be a top-level storage object (Sui)  |
 
 **Built-in type abilities:**
 
@@ -406,22 +407,29 @@ fun init(otw: MY_COIN, ctx: &mut TxContext) {
 - No fields, or single `bool` field
 - Cannot be manually constructed (passed by runtime to `init`)
 
-### 13.4 Public / Entry Function Rules
+### 13.4 Public and Entry Functions
 
-Public and Entry functions can be called directly in PTBs:
+Both `public` and `entry` functions can be called directly from Programmable Transaction Blocks (PTBs). The key difference:
+
+- **`public fun`** - Callable from PTBs AND from other Move modules
+- **`entry fun`** - Callable from PTBs only, NOT from other Move modules
+
+The `entry` modifier exists to allow **non-public** functions to be callable from transactions:
 
 ```move
-use std::string::String;
+// Callable from PTBs AND other modules - no signature restrictions
+public fun composable_create(ctx: &mut TxContext): MyObject { ... }
 
-public fun do_something(
-    obj: &mut MyObject,       // Objects by reference or value
-    value: u64,               // Primitives by value
-    object_id: ID,
-    optional_object_id: Option<ID>,
-    string_argument: String,
-    ctx: &mut TxContext,      // TxContext last (optional)
-) { }
+// Callable from PTBs only - has signature restrictions
+entry fun transaction_only(ctx: &mut TxContext) { ... }
+
+// Callable from PTBs AND other modules - but has unnecessary signature restrictions
+public entry fun redundant(ctx: &mut TxContext) { ... }
 ```
+
+**`entry` function signature restrictions:**
+
+The `entry` modifier enforces strict signature rules to ensure the function can be safely called from transactions:
 
 **Valid parameter types:**
 
@@ -439,7 +447,19 @@ public fun do_something(
 - `&mut Random` - must be `&Random`
 - Non-object structs without `key`
 
-**Return type:** Must have `drop` ability (or be unit `()`) for entry functions, and any type for public functions.
+**Return type:** Must have `drop` ability (or be unit `()`)
+
+**Why `public entry` is discouraged:**
+
+`public` functions can already be called from PTBs, so adding `entry` provides no benefit. However, it does add the signature restrictions above, which may prevent valid use cases (e.g., returning non-droppable types). This triggers the `public_entry` lint warning.
+
+**When to use each:**
+
+| Modifier       | Use Case                                                  |
+| -------------- | --------------------------------------------------------- |
+| `public fun`   | Default choice - callable everywhere, no restrictions     |
+| `entry fun`    | Transaction-only access without exposing to other modules |
+| `public entry` | Avoid - adds restrictions without benefit                 |
 
 ### 13.5 Transfer Rules
 
@@ -646,5 +666,5 @@ public struct Wrapper has key {
 **Critical:**
 
 - `share_owned` lint: warns when sharing an owned (transferred) object - changing its storage model
-- Shared objects can be reshared (take by value, call `share_object` again)
+- Shared objects can be shared again (take by value, call `share_object` again)
 - Shared objects can be deleted (take by value and destroy)
