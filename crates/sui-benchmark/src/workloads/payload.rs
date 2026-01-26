@@ -121,8 +121,12 @@ pub trait Payload: Send + Sync + std::fmt::Debug + Display {
         NonZeroUsize::MAX
     }
 
-    // TODO: Implement this to allow limiting the size of each soft bundle.
-    // fn max_soft_bundle_size(&self) -> NonZeroUsize
+    /// Maximum size of any individual soft bundle.
+    fn max_soft_bundle_size(&self) -> NonZeroUsize {
+        // TODO: we could get this from the protocol config but a) its unlikely to change
+        // b) it would be very hard to do that
+        NonZeroUsize::new(5).unwrap()
+    }
 
     /// Creates a batch of transactions for concurrent execution.
     /// Only called when `is_batched()` returns true.
