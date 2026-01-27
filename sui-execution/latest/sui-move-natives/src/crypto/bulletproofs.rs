@@ -53,16 +53,16 @@ pub fn verify_bulletproof_ristretto255(
     let range = pop_arg!(args, u8);
     let proof = pop_arg!(args, VectorRef);
 
-    let Ok(commitment) = commitment.as_bytes_ref().to_vec().try_into().map_err(|_| InvalidInput).and_then(|b| RistrettoPoint::from_byte_array(&b)).map(PedersenCommitment) else {
-        return Ok(NativeResult::err(context.gas_used(), INVALID_COMMITMENT));
+    let Ok(proof) = bcs::from_bytes::<RangeProof>(&proof.as_bytes_ref()) else {
+        return Ok(NativeResult::err(context.gas_used(), INVALID_PROOF));
     };
 
     let Ok(range) = range_from_bits(range).map_err(|_| InvalidInput) else {
         return Ok(NativeResult::err(context.gas_used(), INVALID_RANGE));
     };
 
-    let Ok(proof) = bcs::from_bytes::<RangeProof>(&proof.as_bytes_ref()) else {
-        return Ok(NativeResult::err(context.gas_used(), INVALID_PROOF));
+    let Ok(commitment) = commitment.as_bytes_ref().to_vec().try_into().map_err(|_| InvalidInput).and_then(|b| RistrettoPoint::from_byte_array(&b)).map(PedersenCommitment) else {
+        return Ok(NativeResult::err(context.gas_used(), INVALID_COMMITMENT));
     };
 
     let result = proof.verify(&commitment, &range, &mut thread_rng());
