@@ -34,7 +34,6 @@ use sui_types::coin::CoinMetadata;
 use sui_types::coin_registry::Currency;
 use sui_types::gas_coin::GAS;
 use sui_types::object::Object;
-use sui_types::parse_sui_type_tag;
 
 use crate::api::rpc_module::RpcModule;
 use crate::context::Context;
@@ -118,7 +117,7 @@ impl CoinsApiServer for Coins {
         limit: Option<usize>,
     ) -> RpcResult<PageResponse<Coin, String>> {
         let inner = if let Some(coin_type) = coin_type {
-            parse_sui_type_tag(&coin_type)
+            TypeTag::from_str(&coin_type)
                 .map_err(|e| invalid_params(Error::BadType(coin_type, e)))?
         } else {
             GAS::type_tag()
@@ -158,22 +157,20 @@ impl CoinsApiServer for Coins {
                 true,
             )
             .await
-            .context("Failed to list owned coin objects")
-            .map_err(RpcError::<Error>::from)?;
+            .context("Failed to list owned coin objects")?;
 
-        let coin_ids = results
+        let coin_ids: Vec<_> = results
             .results
             .iter()
             .map(|obj_ref| obj_ref.value.0)
-            .collect::<Vec<_>>();
+            .collect();
 
         let next_cursor = results
             .results
             .last()
             .map(|edge| BcsCursor(edge.token.clone()).encode())
             .transpose()
-            .context("Failed to encode cursor")
-            .map_err(RpcError::<Error>::from)?;
+            .context("Failed to encode cursor")?;
 
         let coin_futures = coin_ids.iter().map(|id| coin_response(ctx, *id));
 
@@ -230,17 +227,20 @@ impl CoinsApiServer for Coins {
                     true,
                 )
                 .await
-                .context("Failed to get all balances")
-                .map_err(RpcError::<Error>::from)?;
+                .context("Failed to get all balances")?;
 
             for edge in &page.results {
                 all_balances.push(Balance {
-                    coin_type: edge.value.0.to_canonical_string(/* with_prefix */ true),
-                    total_balance: edge.value.1 as u128,
+                    coin_type: edge
+                        .value
+                        .coin_type
+                        .to_canonical_string(/* with_prefix */ true),
+                    total_balance: edge.value.total_balance.unwrap_or(0) as u128,
                     // The Consistent Store does not track coin object counts, so the rpc will
                     // always return 1.
                     coin_object_count: 1,
                     locked_balance: HashMap::new(),
+                    funds_in_address_balance: edge.value.address_balance.unwrap_or(0) as u128,
                 });
             }
 
@@ -263,28 +263,28 @@ impl CoinsApiServer for Coins {
         let consistent_reader = ctx.consistent_reader();
 
         let inner_coin_type = if let Some(coin_type) = coin_type {
-            parse_sui_type_tag(&coin_type)
+            TypeTag::from_str(&coin_type)
                 .map_err(|e| invalid_params(Error::BadType(coin_type, e)))?
         } else {
             GAS::type_tag()
         };
 
-        let (type_tag, total_balance) = consistent_reader
+        let response = consistent_reader
             .get_balance(
                 None,
                 owner.to_string(),
                 inner_coin_type.to_canonical_string(/* with_prefix */ true),
             )
             .await
-            .context("Failed to get balance")
-            .map_err(RpcError::<Error>::from)?;
+            .context("Failed to get balance")?;
 
         Ok(Balance {
-            coin_type: type_tag.to_canonical_string(/* with_prefix */ true),
-            total_balance: total_balance as u128,
-            // Harcoded value since the Consistent Store does not track coin object counts.
+            coin_type: inner_coin_type.to_canonical_string(/* with_prefix */ true),
+            total_balance: response.total_balance.unwrap_or(0) as u128,
+            // Hard coded value since the Consistent Store does not track coin object counts.
             coin_object_count: 1,
             locked_balance: HashMap::new(),
+            funds_in_address_balance: response.address_balance.unwrap_or(0) as u128,
         })
     }
 }
@@ -349,7 +349,7 @@ async fn coin_metadata_response(
     ctx: &Context,
     coin_type: &str,
 ) -> Result<Option<SuiCoinMetadata>, RpcError<Error>> {
-    let inner = parse_sui_type_tag(coin_type)
+    let inner = TypeTag::from_str(coin_type)
         .map_err(|e| invalid_params(Error::BadType(coin_type.to_owned(), e)))?;
 
     let object_type = StructTag {

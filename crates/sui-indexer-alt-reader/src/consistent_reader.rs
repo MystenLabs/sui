@@ -164,7 +164,7 @@ impl ConsistentReader {
     ) -> Result<proto::Balance, Error> {
         self.request(
             "get_balance",
-            Some(checkpoint),
+            checkpoint,
             |mut client, request| async move { client.get_balance(request).await },
             proto::GetBalanceRequest {
                 owner: Some(address),
