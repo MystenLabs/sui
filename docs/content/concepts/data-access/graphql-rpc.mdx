@@ -38,6 +38,7 @@ By default, each response contains the following HTTP response headers:
 
 - `x-sui-rpc-request-id`: A unique identifier for the request. This appears in application logs for debugging.
 - `x-sui-rpc-version`: The version of the service that handled the request.
+
 ```sh
 $ curl -i -X POST https://graphql.testnet.sui.io/graphql\
      --header 'x-sui-rpc-show-usage: true'                 \
@@ -51,7 +52,7 @@ $ curl -i -X POST https://graphql.testnet.sui.io/graphql\
 <summary>Output</summary>
 
 ```sh
-HTTP/2 200 
+HTTP/2 200
 content-type: application/json
 content-length: 179
 x-sui-rpc-request-id: f5442058-47ab-4360-8295-61c009f38516
@@ -63,23 +64,23 @@ via: 1.1 google
 alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
 
 {
-  "data": { 
-    "epoch": { 
-      "referenceGasPrice": "1000" 
-    } 
+  "data": {
+    "epoch": {
+      "referenceGasPrice": "1000"
+    }
   },
   "extensions": {
     "usage": {
-      "input": { 
-        "nodes": 2, 
-        "depth": 2 
+      "input": {
+        "nodes": 2,
+        "depth": 2
       },
-      "payload": { 
-        "query_payload_size": 67, 
-        "tx_payload_size": 0 
+      "payload": {
+        "query_payload_size": 67,
+        "tx_payload_size": 0
       },
-      "output": { 
-        "nodes": 2 
+      "output": {
+        "nodes": 2
       }
     }
   }
