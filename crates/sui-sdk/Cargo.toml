@@ -44,6 +44,7 @@ tracing.workspace = true
 move-core-types.workspace = true
 fastcrypto.workspace = true
 sui-crypto.workspace = true
+sui-rpc-api.workspace = true
 sui-rpc.workspace = true
 sui-sdk-types.workspace = true
 

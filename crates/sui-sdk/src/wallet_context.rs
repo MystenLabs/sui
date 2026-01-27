@@ -19,6 +19,8 @@ use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{Signature, SuiKeyPair};
 
+use std::sync::OnceLock;
+use sui_rpc_api::Client;
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 use tokio::sync::RwLock;
@@ -28,6 +30,7 @@ pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
     request_timeout: Option<std::time::Duration>,
     client: Arc<RwLock<Option<SuiClient>>>,
+    grpc: OnceLock<Client>,
     max_concurrent_requests: Option<u64>,
     env_override: Option<String>,
 }
@@ -46,6 +49,7 @@ impl WalletContext {
             config,
             request_timeout: None,
             client: Default::default(),
+            grpc: OnceLock::new(),
             max_concurrent_requests: None,
             env_override: None,
         };
@@ -64,6 +68,7 @@ impl WalletContext {
             config,
             request_timeout: None,
             client: Arc::new(Default::default()),
+            grpc: OnceLock::new(),
             max_concurrent_requests: None,
             env_override: None,
         }
@@ -131,6 +136,15 @@ impl WalletContext {
 
             self.client.write().await.insert(client).clone()
         })
+    }
+
+    pub fn grpc_client(&self) -> Result<Client, anyhow::Error> {
+        if let Some(client) = self.grpc.get() {
+            Ok(client.clone())
+        } else {
+            let client = self.get_active_env()?.create_grpc_client()?;
+            Ok(self.grpc.get_or_init(move || client).clone())
+        }
     }
 
     /// Load the chain ID corresponding to the active environment, or fetch and cache it if not
