@@ -750,7 +750,7 @@ impl<'a> ChildObjectStore<'a> {
                     value,
                     fingerprint,
                 } = child_object;
-                let final_value = value.into_value();
+                let final_value = value.into_value()?;
                 let object_changed = fingerprint.object_has_changed(&owner, &ty, &final_value)?;
                 let child_effect = ChildObjectEffect {
                     owner,
