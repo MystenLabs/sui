@@ -201,11 +201,17 @@ if __name__ == "__main__":
 
     commands = []
 
+    if args.no_capture:
+      rust_log = "error"
+    else:
+      rust_log = "off"
+
     for i in range(1, args.num_seeds + 1):
         next_seed = args.seed_start + i
         env_vars = {
           "MSIM_TEST_SEED": "%d" % next_seed,
-          "RUST_LOG": "error",
+          "RUST_LOG": rust_log,
+          "MSIM_WATCHDOG_TIMEOUT_MS": "120000",
         }
         if reach_log_dir:
             env_vars["MSIM_LOG_REACHABLE_ASSERTIONS"] = reach_log_dir
