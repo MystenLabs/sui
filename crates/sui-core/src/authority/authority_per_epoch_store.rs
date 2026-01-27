@@ -3075,15 +3075,27 @@ impl AuthorityPerEpochStore {
     ) {
         let sigs: Vec<_> = txs
             .filter_map(|s| match s {
-                Schedulable::Transaction(tx) => Some((
-                    *tx.tx().digest(),
-                    tx.tx()
-                        .tx_signatures()
-                        .iter()
-                        .cloned()
-                        .zip(tx.aliases().iter().map(|(_, seq)| *seq))
-                        .collect(),
-                )),
+                Schedulable::Transaction(tx) => {
+                    let tx_signatures = tx.tx().tx_signatures();
+                    let sigs_with_versions: Vec<_> =
+                        if self.protocol_config().fix_checkpoint_signature_mapping() {
+                            tx.aliases()
+                                .iter()
+                                .map(|(sig_idx, seq)| {
+                                    let sig = tx_signatures[*sig_idx as usize].clone();
+                                    (sig, *seq)
+                                })
+                                .collect()
+                        } else {
+                            // Old behavior: zip all signatures with alias versions in order.
+                            tx_signatures
+                                .iter()
+                                .cloned()
+                                .zip(tx.aliases().iter().map(|(_, seq)| *seq))
+                                .collect()
+                        };
+                    Some((*tx.tx().digest(), sigs_with_versions))
+                }
                 Schedulable::RandomnessStateUpdate(_, _) => None,
                 Schedulable::AccumulatorSettlement(_, _) => None,
                 Schedulable::ConsensusCommitPrologue(_, _, _) => None,

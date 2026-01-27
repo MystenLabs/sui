@@ -3675,8 +3675,7 @@ mod tests {
         messages_consensus::ConsensusTransaction,
         object::Object,
         transaction::{
-            CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
-            VerifiedCertificate,
+            CertifiedTransaction, TransactionData, TransactionDataAPI, VerifiedCertificate,
         },
     };
 
@@ -4343,20 +4342,25 @@ mod tests {
 
     fn user_txn(gas_price: u64) -> VerifiedExecutableTransactionWithAliases {
         let (committee, keypairs) = Committee::new_simple_test_committee();
-        let data = SenderSignedData::new(
+        let (sender, sender_keypair) = deterministic_random_account_key();
+        let tx = sui_types::transaction::Transaction::from_data_and_signer(
             TransactionData::new_transfer(
                 SuiAddress::default(),
                 FullObjectRef::from_fastpath_ref(random_object_ref()),
-                SuiAddress::default(),
+                sender,
                 random_object_ref(),
                 1000 * gas_price,
                 gas_price,
             ),
-            vec![],
+            vec![&sender_keypair],
         );
         let tx = VerifiedExecutableTransaction::new_from_certificate(
             VerifiedCertificate::new_unchecked(
-                CertifiedTransaction::new_from_keypairs_for_testing(data, &keypairs, &committee),
+                CertifiedTransaction::new_from_keypairs_for_testing(
+                    tx.into_data(),
+                    &keypairs,
+                    &committee,
+                ),
             ),
         );
         VerifiedExecutableTransactionWithAliases::no_aliases(tx)
