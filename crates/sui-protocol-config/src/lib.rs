@@ -939,6 +939,11 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     address_aliases: bool,
 
+    // Corrects signature-to-signer mapping in CheckpointContentsV2.
+    // TODO: remove old code and deprecate once in mainnet.
+    #[serde(skip_serializing_if = "is_false")]
+    fix_checkpoint_signature_mapping: bool,
+
     // If true, enable object funds withdraw.
     #[serde(skip_serializing_if = "is_false")]
     enable_object_funds_withdraw: bool,
@@ -2520,6 +2525,10 @@ impl ProtocolConfig {
             );
         }
         address_aliases
+    }
+
+    pub fn fix_checkpoint_signature_mapping(&self) -> bool {
+        self.feature_flags.fix_checkpoint_signature_mapping
     }
 
     pub fn enable_object_funds_withdraw(&self) -> bool {
@@ -4504,6 +4513,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.split_checkpoints_in_consensus_handler = false;
                     }
                     cfg.feature_flags.validate_zklogin_public_identifier = true;
+                    cfg.feature_flags.fix_checkpoint_signature_mapping = true;
                 }
                 // Use this template when making changes:
                 //
