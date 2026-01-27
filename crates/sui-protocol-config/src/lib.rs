@@ -293,8 +293,8 @@ const MAX_PROTOCOL_VERSION: u64 = 110;
 // Version 109: Update where we set bounds for some binary tables to be a bit more idiomatic.
 // Version 110: Enable parsing on all nonzero custom pcrs in nitro attestation parsing native
 //              function on mainnet.
-//              New framework.
 //              split_checkpoints_in_consensus_handler in devnet
+//              Enable additional validation on zkLogin public identifier.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -531,6 +531,10 @@ struct FeatureFlags {
     // If true, multisig containing passkey sig is accepted.
     #[serde(skip_serializing_if = "is_false")]
     accept_passkey_in_multisig: bool,
+
+    // If true, additional zkLogin public identifier structure is validated.
+    #[serde(skip_serializing_if = "is_false")]
+    validate_zklogin_public_identifier: bool,
 
     // If true, consensus prologue transaction also includes the consensus output digest.
     // It can be used to detect consensus output folk.
@@ -2047,6 +2051,10 @@ impl ProtocolConfig {
 
     pub fn accept_passkey_in_multisig(&self) -> bool {
         self.feature_flags.accept_passkey_in_multisig
+    }
+
+    pub fn validate_zklogin_public_identifier(&self) -> bool {
+        self.feature_flags.validate_zklogin_public_identifier
     }
 
     pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {
@@ -4494,6 +4502,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
                     }
+                    cfg.feature_flags.validate_zklogin_public_identifier = true;
                 }
                 // Use this template when making changes:
                 //

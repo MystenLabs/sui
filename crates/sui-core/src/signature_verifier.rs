@@ -137,6 +137,8 @@ struct ZkLoginParams {
     pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
     /// Flag to determine whether additional multisig checks are performed.
     pub additional_multisig_checks: bool,
+    /// Flag to determine whether additional zkLogin public identifier structure is validated.
+    pub validate_zklogin_public_identifier: bool,
 }
 
 impl SignatureVerifier {
@@ -152,6 +154,7 @@ impl SignatureVerifier {
         accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
         additional_multisig_checks: bool,
+        validate_zklogin_public_identifier: bool,
         enable_address_aliases: bool,
     ) -> Self {
         Self {
@@ -184,6 +187,7 @@ impl SignatureVerifier {
                 accept_passkey_in_multisig,
                 zklogin_max_epoch_upper_bound_delta,
                 additional_multisig_checks,
+                validate_zklogin_public_identifier,
             },
         }
     }
@@ -199,6 +203,7 @@ impl SignatureVerifier {
         accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
         additional_multisig_checks: bool,
+        validate_zklogin_public_identifier: bool,
         enable_address_aliases: bool,
     ) -> Self {
         Self::new_with_batch_size(
@@ -213,6 +218,7 @@ impl SignatureVerifier {
             accept_passkey_in_multisig,
             zklogin_max_epoch_upper_bound_delta,
             additional_multisig_checks,
+            validate_zklogin_public_identifier,
             enable_address_aliases,
         )
     }
@@ -482,6 +488,7 @@ impl SignatureVerifier {
                     self.zk_login_params.accept_passkey_in_multisig,
                     self.zk_login_params.zklogin_max_epoch_upper_bound_delta,
                     self.zk_login_params.additional_multisig_checks,
+                    self.zk_login_params.validate_zklogin_public_identifier,
                 );
                 verify_sender_signed_data_message_signatures(
                     signed_tx,
