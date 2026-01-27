@@ -455,7 +455,6 @@ impl LoadedBridgeCliConfig {
             eth_bridge_committee_proxy_address,
             eth_signer_provider.clone(),
         );
-        let eth_bridge_committee_proxy_address: EthAddress = sui_bridge.committee().call().await?;
         let eth_bridge_config_proxy_address: EthAddress = eth_committee.config().call().await?;
 
         let eth_address = eth_signer_provider.default_signer_address();
