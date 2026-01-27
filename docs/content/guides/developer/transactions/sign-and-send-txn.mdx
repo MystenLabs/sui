@@ -4,15 +4,25 @@ description: Each transaction on Sui represents a call to a specific functionali
 keywords: [ transactions, transaction inputs, smart contract functions, signatures, Ed25519 pure, ECDSA Secp256k1, ECDSA Secp256r1, Multisig, zkLogin ]
 ---
 
-Transactions in Sui represent calls to specific functionality (like calling a smart contract function) that execute on inputs to define the result of the transaction.
+Transactions in Sui represent calls to specific functionality that execute on inputs to define the result of the transaction.
 
-Inputs can either be an object reference (either to an owned object, an immutable object, or a shared object) or an encoded value (for example, a vector of bytes used as an argument to a Move call). After a transaction is constructed, usually through using [programmable transaction blocks](/guides/developer/transactions/building-ptb.mdx) (PTBs), the user signs the transaction and submits it to be executed on chain.
+Inputs can either be an object reference, either to an owned object, an immutable object, or a shared object, or an encoded value, for example, a vector of bytes used as an argument to a Move call. After a transaction is constructed, usually through using [programmable transaction blocks](/guides/developer/transactions/building-ptb.mdx) (PTBs), the user signs the transaction and submits it to be executed on chain.
 
 The signature is provided with the private key owned by the wallet, and its public key must be consistent with the transaction sender's Sui address.
 
-Sui uses a `SuiKeyPair` to produce the signature, which commits to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`). The signature schemes currently supported are `Ed25519 Pure`, `ECDSA Secp256k1`, `ECDSA Secp256r1`, `Multisig`, and `zkLogin`.
+Sui uses a `SuiKeyPair` to produce the signature, which commits to the Blake2b hash digest of the intent message (`intent || bcs bytes of tx_data`). The signature schemes currently supported are:
 
-You can instantiate `Ed25519 Pure`, `ECDSA Secp256k1`, and `ECDSA Secp256r1` using `SuiKeyPair` and use it to sign transactions. Note that this guide does not apply to `Multisig` and `zkLogin`, refer to their own pages ([Multisig](/guides/developer/transactions/transaction-auth/multisig) and [zkLogin](https://docs.sui.io/concepts/cryptography/zklogin) respectively) for instructions.
+- Ed25519 Pure
+
+- ECDSA Secp256k1
+
+- ECDSA Secp256r1
+
+- Multisig
+
+- zkLogin
+
+You can instantiate Ed25519 Pure, ECDSA Secp256k1, and ECDSA Secp256r1 using `SuiKeyPair` and use it to sign transactions. Note that this guide does not apply to Multisig and zkLogin, refer to their own pages ([Multisig](/guides/developer/transactions/transaction-auth/multisig) and [zkLogin](https://docs.sui.io/concepts/cryptography/zklogin) respectively) for instructions.
 
 With a signature and the transaction bytes, a transaction can be submitted to be executed.
 
@@ -21,8 +31,11 @@ With a signature and the transaction bytes, a transaction can be submitted to be
 The following high-level process describes the overall workflow for constructing, signing, and executing an on-chain transaction:
 
 - Construct the transaction data by creating a `Transaction` where multiple transactions are chained. See [Building Programmable Transaction Blocks](/guides/developer/transactions/building-ptb.mdx) for more information.
+
 - The SDK's built-in gas estimation and coin selection picks the gas coin.
+
 - Sign the transaction to generate a [signature](/concepts/transactions/transaction-auth.mdx).
+
 - Submit the `Transaction` and its signature for on-chain execution.
 
 :::info
