@@ -460,7 +460,8 @@ pub struct AdversarialWorkload {
 impl Workload<dyn Payload> for AdversarialWorkload {
     async fn init(
         &mut self,
-        proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) {
         let gas = &self.init_gas;
@@ -478,7 +479,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             .await
             .build_and_sign(gas.2.as_ref());
 
-        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let (_, execution_result) = execution_proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.unwrap();
         let created = effects.created();
         // should only create the package object, upgrade cap, dynamic field top level obj, and NUM_DYNAMIC_FIELDS df objects. otherwise, there are some object initializers running and we will need to disambiguate
@@ -492,7 +493,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             .unwrap();
 
         for o in &created {
-            let obj = proxy.get_object(o.0.0).await.unwrap();
+            let obj = execution_proxy.get_object(o.0.0).await.unwrap();
             if let Some(tag) = obj.data.struct_tag()
                 && tag.to_string().contains("::adversarial::Obj")
             {
@@ -505,7 +506,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         );
         self.package_id = package_obj.0.0;
 
-        let gas_ref = proxy
+        let gas_ref = execution_proxy
             .get_object(gas.0.0)
             .await
             .unwrap()
@@ -526,7 +527,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
             reference_gas_price,
         );
 
-        let (_, execution_result) = proxy.execute_transaction_block(transaction).await;
+        let (_, execution_result) = execution_proxy.execute_transaction_block(transaction).await;
         let effects = execution_result.unwrap();
 
         let created = effects.created();
@@ -541,7 +542,8 @@ impl Workload<dyn Payload> for AdversarialWorkload {
 
     async fn make_test_payloads(
         &self,
-        _proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _execution_proxy: Arc<dyn ValidatorProxy + Sync + Send>,
+        _fullnode_proxies: Vec<Arc<dyn ValidatorProxy + Sync + Send>>,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         let mut payloads = Vec::new();

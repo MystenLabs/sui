@@ -25,10 +25,9 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
 use sui_types::transaction::{
-    Argument, CallArg, DEFAULT_VALIDATOR_GAS_PRICE, FundsWithdrawalArg, GasData, ObjectArg,
+    Argument, CallArg, DEFAULT_VALIDATOR_GAS_PRICE, FundsWithdrawalArg, ObjectArg,
     SharedObjectMutability, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData, TransactionDataV1,
-    TransactionExpiration,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData,
 };
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use sui_types::{SUI_SYSTEM_PACKAGE_ID, TypeTag};
@@ -100,7 +99,7 @@ impl FundSource {
 pub struct TestTransactionBuilder {
     ptb_builder: ProgrammableTransactionBuilder,
     sender: SuiAddress,
-    gas_object: ObjectRef,
+    gas_object: Option<ObjectRef>,
     gas_price: u64,
     gas_budget: Option<u64>,
     address_balance_gas: Option<AddressBalanceGasConfig>,
@@ -108,6 +107,10 @@ pub struct TestTransactionBuilder {
 
 impl TestTransactionBuilder {
     pub fn new(sender: SuiAddress, gas_object: ObjectRef, gas_price: u64) -> Self {
+        Self::new_impl(sender, Some(gas_object), gas_price)
+    }
+
+    fn new_impl(sender: SuiAddress, gas_object: Option<ObjectRef>, gas_price: u64) -> Self {
         Self {
             ptb_builder: ProgrammableTransactionBuilder::new(),
             sender,
@@ -118,11 +121,25 @@ impl TestTransactionBuilder {
         }
     }
 
+    pub fn new_with_address_balance_gas(
+        sender: SuiAddress,
+        gas_price: u64,
+        chain_identifier: ChainIdentifier,
+        current_epoch: EpochId,
+        nonce: u32,
+    ) -> Self {
+        Self::new_impl(sender, None, gas_price).with_address_balance_gas(
+            chain_identifier,
+            current_epoch,
+            nonce,
+        )
+    }
+
     pub fn sender(&self) -> SuiAddress {
         self.sender
     }
 
-    pub fn gas_object(&self) -> ObjectRef {
+    pub fn gas_object(&self) -> Option<ObjectRef> {
         self.gas_object
     }
 
@@ -423,7 +440,7 @@ impl TestTransactionBuilder {
             .sum::<u64>();
         match fund_source {
             FundSource::Coin(coin) => {
-                let source = if coin == self.gas_object {
+                let source = if Some(coin) == self.gas_object {
                     Argument::GasCoin
                 } else {
                     self.ptb_builder
@@ -606,28 +623,22 @@ impl TestTransactionBuilder {
             .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE);
 
         if let Some(ab_gas) = self.address_balance_gas {
-            TransactionData::V1(TransactionDataV1 {
-                kind: sui_types::transaction::TransactionKind::ProgrammableTransaction(pt),
-                sender: self.sender,
-                gas_data: GasData {
-                    payment: vec![],
-                    owner: self.sender,
-                    price: self.gas_price,
-                    budget: gas_budget,
-                },
-                expiration: TransactionExpiration::ValidDuring {
-                    min_epoch: Some(ab_gas.current_epoch),
-                    max_epoch: Some(ab_gas.current_epoch + 1),
-                    min_timestamp: None,
-                    max_timestamp: None,
-                    chain: ab_gas.chain_identifier,
-                    nonce: ab_gas.nonce,
-                },
-            })
+            TransactionData::new_programmable_with_address_balance_gas(
+                self.sender,
+                pt,
+                gas_budget,
+                self.gas_price,
+                ab_gas.chain_identifier,
+                ab_gas.current_epoch,
+                ab_gas.nonce,
+            )
         } else {
             TransactionData::new_programmable(
                 self.sender,
-                vec![self.gas_object],
+                vec![
+                    self.gas_object
+                        .expect("gas_object required when not using address_balance_gas"),
+                ],
                 pt,
                 gas_budget,
                 self.gas_price,

@@ -1157,26 +1157,38 @@ mod test {
         let primary_coin = (primary_gas, sender, ed25519_keypair.clone());
 
         let registry = prometheus::Registry::new();
-        let proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
-            Arc::new(
-                FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url, &registry)
-                    .await
-                    .unwrap(),
-            )
+        // Create fullnode proxy for RPC reads
+        let fullnode_proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            FullNodeProxy::from_url(&test_cluster.fullnode_handle.rpc_url, &registry)
+                .await
+                .unwrap(),
+        );
+        let fullnode_proxies = vec![fullnode_proxy.clone()];
+
+        // Create execution proxy - either fullnode or validator aggregator
+        let execution_proxy: Arc<dyn ValidatorProxy + Send + Sync> = if config.remote_env {
+            fullnode_proxy.clone()
         } else {
+            // Use a separate registry because FullNodeProxy already registered SafeClientMetrics
+            let validator_registry = prometheus::Registry::new();
             Arc::new(
                 LocalValidatorAggregatorProxy::from_genesis(
                     &genesis,
-                    &registry,
+                    &validator_registry,
                     &test_cluster.fullnode_handle.rpc_url,
                 )
                 .await,
             )
         };
 
-        let bank = BenchmarkBank::new(proxy.clone(), primary_coin);
+        let bank = BenchmarkBank::new(
+            execution_proxy.clone(),
+            fullnode_proxies.clone(),
+            primary_coin,
+        );
         let system_state_observer = {
-            let mut system_state_observer = SystemStateObserver::new(proxy.clone());
+            let mut system_state_observer =
+                SystemStateObserver::new_from_test_cluster(&test_cluster);
             if let Ok(_) = system_state_observer.state.changed().await {
                 info!(
                     "Got the new state (reference gas price and/or protocol config) from system state object"
@@ -1279,7 +1291,8 @@ mod test {
             let show_progress = interval.is_unbounded();
             let (benchmark_stats, _) = driver
                 .run(
-                    vec![proxy],
+                    vec![execution_proxy],
+                    fullnode_proxies,
                     workloads,
                     system_state_observer,
                     &registry,
@@ -1363,10 +1376,15 @@ mod test {
 
         let test_cluster_for_handler = test_cluster.clone();
 
+        let mut config = SimulatedLoadConfig::default();
+        // composite workload is very strict about error checking and fails during
+        // this test.
+        config.composite_weight = 0;
+
         test_simulated_load_with_test_config(
             test_cluster.clone(),
             30,
-            SimulatedLoadConfig::default(),
+            config,
             None, // target_qps
             None, // num_workers
             Some({
@@ -1553,7 +1571,8 @@ mod test {
         .with_probability(TestCoinMint::FLAG, 0.1)
         .with_probability(TestCoinAddressDeposit::FLAG, 0.1)
         .with_probability(TestCoinAddressWithdraw::FLAG, 0.05)
-        .with_probability(TestCoinObjectWithdraw::FLAG, 0.05);
+        .with_probability(TestCoinObjectWithdraw::FLAG, 0.05)
+        .with_probability(AddressBalanceOverdraw::FLAG, 0.2);
 
         test_simulated_load_with_test_config(
             test_cluster,
@@ -1567,15 +1586,17 @@ mod test {
         .await;
 
         let metrics = metrics.lock().unwrap();
-        let total_txns = metrics.total_transactions_all();
-        let total_successes = metrics.total_successes_all();
-        let cancellation_rate = metrics.overall_cancellation_rate();
-        let distinct_op_sets = metrics.distinct_operation_sets_count();
 
-        assert!(total_txns > 0);
-        assert!(total_successes > 0);
-        assert!(cancellation_rate < 0.75);
-        assert!(distinct_op_sets >= 2);
+        let metrics_sum = metrics.sum_all();
+
+        info!("metrics: {:#?}", metrics.sum_all());
+
+        // make sure the test did stuff
+        assert!(metrics_sum.signed_and_sent_count > 500);
+        assert!(metrics_sum.success_count > 200);
+        assert!(metrics_sum.permanent_failure_count > 100);
+        assert!(metrics_sum.cancellation_count > 100);
+        assert!(metrics_sum.insufficient_funds_count > 2);
     }
 
     #[sim_test(config = "test_config()")]

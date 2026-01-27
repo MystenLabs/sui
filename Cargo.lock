@@ -14266,6 +14266,7 @@ dependencies = [
  "bcs",
  "clap",
  "comfy-table",
+ "derive_more 1.0.0",
  "duration-str",
  "fastcrypto-zkp",
  "futures",
