@@ -4544,7 +4544,8 @@ impl ProtocolConfig {
                         cfg.feature_flags.split_checkpoints_in_consensus_handler = false;
                     }
                     cfg.feature_flags.validate_zklogin_public_identifier = true;
-                    cfg.feature_flags.enable_ristretto_group_ops_native_functions = true;
+                    cfg.feature_flags
+                        .enable_ristretto_group_ops_native_functions = true;
 
                     // TODO: Copied from BLS123-81 Scalars and G1Elements - should update
                     cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
