@@ -3495,14 +3495,27 @@ impl CheckpointService {
     ) {
         let (builder, aggregator, state_hasher) = self.state.lock().take_unstarted();
 
-        // Clean up state hashes computed after the last committed checkpoint
+        // Clean up state hashes computed after the last built checkpoint
         // This prevents ECMH divergence after fork recovery restarts
-        if let Some(last_committed_seq) = self
+
+        // Note: there is a rare crash recovery edge case where we write the builder
+        // summary, but crash before we can bump the highest executed checkpoint.
+        // If we committed the builder summary, it was certified and unforked, so there
+        // is no need to clear that state hash. If we do clear it, then checkpoint executor
+        // will wait forever for checkpoint builder to produce the state hash, which will
+        // never happen.
+        let last_persisted_builder_seq = epoch_store
+            .last_persisted_checkpoint_builder_summary()
+            .expect("epoch should not have ended")
+            .map(|s| s.summary.sequence_number);
+
+        let last_executed_seq = self
             .tables
             .get_highest_executed_checkpoint()
             .expect("Failed to get highest executed checkpoint")
-            .map(|checkpoint| *checkpoint.sequence_number())
-        {
+            .map(|checkpoint| *checkpoint.sequence_number());
+
+        if let Some(last_committed_seq) = last_persisted_builder_seq.max(last_executed_seq) {
             if let Err(e) = builder
                 .epoch_store
                 .clear_state_hashes_after_checkpoint(last_committed_seq)
