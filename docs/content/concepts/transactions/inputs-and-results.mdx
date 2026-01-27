@@ -26,9 +26,11 @@ For pure inputs, the only data provided is the [BCS](https://github.com/MystenLa
 
 - An object ID `sui::object::ID`.
 
-- A vector, `vector<T>`, where `T` is a valid type for a pure input, checked recursively.
+- A vector, `vector<T>`.
 
-- An option, `std::option::Option<T>`, where `T` is a valid type for a pure input, checked recursively.
+- An option, `std::option::Option<T>`.
+
+For vectors and options, `T` must be a valid pure input type. This rule applies recursively.
 
 Bytes are not validated until the type is specified in a command, for example in `MoveCall` or `MakeMoveVec`. This means that a given pure input could be used to instantiate Move values of several types.
 
@@ -46,3 +48,72 @@ Each transaction command produces an array of values. The array can be empty. Th
 
 - `TransferObjects` and `MergeCoins` produce an empty result vector.
 
+Consider the following Move functions that create a `Hero` and a `Sword` for a game.
+
+```move
+public struct Sword has key, store {
+    id: UID,
+    attack: u64,
+}
+
+public fun new_sword(attack: u64, ctx: &mut TxContext): Sword {
+    Sword {
+        id: object::new(ctx),
+        attack
+    }
+}
+
+public struct Hero has key, store {
+    id: UID,
+    health: u64,
+    stamina: u64,
+}
+
+/// Hero starts with 100 heath and 10 stamina.
+public fun mint_hero(ctx: &mut TxContext): Hero {
+    Hero {
+        id: object::new(ctx),
+        health: 100,
+        stamina: 10,
+    }
+}
+```
+
+There is also a specialized Move function that equips a `Hero` with a `Sword`:
+
+```move
+/// Hero can equip a single sword.
+/// Equiping a sword increases the `Hero`'s power by its attack.
+public fun equip_sword(self: &mut Hero, sword: Sword) {
+    if (df::exists_(&self.id, b"sword".to_string())) {
+        abort (EAlreadyEquipedSword)
+    };
+    self.add_dof(b"sword".to_string(), sword)
+}
+```
+
+Combine the creation of `Hero`, a `Sword`, and attaching the sword to the hero in a single transaction using TypeScript:
+
+```ts
+const tx = new Transaction();
+
+//According to Move function mint_hero, this moveCall will return an Object of Type Hero
+const hero = tx.moveCall({
+   target: `0x123::hero::mint_hero`,
+   arguments: [],
+   typeArguments: [],
+});
+
+//According to Move function new_sword, this moveCall will return an Object of Type Hero
+const sword = tx.moveCall({
+   target: `0x123::hero::new_sword`,
+   arguments: [tx.pure.u64(10)],
+   typeArguments: [],
+});
+    
+//According to Move function equip_sword, this moveCall expects as arguments an object of type Hero and an Object of type Sword: 
+tx.moveCall({
+   target: `0x123::hero::equip_sword`,
+   arguments: [hero, sword],
+});
+```
