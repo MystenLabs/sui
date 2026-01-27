@@ -1,9 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::{
-    account_address::AccountAddress, gas_algebra::AbstractMemorySize, language_storage::TypeTag,
-};
+use move_core_types::{account_address::AccountAddress, gas_algebra::AbstractMemorySize};
 
 // -------------------------------------------------------------------------------------------------
 // Abstract Memory Size
@@ -14,15 +12,6 @@ pub struct SizeConfig {
     pub traverse_references: bool,
     /// If true, the size of the vector will be included in the abstract memory size.
     pub include_vector_size: bool,
-}
-
-/// Trait that provides an abstract view into a Move type.
-///
-/// This is used to expose certain info to clients (e.g. the gas meter),
-/// usually in a lazily evaluated fashion.
-pub trait TypeView {
-    /// Returns the `TypeTag` (fully qualified name) of the type.
-    fn to_type_tag(&self) -> TypeTag;
 }
 
 /// Trait that provides an abstract view into a Move Value.
@@ -252,14 +241,5 @@ where
 {
     fn visit(&self, visitor: &mut impl ValueVisitor) {
         <T as ValueView>::visit(*self, visitor)
-    }
-}
-
-impl<T> TypeView for &T
-where
-    T: TypeView,
-{
-    fn to_type_tag(&self) -> TypeTag {
-        <T as TypeView>::to_type_tag(*self)
     }
 }
