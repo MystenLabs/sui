@@ -11,12 +11,13 @@ use sui_rpc::proto::TryFromProtoError;
 use sui_rpc::proto::sui::rpc::v2::{self as proto, GetServiceInfoRequest};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::digests::ChainIdentifier;
+use sui_types::digests::TransactionDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::CheckpointData;
-use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
 use tap::Pipe;
 use tonic::Status;
 use tonic::metadata::MetadataMap;
@@ -144,7 +145,43 @@ impl Client {
     pub async fn execute_transaction(
         &mut self,
         transaction: &Transaction,
-    ) -> Result<TransactionExecutionResponse> {
+    ) -> Result<ExecutedTransaction> {
+        let request = Self::create_executed_transaction_request(transaction)?;
+
+        let (metadata, response, _extentions) = self
+            .0
+            .execution_client()
+            .execute_transaction(request)
+            .await?
+            .into_parts();
+
+        execute_transaction_response_try_from_proto(&response)
+            .map_err(|e| status_from_error_with_metadata(e, metadata))
+    }
+
+    pub async fn execute_transaction_and_wait_for_checkpoint(
+        &self,
+        transaction: &Transaction,
+    ) -> Result<ExecutedTransaction> {
+        const WAIT_FOR_CHECKPOINT_TIMEOUT: Duration = Duration::from_secs(30);
+
+        let request = Self::create_executed_transaction_request(transaction)?;
+
+        let (metadata, response, _extentions) = self
+            .0
+            .clone()
+            .execute_transaction_and_wait_for_checkpoint(request, WAIT_FOR_CHECKPOINT_TIMEOUT)
+            .await
+            .map_err(|e| Status::from_error(e.into()))?
+            .into_parts();
+
+        execute_transaction_response_try_from_proto(&response)
+            .map_err(|e| status_from_error_with_metadata(e, metadata))
+    }
+
+    fn create_executed_transaction_request(
+        transaction: &Transaction,
+    ) -> Result<proto::ExecuteTransactionRequest> {
         let signatures = transaction
             .inner()
             .tx_signatures
@@ -166,20 +203,41 @@ impl Client {
         })
         .with_signatures(signatures)
         .with_read_mask(FieldMask::from_paths([
+            "transaction.bcs",
             "effects.bcs",
             "events.bcs",
             "balance_changes",
-            "objects.objects.bcs",
+            "checkpoint",
         ]));
 
-        let (metadata, response, _extentions) = self
+        Ok(request)
+    }
+
+    pub async fn get_transaction(
+        &mut self,
+        digest: &TransactionDigest,
+    ) -> Result<ExecutedTransaction> {
+        let request = proto::GetTransactionRequest::new(&(*digest).into()).with_read_mask(
+            FieldMask::from_paths([
+                "transaction.bcs",
+                "effects.bcs",
+                "events.bcs",
+                "balance_changes",
+                "checkpoint",
+            ]),
+        );
+
+        let (metadata, resp, _extentions) = self
             .0
-            .execution_client()
-            .execute_transaction(request)
+            .ledger_client()
+            .get_transaction(request)
             .await?
             .into_parts();
 
-        execute_transaction_response_try_from_proto(&response)
+        let transaction = resp
+            .transaction
+            .ok_or_else(|| tonic::Status::not_found("no transaction returned"))?;
+        executed_transaction_try_from_proto(&transaction)
             .map_err(|e| status_from_error_with_metadata(e, metadata))
     }
 
@@ -323,11 +381,12 @@ impl Client {
 }
 
 #[derive(Debug)]
-pub struct TransactionExecutionResponse {
+pub struct ExecutedTransaction {
+    pub transaction: TransactionData,
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
     pub balance_changes: Vec<sui_sdk_types::BalanceChange>,
-    pub objects: ObjectSet,
+    pub checkpoint: Option<u64>,
 }
 
 /// Field mask for checkpoint data requests.
@@ -384,21 +443,32 @@ fn object_try_from_proto(object: &proto::Object) -> Result<Object, TryFromProtoE
         .map_err(|e| TryFromProtoError::invalid("bcs", e))
 }
 
-/// Attempts to parse `TransactionExecutionResponse` from the fields in `TransactionExecutionResponse`
+/// Attempts to parse `ExecutedTransaction` from the fields in `proto::ExecuteTransactionResponse`
 #[allow(clippy::result_large_err)]
 fn execute_transaction_response_try_from_proto(
     response: &proto::ExecuteTransactionResponse,
-) -> Result<TransactionExecutionResponse, TryFromProtoError> {
+) -> Result<ExecutedTransaction, TryFromProtoError> {
     let executed_transaction = response
         .transaction
         .as_ref()
         .ok_or_else(|| TryFromProtoError::missing("transaction"))?;
 
+    executed_transaction_try_from_proto(executed_transaction)
+}
+
+#[allow(clippy::result_large_err)]
+fn executed_transaction_try_from_proto(
+    executed_transaction: &proto::ExecutedTransaction,
+) -> Result<ExecutedTransaction, TryFromProtoError> {
+    let transaction = executed_transaction
+        .transaction()
+        .bcs()
+        .deserialize()
+        .map_err(|e| TryFromProtoError::invalid("transaction.bcs", e))?;
+
     let effects = executed_transaction
-        .effects
-        .as_ref()
-        .and_then(|effects| effects.bcs.as_ref())
-        .ok_or_else(|| TryFromProtoError::missing("effects_bcs"))?
+        .effects()
+        .bcs()
         .deserialize()
         .map_err(|e| TryFromProtoError::invalid("effects.bcs", e))?;
     let events = executed_transaction
@@ -415,16 +485,12 @@ fn execute_transaction_response_try_from_proto(
         .map(TryInto::try_into)
         .collect::<Result<_, _>>()?;
 
-    let objects = executed_transaction
-        .objects()
-        .try_into()
-        .map_err(|e| TryFromProtoError::invalid("objects.bcs", e))?;
-
-    TransactionExecutionResponse {
+    ExecutedTransaction {
+        transaction,
         effects,
         events,
         balance_changes,
-        objects,
+        checkpoint: executed_transaction.checkpoint,
     }
     .pipe(Ok)
 }
