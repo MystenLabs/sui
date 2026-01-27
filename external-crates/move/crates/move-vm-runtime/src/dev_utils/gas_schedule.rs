@@ -12,7 +12,7 @@ use crate::{
     shared::{
         SafeIndex,
         gas::{GasMeter, SimpleInstruction},
-        views::{SizeConfig, TypeView, ValueView},
+        views::{SizeConfig, ValueView},
     },
 };
 use move_binary_format::{
@@ -289,7 +289,6 @@ impl GasMeter for GasStatus<'_> {
 
     fn charge_native_function_before_execution(
         &mut self,
-        _ty_args: impl ExactSizeIterator<Item = impl TypeView>,
         _args: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         Ok(())
@@ -309,14 +308,10 @@ impl GasMeter for GasStatus<'_> {
         &mut self,
         _module_id: &ModuleId,
         _func_name: &str,
-        ty_args: impl ExactSizeIterator<Item = impl TypeView>,
         args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
-        self.charge_instr_with_size(
-            Opcodes::CALL_GENERIC,
-            ((ty_args.len() + args.len() + 1) as u64).into(),
-        )
+        self.charge_instr_with_size(Opcodes::CALL_GENERIC, (args.len() as u64).into())
     }
 
     fn charge_ld_const(&mut self, size: NumBytes) -> PartialVMResult<()> {
@@ -428,22 +423,16 @@ impl GasMeter for GasStatus<'_> {
 
     fn charge_vec_pack<'a>(
         &mut self,
-        _ty: impl TypeView + 'a,
         args: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         self.charge_instr_with_size(Opcodes::VEC_PACK, (args.len() as u64).into())
     }
 
-    fn charge_vec_len(&mut self, _ty: impl TypeView) -> PartialVMResult<()> {
+    fn charge_vec_len(&mut self) -> PartialVMResult<()> {
         self.charge_instr(Opcodes::VEC_LEN)
     }
 
-    fn charge_vec_borrow(
-        &mut self,
-        is_mut: bool,
-        _ty: impl TypeView,
-        _is_success: bool,
-    ) -> PartialVMResult<()> {
+    fn charge_vec_borrow(&mut self, is_mut: bool, _is_success: bool) -> PartialVMResult<()> {
         use Opcodes::*;
 
         self.charge_instr(if is_mut {
@@ -453,35 +442,26 @@ impl GasMeter for GasStatus<'_> {
         })
     }
 
-    fn charge_vec_push_back(
-        &mut self,
-        _ty: impl TypeView,
-        val: impl ValueView,
-    ) -> PartialVMResult<()> {
+    fn charge_vec_push_back(&mut self, val: impl ValueView) -> PartialVMResult<()> {
         self.charge_instr_with_size(
             Opcodes::VEC_PUSH_BACK,
             val.abstract_memory_size(&MOVE_TEST_SIZE_CONFIG)?,
         )
     }
 
-    fn charge_vec_pop_back(
-        &mut self,
-        _ty: impl TypeView,
-        _val: Option<impl ValueView>,
-    ) -> PartialVMResult<()> {
+    fn charge_vec_pop_back(&mut self, _val: Option<impl ValueView>) -> PartialVMResult<()> {
         self.charge_instr(Opcodes::VEC_POP_BACK)
     }
 
     fn charge_vec_unpack(
         &mut self,
-        _ty: impl TypeView,
         expect_num_elements: NumArgs,
         _elems: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
         self.charge_instr_with_size(Opcodes::VEC_UNPACK, u64::from(expect_num_elements).into())
     }
 
-    fn charge_vec_swap(&mut self, _ty: impl TypeView) -> PartialVMResult<()> {
+    fn charge_vec_swap(&mut self) -> PartialVMResult<()> {
         self.charge_instr(Opcodes::VEC_SWAP)
     }
 
