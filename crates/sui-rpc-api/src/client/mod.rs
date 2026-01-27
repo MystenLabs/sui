@@ -6,6 +6,8 @@ use sui_types::digests::ChainIdentifier;
 use tap::Pipe;
 use tonic::metadata::MetadataMap;
 
+use futures::stream::Stream;
+use futures::stream::TryStreamExt;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::TryFromProtoError;
@@ -242,6 +244,26 @@ impl Client {
             items: objects,
             next_page_token: response.next_page_token,
         })
+    }
+
+    pub fn list_owned_objects(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<move_core_types::language_storage::StructTag>,
+    ) -> impl Stream<Item = Result<Object>> + 'static {
+        let mut request = proto::ListOwnedObjectsRequest::default()
+            .with_owner(owner.to_string())
+            .with_read_mask(FieldMask::from_paths(["bcs"]));
+
+        if let Some(object_type) = object_type {
+            request.set_object_type(object_type.to_canonical_string(true));
+        }
+
+        self.0
+            .list_owned_objects(request)
+            .and_then(|object| async move {
+                object_try_from_proto(&object).map_err(|e| Status::from_error(e.into()))
+            })
     }
 
     pub async fn get_reference_gas_price(&self) -> Result<u64> {

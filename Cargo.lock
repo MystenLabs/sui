@@ -16610,6 +16610,7 @@ dependencies = [
  "bcs",
  "bytes",
  "fastcrypto",
+ "futures",
  "http 1.3.1",
  "itertools 0.13.0",
  "mime",
