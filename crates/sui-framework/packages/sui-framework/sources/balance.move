@@ -158,15 +158,12 @@ public fun positive_pending_funds_value<T>(
     root: &sui::accumulator::AccumulatorRoot,
     address: address,
 ): Option<u64> {
-    let settled = settled_funds_value<T>(root, address);
-    let deposits = pending_funds_deposits<T>(address);
-    let withdrawals = pending_funds_withdrawals<T>(address);
-    let total_available = (settled as u128) + (deposits as u128);
-    if (total_available >= (withdrawals as u128)) {
-        std::option::some(((total_available - (withdrawals as u128)) as u64))
-    } else {
-        std::option::none()
-    }
+    let settled = settled_funds_value<T>(root, address) as u128;
+    let deposits = pending_funds_deposits<T>(address) as u128;
+    let withdrawals = pending_funds_withdrawals<T>(address) as u128;
+    let total_available = settled + deposits;
+    if (total_available >= withdrawals) option::some((total_available - withdrawals) as u64)
+    else option::none()
 }
 
 // === SUI specific operations ===
