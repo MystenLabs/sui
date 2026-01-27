@@ -151,11 +151,8 @@ impl WalletContext {
     /// present.
     ///
     /// The chain ID is cached in the `client.yaml` file to avoid redundant network requests.
-    pub async fn load_or_cache_chain_id(
-        &self,
-        client: &SuiClient,
-    ) -> Result<String, anyhow::Error> {
-        self.internal_load_or_cache_chain_id(client, false).await
+    pub async fn load_or_cache_chain_id(&self) -> Result<String, anyhow::Error> {
+        self.internal_load_or_cache_chain_id(false).await
     }
 
     /// Try to load the cached chain ID for the active environment.
@@ -182,13 +179,12 @@ impl WalletContext {
 
     /// Cache (or recache) chain ID for the active environment by fetching it from the
     /// network
-    pub async fn cache_chain_id(&self, client: &SuiClient) -> Result<String, anyhow::Error> {
-        self.internal_load_or_cache_chain_id(client, true).await
+    pub async fn cache_chain_id(&self) -> Result<String, anyhow::Error> {
+        self.internal_load_or_cache_chain_id(true).await
     }
 
     async fn internal_load_or_cache_chain_id(
         &self,
-        client: &SuiClient,
         force_recache: bool,
     ) -> Result<String, anyhow::Error> {
         let env = self.get_active_env()?;
@@ -197,13 +193,13 @@ impl WalletContext {
             info!("Found cached chain ID for env {}: {}", env.alias, chain_id);
             return Ok(chain_id.clone());
         }
-        let chain_id = client.read_api().get_chain_identifier().await?;
+        let chain_id = self.grpc_client()?.get_chain_identifier().await?;
         let path = self.config.path();
         let mut config_result = SuiClientConfig::load_with_lock(path)?;
 
-        config_result.update_env_chain_id(&env.alias, chain_id.clone())?;
+        config_result.update_env_chain_id(&env.alias, chain_id.to_string())?;
         config_result.save_with_lock(path)?;
-        Ok(chain_id)
+        Ok(chain_id.to_string())
     }
 
     pub fn get_active_env(&self) -> Result<&SuiEnv, anyhow::Error> {
