@@ -4,7 +4,6 @@
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 
 use anyhow::Context;
 use prometheus::Registry;
@@ -23,7 +22,6 @@ use sui_macros::sim_test;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::get_available_port;
 use sui_swarm_config::genesis_config::AccountConfig;
-use sui_test_transaction_builder::make_publish_transaction;
 use sui_test_transaction_builder::make_staking_transaction;
 use sui_types::base_types::SuiAddress;
 use sui_types::transaction::TransactionDataAPI;
