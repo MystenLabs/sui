@@ -913,7 +913,7 @@ There are a few parameters that you need to pass into `initialize_house_data()` 
 - Use `Transaction::splitCoin` for the House stake to create a new coin with a defined amount split from the Gas Coin `txb.gas`. Think of the gas coin as one singular coin available for gas payment from your account (which might cover the entire remaining balance of your account). This is useful for Sui payments - instead of manually selecting the coins for gas payment or manually splitting/merging to have the coin with correct amount for your Move call, the gas coin is the single entry point for this, with all the heavy lifting delegated to the SDK behind the scenes.
 - Pass the BLS public key as bytes `vector<u8>`. When providing inputs that are not on-chain objects, serialize them as BCS using a combination of `txb.pure` and `bcs` imported from `@mysten/sui/bcs`.
 
-Now sign and execute the transaction block. dApp Kit provides the `signAndExecuteTransaction` method on the dAppKit instance (accessed via `useDAppKit()`) to streamline this process. When called, it prompts the UI for you to approve, sign, and execute the transaction block. The `HouseData` object is important as you use it as input for later Move calls, so save its ID somewhere.
+Now sign and execute the transaction. dApp Kit provides the `signAndExecuteTransaction` method on the dAppKit instance (accessed via `useDAppKit()`) to streamline this process. When called, it prompts the UI for you to approve, sign, and execute the transaction. The `HouseData` object is important as you use it as input for later Move calls, so save its ID somewhere.
 
 Great, now you know how to initialize the `HouseData` shared object. Move to the next function call.
 
@@ -1001,7 +1001,7 @@ export function PlayerListCounterNft() {
 }
 ```
 
-For the case when there is no existing `Counter` object, mint a new `Counter` for the connected wallet. Also add the minting logic into `PlayerListCounterNft.tsx` when the user clicks the button. You already know how to build and execute a Move call with `TransactionBlock` and `initialize_house_data()`, you can implement a similar call here.
+For the case when there is no existing `Counter` object, mint a new `Counter` for the connected wallet. Also add the minting logic into `PlayerListCounterNft.tsx` when the user clicks the button. You already know how to build and execute a Move call with `Transaction` and `initialize_house_data()`, you can implement a similar call here.
 
 As you might recall with `Transaction`, outputs from the transaction can be inputs for the next transaction. Call `counter_nft::mint()`, which returns the newly created `Counter` object, and use it as input for `counter_nft::transfer_to_sender()` to transfer the `Counter` object to the caller wallet:
 
@@ -1068,95 +1068,142 @@ try {
 }
 ```
 
-One final step remains: settle the game. There are a couple of ways you can use the UI to settle the game:
-
-1. Create a Settle Game button and pass all the necessary arguments to the `single_player_satoshi::finish_game()` Move call.
-1. Settle the game automatically through an events subscription. This example uses this path to teach good practices on events and how to subscribe to them.
+One final step remains: settle the game. To do this, poll for new `NewGame` events using the GraphQL API, then automatically call `single_player_satoshi::finish_game()` for each new game.
 
 :::info
 
-Event subscriptions via WebSocket (`subscribeEvent`) require configuring dApp Kit with `SuiJsonRpcClient`. Alternatively, for SDK 2.0 with the gRPC client, you can poll for events using GraphQL. See [Using Events](/guides/developer/accessing-data/using-events.mdx) for more information.
+For more information on how to work with events in your dApp, see [Using Events](/guides/developer/accessing-data/using-events.mdx).
 
 :::
 
-All of this logic is in `HouseFinishGame.tsx` (using JSON-RPC subscription):
+All of this logic is in `HouseFinishGame.tsx`, which polls the GraphQL API for new game events:
 
 ```typescript title='containers/House/HouseFinishGame.tsx'
-// This component will help the House to automatically finish the game whenever new game is started
 export function HouseFinishGame() {
-  const suiClient = useCurrentClient();
   const dAppKit = useDAppKit();
 
   const [housePrivHex] = useContext(HouseKeypairContext);
   const [houseDataId] = useContext(HouseDataContext);
 
   useEffect(() => {
-    // Subscribe to NewGame event
-    const unsub = suiClient.subscribeEvent({
-      filter: {
-        MoveEventType: `${PACKAGE_ID}::single_player_satoshi::NewGame`,
-      },
-      onMessage: async (event) => {
-        console.log(event);
-        const { game_id, vrf_input } = event.parsedJson as {
-          game_id: string;
-          vrf_input: number[];
-        };
-
-        toast.info(`NewGame started ID: ${game_id}`);
-
-        console.log(housePrivHex);
-
-        try {
-          const houseSignedInput = bls.sign(
-            new Uint8Array(vrf_input),
-            curveUtils.hexToBytes(housePrivHex),
-          );
-
-          // Finish the game immediately after new game started
-          const txb = new Transaction();
-          txb.moveCall({
-            target: `${PACKAGE_ID}::single_player_satoshi::finish_game`,
-            arguments: [
-              txb.pure.id(game_id),
-              txb.pure(bcs.vector(bcs.U8).serialize(houseSignedInput)),
-              txb.object(houseDataId),
-            ],
-          });
-
-          const result = await dAppKit.signAndExecuteTransaction({
-            transaction: txb,
-          });
-
-          if (result.$kind === 'FailedTransaction') {
-            toast.error('Transaction failed');
-          } else {
-            toast.success(`Digest: ${result.Transaction?.digest}`);
-          }
-        } catch (err: any) {
-          console.error(err);
-          toast.error(err.message);
-        }
-      },
+    const gqlClient = new SuiGraphQLClient({
+      url: 'https://graphql.mainnet.sui.io/graphql',
+      network: 'mainnet',
     });
 
+    const queryNewGames = graphql(`
+      query NewGames($eventType: String!, $after: String) {
+        events(filter: { eventType: $eventType }, after: $after) {
+          nodes {
+            contents { json }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    `);
+
+    const queryCursor = graphql(`
+      query LatestCursor($eventType: String!) {
+        events(filter: { eventType: $eventType }, last: 1) {
+          pageInfo {
+            endCursor
+          }
+        }
+      }
+    `);
+
+    let cursor: string | null = null;
+    let cancelled = false;
+
+    async function pollForGames() {
+      // Capture the current end cursor so we only process new games
+      const initial = await gqlClient.query({
+        query: queryCursor,
+        variables: {
+          eventType: `${PACKAGE_ID}::single_player_satoshi::NewGame`,
+        },
+      });
+      cursor = initial.data?.events?.pageInfo.endCursor ?? null;
+
+      while (!cancelled) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+
+        try {
+          const result = await gqlClient.query({
+            query: queryNewGames,
+            variables: {
+              eventType: `${PACKAGE_ID}::single_player_satoshi::NewGame`,
+              after: cursor,
+            },
+          });
+
+          const events = result.data?.events;
+          if (events?.pageInfo.endCursor) {
+            cursor = events.pageInfo.endCursor;
+          }
+
+          for (const node of events?.nodes ?? []) {
+            const { game_id, vrf_input } = node.contents?.json as {
+              game_id: string;
+              vrf_input: number[];
+            };
+
+            toast.info(`NewGame started ID: ${game_id}`);
+
+            try {
+              const houseSignedInput = bls.sign(
+                new Uint8Array(vrf_input),
+                curveUtils.hexToBytes(housePrivHex),
+              );
+
+              const txb = new Transaction();
+              txb.moveCall({
+                target: `${PACKAGE_ID}::single_player_satoshi::finish_game`,
+                arguments: [
+                  txb.pure.id(game_id),
+                  txb.pure(bcs.vector(bcs.U8).serialize(houseSignedInput)),
+                  txb.object(houseDataId),
+                ],
+              });
+
+              const result = await dAppKit.signAndExecuteTransaction({
+                transaction: txb,
+              });
+
+              if (result.$kind === 'FailedTransaction') {
+                toast.error('Transaction failed');
+              } else {
+                toast.success(`Digest: ${result.Transaction?.digest}`);
+              }
+            } catch (err: any) {
+              console.error(err);
+              toast.error(err.message);
+            }
+          }
+        } catch (err: any) {
+          console.error('Polling error:', err);
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    }
+
+    pollForGames();
+
     return () => {
-      (async () => (await unsub)())();
+      cancelled = true;
     };
-  }, [housePrivHex, houseDataId, suiClient, dAppKit]);
+  }, [housePrivHex, houseDataId, dAppKit]);
 
   return null;
 }
 ```
 
-To get the underlying client instance from the SDK, use `useCurrentClient()`. You want to subscribe to events whenever the `HouseFinishGame` component loads. To do this, use the React hook `useEffect()` from the core React library.
+The component uses `SuiGraphQLClient` to poll for `NewGame` events every 5 seconds, tracking the cursor to only process new events. When a new game is detected, it signs the VRF input with the BLS private key and calls `single_player_satoshi::finish_game()` to settle the game.
 
-The client exposes a method called `subscribeEvent()` that enables you to subscribe to a variety of event types. This is actually a thin wrapper around the RPC method [`suix_subscribeEvent`](/sui-api-ref#suix_subscribeevent).
-
-The logic is that whenever a new game starts, you want to settle the game immediately. The necessary event to achieve this is the Move event type called `single_player_satoshi::NewGame`. If you inspect the parsed payload of the event through `event.parsedJson`, you can see the corresponding event fields declared in the smart contract. In this case, you just need to use two fields, the Game ID and the VRF input.
-
-The next steps are similar to the previous Move calls, but you have to use the BLS private key to sign the VRF input and then pass the Game ID, signed VRF input and `HouseData` ID to the `single_player_satoshi::finish_game()` Move call.
-
-Last but not least, remember to unsubscribe from the event whenever the `HouseFinishGame` component dismounts. This is important as you might not want to subscribe to the same event multiple times.
+The cleanup function sets `cancelled = true` to stop polling when the component unmounts.
 
 Congratulations, you completed the frontend. You can carry the lessons learned here forward when using the dApp Kit to build your next Sui project.

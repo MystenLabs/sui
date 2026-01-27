@@ -157,7 +157,7 @@ A successful `curl` return
 
 </details>
 
-The TypeScript SDK provides methods to query events. For getting events from a specific transaction, use the `getTransaction` method with `include: { events: true }`:
+You can use the `getTransaction` method with `include: { events: true }` to retrieve events for a specific transaction:
 
 ```ts
 import { SuiGrpcClient } from '@mysten/sui/grpc';
@@ -167,7 +167,6 @@ const client = new SuiGrpcClient({
   network: 'mainnet',
 });
 
-// Get events for a specific transaction
 async function getEventsForTransaction(digest: string) {
   const result = await client.getTransaction({
     digest,
@@ -194,13 +193,11 @@ TypeScript SDK GraphQL events example
 import { SuiGraphQLClient } from '@mysten/sui/graphql';
 import { graphql } from '@mysten/sui/graphql/schema';
 
-// Create a GraphQL client
 const gqlClient = new SuiGraphQLClient({
   url: 'https://graphql.mainnet.sui.io/graphql',
   network: 'mainnet',
 });
 
-// Define a type-safe query for filtering events by type
 const queryEventsByType = graphql(`
   query EventsByType($eventType: String!, $first: Int) {
     events(filter: { eventType: $eventType }, first: $first) {
@@ -222,7 +219,6 @@ const queryEventsByType = graphql(`
   }
 `);
 
-// Query events by type
 async function getEventsByType(eventType: string, first: number = 10) {
   const result = await gqlClient.query({
     query: queryEventsByType,

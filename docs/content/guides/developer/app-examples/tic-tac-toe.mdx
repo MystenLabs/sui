@@ -214,15 +214,7 @@ newMultiSigGame(player: PublicKey, opponent: PublicKey): Transaction {
 
 Placing a mark requires two transactions, just like the owned example, but they are both driven by one of the players. The first transaction is executed by the player as themselves, to send the mark to the game, and the second is executed by the player acting as the admin to place the mark they just sent. In the React frontend, this is performed as follows:
 
-:::info
-
-This pattern requires configuring dApp Kit with `SuiJsonRpcClient` (see `config.ts` in the example) to use the `executeTransactionBlock` method.
-
-:::
-
 ```typescript title="examples/tic-tac-toe/ui/src/pages/Game.tsx"
-import type { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
-
 function OwnedGame({
   game,
   trophy,
@@ -236,21 +228,14 @@ function OwnedGame({
 }): ReactElement {
   const adminKey = game.admin ? new MultiSigPublicKey(new Uint8Array(game.admin)) : null;
 
-  // Cast to SuiJsonRpcClient since the app is configured to use JSON-RPC client
-  const client = useCurrentClient() as SuiJsonRpcClient;
+  const client = useCurrentClient();
   const { mutate: signAndExecute } = useExecutor();
   const { mutate: multiSignAndExecute } = useExecutor({
     execute: ({ bytes, signature }) => {
       const multiSig = adminKey!!.combinePartialSignatures([signature]);
-      return client.executeTransactionBlock({
-        transactionBlock: bytes,
-        // The multi-sig authorizes access to the game object, while
-        // the original signature authorizes access to the player's
-        // gas object, because the player is sponsoring the transaction.
-        signature: [multiSig, signature],
-        options: {
-          showRawEffects: true,
-        },
+      return client.core.executeTransaction({
+        transaction: bytes,
+        signatures: [multiSig, signature],
       });
     },
   });

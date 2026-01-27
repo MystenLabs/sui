@@ -34,25 +34,22 @@ https://github.com/MystenLabs/ts-sdks/blob/main/packages/deepbook-v3/src/utils/c
 
 ## DeepBookClient
 
-To work with DeepBookV3, use the client extension pattern to add DeepBook functionality to a Sui client. The [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the `SuiGrpcClient` and key functionality necessary to process transactions. The following example imports those libraries, as well.
+To work with DeepBookV3, use the client extension to add DeepBook functionality to a Sui client. The [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the `SuiGrpcClient` and key functionality necessary to process transactions. The following example imports those libraries, as well.
 
 ```tsx
-import { deepbook } from '@mysten/deepbook-v3';
+import { deepbook, type DeepBookClient } from '@mysten/deepbook-v3';
+import type { ClientWithExtensions } from '@mysten/sui/client';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 
 class DeepBookMarketMaker {
-	client: ReturnType<typeof this.createClient>; // Client with DeepBook extension
-	keypair: Ed25519Keypair; // For signing transactions
+	client: ClientWithExtensions<{ deepbook: DeepBookClient }>;
+	keypair: Ed25519Keypair;
 
 	constructor(privateKey: string, env: 'testnet' | 'mainnet') {
 		this.keypair = this.getSignerFromPK(privateKey);
-		this.client = this.createClient(env);
-	}
-
-	createClient(env: 'testnet' | 'mainnet') {
-		return new SuiGrpcClient({
+		this.client = new SuiGrpcClient({
 			network: env,
 			baseUrl:
 				env === 'mainnet'
@@ -89,31 +86,25 @@ Before placing any trade, you must supply a balance manager address to the clien
 Example using an existing balance manager:
 
 ```tsx
-import { deepbook } from '@mysten/deepbook-v3';
+import { deepbook, type DeepBookClient } from '@mysten/deepbook-v3';
+import type { ClientWithExtensions } from '@mysten/sui/client';
+import type { BalanceManager } from '@mysten/deepbook-v3';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { config } from 'dotenv';
-import type { BalanceManager } from '@mysten/deepbook-v3';
 
 config();
 
-// Used wherever balance manager key is required
 const BALANCE_MANAGER_KEY = 'MANAGER_1';
 
 class DeepBookMarketMaker {
-	client: ReturnType<typeof this.createClient>; // Client with DeepBook extension
-	keypair: Ed25519Keypair; // For signing transactions
-	env: 'testnet' | 'mainnet';
+	client: ClientWithExtensions<{ deepbook: DeepBookClient }>;
+	keypair: Ed25519Keypair;
 
 	constructor(privateKey: string, env: 'testnet' | 'mainnet') {
-		this.env = env;
 		this.keypair = this.getSignerFromPK(privateKey);
-		this.client = this.createClient(env);
-	}
-
-	createClient(env: 'testnet' | 'mainnet') {
-		return new SuiGrpcClient({
+		this.client = new SuiGrpcClient({
 			network: env,
 			baseUrl:
 				env === 'mainnet'
@@ -139,7 +130,6 @@ class DeepBookMarketMaker {
 	}
 
 	getBalanceManagers(): { [key: string]: BalanceManager } {
-		// Used wherever balance manager key is required
 		const balanceManagerAddress = process.env.BALANCE_MANAGER_ADDRESS;
 		const balanceManagerTradeCap = process.env.BALANCE_MANAGER_TRADE_CAP;
 		if (!balanceManagerAddress) {
@@ -158,28 +148,28 @@ class DeepBookMarketMaker {
 Example creating a balance manager:
 
 ```tsx
-import { deepbook } from '@mysten/deepbook-v3';
+import { deepbook, type DeepBookClient } from '@mysten/deepbook-v3';
+import type { ClientWithExtensions } from '@mysten/sui/client';
+import type { BalanceManager } from '@mysten/deepbook-v3';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
-import type { BalanceManager } from '@mysten/deepbook-v3';
 
-// Used wherever balance manager key is required
 const BALANCE_MANAGER_KEY = 'MANAGER_1';
 
 class DeepBookMarketMaker {
-	client: ReturnType<typeof this.createClient>; // Client with DeepBook extension
-	keypair: Ed25519Keypair; // For signing transactions
+	client: ClientWithExtensions<{ deepbook: DeepBookClient }>;
+	keypair: Ed25519Keypair;
 	env: 'testnet' | 'mainnet';
 
 	constructor(privateKey: string, env: 'testnet' | 'mainnet') {
 		this.env = env;
 		this.keypair = this.getSignerFromPK(privateKey);
-		this.client = this.createClient(env);
+		this.client = this.#createClient(env);
 	}
 
-	createClient(env: 'testnet' | 'mainnet', balanceManagers?: { [key: string]: BalanceManager }) {
+	#createClient(env: 'testnet' | 'mainnet', balanceManagers?: { [key: string]: BalanceManager }) {
 		return new SuiGrpcClient({
 			network: env,
 			baseUrl:
@@ -215,9 +205,12 @@ class DeepBookMarketMaker {
 			include: { effects: true, objectTypes: true },
 		});
 
-		const txResult = result.Transaction ?? result.FailedTransaction;
-		const objectTypes = txResult?.objectTypes ?? {};
-		const balanceManagerAddress = txResult?.effects?.changedObjects?.find(
+		if (result.$kind === 'FailedTransaction') {
+			throw new Error('Transaction failed');
+		}
+
+		const objectTypes = result.Transaction?.objectTypes ?? {};
+		const balanceManagerAddress = result.Transaction?.effects?.changedObjects?.find(
 			(obj) => obj.idOperation === 'Created' && objectTypes[obj.objectId]?.includes('BalanceManager'),
 		)?.objectId;
 
@@ -232,8 +225,7 @@ class DeepBookMarketMaker {
 			},
 		};
 
-		// Reinitialize client with the new balance manager
-		this.client = this.createClient(this.env, balanceManagers);
+		this.client = this.#createClient(this.env, balanceManagers);
 	}
 }
 ```
@@ -264,17 +256,18 @@ You can also initialize the SDK with custom coins to interact with pools that ar
 Similar to coins, the SDK comes with default pools. You can provide a `PoolMap` during construction to override this behavior.
 
 ```tsx
-import { deepbook } from '@mysten/deepbook-v3';
+import { deepbook, type DeepBookClient } from '@mysten/deepbook-v3';
+import type { ClientWithExtensions } from '@mysten/sui/client';
+import type { BalanceManager } from '@mysten/deepbook-v3';
 import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import type { Keypair } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import type { Transaction } from '@mysten/sui/transactions';
-import type { BalanceManager } from '@mysten/deepbook-v3';
 
 export class DeepBookMarketMaker {
 	keypair: Keypair;
-	client: ReturnType<typeof this.createClient>;
+	client: ClientWithExtensions<{ deepbook: DeepBookClient }>;
 
 	constructor(
 		keypair: string | Keypair,
@@ -288,15 +281,7 @@ export class DeepBookMarketMaker {
 			this.keypair = keypair;
 		}
 
-		this.client = this.createClient(env, balanceManagers, adminCap);
-	}
-
-	createClient(
-		env: 'testnet' | 'mainnet',
-		balanceManagers?: { [key: string]: BalanceManager },
-		adminCap?: string,
-	) {
-		return new SuiGrpcClient({
+		this.client = new SuiGrpcClient({
 			network: env,
 			baseUrl:
 				env === 'mainnet'
@@ -324,7 +309,10 @@ export class DeepBookMarketMaker {
 			signer: this.keypair,
 			include: { effects: true },
 		});
-		return result.Transaction ?? result.FailedTransaction;
+		if (result.$kind === 'FailedTransaction') {
+			throw new Error('Transaction failed');
+		}
+		return result.Transaction;
 	};
 
 	getActiveAddress() {
@@ -356,7 +344,7 @@ import { DeepBookMarketMaker } from './deepbookMarketMaker.js';
 
 	const tx = new Transaction();
 
-	// Read only call - access DeepBook methods via the client extension
+	// Read only call
 	console.log(await mmClient.client.deepbook.checkManagerBalance('MANAGER_1', 'SUI'));
 	console.log(await mmClient.client.deepbook.getLevel2Range('SUI_DBUSDC', 0.1, 100, true));
 
