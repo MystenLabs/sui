@@ -5,7 +5,7 @@
 module sui::bulletproofs;
 
 use sui::ristretto255::Point;
-use sui::group_ops::{Self, Element};
+use sui::group_ops::Element;
 
 public fun verify_range_proof(proof: &vector<u8>, range: u8, commitment: &Element<Point>): bool {
     verify_bulletproof_ristretto255(proof, range, commitment.bytes())

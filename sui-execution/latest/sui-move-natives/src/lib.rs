@@ -1334,8 +1334,8 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             make_native!(nitro_attestation::load_nitro_attestation_internal),
         ),
         (
-            "verify_bulletproof_ristretto255",
             "bulletproofs",
+            "verify_bulletproof_ristretto255",
             make_native!(bulletproofs::verify_bulletproof_ristretto255),
         ),
     ];

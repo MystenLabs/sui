@@ -4,6 +4,7 @@
 /// Group operations of BLS12-381.
 module sui::ristretto255;
 
+use sui::bcs;
 use sui::group_ops::{Self, Element};
 
 /////////////////////////////////////////////
@@ -34,8 +35,8 @@ public fun scalar_from_bytes(bytes: &vector<u8>): Element<Scalar> {
 }
 
 public fun scalar_from_u64(x: u64): Element<Scalar> {
-    let mut bytes = SCALAR_ZERO_BYTES;
-    group_ops::set_as_prefix(x, true, &mut bytes);
+    let scalar: u256 = x as u256;
+    let bytes = bcs::to_bytes(&scalar);
     group_ops::from_bytes(SCALAR_TYPE, bytes, true)
 }
 

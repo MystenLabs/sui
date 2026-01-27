@@ -1701,6 +1701,7 @@ pub struct ProtocolConfig {
     debug_print_base_cost: Option<u64>,
     debug_print_stack_trace_base_cost: Option<u64>,
 
+    /// TODO: Should depend on range and batch size
     verify_bulletproof_ristretto255_cost: Option<u64>,
 
     // ==== Ephemeral (consensus only) params deleted ====
@@ -4563,6 +4564,7 @@ impl ProtocolConfig {
                     cfg.group_ops_ristretto_msm_base_cost = Some(62648);
                     cfg.group_ops_ristretto_msm_base_cost_per_input = Some(1333);
                     cfg.group_ops_ristretto_msm_max_len = Some(1200);
+                    cfg.verify_bulletproof_ristretto255_cost = Some(3000);
                 }
                 // Use this template when making changes:
                 //
