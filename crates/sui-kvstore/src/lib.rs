@@ -5,7 +5,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde::Serialize;
+use sui_types::balance_change::BalanceChange;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectType;
 use sui_types::committee::EpochId;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::digests::CheckpointDigest;
@@ -28,8 +30,11 @@ pub use crate::handlers::BIGTABLE_MAX_MUTATIONS;
 pub use crate::handlers::BigTableHandler;
 pub use crate::handlers::CheckpointsByDigestPipeline;
 pub use crate::handlers::CheckpointsPipeline;
+pub use crate::handlers::EpochEndPipeline;
 pub use crate::handlers::EpochLegacyBatch;
 pub use crate::handlers::EpochLegacyPipeline;
+pub use crate::handlers::EpochStartPipeline;
+pub use crate::handlers::ObjectTypesPipeline;
 pub use crate::handlers::ObjectsPipeline;
 pub use crate::handlers::PrevEpochUpdate;
 pub use crate::handlers::TransactionsPipeline;
@@ -63,6 +68,7 @@ pub trait KeyValueStoreReader {
         &mut self,
         keys: &[TransactionDigest],
     ) -> Result<Vec<(TransactionDigest, TransactionEventsData)>>;
+    async fn get_object_types(&mut self, object_ids: &[ObjectID]) -> Result<Vec<ObjectType>>;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -79,6 +85,8 @@ pub struct TransactionData {
     pub events: Option<TransactionEvents>,
     pub checkpoint_number: CheckpointSequenceNumber,
     pub timestamp: u64,
+    pub balance_changes: Vec<BalanceChange>,
+    pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
 }
 
 /// Partial transaction and events for when we only need transaction content for events
@@ -86,6 +94,37 @@ pub struct TransactionData {
 pub struct TransactionEventsData {
     pub events: Vec<Event>,
     pub timestamp_ms: u64,
+}
+
+/// Data written at epoch start (before transactions are processed)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EpochStartData {
+    pub epoch: u64,
+    pub protocol_version: Option<u64>,
+    pub start_timestamp_ms: Option<u64>,
+    pub start_checkpoint: Option<u64>,
+    pub reference_gas_price: Option<u64>,
+    pub system_state: Option<sui_types::sui_system_state::SuiSystemState>,
+}
+
+impl From<&EpochInfo> for EpochStartData {
+    fn from(info: &EpochInfo) -> Self {
+        Self {
+            epoch: info.epoch,
+            protocol_version: info.protocol_version,
+            start_timestamp_ms: info.start_timestamp_ms,
+            start_checkpoint: info.start_checkpoint,
+            reference_gas_price: info.reference_gas_price,
+            system_state: info.system_state.clone(),
+        }
+    }
+}
+
+/// Data written at epoch end (after the last transaction of the epoch)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EpochEndData {
+    pub end_timestamp_ms: Option<u64>,
+    pub end_checkpoint: Option<u64>,
 }
 
 /// Serializable watermark for per-pipeline tracking in BigTable.

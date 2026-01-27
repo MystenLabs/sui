@@ -18,7 +18,10 @@ use sui_kvstore::BigTableHandler;
 use sui_kvstore::BigTableStore;
 use sui_kvstore::CheckpointsByDigestPipeline;
 use sui_kvstore::CheckpointsPipeline;
+use sui_kvstore::EpochEndPipeline;
 use sui_kvstore::EpochLegacyPipeline;
+use sui_kvstore::EpochStartPipeline;
+use sui_kvstore::ObjectTypesPipeline;
 use sui_kvstore::ObjectsPipeline;
 use sui_kvstore::TransactionsPipeline;
 use sui_kvstore::set_max_mutations;
@@ -143,6 +146,15 @@ async fn main() -> Result<()> {
         .await?;
     indexer
         .concurrent_pipeline(BigTableHandler::new(ObjectsPipeline), config.clone())
+        .await?;
+    indexer
+        .concurrent_pipeline(BigTableHandler::new(ObjectTypesPipeline), config.clone())
+        .await?;
+    indexer
+        .concurrent_pipeline(BigTableHandler::new(EpochStartPipeline), config.clone())
+        .await?;
+    indexer
+        .concurrent_pipeline(BigTableHandler::new(EpochEndPipeline), config.clone())
         .await?;
 
     // DEPRECATED. Delete after migrating readers to new columns.
