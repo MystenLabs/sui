@@ -2108,6 +2108,10 @@ impl SuiNode {
         self.randomness_handle.clone()
     }
 
+    pub fn endpoint_manager(&self) -> &EndpointManager {
+        &self.endpoint_manager
+    }
+
     /// Get a short prefix of a digest for metric labels
     fn get_digest_prefix(digest: impl std::fmt::Display) -> String {
         let digest_str = digest.to_string();
