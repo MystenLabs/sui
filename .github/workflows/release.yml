@@ -11,7 +11,7 @@ on:
         type: string
         required: true
 
-concurrency: ${{ github.workflow }}-${{ inputs.sui_tag || github.ref_name }}
+# concurrency: ${{ github.workflow }}-${{ inputs.sui_tag || github.ref_name }}
 
 env:
   TAG_NAME: "${{ github.event.inputs.sui_tag || github.ref_name }}"
