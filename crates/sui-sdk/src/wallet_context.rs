@@ -527,8 +527,10 @@ impl WalletContext {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<SuiTransactionBlockResponse> {
+        let digest = tx.digest().to_owned();
         let client = self.get_client().await?;
-        Ok(client
+
+        let response = client
             .quorum_driver_api()
             .execute_transaction_block(
                 tx,
@@ -540,6 +542,10 @@ impl WalletContext {
                     .with_balance_changes(),
                 Some(sui_types::transaction_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
             )
-            .await?)
+            .await?;
+
+        self.grpc_client()?.wait_for_transaction(&digest).await?;
+
+        Ok(response)
     }
 }

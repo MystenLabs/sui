@@ -2,23 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bytes::Bytes;
-use sui_types::digests::ChainIdentifier;
-use tap::Pipe;
-use tonic::metadata::MetadataMap;
-
 use futures::stream::Stream;
 use futures::stream::TryStreamExt;
 use prost_types::FieldMask;
+use std::time::Duration;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::TryFromProtoError;
 use sui_rpc::proto::sui::rpc::v2::{self as proto, GetServiceInfoRequest};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::digests::ChainIdentifier;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
+use tap::Pipe;
+use tonic::Status;
+use tonic::metadata::MetadataMap;
 
 pub use sui_rpc::client::HeadersInterceptor;
 pub use sui_rpc::client::ResponseExt;
@@ -30,8 +31,6 @@ pub struct Page<T> {
     pub items: Vec<T>,
     pub next_page_token: Option<Bytes>,
 }
-
-use tonic::Status;
 
 #[derive(Clone)]
 pub struct Client(sui_rpc::Client);
@@ -279,6 +278,47 @@ impl Client {
             .into_inner();
 
         Ok(response.epoch().reference_gas_price())
+    }
+
+    /// Wait for a transaction to be available in the ledger AND indexed (equivalent to WaitForLocalExecution)
+    pub async fn wait_for_transaction(
+        &self,
+        digest: &sui_types::digests::TransactionDigest,
+    ) -> Result<(), anyhow::Error> {
+        const WAIT_FOR_LOCAL_EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
+        const WAIT_FOR_LOCAL_EXECUTION_DELAY: Duration = Duration::from_millis(200);
+        const WAIT_FOR_LOCAL_EXECUTION_INTERVAL: Duration = Duration::from_millis(500);
+
+        let mut client = self.0.clone();
+        let mut client = client.ledger_client();
+
+        tokio::time::timeout(WAIT_FOR_LOCAL_EXECUTION_TIMEOUT, async {
+            // Apply a short delay to give the full node a chance to catch up.
+            tokio::time::sleep(WAIT_FOR_LOCAL_EXECUTION_DELAY).await;
+
+            let mut interval = tokio::time::interval(WAIT_FOR_LOCAL_EXECUTION_INTERVAL);
+            loop {
+                interval.tick().await;
+
+                let request = proto::GetTransactionRequest::default()
+                    .with_digest(digest.to_string())
+                    .with_read_mask(prost_types::FieldMask::from_paths(["digest", "checkpoint"]));
+
+                if let Ok(response) = client.get_transaction(request).await {
+                    let tx = response.into_inner().transaction;
+                    if let Some(executed_tx) = tx {
+                        // Check that transaction is indexed (checkpoint field is populated)
+                        if executed_tx.checkpoint.is_some() {
+                            break;
+                        }
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("Timeout waiting for transaction indexing: {}", digest))?;
+
+        Ok(())
     }
 }
 
