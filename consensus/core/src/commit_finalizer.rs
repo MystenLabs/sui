@@ -215,10 +215,6 @@ impl CommitFinalizer {
             .finalizer_output_commits
             .with_label_values(&["direct"])
             .inc_by(direct_finalized_commits.len() as u64);
-        println!(
-            "Direct finalized commits: {:?}",
-            direct_finalized_commits.clone()
-        );
         finalized_commits.extend(direct_finalized_commits);
 
         // Indirect finalization: one or more commits cannot be directly finalized.
