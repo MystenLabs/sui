@@ -86,7 +86,7 @@ There is also a specialized Move function that equips a `Hero` with a `Sword`:
 /// Equiping a sword increases the `Hero`'s power by its attack.
 public fun equip_sword(self: &mut Hero, sword: Sword) {
     if (df::exists_(&self.id, b"sword".to_string())) {
-        abort (EAlreadyEquipedSword)
+        abort (EAlreadyEquippedSword)
     };
     self.add_dof(b"sword".to_string(), sword)
 }
