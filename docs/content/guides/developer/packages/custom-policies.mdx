@@ -670,26 +670,22 @@ const tuesdayUpgradeCap = tx.moveCall({
 	target: `${POLICY_PACKAGE_ID}::day_of_week::new_policy`,
 	arguments: [
 		packageUpgradeCap,
-		tx.pure(1), // Tuesday
+		tx.pure.u8(1), // Tuesday
 	],
 });
 
-tx.transferObjects([tuesdayUpgradeCap], tx.pure(sender));
+tx.transferObjects([tuesdayUpgradeCap], tx.pure.address(sender));
 ```
 
-Finally, execute that transaction and display its effects to the console. The following snippet assumes that you're running your examples against a local network. Pass `devnet`, `testnet`, or `mainnet` to the `getFullnodeUrl()` function to run on Devnet, Testnet, or Mainnet respectively:
+Finally, execute that transaction and display its effects to the console. The following snippet assumes that you're running your examples against a local network. Change the `baseUrl` and `network` parameters to run on Devnet, Testnet, or Mainnet respectively:
 
 ```js
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 
-const client = new SuiClient({ url: getFullnodeUrl('localnet') });
+const client = new SuiGrpcClient({ baseUrl: 'http://localhost:9000', network: 'localnet' });
 const result = await client.signAndExecuteTransaction({
 	signer,
 	transaction: tx,
-	options: {
-		showEffects: true,
-		showObjectChanges: true,
-	},
 });
 
 console.log(result);
@@ -709,7 +705,7 @@ import { readFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import { fromBase64 } from '@mysten/sui/utils';
@@ -752,20 +748,16 @@ const tuesdayUpgradeCap = tx.moveCall({
 	target: `${POLICY_PACKAGE_ID}::day_of_week::new_policy`,
 	arguments: [
 		packageUpgradeCap,
-		tx.pure(1), // Tuesday
+		tx.pure.u8(1), // Tuesday
 	],
 });
 
-tx.transferObjects([tuesdayUpgradeCap], tx.pure(sender));
+tx.transferObjects([tuesdayUpgradeCap], tx.pure.address(sender));
 
-const client = new SuiClient({ url: getFullnodeUrl('localnet') });
+const client = new SuiGrpcClient({ baseUrl: 'http://localhost:9000', network: 'localnet' });
 const result = await client.signAndExecuteTransaction({
 	signer,
 	transaction: tx,
-	options: {
-		showEffects: true,
-		showObjectChanges: true,
-	},
 });
 
 console.log(result);
@@ -945,7 +937,7 @@ import { readFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction, UpgradePolicy } from '@mysten/sui/transactions';
 import { fromBase64 } from '@mysten/sui/utils';
@@ -988,13 +980,13 @@ const tx = new Transaction();
 const cap = tx.object(CAP_ID);
 const ticket = tx.moveCall({
 	target: `${POLICY_PACKAGE_ID}::day_of_week::authorize_upgrade`,
-	arguments: [cap, tx.pure(UpgradePolicy.COMPATIBLE), tx.pure(digest)],
+	arguments: [cap, tx.pure.u8(UpgradePolicy.COMPATIBLE), tx.pure(Uint8Array.from(digest))],
 });
 
 const receipt = tx.upgrade({
 	modules,
 	dependencies,
-	packageId: EXAMPLE_PACKAGE_ID,
+	package: EXAMPLE_PACKAGE_ID,
 	ticket,
 });
 
@@ -1003,14 +995,10 @@ tx.moveCall({
 	arguments: [cap, receipt],
 });
 
-const client = new SuiClient({ url: getFullnodeUrl('localnet') });
+const client = new SuiGrpcClient({ baseUrl: 'http://localhost:9000', network: 'localnet' });
 const result = await client.signAndExecuteTransaction({
 	signer,
 	transaction: tx,
-	options: {
-		showEffects: true,
-		showObjectChanges: true,
-	},
 });
 
 console.log(result);

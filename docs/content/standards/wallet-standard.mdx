@@ -261,10 +261,12 @@ wallet.features['sui:signTransaction'].signTransaction({
 
 Similar to account authorization, this process opens a pop-up dialog for the user to either accept or decline the transaction. Upon accepting, the function returns an object in the form `{bytes: String, signature: Uint8Array}`. The `bytes` value is the `b64` encoding of the transaction and the `signature` value is the transaction signature.
 
-To execute the transaction, use `SuiClient` from `@mysten/sui`:
+To execute the transaction, use `SuiJsonRpcClient` from `@mysten/sui/jsonRpc`:
 
 ```tsx
-const client: SuiClient
+import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
+
+const client: SuiJsonRpcClient;
 client.executeTransactionBlock({
     transactionBlock: bytes,
     signature: signature,
@@ -315,4 +317,4 @@ These values are all arrays containing the new or changed items. Consequently, e
 
 ### Implementation example
 
-Mysten Labs offers a bare bones scaffold for React-based applications called `@mysten/dapp-kit`. See the [dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit) for more information.
+Mysten Labs offers a bare bones scaffold for React-based applications called `@mysten/dapp-kit-react`. See the [dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit) for more information.

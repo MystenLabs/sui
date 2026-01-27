@@ -983,7 +983,7 @@ Create `src/components/Header.tsx`. This file contains the navigation links and 
 </summary>
 
 ```tsx
-import { ConnectButton } from "@mysten/dapp-kit";
+import { ConnectButton } from "@mysten/dapp-kit-react";
 import { SizeIcon } from "@radix-ui/react-icons";
 import { Box, Container, Flex, Heading } from "@radix-ui/themes";
 import { NavLink } from "react-router-dom";
@@ -1093,7 +1093,8 @@ First add this file `src/components/locked/LockOwnedObjects.tsx`:
 </summary>
 
 ```tsx
-import { useCurrentAccount, useSuiClientInfiniteQuery } from "@mysten/dapp-kit";
+import { useCurrentAccount, useCurrentClient } from "@mysten/dapp-kit-react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
 import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
 
@@ -1103,29 +1104,25 @@ import { InfiniteScrollArea } from "@/components/InfiniteScrollArea";
  */
 export function LockOwnedObjects() {
   const account = useCurrentAccount();
+  const client = useCurrentClient();
 
   const { data, fetchNextPage, isFetchingNextPage, hasNextPage, refetch } =
-    useSuiClientInfiniteQuery(
-      "getOwnedObjects",
-      {
-        owner: account?.address!,
-        options: {
-          showDisplay: true,
-          showType: true,
-        },
+    useInfiniteQuery({
+      queryKey: ["listOwnedObjects", account?.address],
+      queryFn: async ({ pageParam }) => {
+        const result = await client.core.listOwnedObjects({
+          owner: account?.address!,
+          cursor: pageParam ?? undefined,
+        });
+        return result;
       },
-      {
-        enabled: !!account,
-        select: (data) =>
-          data.pages
-            .flatMap((page) => page.data)
-            .filter(
-              // we're filtering out objects that don't have Display or image_url
-              // for demo purposes. The Escrow contract works with all objects.
-              (x) => !!x.data?.display && !!x.data?.display?.data?.image_url,
-            ),
-      },
-    );
+      initialPageParam: null as string | null,
+      getNextPageParam: (lastPage) =>
+        lastPage.hasNextPage ? lastPage.cursor : null,
+      enabled: !!account,
+      select: (data) =>
+        data.pages.flatMap((page) => page.objects),
+    });
 
   return (
     <InfiniteScrollArea
@@ -1134,7 +1131,7 @@ export function LockOwnedObjects() {
       loading={isFetchingNextPage}
     >
       {data?.map((obj) => (
-        <SuiObjectDisplay object={obj.data!}>
+        <SuiObjectDisplay key={obj.objectId} object={obj}>
         </SuiObjectDisplay>
       ))}
     </InfiniteScrollArea>
@@ -1144,7 +1141,7 @@ export function LockOwnedObjects() {
 
 </details>
 
-Fetch the owned objects directly from Sui blockchain using the `useSuiClientInfiniteQuery()` hook from dApp Kit. This hook is a thin wrapper around Sui blockchain RPC calls. Reference the documentation to learn more about these [RPC hooks](https://sdk.mystenlabs.com/dapp-kit/rpc-hooks). Supply the RPC endpoint you want to execute, in this case the [`getOwnedObjects` endpoint](https://docs.sui.io/sui-api-ref#suix_getownedobjects). Supply the connected wallet account as the `owner`. The returned data is stored inside the cache at query key `getOwnedObjects`. In a future step you invalidate this cache after a mutation succeeds, so the data is re-fetched automatically.
+Fetch the owned objects directly from the Sui blockchain using `useInfiniteQuery` from TanStack Query with the `useCurrentClient()` hook from dApp Kit. The `useCurrentClient()` hook returns the configured Sui client, and you use its `core.listOwnedObjects()` method to fetch paginated owned objects. Supply the connected wallet account as the `owner`. The returned data is stored inside the cache at query key `getOwnedObjects`. In a future step you invalidate this cache after a mutation succeeds, so the data is re-fetched automatically.
 
 
 <details>
@@ -1230,7 +1227,7 @@ Create `src/hooks/useTransactionExecution.ts`:
 
 A `Transaction` is the input. Sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
 
-Use the `useSuiClient()` hook from dApp Kit to retrieve the Sui client instance configured in `src/main.tsx`. The `useSignTransaction()` function is another hook from dApp kit that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, use the `executeTransaction()` on the Sui client instance of the Sui TypeScript SDK.
+Use the `useCurrentClient()` hook from dApp Kit to retrieve the Sui client instance configured in `src/main.tsx`. The `useSignTransaction()` function is another hook from dApp kit that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, use the `executeTransaction()` on the client instance of the Sui TypeScript SDK.
 
 ### Generate demo data
 
@@ -1303,8 +1300,8 @@ Create `src/mutations/locked.ts`:
 ```tsx
 import { CONSTANTS } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
-import { useCurrentAccount } from "@mysten/dapp-kit";
-import { SuiObjectData } from "@mysten/sui/client";
+import { useCurrentAccount } from "@mysten/dapp-kit-react";
+import { SuiObjectData } from "@mysten/sui/jsonRpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { useMutation } from "@tanstack/react-query";
 /**
@@ -1378,11 +1375,11 @@ Take a look at the **My Locked Objects** tab by examining `src/components/locked
 
 </details>
 
-This instance of `useSuiClientInfiniteQuery()` is similar to the one in the `LockOwnedObjects` component. The difference is that it fetches the locked objects instead of the owned objects. The `Locked` object is a struct type in the smart contract, so you need to supply the struct type to the query call as a `filter`. The struct type is usually identified by the format of `{PACKAGE_ID}::{MODULE_NAME}::{STRUCT_TYPE}`.
+This query pattern is similar to the one in the `LockOwnedObjects` component. The difference is that it fetches the locked objects instead of the owned objects. The `Locked` object is a struct type in the smart contract, so you need to supply the struct type to the query call as a `filter`. The struct type is usually identified by the format of `{PACKAGE_ID}::{MODULE_NAME}::{STRUCT_TYPE}`.
 
 ##### `LockedObject` and `Locked` component
 
-The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is mainly responsible for mapping an on-chain `SuiObjectData` `Locked` object to its corresponding `ApiLockedObject`, which is finally delegated to the `<Locked />` component for rendering. The `<LockedObject />` fetches the locked item object ID if the prop `itemId` is not supplied by using dApp Kit `useSuiClientQuery()` hook to call the `getDynamicFieldObject` RPC endpoint. Recall that in this smart contract, the locked item is put into a [dynamic object field](/guides/developer/objects/dynamic-fields.mdx).
+The `<LockedObject />` (`src/components/locked/LockedObject.tsx`) component is mainly responsible for mapping an on-chain `SuiObjectData` `Locked` object to its corresponding `ApiLockedObject`, which is finally delegated to the `<Locked />` component for rendering. The `<LockedObject />` fetches the locked item object ID if the prop `itemId` is not supplied by using TanStack Query's `useQuery` hook with the `useCurrentClient()` hook to call the `getDynamicFieldObject` RPC endpoint. Recall that in this smart contract, the locked item is put into a [dynamic object field](/guides/developer/objects/dynamic-fields.mdx).
 
 <details>
 
@@ -1407,7 +1404,8 @@ The `<Locked />` (`src/components/locked/partials/Locked.tsx`) component is main
 </summary>
 
 ```tsx
-import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
+import { useCurrentAccount, useCurrentClient } from "@mysten/dapp-kit-react";
+import { useQuery } from "@tanstack/react-query";
 import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
 import { ExplorerLink } from "../../ExplorerLink";
 import { ApiLockedObject } from "@/types/types";
@@ -1427,21 +1425,17 @@ export function Locked({
   hideControls?: boolean;
 }) {
   const account = useCurrentAccount();
+  const client = useCurrentClient();
 
-  const suiObject = useSuiClientQuery(
-    "getObject",
-    {
-      id: locked.itemId,
-      options: {
-        showDisplay: true,
-        showType: true,
-        showOwner: true,
-      },
+  const suiObject = useQuery({
+    queryKey: ["getObject", locked.itemId],
+    queryFn: async () => {
+      const { object } = await client.core.getObject({
+        objectId: locked.itemId,
+      });
+      return object;
     },
-    {
-      select: (data) => data.data,
-    },
-  );
+  });
 
   const getLabel = () => {
     if (locked.deleted) return "Deleted";
@@ -1536,7 +1530,8 @@ Update `src/components/locked/partials/Locked.tsx` to include the `useUnlockObje
 </summary>
 
 ```tsx
-import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
+import { useCurrentAccount, useCurrentClient } from "@mysten/dapp-kit-react";
+import { useQuery } from "@tanstack/react-query";
 import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
 import { Button } from "@radix-ui/themes";
 import {
@@ -1565,22 +1560,18 @@ export function Locked({
 }) {
   const [isToggled, setIsToggled] = useState(false);
   const account = useCurrentAccount();
+  const client = useCurrentClient();
   const { mutate: unlockMutation, isPending } = useUnlockMutation();
 
-  const suiObject = useSuiClientQuery(
-    "getObject",
-    {
-      id: locked.itemId,
-      options: {
-        showDisplay: true,
-        showType: true,
-        showOwner: true,
-      },
+  const suiObject = useQuery({
+    queryKey: ["getObject", locked.itemId],
+    queryFn: async () => {
+      const { object } = await client.core.getObject({
+        objectId: locked.itemId,
+      });
+      return object;
     },
-    {
-      select: (data) => data.data,
-    },
-  );
+  });
 
   const isOwner = () => {
     return !!locked.creator && account?.address === locked.creator;
@@ -1735,7 +1726,7 @@ Add `src/components/locked/ApiLockedList.tsx`:
 
 This hook fetches all the non-deleted system `Locked` objects from the API in a paginated fashion. Then, it proceeds into fetching the on-chain state, to ensure the latest state of the object is displayed.
 
-This component uses tanstack's `useInfiniteQuery` instead of `useSuiClientInfiniteQuery` since the data is being fetched from the example's API rather than Sui. 
+This component uses TanStack Query's `useInfiniteQuery` since the data is being fetched from the example's API rather than directly from Sui. 
 
 <details>
 
@@ -1775,8 +1766,8 @@ To create escrows, include a mutating function through the `useCreateEscrowMutat
 import { CONSTANTS } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
 import { ApiLockedObject } from "@/types/types";
-import { useCurrentAccount } from "@mysten/dapp-kit";
-import { SuiObjectData } from "@mysten/sui/client";
+import { useCurrentAccount } from "@mysten/dapp-kit-react";
+import { SuiObjectData } from "@mysten/sui/jsonRpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { useMutation } from "@tanstack/react-query";
 
@@ -1869,8 +1860,8 @@ To cancel the escrow, create a mutation through the `useCancelEscrowMutation` ho
 import { CONSTANTS, QueryKey } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
 import { ApiEscrowObject, ApiLockedObject } from "@/types/types";
-import { useCurrentAccount } from "@mysten/dapp-kit";
-import { SuiObjectData } from "@mysten/sui/client";
+import { useCurrentAccount } from "@mysten/dapp-kit-react";
+import { SuiObjectData } from "@mysten/sui/jsonRpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -1959,7 +1950,8 @@ Add `src/components/escrows/Escrow.tsx`
 </summary>
 
 ```tsx
-import { useCurrentAccount, useSuiClientQuery } from "@mysten/dapp-kit";
+import { useCurrentAccount, useCurrentClient } from "@mysten/dapp-kit-react";
+import { useQuery } from "@tanstack/react-query";
 import { SuiObjectDisplay } from "@/components/SuiObjectDisplay";
 import { Button } from "@radix-ui/themes";
 import {
@@ -1969,7 +1961,6 @@ import {
 } from "@radix-ui/react-icons";
 import { CONSTANTS, QueryKey } from "@/constants";
 import { ExplorerLink } from "../ExplorerLink";
-import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { ApiEscrowObject } from "@/types/types";
 import {
@@ -1984,15 +1975,18 @@ import { LockedObject } from "../locked/LockedObject";
  */
 export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
   const account = useCurrentAccount();
+  const client = useCurrentClient();
   const [isToggled, setIsToggled] = useState(true);
   const { mutate: cancelEscrowMutation, isPending: pendingCancellation } =
     useCancelEscrowMutation();
 
-  const suiObject = useSuiClientQuery("getObject", {
-    id: escrow?.itemId,
-    options: {
-      showDisplay: true,
-      showType: true,
+  const suiObject = useQuery({
+    queryKey: ["getObject", escrow?.itemId],
+    queryFn: async () => {
+      const { object } = await client.core.getObject({
+        objectId: escrow?.itemId,
+      });
+      return object;
     },
   });
 
@@ -2031,7 +2025,7 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
 
   return (
     <SuiObjectDisplay
-      object={suiObject.data?.data!}
+      object={suiObject.data!}
       label={getLabel()}
       labelClasses={getLabelClasses()}
     >
@@ -2058,7 +2052,7 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
               onClick={() =>
                 cancelEscrowMutation({
                   escrow,
-                  suiObject: suiObject.data?.data!,
+                  suiObject: suiObject.data!,
                 })
               }
             >
@@ -2133,7 +2127,7 @@ import { Tabs, Tooltip } from "@radix-ui/themes";
 import { LockedList } from "../components/locked/ApiLockedList";
 import { EscrowList } from "../components/escrows/EscrowList";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
-import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useCurrentAccount } from "@mysten/dapp-kit-react";
 
 export function EscrowDashboard() {
   const account = useCurrentAccount();
@@ -2228,8 +2222,8 @@ To accept the escrow, create a mutation through the `useAcceptEscrowMutation` ho
 import { CONSTANTS, QueryKey } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
 import { ApiEscrowObject, ApiLockedObject } from "@/types/types";
-import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
-import { SuiObjectData } from "@mysten/sui/client";
+import { useCurrentAccount, useCurrentClient } from "@mysten/dapp-kit-react";
+import { SuiObjectData } from "@mysten/sui/jsonRpc";
 import { Transaction } from "@mysten/sui/transactions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
@@ -2311,7 +2305,7 @@ export function useCancelEscrowMutation() {
  */
 export function useAcceptEscrowMutation() {
   const currentAccount = useCurrentAccount();
-  const client = useSuiClient();
+  const client = useCurrentClient();
   const executeTransaction = useTransactionExecution();
   const queryClient = useQueryClient();
 
@@ -2327,20 +2321,17 @@ export function useAcceptEscrowMutation() {
         throw new Error("You need to connect your wallet!");
       const txb = new Transaction();
 
-      const escrowObject = await client.multiGetObjects({
-        ids: [escrow.itemId, locked.itemId],
-        options: {
-          showType: true,
-        },
+      const { objects } = await client.core.getObjects({
+        objectIds: [escrow.itemId, locked.itemId],
       });
 
-      const escrowType = escrowObject.find(
-        (x) => x.data?.objectId === escrow.itemId,
-      )?.data?.type;
+      const escrowType = objects.find(
+        (x) => !(x instanceof Error) && x.objectId === escrow.itemId,
+      )?.type;
 
-      const lockedType = escrowObject.find(
-        (x) => x.data?.objectId === locked.itemId,
-      )?.data?.type;
+      const lockedType = objects.find(
+        (x) => !(x instanceof Error) && x.objectId === locked.itemId,
+      )?.type;
 
       if (!escrowType || !lockedType) {
         throw new Error("Failed to fetch types.");
