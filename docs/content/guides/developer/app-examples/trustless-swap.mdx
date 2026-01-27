@@ -1330,7 +1330,7 @@ If you do not see any objects, you might need to create some demo data or connec
 
 ### Execute transaction hook {#execute-transaction-hook}
 
-In the frontend, you might need to execute a transaction block in multiple places. Extract the transaction execution logic and reuse it everywhere. Create and examine the execute transaction hook.
+In the frontend, you might need to execute a transaction in multiple places. Extract the transaction execution logic and reuse it everywhere. Create and examine the execute transaction hook.
 
 <details>
 
@@ -1347,9 +1347,9 @@ Create `src/hooks/useTransactionExecution.ts`:
 
 </details>
 
-A `Transaction` is the input. Sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
+A `Transaction` is the input. Sign it with the current connected wallet account, execute the transaction, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
 
-Use the `useCurrentClient()` hook from dApp Kit to retrieve the Sui client instance configured in `src/main.tsx`. The `useSignTransaction()` function is another hook from dApp kit that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction, use the `executeTransaction()` on the client instance of the the Sui TypeScript SDK.
+Use the `useCurrentClient()` hook from dApp Kit to retrieve the Sui client instance configured in `src/main.tsx`. The `useSignTransaction()` function is another hook from dApp kit that helps to sign the transaction using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction, use the `executeTransaction()` on the client instance of the Sui TypeScript SDK.
 
 ### Generate demo data
 
@@ -1407,7 +1407,7 @@ Run your app and ensure you can:
 
 ### Locking owned objects
 
-To lock the object, execute the `lock` Move function identified by `{PACKAGE_ID}::lock::lock`. The implementation is similar to what's in previous mutation functions. Use `useMutation()` from `@tanstack/react-query` to wrap the main logic inside it. The lock function requires an object to be locked and its type because the smart contract `lock` function is generic and requires type parameters. After creating a `Locked` object and its `Key` object, transfer them to the connected wallet account within the same transaction block.
+To lock the object, execute the `lock` Move function identified by `{PACKAGE_ID}::lock::lock`. The implementation is similar to what's in previous mutation functions. Use `useMutation()` from `@tanstack/react-query` to wrap the main logic inside it. The lock function requires an object to be locked and its type because the smart contract `lock` function is generic and requires type parameters. After creating a `Locked` object and its `Key` object, transfer them to the connected wallet account within the same transaction.
 
 Extract logic of locking owned objects into a separated mutating function to enhance discoverability and encapsulation.
 
@@ -1847,8 +1847,6 @@ Add `src/components/locked/ApiLockedList.tsx`:
 </details>
 
 This hook fetches all the non-deleted system `Locked` objects from the API in a paginated fashion. Then, it proceeds into fetching the on-chain state, to ensure the latest state of the object is displayed.
-
-This component uses TanStack Query's `useInfiniteQuery` since the data is being fetched from the example's API rather than directly from Sui.
 
 <details>
 

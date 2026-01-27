@@ -123,7 +123,6 @@ Once the OAuth flow completes, the JWT can be found in the redirect URL. Along w
 ```typescript
 import { jwtToAddress } from '@mysten/sui/zklogin';
 
-// The third parameter (legacyAddress) should be false for new addresses
 const zkLoginUserAddress = jwtToAddress(jwt, userSalt, false);
 ```
 

@@ -477,83 +477,104 @@ Add the following code to your `src/Counter.tsx` file:
 
 </summary>
 
-  ```tsx
-    import {
-      useCurrentAccount,
-      useCurrentClient,
-      useDAppKit,
-    } from "@mysten/dapp-kit-react";
-    import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-    import { Transaction } from "@mysten/sui/transactions";
-    import { Button, Flex, Heading, Text } from "@radix-ui/themes";
-    import ClipLoader from "react-spinners/ClipLoader";
+  ```tsx title='src/Counter.tsx'
+  import { bcs } from '@mysten/sui/bcs';
+  import { useCurrentAccount, useCurrentClient, useDAppKit } from '@mysten/dapp-kit-react';
+  import { Transaction } from '@mysten/sui/transactions';
+  import { useMutation, useQuery } from '@tanstack/react-query';
 
-    export function Counter({ id }: { id: string }) {
-      const client = useCurrentClient();
-      const currentAccount = useCurrentAccount();
-      const dAppKit = useDAppKit();
-      const queryClient = useQueryClient();
+  const CounterStruct = bcs.struct('Counter', {
+    id: bcs.Address,
+    owner: bcs.Address,
+    value: bcs.u64(),
+  });
 
-      // Fetch counter object with React Query
-      const { data, isPending, error } = useQuery({
-        queryKey: ["counter", id],
-        queryFn: async () => {
-          const { object } = await client.getObject({
-            objectId: id,
-            include: { content: true },
-          });
-          return object;
-        },
-      });
+  export function Counter({
+    id,
+    packageId,
+  }: {
+    id: string;
+    packageId: string;
+  }) {
+    const client = useCurrentClient();
+    const dAppKit = useDAppKit();
+    const account = useCurrentAccount();
 
-      const executeMoveCall = (method: "increment" | "reset") => {
-        // TODO - will be implemented below
-      };
+    const { data: counter, refetch } = useQuery({
+      queryKey: ['counter', id],
+      queryFn: async () => {
+        const object = await client.core.getObject({
+          objectId: id,
+        });
 
-      if (isPending) return <Text>Loading...</Text>;
+        const parsed = CounterStruct.parse(object.content);
+        return {
+          value: Number(parsed.value),
+          owner: parsed.owner,
+        };
+      },
+    });
 
-      if (error) return <Text>Error: {error.message}</Text>;
+    const { mutate: increment } = useMutation({
+      mutationFn: async () => {
+        const tx = new Transaction();
+        tx.moveCall({
+          target: `${packageId}::counter::increment`,
+          arguments: [tx.object(id)],
+        });
 
-      if (!data) return <Text>Not found</Text>;
+        const result = await dAppKit.signAndExecuteTransaction({
+          transaction: tx,
+        });
+        if (result.$kind === 'FailedTransaction') {
+          throw new Error('Transaction failed');
+        }
+      },
+      onSuccess: () => refetch(),
+    });
 
-      const ownedByCurrentAccount =
-        data.owner.$kind === "AddressOwner" && data.owner.AddressOwner === currentAccount?.address;
+    const { mutate: reset } = useMutation({
+      mutationFn: async () => {
+        const tx = new Transaction();
+        tx.moveCall({
+          target: `${packageId}::counter::set_value`,
+          arguments: [tx.object(id), tx.pure.u64(0)],
+        });
 
-      return (
-        <>
-          <Heading size="3">Counter {id}</Heading>
+        const result = await dAppKit.signAndExecuteTransaction({
+          transaction: tx,
+        });
+        if (result.$kind === 'FailedTransaction') {
+          throw new Error('Transaction failed');
+        }
+      },
+      onSuccess: () => refetch(),
+    });
 
-          <Flex direction="column" gap="2">
-            <Text>Count: (see full implementation for BCS parsing)</Text>
-            <Flex direction="row" gap="2">
-              <Button onClick={() => executeMoveCall("increment")}>
-                Increment
-              </Button>
-              {ownedByCurrentAccount ? (
-                <Button onClick={() => executeMoveCall("reset")}>
-                  Reset
-                </Button>
-              ) : null}
-            </Flex>
-          </Flex>
-        </>
-      );
-    }
+    return (
+      <div>
+        <div>Count: {counter?.value ?? '--'}</div>
+        <button onClick={() => increment()}>Increment</button>
+        {account?.address === counter?.owner && (
+          <button onClick={() => reset()}>Reset</button>
+        )}
+      </div>
+    );
+  }
   ```
 
 </details>
 
 This snippet shows the key concepts. It uses the `useCurrentClient` hook to get the Sui client, combined with TanStack Query's `useQuery` hook to fetch the object. The `useDAppKit` hook provides access to transaction signing.
 
-Note that the gRPC API returns object content as BCS-encoded bytes. The full template (shown below) includes BCS parsing to extract the counter's value and owner fields.
+Note that the gRPC API returns object content as BCS-encoded bytes. The snippet above includes inline BCS type definitions to parse the counter data. For production use, the [codegen package](https://sdk.mystenlabs.com/typescript/bcs#codegen) can generate these types automatically from your Move modules. The full template (shown below) uses the codegen package for BCS parsing.
 
-The code also adds an `executeMoveCall` function that still needs implementing. The full implementation uses `useMutation` from React Query to handle the transaction execution and state management.
 
 <details>
 
 <summary>
 
-Update the `executeMoveCall` function in the `src/Counter.tsx` file:
+The full template version of `src/Counter.tsx` (using the codegen package for BCS parsing):
 
 </summary>
 

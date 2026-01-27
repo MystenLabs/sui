@@ -261,17 +261,20 @@ wallet.features['sui:signTransaction'].signTransaction({
 
 Similar to account authorization, this process opens a pop-up dialog for the user to either accept or decline the transaction. Upon accepting, the function returns an object in the form `{bytes: String, signature: Uint8Array}`. The `bytes` value is the `b64` encoding of the transaction and the `signature` value is the transaction signature.
 
-To execute the transaction, use `SuiJsonRpcClient` from `@mysten/sui/jsonRpc`:
+To execute the transaction, use a Sui client such as `SuiGrpcClient` from `@mysten/sui/grpc`:
 
 ```tsx
-import { SuiJsonRpcClient } from '@mysten/sui/jsonRpc';
+import { fromBase64 } from '@mysten/sui/utils';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 
-const client: SuiJsonRpcClient;
-client.executeTransactionBlock({
-    transactionBlock: bytes,
-    signature: signature,
-    options: {}
-})
+const client = new SuiGrpcClient({
+  network: 'mainnet',
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+});
+client.core.executeTransaction({
+  transaction: fromBase64(bytes),
+  signatures: [signature],
+});
 ```
 
 ### Transactions - abbreviated approach
