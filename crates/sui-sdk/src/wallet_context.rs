@@ -236,13 +236,11 @@ impl WalletContext {
 
     /// Get the latest object reference given a object id
     pub async fn get_object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, anyhow::Error> {
-        let client = self.get_client().await?;
-        Ok(client
-            .read_api()
-            .get_object_with_options(object_id, SuiObjectDataOptions::new())
+        Ok(self
+            .grpc_client()?
+            .get_object(object_id)
             .await?
-            .into_object()?
-            .object_ref())
+            .compute_object_reference())
     }
 
     /// Get the latest full object reference given a object id
