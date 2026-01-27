@@ -5,12 +5,14 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
 
+use mysten_common::in_test_configuration;
 use rand::rngs::OsRng;
 use sui_config::ExecutionCacheConfig;
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_config::node::AuthorityOverloadConfig;
 #[cfg(msim)]
 use sui_config::node::ExecutionTimeObserverConfig;
+use sui_config::node::FundsWithdrawSchedulerType;
 use sui_protocol_config::Chain;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
@@ -78,6 +80,15 @@ pub enum GlobalStateHashV2EnabledConfig {
     PerValidator(GlobalStateHashV2EnabledCallback),
 }
 
+pub type FundsWithdrawSchedulerTypeCallback =
+    Arc<dyn Fn(usize) -> FundsWithdrawSchedulerType + Send + Sync + 'static>;
+
+#[derive(Clone)]
+pub enum FundsWithdrawSchedulerTypeConfig {
+    Global(FundsWithdrawSchedulerType),
+    PerValidator(FundsWithdrawSchedulerTypeCallback),
+}
+
 pub struct ConfigBuilder<R = OsRng> {
     rng: Option<R>,
     config_directory: PathBuf,
@@ -97,6 +108,7 @@ pub struct ConfigBuilder<R = OsRng> {
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
     global_state_hash_v2_enabled_config: Option<GlobalStateHashV2EnabledConfig>,
+    funds_withdraw_scheduler_type_config: Option<FundsWithdrawSchedulerTypeConfig>,
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
     #[cfg(msim)]
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
@@ -104,6 +116,23 @@ pub struct ConfigBuilder<R = OsRng> {
 
 impl ConfigBuilder {
     pub fn new<P: AsRef<Path>>(config_directory: P) -> Self {
+        // In test configuration, alternate scheduler types between validators
+        // so that half use Eager and half use Naive. This allows testing both
+        // scheduler implementations and catching any discrepancies via quorum comparison.
+        let funds_withdraw_scheduler_type_config = if in_test_configuration() {
+            Some(FundsWithdrawSchedulerTypeConfig::PerValidator(Arc::new(
+                |idx| {
+                    if idx % 2 == 0 {
+                        FundsWithdrawSchedulerType::Eager
+                    } else {
+                        FundsWithdrawSchedulerType::Naive
+                    }
+                },
+            )))
+        } else {
+            None
+        };
+
         Self {
             rng: Some(OsRng),
             config_directory: config_directory.as_ref().into(),
@@ -125,6 +154,7 @@ impl ConfigBuilder {
             max_submit_position: None,
             submit_delay_step_override_millis: None,
             global_state_hash_v2_enabled_config: None,
+            funds_withdraw_scheduler_type_config,
             state_sync_config: None,
             #[cfg(msim)]
             execution_time_observer_config: None,
@@ -274,6 +304,32 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_funds_withdraw_scheduler_type(
+        mut self,
+        scheduler_type: FundsWithdrawSchedulerType,
+    ) -> Self {
+        self.funds_withdraw_scheduler_type_config =
+            Some(FundsWithdrawSchedulerTypeConfig::Global(scheduler_type));
+        self
+    }
+
+    pub fn with_funds_withdraw_scheduler_type_callback(
+        mut self,
+        func: FundsWithdrawSchedulerTypeCallback,
+    ) -> Self {
+        self.funds_withdraw_scheduler_type_config =
+            Some(FundsWithdrawSchedulerTypeConfig::PerValidator(func));
+        self
+    }
+
+    pub fn with_funds_withdraw_scheduler_type_config(
+        mut self,
+        c: FundsWithdrawSchedulerTypeConfig,
+    ) -> Self {
+        self.funds_withdraw_scheduler_type_config = Some(c);
+        self
+    }
+
     #[cfg(msim)]
     pub fn with_execution_time_observer_config(mut self, c: ExecutionTimeObserverConfig) -> Self {
         self.execution_time_observer_config = Some(c);
@@ -333,6 +389,7 @@ impl<R> ConfigBuilder<R> {
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
+            funds_withdraw_scheduler_type_config: self.funds_withdraw_scheduler_type_config,
             state_sync_config: self.state_sync_config,
             #[cfg(msim)]
             execution_time_observer_config: self.execution_time_observer_config,
@@ -553,6 +610,13 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     };
                     builder =
                         builder.with_global_state_hash_v2_enabled(global_state_hash_v2_enabled);
+                }
+                if let Some(scheduler_type_config) = &self.funds_withdraw_scheduler_type_config {
+                    let scheduler_type = match scheduler_type_config {
+                        FundsWithdrawSchedulerTypeConfig::Global(t) => *t,
+                        FundsWithdrawSchedulerTypeConfig::PerValidator(func) => func(idx),
+                    };
+                    builder = builder.with_funds_withdraw_scheduler_type(scheduler_type);
                 }
                 if let Some(num_unpruned_validators) = self.num_unpruned_validators
                     && idx < num_unpruned_validators

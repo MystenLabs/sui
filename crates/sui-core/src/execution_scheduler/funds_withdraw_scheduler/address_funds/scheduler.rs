@@ -4,8 +4,8 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use super::{
-    FundsSettlement, ScheduleResult, ScheduleStatus, eager_scheduler::EagerFundsWithdrawScheduler,
-    naive_scheduler::NaiveFundsWithdrawScheduler,
+    FundsSettlement, FundsWithdrawSchedulerType, ScheduleResult, ScheduleStatus,
+    eager_scheduler::EagerFundsWithdrawScheduler, naive_scheduler::NaiveFundsWithdrawScheduler,
 };
 use crate::{
     accumulators::funds_read::AccountFundsRead,
@@ -35,7 +35,7 @@ struct WithdrawEvent {
 
 #[derive(Clone)]
 pub(crate) struct FundsWithdrawScheduler {
-    innards: BTreeMap<String, Arc<dyn FundsWithdrawSchedulerTrait>>,
+    scheduler: Arc<dyn FundsWithdrawSchedulerTrait>,
     /// Use channels to process withdraws and settlements asynchronously without blocking the caller.
     withdraw_sender: UnboundedSender<WithdrawEvent>,
     settlement_sender: UnboundedSender<FundsSettlement>,
@@ -70,38 +70,36 @@ impl FundsWithdrawScheduler {
     pub fn new(
         funds_read: Arc<dyn AccountFundsRead>,
         starting_accumulator_version: SequenceNumber,
+        scheduler_type: FundsWithdrawSchedulerType,
     ) -> Self {
-        // TODO: Currently, scheduling will be as slow as the slowest scheduler (i.e., the naive scheduler).
-        // Once we ensure that the eager scheduler is correct, it will become the only scheduler needed here,
-        // and we would only run the naive scheduler in tests for correctness verification.
-        let innards = BTreeMap::from([
-            (
-                "naive".to_string(),
-                NaiveFundsWithdrawScheduler::new(funds_read.clone(), starting_accumulator_version)
-                    as Arc<dyn FundsWithdrawSchedulerTrait>,
-            ),
-            (
-                "eager".to_string(),
+        let scheduler: Arc<dyn FundsWithdrawSchedulerTrait> = match scheduler_type {
+            FundsWithdrawSchedulerType::Naive => {
+                NaiveFundsWithdrawScheduler::new(funds_read, starting_accumulator_version)
+            }
+            FundsWithdrawSchedulerType::Eager => {
                 EagerFundsWithdrawScheduler::new(funds_read, starting_accumulator_version)
-                    as Arc<dyn FundsWithdrawSchedulerTrait>,
-            ),
-        ]);
+            }
+        };
         let (withdraw_sender, withdraw_receiver) =
             unbounded_channel("withdraw_scheduler_withdraws");
         let (settlement_sender, settlement_receiver) =
             unbounded_channel("withdraw_scheduler_settlements");
-        let scheduler = Self {
-            innards,
+        let funds_withdraw_scheduler = Self {
+            scheduler,
             withdraw_sender,
             settlement_sender,
         };
-        tokio::spawn(scheduler.clone().process_withdraw_task(withdraw_receiver));
         tokio::spawn(
-            scheduler
+            funds_withdraw_scheduler
+                .clone()
+                .process_withdraw_task(withdraw_receiver),
+        );
+        tokio::spawn(
+            funds_withdraw_scheduler
                 .clone()
                 .process_settlement_task(settlement_receiver),
         );
-        scheduler
+        funds_withdraw_scheduler
     }
 
     /// This function will be called at most once per consensus commit batch that all reads the same root accumulator version.
@@ -128,10 +126,8 @@ impl FundsWithdrawScheduler {
     }
 
     pub fn close_epoch(&self) {
-        for (name, scheduler) in &self.innards {
-            debug!("Closing epoch for scheduler: {}", name);
-            scheduler.close_epoch();
-        }
+        debug!("Closing epoch for funds withdraw scheduler");
+        self.scheduler.close_epoch();
     }
 
     async fn process_withdraw_task(self, mut withdraw_receiver: UnboundedReceiver<WithdrawEvent>) {
@@ -146,82 +142,27 @@ impl FundsWithdrawScheduler {
                 reservations.withdraws,
             );
 
-            // Create intermediate channels for each scheduler so that we could aggregate the results from all schedulers.
-            let mut scheduler_receivers = BTreeMap::new();
-            for (name, scheduler) in &self.innards {
-                let (mut intermediate_senders, receivers): (BTreeMap<_, _>, BTreeMap<_, _>) =
-                    reservations
-                        .withdraws
-                        .iter()
-                        .map(|withdraw| {
-                            let (s, r) = oneshot::channel();
-                            ((withdraw.tx_digest, s), (withdraw.tx_digest, r))
-                        })
-                        .unzip();
-                for (tx_digest, receiver) in receivers {
-                    scheduler_receivers
-                        .entry(tx_digest)
-                        .or_insert_with(BTreeMap::new)
-                        .insert(name.clone(), receiver);
-                }
-                let results = scheduler.schedule_withdraws(reservations.clone());
-                for (tx_digest, result) in results {
-                    let intermediate_sender = intermediate_senders.remove(&tx_digest).unwrap();
-                    match result {
-                        ScheduleResult::ScheduleResult(status) => {
-                            intermediate_sender.send((tx_digest, status)).unwrap();
-                        }
-                        ScheduleResult::Pending(receiver) => {
-                            let name = name.clone();
-                            tokio::spawn(async move {
-                                let Ok(status) = receiver.await else {
-                                    debug!(
-                                        ?tx_digest,
-                                        "Failed to receive result from scheduler: {}", name
-                                    );
-                                    return;
-                                };
-                                intermediate_sender.send((tx_digest, status)).unwrap();
-                            });
-                        }
-                    }
-                }
-            }
-
-            for (tx_digest, receivers) in scheduler_receivers {
-                let mut result = None;
-                for (name, receiver) in receivers {
-                    match receiver.await {
-                        Ok((_, status)) => {
-                            debug!(
-                                scheduler = %name,
-                                ?tx_digest,
-                                ?status,
-                                "Received scheduling result"
-                            );
-                            if status == ScheduleStatus::SkipSchedule {
-                                continue;
-                            }
-                            if let Some(result) = result {
-                                assert_eq!(
-                                    result, status,
-                                    "Scheduler {} returned different results for tx {:?}: expected {:?}, got {:?}",
-                                    name, tx_digest, result, status
-                                );
-                            } else {
-                                result = Some(status);
-                            }
-                        }
-                        Err(_) => {
-                            tracing::error!("Failed to receive result from scheduler: {}", name);
-                        }
-                    }
-                }
+            let results = self.scheduler.schedule_withdraws(reservations);
+            for (tx_digest, result) in results {
                 let original_sender = senders.remove(&tx_digest).unwrap();
-                if let Some(result) = result {
-                    let _ = original_sender.send((tx_digest, result));
-                } else {
-                    let _ = original_sender.send((tx_digest, ScheduleStatus::SkipSchedule));
+                match result {
+                    ScheduleResult::ScheduleResult(status) => {
+                        debug!(?tx_digest, ?status, "Scheduling result");
+                        let _ = original_sender.send((tx_digest, status));
+                    }
+                    ScheduleResult::Pending(receiver) => {
+                        tokio::spawn(async move {
+                            match receiver.await {
+                                Ok(status) => {
+                                    debug!(?tx_digest, ?status, "Scheduling result (pending)");
+                                    let _ = original_sender.send((tx_digest, status));
+                                }
+                                Err(_) => {
+                                    debug!(?tx_digest, "Failed to receive scheduling result");
+                                }
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -238,9 +179,7 @@ impl FundsWithdrawScheduler {
                 "Settling funds changes: {:?}",
                 settlement.funds_changes,
             );
-            for scheduler in self.innards.values() {
-                scheduler.settle_funds(settlement.clone());
-            }
+            self.scheduler.settle_funds(settlement);
         }
         tracing::info!("Funds settlement receiver closed");
     }

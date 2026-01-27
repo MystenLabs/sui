@@ -10,9 +10,9 @@ use fastcrypto::traits::KeyPair;
 use sui_config::node::{
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
     CheckpointExecutorConfig, DBCheckpointConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
-    ExecutionCacheConfig, ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig, Genesis,
-    KeyPairWithPath, StateSnapshotConfig, default_enable_index_processing,
-    default_end_of_epoch_broadcast_channel_capacity,
+    ExecutionCacheConfig, ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig,
+    FundsWithdrawSchedulerType, Genesis, KeyPairWithPath, StateSnapshotConfig,
+    default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
 };
 use sui_config::node::{RunWithRange, TransactionDriverConfig, default_zklogin_oauth_providers};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
@@ -46,6 +46,7 @@ pub struct ValidatorConfigBuilder {
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
     global_state_hash_v2: bool,
+    funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
     chain_override: Option<Chain>,
     state_sync_config: Option<StateSyncConfig>,
@@ -130,6 +131,14 @@ impl ValidatorConfigBuilder {
 
     pub fn with_global_state_hash_v2_enabled(mut self, enabled: bool) -> Self {
         self.global_state_hash_v2 = enabled;
+        self
+    }
+
+    pub fn with_funds_withdraw_scheduler_type(
+        mut self,
+        scheduler_type: FundsWithdrawSchedulerType,
+    ) -> Self {
+        self.funds_withdraw_scheduler_type = scheduler_type;
         self
     }
 
@@ -260,6 +269,7 @@ impl ValidatorConfigBuilder {
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
             state_accumulator_v2: self.global_state_hash_v2,
+            funds_withdraw_scheduler_type: self.funds_withdraw_scheduler_type,
             enable_soft_bundle: true,
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
@@ -599,6 +609,7 @@ impl FullnodeConfigBuilder {
             firewall_config: self.fw_config,
             execution_cache: ExecutionCacheConfig::default(),
             state_accumulator_v2: true,
+            funds_withdraw_scheduler_type: FundsWithdrawSchedulerType::default(),
             enable_soft_bundle: true,
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
