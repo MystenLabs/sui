@@ -14,15 +14,11 @@ use crate::{
     jit::execution::ast::{Function, InternedDisplay, Type},
     shared::{
         constants::{CALL_STACK_SIZE_LIMIT, OPERAND_STACK_SIZE_LIMIT},
-        views::TypeView,
         vm_pointer::VMPointer,
     },
 };
 use move_binary_format::errors::*;
-use move_core_types::{
-    language_storage::TypeTag,
-    vm_status::{StatusCode, StatusType},
-};
+use move_core_types::vm_status::{StatusCode, StatusType};
 
 use std::{fmt::Write, sync::Arc};
 use tracing::error;
@@ -84,11 +80,6 @@ pub(crate) struct CallFrame {
     pub(crate) function: VMPointer<Function>,
     pub(crate) stack_frame: StackFrame,
     pub(crate) ty_args: Vec<Type>,
-}
-
-pub(super) struct ResolvableType<'a, 'b> {
-    pub(super) ty: &'a Type,
-    pub(super) vtables: &'b VMDispatchTables,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -538,16 +529,6 @@ impl CallFrame {
 
     pub(super) fn location(&self, interner: &IdentifierInterner) -> Location {
         Location::Module(self.function().module_id(interner).clone())
-    }
-}
-
-// -------------------------------------------------------------------------------------------------
-// Other impls
-// -------------------------------------------------------------------------------------------------
-
-impl TypeView for ResolvableType<'_, '_> {
-    fn to_type_tag(&self) -> TypeTag {
-        self.vtables.type_to_type_tag(self.ty).unwrap()
     }
 }
 

@@ -15,7 +15,6 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     gas_algebra::{NumArgs, NumBytes},
-    language_storage::TypeTag,
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
@@ -27,7 +26,6 @@ use move_vm_types::{
         self, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value, Vector,
         VectorRef,
     },
-    views::TypeView,
 };
 use smallvec::SmallVec;
 
@@ -77,17 +75,6 @@ pub(crate) struct Interpreter {
     call_stack: CallStack,
     /// Limits imposed at runtime
     runtime_limits_config: VMRuntimeLimitsConfig,
-}
-
-struct TypeWithLoader<'a, 'b> {
-    ty: &'a Type,
-    loader: &'b Loader,
-}
-
-impl TypeView for TypeWithLoader<'_, '_> {
-    fn to_type_tag(&self) -> TypeTag {
-        self.loader.type_to_type_tag(self.ty).unwrap()
-    }
 }
 
 impl Interpreter {
@@ -250,7 +237,6 @@ impl Interpreter {
                         .charge_call_generic(
                             module_id,
                             func.name(),
-                            ty_args.iter().map(|ty| TypeWithLoader { ty, loader }),
                             self.operand_stack
                                 .last_n(func.arg_count())
                                 .map_err(|e| set_err_info!(current_frame, e))?,
@@ -388,13 +374,7 @@ impl Interpreter {
             NativeContext::new(self, resolver, extensions, gas_meter.remaining_gas());
         let native_function = function.get_native()?;
 
-        gas_meter.charge_native_function_before_execution(
-            ty_args.iter().map(|ty| TypeWithLoader {
-                ty,
-                loader: resolver.loader(),
-            }),
-            args.iter(),
-        )?;
+        gas_meter.charge_native_function_before_execution(args.iter())?;
 
         let result = native_function(&mut native_context, ty_args.to_vec(), args)?;
 
@@ -804,15 +784,6 @@ impl Frame {
     ) -> PartialVMResult<InstrRet> {
         use SimpleInstruction as S;
 
-        macro_rules! make_ty {
-            ($ty: expr) => {
-                TypeWithLoader {
-                    ty: $ty,
-                    loader: resolver.loader(),
-                }
-            };
-        }
-
         match instruction {
             Bytecode::Pop => {
                 let popped_val = interpreter.operand_stack.pop()?;
@@ -1185,10 +1156,7 @@ impl Frame {
             Bytecode::VecPack(si, num) => {
                 let ty = resolver.instantiate_single_type(*si, ty_args)?;
                 Self::check_depth_of_type(resolver, &ty)?;
-                gas_meter.charge_vec_pack(
-                    make_ty!(&ty),
-                    interpreter.operand_stack.last_n(*num as usize)?,
-                )?;
+                gas_meter.charge_vec_pack(interpreter.operand_stack.last_n(*num as usize)?)?;
                 let elements = interpreter.operand_stack.popn(*num as u16)?;
                 let value = Vector::pack(&ty, elements)?;
                 interpreter.operand_stack.push(value)?;
@@ -1196,10 +1164,7 @@ impl Frame {
             Bytecode::VecLen(si) => {
                 let vec_ref = interpreter.operand_stack.pop_as::<VectorRef>()?;
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
-                gas_meter.charge_vec_len(TypeWithLoader {
-                    ty,
-                    loader: resolver.loader(),
-                })?;
+                gas_meter.charge_vec_len()?;
                 let value = vec_ref.len(ty)?;
                 interpreter.operand_stack.push(value)?;
             }
@@ -1208,7 +1173,7 @@ impl Frame {
                 let vec_ref = interpreter.operand_stack.pop_as::<VectorRef>()?;
                 let ty = resolver.instantiate_single_type(*si, ty_args)?;
                 let res = vec_ref.borrow_elem(idx, &ty);
-                gas_meter.charge_vec_borrow(false, make_ty!(&ty), res.is_ok())?;
+                gas_meter.charge_vec_borrow(false, res.is_ok())?;
                 interpreter.operand_stack.push(res?)?;
             }
             Bytecode::VecMutBorrow(si) => {
@@ -1216,31 +1181,27 @@ impl Frame {
                 let vec_ref = interpreter.operand_stack.pop_as::<VectorRef>()?;
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
                 let res = vec_ref.borrow_elem(idx, ty);
-                gas_meter.charge_vec_borrow(true, make_ty!(ty), res.is_ok())?;
+                gas_meter.charge_vec_borrow(true, res.is_ok())?;
                 interpreter.operand_stack.push(res?)?;
             }
             Bytecode::VecPushBack(si) => {
                 let elem = interpreter.operand_stack.pop()?;
                 let vec_ref = interpreter.operand_stack.pop_as::<VectorRef>()?;
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
-                gas_meter.charge_vec_push_back(make_ty!(ty), &elem)?;
+                gas_meter.charge_vec_push_back(&elem)?;
                 vec_ref.push_back(elem, ty, interpreter.runtime_limits_config().vector_len_max)?;
             }
             Bytecode::VecPopBack(si) => {
                 let vec_ref = interpreter.operand_stack.pop_as::<VectorRef>()?;
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
                 let res = vec_ref.pop(ty);
-                gas_meter.charge_vec_pop_back(make_ty!(ty), res.as_ref().ok())?;
+                gas_meter.charge_vec_pop_back(res.as_ref().ok())?;
                 interpreter.operand_stack.push(res?)?;
             }
             Bytecode::VecUnpack(si, num) => {
                 let vec_val = interpreter.operand_stack.pop_as::<Vector>()?;
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
-                gas_meter.charge_vec_unpack(
-                    make_ty!(ty),
-                    NumArgs::new(*num),
-                    vec_val.elem_views(),
-                )?;
+                gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views())?;
                 let elements = vec_val.unpack(ty, *num)?;
                 for value in elements {
                     interpreter.operand_stack.push(value)?;
@@ -1251,7 +1212,7 @@ impl Frame {
                 let idx1 = interpreter.operand_stack.pop_as::<u64>()? as usize;
                 let vec_ref = interpreter.operand_stack.pop_as::<VectorRef>()?;
                 let ty = &resolver.instantiate_single_type(*si, ty_args)?;
-                gas_meter.charge_vec_swap(make_ty!(ty))?;
+                gas_meter.charge_vec_swap()?;
                 vec_ref.swap(idx1, idx2, ty)?;
             }
             Bytecode::PackVariant(_)
