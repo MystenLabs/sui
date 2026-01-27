@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_types::digests::ChainIdentifier;
 use tap::Pipe;
 use tonic::metadata::MetadataMap;
 
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::TryFromProtoError;
-use sui_rpc::proto::sui::rpc::v2 as proto;
+use sui_rpc::proto::sui::rpc::v2::{self as proto, GetServiceInfoRequest};
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -173,6 +174,25 @@ impl Client {
 
         execute_transaction_response_try_from_proto(&response)
             .map_err(|e| status_from_error_with_metadata(e, metadata))
+    }
+
+    pub async fn get_chain_identifier(&self) -> Result<ChainIdentifier> {
+        let response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_service_info(GetServiceInfoRequest::default())
+            .await?
+            .into_inner();
+        let chain_id = response
+            .chain_id()
+            .parse::<sui_sdk_types::Digest>()
+            .map_err(|e| TryFromProtoError::invalid("chain_id", e))
+            .map_err(|e| Status::from_error(e.into()))?;
+
+        Ok(ChainIdentifier::from(
+            sui_types::digests::CheckpointDigest::from(chain_id),
+        ))
     }
 }
 
