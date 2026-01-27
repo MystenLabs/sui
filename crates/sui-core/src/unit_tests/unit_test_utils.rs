@@ -137,6 +137,7 @@ pub async fn init_local_authorities_with_genesis(
 ) -> AuthorityAggregator<LocalAuthorityClient> {
     telemetry_subscribers::init_for_testing();
     let mut clients = BTreeMap::new();
+    let genesis_committee = genesis.committee();
     for state in authorities {
         let name = state.name;
         let client = LocalAuthorityClient::new_from_authority(state);
@@ -148,5 +149,5 @@ pub async fn init_local_authorities_with_genesis(
     };
     AuthorityAggregatorBuilder::from_genesis(genesis)
         .with_timeouts_config(timeouts)
-        .build_custom_clients(clients)
+        .build_custom_clients(&genesis_committee, clients)
 }

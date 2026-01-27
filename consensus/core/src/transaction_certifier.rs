@@ -835,7 +835,7 @@ mod test {
             .collect::<Vec<_>>();
         for author in 0..3 {
             let mut block = TestBlock::new(2, author)
-                .set_ancestors(ancestors.clone())
+                .set_ancestors_raw(ancestors.clone())
                 .set_transactions(transactions.clone());
             let mut votes = vec![];
             for i in 0..(3 - author) {
@@ -877,7 +877,7 @@ mod test {
         let mut round_3_blocks = vec![];
         for author in 0..4 {
             let block = TestBlock::new(3, author)
-                .set_ancestors(ancestors.clone())
+                .set_ancestors_raw(ancestors.clone())
                 .set_transactions(transactions.clone());
             round_3_blocks.push(VerifiedBlock::new_for_test(block.build()));
         }

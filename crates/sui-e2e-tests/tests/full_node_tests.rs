@@ -1213,7 +1213,7 @@ async fn test_access_old_object_pruned() {
     let test_cluster = TestClusterBuilder::new().build().await;
     let tx_builder = test_cluster.test_transaction_builder().await;
     let sender = tx_builder.sender();
-    let gas_object = tx_builder.gas_object();
+    let gas_object = tx_builder.gas_object().unwrap();
     let effects = test_cluster
         .sign_and_execute_transaction(&tx_builder.transfer_sui(None, sender).build())
         .await

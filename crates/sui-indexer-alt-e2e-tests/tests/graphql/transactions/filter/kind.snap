@@ -32,14 +32,14 @@ task 5, line 27:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 6, lines 29-57:
+task 6, lines 29-58:
 //# run-graphql
 Response: {
   "data": {
     "programmable": {
       "pageInfo": {
         "startCursor": "MQ==",
-        "endCursor": "Mw==",
+        "endCursor": "NA==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
@@ -47,23 +47,14 @@ Response: {
         {
           "cursor": "MQ==",
           "node": {
-            "digest": "DJYPVtBJJNEkaDZjN7EbpNGcnrGrgfxqXvpqB95RxENi",
+            "digest": "58mQ5rDsUZRjs4m28graiKUEmd5HurSwPtafbCnc2gHV",
+            "kind": {
+              "__typename": "ProgrammableTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 1,
-                "digest": "FUZ6GuXscvkrMEcS3QFzXZT5bqAVaf5F7P7UPzodDMNc"
-              }
-            }
-          }
-        },
-        {
-          "cursor": "Mg==",
-          "node": {
-            "digest": "4PzAyDSqu9tudKKVrWgvVspPrkdxqrxHv2L2Uy7E9UAE",
-            "effects": {
-              "checkpoint": {
-                "sequenceNumber": 2,
-                "digest": "9VqmMdRDbFSAbajf9xru4fkzCBGPhGEXzs5WudruGMZf"
+                "digest": "8ye6ypFzMBmSZLG3YgHBYCcpLeoYFAmyKP26MkkVn1CH"
               }
             }
           }
@@ -71,11 +62,29 @@ Response: {
         {
           "cursor": "Mw==",
           "node": {
-            "digest": "7qiN36rRrQA2s6smC1KaRbAWsZmbyC2Myt6KevHMSf97",
+            "digest": "Aqmqdaarwh66v7JMYZWpv5Ym4qoQzj4tsg1p5SrvaexW",
+            "kind": {
+              "__typename": "ProgrammableTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 2,
-                "digest": "9VqmMdRDbFSAbajf9xru4fkzCBGPhGEXzs5WudruGMZf"
+                "digest": "8xvuhJDndDU7adRdwLi8Hr7JhMuLP2EobA1bGd3hNmer"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NA==",
+          "node": {
+            "digest": "DmQibQeaVLbDs22SWF2dkLpN3hrHBwrz4eBDWGq981US",
+            "kind": {
+              "__typename": "ProgrammableTransaction"
+            },
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2,
+                "digest": "8xvuhJDndDU7adRdwLi8Hr7JhMuLP2EobA1bGd3hNmer"
               }
             }
           }
@@ -84,32 +93,38 @@ Response: {
     },
     "programmableA": {
       "pageInfo": {
-        "startCursor": "Mg==",
-        "endCursor": "Mw==",
+        "startCursor": "Mw==",
+        "endCursor": "NA==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
       "edges": [
         {
-          "cursor": "Mg==",
+          "cursor": "Mw==",
           "node": {
-            "digest": "4PzAyDSqu9tudKKVrWgvVspPrkdxqrxHv2L2Uy7E9UAE",
+            "digest": "Aqmqdaarwh66v7JMYZWpv5Ym4qoQzj4tsg1p5SrvaexW",
+            "kind": {
+              "__typename": "ProgrammableTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 2,
-                "digest": "9VqmMdRDbFSAbajf9xru4fkzCBGPhGEXzs5WudruGMZf"
+                "digest": "8xvuhJDndDU7adRdwLi8Hr7JhMuLP2EobA1bGd3hNmer"
               }
             }
           }
         },
         {
-          "cursor": "Mw==",
+          "cursor": "NA==",
           "node": {
-            "digest": "7qiN36rRrQA2s6smC1KaRbAWsZmbyC2Myt6KevHMSf97",
+            "digest": "DmQibQeaVLbDs22SWF2dkLpN3hrHBwrz4eBDWGq981US",
+            "kind": {
+              "__typename": "ProgrammableTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 2,
-                "digest": "9VqmMdRDbFSAbajf9xru4fkzCBGPhGEXzs5WudruGMZf"
+                "digest": "8xvuhJDndDU7adRdwLi8Hr7JhMuLP2EobA1bGd3hNmer"
               }
             }
           }
@@ -128,7 +143,7 @@ Response: {
     "system": {
       "pageInfo": {
         "startCursor": "MA==",
-        "endCursor": "MA==",
+        "endCursor": "NQ==",
         "hasPreviousPage": false,
         "hasNextPage": false
       },
@@ -136,11 +151,44 @@ Response: {
         {
           "cursor": "MA==",
           "node": {
-            "digest": "8WWkfU8M7scu5XxFf2bdXjJWQsbLy3ozt11pxG85dj2X",
+            "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
+            "kind": {
+              "__typename": "GenesisTransaction"
+            },
             "effects": {
               "checkpoint": {
                 "sequenceNumber": 0,
-                "digest": "Djbna8hyYU5ZfB4vHY2A5UU4BDmgBcMggWAmnEUSivXA"
+                "digest": "9ZKWB9QuscTRoaHBeV9Zd9DFFQc2KhcGpRUyZhTSfveD"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "Mg==",
+          "node": {
+            "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
+            "kind": {
+              "__typename": "ProgrammableSystemTransaction"
+            },
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 1,
+                "digest": "8ye6ypFzMBmSZLG3YgHBYCcpLeoYFAmyKP26MkkVn1CH"
+              }
+            }
+          }
+        },
+        {
+          "cursor": "NQ==",
+          "node": {
+            "digest": "2iEZQGAgJYgzmcNC2eLrbNejeTJHJxY4Xy4yKj7R3D8g",
+            "kind": {
+              "__typename": "ProgrammableSystemTransaction"
+            },
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2,
+                "digest": "8xvuhJDndDU7adRdwLi8Hr7JhMuLP2EobA1bGd3hNmer"
               }
             }
           }

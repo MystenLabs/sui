@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_common::random::get_rng;
 use rand::Rng;
-use rand::rngs::SmallRng;
 use sui_types::TypeTag;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::gas_coin::GAS;
@@ -11,6 +11,8 @@ use sui_types::transaction::{
     Argument, CallArg, Command, FundsWithdrawalArg, ObjectArg, SharedObjectMutability,
 };
 use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+
+use super::AccountState;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum InitRequirement {
@@ -39,6 +41,7 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     TestCoinAddressDeposit::DESCRIPTOR,
     TestCoinAddressWithdraw::DESCRIPTOR,
     TestCoinObjectWithdraw::DESCRIPTOR,
+    AddressBalanceOverdraw::DESCRIPTOR,
 ];
 
 pub fn describe_flags(flags: u32) -> String {
@@ -92,7 +95,7 @@ pub trait Operation: Send + Sync {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        account_state: &AccountState,
     );
 }
 
@@ -124,7 +127,7 @@ impl Operation for SharedCounterIncrement {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        _rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (id, initial_shared_version) = resources.counter.expect("Counter not resolved");
 
@@ -172,7 +175,7 @@ impl Operation for SharedCounterRead {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        _rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (id, initial_shared_version) = resources.counter.expect("Counter not resolved");
 
@@ -226,7 +229,7 @@ impl Operation for RandomnessRead {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        _rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let initial_shared_version = resources.randomness.expect("Randomness not resolved");
 
@@ -274,14 +277,14 @@ impl Operation for AddressBalanceDeposit {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let recipient = SuiAddress::random_for_testing_only();
 
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(1000..10000)
+            get_rng().gen_range(1000..10000)
         };
 
         let amount_arg = builder.pure(amount).unwrap();
@@ -342,12 +345,12 @@ impl Operation for AddressBalanceWithdraw {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(100..1000)
+            get_rng().gen_range(100..1000)
         };
 
         let withdrawal_arg = FundsWithdrawalArg::balance_from_sender(amount, GAS::type_tag());
@@ -399,7 +402,7 @@ impl Operation for ObjectBalanceDeposit {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (pool_id, initial_shared_version) =
             resources.balance_pool.expect("Balance pool not resolved");
@@ -407,7 +410,7 @@ impl Operation for ObjectBalanceDeposit {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(1000..10000)
+            get_rng().gen_range(1000..10000)
         };
 
         let amount_arg = builder.pure(amount).unwrap();
@@ -478,7 +481,7 @@ impl Operation for ObjectBalanceWithdraw {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (pool_id, initial_shared_version) =
             resources.balance_pool.expect("Balance pool not resolved");
@@ -486,7 +489,7 @@ impl Operation for ObjectBalanceWithdraw {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(100..1000)
+            get_rng().gen_range(100..1000)
         };
 
         let pool_arg = builder
@@ -563,7 +566,7 @@ impl Operation for TestCoinMint {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (cap_id, cap_version) = resources.test_coin_cap.expect("Test coin cap not resolved");
         let (pool_id, pool_version) = resources.balance_pool.expect("Balance pool not resolved");
@@ -575,7 +578,7 @@ impl Operation for TestCoinMint {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(1000..10000)
+            get_rng().gen_range(1000..10000)
         };
 
         let cap_arg = builder
@@ -649,7 +652,7 @@ impl Operation for TestCoinAddressDeposit {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (pool_id, pool_version) = resources.balance_pool.expect("Balance pool not resolved");
         let test_coin_type = resources
@@ -661,7 +664,7 @@ impl Operation for TestCoinAddressDeposit {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(100..1000)
+            get_rng().gen_range(100..1000)
         };
 
         let pool_arg = builder
@@ -736,7 +739,7 @@ impl Operation for TestCoinAddressWithdraw {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let test_coin_type = resources
             .test_coin_type
@@ -746,7 +749,7 @@ impl Operation for TestCoinAddressWithdraw {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(100..500)
+            get_rng().gen_range(100..500)
         };
 
         let withdrawal_arg =
@@ -799,7 +802,7 @@ impl Operation for TestCoinObjectWithdraw {
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         resources: &OperationResources,
-        rng: &mut SmallRng,
+        _account_state: &AccountState,
     ) {
         let (pool_id, pool_version) = resources.balance_pool.expect("Balance pool not resolved");
         let test_coin_type = resources
@@ -810,7 +813,7 @@ impl Operation for TestCoinObjectWithdraw {
         let amount = if resources.address_balance_amount > 0 {
             resources.address_balance_amount
         } else {
-            rng.gen_range(100..1000)
+            get_rng().gen_range(100..1000)
         };
 
         let pool_arg = builder
@@ -849,5 +852,71 @@ impl Operation for TestCoinObjectWithdraw {
 
         let recipient = SuiAddress::random_for_testing_only();
         builder.transfer_arg(recipient, coin);
+    }
+}
+
+pub struct AddressBalanceOverdraw;
+
+impl AddressBalanceOverdraw {
+    pub const FLAG: u32 = 1 << 11;
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: "AddressBalanceOverdraw",
+        flag: Self::FLAG,
+        factory: || Box::new(AddressBalanceOverdraw),
+    };
+}
+
+impl Operation for AddressBalanceOverdraw {
+    fn name(&self) -> &'static str {
+        "address_balance_overdraw"
+    }
+
+    fn operation_flag(&self) -> u32 {
+        Self::FLAG
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::AddressBalance]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![InitRequirement::SeedAddressBalance]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        _resources: &OperationResources,
+        account_state: &AccountState,
+    ) {
+        let withdraw_amount = if account_state.sui_balance == 0 {
+            // reservations of zero are invalid, so the transaction will be rejected.
+            0
+        } else {
+            // withdraw at least half the balance
+            let half_balance = std::cmp::max(1, account_state.sui_balance / 2);
+            get_rng().gen_range(half_balance..=account_state.sui_balance)
+        };
+
+        let withdrawal = FundsWithdrawalArg::balance_from_sender(withdraw_amount, GAS::type_tag());
+
+        let withdraw_arg = builder.funds_withdrawal(withdrawal).unwrap();
+        let recipient = builder.pure(account_state.sender).unwrap();
+
+        let balance = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("redeem_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![withdraw_arg],
+        );
+
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("send_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![balance, recipient],
+        );
     }
 }

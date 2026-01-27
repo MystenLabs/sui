@@ -213,6 +213,37 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to `262,144` (256 KiB).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_checkpoint_summary_size: Option<usize>,
+
+    /// Minimum timeout for checkpoint content downloads (adaptive timeout lower bound).
+    ///
+    /// If unspecified, this will default to `10,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_timeout_min_ms: Option<u64>,
+
+    /// Maximum timeout for checkpoint content downloads (adaptive timeout upper bound).
+    ///
+    /// If unspecified, this will default to `30,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_content_timeout_max_ms: Option<u64>,
+
+    /// Time window for peer scoring samples.
+    ///
+    /// If unspecified, this will default to `60,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_scoring_window_ms: Option<u64>,
+
+    /// Probability of selecting an unknown peer to explore its throughput.
+    ///
+    /// If unspecified, this will default to `0.1`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exploration_probability: Option<f64>,
+
+    /// Failure rate threshold for marking a peer as failing.
+    /// A peer is marked as failing if its failure rate exceeds this threshold.
+    ///
+    /// If unspecified, this will default to `0.3` (30%).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub peer_failure_rate: Option<f64>,
 }
 
 impl StateSyncConfig {
@@ -314,7 +345,37 @@ impl StateSyncConfig {
             .unwrap_or(DEFAULT_MAX_CHECKPOINT_SUMMARY_SIZE)
     }
 
-    /// Returns a StateSyncConfig with randomized settings for testing.
+    pub fn checkpoint_content_timeout_min(&self) -> Duration {
+        const DEFAULT: Duration = Duration::from_secs(5);
+        self.checkpoint_content_timeout_min_ms
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT)
+    }
+
+    pub fn checkpoint_content_timeout_max(&self) -> Duration {
+        const DEFAULT: Duration = Duration::from_secs(30);
+        self.checkpoint_content_timeout_max_ms
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT)
+    }
+
+    pub fn peer_scoring_window(&self) -> Duration {
+        const DEFAULT: Duration = Duration::from_secs(60);
+        self.peer_scoring_window_ms
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT)
+    }
+
+    pub fn exploration_probability(&self) -> f64 {
+        const DEFAULT: f64 = 0.1;
+        self.exploration_probability.unwrap_or(DEFAULT)
+    }
+
+    pub fn peer_failure_rate(&self) -> f64 {
+        const DEFAULT: f64 = 0.3;
+        self.peer_failure_rate.unwrap_or(DEFAULT)
+    }
+
     pub fn randomized_for_testing() -> Self {
         use rand::Rng;
         let mut rng = rand::thread_rng();
@@ -324,7 +385,6 @@ impl StateSyncConfig {
             checkpoint_header_download_concurrency: Some(rng.gen_range(10..=500)),
             checkpoint_content_download_concurrency: Some(rng.gen_range(10..=500)),
             max_checkpoint_lookahead: Some(rng.gen_range(100..=2000)),
-            // Tests sync up to 100 checkpoints, so minimum must be >= 100
             max_checkpoint_sync_batch_size: Some(rng.gen_range(100..=500)),
             max_checkpoint_summary_size: Some(rng.gen_range(64 * 1024..=512 * 1024)),
             ..Default::default()

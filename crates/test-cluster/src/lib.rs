@@ -59,6 +59,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
+use tokio::sync::broadcast;
 use tokio::time::{Instant, timeout};
 use tokio::{task::JoinHandle, time::sleep};
 use tonic::IntoRequest;
@@ -149,6 +150,14 @@ impl TestCluster {
         self.fullnode_handle
             .sui_node
             .with(|node| node.state().epoch_store_for_testing().committee().clone())
+    }
+
+    pub fn get_sui_system_state(&self) -> SuiSystemState {
+        self.fullnode_handle.sui_node.with(|node| {
+            node.state()
+                .get_sui_system_state_object_for_testing()
+                .unwrap()
+        })
     }
 
     /// Convenience method to start a new fullnode in the test cluster.
@@ -462,6 +471,13 @@ impl TestCluster {
         timeout(Duration::from_secs(40), join_all(tasks))
             .await
             .expect("timed out waiting for reconfiguration to complete");
+    }
+
+    pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
+        // fullnode_handle is not part of swarm and cannot be dropped / killed
+        self.fullnode_handle
+            .sui_node
+            .with(|node| node.subscribe_to_epoch_change())
     }
 
     /// Upgrade the network protocol version, by restarting every validator with a new

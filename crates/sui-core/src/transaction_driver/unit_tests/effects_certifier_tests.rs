@@ -174,7 +174,8 @@ fn create_test_authority_aggregator() -> AuthorityAggregator<MockAuthority> {
         authority_clients.insert(*name, mock_authority);
     }
 
-    AuthorityAggregatorBuilder::from_committee(committee).build_custom_clients(authority_clients)
+    AuthorityAggregatorBuilder::from_committee(committee.clone())
+        .build_custom_clients(&committee, authority_clients)
 }
 
 fn create_test_effects_digest(value: u8) -> TransactionEffectsDigest {

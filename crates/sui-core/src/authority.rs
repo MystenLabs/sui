@@ -32,7 +32,7 @@ use move_binary_format::CompiledModule;
 use move_binary_format::binary_config::BinaryConfig;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
-use mysten_common::fatal;
+use mysten_common::{assert_reachable, fatal};
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
@@ -1191,6 +1191,7 @@ impl AuthorityState {
         if epoch_store.is_recently_finalized(&tx_digest)
             || epoch_store.transactions_executed_in_cur_epoch(&[tx_digest])?[0]
         {
+            assert_reachable!("transaction recently executed");
             return Ok(());
         }
 
@@ -1198,6 +1199,7 @@ impl AuthorityState {
             .get_transaction_cache_reader()
             .transaction_executed_in_last_epoch(transaction.digest(), epoch_store.epoch())
         {
+            assert_reachable!("transaction executed in last epoch");
             return Err(SuiErrorKind::TransactionAlreadyExecuted {
                 digest: (*transaction.digest()),
             }
@@ -6271,13 +6273,8 @@ impl RandomnessRoundReceiver {
             let mut effects = match result {
                 Ok(result) => result,
                 Err(_) => {
-                    if cfg!(debug_assertions) {
-                        // Crash on randomness update execution timeout in debug builds.
-                        panic!(
-                            "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
-                        );
-                    }
-                    warn!(
+                    // Crash on randomness update execution timeout in debug builds.
+                    debug_fatal!(
                         "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
                     );
                     // Continue waiting as long as necessary in non-debug builds.

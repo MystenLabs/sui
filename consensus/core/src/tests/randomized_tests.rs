@@ -12,7 +12,6 @@ use crate::{
 };
 
 const NUM_RUNS: u32 = 100;
-const MAX_STEP: u32 = 3;
 
 /// Test builds a randomized dag with the following conditions:
 /// - Links to 2f+1 minimum ancestors
@@ -80,7 +79,7 @@ async fn test_randomized_dag_and_decision_sequence() {
     let all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
 
     // Create RandomDag from existing blocks for using RandomDagIterator
-    let dag = RandomDag::from_blocks(context.clone(), all_blocks);
+    let dag = RandomDag::from_blocks(all_blocks);
 
     // Collect finalized commit sequences from each run
     let mut commit_sequences = vec![];
@@ -94,8 +93,8 @@ async fn test_randomized_dag_and_decision_sequence() {
         let mut finalized_commits = vec![];
         let mut last_decided = Slot::new_for_test(0, 0);
 
-        // Use RandomDagIterator to deliver blocks in constrained random order
-        for block in dag.random_iter(&mut rng, MAX_STEP) {
+        // Use RandomDagIterator to deliver blocks in dependency-respecting random order
+        for block in dag.random_iter(&mut rng) {
             fixture.try_accept_blocks(vec![block]);
 
             let (finalized, new_last_decided) = fixture.try_commit(last_decided).await;

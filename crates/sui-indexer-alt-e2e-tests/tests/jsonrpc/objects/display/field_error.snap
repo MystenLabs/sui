@@ -8,7 +8,7 @@ A: object(0,0)
 
 task 1, lines 12-81:
 //# publish --sender A
-events: Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [83, 184, 107, 6, 76, 81, 34, 227, 63, 167, 59, 188, 36, 40, 98, 111, 91, 68, 208, 63, 116, 244, 144, 234, 230, 164, 181, 253, 29, 119, 25, 175] }, Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [83, 184, 107, 6, 76, 81, 34, 227, 63, 167, 59, 188, 36, 40, 98, 111, 91, 68, 208, 63, 116, 244, 144, 234, 230, 164, 181, 253, 29, 119, 25, 175, 1, 0, 5, 3, 98, 97, 114, 5, 123, 98, 97, 114, 125, 7, 98, 97, 114, 95, 118, 97, 108, 9, 123, 98, 97, 114, 46, 118, 97, 108, 125, 3, 98, 97, 122, 5, 123, 98, 97, 122, 125, 3, 113, 117, 120, 5, 123, 113, 117, 120, 125, 3, 113, 117, 121, 5, 123, 113, 117, 121, 125] }
+events: Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [148, 72, 128, 68, 76, 60, 216, 109, 65, 80, 241, 177, 38, 0, 184, 88, 71, 54, 50, 13, 174, 215, 232, 224, 64, 42, 169, 34, 125, 204, 181, 104] }, Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [148, 72, 128, 68, 76, 60, 216, 109, 65, 80, 241, 177, 38, 0, 184, 88, 71, 54, 50, 13, 174, 215, 232, 224, 64, 42, 169, 34, 125, 204, 181, 104, 1, 0, 5, 3, 98, 97, 114, 5, 123, 98, 97, 114, 125, 7, 98, 97, 114, 95, 118, 97, 108, 9, 123, 98, 97, 114, 46, 118, 97, 108, 125, 3, 98, 97, 122, 5, 123, 98, 97, 122, 125, 3, 113, 117, 120, 5, 123, 113, 117, 120, 125, 3, 113, 117, 121, 5, 123, 113, 117, 121, 125] }
 created: object(1,0), object(1,1), object(1,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 17480000,  storage_rebate: 0, non_refundable_storage_fee: 0
@@ -19,7 +19,7 @@ task 2, lines 83-85:
 //> 1: TransferObjects([Result(0)], Input(3))
 created: object(2,0)
 mutated: object(0,0)
-gas summary: computation_cost: 17000000, storage_cost: 36176000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 3900000, storage_cost: 36176000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, line 87:
 //# create-checkpoint
@@ -32,7 +32,7 @@ Response: {
   "id": 0,
   "error": {
     "code": -32603,
-    "message": "Internal Error: Failed to get object 0x1f33c7b0030afd69ca05a13b82730a657759bc2be43c48107522c8958b0f5a3e at latest version: Failed to deserialize object content: Failure serializing object in the requested format: Deserialized value too large"
+    "message": "Internal Error: Failed to get object 0x64bd33248ee01644a93a51add89c41b4df78b448fd3077d30f452ad21596980e at latest version: Failed to deserialize object content: Failure serializing object in the requested format: Deserialized value too large"
   }
 }
 
@@ -43,9 +43,9 @@ Response: {
   "id": 1,
   "result": {
     "data": {
-      "objectId": "0x1f33c7b0030afd69ca05a13b82730a657759bc2be43c48107522c8958b0f5a3e",
+      "objectId": "0x64bd33248ee01644a93a51add89c41b4df78b448fd3077d30f452ad21596980e",
       "version": "3",
-      "digest": "DjUiFiJ5Z9yW64ca4LZ5M4niG1zQZgfW8BygyZ5BHC8c",
+      "digest": "5YmjU3N3qPqvr2rHgPtttBgpujvicFHJFLiVf8g5NcHJ",
       "display": {
         "data": {
           "bar_val": "42",

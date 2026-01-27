@@ -2850,7 +2850,7 @@ async fn test_authority_persist() {
 
     let seed = [1u8; 32];
     let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
-    let committee = genesis.committee().unwrap();
+    let committee = genesis.committee();
 
     // Create a random directory to store the DB
     let dir = env::temp_dir();
@@ -2883,7 +2883,7 @@ async fn test_authority_persist() {
     // Reopen the same authority with the same path
     let seed = [1u8; 32];
     let (genesis, authority_key) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
-    let committee = genesis.committee().unwrap();
+    let committee = genesis.committee();
     let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(&path, None, None));
     let store =
         AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis)
@@ -6299,11 +6299,6 @@ async fn test_consensus_handler_per_object_congestion_control() {
 
     // Verify deferral keys are formed correctly
     let epoch_store = authority.epoch_store_for_testing();
-    let commit_round = if epoch_store.randomness_state_enabled() {
-        epoch_store.get_highest_pending_checkpoint_height() / 2
-    } else {
-        epoch_store.get_highest_pending_checkpoint_height()
-    };
     let deferred_txns = epoch_store.get_all_deferred_transactions_for_test();
     assert_eq!(deferred_txns.len(), 1, "Expected 1 deferral key");
     let num_deferred = deferred_txns[0].1.len();
@@ -6319,8 +6314,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
             future_round,
             deferred_from_round,
         } => {
-            assert_eq!(future_round, commit_round + 1);
-            assert_eq!(deferred_from_round, commit_round);
+            assert_eq!(deferred_from_round + 1, future_round);
         }
         DeferralKey::Randomness {
             deferred_from_round,

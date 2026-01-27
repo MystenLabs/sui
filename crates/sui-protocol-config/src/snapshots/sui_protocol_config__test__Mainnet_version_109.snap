@@ -49,8 +49,6 @@ feature_flags:
   enable_group_ops_native_functions: true
   enable_nitro_attestation: true
   enable_nitro_attestation_upgraded_parsing: true
-  enable_nitro_attestation_all_nonzero_pcrs_parsing: true
-  enable_nitro_attestation_always_include_required_pcrs_parsing: true
   reject_mutable_random_on_entry_functions: true
   per_object_congestion_control_mode:
     ExecutionTimeEstimate:
@@ -133,11 +131,11 @@ feature_flags:
   deprecate_global_storage_ops: true
   consensus_skip_gced_accept_votes: true
   include_cancelled_randomness_txns_in_prologue: true
-  fix_checkpoint_signature_mapping: true
   consensus_skip_gced_blocks_in_direct_finalization: true
   gas_rounding_halve_digits: true
   flexible_tx_context_positions: true
   disable_entry_point_signature_check: true
+  restrict_hot_or_not_entry_functions: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -168,6 +166,8 @@ binary_function_defs: 1000
 binary_field_handles: 500
 binary_field_instantiations: 250
 binary_friend_decls: 100
+binary_variant_handles: 1024
+binary_variant_instantiation_handles: 1024
 max_move_object_size: 256000
 max_move_package_size: 102400
 max_publish_or_upgrade_per_ptb: 5
