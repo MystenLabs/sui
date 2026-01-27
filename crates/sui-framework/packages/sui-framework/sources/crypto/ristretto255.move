@@ -20,7 +20,7 @@ const SCALAR_ONE_BYTES: vector<u8> =
 const IDENTITY_BYTES: vector<u8> =
     x"0000000000000000000000000000000000000000000000000000000000000000";
 const GENERATOR_BYTES: vector<u8> =
-    x"0000000000000000000000000000000000000000000000000000000000000000";
+    x"e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76";
 
 // Internal types used by group_ops' native functions.
 const SCALAR_TYPE: u8 = 5;
@@ -48,6 +48,8 @@ public fun scalar_one(): Element<Scalar> {
 }
 
 public fun scalar_add(e1: &Element<Scalar>, e2: &Element<Scalar>): Element<Scalar> {
+    std::debug::print(e1);
+    std::debug::print(e2);
     group_ops::add(SCALAR_TYPE, e1, e2)
 }
 

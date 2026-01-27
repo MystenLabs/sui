@@ -42,7 +42,7 @@ use self::{
 };
 use crate::crypto::group_ops::GroupOpsCostParams;
 use crate::crypto::poseidon::PoseidonBN254CostParams;
-use crate::crypto::zklogin;
+use crate::crypto::{bulletproofs, zklogin};
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use crate::{crypto::group_ops, transfer::PartyTransferInternalCostParams};
 use better_any::{Tid, TidAble};
@@ -72,6 +72,7 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use transfer::TransferReceiveObjectInternalCostParams;
+use crate::crypto::bulletproofs::VerifyBulletproofRistretto255CostParams;
 
 mod accumulator;
 mod address;
@@ -197,6 +198,8 @@ pub struct NativesCostTable {
 
     // nitro attestation
     pub nitro_attestation_cost_params: NitroAttestationCostParams,
+
+    pub verify_bulletproof_ristretto255_cost_params: VerifyBulletproofRistretto255CostParams,
 }
 
 impl NativeExtensionMarker<'_> for NativesCostTable {}
@@ -791,6 +794,9 @@ impl NativesCostTable {
                     .nitro_attestation_verify_cost_per_cert_as_option()
                     .map(Into::into),
             },
+            verify_bulletproof_ristretto255_cost_params: VerifyBulletproofRistretto255CostParams {
+                verify_bulletproof_ristretto255_cost: protocol_config.verify_bulletproof_ristretto255_cost_as_option().map(Into::into),
+            },
         }
     }
 }
@@ -1292,6 +1298,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "nitro_attestation",
             "load_nitro_attestation_internal",
             make_native!(nitro_attestation::load_nitro_attestation_internal),
+        ),
+        (
+            "verify_bulletproof_ristretto255",
+            "bulletproofs",
+            make_native!(bulletproofs::verify_bulletproof_ristretto255),
         ),
     ];
     let sui_framework_natives_iter =

@@ -565,10 +565,6 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     enable_group_ops_native_function_msm: bool,
 
-    // Enable native functions for ristretto group operations.
-    #[serde(skip_serializing_if = "is_false")]
-    enable_ristretto_group_ops_native_functions: bool,
-
     // Enable nitro attestation.
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation: bool,
@@ -1705,6 +1701,8 @@ pub struct ProtocolConfig {
     debug_print_base_cost: Option<u64>,
     debug_print_stack_trace_base_cost: Option<u64>,
 
+    verify_bulletproof_ristretto255_cost: Option<u64>,
+
     // ==== Ephemeral (consensus only) params deleted ====
     //
     // Const params for consensus scoring decision
@@ -2169,10 +2167,6 @@ impl ProtocolConfig {
 
     pub fn enable_group_ops_native_function_msm(&self) -> bool {
         self.feature_flags.enable_group_ops_native_function_msm
-    }
-
-    pub fn enable_ristretto_group_ops_native_functions(&self) -> bool {
-        self.feature_flags.enable_ristretto_group_ops_native_functions
     }
 
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
@@ -3056,6 +3050,8 @@ impl ProtocolConfig {
             nitro_attestation_parse_cost_per_byte: None,
             nitro_attestation_verify_base_cost: None,
             nitro_attestation_verify_cost_per_cert: None,
+
+            verify_bulletproof_ristretto255_cost: None,
 
             bcs_per_byte_serialized_cost: None,
             bcs_legacy_min_output_size_cost: None,
@@ -4551,9 +4547,6 @@ impl ProtocolConfig {
                     cfg.feature_flags.enable_ristretto_group_ops_native_functions = true;
 
                     // TODO: Copied from BLS123-81 Scalars and G1Elements - should update
-                    if chain != Chain::Mainnet {
-                        cfg.feature_flags.enable_ristretto_group_ops_native_functions = true;
-                    }
                     cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
                     cfg.group_ops_ristretto_decode_point_cost = Some(2848);
                     cfg.group_ops_ristretto_scalar_add_cost = Some(10);

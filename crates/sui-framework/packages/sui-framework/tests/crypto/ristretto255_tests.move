@@ -13,3 +13,17 @@ fun test_ristretto255_arithmetic() {
     let z = ristretto255::point_add(&ristretto255::generator(), &ristretto255::point_add(&ristretto255::generator(), &ristretto255::generator()));
     assert!(y == z)
 }
+
+#[test]
+fun test_ristretto255_arithmetic_2() {
+    let z = ristretto255::point_add(&ristretto255::generator(), &ristretto255::generator());
+}
+
+
+#[test]
+fun test_ristretto255_arithmetic_3() {
+    let x = ristretto255::scalar_from_u64(3);
+    let y = ristretto255::scalar_from_u64(4);
+    let z = ristretto255::scalar_from_u64(7);
+    assert!(ristretto255::scalar_add(&x, &y) == z);
+}

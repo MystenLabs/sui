@@ -14,3 +14,4 @@ pub mod nitro_attestation;
 pub mod poseidon;
 pub mod vdf;
 pub mod zklogin;
+pub mod bulletproofs;
