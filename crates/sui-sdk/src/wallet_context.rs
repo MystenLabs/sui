@@ -432,9 +432,10 @@ impl WalletContext {
     }
 
     pub async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
-        let client = self.get_client().await?;
-        let gas_price = client.governance_api().get_reference_gas_price().await?;
-        Ok(gas_price)
+        self.grpc_client()?
+            .get_reference_gas_price()
+            .await
+            .map_err(Into::into)
     }
 
     /// Add an account
