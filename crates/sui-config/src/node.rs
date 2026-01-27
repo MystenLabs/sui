@@ -46,6 +46,14 @@ pub const DEFAULT_VALIDATOR_GAS_PRICE: u64 = sui_types::transaction::DEFAULT_VAL
 /// Default commission rate of 2%
 pub const DEFAULT_COMMISSION_RATE: u64 = 200;
 
+/// The type of funds withdraw scheduler to use.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FundsWithdrawSchedulerType {
+    Naive,
+    #[default]
+    Eager,
+}
+
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -189,6 +197,12 @@ pub struct NodeConfig {
     #[serde(skip)]
     #[serde(default = "bool_true")]
     pub state_accumulator_v2: bool,
+
+    /// The type of funds withdraw scheduler to use.
+    /// Default is Eager. Not exposed to file configuration.
+    #[serde(skip)]
+    #[serde(default)]
+    pub funds_withdraw_scheduler_type: FundsWithdrawSchedulerType,
 
     #[serde(default = "bool_true")]
     pub enable_soft_bundle: bool,
