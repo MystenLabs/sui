@@ -75,9 +75,7 @@ impl EnvFinder<'_> {
         let chain_id = if let Some(chain_id) = active_env.chain_id {
             // cached
             chain_id
-        } else if let Ok(client) = self.wallet.get_client().await
-            && let Ok(chain_id) = self.wallet.cache_chain_id(&client).await
-        {
+        } else if let Ok(chain_id) = self.wallet.cache_chain_id().await {
             // fetched
             chain_id
         } else if let Some(chain_id) = self.manifest_envs.get(&active_env.alias) {

@@ -5442,9 +5442,8 @@ async fn test_move_build_dump_bytecode_as_base64() -> Result<(), anyhow::Error> 
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let client_config_path = context.config.path();
-    let client = context.get_client().await?;
     // we need to cache the chain id as it does not get automatically cached in TestClusterBuilder
-    let chain_id = context.cache_chain_id(&client).await?;
+    let chain_id = context.cache_chain_id().await?;
 
     // Create temp directory with the test package and update the Move.toml with localnet chain id
     let (temp_dir, pkg_path) =
@@ -5486,8 +5485,7 @@ async fn test_move_build_dump_bytecode_as_base64_with_unpublished_deps() -> Resu
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let context = &mut test_cluster.wallet;
     let client_config_path = context.config.path();
-    let client = context.get_client().await?;
-    let chain_id = context.cache_chain_id(&client).await?;
+    let chain_id = context.cache_chain_id().await?;
 
     // Create temp directory with the test package
     let (temp_dir, pkg_path) = create_temp_dir_with_framework_packages(
