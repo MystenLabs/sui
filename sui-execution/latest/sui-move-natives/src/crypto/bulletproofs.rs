@@ -26,8 +26,7 @@ pub const INVALID_RANGE: u64 = 2;
 
 #[derive(Clone)]
 pub struct VerifyBulletproofRistretto255CostParams {
-    /// Base cost for invoking the `hmac_sha3_256` function
-    pub verify_bulletproof_ristretto255_cost: Option<InternalGas>,
+    pub verify_bulletproof_ristretto255_cost: InternalGas,
 }
 
 pub fn verify_bulletproof_ristretto255(
@@ -44,10 +43,10 @@ pub fn verify_bulletproof_ristretto255(
         .clone();
 
     // Charge the base cost for this operation
-    /*    native_charge_gas_early_exit!(
+    native_charge_gas_early_exit!(
         context,
         verify_bulletproof_ristretto255_cost_params.verify_bulletproof_ristretto255_cost
-    );*/
+    );
 
     let commitment = pop_arg!(args, VectorRef);
     let range = pop_arg!(args, u8);

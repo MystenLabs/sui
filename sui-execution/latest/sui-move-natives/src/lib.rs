@@ -827,9 +827,7 @@ impl NativesCostTable {
                     .map(Into::into),
             },
             verify_bulletproof_ristretto255_cost_params: VerifyBulletproofRistretto255CostParams {
-                verify_bulletproof_ristretto255_cost: protocol_config
-                    .verify_bulletproof_ristretto255_cost_as_option()
-                    .map(Into::into),
+                verify_bulletproof_ristretto255_cost: protocol_config.verify_bulletproof_ristretto255_cost().into(),
             },
         }
     }
