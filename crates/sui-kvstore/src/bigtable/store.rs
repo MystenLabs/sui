@@ -4,37 +4,46 @@
 //! BigTable Store implementation for sui-indexer-alt-framework.
 //!
 //! This implements the `Store` and `Connection` traits to allow the new framework
-//! to use BigTable for watermark storage. The watermark is stored in the same format
-//! as the legacy binary (key=[0] in watermark_alt table) to allow both binaries to
-//! run in parallel during migration.
-//!
-//! Note: The legacy binary stores "next checkpoint to process", while the new framework
-//! uses "checkpoint_hi_inclusive" (last processed). We translate between these with +1/-1.
+//! to use BigTable for watermark storage. Per-pipeline watermarks are stored in
+//! the `watermarks` table, with fallback to the legacy `watermark_alt` table for
+//! migration support.
 
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use sui_indexer_alt_framework_store_traits::{
-    CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store,
-};
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_indexer_alt_framework_store_traits::CommitterWatermark;
+use sui_indexer_alt_framework_store_traits::Connection;
+use sui_indexer_alt_framework_store_traits::PrunerWatermark;
+use sui_indexer_alt_framework_store_traits::ReaderWatermark;
+use sui_indexer_alt_framework_store_traits::Store;
 
-use super::client::BigTableClient;
-use crate::{KeyValueStoreReader, KeyValueStoreWriter, TransactionData};
+use crate::KeyValueStoreReader as _;
+use crate::PipelineWatermark;
+use crate::bigtable::client::BigTableClient;
 
 /// A Store implementation backed by BigTable.
-///
-/// This store manages watermarks in the `watermark_alt` table using key `[0]`
-/// for compatibility with the legacy kvstore binary.
 #[derive(Clone)]
 pub struct BigTableStore {
     client: BigTableClient,
 }
 
+/// A connection to BigTable for watermark operations and data writes.
+pub struct BigTableConnection<'a> {
+    client: BigTableClient,
+    _marker: std::marker::PhantomData<&'a ()>,
+}
+
 impl BigTableStore {
     pub fn new(client: BigTableClient) -> Self {
         Self { client }
+    }
+}
+
+impl BigTableConnection<'_> {
+    /// Returns a mutable reference to the underlying BigTable client.
+    pub fn client(&mut self) -> &mut BigTableClient {
+        &mut self.client
     }
 }
 
@@ -50,79 +59,22 @@ impl Store for BigTableStore {
     }
 }
 
-/// A connection to BigTable for watermark operations and data writes.
-pub struct BigTableConnection<'a> {
-    client: BigTableClient,
-    _marker: std::marker::PhantomData<&'a ()>,
-}
-
-impl BigTableConnection<'_> {
-    /// Process a checkpoint by writing all its data to BigTable.
-    ///
-    /// This is a copy of KvWorker::process_checkpoint to decouple the new binary
-    /// from the legacy code path. Changes here won't affect the legacy binary.
-    pub async fn process_checkpoint(&mut self, checkpoint: &CheckpointData) -> Result<()> {
-        let mut objects = vec![];
-        let mut transactions = vec![];
-        for transaction in &checkpoint.transactions {
-            let full_transaction = TransactionData {
-                transaction: transaction.transaction.clone(),
-                effects: transaction.effects.clone(),
-                events: transaction.events.clone(),
-                checkpoint_number: checkpoint.checkpoint_summary.sequence_number,
-                timestamp: checkpoint.checkpoint_summary.timestamp_ms,
-            };
-            for object in &transaction.output_objects {
-                objects.push(object);
-            }
-            transactions.push(full_transaction);
-        }
-        self.client
-            .save_objects(&objects, checkpoint.checkpoint_summary.timestamp_ms)
-            .await?;
-        self.client.save_transactions(&transactions).await?;
-        self.client.save_checkpoint(checkpoint).await?;
-        if let Some(epoch_info) = checkpoint.epoch_info()? {
-            if epoch_info.epoch > 0 {
-                let mut prev = self
-                    .client
-                    .get_epoch(epoch_info.epoch - 1)
-                    .await?
-                    .with_context(|| {
-                        format!(
-                            "previous epoch {} not found when processing epoch {}",
-                            epoch_info.epoch - 1,
-                            epoch_info.epoch
-                        )
-                    })?;
-                prev.end_checkpoint = epoch_info.start_checkpoint.map(|sq| sq - 1);
-                prev.end_timestamp_ms = epoch_info.start_timestamp_ms;
-                self.client.save_epoch(prev).await?;
-            }
-            self.client.save_epoch(epoch_info).await?;
-        }
-        Ok(())
-    }
-}
-
 #[async_trait]
 impl Connection for BigTableConnection<'_> {
     async fn init_watermark(
         &mut self,
-        _pipeline_task: &str,
+        pipeline_task: &str,
         _default_next_checkpoint: u64,
     ) -> Result<Option<u64>> {
-        // Read existing watermark from BigTable.
-        // The stored value is "next checkpoint to process", so we subtract 1
-        // to get checkpoint_hi_inclusive (last processed checkpoint).
-        //
-        // Phase 1: We ignore pipeline_task and use the shared key [0] for
-        // compatibility with the legacy binary.
+        // First check if we have a pipeline-specific watermark
+        if let Some(watermark) = self.client.get_pipeline_watermark(pipeline_task).await? {
+            return Ok(Some(watermark.checkpoint_hi_inclusive));
+        }
+
+        // If no pipeline watermark exists, check the legacy watermark_alt table
+        // and use it as the initial watermark for migration.
         let next_checkpoint = self.client.get_latest_checkpoint().await?;
         if next_checkpoint == 0 {
-            // No watermark exists yet - return None to indicate initialization.
-            // We don't actually write the default because it would be incompatible
-            // with the legacy binary.
             Ok(None)
         } else {
             // Return the last processed checkpoint (next - 1)
@@ -132,8 +84,14 @@ impl Connection for BigTableConnection<'_> {
 
     async fn committer_watermark(
         &mut self,
-        _pipeline_task: &str,
+        pipeline_task: &str,
     ) -> Result<Option<CommitterWatermark>> {
+        // First check for pipeline-specific watermark
+        if let Some(watermark) = self.client.get_pipeline_watermark(pipeline_task).await? {
+            return Ok(Some(watermark.into()));
+        }
+
+        // Fall back to legacy watermark
         let next_checkpoint = self.client.get_latest_checkpoint().await?;
         if next_checkpoint == 0 {
             Ok(None)
@@ -149,15 +107,12 @@ impl Connection for BigTableConnection<'_> {
 
     async fn set_committer_watermark(
         &mut self,
-        _pipeline_task: &str,
+        pipeline_task: &str,
         watermark: CommitterWatermark,
     ) -> Result<bool> {
-        // Write checkpoint number to watermark_alt table.
-        // The legacy binary stores "next checkpoint to process", so we add 1
-        // to checkpoint_hi_inclusive.
-        // Uses checkpoint timestamp for cell timestamp (deterministic).
+        let pipeline_watermark: PipelineWatermark = watermark.into();
         self.client
-            .save_watermark(watermark.checkpoint_hi_inclusive + 1)
+            .set_pipeline_watermark(pipeline_task, &pipeline_watermark)
             .await?;
         Ok(true)
     }

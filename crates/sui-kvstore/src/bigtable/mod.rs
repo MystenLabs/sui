@@ -3,5 +3,5 @@
 
 pub(crate) mod client;
 mod metrics;
-mod proto;
+pub(crate) mod proto;
 pub(crate) mod store;
