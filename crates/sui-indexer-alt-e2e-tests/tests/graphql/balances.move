@@ -3,8 +3,7 @@
 
 // Simple e2e test of coin, address, and total balance queries.
 
-//# init --accounts A B --addresses T=0x0 --simulator --enable-accumulators
-
+//# init --protocol-version 108 --accounts A B --addresses T=0x0 --simulator --enable-accumulators
 
 //# publish --sender A
 #[allow(deprecated_usage)]

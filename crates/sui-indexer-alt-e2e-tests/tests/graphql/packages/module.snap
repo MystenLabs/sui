@@ -35,17 +35,17 @@ Response: {
         "package": {
           "m": {
             "name": "M",
-            "fullyQualifiedName": "0x1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc::M",
+            "fullyQualifiedName": "0x84aab8b1269b28a0cb0a8e2fa57c8a64d3bf3e3e7522838475bed13be94cf3c5::M",
             "fileFormatVersion": 6,
-            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFNA2ZvbxaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBioAAAAAAAAAAgA=",
-            "disassembly": "// Move bytecode v6\nmodule 1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc.M {\n\npublic foo(): u64 {\nB0:\n\t0: LdU64(42)\n\t1: Ret\n}\n\n}\n"
+            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFNA2Zvb4SquLEmmyigywqOL6V8imTTvz4+dSKDhHW+0TvpTPPFAAEAAAACBioAAAAAAAAAAgA=",
+            "disassembly": "// Move bytecode v6\nmodule 84aab8b1269b28a0cb0a8e2fa57c8a64d3bf3e3e7522838475bed13be94cf3c5.M {\n\npublic foo(): u64 {\nB0:\n\t0: LdU64(42)\n\t1: Ret\n}\n\n}\n"
           },
           "n": {
             "name": "N",
-            "fullyQualifiedName": "0x1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc::N",
+            "fullyQualifiedName": "0x84aab8b1269b28a0cb0a8e2fa57c8a64d3bf3e3e7522838475bed13be94cf3c5::N",
             "fileFormatVersion": 6,
-            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFOA2JhchaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBisAAAAAAAAAAgA=",
-            "disassembly": "// Move bytecode v6\nmodule 1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc.N {\n\npublic bar(): u64 {\nB0:\n\t0: LdU64(43)\n\t1: Ret\n}\n\n}\n"
+            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFOA2JhcoSquLEmmyigywqOL6V8imTTvz4+dSKDhHW+0TvpTPPFAAEAAAACBisAAAAAAAAAAgA=",
+            "disassembly": "// Move bytecode v6\nmodule 84aab8b1269b28a0cb0a8e2fa57c8a64d3bf3e3e7522838475bed13be94cf3c5.N {\n\npublic bar(): u64 {\nB0:\n\t0: LdU64(43)\n\t1: Ret\n}\n\n}\n"
           },
           "o": null
         }
@@ -56,24 +56,24 @@ Response: {
         "package": {
           "m": {
             "name": "M",
-            "fullyQualifiedName": "0x02b46f517b695db5fdabf2721b492c0d1ea38270ab6ffc3ce3c7e37b0c0f3c0d::M",
+            "fullyQualifiedName": "0x8400afca72f68c028b457c2fd931ce5722fd6c0d56e37001e92a970c86aae8d6::M",
             "fileFormatVersion": 6,
-            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFNA2ZvbxaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBioAAAAAAAAAAgA=",
-            "disassembly": "// Move bytecode v6\nmodule 1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc.M {\n\npublic foo(): u64 {\nB0:\n\t0: LdU64(42)\n\t1: Ret\n}\n\n}\n"
+            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFNA2Zvb4SquLEmmyigywqOL6V8imTTvz4+dSKDhHW+0TvpTPPFAAEAAAACBioAAAAAAAAAAgA=",
+            "disassembly": "// Move bytecode v6\nmodule 84aab8b1269b28a0cb0a8e2fa57c8a64d3bf3e3e7522838475bed13be94cf3c5.M {\n\npublic foo(): u64 {\nB0:\n\t0: LdU64(42)\n\t1: Ret\n}\n\n}\n"
           },
           "n": {
             "name": "N",
-            "fullyQualifiedName": "0x02b46f517b695db5fdabf2721b492c0d1ea38270ab6ffc3ce3c7e37b0c0f3c0d::N",
+            "fullyQualifiedName": "0x8400afca72f68c028b457c2fd931ce5722fd6c0d56e37001e92a970c86aae8d6::N",
             "fileFormatVersion": 6,
-            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFOA2JhchaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBisAAAAAAAAAAgA=",
-            "disassembly": "// Move bytecode v6\nmodule 1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc.N {\n\npublic bar(): u64 {\nB0:\n\t0: LdU64(43)\n\t1: Ret\n}\n\n}\n"
+            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFOA2JhcoSquLEmmyigywqOL6V8imTTvz4+dSKDhHW+0TvpTPPFAAEAAAACBisAAAAAAAAAAgA=",
+            "disassembly": "// Move bytecode v6\nmodule 84aab8b1269b28a0cb0a8e2fa57c8a64d3bf3e3e7522838475bed13be94cf3c5.N {\n\npublic bar(): u64 {\nB0:\n\t0: LdU64(43)\n\t1: Ret\n}\n\n}\n"
           },
           "o": {
             "name": "O",
-            "fullyQualifiedName": "0x02b46f517b695db5fdabf2721b492c0d1ea38270ab6ffc3ce3c7e37b0c0f3c0d::O",
+            "fullyQualifiedName": "0x8400afca72f68c028b457c2fd931ce5722fd6c0d56e37001e92a970c86aae8d6::O",
             "fileFormatVersion": 6,
-            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFPA2JhehaBrMeQ6Mubi2GxqXEqgbnNZts01i6TIcY10cTiHHn8AAEAAAACBiwAAAAAAAAAAgA=",
-            "disassembly": "// Move bytecode v6\nmodule 1681acc790e8cb9b8b61b1a9712a81b9cd66db34d62e9321c635d1c4e21c79fc.O {\n\npublic baz(): u64 {\nB0:\n\t0: LdU64(44)\n\t1: Ret\n}\n\n}\n"
+            "bytes": "oRzrCwYAAAAGAQACAwIFBQcDBwoGCBAgDDAQAAAAAQABAAABAwFPA2JheoSquLEmmyigywqOL6V8imTTvz4+dSKDhHW+0TvpTPPFAAEAAAACBiwAAAAAAAAAAgA=",
+            "disassembly": "// Move bytecode v6\nmodule 84aab8b1269b28a0cb0a8e2fa57c8a64d3bf3e3e7522838475bed13be94cf3c5.O {\n\npublic baz(): u64 {\nB0:\n\t0: LdU64(44)\n\t1: Ret\n}\n\n}\n"
           }
         }
       }

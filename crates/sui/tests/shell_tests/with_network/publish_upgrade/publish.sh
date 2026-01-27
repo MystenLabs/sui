@@ -22,29 +22,25 @@ add_env_to_toml() {
   echo "localnet = \"$chain_id\"" >> $1/Move.toml
 }
 
+sui_version=$(sui --version | sed 's/sui \([^-]*\)-.*$/\1/g')
 extract_published() {
-  awk '
-    /^\[published\.[^]]+\]/ {
-      print
-      inpub=1
-      next
-    }
-    inpub && /^version[[:space:]]*=/ {
-      print
-      print ""
-      inpub=0
-    }
-  ' "$@"
+  echo "=== $@ ==="
+  cat "$@" \
+    | grep -v 0x \
+    | grep -v "^#" \
+    | sed "s/$chain_id/CHAIN_ID/g" \
+    | sed "s/$sui_version/SUI_VERSION/g"
+  echo "=== End Published.toml ==="
 }
 
 chain_id=$(sui client --client.config $CONFIG chain-identifier)
 
 for i in a b c d e
 do
-  echo === publishing $i ===
+  echo ""
+  echo "=== publishing $i ==="
   add_env_to_toml $i
 
   sui client --client.config $CONFIG publish $i > output.log 2>&1 || cat output.log
   extract_published $i/Published.toml
-
 done

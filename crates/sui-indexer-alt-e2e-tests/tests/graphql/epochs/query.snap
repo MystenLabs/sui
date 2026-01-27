@@ -33,20 +33,20 @@ Response: {
           "pendingRemovals": [],
           "pendingActiveValidators": {
             "contents": {
-              "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+              "id": "0x465c2a189dcbc4f7f150cf57d26d291f2897448b9bc01d43ba2e7115c75b35df",
               "size": "0"
             }
           },
           "stakingPoolMappings": {
-            "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "id": "0x4d02708f6850adfa71567c2eaff59aaa3ab59d40b3a3f27452eb7b2ca25e0e84",
             "size": "1"
           },
           "inactiveValidators": {
-            "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "id": "0xa1c8458f15908b6f8cda2afab3679810d7895e143c5f5f27e55740d651dd5ad5",
             "size": "0"
           },
           "validatorCandidates": {
-            "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "id": "0x99ae8894b1f3265a97c22b01745fa08ed1c691783bdf2a1d8096bb63082a240c",
             "size": "0"
           }
         }
@@ -61,7 +61,7 @@ Response: {
       "fundInflow": "0",
       "fundOutflow": "0",
       "systemState": {
-        "protocolVersion": "70",
+        "protocolVersion": "108",
         "systemStateVersion": "2",
         "storageFund": {
           "total_object_storage_rebates": "0",
@@ -77,7 +77,7 @@ Response: {
           "validator_very_low_stake_threshold": "15000000000000000",
           "validator_low_stake_grace_period": "7",
           "extra_fields": {
-            "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+            "id": "0x23ef49aedfdfc2a1966a84f906d371055e60c5186a7797bb7b04ea1ee72602a7",
             "size": "0"
           }
         },
@@ -88,7 +88,7 @@ Response: {
           "stake_subsidy_period_length": "10",
           "stake_subsidy_decrease_rate": 1000,
           "extra_fields": {
-            "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+            "id": "0xe9c22b83f97030c5d5b38a8822275b88dfc8d924ab05f3970557ae93a7df7671",
             "size": "0"
           }
         },
@@ -111,20 +111,20 @@ Response: {
           "pendingRemovals": [],
           "pendingActiveValidators": {
             "contents": {
-              "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+              "id": "0x465c2a189dcbc4f7f150cf57d26d291f2897448b9bc01d43ba2e7115c75b35df",
               "size": "0"
             }
           },
           "stakingPoolMappings": {
-            "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "id": "0x4d02708f6850adfa71567c2eaff59aaa3ab59d40b3a3f27452eb7b2ca25e0e84",
             "size": "1"
           },
           "inactiveValidators": {
-            "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "id": "0xa1c8458f15908b6f8cda2afab3679810d7895e143c5f5f27e55740d651dd5ad5",
             "size": "0"
           },
           "validatorCandidates": {
-            "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "id": "0x99ae8894b1f3265a97c22b01745fa08ed1c691783bdf2a1d8096bb63082a240c",
             "size": "0"
           }
         }
@@ -139,7 +139,7 @@ Response: {
       "fundInflow": "0",
       "fundOutflow": "0",
       "systemState": {
-        "protocolVersion": "70",
+        "protocolVersion": "108",
         "systemStateVersion": "1",
         "storageFund": {
           "total_object_storage_rebates": "0",
@@ -154,7 +154,7 @@ Response: {
           "validator_very_low_stake_threshold": "15000000000000000",
           "validator_low_stake_grace_period": "7",
           "extra_fields": {
-            "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+            "id": "0x23ef49aedfdfc2a1966a84f906d371055e60c5186a7797bb7b04ea1ee72602a7",
             "size": "0"
           }
         },
@@ -165,7 +165,7 @@ Response: {
           "stake_subsidy_period_length": "10",
           "stake_subsidy_decrease_rate": 1000,
           "extra_fields": {
-            "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+            "id": "0xe9c22b83f97030c5d5b38a8822275b88dfc8d924ab05f3970557ae93a7df7671",
             "size": "0"
           }
         },
@@ -188,20 +188,20 @@ Response: {
           "pendingRemovals": [],
           "pendingActiveValidators": {
             "contents": {
-              "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+              "id": "0x465c2a189dcbc4f7f150cf57d26d291f2897448b9bc01d43ba2e7115c75b35df",
               "size": "0"
             }
           },
           "stakingPoolMappings": {
-            "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "id": "0x4d02708f6850adfa71567c2eaff59aaa3ab59d40b3a3f27452eb7b2ca25e0e84",
             "size": "1"
           },
           "inactiveValidators": {
-            "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "id": "0xa1c8458f15908b6f8cda2afab3679810d7895e143c5f5f27e55740d651dd5ad5",
             "size": "0"
           },
           "validatorCandidates": {
-            "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "id": "0x99ae8894b1f3265a97c22b01745fa08ed1c691783bdf2a1d8096bb63082a240c",
             "size": "0"
           }
         }
@@ -216,7 +216,7 @@ Response: {
       "fundInflow": "0",
       "fundOutflow": "0",
       "systemState": {
-        "protocolVersion": "70",
+        "protocolVersion": "108",
         "systemStateVersion": "2",
         "storageFund": {
           "total_object_storage_rebates": "0",
@@ -232,7 +232,7 @@ Response: {
           "validator_very_low_stake_threshold": "15000000000000000",
           "validator_low_stake_grace_period": "7",
           "extra_fields": {
-            "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+            "id": "0x23ef49aedfdfc2a1966a84f906d371055e60c5186a7797bb7b04ea1ee72602a7",
             "size": "0"
           }
         },
@@ -243,7 +243,7 @@ Response: {
           "stake_subsidy_period_length": "10",
           "stake_subsidy_decrease_rate": 1000,
           "extra_fields": {
-            "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+            "id": "0xe9c22b83f97030c5d5b38a8822275b88dfc8d924ab05f3970557ae93a7df7671",
             "size": "0"
           }
         },
@@ -266,20 +266,20 @@ Response: {
           "pendingRemovals": [],
           "pendingActiveValidators": {
             "contents": {
-              "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+              "id": "0x465c2a189dcbc4f7f150cf57d26d291f2897448b9bc01d43ba2e7115c75b35df",
               "size": "0"
             }
           },
           "stakingPoolMappings": {
-            "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+            "id": "0x4d02708f6850adfa71567c2eaff59aaa3ab59d40b3a3f27452eb7b2ca25e0e84",
             "size": "1"
           },
           "inactiveValidators": {
-            "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+            "id": "0xa1c8458f15908b6f8cda2afab3679810d7895e143c5f5f27e55740d651dd5ad5",
             "size": "0"
           },
           "validatorCandidates": {
-            "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+            "id": "0x99ae8894b1f3265a97c22b01745fa08ed1c691783bdf2a1d8096bb63082a240c",
             "size": "0"
           }
         }
@@ -294,7 +294,7 @@ Response: {
       "fundInflow": "0",
       "fundOutflow": "0",
       "systemState": {
-        "protocolVersion": "70",
+        "protocolVersion": "108",
         "systemStateVersion": "2",
         "storageFund": {
           "total_object_storage_rebates": "0",
@@ -310,7 +310,7 @@ Response: {
           "validator_very_low_stake_threshold": "15000000000000000",
           "validator_low_stake_grace_period": "7",
           "extra_fields": {
-            "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+            "id": "0x23ef49aedfdfc2a1966a84f906d371055e60c5186a7797bb7b04ea1ee72602a7",
             "size": "0"
           }
         },
@@ -321,7 +321,7 @@ Response: {
           "stake_subsidy_period_length": "10",
           "stake_subsidy_decrease_rate": 1000,
           "extra_fields": {
-            "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+            "id": "0xe9c22b83f97030c5d5b38a8822275b88dfc8d924ab05f3970557ae93a7df7671",
             "size": "0"
           }
         },
@@ -354,20 +354,20 @@ Response: {
               "pendingRemovals": [],
               "pendingActiveValidators": {
                 "contents": {
-                  "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+                  "id": "0x465c2a189dcbc4f7f150cf57d26d291f2897448b9bc01d43ba2e7115c75b35df",
                   "size": "0"
                 }
               },
               "stakingPoolMappings": {
-                "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+                "id": "0x4d02708f6850adfa71567c2eaff59aaa3ab59d40b3a3f27452eb7b2ca25e0e84",
                 "size": "1"
               },
               "inactiveValidators": {
-                "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+                "id": "0xa1c8458f15908b6f8cda2afab3679810d7895e143c5f5f27e55740d651dd5ad5",
                 "size": "0"
               },
               "validatorCandidates": {
-                "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+                "id": "0x99ae8894b1f3265a97c22b01745fa08ed1c691783bdf2a1d8096bb63082a240c",
                 "size": "0"
               }
             }
@@ -382,7 +382,7 @@ Response: {
           "fundInflow": "0",
           "fundOutflow": "0",
           "systemState": {
-            "protocolVersion": "70",
+            "protocolVersion": "108",
             "systemStateVersion": "2",
             "storageFund": {
               "total_object_storage_rebates": "0",
@@ -398,7 +398,7 @@ Response: {
               "validator_very_low_stake_threshold": "15000000000000000",
               "validator_low_stake_grace_period": "7",
               "extra_fields": {
-                "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+                "id": "0x23ef49aedfdfc2a1966a84f906d371055e60c5186a7797bb7b04ea1ee72602a7",
                 "size": "0"
               }
             },
@@ -409,7 +409,7 @@ Response: {
               "stake_subsidy_period_length": "10",
               "stake_subsidy_decrease_rate": 1000,
               "extra_fields": {
-                "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+                "id": "0xe9c22b83f97030c5d5b38a8822275b88dfc8d924ab05f3970557ae93a7df7671",
                 "size": "0"
               }
             },
@@ -432,20 +432,20 @@ Response: {
               "pendingRemovals": [],
               "pendingActiveValidators": {
                 "contents": {
-                  "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+                  "id": "0x465c2a189dcbc4f7f150cf57d26d291f2897448b9bc01d43ba2e7115c75b35df",
                   "size": "0"
                 }
               },
               "stakingPoolMappings": {
-                "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+                "id": "0x4d02708f6850adfa71567c2eaff59aaa3ab59d40b3a3f27452eb7b2ca25e0e84",
                 "size": "1"
               },
               "inactiveValidators": {
-                "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+                "id": "0xa1c8458f15908b6f8cda2afab3679810d7895e143c5f5f27e55740d651dd5ad5",
                 "size": "0"
               },
               "validatorCandidates": {
-                "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+                "id": "0x99ae8894b1f3265a97c22b01745fa08ed1c691783bdf2a1d8096bb63082a240c",
                 "size": "0"
               }
             }
@@ -460,7 +460,7 @@ Response: {
           "fundInflow": "0",
           "fundOutflow": "0",
           "systemState": {
-            "protocolVersion": "70",
+            "protocolVersion": "108",
             "systemStateVersion": "1",
             "storageFund": {
               "total_object_storage_rebates": "0",
@@ -475,7 +475,7 @@ Response: {
               "validator_very_low_stake_threshold": "15000000000000000",
               "validator_low_stake_grace_period": "7",
               "extra_fields": {
-                "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+                "id": "0x23ef49aedfdfc2a1966a84f906d371055e60c5186a7797bb7b04ea1ee72602a7",
                 "size": "0"
               }
             },
@@ -486,7 +486,7 @@ Response: {
               "stake_subsidy_period_length": "10",
               "stake_subsidy_decrease_rate": 1000,
               "extra_fields": {
-                "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+                "id": "0xe9c22b83f97030c5d5b38a8822275b88dfc8d924ab05f3970557ae93a7df7671",
                 "size": "0"
               }
             },
@@ -509,20 +509,20 @@ Response: {
               "pendingRemovals": [],
               "pendingActiveValidators": {
                 "contents": {
-                  "id": "0x9541f20fb73c0586eececa4e9e872e7af6892c50420c05b9883d6d2865306f77",
+                  "id": "0x465c2a189dcbc4f7f150cf57d26d291f2897448b9bc01d43ba2e7115c75b35df",
                   "size": "0"
                 }
               },
               "stakingPoolMappings": {
-                "id": "0x92aeb4c135bbe12a5d16fa81ef3e1e9211e8a76bbe861bc21aa6010fafe37cf1",
+                "id": "0x4d02708f6850adfa71567c2eaff59aaa3ab59d40b3a3f27452eb7b2ca25e0e84",
                 "size": "1"
               },
               "inactiveValidators": {
-                "id": "0x5a2e52e99e944608af962628eed737de7bcdef3cb52e8177734d6f95a20ced4e",
+                "id": "0xa1c8458f15908b6f8cda2afab3679810d7895e143c5f5f27e55740d651dd5ad5",
                 "size": "0"
               },
               "validatorCandidates": {
-                "id": "0xc92f51413cff79cbf74de822357864565fac59ba3079acf20711a6da5c2599da",
+                "id": "0x99ae8894b1f3265a97c22b01745fa08ed1c691783bdf2a1d8096bb63082a240c",
                 "size": "0"
               }
             }
@@ -537,7 +537,7 @@ Response: {
           "fundInflow": "0",
           "fundOutflow": "0",
           "systemState": {
-            "protocolVersion": "70",
+            "protocolVersion": "108",
             "systemStateVersion": "2",
             "storageFund": {
               "total_object_storage_rebates": "0",
@@ -553,7 +553,7 @@ Response: {
               "validator_very_low_stake_threshold": "15000000000000000",
               "validator_low_stake_grace_period": "7",
               "extra_fields": {
-                "id": "0x277bd686d22b1b2a82ddde6188dab5ba901b606f54b25b6283a3246ee227378a",
+                "id": "0x23ef49aedfdfc2a1966a84f906d371055e60c5186a7797bb7b04ea1ee72602a7",
                 "size": "0"
               }
             },
@@ -564,7 +564,7 @@ Response: {
               "stake_subsidy_period_length": "10",
               "stake_subsidy_decrease_rate": 1000,
               "extra_fields": {
-                "id": "0xe5a72888dad04d66e3916795bb20382356e4b1d2eb2aa57b6e0ecdcd7e6c5787",
+                "id": "0xe9c22b83f97030c5d5b38a8822275b88dfc8d924ab05f3970557ae93a7df7671",
                 "size": "0"
               }
             },

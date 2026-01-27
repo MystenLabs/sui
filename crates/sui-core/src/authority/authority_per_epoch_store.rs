@@ -107,7 +107,7 @@ use crate::authority::shared_object_version_manager::{
     AsTx, AssignedTxAndVersions, ConsensusSharedObjVerAssignment, Schedulable, SharedObjVerManager,
 };
 use crate::checkpoints::{
-    BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint,
+    BuilderCheckpointSummary, CheckpointHeight, EpochStats, PendingCheckpoint, PendingCheckpointV2,
 };
 use crate::consensus_handler::{
     ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
@@ -302,8 +302,11 @@ impl PartialOrd for ExecutionIndices {
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithStats {
     pub index: ExecutionIndices,
-    // Hash is always 0 and kept for compatibility only.
-    pub hash: u64,
+    /// Height watermark assigned to this commit.
+    /// We use this to determine if a commit has been fully executed.
+    /// if an executed checkpoint's height is higher than commit
+    /// height, we've fully executed the commit.
+    pub height: u64,
     pub stats: ConsensusStats,
 }
 
@@ -1101,6 +1104,7 @@ impl AuthorityPerEpochStore {
             protocol_config.accept_passkey_in_multisig(),
             protocol_config.zklogin_max_epoch_upper_bound_delta(),
             protocol_config.additional_multisig_checks(),
+            protocol_config.validate_zklogin_public_identifier(),
             protocol_config.address_aliases(),
         );
 
@@ -2156,20 +2160,10 @@ impl AuthorityPerEpochStore {
             self.consensus_quarantine.read().is_empty(),
             "get_last_consensus_stats should only be called at startup"
         );
-        match self.tables()?.get_last_consensus_stats()? {
-            Some(stats) => Ok(stats),
-            None => {
-                let indices = self
-                    .tables()?
-                    .get_last_consensus_index()
-                    .map(|x| x.unwrap_or_default())?;
-                Ok(ExecutionIndicesWithStats {
-                    index: indices,
-                    hash: 0, // unused
-                    stats: ConsensusStats::default(),
-                })
-            }
-        }
+        Ok(self
+            .tables()?
+            .get_last_consensus_stats()?
+            .unwrap_or_default())
     }
 
     pub fn get_accumulators_in_checkpoint_range(
@@ -3507,11 +3501,50 @@ impl AuthorityPerEpochStore {
             .get_pending_checkpoints(last))
     }
 
-    pub fn pending_checkpoint_exists(&self, index: &CheckpointHeight) -> SuiResult<bool> {
+    fn pending_checkpoint_exists(&self, index: &CheckpointHeight) -> SuiResult<bool> {
         Ok(self
             .consensus_quarantine
             .read()
             .pending_checkpoint_exists(index))
+    }
+
+    pub(crate) fn write_pending_checkpoint_v2(
+        &self,
+        output: &mut ConsensusCommitOutput,
+        checkpoint: &PendingCheckpointV2,
+    ) -> SuiResult {
+        assert!(
+            !self.pending_checkpoint_exists_v2(&checkpoint.height())?,
+            "Duplicate pending checkpoint notification at height {:?}",
+            checkpoint.height()
+        );
+
+        debug!(
+            checkpoint_commit_height = checkpoint.height(),
+            "Pending checkpoint has {} roots",
+            checkpoint.num_roots(),
+        );
+
+        output.insert_pending_checkpoint_v2(checkpoint.clone());
+
+        Ok(())
+    }
+
+    pub fn get_pending_checkpoints_v2(
+        &self,
+        last: Option<CheckpointHeight>,
+    ) -> SuiResult<Vec<(CheckpointHeight, PendingCheckpointV2)>> {
+        Ok(self
+            .consensus_quarantine
+            .read()
+            .get_pending_checkpoints_v2(last))
+    }
+
+    fn pending_checkpoint_exists_v2(&self, index: &CheckpointHeight) -> SuiResult<bool> {
+        Ok(self
+            .consensus_quarantine
+            .read()
+            .pending_checkpoint_exists_v2(index))
     }
 
     pub fn process_constructed_checkpoint(
@@ -3572,6 +3605,12 @@ impl AuthorityPerEpochStore {
             return Ok(Some(summary.clone()));
         }
 
+        self.last_persisted_checkpoint_builder_summary()
+    }
+
+    pub fn last_persisted_checkpoint_builder_summary(
+        &self,
+    ) -> SuiResult<Option<BuilderCheckpointSummary>> {
         Ok(self
             .tables()?
             .builder_checkpoint_summary_v2

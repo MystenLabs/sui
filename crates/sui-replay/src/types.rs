@@ -19,7 +19,7 @@ use sui_types::object::Object;
 use sui_types::transaction::{InputObjectKind, SenderSignedData, TransactionKind};
 use thiserror::Error;
 use tokio::time::Duration;
-use tracing::{error, warn};
+use tracing::warn;
 
 use crate::config::ReplayableNetworkConfigSet;
 

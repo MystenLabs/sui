@@ -1,0 +1,6 @@
+[package]
+name = "a"
+implicit-dependencies = false
+
+[dependencies]
+std = { local = "../move-stdlib" }

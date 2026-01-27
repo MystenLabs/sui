@@ -24,7 +24,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 109;
+const MAX_PROTOCOL_VERSION: u64 = 110;
 
 // Record history of protocol version allocations here:
 //
@@ -290,7 +290,11 @@ const MAX_PROTOCOL_VERSION: u64 = 109;
 //              Disable entry point signature check.
 //              Enable address aliases on testnet.
 //              Enable poseidon_bn254 on mainnet.
-// Version 109: New framework.
+// Version 109: Update where we set bounds for some binary tables to be a bit more idiomatic.
+// Version 110: Enable parsing on all nonzero custom pcrs in nitro attestation parsing native
+//              function on mainnet.
+//              split_checkpoints_in_consensus_handler in devnet
+//              Enable additional validation on zkLogin public identifier.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -350,17 +354,14 @@ impl std::ops::Add<u64> for ProtocolVersion {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum)]
+#[derive(
+    Clone, Serialize, Deserialize, Debug, Default, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum,
+)]
 pub enum Chain {
     Mainnet,
     Testnet,
+    #[default]
     Unknown,
-}
-
-impl Default for Chain {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 impl Chain {
@@ -530,6 +531,10 @@ struct FeatureFlags {
     // If true, multisig containing passkey sig is accepted.
     #[serde(skip_serializing_if = "is_false")]
     accept_passkey_in_multisig: bool,
+
+    // If true, additional zkLogin public identifier structure is validated.
+    #[serde(skip_serializing_if = "is_false")]
+    validate_zklogin_public_identifier: bool,
 
     // If true, consensus prologue transaction also includes the consensus output digest.
     // It can be used to detect consensus output folk.
@@ -957,6 +962,14 @@ struct FeatureFlags {
     // If true, convert withdrawal compatibility PTB arguments to coins at the start of the PTB.
     #[serde(skip_serializing_if = "is_false")]
     convert_withdrawal_compatibility_ptb_arguments: bool,
+
+    // If true, additional restrictions for hot or not entry functions are enforced.
+    #[serde(skip_serializing_if = "is_false")]
+    restrict_hot_or_not_entry_functions: bool,
+
+    // If true, split checkpoints in consensus handler.
+    #[serde(skip_serializing_if = "is_false")]
+    split_checkpoints_in_consensus_handler: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2040,6 +2053,10 @@ impl ProtocolConfig {
         self.feature_flags.accept_passkey_in_multisig
     }
 
+    pub fn validate_zklogin_public_identifier(&self) -> bool {
+        self.feature_flags.validate_zklogin_public_identifier
+    }
+
     pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta
     }
@@ -2529,6 +2546,14 @@ impl ProtocolConfig {
     pub fn convert_withdrawal_compatibility_ptb_arguments(&self) -> bool {
         self.feature_flags
             .convert_withdrawal_compatibility_ptb_arguments
+    }
+
+    pub fn restrict_hot_or_not_entry_functions(&self) -> bool {
+        self.feature_flags.restrict_hot_or_not_entry_functions
+    }
+
+    pub fn split_checkpoints_in_consensus_handler(&self) -> bool {
+        self.feature_flags.split_checkpoints_in_consensus_handler
     }
 }
 
@@ -4464,7 +4489,22 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.enable_poseidon = true;
                 }
-                109 => {}
+                109 => {
+                    cfg.binary_variant_handles = Some(1024);
+                    cfg.binary_variant_instantiation_handles = Some(1024);
+                    cfg.feature_flags.restrict_hot_or_not_entry_functions = true;
+                }
+                110 => {
+                    cfg.feature_flags
+                        .enable_nitro_attestation_all_nonzero_pcrs_parsing = true;
+                    cfg.feature_flags
+                        .enable_nitro_attestation_always_include_required_pcrs_parsing = true;
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // temporarily disable while debugging
+                        cfg.feature_flags.split_checkpoints_in_consensus_handler = false;
+                    }
+                    cfg.feature_flags.validate_zklogin_public_identifier = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -4853,6 +4893,10 @@ impl ProtocolConfig {
 
     pub fn set_enable_object_funds_withdraw_for_testing(&mut self, val: bool) {
         self.feature_flags.enable_object_funds_withdraw = val;
+    }
+
+    pub fn set_split_checkpoints_in_consensus_handler_for_testing(&mut self, val: bool) {
+        self.feature_flags.split_checkpoints_in_consensus_handler = val;
     }
 }
 

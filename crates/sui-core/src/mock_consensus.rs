@@ -87,7 +87,7 @@ impl MockConsensusClient {
                         let assigned_versions = epoch_store
                             .assign_shared_object_versions_for_tests(
                                 validator.get_object_cache_reader().as_ref(),
-                                &vec![exec_tx.clone()],
+                                std::slice::from_ref(&exec_tx),
                             )
                             .unwrap();
 

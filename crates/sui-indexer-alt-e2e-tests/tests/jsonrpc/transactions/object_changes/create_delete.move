@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 70 --accounts A --addresses P0=0x0 --simulator
+//# init --protocol-version 108 --accounts A --addresses P0=0x0 --simulator
 
 // Test creating and deleting an object. Both of these operations should show
 // up in object changes.

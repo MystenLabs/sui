@@ -45,15 +45,15 @@ task 7, lines 29-45:
 Response: {
   "data": {
     "p1": {
-      "address": "0x37c66e5033ffe07f458c76432c64848275451aaeb5d6d4420e14818318b93759",
+      "address": "0x88b35a89f3f9154bea12a982c3997a16be6e788d102b7b3aac778285111a2586",
       "version": 1
     },
     "p2": {
-      "address": "0x57bf7d91755b58a6b82e41e490bd2f03e803d1c081fe85747312eb016f39314e",
+      "address": "0x22a0d7ab729ca0c987a2cc9028028481e6d3074978783673c043dbc2b34b7ce5",
       "version": 2
     },
     "p3": {
-      "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
+      "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
       "version": 3
     }
   }
@@ -64,16 +64,16 @@ task 8, lines 47-74:
 Response: {
   "data": {
     "latest": {
-      "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
+      "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
       "version": 3
     },
     "c0": null,
     "c1": {
-      "address": "0x37c66e5033ffe07f458c76432c64848275451aaeb5d6d4420e14818318b93759",
+      "address": "0x88b35a89f3f9154bea12a982c3997a16be6e788d102b7b3aac778285111a2586",
       "version": 1
     },
     "c2": {
-      "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
+      "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
       "version": 3
     }
   }
@@ -84,16 +84,16 @@ task 9, lines 76-98:
 Response: {
   "data": {
     "latest": {
-      "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
+      "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
       "version": 3
     },
     "c0": null,
     "c1": {
-      "address": "0x37c66e5033ffe07f458c76432c64848275451aaeb5d6d4420e14818318b93759",
+      "address": "0x88b35a89f3f9154bea12a982c3997a16be6e788d102b7b3aac778285111a2586",
       "version": 1
     },
     "c2": {
-      "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
+      "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
       "version": 3
     }
   }
@@ -152,7 +152,7 @@ Response: {
     "implicit": null,
     "explicit": null,
     "object": {
-      "address": "0xa562719ea34a60492a851488cb194ce74d7d7a427d310dc8aa2a14149b2d128c",
+      "address": "0x36c928ff452f2099f896f474faa64259157cbf02ba7787596a8afa3acba56581",
       "version": 5
     }
   }

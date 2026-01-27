@@ -19,7 +19,7 @@ At a high level, the DeepBook Margin design revolves around four main shared obj
 - `MarginPool`: A shared object that manages liquidity for a specific asset, handling supply and borrow operations with interest accrual. See the [MarginPool shared object](#margin-pool) section to learn more.
 - `MarginManager`: A shared object that wraps a `BalanceManager` and provides capabilities for leveraged trading, including borrowing, repaying, and risk management. See the [MarginManager shared object](#margin-manager) section to learn more.
 - `MarginRegistry`: A central registry that manages all margin pools and margin managers, enforces system-wide configurations, and tracks enabled pools. See the [MarginRegistry](#margin-registry) section to learn more.
-- `BalanceManager`: Inherited from DeepBookV3, used to source funds for trading. See [BalanceManager](../deepbookv3/balance-manager.mdx) to learn more.
+- `BalanceManager`: Inherited from DeepBookV3, used to source funds for trading. See [BalanceManager](../deepbookv3/contract-information/balance-manager.mdx) to learn more.
 
 ## `MarginPool` shared object {#margin-pool}
 

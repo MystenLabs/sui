@@ -153,7 +153,9 @@ impl<'env> Context<'env> {
             module_extensions, ..
         } = defn_context;
         (
-            warning_filters_table.into_inner().unwrap(),
+            warning_filters_table
+                .into_inner()
+                .expect("Missing warning filters table"),
             module_extensions,
         )
     }
@@ -171,7 +173,7 @@ impl<'env> Context<'env> {
     }
 
     fn cur_address(&self) -> &Address {
-        self.address.as_ref().unwrap()
+        self.address.as_ref().expect("Current address not set")
     }
 
     pub fn new_alias_map_builder(&mut self) -> AliasMapBuilder {
@@ -192,7 +194,7 @@ impl<'env> Context<'env> {
         let res = self
             .path_expander
             .as_mut()
-            .unwrap()
+            .expect("Path expander missing")
             .push_alias_scope(loc, new_scope);
         match res {
             Err(diag) => self.add_diag(*diag),
@@ -204,7 +206,7 @@ impl<'env> Context<'env> {
     pub fn push_lambda_parameters<'a, I: IntoIterator<Item = &'a Name>>(&mut self, tparams: I) {
         self.path_expander
             .as_mut()
-            .unwrap()
+            .expect("Cannot push lambda parameters without path expander")
             .push_lambda_parameters(tparams.into_iter().collect::<Vec<_>>());
     }
 
@@ -215,14 +217,18 @@ impl<'env> Context<'env> {
     {
         self.path_expander
             .as_mut()
-            .unwrap()
+            .expect("Cannot push type parameters without path expander")
             .push_type_parameters(tparams.into_iter().collect::<Vec<_>>());
     }
 
     /// Pops the innermost alias information on the path expander and reports errors for aliases
     /// that were unused Marks implicit use funs as unused
     pub fn pop_alias_scope(&mut self, mut use_funs: Option<&mut E::UseFuns>) {
-        let AliasSet { modules, members } = self.path_expander.as_mut().unwrap().pop_alias_scope();
+        let AliasSet { modules, members } = self
+            .path_expander
+            .as_mut()
+            .expect("Cannot pop scope from empty path expander")
+            .pop_alias_scope();
         for alias in modules {
             unused_alias(self, "module", alias)
         }
@@ -257,7 +263,7 @@ impl<'env> Context<'env> {
             self,
             path_expander
                 .as_mut()
-                .unwrap()
+                .expect("Cannot expand external attribute value without path expander")
                 .name_access_chain_to_attribute_value(inner_context, attribute_value)
         )
     }
@@ -290,7 +296,7 @@ impl<'env> Context<'env> {
         } = self;
         path_expander
             .as_mut()
-            .unwrap()
+            .expect("Cannot expand module access without path expander")
             .name_access_chain_to_module_access(inner_context, access, chain)
     }
 
@@ -318,7 +324,7 @@ impl<'env> Context<'env> {
             self,
             path_expander
                 .as_mut()
-                .unwrap()
+                .expect("Cannot expand module ident without path expander")
                 .name_access_chain_to_module_ident(inner_context, chain)
         )
     }
@@ -331,7 +337,7 @@ impl<'env> Context<'env> {
         } = self;
         path_expander
             .as_mut()
-            .unwrap()
+            .expect("Cannot provide IDE autocomplete suggestion without path expander")
             .ide_autocomplete_suggestion(inner_context, loc)
     }
 
@@ -648,7 +654,9 @@ fn default_aliases(context: &mut Context) -> AliasMapBuilder {
     for (addr, module) in modules {
         let alias = sp(loc, module);
         let mident = sp(loc, ModuleIdent_::new(addr, ModuleName(sp(loc, module))));
-        builder.add_implicit_module_alias(alias, mident).unwrap();
+        builder
+            .add_implicit_module_alias(alias, mident)
+            .expect("Failed to add module alias to builder");
     }
     for (addr, module, member, kind) in members {
         let alias = sp(loc, member);
@@ -656,7 +664,7 @@ fn default_aliases(context: &mut Context) -> AliasMapBuilder {
         let name = sp(loc, member);
         builder
             .add_implicit_member_alias(alias, mident, name, kind)
-            .unwrap();
+            .expect("Failed to add module alias to builder");
     }
     builder
 }
@@ -990,12 +998,13 @@ fn into_modules_and_extenions(
                 }
                 let addr = top_level_address_(
                     &mut context.defn_context,
-                    na_map,
+                    na_map.clone(),
                     /* suggest_declaration */ false,
                     addr,
                 );
 
-                modules
+                context.defn_context.named_address_mapping = Some(na_map);
+                let modules = modules
                     .into_iter()
                     .map(|mut def| {
                         let module_addr = Some(check_module_address(context, loc, addr, &mut def));
@@ -1007,7 +1016,9 @@ fn into_modules_and_extenions(
                         };
                         (module_addr, def)
                     })
-                    .collect()
+                    .collect();
+                context.defn_context.named_address_mapping = None;
+                modules
             }
         }
     }
@@ -1029,7 +1040,10 @@ pub(super) fn top_level_address(
 ) -> Address {
     top_level_address_(
         context,
-        context.named_address_mapping.clone().unwrap(),
+        context
+            .named_address_mapping
+            .clone()
+            .expect("Name address map missing when resolving top-level address"),
         suggest_declaration,
         ln,
     )
@@ -1080,7 +1094,10 @@ pub(super) fn top_level_address_opt(
     ln: P::LeadingNameAccess,
 ) -> Option<Address> {
     let name_res = check_valid_address_name(&context.reporter, &ln);
-    let named_address_mapping = context.named_address_mapping.as_ref().unwrap();
+    let named_address_mapping = context
+        .named_address_mapping
+        .as_ref()
+        .expect("Name address map missing when optionally resolving top-level address");
     let sp!(loc, ln_) = ln;
     match ln_ {
         P::LeadingNameAccess_::AnonymousAddress(bytes) => {
@@ -1104,7 +1121,11 @@ pub(super) fn top_level_address_opt(
 }
 
 fn maybe_make_well_known_address(context: &mut Context, loc: Loc, name: Symbol) -> Option<Address> {
-    let named_address_mapping = context.defn_context.named_address_mapping.as_ref().unwrap();
+    let named_address_mapping = context
+        .defn_context
+        .named_address_mapping
+        .as_ref()
+        .expect("Name address map missing for well-known address resolution");
     let addr = named_address_mapping.get(&name).copied()?;
     Some(make_address(
         &mut context.defn_context,
@@ -1206,7 +1227,9 @@ fn duplicate_module_error(
     mident: ModuleIdent,
     old_loc: Loc,
 ) {
-    let old_mident = module_map.get_key(&mident).unwrap();
+    let old_mident = module_map
+        .get_key(&mident)
+        .expect("Old module ident missing");
     let dup_msg = format!("Duplicate definition for module '{}'", mident);
     let prev_msg = format!("Module previously defined here, with '{}'", old_mident);
     context.add_diag(diag!(
@@ -1336,7 +1359,11 @@ fn module_(
 
     context.pop_alias_scope(Some(&mut use_funs));
 
-    let named_address_map = context.defn_context.named_address_mapping.clone().unwrap();
+    let named_address_map = context
+        .defn_context
+        .named_address_mapping
+        .clone()
+        .expect("Named address map missing when building module definition");
     let target_kind = context.defn_context.target_kind;
     let def = E::ModuleDefinition {
         named_address_map,
@@ -1422,7 +1449,9 @@ fn check_visibility_modifiers(
     }
 
     // Emit any errors.
-    if public_package_usage.is_some() && friend_usage.is_some() {
+    if let Some(public_package_usage) = public_package_usage
+        && let Some(friend_usage) = friend_usage
+    {
         let friend_error_msg = format!(
             "Cannot define 'friend' modules and use '{}' visibility in the same module",
             E::Visibility::PACKAGE
@@ -1432,10 +1461,7 @@ fn check_visibility_modifiers(
             context.add_diag(diag!(
                 Declarations::InvalidVisibilityModifier,
                 (friend.loc, friend_error_msg.clone()),
-                (
-                    public_package_usage.unwrap(),
-                    package_definition_msg.clone()
-                )
+                (public_package_usage, package_definition_msg.clone())
             ));
         }
         let package_error_msg = format!(
@@ -1454,10 +1480,7 @@ fn check_visibility_modifiers(
                     context.add_diag(diag!(
                         Declarations::InvalidVisibilityModifier,
                         (loc, friend_error_msg.clone()),
-                        (
-                            public_package_usage.unwrap(),
-                            package_definition_msg.clone()
-                        )
+                        (public_package_usage, package_definition_msg.clone())
                     ));
                 }
                 E::Visibility::Package(loc) => {
@@ -1465,7 +1488,7 @@ fn check_visibility_modifiers(
                         Declarations::InvalidVisibilityModifier,
                         (loc, package_error_msg.clone()),
                         (
-                            friend_usage.unwrap(),
+                            friend_usage,
                             &format!("'{}' visibility used here", E::Visibility::FRIEND_IDENT)
                         )
                     ));
@@ -1567,7 +1590,7 @@ fn module_warning_filter(
         context
             .warning_filters_table
             .get_mut()
-            .unwrap()
+            .expect("Warning filters table missing")
             .add(filters)
     }
 }
@@ -1584,7 +1607,11 @@ fn struct_warning_filter(context: &mut Context, attributes: &E::Attributes) -> W
             .filter_from_str(none, FILTER_UNUSED_STRUCT_FIELD);
         wf.add_all(new_filters);
     }
-    context.warning_filters_table.get_mut().unwrap().add(wf)
+    context
+        .warning_filters_table
+        .get_mut()
+        .expect("Warning filter table missing")
+        .add(wf)
 }
 
 fn function_warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {

@@ -306,7 +306,7 @@ mod checked {
             }
 
             if execution_result.is_ok() {
-                let gas_check = check_written_objects_limit::<Mode>(
+                let gas_check = check_written_objects_limit(
                     temporary_store,
                     gas_charger,
                     protocol_config,
@@ -461,7 +461,7 @@ mod checked {
     }
 
     #[instrument(name = "check_written_objects_limit", level = "debug", skip_all)]
-    fn check_written_objects_limit<Mode: ExecutionMode>(
+    fn check_written_objects_limit(
         temporary_store: &mut TemporaryStore<'_>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
@@ -495,7 +495,7 @@ mod checked {
                             max_size: lim as u64,
                         },
                         "Written objects size crossed hard limit",
-                    ))
+                    ));
                 }
             };
         }
@@ -655,29 +655,45 @@ mod checked {
                             );
                         }
                         EndOfEpochTransactionKind::BridgeCommitteeInit(_) => {
-                            panic!("EndOfEpochTransactionKind::BridgeCommitteeInit should not exist in v2");
+                            panic!(
+                                "EndOfEpochTransactionKind::BridgeCommitteeInit should not exist in v2"
+                            );
                         }
                         EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
-                            panic!("EndOfEpochTransactionKind::StoreExecutionTimeEstimates should not exist in v2");
+                            panic!(
+                                "EndOfEpochTransactionKind::StoreExecutionTimeEstimates should not exist in v2"
+                            );
                         }
                         EndOfEpochTransactionKind::AccumulatorRootCreate => {
-                            panic!("EndOfEpochTransactionKind::AccumulatorRootCreate should not exist in v2");
+                            panic!(
+                                "EndOfEpochTransactionKind::AccumulatorRootCreate should not exist in v2"
+                            );
                         }
                         EndOfEpochTransactionKind::WriteAccumulatorStorageCost(_) => {
-                            panic!("EndOfEpochTransactionKind::WriteAccumulatorStorageCost should not exist in v2");
+                            panic!(
+                                "EndOfEpochTransactionKind::WriteAccumulatorStorageCost should not exist in v2"
+                            );
                         }
                         EndOfEpochTransactionKind::CoinRegistryCreate => {
-                            panic!("EndOfEpochTransactionKind::CoinRegistryCreate should not exist in v2");
+                            panic!(
+                                "EndOfEpochTransactionKind::CoinRegistryCreate should not exist in v2"
+                            );
                         }
                         EndOfEpochTransactionKind::DisplayRegistryCreate => {
-                            panic!("EndOfEpochTransactionKind::DisplayRegistryCreate should not exist in v2");
+                            panic!(
+                                "EndOfEpochTransactionKind::DisplayRegistryCreate should not exist in v2"
+                            );
                         }
                         EndOfEpochTransactionKind::AddressAliasStateCreate => {
-                            panic!("EndOfEpochTransactionKind::AddressAliasStateCreate should not exist in v2");
+                            panic!(
+                                "EndOfEpochTransactionKind::AddressAliasStateCreate should not exist in v2"
+                            );
                         }
                     }
                 }
-                unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
+                unreachable!(
+                    "EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list"
+                )
             }
             TransactionKind::AuthenticatorStateUpdate(auth_state_update) => {
                 setup_authenticator_state_update(
@@ -883,11 +899,11 @@ mod checked {
 
         if result.is_err() {
             tracing::error!(
-            "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
-            result.as_ref().err(),
-            temporary_store.objects(),
-            change_epoch,
-        );
+                "Failed to execute advance epoch transaction. Switching to safe mode. Error: {:?}. Input objects: {:?}. Tx data: {:?}",
+                result.as_ref().err(),
+                temporary_store.objects(),
+                change_epoch,
+            );
             temporary_store.drop_writes();
             // Must reset the storage rebate since we are re-executing.
             gas_charger.reset_storage_cost_and_rebate();

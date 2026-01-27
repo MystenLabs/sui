@@ -129,6 +129,32 @@ public fun saturating_mul(x: u128, y: u128): u128 {
     std::macros::num_saturating_mul!(x, y, max_value!())
 }
 
+/// Shifts `x` left by `shift` bits.
+/// Returns `None` if the shift is greater than or equal to the bit size of 128.
+public fun checked_shl(x: u128, shift: u8): Option<u128> {
+    std::macros::num_checked_shl!(x, shift, 128)
+}
+
+/// Shifts `x` right by `shift` bits.
+/// Returns `None` if the shift is greater than or equal to the bit size of 128.
+public fun checked_shr(x: u128, shift: u8): Option<u128> {
+    std::macros::num_checked_shr!(x, shift, 128)
+}
+
+/// Shifts `x` left by `shift` bits.
+/// Returns `None` if the shift is larger than or equal to the bit size of 128, or if the shift
+/// would lose any bits (if the operation is not reversible).
+public fun lossless_shl(x: u128, shift: u8): Option<u128> {
+    std::macros::num_lossless_shl!(x, shift, 128)
+}
+
+/// Shifts `x` right by `shift` bits.
+/// Returns `None` if the shift is larger than or equal to the bit size of 128, or if the shift
+/// would lose any bits (if the operation is not reversible).
+public fun lossless_shr(x: u128, shift: u8): Option<u128> {
+    std::macros::num_lossless_shr!(x, shift, 128)
+}
+
 /// Maximum value for a `u128`
 public macro fun max_value(): u128 {
     0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF

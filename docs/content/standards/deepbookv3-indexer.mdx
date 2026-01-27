@@ -2,7 +2,7 @@
 title: DeepBookV3 Indexer
 sidebar_label: Indexer
 description: DeepBookV3 Indexer provides streamlined, real-time access to order book and trading data from the DeepBookV3 protocol. It acts as a centralized service to aggregate and expose critical data points.
-keywords: [ DeepBook Indexer, DeepBook, public indexer, viewing pool information, historical volume analysis, volume tracking, balance manager, BalanceManager, trading pairs ]
+keywords: [ DeepBook Indexer, DeepBook, public indexer, viewing pool information, historical volume analysis, volume tracking, balance manager, BalanceManager, trading pairs, points, referral fee ]
 ---
 
 DeepBookV3 Indexer provides streamlined, real-time access to order book and trading data from the DeepBookV3 protocol. It acts as a centralized service to aggregate and expose critical data points for developers, traders, and analysts who interact with DeepBookV3.
@@ -959,6 +959,86 @@ Returns the health status of the indexer, including checkpoint lag information f
         }
     ]
 }
+```
+
+</details>
+
+<details>
+<summary>Get points</summary>
+
+```http
+/get_points?addresses=<ADDRESS1>,<ADDRESS2>,...
+```
+
+Returns the total points accumulated for the specified addresses. Points are earned through trading activity on DeepBookV3. Provide addresses as comma-separated values.
+
+#### Response
+
+```json
+[
+    {
+        "address": "0x1234...",
+        "total_points": 1000000
+    },
+    {
+        "address": "0x5678...",
+        "total_points": 500000
+    }
+]
+```
+
+#### Example
+
+A successful request to
+
+```http
+/get_points?addresses=0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d,0x47dcbbc8561fe3d52198336855f0983878152a12524749e054357ac2e3573d58
+```
+
+produces a response similar to
+
+```json
+[
+    {
+        "address": "0x344c2734b1d211bd15212bfb7847c66a3b18803f3f5ab00f5ff6f87b6fe6d27d",
+        "total_points": 1250000
+    },
+    {
+        "address": "0x47dcbbc8561fe3d52198336855f0983878152a12524749e054357ac2e3573d58",
+        "total_points": 750000
+    }
+]
+```
+
+</details>
+
+<details>
+<summary>Get referral fee events</summary>
+
+```http
+/referral_fee_events?pool_id=<ID>&referral_id=<ID>
+```
+
+Returns events for referral fees earned during trading. These events track fees earned by referrals across different pools.
+
+#### Response
+
+```json
+[
+    {
+        "event_digest": "0xabc123...",
+        "digest": "0xdef456...",
+        "sender": "0x1111...",
+        "checkpoint": 12345678,
+        "checkpoint_timestamp_ms": 1738000000000,
+        "package": "0x2222...",
+        "pool_id": "0x1234...",
+        "referral_id": "0x5678...",
+        "base_fee": 1000000,
+        "quote_fee": 500000,
+        "deep_fee": 250000
+    }
+]
 ```
 
 </details>

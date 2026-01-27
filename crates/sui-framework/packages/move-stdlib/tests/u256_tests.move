@@ -150,3 +150,27 @@ fun test_saturating_sub() {
 fun test_saturating_mul() {
     integer_tests::test_saturating_mul!(MAX, CASES);
 }
+
+#[test]
+fun test_lossless_shl() {
+    // valid shifts that preserve all bits
+    assert_eq!(0u256.lossless_shl(0), option::some(0));
+    assert_eq!(1u256.lossless_shl(0), option::some(1));
+    assert_eq!(1u256.lossless_shl(1), option::some(2));
+    assert_eq!(1u256.lossless_shl(255), option::some(1 << 255));
+    // shifts that lose bits
+    assert_eq!(MAX.lossless_shl(1), option::none());
+    assert_eq!((1u256 << 255).lossless_shl(1), option::none());
+}
+
+#[test]
+fun test_lossless_shr() {
+    // valid shifts that preserve all bits
+    assert_eq!(0u256.lossless_shr(0), option::some(0));
+    assert_eq!(2u256.lossless_shr(1), option::some(1));
+    assert_eq!((1u256 << 255).lossless_shr(255), option::some(1));
+    assert_eq!(MAX.lossless_shr(0), option::some(MAX));
+    // shifts that lose bits
+    assert_eq!(1u256.lossless_shr(1), option::none());
+    assert_eq!(MAX.lossless_shr(1), option::none());
+}

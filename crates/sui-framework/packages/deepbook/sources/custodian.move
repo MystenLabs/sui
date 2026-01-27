@@ -105,7 +105,7 @@ module deepbook::custodian {
         increase_user_locked_balance(custodian, account_cap, to_lock);
     }
 
-    /// Move `quantity` from the locked balance of `user` to the unlocked balacne of `user`
+    /// Move `quantity` from the locked balance of `user` to the unlocked balance of `user`
     public(package) fun unlock_balance<T>(
         custodian: &mut Custodian<T>,
         user: ID,

@@ -39,7 +39,6 @@ mod transaction_certifier;
 mod universal_committer;
 
 /// Consensus test utilities.
-#[cfg(any(test, msim))]
 mod commit_test_fixture;
 #[cfg(test)]
 mod test_dag;
@@ -79,7 +78,6 @@ pub use transaction_certifier::TransactionCertifier;
 // Exported API for simtests.
 #[cfg(msim)]
 pub use block::Slot;
-#[cfg(msim)]
 pub use commit_test_fixture::{
     CommitTestFixture, RandomDag, RandomDagIterator, assert_commit_sequences_match,
 };

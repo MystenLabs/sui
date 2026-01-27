@@ -21,7 +21,7 @@ use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use sui_types::multiaddr::Multiaddr;
 use tap::{Pipe, TapFallible};
 use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::watch;
+use tokio::sync::mpsc;
 use tokio::{
     sync::oneshot,
     task::{AbortHandle, JoinSet},
@@ -43,12 +43,39 @@ mod server;
 #[cfg(test)]
 mod tests;
 
-pub use builder::{Builder, Handle, UnstartedDiscovery};
+pub use builder::{Builder, UnstartedDiscovery};
 pub use generated::{
     discovery_client::DiscoveryClient,
     discovery_server::{Discovery, DiscoveryServer},
 };
 pub use server::GetKnownPeersResponseV2;
+
+/// Message types for the discovery system mailbox.
+#[derive(Debug)]
+pub enum DiscoveryMessage {
+    /// Update the address for a single peer.
+    PeerAddressChange(PeerInfo),
+}
+
+/// A Handle to the Discovery subsystem. The Discovery system will be shut down once all Handles
+/// have been dropped.
+#[derive(Clone, Debug)]
+pub struct Handle {
+    pub(super) _shutdown_handle: Arc<oneshot::Sender<()>>,
+    sender: mpsc::Sender<DiscoveryMessage>,
+}
+
+impl Handle {
+    /// Updates the address for a single peer in the p2p network.
+    ///
+    /// If the peer's address has changed, the discovery system will
+    /// forcibly reconnect to the peer at the new address.
+    pub fn peer_address_change(&self, peer_info: PeerInfo) {
+        self.sender
+            .try_send(DiscoveryMessage::PeerAddressChange(peer_info))
+            .expect("Discovery mailbox should not overflow or be closed")
+    }
+}
 
 use self::metrics::Metrics;
 
@@ -107,11 +134,6 @@ impl Message for NodeInfo {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct TrustedPeerChangeEvent {
-    pub new_peers: Vec<PeerInfo>,
-}
-
 struct DiscoveryEventLoop {
     config: P2pConfig,
     discovery_config: Arc<DiscoveryConfig>,
@@ -124,7 +146,7 @@ struct DiscoveryEventLoop {
     dial_seed_peers_task: Option<AbortHandle>,
     shutdown_handle: oneshot::Receiver<()>,
     state: Arc<RwLock<State>>,
-    trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
+    mailbox: mpsc::Receiver<DiscoveryMessage>,
     metrics: Metrics,
 }
 
@@ -150,9 +172,8 @@ impl DiscoveryEventLoop {
                 peer_event = peer_events.recv() => {
                     self.handle_peer_event(peer_event);
                 },
-                Ok(()) = self.trusted_peer_change_rx.changed() => {
-                    let event: TrustedPeerChangeEvent = self.trusted_peer_change_rx.borrow_and_update().clone();
-                    self.handle_trusted_peer_change_event(event);
+                Some(message) = self.mailbox.recv() => {
+                    self.handle_message(message);
                 }
                 Some(task_result) = self.tasks.join_next() => {
                     match task_result {
@@ -177,6 +198,14 @@ impl DiscoveryEventLoop {
         }
 
         info!("Discovery ended");
+    }
+
+    fn handle_message(&mut self, message: DiscoveryMessage) {
+        match message {
+            DiscoveryMessage::PeerAddressChange(peer_info) => {
+                self.handle_peer_address_change(peer_info);
+            }
+        }
     }
 
     fn construct_our_info(&mut self) {
@@ -218,20 +247,15 @@ impl DiscoveryEventLoop {
         }
     }
 
-    // TODO: we don't boot out old committee members yet, however we may want to do this
-    // in the future along with other network management work.
-    fn handle_trusted_peer_change_event(
-        &mut self,
-        trusted_peer_change_event: TrustedPeerChangeEvent,
-    ) {
-        for peer_info in trusted_peer_change_event.new_peers {
-            debug!(?peer_info, "Add committee member as preferred peer.");
-            if let Some(old_peer_info) = self.network.known_peers().insert(peer_info.clone())
-                && old_peer_info.address != peer_info.address
-                && let Some(address) = peer_info.address.first().cloned()
-            {
-                // Forcibly reconnect to the peer if its address(es) changed.
-                let _ = self.network.disconnect(peer_info.peer_id);
+    fn handle_peer_address_change(&mut self, peer_info: PeerInfo) {
+        debug!(?peer_info, "Add committee member as preferred peer.");
+        if let Some(old_peer_info) = self.network.known_peers().insert(peer_info.clone())
+            && old_peer_info.address != peer_info.address
+        {
+            // Forcibly reconnect to the peer if its address(es) changed.
+            // If no valid new address is provided, we will remain disconnected.
+            let _ = self.network.disconnect(peer_info.peer_id);
+            if let Some(address) = peer_info.address.first().cloned() {
                 let network = self.network.clone();
                 self.tasks.spawn(async move {
                     // If this fails, ConnectionManager will retry.

@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 817
 ---
 processed 8 tasks
 
@@ -82,7 +81,7 @@ task 6, lines 34-42:
 Response: {
   "data": {
     "transaction": {
-      "digest": "Bjgf1MWa4y5J64ih9TqagkQRb8mWvBMLeJ5ZmEWkZbuR",
+      "digest": "BughqoZMWav42egoT6v23S5QaTmZzofbAYXkWCg5PtXe",
       "effects": {
         "balanceChangesJson": [
           {

@@ -5170,6 +5170,9 @@ address_string
 module_string
 	public fun
 	0x1::type_name
+datatype_string
+	public fun
+	0x1::type_name
 into_string
 	public fun
 	0x1::type_name
@@ -5245,6 +5248,18 @@ saturating_sub
 saturating_mul
 	public fun
 	0x1::u128
+checked_shl
+	public fun
+	0x1::u128
+checked_shr
+	public fun
+	0x1::u128
+lossless_shl
+	public fun
+	0x1::u128
+lossless_shr
+	public fun
+	0x1::u128
 bitwise_not
 	public fun
 	0x1::u16
@@ -5291,6 +5306,18 @@ saturating_sub
 	public fun
 	0x1::u16
 saturating_mul
+	public fun
+	0x1::u16
+checked_shl
+	public fun
+	0x1::u16
+checked_shr
+	public fun
+	0x1::u16
+lossless_shl
+	public fun
+	0x1::u16
+lossless_shr
 	public fun
 	0x1::u16
 bitwise_not
@@ -5350,6 +5377,12 @@ saturating_sub
 saturating_mul
 	public fun
 	0x1::u256
+lossless_shl
+	public fun
+	0x1::u256
+lossless_shr
+	public fun
+	0x1::u256
 bitwise_not
 	public fun
 	0x1::u32
@@ -5399,6 +5432,18 @@ saturating_sub
 	public fun
 	0x1::u32
 saturating_mul
+	public fun
+	0x1::u32
+checked_shl
+	public fun
+	0x1::u32
+checked_shr
+	public fun
+	0x1::u32
+lossless_shl
+	public fun
+	0x1::u32
+lossless_shr
 	public fun
 	0x1::u32
 bitwise_not
@@ -5455,6 +5500,18 @@ saturating_sub
 saturating_mul
 	public fun
 	0x1::u64
+checked_shl
+	public fun
+	0x1::u64
+checked_shr
+	public fun
+	0x1::u64
+lossless_shl
+	public fun
+	0x1::u64
+lossless_shr
+	public fun
+	0x1::u64
 bitwise_not
 	public fun
 	0x1::u8
@@ -5498,6 +5555,18 @@ saturating_sub
 	public fun
 	0x1::u8
 saturating_mul
+	public fun
+	0x1::u8
+checked_shl
+	public fun
+	0x1::u8
+checked_shr
+	public fun
+	0x1::u8
+lossless_shl
+	public fun
+	0x1::u8
+lossless_shr
 	public fun
 	0x1::u8
 UQ32_32

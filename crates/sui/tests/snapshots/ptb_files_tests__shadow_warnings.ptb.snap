@@ -1,6 +1,6 @@
 ---
 source: crates/sui/tests/ptb_files_tests.rs
-expression: "results.join(\"\\n\")"
+expression: "&String::from_iter(normalized(results.join(\"\\n\").chars()))"
 ---
  === PREVIEW === 
 ╭───────────────────────╮
@@ -57,4 +57,4 @@ expression: "results.join(\"\\n\")"
   help: You can either rename this variable, or do not pass the `warn-
         shadows` flag to ignore these types of errors.
 
- === BUILT PTB === 
+ === BUILT PTB ===

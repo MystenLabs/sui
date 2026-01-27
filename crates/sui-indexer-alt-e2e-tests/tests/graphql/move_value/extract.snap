@@ -62,10 +62,10 @@ Response: {
       "asMoveObject": {
         "contents": {
           "type": {
-            "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Foo"
+            "repr": "0x75cb22445aa302d3c79225692469d671e74d99ec26934ee86e6340431fd65b70::mod::Foo"
           },
           "json": {
-            "id": "0x77c44171e6ff9bf6a978d9faaa3436465fa68e2b25816b63db70fb198df296b4",
+            "id": "0xb749f8e8b9eb7046160a5fef6b78dd80e81af171d5b72a793867788bf9497614",
             "bar": [
               {
                 "@variant": "Baz",
@@ -87,7 +87,7 @@ Response: {
           },
           "bar": {
             "type": {
-              "repr": "vector<0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar>"
+              "repr": "vector<0x75cb22445aa302d3c79225692469d671e74d99ec26934ee86e6340431fd65b70::mod::Bar>"
             },
             "json": [
               {
@@ -110,7 +110,7 @@ Response: {
           },
           "baz": {
             "type": {
-              "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar"
+              "repr": "0x75cb22445aa302d3c79225692469d671e74d99ec26934ee86e6340431fd65b70::mod::Bar"
             },
             "json": {
               "@variant": "Baz",
@@ -119,7 +119,7 @@ Response: {
           },
           "qux": {
             "type": {
-              "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar"
+              "repr": "0x75cb22445aa302d3c79225692469d671e74d99ec26934ee86e6340431fd65b70::mod::Bar"
             },
             "json": {
               "@variant": "Qux",
@@ -128,7 +128,7 @@ Response: {
           },
           "quySome": {
             "type": {
-              "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar"
+              "repr": "0x75cb22445aa302d3c79225692469d671e74d99ec26934ee86e6340431fd65b70::mod::Bar"
             },
             "json": {
               "@variant": "Quy",
@@ -137,7 +137,7 @@ Response: {
           },
           "quyNone": {
             "type": {
-              "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar"
+              "repr": "0x75cb22445aa302d3c79225692469d671e74d99ec26934ee86e6340431fd65b70::mod::Bar"
             },
             "json": {
               "@variant": "Quy",
@@ -170,10 +170,10 @@ Response: {
           },
           "dof": {
             "type": {
-              "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Quz"
+              "repr": "0x75cb22445aa302d3c79225692469d671e74d99ec26934ee86e6340431fd65b70::mod::Quz"
             },
             "json": {
-              "id": "0xa86069c3ad72aed295f40bfedd6eed78f353c72ed5dda3306674039aa06f6937",
+              "id": "0x072167a19b9522d98f7ec3ff099883490ca34c903c1c7c6d021e9c49d7974b1e",
               "map": {
                 "contents": [
                   {
@@ -230,7 +230,7 @@ Response: {
             "contents": {
               "extract": {
                 "type": {
-                  "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar"
+                  "repr": "0x75cb22445aa302d3c79225692469d671e74d99ec26934ee86e6340431fd65b70::mod::Bar"
                 },
                 "json": {
                   "@variant": "Baz",
@@ -246,7 +246,7 @@ Response: {
             "contents": {
               "extract": {
                 "type": {
-                  "repr": "0x17b7f574b854bce5f0368433dc77d40be217911e5fe423593ec1dcc16b64077a::mod::Bar"
+                  "repr": "0x75cb22445aa302d3c79225692469d671e74d99ec26934ee86e6340431fd65b70::mod::Bar"
                 },
                 "json": {
                   "@variant": "Qux",

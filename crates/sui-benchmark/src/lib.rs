@@ -1,17 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use anyhow::bail;
 use async_trait::async_trait;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use prometheus::Registry;
-use rand::Rng;
+use rand::{Rng, seq::IteratorRandom};
 use sui_config::genesis::Genesis;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
     authority_client::NetworkAuthorityClient,
+    epoch::committee_store::CommitteeStore,
+    safe_client::SafeClientMetricsBase,
     transaction_driver::{
         SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics,
         reconfig_observer::ReconfigObserver,
@@ -82,6 +88,17 @@ pub enum ExecutionEffects {
 }
 
 impl ExecutionEffects {
+    pub fn digest(&self) -> TransactionDigest {
+        match self {
+            ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
+                *effects.data().transaction_digest()
+            }
+            ExecutionEffects::SuiTransactionBlockEffects(sui_tx_effects) => {
+                *sui_tx_effects.transaction_digest()
+            }
+        }
+    }
+
     pub fn mutated(&self) -> Vec<(ObjectRef, Owner)> {
         match self {
             ExecutionEffects::FinalizedTransactionEffects(effects, ..) => {
@@ -329,7 +346,7 @@ impl LocalValidatorAggregatorProxy {
         let (aggregator, clients) = AuthorityAggregatorBuilder::from_genesis(genesis)
             .with_registry(registry)
             .build_network_clients();
-        let committee = genesis.committee().unwrap();
+        let committee = genesis.committee();
         let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
         Self::new_impl(
             aggregator,
@@ -472,82 +489,119 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         &self,
         txs: Vec<Transaction>,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-        use sui_network::tonic::IntoRequest;
-
-        let digests: Vec<_> = txs.iter().map(|tx| *tx.digest()).collect();
-
-        let request = RawSubmitTxRequest {
-            transactions: txs
-                .iter()
-                .map(|tx| bcs::to_bytes(tx).unwrap().into())
-                .collect(),
-            submit_type: SubmitTxType::SoftBundle.into(),
-        };
-
-        // Get a validator client - use grpc client directly for soft bundle
-        let auth_agg = self.td.authority_aggregator().load();
-        let (_, safe_client) = auth_agg.authority_clients.iter().next().unwrap();
-        let mut validator_client = safe_client.authority_client().get_client_for_testing()?;
-
-        // Submit the soft bundle via grpc
-        let result = validator_client
-            .submit_transaction(request.into_request())
-            .await
-            .map(sui_network::tonic::Response::into_inner)?;
-
-        if result.results.len() != txs.len() {
-            bail!(
-                "Expected {} results, got {}",
-                txs.len(),
-                result.results.len()
-            );
-        }
-
-        // Extract consensus positions from submission results
-        let mut consensus_positions = Vec::new();
-        for (i, raw_result) in result.results.iter().enumerate() {
-            let submit_result: SubmitTxResult = raw_result.clone().try_into()?;
-            match submit_result {
-                SubmitTxResult::Submitted { consensus_position } => {
-                    consensus_positions.push(consensus_position);
-                }
-                SubmitTxResult::Executed { .. } => {
-                    bail!("Transaction {} was already executed during submission", i);
-                }
-                SubmitTxResult::Rejected { error } => {
-                    bail!("Transaction {} was rejected: {:?}", i, error);
-                }
-            }
-        }
-
-        // Wait for effects using consensus positions
-        let wait_futures: Vec<_> = digests
-            .iter()
-            .zip(consensus_positions.iter())
-            .map(|(digest, position)| {
-                let request = WaitForEffectsRequest {
-                    transaction_digest: Some(*digest),
-                    consensus_position: Some(*position),
-                    include_details: true,
-                    ping_type: None,
-                };
-                safe_client.wait_for_effects(request, None)
-            })
-            .collect();
-
-        let responses = futures::future::join_all(wait_futures).await;
-
-        let mut results = Vec::with_capacity(digests.len());
-        for (digest, response) in digests.into_iter().zip(responses.into_iter()) {
-            results.push((digest, response?));
-        }
-
-        Ok(results)
+        execute_soft_bundle_with_retries(&self.td, txs).await
     }
 
     fn get_chain_identifier(&self) -> ChainIdentifier {
         self.chain_identifier
     }
+}
+
+async fn execute_soft_bundle_with_retries(
+    td: &TransactionDriver<NetworkAuthorityClient>,
+    txs: Vec<Transaction>,
+) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
+    let start = Instant::now();
+    let mut retry_cnt = 0;
+    loop {
+        match execute_soft_bundle_impl(td, &txs).await {
+            Ok(results) => {
+                return Ok(results);
+            }
+            Err(e) => {
+                if retry_cnt < 10 || start.elapsed() < Duration::from_secs(60) {
+                    retry_cnt += 1;
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+    }
+}
+
+/// Helper function to execute a soft bundle via gRPC.
+/// Shared by both LocalValidatorAggregatorProxy and FullNodeProxy.
+async fn execute_soft_bundle_impl(
+    td: &TransactionDriver<NetworkAuthorityClient>,
+    txs: &[Transaction],
+) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
+    use sui_network::tonic::IntoRequest;
+
+    let digests: Vec<_> = txs.iter().map(|tx| *tx.digest()).collect();
+
+    let request = RawSubmitTxRequest {
+        transactions: txs
+            .iter()
+            .map(|tx| bcs::to_bytes(tx).unwrap().into())
+            .collect(),
+        submit_type: SubmitTxType::SoftBundle.into(),
+    };
+
+    // Get a validator client - use grpc client directly for soft bundle
+    let auth_agg = td.authority_aggregator().load();
+    let safe_client = auth_agg
+        .authority_clients
+        .values()
+        .choose(&mut mysten_common::random::get_rng())
+        .unwrap();
+
+    let mut validator_client = safe_client.authority_client().get_client_for_testing()?;
+
+    // Submit the soft bundle via grpc
+    let result = validator_client
+        .submit_transaction(request.into_request())
+        .await
+        .map(sui_network::tonic::Response::into_inner)?;
+
+    if result.results.len() != txs.len() {
+        bail!(
+            "Expected {} results, got {}",
+            txs.len(),
+            result.results.len()
+        );
+    }
+
+    // Extract consensus positions from submission results
+    let mut consensus_positions = Vec::new();
+    for (i, raw_result) in result.results.iter().enumerate() {
+        let submit_result: SubmitTxResult = raw_result.clone().try_into()?;
+        match submit_result {
+            SubmitTxResult::Submitted { consensus_position } => {
+                consensus_positions.push(consensus_position);
+            }
+            SubmitTxResult::Executed { .. } => {
+                bail!("Transaction {} was already executed during submission", i);
+            }
+            SubmitTxResult::Rejected { error } => {
+                bail!("Transaction {} was rejected: {:?}", i, error);
+            }
+        }
+    }
+
+    // Wait for effects using consensus positions
+    let wait_futures: Vec<_> = digests
+        .iter()
+        .zip(consensus_positions.iter())
+        .map(|(digest, position)| {
+            let request = WaitForEffectsRequest {
+                transaction_digest: Some(*digest),
+                consensus_position: Some(*position),
+                include_details: true,
+                ping_type: None,
+            };
+            safe_client.wait_for_effects(request, None)
+        })
+        .collect();
+
+    let responses = futures::future::join_all(wait_futures).await;
+
+    let mut results = Vec::with_capacity(digests.len());
+    for (digest, response) in digests.into_iter().zip(responses.into_iter()) {
+        results.push((digest, response?));
+    }
+
+    Ok(results)
 }
 
 pub struct FullNodeProxy {
@@ -557,10 +611,13 @@ pub struct FullNodeProxy {
     committee: Arc<Committee>,
     protocol_config: Arc<ProtocolConfig>,
     chain_identifier: ChainIdentifier,
+
+    // TransactionDriver for soft bundle support (size > 1)
+    td: Arc<TransactionDriver<NetworkAuthorityClient>>,
 }
 
 impl FullNodeProxy {
-    pub async fn from_url(http_url: &str) -> Result<Self, anyhow::Error> {
+    pub async fn from_url(http_url: &str, registry: &Registry) -> Result<Self, anyhow::Error> {
         let http_url = if http_url.starts_with("http://") || http_url.starts_with("https://") {
             http_url.to_string()
         } else {
@@ -570,7 +627,7 @@ impl FullNodeProxy {
         // Each request times out after 60s (default value)
         let sui_client = SuiClientBuilder::default()
             .max_concurrent_requests(500_000)
-            .build(http_url)
+            .build(&http_url)
             .await?;
 
         let committee = {
@@ -594,11 +651,44 @@ impl FullNodeProxy {
             ProtocolConfig::get_for_version(resp.protocol_version, chain)
         };
 
+        // Build AuthorityAggregator and TransactionDriver for soft bundle support
+        let sui_system_state = sui_client
+            .governance_api()
+            .get_latest_sui_system_state()
+            .await?;
+        let new_committee = sui_system_state.get_sui_committee_for_benchmarking();
+        let committee_store = Arc::new(CommitteeStore::new_for_testing(new_committee.committee()));
+        let safe_client_metrics_base = SafeClientMetricsBase::new(registry);
+
+        let aggregator = AuthorityAggregator::new_from_committee(
+            new_committee,
+            Arc::new(sui_system_state.get_committee_authority_names_to_hostnames()),
+            sui_system_state.reference_gas_price,
+            &committee_store,
+            safe_client_metrics_base.clone(),
+        );
+
+        let transaction_driver_metrics = Arc::new(TransactionDriverMetrics::new(registry));
+        let reconfig_observer = Arc::new(
+            FullNodeReconfigObserver::new(&http_url, committee_store, safe_client_metrics_base)
+                .await,
+        );
+
+        let client_metrics = Arc::new(ValidatorClientMetrics::new(registry));
+        let td = TransactionDriver::new(
+            Arc::new(aggregator),
+            reconfig_observer,
+            transaction_driver_metrics,
+            None,
+            client_metrics,
+        );
+
         Ok(Self {
             sui_client,
             committee: Arc::new(committee),
             protocol_config: Arc::new(protocol_config),
             chain_identifier,
+            td,
         })
     }
 }
@@ -680,8 +770,9 @@ impl ValidatorProxy for FullNodeProxy {
         tx: Transaction,
     ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
         let tx_digest = *tx.digest();
+        let start = Instant::now();
         let mut retry_cnt = 0;
-        while retry_cnt < 10 {
+        while retry_cnt < 10 || start.elapsed() < Duration::from_secs(60) {
             // Fullnode could time out after WAIT_FOR_FINALITY_TIMEOUT (30s) in TransactionOrchestrator
             // SuiClient times out after 60s
             match self
@@ -739,6 +830,7 @@ impl ValidatorProxy for FullNodeProxy {
             committee: self.clone_committee(),
             protocol_config: self.protocol_config.clone(),
             chain_identifier: self.chain_identifier,
+            td: self.td.clone(),
         })
     }
 
@@ -754,9 +846,9 @@ impl ValidatorProxy for FullNodeProxy {
 
     async fn execute_soft_bundle(
         &self,
-        _txs: Vec<Transaction>,
+        txs: Vec<Transaction>,
     ) -> anyhow::Result<Vec<(TransactionDigest, WaitForEffectsResponse)>> {
-        unimplemented!("Soft bundle execution not supported via FullNodeProxy")
+        execute_soft_bundle_with_retries(&self.td, txs).await
     }
 
     fn get_chain_identifier(&self) -> ChainIdentifier {

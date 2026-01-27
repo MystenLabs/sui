@@ -26,29 +26,29 @@ created: object(3,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4, line 15:
+task 4, line 16:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 5, lines 17-19:
+task 5, lines 18-20:
 //# programmable --sender A --inputs 1
 //> SplitCoins(Gas, [Input(0)]);
 //> MergeCoins(Gas, [Result(0)])
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6, line 21:
+task 6, line 22:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 7, lines 23-25:
+task 7, lines 24-26:
 //# programmable --sender A --inputs 2
 //> SplitCoins(Gas, [Input(0)]);
 //> MergeCoins(Gas, [Result(0)])
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8, lines 27-59:
+task 8, lines 28-66:
 //# run-graphql
 Response: {
   "data": {
@@ -59,7 +59,7 @@ Response: {
           {
             "cursor": "MA==",
             "node": {
-              "digest": "3FJ4fSrf7toVCANccxAbeJ5A1iSzwKLghCYcaz9atbCD",
+              "digest": "9SSXusUFMCT7nVFXQA8kMyG1p38Uze9APuQtFFKWS4AK",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 0,
@@ -73,7 +73,7 @@ Response: {
           {
             "cursor": "MQ==",
             "node": {
-              "digest": "REZjsEkDFhaJ8jE4tJKn7JE8VxtATeZMYMY7bkcLv8f",
+              "digest": "GtHkWEVdLDkA1QeXAhPuJBYbUEGPLAGKheGcsguXwoMo",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 1,
@@ -94,7 +94,7 @@ Response: {
           {
             "cursor": "MA==",
             "node": {
-              "digest": "3FJ4fSrf7toVCANccxAbeJ5A1iSzwKLghCYcaz9atbCD",
+              "digest": "9SSXusUFMCT7nVFXQA8kMyG1p38Uze9APuQtFFKWS4AK",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 0,
@@ -114,14 +114,14 @@ Response: {
         "edges": []
       }
     },
-    "epoch1AtCheckpoint2": {
-      "totalTransactions": 3,
+    "epoch1AtCheckpoint2SentFilter": {
+      "totalTransactions": 5,
       "transactions": {
         "edges": [
           {
             "cursor": "Mg==",
             "node": {
-              "digest": "ARwAbZ2EETkMxUDTEwx2BoL95cbqnLVmiRDVH53h6UHa",
+              "digest": "6X6RhKgJ6oqrNtbKCiJY85oMnMHAnwUaPZCZxu5HMXzc",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,
@@ -135,7 +135,56 @@ Response: {
           {
             "cursor": "Mw==",
             "node": {
-              "digest": "63rb3kkmYLsb5THn4GV3VHp5sDZ5GffaY3TWo3jaFC78",
+              "digest": "FojKmHAbqgHVG2azbfKv6keTY6xb1n2pLYXr5UHeZeZo",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 2,
+                  "epoch": {
+                    "epochId": 1
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "epoch1AtCheckpoint2All": {
+      "totalTransactions": 5,
+      "transactions": {
+        "edges": [
+          {
+            "cursor": "Mg==",
+            "node": {
+              "digest": "6X6RhKgJ6oqrNtbKCiJY85oMnMHAnwUaPZCZxu5HMXzc",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 2,
+                  "epoch": {
+                    "epochId": 1
+                  }
+                }
+              }
+            }
+          },
+          {
+            "cursor": "Mw==",
+            "node": {
+              "digest": "FojKmHAbqgHVG2azbfKv6keTY6xb1n2pLYXr5UHeZeZo",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 2,
+                  "epoch": {
+                    "epochId": 1
+                  }
+                }
+              }
+            }
+          },
+          {
+            "cursor": "NA==",
+            "node": {
+              "digest": "5QdTEu1h7fuRih364SecoELKZ8BQvetNyZHhrGV8YF2i",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,

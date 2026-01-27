@@ -4,14 +4,17 @@
 use std::sync::Arc;
 
 use bytes::Bytes;
+use object_store::ObjectStoreExt;
 use object_store::path::Path as ObjectPath;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::concurrent::BatchStatus;
 use sui_indexer_alt_framework::pipeline::concurrent::Handler;
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_object_store::ObjectStore;
-use sui_storage::blob::{Blob, BlobEncoding};
-use sui_types::full_checkpoint_content::{Checkpoint, CheckpointData};
+use sui_storage::blob::Blob;
+use sui_storage::blob::BlobEncoding;
+use sui_types::full_checkpoint_content::Checkpoint;
+use sui_types::full_checkpoint_content::CheckpointData;
 
 pub struct BcsCheckpoint {
     pub sequence_number: u64,

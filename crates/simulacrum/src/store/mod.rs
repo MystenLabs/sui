@@ -34,7 +34,7 @@ pub trait SimulatorStore:
     fn init_with_genesis(&mut self, genesis: &genesis::Genesis) {
         self.insert_checkpoint(genesis.checkpoint());
         self.insert_checkpoint_contents(genesis.checkpoint_contents().clone());
-        self.insert_committee(genesis.committee().unwrap());
+        self.insert_committee(genesis.committee().clone());
         self.insert_transaction(VerifiedTransaction::new_unchecked(
             genesis.transaction().clone(),
         ));

@@ -4,7 +4,7 @@
 use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
-use crate::workloads::payload::{ConcurrentTransactionResult, Payload};
+use crate::workloads::payload::{BatchExecutionResults, BatchedTransactionStatus, Payload};
 use crate::workloads::workload::{
     ESTIMATED_COMPUTATION_COST, ExpectedFailureType, MAX_GAS_FOR_TESTING, Workload, WorkloadBuilder,
 };
@@ -272,11 +272,11 @@ impl Payload for RandomizedTransactionPayload {
         Some(ExpectedFailureType::NoFailure)
     }
 
-    fn is_concurrent_batch(&self) -> bool {
+    fn is_batched(&self) -> bool {
         true
     }
 
-    fn make_concurrent_transactions(&mut self) -> Vec<Transaction> {
+    fn make_transaction_batch(&mut self) -> Vec<Transaction> {
         let rgp = self
             .system_state_observer
             .state
@@ -343,13 +343,14 @@ impl Payload for RandomizedTransactionPayload {
         transactions
     }
 
-    fn handle_concurrent_results(&mut self, results: &[ConcurrentTransactionResult]) {
+    fn handle_batch_results(&mut self, results: &BatchExecutionResults) {
         let mut success_count = 0;
         let mut lock_conflict_count = 0;
+        let mut retriable_count = 0;
 
-        for (i, result) in results.iter().enumerate() {
-            match result {
-                ConcurrentTransactionResult::Success { effects } => {
+        for (i, result) in results.results.iter().enumerate() {
+            match &result.status {
+                BatchedTransactionStatus::Success { effects } => {
                     success_count += 1;
                     // Update gas object ref
                     self.gas_objects[i].0 = effects.gas_object().0;
@@ -374,26 +375,42 @@ impl Payload for RandomizedTransactionPayload {
                         "Immutable object should not be in mutated objects"
                     );
                 }
-                ConcurrentTransactionResult::Failure { error } => {
+                BatchedTransactionStatus::PermanentFailure { error } => {
                     // Check if it's an ObjectLockConflict (expected when owned object is included)
                     if error.contains("ObjectLockConflict") {
                         lock_conflict_count += 1;
                         tracing::debug!(
-                            "Transaction {} rejected with ObjectLockConflict (expected)",
-                            i
+                            "Transaction {} ({}) rejected with ObjectLockConflict (expected)",
+                            i,
+                            result.digest
                         );
                     } else {
-                        tracing::debug!("Transaction {} failed with error: {:?}", i, error);
+                        tracing::debug!(
+                            "Transaction {} ({}) failed with error: {:?}",
+                            i,
+                            result.digest,
+                            error
+                        );
                     }
+                }
+                BatchedTransactionStatus::RetriableFailure { error } => {
+                    retriable_count += 1;
+                    tracing::debug!(
+                        "Transaction {} ({}) had retriable failure: {:?}",
+                        i,
+                        result.digest,
+                        error
+                    );
                 }
             }
         }
 
         tracing::debug!(
-            "Concurrent batch results: {} success, {} lock conflicts out of {} transactions",
+            "Batch results: {} success, {} lock conflicts, {} retriable out of {} transactions",
             success_count,
             lock_conflict_count,
-            results.len()
+            retriable_count,
+            results.results.len()
         );
     }
 }

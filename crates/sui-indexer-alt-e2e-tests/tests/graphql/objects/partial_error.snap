@@ -23,7 +23,7 @@ Response: {
   "data": {
     "object": {
       "version": 2,
-      "digest": "BTBgndfKC52pKmip2bN9GmSVbMscLM7Eti1sauMLV1iq",
+      "digest": "DJaEiwXLz9qPWaJKHrPkLcSPnK6MNDSUyWgppLCaGUhr",
       "objectAt": null
     }
   },
@@ -53,7 +53,7 @@ Response: {
   "data": {
     "validObject": {
       "version": 2,
-      "digest": "BTBgndfKC52pKmip2bN9GmSVbMscLM7Eti1sauMLV1iq"
+      "digest": "DJaEiwXLz9qPWaJKHrPkLcSPnK6MNDSUyWgppLCaGUhr"
     },
     "invalidObjectAt": {
       "objectAt": null
