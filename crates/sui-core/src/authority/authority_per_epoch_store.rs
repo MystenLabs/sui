@@ -3083,16 +3083,23 @@ impl AuthorityPerEpochStore {
             .filter_map(|s| match s {
                 Schedulable::Transaction(tx) => {
                     let tx_signatures = tx.tx().tx_signatures();
-                    // aliases contains (sig_idx, alias_version) for each required signer.
-                    // Use the index to look up the corresponding signature.
-                    let sigs_with_versions: Vec<_> = tx
-                        .aliases()
-                        .iter()
-                        .map(|(sig_idx, seq)| {
-                            let sig = tx_signatures[*sig_idx as usize].clone();
-                            (sig, *seq)
-                        })
-                        .collect();
+                    let sigs_with_versions: Vec<_> =
+                        if self.protocol_config().fix_checkpoint_signature_mapping() {
+                            tx.aliases()
+                                .iter()
+                                .map(|(sig_idx, seq)| {
+                                    let sig = tx_signatures[*sig_idx as usize].clone();
+                                    (sig, *seq)
+                                })
+                                .collect()
+                        } else {
+                            // Old behavior: zip all signatures with alias versions in order.
+                            tx_signatures
+                                .iter()
+                                .cloned()
+                                .zip(tx.aliases().iter().map(|(_, seq)| *seq))
+                                .collect()
+                        };
                     Some((*tx.tx().digest(), sigs_with_versions))
                 }
                 Schedulable::RandomnessStateUpdate(_, _) => None,
