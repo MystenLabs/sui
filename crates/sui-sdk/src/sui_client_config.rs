@@ -13,6 +13,8 @@ use crate::{
 };
 use sui_config::Config;
 use sui_keys::keystore::{AccountKeystore, Keystore};
+use sui_rpc_api::Client;
+use sui_rpc_api::client::HeadersInterceptor;
 use sui_types::{
     base_types::*,
     digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
@@ -126,6 +128,24 @@ impl SuiEnv {
             builder = builder.max_concurrent_requests(max_concurrent_requests as usize);
         }
         Ok(builder.build(&self.rpc).await?)
+    }
+
+    pub fn create_grpc_client(&self) -> Result<Client, anyhow::Error> {
+        let mut client = Client::new(&self.rpc)?;
+
+        if let Some(basic_auth) = &self.basic_auth {
+            let fields: Vec<_> = basic_auth.split(':').collect();
+            if fields.len() != 2 {
+                return Err(anyhow!(
+                    "Basic auth should be in the format `username:password`"
+                ));
+            }
+            let mut headers = HeadersInterceptor::new();
+            headers.basic_auth(fields[0], Some(fields[1]));
+            client = client.with_headers(headers);
+        }
+
+        Ok(client)
     }
 
     pub fn devnet() -> Self {
