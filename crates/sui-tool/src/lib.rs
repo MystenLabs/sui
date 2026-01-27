@@ -39,7 +39,6 @@ use tokio::time::Instant;
 
 use anyhow::anyhow;
 use clap::ValueEnum;
-use eyre::ContextCompat;
 use fastcrypto::hash::MultisetHash;
 use futures::{StreamExt, TryStreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -617,6 +616,7 @@ fn start_summary_sync(
     num_parallel_downloads: usize,
     verify: bool,
     end_of_epoch_checkpoint_seq_nums: Vec<u64>,
+    resume: bool,
 ) -> JoinHandle<Result<(), anyhow::Error>> {
     tokio::spawn(async move {
         let store = AuthorityStore::open_no_genesis(perpetual_db, false, &Registry::default())?;
@@ -638,7 +638,34 @@ fn start_summary_sync(
             .last()
             .expect("Expected at least one checkpoint");
 
-        let num_to_sync = end_of_epoch_checkpoint_seq_nums.len() as u64;
+        // When resuming, filter out checkpoints that are already synced
+        let latest_synced = checkpoint_store
+            .get_highest_synced_checkpoint()?
+            .map(|c| c.sequence_number)
+            .unwrap_or(0);
+
+        let checkpoints_to_sync: Vec<u64> = if resume {
+            end_of_epoch_checkpoint_seq_nums
+                .iter()
+                .filter(|&&cp| cp > latest_synced)
+                .copied()
+                .collect()
+        } else {
+            end_of_epoch_checkpoint_seq_nums.clone()
+        };
+
+        let num_already_synced = end_of_epoch_checkpoint_seq_nums.len() - checkpoints_to_sync.len();
+        let num_to_sync = checkpoints_to_sync.len() as u64;
+
+        if resume && num_already_synced > 0 {
+            let msg = format!(
+                "Resuming: {} checkpoints already synced, {} remaining",
+                num_already_synced, num_to_sync
+            );
+            m.println(&msg).ok();
+            info!("{}", msg);
+        }
+
         let sync_progress_bar = m.add(
             ProgressBar::new(num_to_sync).with_style(
                 ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len} ({msg})")
@@ -651,14 +678,6 @@ fn start_summary_sync(
         let s_instant = Instant::now();
 
         let cloned_counter = sync_checkpoint_counter.clone();
-        let latest_synced = checkpoint_store
-            .get_highest_synced_checkpoint()?
-            .map(|c| c.sequence_number)
-            .unwrap_or(0);
-        let s_start = latest_synced
-            .checked_add(1)
-            .wrap_err("Checkpoint overflow")
-            .map_err(|_| anyhow!("Failed to increment checkpoint"))?;
         tokio::spawn(async move {
             loop {
                 if cloned_progress_bar.is_finished() {
@@ -667,7 +686,7 @@ fn start_summary_sync(
                 let num_summaries = cloned_counter.load(Ordering::Relaxed);
                 let total_checkpoints_per_sec =
                     num_summaries as f64 / s_instant.elapsed().as_secs_f64();
-                cloned_progress_bar.set_position(s_start + num_summaries);
+                cloned_progress_bar.set_position(num_summaries);
                 cloned_progress_bar.set_message(format!(
                     "checkpoints synced per sec: {}",
                     total_checkpoints_per_sec
@@ -676,14 +695,16 @@ fn start_summary_sync(
             }
         });
 
-        read_summaries_for_list_no_verify(
-            ingestion_url,
-            num_parallel_downloads,
-            state_sync_store.clone(),
-            end_of_epoch_checkpoint_seq_nums.clone(),
-            sync_checkpoint_counter,
-        )
-        .await?;
+        if !checkpoints_to_sync.is_empty() {
+            read_summaries_for_list_no_verify(
+                ingestion_url,
+                num_parallel_downloads,
+                state_sync_store.clone(),
+                checkpoints_to_sync,
+                sync_checkpoint_counter,
+            )
+            .await?;
+        }
         sync_progress_bar.finish_with_message("Checkpoint summary sync is complete");
         info!("Checkpoint summary sync is complete");
 
@@ -820,6 +841,7 @@ pub async fn download_formal_snapshot(
     network: Chain,
     verify: SnapshotVerifyMode,
     max_retries: usize,
+    resume: bool,
 ) -> Result<(), anyhow::Error> {
     let m = MultiProgress::new();
     let msg = format!(
@@ -830,8 +852,13 @@ pub async fn download_formal_snapshot(
     info!("{}", msg);
 
     let path = path.join("staging").to_path_buf();
-    if path.exists() {
+    if path.exists() && !resume {
         fs::remove_dir_all(path.clone())?;
+    }
+    if resume {
+        let resume_msg = "Resuming download - skipping already downloaded files";
+        m.println(resume_msg).unwrap();
+        info!("{}", resume_msg);
     }
 
     // Start prometheus server so that we can serve metrics during snapshot download
@@ -875,6 +902,7 @@ pub async fn download_formal_snapshot(
         num_parallel_downloads,
         verify != SnapshotVerifyMode::None,
         end_of_epoch_checkpoint_seq_nums.clone(),
+        resume,
     );
 
     // Start transaction backfill in parallel with summary sync
@@ -892,6 +920,7 @@ pub async fn download_formal_snapshot(
                 m,
                 end_of_epoch_checkpoint_seq_nums,
                 max_retries,
+                resume,
             )
             .await
         })
@@ -900,7 +929,7 @@ pub async fn download_formal_snapshot(
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
     let perpetual_db_clone = perpetual_db.clone();
     let snapshot_dir = path.parent().unwrap().join("snapshot");
-    if snapshot_dir.exists() {
+    if snapshot_dir.exists() && !resume {
         fs::remove_dir_all(snapshot_dir.clone())?;
     }
     let snapshot_dir_clone = snapshot_dir.clone();
@@ -922,7 +951,7 @@ pub async fn download_formal_snapshot(
             &local_store_config,
             NonZeroUsize::new(num_parallel_downloads).unwrap(),
             m_clone,
-            false, // skip_reset_local_store
+            resume, // skip_reset_local_store - when resuming, skip already downloaded files
             max_retries,
         )
         .await
@@ -1075,6 +1104,7 @@ async fn backfill_epoch_transaction_digests(
     m: MultiProgress,
     end_of_epoch_checkpoint_seq_nums: Vec<u64>,
     max_retries: usize,
+    resume: bool,
 ) -> Result<()> {
     if epoch == 0 {
         return Ok(());
@@ -1097,10 +1127,17 @@ async fn backfill_epoch_transaction_digests(
             .map(|cp| cp + 1)
             .unwrap_or(0)
     };
-    let msg = format!(
-        "Beginning transaction digest backfill for epoch: {:?}, backfilling from: {:?}..{:?}",
-        epoch, epoch_start_cp, epoch_last_cp_seq
-    );
+    let msg = if resume {
+        format!(
+            "Resuming transaction digest backfill for epoch: {:?}, backfilling from: {:?}..{:?} (re-processing may occur)",
+            epoch, epoch_start_cp, epoch_last_cp_seq
+        )
+    } else {
+        format!(
+            "Beginning transaction digest backfill for epoch: {:?}, backfilling from: {:?}..{:?}",
+            epoch, epoch_start_cp, epoch_last_cp_seq
+        )
+    };
     m.println(&msg).ok();
     info!("{}", msg);
 
