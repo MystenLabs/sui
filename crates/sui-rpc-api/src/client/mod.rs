@@ -13,7 +13,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::full_checkpoint_content::CheckpointData;
+use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
@@ -87,9 +87,9 @@ impl Client {
     pub async fn get_full_checkpoint(
         &mut self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Result<CheckpointData> {
+    ) -> Result<Checkpoint> {
         let request = proto::GetCheckpointRequest::by_sequence_number(sequence_number)
-            .with_read_mask(checkpoint_data_field_mask());
+            .with_read_mask(Checkpoint::proto_field_mask());
 
         let (metadata, response, _extentions) = self
             .0
@@ -103,7 +103,6 @@ impl Client {
             .checkpoint
             .ok_or_else(|| tonic::Status::not_found("no checkpoint returned"))?;
         sui_types::full_checkpoint_content::Checkpoint::try_from(&checkpoint)
-            .map(Into::into)
             .map_err(|e| status_from_error_with_metadata(e, metadata))
     }
 
@@ -387,21 +386,6 @@ pub struct ExecutedTransaction {
     pub events: Option<TransactionEvents>,
     pub balance_changes: Vec<sui_sdk_types::BalanceChange>,
     pub checkpoint: Option<u64>,
-}
-
-/// Field mask for checkpoint data requests.
-pub fn checkpoint_data_field_mask() -> FieldMask {
-    FieldMask::from_paths([
-        "sequence_number",
-        "summary.bcs",
-        "signature",
-        "contents.bcs",
-        "transactions.transaction.bcs",
-        "transactions.effects.bcs",
-        "transactions.effects.unchanged_loaded_runtime_objects",
-        "transactions.events.bcs",
-        "objects.objects.bcs",
-    ])
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
