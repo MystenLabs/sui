@@ -1,79 +1,73 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::{Arc, RwLock},
-    task::{Context, Poll},
-    time::{Duration, Instant},
-};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::RwLock;
+use std::task::Context;
+use std::task::Poll;
+use std::time::Duration;
+use std::time::Instant;
 
-use anyhow::{Context as _, Result, anyhow};
+use anyhow::Context as _;
+use anyhow::Result;
 use async_trait::async_trait;
-use gcp_auth::{Token, TokenProvider};
-use http::{HeaderValue, Request, Response};
+use bytes::Bytes;
+use gcp_auth::Token;
+use gcp_auth::TokenProvider;
+use http::HeaderValue;
+use http::Request;
+use http::Response;
 use prometheus::Registry;
-use sui_types::{
-    base_types::{EpochId, ObjectID, TransactionDigest},
-    digests::CheckpointDigest,
-    effects::TransactionEvents,
-    full_checkpoint_content::CheckpointData,
-    messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary},
-    messages_consensus::TimestampMs,
-    object::Object,
-    storage::{EpochInfo, ObjectKey},
-};
-use tonic::{
-    Streaming,
-    body::Body,
-    codegen::Service,
-    transport::{Certificate, Channel, ClientTlsConfig},
-};
-use tracing::error;
+use sui_types::base_types::EpochId;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::TransactionDigest;
+use sui_types::digests::CheckpointDigest;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::CheckpointSummary;
+use sui_types::object::Object;
+use sui_types::storage::EpochInfo;
+use sui_types::storage::ObjectKey;
+use tonic::body::Body;
+use tonic::codegen::Service;
+use tonic::transport::Certificate;
+use tonic::transport::Channel;
+use tonic::transport::ClientTlsConfig;
 
-use super::proto::bigtable::v2::{
-    RowFilter,
-    row_filter::{Chain, Filter},
-};
+use crate::Checkpoint;
+use crate::KeyValueStoreReader;
+use crate::TransactionData;
+use crate::TransactionEventsData;
+use crate::Watermark;
 use crate::bigtable::metrics::KvMetrics;
-use crate::bigtable::proto::bigtable::v2::{
-    MutateRowsRequest, MutateRowsResponse, Mutation, ReadRowsRequest, RequestStats, RowRange,
-    RowSet, bigtable_client::BigtableClient as BigtableInternalClient, mutate_rows_request::Entry,
-    mutation, mutation::SetCell, read_rows_response::cell_chunk::RowStatus,
-    request_stats::StatsView, row_range::EndKey,
-};
-use crate::{
-    Checkpoint, KeyValueStoreReader, KeyValueStoreWriter, TransactionData, TransactionEventsData,
-};
+use crate::bigtable::proto::bigtable::v2::MutateRowsRequest;
+use crate::bigtable::proto::bigtable::v2::ReadRowsRequest;
+use crate::bigtable::proto::bigtable::v2::RequestStats;
+use crate::bigtable::proto::bigtable::v2::RowFilter;
+use crate::bigtable::proto::bigtable::v2::RowRange;
+use crate::bigtable::proto::bigtable::v2::RowSet;
+use crate::bigtable::proto::bigtable::v2::bigtable_client::BigtableClient as BigtableInternalClient;
+use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
+use crate::bigtable::proto::bigtable::v2::read_rows_response::cell_chunk::RowStatus;
+use crate::bigtable::proto::bigtable::v2::request_stats::StatsView;
+use crate::bigtable::proto::bigtable::v2::row_filter::Chain;
+use crate::bigtable::proto::bigtable::v2::row_filter::Filter;
+use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
+use crate::tables;
 
-const OBJECTS_TABLE: &str = "objects";
-const TRANSACTIONS_TABLE: &str = "transactions";
-const CHECKPOINTS_TABLE: &str = "checkpoints";
-const CHECKPOINTS_BY_DIGEST_TABLE: &str = "checkpoints_by_digest";
-const WATERMARK_TABLE: &str = "watermark";
-const WATERMARK_ALT_TABLE: &str = "watermark_alt";
-const EPOCHS_TABLE: &str = "epochs";
+/// Error returned when a batch write has per-entry failures.
+/// Contains the keys and error details for each failed mutation.
+#[derive(Debug)]
+pub struct PartialWriteError {
+    pub failed_keys: Vec<MutationError>,
+}
 
-const COLUMN_FAMILY_NAME: &str = "sui";
-const DEFAULT_COLUMN_QUALIFIER: &str = "";
-const CHECKPOINT_SUMMARY_COLUMN_QUALIFIER: &str = "s";
-const CHECKPOINT_SIGNATURES_COLUMN_QUALIFIER: &str = "sg";
-const CHECKPOINT_CONTENTS_COLUMN_QUALIFIER: &str = "c";
-const TRANSACTION_COLUMN_QUALIFIER: &str = "tx";
-const EFFECTS_COLUMN_QUALIFIER: &str = "ef";
-const EVENTS_COLUMN_QUALIFIER: &str = "ev";
-const TIMESTAMP_COLUMN_QUALIFIER: &str = "ts";
-const CHECKPOINT_NUMBER_COLUMN_QUALIFIER: &str = "cn";
-
-type Bytes = Vec<u8>;
-
-#[derive(Clone)]
-struct AuthChannel {
-    channel: Channel,
-    policy: String,
-    token_provider: Option<Arc<dyn TokenProvider>>,
-    token: Arc<RwLock<Option<Arc<Token>>>>,
+#[derive(Debug)]
+pub struct MutationError {
+    pub key: Bytes,
+    pub code: i32,
+    pub message: String,
 }
 
 #[derive(Clone)]
@@ -85,354 +79,28 @@ pub struct BigTableClient {
     app_profile_id: Option<String>,
 }
 
-#[async_trait]
-impl KeyValueStoreWriter for BigTableClient {
-    async fn save_objects(&mut self, objects: &[&Object], timestamp_ms: TimestampMs) -> Result<()> {
-        let mut items = Vec::with_capacity(objects.len());
-        for object in objects {
-            let object_key = ObjectKey(object.id(), object.version());
-            items.push((
-                Self::raw_object_key(&object_key)?,
-                vec![(DEFAULT_COLUMN_QUALIFIER, bcs::to_bytes(object)?)],
-            ));
-        }
-        self.multi_set(OBJECTS_TABLE, items, Some(timestamp_ms))
-            .await
-    }
-
-    async fn save_transactions(&mut self, transactions: &[TransactionData]) -> Result<()> {
-        let mut items = Vec::with_capacity(transactions.len());
-        let mut timestamp_ms = None;
-        for transaction in transactions {
-            timestamp_ms = Some(transaction.timestamp);
-            let cells = vec![
-                (
-                    TRANSACTION_COLUMN_QUALIFIER,
-                    bcs::to_bytes(&transaction.transaction)?,
-                ),
-                (
-                    EFFECTS_COLUMN_QUALIFIER,
-                    bcs::to_bytes(&transaction.effects)?,
-                ),
-                (EVENTS_COLUMN_QUALIFIER, bcs::to_bytes(&transaction.events)?),
-                (
-                    TIMESTAMP_COLUMN_QUALIFIER,
-                    bcs::to_bytes(&transaction.timestamp)?,
-                ),
-                (
-                    CHECKPOINT_NUMBER_COLUMN_QUALIFIER,
-                    bcs::to_bytes(&transaction.checkpoint_number)?,
-                ),
-            ];
-            items.push((transaction.transaction.digest().inner().to_vec(), cells));
-        }
-        self.multi_set(TRANSACTIONS_TABLE, items, timestamp_ms)
-            .await
-    }
-
-    async fn save_checkpoint(&mut self, checkpoint: &CheckpointData) -> Result<()> {
-        let summary = &checkpoint.checkpoint_summary.data();
-        let timestamp = summary.timestamp_ms;
-        let contents = &checkpoint.checkpoint_contents;
-        let signatures = &checkpoint.checkpoint_summary.auth_sig();
-        let key = summary.sequence_number.to_be_bytes().to_vec();
-        let cells = vec![
-            (CHECKPOINT_SUMMARY_COLUMN_QUALIFIER, bcs::to_bytes(summary)?),
-            (
-                CHECKPOINT_SIGNATURES_COLUMN_QUALIFIER,
-                bcs::to_bytes(signatures)?,
-            ),
-            (
-                CHECKPOINT_CONTENTS_COLUMN_QUALIFIER,
-                bcs::to_bytes(contents)?,
-            ),
-        ];
-        self.multi_set(CHECKPOINTS_TABLE, [(key.clone(), cells)], Some(timestamp))
-            .await?;
-        self.multi_set(
-            CHECKPOINTS_BY_DIGEST_TABLE,
-            [(
-                checkpoint.checkpoint_summary.digest().inner().to_vec(),
-                vec![(DEFAULT_COLUMN_QUALIFIER, key)],
-            )],
-            Some(timestamp),
-        )
-        .await
-    }
-
-    async fn save_watermark(&mut self, watermark: CheckpointSequenceNumber) -> Result<()> {
-        let watermark_bytes = watermark.to_be_bytes().to_vec();
-        self.multi_set(
-            WATERMARK_ALT_TABLE,
-            [(
-                vec![0],
-                vec![(DEFAULT_COLUMN_QUALIFIER, watermark_bytes.clone())],
-            )],
-            Some(watermark),
-        )
-        .await?;
-        self.multi_set(
-            WATERMARK_TABLE,
-            [(watermark_bytes, vec![(DEFAULT_COLUMN_QUALIFIER, vec![])])],
-            None,
-        )
-        .await
-    }
-
-    async fn save_epoch(&mut self, epoch: EpochInfo) -> Result<()> {
-        let key = epoch.epoch.to_be_bytes().to_vec();
-        self.multi_set(
-            EPOCHS_TABLE,
-            [(
-                key,
-                vec![(DEFAULT_COLUMN_QUALIFIER, bcs::to_bytes(&epoch)?)],
-            )],
-            epoch.end_timestamp_ms.or(epoch.start_timestamp_ms),
-        )
-        .await
-    }
-}
-
-#[async_trait]
-impl KeyValueStoreReader for BigTableClient {
-    async fn get_objects(&mut self, object_keys: &[ObjectKey]) -> Result<Vec<Object>> {
-        let keys: Result<_, _> = object_keys.iter().map(Self::raw_object_key).collect();
-        let mut objects = vec![];
-        for (_, row) in self.multi_get(OBJECTS_TABLE, keys?, None).await? {
-            for (_, value) in row {
-                objects.push(bcs::from_bytes(&value)?);
-            }
-        }
-        Ok(objects)
-    }
-
-    async fn get_transactions(
-        &mut self,
-        transactions: &[TransactionDigest],
-    ) -> Result<Vec<TransactionData>> {
-        let keys = transactions.iter().map(|tx| tx.inner().to_vec()).collect();
-        let mut result = vec![];
-        for (_, row) in self.multi_get(TRANSACTIONS_TABLE, keys, None).await? {
-            let mut transaction = None;
-            let mut effects = None;
-            let mut events = None;
-            let mut timestamp = 0;
-            let mut checkpoint_number = 0;
-
-            for (column, value) in row {
-                match std::str::from_utf8(&column)? {
-                    TRANSACTION_COLUMN_QUALIFIER => transaction = Some(bcs::from_bytes(&value)?),
-                    EFFECTS_COLUMN_QUALIFIER => effects = Some(bcs::from_bytes(&value)?),
-                    EVENTS_COLUMN_QUALIFIER => events = Some(bcs::from_bytes(&value)?),
-                    TIMESTAMP_COLUMN_QUALIFIER => timestamp = bcs::from_bytes(&value)?,
-                    CHECKPOINT_NUMBER_COLUMN_QUALIFIER => {
-                        checkpoint_number = bcs::from_bytes(&value)?
-                    }
-                    _ => error!("unexpected column {:?} in transactions table", column),
-                }
-            }
-            result.push(TransactionData {
-                transaction: transaction.context("transaction field is missing")?,
-                effects: effects.context("effects field is missing")?,
-                events: events.context("events field is missing")?,
-                timestamp,
-                checkpoint_number,
-            })
-        }
-        Ok(result)
-    }
-
-    async fn get_checkpoints(
-        &mut self,
-        sequence_numbers: &[CheckpointSequenceNumber],
-    ) -> Result<Vec<Checkpoint>> {
-        let keys = sequence_numbers
-            .iter()
-            .map(|sq| sq.to_be_bytes().to_vec())
-            .collect();
-        let mut checkpoints = vec![];
-        for (_, row) in self.multi_get(CHECKPOINTS_TABLE, keys, None).await? {
-            let mut summary = None;
-            let mut contents = None;
-            let mut signatures = None;
-            for (column, value) in row {
-                match std::str::from_utf8(&column)? {
-                    CHECKPOINT_SUMMARY_COLUMN_QUALIFIER => summary = Some(bcs::from_bytes(&value)?),
-                    CHECKPOINT_CONTENTS_COLUMN_QUALIFIER => {
-                        contents = Some(bcs::from_bytes(&value)?)
-                    }
-                    CHECKPOINT_SIGNATURES_COLUMN_QUALIFIER => {
-                        signatures = Some(bcs::from_bytes(&value)?)
-                    }
-                    _ => error!("unexpected column {:?} in checkpoints table", column),
-                }
-            }
-            let checkpoint = Checkpoint {
-                summary: summary.context("summary field is missing")?,
-                contents: contents.context("contents field is missing")?,
-                signatures: signatures.context("signatures field is missing")?,
-            };
-            checkpoints.push(checkpoint);
-        }
-        Ok(checkpoints)
-    }
-
-    async fn get_checkpoint_by_digest(
-        &mut self,
-        digest: CheckpointDigest,
-    ) -> Result<Option<Checkpoint>> {
-        let key = digest.inner().to_vec();
-        let mut response = self
-            .multi_get(CHECKPOINTS_BY_DIGEST_TABLE, vec![key], None)
-            .await?;
-        if let Some((_, row)) = response.pop()
-            && let Some((_, value)) = row.into_iter().next()
-        {
-            let sequence_number = u64::from_be_bytes(value.as_slice().try_into()?);
-            if let Some(chk) = self.get_checkpoints(&[sequence_number]).await?.pop() {
-                return Ok(Some(chk));
-            }
-        }
-        Ok(None)
-    }
-
-    async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber> {
-        match self
-            .multi_get(WATERMARK_ALT_TABLE, vec![vec![0]], None)
-            .await?
-            .pop()
-            .and_then(|(_, mut row)| row.pop())
-        {
-            Some((_, value_bytes)) => Ok(u64::from_be_bytes(value_bytes.as_slice().try_into()?)),
-            None => Ok(0),
-        }
-    }
-
-    async fn get_latest_checkpoint_summary(&mut self) -> Result<Option<CheckpointSummary>> {
-        let sequence_number = self.get_latest_checkpoint().await?;
-        if sequence_number == 0 {
-            return Ok(None);
-        }
-
-        // Fetch just the summary for the latest checkpoint sequence number.
-        let mut response = self
-            .multi_get(
-                CHECKPOINTS_TABLE,
-                vec![(sequence_number - 1).to_be_bytes().to_vec()],
-                Some(RowFilter {
-                    filter: Some(Filter::ColumnQualifierRegexFilter(
-                        format!("^({CHECKPOINT_SUMMARY_COLUMN_QUALIFIER})$").into(),
-                    )),
-                }),
-            )
-            .await?;
-
-        let Some((_, row)) = response.pop() else {
-            return Ok(None);
-        };
-
-        let mut summary: Option<CheckpointSummary> = None;
-        for (column, value) in row {
-            match std::str::from_utf8(&column)? {
-                CHECKPOINT_SUMMARY_COLUMN_QUALIFIER => summary = Some(bcs::from_bytes(&value)?),
-                _ => error!("unexpected column {:?} in checkpoints table", column),
-            }
-        }
-
-        Ok(summary)
-    }
-
-    async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
-        let upper_limit = Self::raw_object_key(&ObjectKey::max_for_id(object_id))?;
-        if let Some((_, row)) = self.reversed_scan(OBJECTS_TABLE, upper_limit).await?.pop()
-            && let Some((_, value)) = row.into_iter().next()
-        {
-            return Ok(Some(bcs::from_bytes(&value)?));
-        }
-        Ok(None)
-    }
-
-    async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochInfo>> {
-        let key = epoch_id.to_be_bytes().to_vec();
-        Ok(
-            match self.multi_get(EPOCHS_TABLE, vec![key], None).await?.pop() {
-                Some((_, mut row)) => row
-                    .pop()
-                    .map(|value| bcs::from_bytes(&value.1))
-                    .transpose()?,
-                None => None,
-            },
-        )
-    }
-
-    async fn get_latest_epoch(&mut self) -> Result<Option<EpochInfo>> {
-        let upper_limit = u64::MAX.to_be_bytes().to_vec();
-        Ok(
-            match self.reversed_scan(EPOCHS_TABLE, upper_limit).await?.pop() {
-                Some((_, mut row)) => row
-                    .pop()
-                    .map(|value| bcs::from_bytes(&value.1))
-                    .transpose()?,
-                None => None,
-            },
-        )
-    }
-
-    // Multi-get transactions, selecting columns relevant to events.
-    async fn get_events_for_transactions(
-        &mut self,
-        transaction_digests: &[TransactionDigest],
-    ) -> Result<Vec<(TransactionDigest, TransactionEventsData)>> {
-        let query = self.multi_get(
-            TRANSACTIONS_TABLE,
-            transaction_digests
-                .iter()
-                .map(|tx| tx.inner().to_vec())
-                .collect(),
-            Some(RowFilter {
-                filter: Some(Filter::ColumnQualifierRegexFilter(
-                    format!("^({EVENTS_COLUMN_QUALIFIER}|{TIMESTAMP_COLUMN_QUALIFIER})$").into(),
-                )),
-            }),
-        );
-        let mut results = vec![];
-
-        for (key, row) in query.await? {
-            let mut transaction_events: Option<Option<TransactionEvents>> = None;
-            let mut timestamp_ms = 0;
-            for (column, value) in row {
-                match std::str::from_utf8(&column)? {
-                    EVENTS_COLUMN_QUALIFIER => transaction_events = Some(bcs::from_bytes(&value)?),
-                    TIMESTAMP_COLUMN_QUALIFIER => timestamp_ms = bcs::from_bytes(&value)?,
-                    _ => error!("unexpected column {:?} in transactions table", column),
-                }
-            }
-            let events = transaction_events
-                .context("events field is missing")?
-                .map(|e| e.data)
-                .unwrap_or_default();
-
-            let transaction_digest = TransactionDigest::try_from(key)
-                .context("Failed to deserialize transaction digest")?;
-
-            results.push((
-                transaction_digest,
-                TransactionEventsData {
-                    events,
-                    timestamp_ms,
-                },
-            ));
-        }
-
-        Ok(results)
-    }
+#[derive(Clone)]
+struct AuthChannel {
+    channel: Channel,
+    policy: String,
+    token_provider: Option<Arc<dyn TokenProvider>>,
+    token: Arc<RwLock<Option<Arc<Token>>>>,
 }
 
 impl BigTableClient {
-    pub async fn new_local(instance_id: String) -> Result<Self> {
-        let emulator_host = std::env::var("BIGTABLE_EMULATOR_HOST")?;
+    pub async fn new_local(host: String, instance_id: String) -> Result<Self> {
+        Self::new_for_host(host, instance_id, "local")
+    }
+
+    /// Create a client connected to a specific host.
+    /// Used internally and for testing with mock servers.
+    pub(crate) fn new_for_host(
+        host: String,
+        instance_id: String,
+        client_name: &str,
+    ) -> Result<Self> {
         let auth_channel = AuthChannel {
-            channel: Channel::from_shared(format!("http://{emulator_host}"))?.connect_lazy(),
+            channel: Channel::from_shared(format!("http://{host}"))?.connect_lazy(),
             policy: "https://www.googleapis.com/auth/bigtable.data".to_string(),
             token_provider: None,
             token: Arc::new(RwLock::new(None)),
@@ -440,7 +108,7 @@ impl BigTableClient {
         Ok(Self {
             table_prefix: format!("projects/emulator/instances/{}/tables/", instance_id),
             client: BigtableInternalClient::new(auth_channel),
-            client_name: "local".to_string(),
+            client_name: client_name.to_string(),
             metrics: None,
             app_profile_id: None,
         })
@@ -490,68 +158,182 @@ impl BigTableClient {
         })
     }
 
-    pub async fn mutate_rows(
-        &mut self,
-        request: MutateRowsRequest,
-    ) -> Result<Streaming<MutateRowsResponse>> {
-        Ok(self.client.mutate_rows(request).await?.into_inner())
-    }
+    /// Get the pipeline watermark from the watermarks table.
+    /// Falls back to the legacy `[0]` row if the pipeline-specific row is missing.
+    // TODO(migration): Remove legacy fallback once all pipelines have their own watermarks.
+    pub async fn get_pipeline_watermark(&mut self, pipeline: &str) -> Result<Option<Watermark>> {
+        let pipeline_key = tables::watermarks::encode_key(pipeline);
+        let legacy_key = vec![0u8];
 
-    fn report_bt_stats(&self, request_stats: &Option<RequestStats>, table_name: &str) {
-        let Some(metrics) = &self.metrics else {
-            return;
-        };
-        let labels = [&self.client_name, table_name];
-        if let Some(StatsView::FullReadStatsView(view)) =
-            request_stats.as_ref().and_then(|r| r.stats_view.as_ref())
-        {
-            if let Some(latency) = view
-                .request_latency_stats
-                .as_ref()
-                .and_then(|s| s.frontend_server_latency)
+        let rows = self
+            .multi_get(
+                tables::watermark_alt_legacy::NAME,
+                vec![pipeline_key.clone(), legacy_key.clone()],
+                None,
+            )
+            .await?;
+
+        let mut pipeline_wm = None;
+        let mut legacy_checkpoint = None;
+
+        for (key, row) in rows {
+            if key.as_ref() == pipeline_key.as_slice() {
+                pipeline_wm = Some(tables::watermarks::decode(&row)?);
+            } else if key.as_ref() == legacy_key.as_slice()
+                && let Some((_, value_bytes)) = row.last()
             {
-                if latency.seconds < 0 || latency.nanos < 0 {
-                    return;
+                let next = u64::from_be_bytes(value_bytes.as_ref().try_into()?);
+                if next > 0 {
+                    legacy_checkpoint = Some(next - 1);
                 }
-                let duration = Duration::new(latency.seconds as u64, latency.nanos as u32);
-                metrics
-                    .kv_bt_chunk_latency_ms
-                    .with_label_values(&labels)
-                    .observe(duration.as_millis() as f64);
-            }
-            if let Some(iteration_stats) = &view.read_iteration_stats {
-                metrics
-                    .kv_bt_chunk_rows_returned_count
-                    .with_label_values(&labels)
-                    .inc_by(iteration_stats.rows_returned_count as u64);
-                metrics
-                    .kv_bt_chunk_rows_seen_count
-                    .with_label_values(&labels)
-                    .inc_by(iteration_stats.rows_seen_count as u64);
             }
         }
+
+        if let Some(wm) = pipeline_wm {
+            return Ok(Some(wm));
+        }
+
+        Ok(legacy_checkpoint.map(|cp| Watermark {
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive: cp,
+            tx_hi: 0,
+            timestamp_ms_hi_inclusive: 0,
+        }))
+    }
+
+    /// Set the pipeline watermark in the watermarks table.
+    pub async fn set_pipeline_watermark(
+        &mut self,
+        pipeline: &str,
+        watermark: &Watermark,
+    ) -> Result<()> {
+        let entry = tables::make_entry(
+            tables::watermarks::encode_key(pipeline),
+            tables::watermarks::encode(watermark)?,
+            Some(watermark.timestamp_ms_hi_inclusive),
+        );
+        self.write_entries(tables::watermarks::NAME, [entry]).await
+    }
+
+    /// Write pre-built entries to BigTable.
+    ///
+    /// On partial failure (some entries succeed, some fail), returns a `PartialWriteError`
+    /// containing the keys that failed. Callers can retain only the failed keys in their
+    /// batch before retrying.
+    pub async fn write_entries(
+        &mut self,
+        table: &str,
+        entries: impl IntoIterator<Item = Entry>,
+    ) -> Result<()> {
+        let entries: Vec<Entry> = entries.into_iter().collect();
+        if entries.is_empty() {
+            return Ok(());
+        }
+
+        let row_keys: Vec<Bytes> = entries.iter().map(|e| e.row_key.clone()).collect();
+
+        let mut request = MutateRowsRequest {
+            table_name: format!("{}{}", self.table_prefix, table),
+            entries,
+            ..MutateRowsRequest::default()
+        };
+        if let Some(ref app_profile_id) = self.app_profile_id {
+            request.app_profile_id = app_profile_id.clone();
+        }
+        let mut response = self.client.mutate_rows(request).await?.into_inner();
+        let mut failed_keys: Vec<MutationError> = Vec::new();
+
+        while let Some(part) = response.message().await? {
+            for entry in part.entries {
+                if let Some(status) = entry.status
+                    && status.code != 0
+                    && let Some(key) = row_keys.get(entry.index as usize)
+                {
+                    failed_keys.push(MutationError {
+                        key: key.clone(),
+                        code: status.code,
+                        message: status.message,
+                    });
+                }
+            }
+        }
+
+        if !failed_keys.is_empty() {
+            return Err(PartialWriteError { failed_keys }.into());
+        }
+
+        Ok(())
+    }
+
+    /// Generate a raw object key from ObjectKey.
+    pub fn raw_object_key(object_key: &ObjectKey) -> Vec<u8> {
+        tables::objects::encode_key(object_key)
     }
 
     pub async fn read_rows(
         &mut self,
         mut request: ReadRowsRequest,
         table_name: &str,
-    ) -> Result<Vec<(Vec<u8>, Vec<(Vec<u8>, Vec<u8>)>)>> {
+    ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
+        // Zero-copy accumulator for cell values. BigTable streams cell data in chunks,
+        // and prost deserializes each chunk.value as a Bytes view into the gRPC buffer
+        // (no allocation). This enum preserves that zero-copy benefit:
+        //
+        // - Single chunk (common): stays as Bytes, no copies at all
+        // - Multiple chunks (only for values >1MB): copies into Vec<u8>
+        #[derive(Default)]
+        enum CellValue {
+            #[default]
+            Empty,
+            Single(Bytes),
+            Multi(Vec<u8>),
+        }
+
+        impl CellValue {
+            fn extend(&mut self, data: Bytes) {
+                *self = match std::mem::take(self) {
+                    CellValue::Empty => CellValue::Single(data),
+                    // Second chunk arrives - must allocate and copy
+                    CellValue::Single(existing) => {
+                        let mut vec = existing.to_vec();
+                        vec.extend_from_slice(&data);
+                        CellValue::Multi(vec)
+                    }
+                    CellValue::Multi(mut vec) => {
+                        vec.extend_from_slice(&data);
+                        CellValue::Multi(vec)
+                    }
+                };
+            }
+
+            fn replace(&mut self, data: Bytes) {
+                *self = CellValue::Single(data);
+            }
+
+            fn into_bytes(self) -> Bytes {
+                match self {
+                    CellValue::Empty => Bytes::new(),
+                    CellValue::Single(b) => b, // zero-copy: return the original Bytes
+                    CellValue::Multi(v) => Bytes::from(v),
+                }
+            }
+        }
+
         if let Some(ref app_profile_id) = self.app_profile_id {
             request.app_profile_id = app_profile_id.clone();
         }
         let mut result = vec![];
         let mut response = self.client.read_rows(request).await?.into_inner();
 
-        let mut row_key = None;
+        let mut row_key: Option<Bytes> = None;
         let mut row = vec![];
-        let mut cell_value = vec![];
-        let mut cell_name = None;
+        let mut cell_value = CellValue::Empty;
+        let mut cell_name: Option<Bytes> = None;
         let mut timestamp = 0;
 
         while let Some(message) = response.message().await? {
             self.report_bt_stats(&message.request_stats, table_name);
-            for mut chunk in message.chunks.into_iter() {
+            for chunk in message.chunks.into_iter() {
                 // new row check
                 if !chunk.row_key.is_empty() {
                     row_key = Some(chunk.row_key);
@@ -559,36 +341,36 @@ impl BigTableClient {
                 match chunk.qualifier {
                     // new cell started
                     Some(qualifier) => {
-                        if let Some(cell_name) = cell_name {
-                            row.push((cell_name, cell_value));
-                            cell_value = vec![];
+                        if let Some(name) = cell_name.take() {
+                            row.push((name, cell_value.into_bytes()));
+                            cell_value = CellValue::Empty;
                         }
-                        cell_name = Some(qualifier);
+                        cell_name = Some(Bytes::from(qualifier));
                         timestamp = chunk.timestamp_micros;
-                        cell_value.append(&mut chunk.value);
+                        cell_value.extend(chunk.value);
                     }
                     None => {
                         if chunk.timestamp_micros == 0 {
-                            cell_value.append(&mut chunk.value);
+                            cell_value.extend(chunk.value);
                         } else if chunk.timestamp_micros >= timestamp {
                             // newer version of cell is available
                             timestamp = chunk.timestamp_micros;
-                            cell_value = chunk.value;
+                            cell_value.replace(chunk.value);
                         }
                     }
                 }
                 if chunk.row_status.is_some() {
                     if let Some(RowStatus::CommitRow(_)) = chunk.row_status {
-                        if let Some(cell_name) = cell_name {
-                            row.push((cell_name, cell_value));
+                        if let Some(name) = cell_name.take() {
+                            row.push((name, cell_value.into_bytes()));
                         }
-                        if let Some(row_key) = row_key {
-                            result.push((row_key, row));
+                        if let Some(key) = row_key.take() {
+                            result.push((key, row));
                         }
                     }
                     row_key = None;
                     row = vec![];
-                    cell_value = vec![];
+                    cell_value = CellValue::Empty;
                     cell_name = None;
                 }
             }
@@ -596,83 +378,12 @@ impl BigTableClient {
         Ok(result)
     }
 
-    async fn multi_set(
-        &mut self,
-        table_name: &str,
-        values: impl IntoIterator<Item = (Bytes, Vec<(&str, Bytes)>)> + std::marker::Send,
-        timestamp_ms: Option<TimestampMs>,
-    ) -> Result<()> {
-        for chunk in values.into_iter().collect::<Vec<_>>().chunks(50_000) {
-            self.multi_set_internal(table_name, chunk.iter().cloned(), timestamp_ms)
-                .await?;
-        }
-        Ok(())
-    }
-
-    async fn multi_set_internal(
-        &mut self,
-        table_name: &str,
-        values: impl IntoIterator<Item = (Bytes, Vec<(&str, Bytes)>)> + std::marker::Send,
-        timestamp_ms: Option<TimestampMs>,
-    ) -> Result<()> {
-        let mut entries = vec![];
-        let timestamp_micros = timestamp_ms
-            .map(|tst| {
-                tst.checked_mul(1000)
-                    .expect("timestamp multiplication overflow") as i64
-            })
-            // default to -1 for current Bigtable server time
-            .unwrap_or(-1);
-        for (row_key, cells) in values {
-            let mutations = cells
-                .into_iter()
-                .map(|(column_name, value)| Mutation {
-                    mutation: Some(mutation::Mutation::SetCell(SetCell {
-                        family_name: COLUMN_FAMILY_NAME.to_string(),
-                        column_qualifier: column_name.to_owned().into_bytes(),
-                        // The timestamp of the cell into which new data should be written.
-                        timestamp_micros,
-                        value,
-                    })),
-                })
-                .collect();
-            entries.push(Entry {
-                row_key,
-                mutations,
-                idempotency: None,
-            });
-        }
-        let mut request = MutateRowsRequest {
-            table_name: format!("{}{}", self.table_prefix, table_name),
-            entries,
-            ..MutateRowsRequest::default()
-        };
-        if let Some(ref app_profile_id) = self.app_profile_id {
-            request.app_profile_id = app_profile_id.clone();
-        }
-        let mut response = self.mutate_rows(request).await?;
-        while let Some(part) = response.message().await? {
-            for entry in part.entries {
-                if let Some(status) = entry.status
-                    && status.code != 0
-                {
-                    return Err(anyhow!(
-                        "bigtable write failed {} {}",
-                        status.code,
-                        status.message
-                    ));
-                }
-            }
-        }
-        Ok(())
-    }
-
     pub async fn multi_get(
         &mut self,
         table_name: &str,
         keys: Vec<Vec<u8>>,
         filter: Option<RowFilter>,
-    ) -> Result<Vec<(Vec<u8>, Vec<(Bytes, Bytes)>)>> {
+    ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
         let start_time = Instant::now();
         let num_keys_requested = keys.len();
         let result = self.multi_get_internal(table_name, keys, filter).await;
@@ -720,12 +431,47 @@ impl BigTableClient {
         result
     }
 
-    pub async fn multi_get_internal(
+    fn report_bt_stats(&self, request_stats: &Option<RequestStats>, table_name: &str) {
+        let Some(metrics) = &self.metrics else {
+            return;
+        };
+        let labels = [&self.client_name, table_name];
+        if let Some(StatsView::FullReadStatsView(view)) =
+            request_stats.as_ref().and_then(|r| r.stats_view.as_ref())
+        {
+            if let Some(latency) = view
+                .request_latency_stats
+                .as_ref()
+                .and_then(|s| s.frontend_server_latency)
+            {
+                if latency.seconds < 0 || latency.nanos < 0 {
+                    return;
+                }
+                let duration = Duration::new(latency.seconds as u64, latency.nanos as u32);
+                metrics
+                    .kv_bt_chunk_latency_ms
+                    .with_label_values(&labels)
+                    .observe(duration.as_millis() as f64);
+            }
+            if let Some(iteration_stats) = &view.read_iteration_stats {
+                metrics
+                    .kv_bt_chunk_rows_returned_count
+                    .with_label_values(&labels)
+                    .inc_by(iteration_stats.rows_returned_count as u64);
+                metrics
+                    .kv_bt_chunk_rows_seen_count
+                    .with_label_values(&labels)
+                    .inc_by(iteration_stats.rows_seen_count as u64);
+            }
+        }
+    }
+
+    async fn multi_get_internal(
         &mut self,
         table_name: &str,
         keys: Vec<Vec<u8>>,
         filter: Option<RowFilter>,
-    ) -> Result<Vec<(Vec<u8>, Vec<(Bytes, Bytes)>)>> {
+    ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
         let version_filter = RowFilter {
             filter: Some(Filter::CellsPerColumnLimitFilter(1)),
         };
@@ -741,7 +487,7 @@ impl BigTableClient {
             table_name: format!("{}{}", self.table_prefix, table_name),
             rows_limit: keys.len() as i64,
             rows: Some(RowSet {
-                row_keys: keys,
+                row_keys: keys.into_iter().map(Bytes::from).collect(),
                 row_ranges: vec![],
             }),
             filter,
@@ -807,11 +553,207 @@ impl BigTableClient {
         };
         self.read_rows(request, table_name).await
     }
+}
 
-    fn raw_object_key(object_key: &ObjectKey) -> Result<Vec<u8>> {
-        let mut raw_key = object_key.0.to_vec();
-        raw_key.extend(object_key.1.value().to_be_bytes());
-        Ok(raw_key)
+impl std::fmt::Display for PartialWriteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "partial write: {} entries failed",
+            self.failed_keys.len()
+        )?;
+        for failed in &self.failed_keys {
+            write!(f, "\n  code {}: {}", failed.code, failed.message)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for PartialWriteError {}
+
+#[async_trait]
+impl KeyValueStoreReader for BigTableClient {
+    async fn get_objects(&mut self, object_keys: &[ObjectKey]) -> Result<Vec<Object>> {
+        let keys: Vec<Vec<u8>> = object_keys.iter().map(Self::raw_object_key).collect();
+        let mut objects = vec![];
+        for (_, row) in self.multi_get(tables::objects::NAME, keys, None).await? {
+            objects.push(tables::objects::decode(&row)?);
+        }
+        Ok(objects)
+    }
+
+    async fn get_transactions(
+        &mut self,
+        transactions: &[TransactionDigest],
+    ) -> Result<Vec<TransactionData>> {
+        let keys = transactions
+            .iter()
+            .map(tables::transactions::encode_key)
+            .collect();
+        let mut result = vec![];
+        for (_, row) in self
+            .multi_get(tables::transactions::NAME, keys, None)
+            .await?
+        {
+            result.push(tables::transactions::decode(&row)?);
+        }
+        Ok(result)
+    }
+
+    async fn get_checkpoints(
+        &mut self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+    ) -> Result<Vec<Checkpoint>> {
+        let keys = sequence_numbers
+            .iter()
+            .copied()
+            .map(tables::checkpoints::encode_key)
+            .collect();
+        let mut checkpoints = vec![];
+        for (_, row) in self
+            .multi_get(tables::checkpoints::NAME, keys, None)
+            .await?
+        {
+            checkpoints.push(tables::checkpoints::decode(&row)?);
+        }
+        Ok(checkpoints)
+    }
+
+    async fn get_checkpoint_by_digest(
+        &mut self,
+        digest: CheckpointDigest,
+    ) -> Result<Option<Checkpoint>> {
+        let key = tables::checkpoints_by_digest::encode_key(&digest);
+        let mut response = self
+            .multi_get(tables::checkpoints_by_digest::NAME, vec![key], None)
+            .await?;
+        if let Some((_, row)) = response.pop() {
+            let sequence_number = tables::checkpoints_by_digest::decode(&row)?;
+            if let Some(chk) = self.get_checkpoints(&[sequence_number]).await?.pop() {
+                return Ok(Some(chk));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber> {
+        match self
+            .multi_get(tables::watermark_alt_legacy::NAME, vec![vec![0]], None)
+            .await?
+            .pop()
+            .and_then(|(_, mut row)| row.pop())
+        {
+            Some((_, value_bytes)) => Ok(u64::from_be_bytes(value_bytes.as_ref().try_into()?)),
+            None => Ok(0),
+        }
+    }
+
+    async fn get_latest_checkpoint_summary(&mut self) -> Result<Option<CheckpointSummary>> {
+        let sequence_number = self.get_latest_checkpoint().await?;
+        if sequence_number == 0 {
+            return Ok(None);
+        }
+
+        // Fetch just the summary for the latest checkpoint sequence number.
+        // TODO(migration): Remove the `- 1` once get_latest_checkpoint reads per-pipeline
+        // watermarks (checkpoint_hi_inclusive) instead of the legacy next_checkpoint format.
+        let mut response = self
+            .multi_get(
+                tables::checkpoints::NAME,
+                vec![tables::checkpoints::encode_key(sequence_number - 1)],
+                Some(RowFilter {
+                    filter: Some(Filter::ColumnQualifierRegexFilter(
+                        format!("^({})$", tables::checkpoints::col::SUMMARY).into(),
+                    )),
+                }),
+            )
+            .await?;
+
+        let Some((_, row)) = response.pop() else {
+            return Ok(None);
+        };
+
+        for (column, value) in row {
+            if column.as_ref() == tables::checkpoints::col::SUMMARY.as_bytes() {
+                return Ok(Some(bcs::from_bytes(&value)?));
+            }
+        }
+
+        Ok(None)
+    }
+
+    async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
+        let upper_limit = Self::raw_object_key(&ObjectKey::max_for_id(object_id));
+        if let Some((_, row)) = self
+            .reversed_scan(tables::objects::NAME, upper_limit.into())
+            .await?
+            .pop()
+        {
+            return Ok(Some(tables::objects::decode(&row)?));
+        }
+        Ok(None)
+    }
+
+    async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochInfo>> {
+        let key = tables::epochs::encode_key(epoch_id);
+        match self
+            .multi_get(tables::epochs::NAME, vec![key], None)
+            .await?
+            .pop()
+        {
+            Some((_, row)) => Ok(Some(tables::epochs::decode(&row)?)),
+            None => Ok(None),
+        }
+    }
+
+    async fn get_latest_epoch(&mut self) -> Result<Option<EpochInfo>> {
+        let upper_limit = tables::epochs::encode_key_upper_bound();
+        match self
+            .reversed_scan(tables::epochs::NAME, upper_limit)
+            .await?
+            .pop()
+        {
+            Some((_, row)) => Ok(Some(tables::epochs::decode(&row)?)),
+            None => Ok(None),
+        }
+    }
+
+    async fn get_events_for_transactions(
+        &mut self,
+        transaction_digests: &[TransactionDigest],
+    ) -> Result<Vec<(TransactionDigest, TransactionEventsData)>> {
+        let query = self.multi_get(
+            tables::transactions::NAME,
+            transaction_digests
+                .iter()
+                .map(tables::transactions::encode_key)
+                .collect(),
+            Some(RowFilter {
+                filter: Some(Filter::ColumnQualifierRegexFilter(
+                    format!(
+                        "^({}|{})$",
+                        tables::transactions::col::EVENTS,
+                        tables::transactions::col::TIMESTAMP
+                    )
+                    .into(),
+                )),
+            }),
+        );
+        let mut results = vec![];
+
+        for (key, row) in query.await? {
+            let events_data = tables::transactions::decode_events(&row)?;
+
+            let key_array: [u8; 32] = key
+                .as_ref()
+                .try_into()
+                .context("Failed to deserialize transaction digest")?;
+            let transaction_digest = TransactionDigest::from(key_array);
+
+            results.push((transaction_digest, events_data));
+        }
+
+        Ok(results)
     }
 }
 
