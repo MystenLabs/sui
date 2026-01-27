@@ -25,8 +25,8 @@ use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig, ValidatorGenesisConfig};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::{
-    CommitteeConfig, ConfigBuilder, GlobalStateHashV2EnabledConfig, ProtocolVersionsConfig,
-    SupportedProtocolVersionsCallback,
+    CommitteeConfig, ConfigBuilder, FundsWithdrawSchedulerTypeConfig,
+    GlobalStateHashV2EnabledConfig, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
 };
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::AuthorityName;
@@ -63,6 +63,7 @@ pub struct SwarmBuilder<R = OsRng> {
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
     global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
+    funds_withdraw_scheduler_type_config: Option<FundsWithdrawSchedulerTypeConfig>,
     disable_fullnode_pruning: bool,
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
     #[cfg(msim)]
@@ -98,6 +99,7 @@ impl SwarmBuilder {
             max_submit_position: None,
             submit_delay_step_override_millis: None,
             global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig::Global(true),
+            funds_withdraw_scheduler_type_config: None,
             disable_fullnode_pruning: false,
             state_sync_config: None,
             #[cfg(msim)]
@@ -135,6 +137,7 @@ impl<R> SwarmBuilder<R> {
             max_submit_position: self.max_submit_position,
             submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
+            funds_withdraw_scheduler_type_config: self.funds_withdraw_scheduler_type_config,
             disable_fullnode_pruning: self.disable_fullnode_pruning,
             state_sync_config: self.state_sync_config,
             #[cfg(msim)]
@@ -263,6 +266,14 @@ impl<R> SwarmBuilder<R> {
         c: GlobalStateHashV2EnabledConfig,
     ) -> Self {
         self.global_state_hash_v2_enabled_config = c;
+        self
+    }
+
+    pub fn with_funds_withdraw_scheduler_type_config(
+        mut self,
+        c: FundsWithdrawSchedulerTypeConfig,
+    ) -> Self {
+        self.funds_withdraw_scheduler_type_config = Some(c);
         self
     }
 
@@ -421,6 +432,14 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 .with_global_state_hash_v2_enabled_config(
                     self.global_state_hash_v2_enabled_config.clone(),
                 );
+
+            if let Some(funds_withdraw_scheduler_type_config) =
+                self.funds_withdraw_scheduler_type_config.clone()
+            {
+                final_builder = final_builder.with_funds_withdraw_scheduler_type_config(
+                    funds_withdraw_scheduler_type_config,
+                );
+            }
 
             if let Some(state_sync_config) = self.state_sync_config.clone() {
                 final_builder = final_builder.with_state_sync_config(state_sync_config);
