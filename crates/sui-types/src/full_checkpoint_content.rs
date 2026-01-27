@@ -284,6 +284,40 @@ impl Checkpoint {
         }
         eventually_removed_object_refs.into_values().collect()
     }
+
+    // Returns the required FieldMask to fetch all necessary fields for populating `Checkpoint`
+    pub fn proto_field_mask() -> sui_rpc::field::FieldMask {
+        use sui_rpc::field::FieldMaskUtil;
+        use sui_rpc::proto::sui::rpc::v2::Checkpoint;
+
+        sui_rpc::field::FieldMask::from_paths([
+            Checkpoint::path_builder().sequence_number(),
+            Checkpoint::path_builder().summary().bcs().value(),
+            Checkpoint::path_builder().signature().finish(),
+            Checkpoint::path_builder().contents().bcs().value(),
+            Checkpoint::path_builder()
+                .transactions()
+                .transaction()
+                .bcs()
+                .value(),
+            Checkpoint::path_builder()
+                .transactions()
+                .effects()
+                .bcs()
+                .value(),
+            Checkpoint::path_builder()
+                .transactions()
+                .effects()
+                .unchanged_loaded_runtime_objects()
+                .finish(),
+            Checkpoint::path_builder()
+                .transactions()
+                .events()
+                .bcs()
+                .value(),
+            Checkpoint::path_builder().objects().objects().bcs().value(),
+        ])
+    }
 }
 
 impl ExecutedTransaction {
