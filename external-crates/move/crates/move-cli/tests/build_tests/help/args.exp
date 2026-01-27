@@ -50,8 +50,10 @@ Options:
           If `true`, enables extra linters
       --mode <MODE>
           Arbitrary mode -- this will be used to enable or filter user-defined `#[mode(<MODE>)]` annotations during compilation
-  -e, --environment <ENVIRONMENT>
+  -e, --build-env <ENVIRONMENT>
           Environment to use for building packages
+      --pubfile-path <PUBFILE_PATH>
+          Path to ephemeral publication file. When provided, uses ephemeral addresses for compilation instead of addresses from the lock file
   -h, --help
           Print help
   -V, --version
