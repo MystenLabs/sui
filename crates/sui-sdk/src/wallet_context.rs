@@ -302,16 +302,12 @@ impl WalletContext {
     }
 
     pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
-        let client = self.get_client().await?;
-        let object = client
-            .read_api()
-            .get_object_with_options(*id, SuiObjectDataOptions::new().with_owner())
+        self.grpc_client()?
+            .get_object(*id)
             .await?
-            .into_object()?;
-        Ok(object
-            .owner
-            .ok_or_else(|| anyhow!("Owner field is None"))?
-            .get_owner_address()?)
+            .owner()
+            .get_owner_address()
+            .map_err(Into::into)
     }
 
     pub async fn try_get_object_owner(
