@@ -55,7 +55,6 @@ curve25519-dalek = { version = "0.1.0", package = "curve25519-dalek-fiat", defau
 dashmap = "6.1.0"
 datatest-stable = "0.1.1"
 derivative = "2.2.0"
-difference = "2.0.0"
 derive-where = "1.2.7"
 digest = "0.9.0"
 dir-diff = "0.3.2"

@@ -113,7 +113,7 @@ impl LinkageAnalyzer {
             ExecutionError::new_with_source(
                 ExecutionErrorKind::FunctionNotFound,
                 format!(
-                    "Could not resolve function '{}' in module {}::{}",
+                    "Could not resolve function '{}' in module '{}::{}'",
                     function_name, package, module_name
                 ),
             )

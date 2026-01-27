@@ -63,6 +63,3 @@ tiered-gas = []
 tracing = [
     "move-vm-config/tracing",
 ]
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(msim)'] }

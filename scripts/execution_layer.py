@@ -361,10 +361,8 @@ def cut_command(f):
         *["-p", "sui-verifier-latest"],
         *["-p", "move-abstract-interpreter"],
         *["-p", "move-bytecode-verifier"],
-        *["-p", "move-stdlib-natives"],
         *["-p", "move-vm-runtime"],
         *["-p", "bytecode-verifier-tests"],
-        *["-p", "move-vm-types"],
     ]
 
 
@@ -384,10 +382,8 @@ def cut_directories(f):
             [
                 external / "move" / "crates" / "move-abstract-interpreter",
                 external / "move" / "crates" / "move-bytecode-verifier",
-                external / "move" / "crates" / "move-stdlib-natives",
                 external / "move" / "crates" / "move-vm-runtime",
                 external / "move" / "crates" / "bytecode-verifier-tests",
-                external / "move" / "crates" / "move-vm-types",
             ]
         )
     else:
@@ -395,10 +391,8 @@ def cut_directories(f):
             [
                 external / "move" / "move-execution" / f / "crates" / "move-abstract-interpreter",
                 external / "move" / "move-execution" / f / "crates" / "move-bytecode-verifier",
-                external / "move" / "move-execution" / f / "crates" / "move-stdlib-natives",
                 external / "move" / "move-execution" / f / "crates" / "move-vm-runtime",
                 external / "move" / "move-execution" / f / "crates" / "bytecode-verifier-tests",
-                external / "move" / "move-execution" / f / "crates" / "move-vm-types",
             ]
         )
 
@@ -498,12 +492,6 @@ def generate_lib(output_file: TextIO):
             call = "Verifier::new(config, metrics)"
             return "\n".join(
                 f"{spc}{feature or version} => Box::new({cut}::{call}),"
-                for (version, feature, cut) in cuts
-            )
-        elif var == "INIT_CUTS":
-            call = "init_vm_for_msim()"
-            return "\n".join(
-                f"{cut}::{call};"
                 for (version, feature, cut) in cuts
             )
         else:

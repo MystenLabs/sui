@@ -663,6 +663,10 @@ ExecutionFailureStatus:
         STRUCT:
           - id:
               TYPENAME: ObjectID
+    42:
+      DuplicateModuleName:
+        STRUCT:
+          - duplicate_module_name: STR
 ExecutionStatus:
   ENUM:
     0:

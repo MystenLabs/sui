@@ -71,7 +71,7 @@ task 13, lines 121-122:
 //# programmable --sender A --inputs @test
 //> test::execution_error_tests::nonexistent_function()
 Error: Transaction Effects Status: Function Not Found.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: Some("Could not resolve function 'nonexistent_function' in module test::execution_error_tests"), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: FunctionNotFound, source: Some("Could not resolve function 'nonexistent_function' in module 'test::execution_error_tests'"), command: Some(0) } }
 
 task 14, line 124:
 //# run test::execution_error_tests::arithmetic_underflow --sender A
@@ -91,7 +91,7 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 task 17, line 130:
 //# run test::execution_error_tests::vector_out_of_bounds --sender B
 Error: Transaction Effects Status: Move Primitive Runtime Error. Location: test::execution_error_tests::vector_out_of_bounds (function index 14) at offset 4. Arithmetic error, stack overflow, max value depth, etc.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 14, instruction: 4, function_name: Some("vector_out_of_bounds") }))), source: Some(VMError { major_status: VECTOR_OPERATION_ERROR, sub_status: Some(1), message: None, exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(14), 4)] }), command: Some(0) } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation { module: ModuleId { address: test, name: Identifier("execution_error_tests") }, function: 14, instruction: 4, function_name: Some("vector_out_of_bounds") }))), source: Some(VMError { major_status: VECTOR_OPERATION_ERROR, sub_status: Some(1), message: Some("Index out of bounds in PrimVec"), exec_state: None, location: Module(ModuleId { address: test, name: Identifier("execution_error_tests") }), indices: [], offsets: [(FunctionDefinitionIndex(14), 4)] }), command: Some(0) } }
 
 task 18, line 132:
 //# create-checkpoint
