@@ -34,7 +34,8 @@ public fun mul_div(x: u32, y: u32, z: u32): u32 {
 }
 
 /// Calculate x * y / z, upcasting the intermediate values to avoid overflow.
-/// Round up the result.
+/// Round up the result if there is a remainder.
+/// Note: A downcast error is possible e.g., with args (u32::MAX, u32::MAX, 1).
 public fun mul_div_ceil(x: u32, y: u32, z: u32): u32 {
     std::macros::num_mul_div_ceil!<_, u64>(x, y, z)
 }

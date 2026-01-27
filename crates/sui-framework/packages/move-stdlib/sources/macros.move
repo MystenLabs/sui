@@ -231,11 +231,11 @@ public(package) macro fun try_as_u128($x: _): Option<u128> {
     if (x > 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF) option::none() else option::some(x as u128)
 }
 
-public macro fun num_mul_div<$T, $U>($a: $T, $b: $T, $c: $T): $T {
+public(package) macro fun num_mul_div<$T, $U>($a: $T, $b: $T, $c: $T): $T {
     (($a as $U) * ($b as $U) / ($c as $U)) as $T
 }
 
-public macro fun num_mul_div_ceil<$T, $U>($a: $T, $b: $T, $c: $T): $T {
+public(package) macro fun num_mul_div_ceil<$T, $U>($a: $T, $b: $T, $c: $T): $T {
     (($a as $U) * ($b as $U)).divide_and_round_up($c as $U) as $T
 }
 
