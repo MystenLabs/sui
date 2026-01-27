@@ -134,11 +134,15 @@ public(package) macro fun check_mul_div($max: _, $x: _, $y: _, $z: _) {
 
     if (x % z == 0 || y % z == 0) {
         assert_eq!(x.mul_div_ceil(y, z), x.mul_div(y, z));
+    } else if (x <= max / y) {
+        // When there's a remainder, mul_div_ceil should be mul_div + 1
+        assert_eq!(x.mul_div_ceil(y, z), x.mul_div(y, z) + 1);
     };
 
     if (x <= max / y && x * y < z) {
         assert_eq!(x.mul_div(y, z), 0);
-        assert_eq!(x.mul_div_ceil(y, z), 0);
+        // x * y > 0 (since we returned early if x == 0 || y == 0), so ceiling is 1
+        assert_eq!(x.mul_div_ceil(y, z), 1);
     };
 }
 
