@@ -212,10 +212,6 @@ const guides = [
   {
     type: 'category',
     label: 'Wallets',
-    link: {
-      type: 'doc',
-      id: 'guides/developer/wallet-index',
-    },
     items: [
       'guides/developer/wallets/suilink',
     ],

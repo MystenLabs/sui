@@ -11,30 +11,13 @@ keywords: [ wallet, wallets, sui, playtron, cross-chain, ethereum, solana, link,
 SuiLink provides the following capabilities:
 
 - **Cross-chain identity verification**: Link wallets from Ethereum, Solana, and other Sui addresses to your primary Sui wallet.
-- **Soulbound proof of ownership**: Receive a non-transferable NFT that cryptographically verifies wallet ownership.
+- **Non-transferable proof of ownership**: Receive a [soulbound NFT](/guides/developer/nft/nft-soulbound.mdx) that cryptographically verifies wallet ownership.
 - **Enhanced discoverability**: Projects in the Sui ecosystem can discover you based on your activity across all connected wallets.
 - **Reward eligibility**: Unlock opportunities for cross-chain rewards, priority features, and exclusive events within the Sui network.
 
-## Supported networks
+### Supported networks
 
-SuiLink currently supports the following cross-chain wallet links:
-
-- Sui to Ethereum
-- Sui to Solana
-- Sui to Sui
-
-Additionally, you can connect multiple wallets from the same network to a single Sui address.
-
-## How SuiLink works
-
-When you create a SuiLink, the system performs the following steps:
-
-1. Connects your Sui wallet.
-2. Authenticates ownership of the wallet you want to link from another blockchain.
-3. Creates a cryptographic proof of ownership.
-4. Generates a soulbound NFT in your Sui wallet containing the linked wallet information.
-
-The SuiLink NFT remains in your Sui wallet as proof of ownership and cannot be transferred.
+SuiLink currently supports the following cross-chain wallet links: Sui-to-Ethereum, Sui-to-Solana, and Sui-to-Sui.
 
 ## Creating a SuiLink
 
@@ -52,34 +35,40 @@ Creating a SuiLink requires a small gas fee on the Sui network to mint the NFT. 
 
 You can link the same Sui wallet address to multiple wallets from Ethereum, Solana, and other Sui addresses. Each connection creates a separate SuiLink NFT in your Sui wallet.
 
-To manage your linked addresses:
+To view your linked addresses:
 
 1. View your SuiLink NFTs in your Sui wallet
 2. Check the `network_address` field to see which wallets are linked
 3. Review the timestamp to see when each link was created
 
-You can permanently unlink a wallet by burning the corresponding NFT pass.
+You can also permanently unlink a wallet by burning the corresponding NFT pass. To unlink an address:
+
+1. Navigate to the NFTs section of your Sui wallet
+2. For the SuiLink NFT you wish to burn, select "Send" or "Transfer"
+3. Enter the classic `0x0` burn address: `0x0000000000000000000000000000000000000000`
+
+Additionally, there are various third-party tools (such as [SUI Manager](https://www.suimanager.com/burner)) that can help burn NFTs, and some wallets have a built-in burning feature.
 
 ## Integrating SuiLink
 
 If you are building an application on Sui, you can integrate SuiLink to verify cross-chain ownership.
 
-### Prerequisites
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
 
-Before integrating SuiLink, ensure you have:
+- [x] [Install and configure a Sui client instance](/guides/developer/getting-started/configure-sui-client.mdx).
 
-- The Sui dApp Kit SDK installed in your project
-- A configured Sui client instance
-- The SuiLink package IDs for your target network
+- [x] [Install the Sui dApp Kit SDK in your project](https://sdk.mystenlabs.com/dapp-kit).
 
-### Package IDs
+- [x] Obtain the correct SuiLink package ID for your target network.
 
-SuiLink uses different package IDs depending on the network and chain type:
-
-| **Network** | **SUILINK_PACKAGE_ID_ETH_SOL** | **SUILINK_PACKAGE_ID_SUI** |
+| **Network** | **ETH and SOL Package ID** | **Sui-to-Sui Package ID** |
 | ------- | ------------------ | --------------------- |
 | Testnet | `0x0025bafa2e6afa511c19bd4e95626c897e798fde629b4782fe061bdc8bd65c8a` | `0x0025bafa2e6afa511c19bd4e95626c897e798fde629b4782fe061bdc8bd65c8a` |
 | Mainnet | `0xf857fa9df5811e6df2a0240a1029d365db24b5026896776ddd1c3c70803bccd3` | `0x73f5ab2461c5993408fff21354fa9831d4f4a66cc81382419ec29e3c80c384b5` |
+
+</TabItem>
+</Tabs>
 
 ### Querying SuiLink objects
 
@@ -128,13 +117,13 @@ Each SuiLink NFT contains the following fields:
 The NFT type indicates which blockchain network the wallet is linked to:
 
 ```typescript
-// Sui to Sui SuiLink (Mainnet)
+// Sui-to-Sui SuiLink (Mainnet)
 0xf857fa9df5811e6df2a0240a1029d365db24b5026896776ddd1c3c70803bccd3::suilink::SuiLink<0x73f5ab2461c5993408fff21354fa9831d4f4a66cc81382419ec29e3c80c384b5::sui::Sui>
 
-// Sui to Ethereum SuiLink (Testnet)
+// Sui-to-Ethereum SuiLink (Testnet)
 0x0025bafa2e6afa511c19bd4e95626c897e798fde629b4782fe061bdc8bd65c8a::suilink::SuiLink<0x0025bafa2e6afa511c19bd4e95626c897e798fde629b4782fe061bdc8bd65c8a::ethereum::Ethereum>
 
-// Sui to Solana SuiLink (Testnet)
+// Sui-to-Solana SuiLink (Testnet)
 0x0025bafa2e6afa511c19bd4e95626c897e798fde629b4782fe061bdc8bd65c8a::suilink::SuiLink<0x0025bafa2e6afa511c19bd4e95626c897e798fde629b4782fe061bdc8bd65c8a::solana::Solana>
 ```
 

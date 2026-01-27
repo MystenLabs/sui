@@ -153,6 +153,20 @@ Enoki Connect is not required for SuiPlay integration. In other words, your game
 
 :::
 
+## SuiLink
+
+[SuiLink](https://www.suilink.io/) is a Mysten Labs product that connects wallets across chains to support use cases such as cross chain wallet verification, asset ownership verification, and asset distributions across chains. 
+
+The [Playtron companion wallet app](https://wallet.playtron.one/) utilizes this technology to enable linking wallets that could contain soulbound assets in their other Sui mnemonic or zkLogin wallets, or their Solana or Ethereum wallets. This offers an improved user experience as users won’t need to transfer over all of their assets to their Playtron wallet to get the benefits these assets attribute to them.
+
+:::info 
+
+You can prove ownership of another wallet or asset and link it to your Playtron wallet (thereby allowing the game to read those assets), but you can't transact with these assets. For operations that require transactions to occur from the Playtron wallet, assets need to be transferred.
+
+:::
+
+For more information, refer to our [separate guide on using SuiLink](/guides/developer/wallets/suilink.mdx).
+
 ## Related links
 
 <RelatedLink href="https://github.com/playtron-os/playtron-sdk" label="Playtron GameOS SDK" desc="The official Playtron OS SDK repository on GitHub." />
