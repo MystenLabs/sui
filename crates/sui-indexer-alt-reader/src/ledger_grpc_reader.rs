@@ -7,6 +7,7 @@ use std::time::Duration;
 use anyhow::Context;
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
+use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_rpc::proto::sui::rpc::v2::ledger_service_client::LedgerServiceClient;
 use sui_types::effects::TransactionEffects;
 use sui_types::event::Event;
@@ -85,9 +86,9 @@ impl LedgerGrpcReader {
     }
 
     pub async fn checkpoint_watermark(&self) -> anyhow::Result<CheckpointSummary> {
+        use grpc::GetCheckpointRequest;
         use prost_types::FieldMask;
         use sui_rpc::field::FieldMaskUtil;
-        use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 
         let request =
             GetCheckpointRequest::default().with_read_mask(FieldMask::from_paths(["summary.bcs"]));
@@ -109,8 +110,8 @@ impl LedgerGrpcReader {
 
     pub async fn get_checkpoint(
         &self,
-        request: sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest,
-    ) -> Result<sui_rpc::proto::sui::rpc::v2::GetCheckpointResponse, tonic::Status> {
+        request: grpc::GetCheckpointRequest,
+    ) -> Result<grpc::GetCheckpointResponse, tonic::Status> {
         self.request(
             "get_checkpoint",
             |mut client, request| async move { client.get_checkpoint(request).await },
@@ -121,8 +122,8 @@ impl LedgerGrpcReader {
 
     pub async fn batch_get_transactions(
         &self,
-        request: sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsRequest,
-    ) -> Result<sui_rpc::proto::sui::rpc::v2::BatchGetTransactionsResponse, tonic::Status> {
+        request: grpc::BatchGetTransactionsRequest,
+    ) -> Result<grpc::BatchGetTransactionsResponse, tonic::Status> {
         self.request(
             "batch_get_transactions",
             |mut client, request| async move { client.batch_get_transactions(request).await },
@@ -133,8 +134,8 @@ impl LedgerGrpcReader {
 
     pub async fn batch_get_objects(
         &self,
-        request: sui_rpc::proto::sui::rpc::v2::BatchGetObjectsRequest,
-    ) -> Result<sui_rpc::proto::sui::rpc::v2::BatchGetObjectsResponse, tonic::Status> {
+        request: grpc::BatchGetObjectsRequest,
+    ) -> Result<grpc::BatchGetObjectsResponse, tonic::Status> {
         self.request(
             "batch_get_objects",
             |mut client, request| async move { client.batch_get_objects(request).await },
@@ -145,8 +146,8 @@ impl LedgerGrpcReader {
 
     pub async fn get_transaction(
         &self,
-        request: sui_rpc::proto::sui::rpc::v2::GetTransactionRequest,
-    ) -> Result<sui_rpc::proto::sui::rpc::v2::GetTransactionResponse, tonic::Status> {
+        request: grpc::GetTransactionRequest,
+    ) -> Result<grpc::GetTransactionResponse, tonic::Status> {
         self.request(
             "get_transaction",
             |mut client, request| async move { client.get_transaction(request).await },
