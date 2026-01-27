@@ -5,19 +5,18 @@ use crate::SuiClient;
 use crate::sui_client_config::{SuiClientConfig, SuiEnv};
 use anyhow::{anyhow, ensure};
 use futures::future;
+use futures::stream::TryStreamExt;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_config::{Config, PersistedConfig};
-use sui_json_rpc_types::{
-    SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-};
+use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{Signature, SuiKeyPair};
+use sui_types::object::Object;
 
 use std::sync::OnceLock;
 use sui_rpc_api::Client;
@@ -258,47 +257,20 @@ impl WalletContext {
     /// Get all the gas objects (and conveniently, gas amounts) for the address
     pub async fn gas_objects(
         &self,
-        address: SuiAddress,
-    ) -> Result<Vec<(u64, SuiObjectData)>, anyhow::Error> {
-        let client = self.get_client().await?;
+        owner: SuiAddress,
+    ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
+        let client = self.grpc_client()?;
 
-        let mut objects: Vec<SuiObjectResponse> = Vec::new();
-        let mut cursor = None;
-        loop {
-            let response = client
-                .read_api()
-                .get_owned_objects(
-                    address,
-                    Some(SuiObjectResponseQuery::new(
-                        Some(SuiObjectDataFilter::StructType(GasCoin::type_())),
-                        Some(SuiObjectDataOptions::full_content()),
-                    )),
-                    cursor,
-                    None,
-                )
-                .await?;
+        client
+            .list_owned_objects(owner, Some(GasCoin::type_()))
+            .map_err(Into::into)
+            .and_then(|object| async move {
+                let gas_coin = GasCoin::try_from(&object)?;
 
-            objects.extend(response.data);
-
-            if response.has_next_page {
-                cursor = response.next_cursor;
-            } else {
-                break;
-            }
-        }
-
-        // TODO: We should ideally fetch the objects from local cache
-        let mut values_objects = Vec::new();
-
-        for object in objects {
-            let o = object.data;
-            if let Some(o) = o {
-                let gas_coin = GasCoin::try_from(&o)?;
-                values_objects.push((gas_coin.value(), o.clone()));
-            }
-        }
-
-        Ok(values_objects)
+                Ok((gas_coin.value(), object))
+            })
+            .try_collect()
+            .await
     }
 
     pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
@@ -348,9 +320,9 @@ impl WalletContext {
         address: SuiAddress,
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
-    ) -> Result<(u64, SuiObjectData), anyhow::Error> {
+    ) -> Result<(u64, Object), anyhow::Error> {
         for o in self.gas_objects(address).await? {
-            if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.object_id) {
+            if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
                 return Ok((o.0, o.1));
             }
         }
@@ -424,7 +396,7 @@ impl WalletContext {
                 .gas_objects(address)
                 .await?
                 .into_iter()
-                .map(|(_, o)| o.object_ref())
+                .map(|(_, o)| o.compute_object_reference())
                 .collect();
             result.push((address, objects));
         }

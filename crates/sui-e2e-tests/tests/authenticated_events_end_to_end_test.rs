@@ -76,7 +76,7 @@ async fn try_emit_authenticated_event(
                 .pop()
                 .unwrap()
                 .1
-                .object_ref()
+                .compute_object_reference()
         },
         10_000_000,
         rgp,

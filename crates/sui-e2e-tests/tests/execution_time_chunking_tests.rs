@@ -185,7 +185,7 @@ async fn create_shared_counter(
         .pop()
         .expect("No gas objects available")
         .1
-        .object_ref();
+        .compute_object_reference();
 
     let mut ptb = ProgrammableTransactionBuilder::new();
     ptb.programmable_move_call(
@@ -240,7 +240,7 @@ async fn send_transactions(
             .pop()
             .expect("No gas objects available")
             .1
-            .object_ref();
+            .compute_object_reference();
 
         let mut ptb = ProgrammableTransactionBuilder::new();
 

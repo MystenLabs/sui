@@ -858,15 +858,15 @@ async fn authenticated_events_backfill_test() {
             cfg
         });
 
-    let rpc_config_without_indexing = sui_config::RpcConfig {
+    let rpc_config = sui_config::RpcConfig {
         authenticated_events_indexing: Some(false),
-        enable_indexing: Some(false),
+        enable_indexing: Some(true),
         ..Default::default()
     };
 
     let mut test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
-        .with_rpc_config(rpc_config_without_indexing)
+        .with_rpc_config(rpc_config)
         .build()
         .await;
 
