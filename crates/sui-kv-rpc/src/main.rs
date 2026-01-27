@@ -44,7 +44,7 @@ async fn main() -> Result<()> {
     let _guard = TelemetryConfig::new().with_env().init();
     let app = App::parse();
     unsafe {
-        std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", app.credentials.clone());
+        std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", &app.credentials);
     };
     let server_version = Some(ServerVersion::new("sui-kv-rpc", VERSION));
     let registry_service = mysten_metrics::start_prometheus_server(
