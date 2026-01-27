@@ -70,7 +70,7 @@ There are various ways to instantiate a key pair and to derive its public key an
 
 ```tsx
 import { fromHex } from '@mysten/bcs';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { type Keypair } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Secp256k1Keypair } from '@mysten/sui/keypairs/secp256k1';
@@ -116,12 +116,15 @@ const serializedSignature = (await keypair.signTransaction(bytes)).signature;
 expect(await keypair.getPublicKey().verifyTransaction(bytes, serializedSignature)).toEqual(true);
 
 // define sui client for the desired network.
-const client = new SuiClient({ url: getFullnodeUrl('testnet') });
+const client = new SuiGrpcClient({
+	baseUrl: 'https://fullnode.testnet.sui.io:443',
+	network: 'testnet',
+});
 
 // execute transaction.
-let res = client.executeTransactionBlock({
-	transactionBlock: bytes,
-	signature: serializedSignature,
+let res = await client.executeTransaction({
+	transaction: bytes,
+	signatures: [serializedSignature],
 });
 console.log(res);
 ```

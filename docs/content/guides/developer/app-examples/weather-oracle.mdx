@@ -436,7 +436,7 @@ First, initialize your backend project. To do this, you need to follow these ste
 - Create a new file named `init.ts`
 
 ```typescript title='init.ts'
-import { SuiClient } from '@mysten/sui/client';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import * as dotenv from 'dotenv';
@@ -452,8 +452,9 @@ dotenv.config({ path: '../.env' });
 const phrase = process.env.ADMIN_PHRASE;
 const fullnode = process.env.FULLNODE!;
 const keypair = Ed25519Keypair.deriveKeypair(phrase!);
-const client = new SuiClient({
-	url: fullnode,
+const client = new SuiGrpcClient({
+	baseUrl: fullnode,
+	network: 'mainnet', // or 'testnet' depending on your setup
 });
 
 const packageId = process.env.PACKAGE_ID;
@@ -511,11 +512,6 @@ async function signAndExecuteTransaction(transaction: Transaction) {
 		.signAndExecuteTransaction({
 			signer: keypair,
 			transaction,
-			requestType: 'WaitForLocalExecution',
-			options: {
-				showObjectChanges: true,
-				showEffects: true,
-			},
 		})
 		.then(function (res) {
 			logger.info(res);
@@ -547,7 +543,7 @@ The code of init.ts does the following:
 You have now initialized the `WeatherOracle` shared object. The next step is to learn how to update them every 10 minutes with the latest weather data from the OpenWeatherMap API.
 
 ```typescript title='index.ts'
-import { SuiClient } from '@mysten/sui/client';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import * as dotenv from 'dotenv';
@@ -563,8 +559,9 @@ dotenv.config({ path: '../.env' });
 const phrase = process.env.ADMIN_PHRASE;
 const fullnode = process.env.FULLNODE!;
 const keypair = Ed25519Keypair.deriveKeypair(phrase!);
-const client = new SuiClient({
-	url: fullnode,
+const client = new SuiGrpcClient({
+	baseUrl: fullnode,
+	network: 'mainnet', // or 'testnet' depending on your setup
 });
 
 const packageId = process.env.PACKAGE_ID;

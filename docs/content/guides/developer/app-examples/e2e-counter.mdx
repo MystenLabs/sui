@@ -379,7 +379,7 @@ Set up your `src/App.tsx` file so that you render the `CreateCounter` component 
 </summary>
 
 ```tsx
-  import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit";
+  import { ConnectButton, useCurrentAccount } from "@mysten/dapp-kit-react";
   import { isValidSuiObjectId } from "@mysten/sui/utils";
   import { Box, Container, Flex, Heading } from "@radix-ui/themes";
   import { useState } from "react";
@@ -480,66 +480,58 @@ Add the following code to your `src/Counter.tsx` file:
   ```tsx
     import {
       useCurrentAccount,
-      useSuiClientQuery,
-    } from "@mysten/dapp-kit";
-    import { SuiObjectData } from "@mysten/sui/client";
+      useCurrentClient,
+      useDAppKit,
+    } from "@mysten/dapp-kit-react";
+    import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+    import { Transaction } from "@mysten/sui/transactions";
     import { Button, Flex, Heading, Text } from "@radix-ui/themes";
-    import { useState } from "react";
     import ClipLoader from "react-spinners/ClipLoader";
 
-
     export function Counter({ id }: { id: string }) {
+      const client = useCurrentClient();
       const currentAccount = useCurrentAccount();
-      const { data, isPending, error, refetch } = useSuiClientQuery("getObject", {
-        id,
-        options: {
-          showContent: true,
-          showOwner: true,
+      const dAppKit = useDAppKit();
+      const queryClient = useQueryClient();
+
+      // Fetch counter object with React Query
+      const { data, isPending, error } = useQuery({
+        queryKey: ["counter", id],
+        queryFn: async () => {
+          const { object } = await client.getObject({
+            objectId: id,
+            include: { content: true },
+          });
+          return object;
         },
       });
 
-      const [waitingForTxn, setWaitingForTxn] = useState("");
-
       const executeMoveCall = (method: "increment" | "reset") => {
-        // TODO
+        // TODO - will be implemented below
       };
 
       if (isPending) return <Text>Loading...</Text>;
 
       if (error) return <Text>Error: {error.message}</Text>;
 
-      if (!data.data) return <Text>Not found</Text>;
+      if (!data) return <Text>Not found</Text>;
 
       const ownedByCurrentAccount =
-        getCounterFields(data.data)?.owner === currentAccount?.address;
+        data.owner.$kind === "AddressOwner" && data.owner.AddressOwner === currentAccount?.address;
 
       return (
         <>
           <Heading size="3">Counter {id}</Heading>
 
           <Flex direction="column" gap="2">
-            <Text>Count: {getCounterFields(data.data)?.value}</Text>
+            <Text>Count: (see full implementation for BCS parsing)</Text>
             <Flex direction="row" gap="2">
-              <Button
-                onClick={() => executeMoveCall("increment")}
-                disabled={waitingForTxn !== ""}
-              >
-                {waitingForTxn === "increment" ? (
-                  <ClipLoader size={20} />
-                ) : (
-                  "Increment"
-                )}
+              <Button onClick={() => executeMoveCall("increment")}>
+                Increment
               </Button>
               {ownedByCurrentAccount ? (
-                <Button
-                  onClick={() => executeMoveCall("reset")}
-                  disabled={waitingForTxn !== ""}
-                >
-                  {waitingForTxn === "reset" ? (
-                    <ClipLoader size={20} />
-                  ) : (
-                    "Reset"
-                  )}
+                <Button onClick={() => executeMoveCall("reset")}>
+                  Reset
                 </Button>
               ) : null}
             </Flex>
@@ -547,20 +539,15 @@ Add the following code to your `src/Counter.tsx` file:
         </>
       );
     }
-    function getCounterFields(data: SuiObjectData) {
-      if (data.content?.dataType !== "moveObject") {
-        return null;
-      }
-
-      return data.content.fields as { value: number; owner: string };
-    }
   ```
 
 </details>
 
-This snippet has a few new concepts to examine. It uses the `useSuiClientQuery` hook to make the `getObject` RPC call. This returns a data object representing your counter. dApp Kit doesn't know which fields your counter object has, so define a `getCounterFields` helper that gets the counter fields, and adds a type-cast so that you can access the expected `value` and `owner` fields in your component.
+This snippet shows the key concepts. It uses the `useCurrentClient` hook to get the Sui client, combined with TanStack Query's `useQuery` hook to fetch the object. The `useDAppKit` hook provides access to transaction signing.
 
-The code also adds an `executeMoveCall` function that still needs implementing. This works just like the `create` function you used to create the counter. Instead of using a callback prop like you did for `CreateCounter`, you can use the refetch provided by `useSuiClientQuery` to reload your `Counter` object after you've executed your PTB.
+Note that the gRPC API returns object content as BCS-encoded bytes. The full template (shown below) includes BCS parsing to extract the counter's value and owner fields.
+
+The code also adds an `executeMoveCall` function that still needs implementing. The full implementation uses `useMutation` from React Query to handle the transaction execution and state management.
 
 <details>
 
