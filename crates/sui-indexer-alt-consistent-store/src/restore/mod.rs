@@ -251,10 +251,10 @@ pub async fn start_restorer(
         };
     }
 
+    add_restorer!(AddressBalances);
     add_restorer!(Balances);
     add_restorer!(ObjectByOwner);
     add_restorer!(ObjectByType);
-    add_restorer!(AddressBalances);
 
     ensure!(
         pipelines.is_empty(),
