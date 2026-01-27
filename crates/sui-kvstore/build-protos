@@ -26,6 +26,7 @@ fn main() {
     tonic_prost_build::configure()
         .build_client(true)
         .build_server(false)
+        .bytes(".")
         .out_dir(&out_dir)
         .compile_fds(fds)
         .unwrap();

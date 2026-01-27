@@ -58,6 +58,7 @@ pub mod r#type {
             }
             #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
             pub enum Encoding {
+                #[deprecated]
                 #[prost(message, tag = "1")]
                 Utf8Raw(Utf8Raw),
                 #[prost(message, tag = "2")]
@@ -152,8 +153,8 @@ pub mod r#type {
             pub struct Singleton {}
             #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
             pub struct DelimitedBytes {
-                #[prost(bytes = "vec", tag = "1")]
-                pub delimiter: ::prost::alloc::vec::Vec<u8>,
+                #[prost(bytes = "bytes", tag = "1")]
+                pub delimiter: ::prost::bytes::Bytes,
             }
             #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
             pub struct OrderedCodeBytes {}
@@ -261,8 +262,8 @@ pub mod r#type {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Row {
-    #[prost(bytes = "vec", tag = "1")]
-    pub key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "1")]
+    pub key: ::prost::bytes::Bytes,
     #[prost(message, repeated, tag = "2")]
     pub families: ::prost::alloc::vec::Vec<Family>,
 }
@@ -275,8 +276,8 @@ pub struct Family {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Column {
-    #[prost(bytes = "vec", tag = "1")]
-    pub qualifier: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "1")]
+    pub qualifier: ::prost::bytes::Bytes,
     #[prost(message, repeated, tag = "2")]
     pub cells: ::prost::alloc::vec::Vec<Cell>,
 }
@@ -284,8 +285,8 @@ pub struct Column {
 pub struct Cell {
     #[prost(int64, tag = "1")]
     pub timestamp_micros: i64,
-    #[prost(bytes = "vec", tag = "2")]
-    pub value: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "2")]
+    pub value: ::prost::bytes::Bytes,
     #[prost(string, repeated, tag = "3")]
     pub labels: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
@@ -301,11 +302,11 @@ pub mod value {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Kind {
         #[prost(bytes, tag = "8")]
-        RawValue(::prost::alloc::vec::Vec<u8>),
+        RawValue(::prost::bytes::Bytes),
         #[prost(int64, tag = "9")]
         RawTimestampMicros(i64),
         #[prost(bytes, tag = "2")]
-        BytesValue(::prost::alloc::vec::Vec<u8>),
+        BytesValue(::prost::bytes::Bytes),
         #[prost(string, tag = "3")]
         StringValue(::prost::alloc::string::String),
         #[prost(int64, tag = "6")]
@@ -339,22 +340,22 @@ pub mod row_range {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum StartKey {
         #[prost(bytes, tag = "1")]
-        StartKeyClosed(::prost::alloc::vec::Vec<u8>),
+        StartKeyClosed(::prost::bytes::Bytes),
         #[prost(bytes, tag = "2")]
-        StartKeyOpen(::prost::alloc::vec::Vec<u8>),
+        StartKeyOpen(::prost::bytes::Bytes),
     }
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum EndKey {
         #[prost(bytes, tag = "3")]
-        EndKeyOpen(::prost::alloc::vec::Vec<u8>),
+        EndKeyOpen(::prost::bytes::Bytes),
         #[prost(bytes, tag = "4")]
-        EndKeyClosed(::prost::alloc::vec::Vec<u8>),
+        EndKeyClosed(::prost::bytes::Bytes),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RowSet {
-    #[prost(bytes = "vec", repeated, tag = "1")]
-    pub row_keys: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    pub row_keys: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
     #[prost(message, repeated, tag = "2")]
     pub row_ranges: ::prost::alloc::vec::Vec<RowRange>,
 }
@@ -372,16 +373,16 @@ pub mod column_range {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum StartQualifier {
         #[prost(bytes, tag = "2")]
-        StartQualifierClosed(::prost::alloc::vec::Vec<u8>),
+        StartQualifierClosed(::prost::bytes::Bytes),
         #[prost(bytes, tag = "3")]
-        StartQualifierOpen(::prost::alloc::vec::Vec<u8>),
+        StartQualifierOpen(::prost::bytes::Bytes),
     }
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum EndQualifier {
         #[prost(bytes, tag = "4")]
-        EndQualifierClosed(::prost::alloc::vec::Vec<u8>),
+        EndQualifierClosed(::prost::bytes::Bytes),
         #[prost(bytes, tag = "5")]
-        EndQualifierOpen(::prost::alloc::vec::Vec<u8>),
+        EndQualifierOpen(::prost::bytes::Bytes),
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -403,16 +404,16 @@ pub mod value_range {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum StartValue {
         #[prost(bytes, tag = "1")]
-        StartValueClosed(::prost::alloc::vec::Vec<u8>),
+        StartValueClosed(::prost::bytes::Bytes),
         #[prost(bytes, tag = "2")]
-        StartValueOpen(::prost::alloc::vec::Vec<u8>),
+        StartValueOpen(::prost::bytes::Bytes),
     }
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum EndValue {
         #[prost(bytes, tag = "3")]
-        EndValueClosed(::prost::alloc::vec::Vec<u8>),
+        EndValueClosed(::prost::bytes::Bytes),
         #[prost(bytes, tag = "4")]
-        EndValueOpen(::prost::alloc::vec::Vec<u8>),
+        EndValueOpen(::prost::bytes::Bytes),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -465,19 +466,19 @@ pub mod row_filter {
         #[prost(bool, tag = "18")]
         BlockAllFilter(bool),
         #[prost(bytes, tag = "4")]
-        RowKeyRegexFilter(::prost::alloc::vec::Vec<u8>),
+        RowKeyRegexFilter(::prost::bytes::Bytes),
         #[prost(double, tag = "14")]
         RowSampleFilter(f64),
         #[prost(string, tag = "5")]
         FamilyNameRegexFilter(::prost::alloc::string::String),
         #[prost(bytes, tag = "6")]
-        ColumnQualifierRegexFilter(::prost::alloc::vec::Vec<u8>),
+        ColumnQualifierRegexFilter(::prost::bytes::Bytes),
         #[prost(message, tag = "7")]
         ColumnRangeFilter(super::ColumnRange),
         #[prost(message, tag = "8")]
         TimestampRangeFilter(super::TimestampRange),
         #[prost(bytes, tag = "9")]
-        ValueRegexFilter(::prost::alloc::vec::Vec<u8>),
+        ValueRegexFilter(::prost::bytes::Bytes),
         #[prost(message, tag = "15")]
         ValueRangeFilter(super::ValueRange),
         #[prost(int32, tag = "10")]
@@ -503,12 +504,12 @@ pub mod mutation {
     pub struct SetCell {
         #[prost(string, tag = "1")]
         pub family_name: ::prost::alloc::string::String,
-        #[prost(bytes = "vec", tag = "2")]
-        pub column_qualifier: ::prost::alloc::vec::Vec<u8>,
+        #[prost(bytes = "bytes", tag = "2")]
+        pub column_qualifier: ::prost::bytes::Bytes,
         #[prost(int64, tag = "3")]
         pub timestamp_micros: i64,
-        #[prost(bytes = "vec", tag = "4")]
-        pub value: ::prost::alloc::vec::Vec<u8>,
+        #[prost(bytes = "bytes", tag = "4")]
+        pub value: ::prost::bytes::Bytes,
     }
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct AddToCell {
@@ -536,8 +537,8 @@ pub mod mutation {
     pub struct DeleteFromColumn {
         #[prost(string, tag = "1")]
         pub family_name: ::prost::alloc::string::String,
-        #[prost(bytes = "vec", tag = "2")]
-        pub column_qualifier: ::prost::alloc::vec::Vec<u8>,
+        #[prost(bytes = "bytes", tag = "2")]
+        pub column_qualifier: ::prost::bytes::Bytes,
         #[prost(message, optional, tag = "3")]
         pub time_range: ::core::option::Option<super::TimestampRange>,
     }
@@ -568,8 +569,8 @@ pub mod mutation {
 pub struct ReadModifyWriteRule {
     #[prost(string, tag = "1")]
     pub family_name: ::prost::alloc::string::String,
-    #[prost(bytes = "vec", tag = "2")]
-    pub column_qualifier: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "2")]
+    pub column_qualifier: ::prost::bytes::Bytes,
     #[prost(oneof = "read_modify_write_rule::Rule", tags = "3, 4")]
     pub rule: ::core::option::Option<read_modify_write_rule::Rule>,
 }
@@ -578,7 +579,7 @@ pub mod read_modify_write_rule {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum Rule {
         #[prost(bytes, tag = "3")]
-        AppendValue(::prost::alloc::vec::Vec<u8>),
+        AppendValue(::prost::bytes::Bytes),
         #[prost(int64, tag = "4")]
         IncrementAmount(i64),
     }
@@ -634,15 +635,15 @@ pub struct ProtoRows {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ProtoRowsBatch {
-    #[prost(bytes = "vec", tag = "1")]
-    pub batch_data: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "1")]
+    pub batch_data: ::prost::bytes::Bytes,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct PartialResultSet {
     #[prost(uint32, optional, tag = "6")]
     pub batch_checksum: ::core::option::Option<u32>,
-    #[prost(bytes = "vec", tag = "5")]
-    pub resume_token: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "5")]
+    pub resume_token: ::prost::bytes::Bytes,
     #[prost(bool, tag = "7")]
     pub reset: bool,
     #[prost(int32, tag = "4")]
@@ -660,8 +661,8 @@ pub mod partial_result_set {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Idempotency {
-    #[prost(bytes = "vec", tag = "1")]
-    pub token: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "1")]
+    pub token: ::prost::bytes::Bytes,
     #[prost(message, optional, tag = "2")]
     pub start_time: ::core::option::Option<::prost_types::Timestamp>,
 }
@@ -768,8 +769,8 @@ pub mod read_rows_request {
 pub struct ReadRowsResponse {
     #[prost(message, repeated, tag = "1")]
     pub chunks: ::prost::alloc::vec::Vec<read_rows_response::CellChunk>,
-    #[prost(bytes = "vec", tag = "2")]
-    pub last_scanned_row_key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "2")]
+    pub last_scanned_row_key: ::prost::bytes::Bytes,
     #[prost(message, optional, tag = "3")]
     pub request_stats: ::core::option::Option<RequestStats>,
 }
@@ -777,8 +778,8 @@ pub struct ReadRowsResponse {
 pub mod read_rows_response {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
     pub struct CellChunk {
-        #[prost(bytes = "vec", tag = "1")]
-        pub row_key: ::prost::alloc::vec::Vec<u8>,
+        #[prost(bytes = "bytes", tag = "1")]
+        pub row_key: ::prost::bytes::Bytes,
         #[prost(message, optional, tag = "2")]
         pub family_name: ::core::option::Option<::prost::alloc::string::String>,
         #[prost(message, optional, tag = "3")]
@@ -787,8 +788,8 @@ pub mod read_rows_response {
         pub timestamp_micros: i64,
         #[prost(string, repeated, tag = "5")]
         pub labels: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-        #[prost(bytes = "vec", tag = "6")]
-        pub value: ::prost::alloc::vec::Vec<u8>,
+        #[prost(bytes = "bytes", tag = "6")]
+        pub value: ::prost::bytes::Bytes,
         #[prost(int32, tag = "7")]
         pub value_size: i32,
         #[prost(oneof = "cell_chunk::RowStatus", tags = "8, 9")]
@@ -818,8 +819,8 @@ pub struct SampleRowKeysRequest {
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SampleRowKeysResponse {
-    #[prost(bytes = "vec", tag = "1")]
-    pub row_key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "1")]
+    pub row_key: ::prost::bytes::Bytes,
     #[prost(int64, tag = "2")]
     pub offset_bytes: i64,
 }
@@ -831,8 +832,8 @@ pub struct MutateRowRequest {
     pub authorized_view_name: ::prost::alloc::string::String,
     #[prost(string, tag = "4")]
     pub app_profile_id: ::prost::alloc::string::String,
-    #[prost(bytes = "vec", tag = "2")]
-    pub row_key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "2")]
+    pub row_key: ::prost::bytes::Bytes,
     #[prost(message, repeated, tag = "3")]
     pub mutations: ::prost::alloc::vec::Vec<Mutation>,
     #[prost(message, optional, tag = "8")]
@@ -855,8 +856,8 @@ pub struct MutateRowsRequest {
 pub mod mutate_rows_request {
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Entry {
-        #[prost(bytes = "vec", tag = "1")]
-        pub row_key: ::prost::alloc::vec::Vec<u8>,
+        #[prost(bytes = "bytes", tag = "1")]
+        pub row_key: ::prost::bytes::Bytes,
         #[prost(message, repeated, tag = "2")]
         pub mutations: ::prost::alloc::vec::Vec<super::Mutation>,
         #[prost(message, optional, tag = "3")]
@@ -895,8 +896,8 @@ pub struct CheckAndMutateRowRequest {
     pub authorized_view_name: ::prost::alloc::string::String,
     #[prost(string, tag = "7")]
     pub app_profile_id: ::prost::alloc::string::String,
-    #[prost(bytes = "vec", tag = "2")]
-    pub row_key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "2")]
+    pub row_key: ::prost::bytes::Bytes,
     #[prost(message, optional, tag = "6")]
     pub predicate_filter: ::core::option::Option<RowFilter>,
     #[prost(message, repeated, tag = "4")]
@@ -926,8 +927,8 @@ pub struct ReadModifyWriteRowRequest {
     pub authorized_view_name: ::prost::alloc::string::String,
     #[prost(string, tag = "4")]
     pub app_profile_id: ::prost::alloc::string::String,
-    #[prost(bytes = "vec", tag = "2")]
-    pub row_key: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "2")]
+    pub row_key: ::prost::bytes::Bytes,
     #[prost(message, repeated, tag = "3")]
     pub rules: ::prost::alloc::vec::Vec<ReadModifyWriteRule>,
 }
@@ -1005,8 +1006,8 @@ pub mod read_change_stream_response {
         pub r#type: i32,
         #[prost(string, tag = "2")]
         pub source_cluster_id: ::prost::alloc::string::String,
-        #[prost(bytes = "vec", tag = "3")]
-        pub row_key: ::prost::alloc::vec::Vec<u8>,
+        #[prost(bytes = "bytes", tag = "3")]
+        pub row_key: ::prost::bytes::Bytes,
         #[prost(message, optional, tag = "4")]
         pub commit_timestamp: ::core::option::Option<::prost_types::Timestamp>,
         #[prost(int32, tag = "5")]
@@ -1102,10 +1103,10 @@ pub struct ExecuteQueryRequest {
     #[deprecated]
     #[prost(string, tag = "3")]
     pub query: ::prost::alloc::string::String,
-    #[prost(bytes = "vec", tag = "9")]
-    pub prepared_query: ::prost::alloc::vec::Vec<u8>,
-    #[prost(bytes = "vec", tag = "8")]
-    pub resume_token: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "9")]
+    pub prepared_query: ::prost::bytes::Bytes,
+    #[prost(bytes = "bytes", tag = "8")]
+    pub resume_token: ::prost::bytes::Bytes,
     #[prost(map = "string, message", tag = "7")]
     pub params: ::std::collections::HashMap<::prost::alloc::string::String, Value>,
     #[prost(oneof = "execute_query_request::DataFormat", tags = "4")]
@@ -1115,6 +1116,7 @@ pub struct ExecuteQueryRequest {
 pub mod execute_query_request {
     #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum DataFormat {
+        #[deprecated]
         #[prost(message, tag = "4")]
         ProtoFormat(super::ProtoFormat),
     }
@@ -1159,8 +1161,8 @@ pub mod prepare_query_request {
 pub struct PrepareQueryResponse {
     #[prost(message, optional, tag = "1")]
     pub metadata: ::core::option::Option<ResultSetMetadata>,
-    #[prost(bytes = "vec", tag = "2")]
-    pub prepared_query: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "bytes", tag = "2")]
+    pub prepared_query: ::prost::bytes::Bytes,
     #[prost(message, optional, tag = "3")]
     pub valid_until: ::core::option::Option<::prost_types::Timestamp>,
 }

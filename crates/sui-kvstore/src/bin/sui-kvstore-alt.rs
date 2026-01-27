@@ -1,42 +1,70 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! New kvstore binary using sui-indexer-alt-framework.
-//!
-//! This binary can run alongside the legacy kvstore binary during migration.
-//! Both write to the same BigTable tables and share the same watermark.
-
 use std::time::Duration;
 
 use anyhow::Result;
 use clap::Parser;
-use sui_indexer_alt_framework::ingestion::{ClientArgs, IngestionConfig};
-use sui_indexer_alt_framework::pipeline::CommitterConfig;
+use sui_indexer_alt_framework::Indexer;
+use sui_indexer_alt_framework::IndexerArgs;
+use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::ingestion::IngestionConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
-use sui_indexer_alt_framework::{Indexer, IndexerArgs};
+use sui_indexer_alt_framework::service::Error;
 use sui_indexer_alt_metrics::MetricsArgs;
-use sui_kvstore::{BigTableClient, BigTableStore, KvStorePipeline};
+use sui_kvstore::BIGTABLE_MAX_MUTATIONS;
+use sui_kvstore::BigTableClient;
+use sui_kvstore::BigTableHandler;
+use sui_kvstore::BigTableStore;
+use sui_kvstore::CheckpointsByDigestPipeline;
+use sui_kvstore::CheckpointsPipeline;
+use sui_kvstore::EpochLegacyPipeline;
+use sui_kvstore::ObjectsPipeline;
+use sui_kvstore::TransactionsPipeline;
+use sui_kvstore::set_max_mutations;
 use telemetry_subscribers::TelemetryConfig;
 use tracing::info;
+
+fn parse_max_mutations(s: &str) -> Result<usize, String> {
+    let value: usize = s.parse().map_err(|e| format!("invalid number: {e}"))?;
+    if value >= BIGTABLE_MAX_MUTATIONS {
+        return Err(format!(
+            "args.max_mutations must be less than {BIGTABLE_MAX_MUTATIONS}"
+        ));
+    }
+    Ok(value)
+}
 
 #[derive(Parser)]
 #[command(name = "sui-kvstore-alt")]
 #[command(about = "KVStore indexer using sui-indexer-alt-framework")]
 struct Args {
-    /// BigTable instance ID (e.g., "projects/myproject/instances/myinstance")
+    /// BigTable instance ID
     instance_id: String,
-
-    /// Number of concurrent checkpoint writes
-    #[arg(long, default_value = "10")]
-    write_concurrency: usize,
-
-    /// Interval between watermark updates
-    #[arg(long, default_value = "1m", value_parser = humantime::parse_duration)]
-    watermark_interval: Duration,
 
     /// BigTable app profile ID
     #[arg(long)]
     app_profile_id: Option<String>,
+
+    /// Number of concurrent checkpoint writes
+    #[arg(long)]
+    write_concurrency: Option<usize>,
+
+    /// Interval between watermark updates
+    #[arg(long, value_parser = humantime::parse_duration)]
+    watermark_interval: Option<Duration>,
+
+    /// Maximum number of checkpoints to fetch concurrently
+    #[arg(long)]
+    ingest_concurrency: Option<usize>,
+
+    /// Maximum size of checkpoint backlog across all workers
+    #[arg(long)]
+    checkpoint_buffer_size: Option<usize>,
+
+    /// Maximum mutations per BigTable batch (must be < 100k)
+    #[arg(long, default_value_t = 10_000, value_parser = parse_max_mutations)]
+    max_mutations: usize,
 
     #[command(flatten)]
     metrics_args: MetricsArgs,
@@ -53,14 +81,15 @@ async fn main() -> Result<()> {
     let _guard = TelemetryConfig::new().with_env().init();
 
     let args = Args::parse();
+    let is_bounded = args.indexer_args.last_checkpoint.is_some();
+    set_max_mutations(args.max_mutations);
 
     info!("Starting sui-kvstore-alt indexer");
     info!(instance_id = %args.instance_id);
 
-    // Create BigTable client
     let client = BigTableClient::new_remote(
         args.instance_id,
-        false, // write mode
+        false,
         None,
         "sui-kvstore-alt".to_string(),
         None,
@@ -68,42 +97,77 @@ async fn main() -> Result<()> {
     )
     .await?;
 
-    // Create store
     let store = BigTableStore::new(client);
 
-    // Set up metrics
     let registry = prometheus::Registry::new_custom(Some("kvstore_alt".into()), None)?;
     let metrics_service =
         sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
 
-    // Create indexer
+    let mut ingestion_config = IngestionConfig::default();
+    if let Some(v) = args.ingest_concurrency {
+        ingestion_config.ingest_concurrency = v;
+    }
+    if let Some(v) = args.checkpoint_buffer_size {
+        ingestion_config.checkpoint_buffer_size = v;
+    }
+
     let mut indexer = Indexer::new(
         store,
         args.indexer_args,
         args.client_args,
-        IngestionConfig::default(),
+        ingestion_config,
         None,
         &registry,
     )
     .await?;
 
-    // Register the kvstore pipeline
-    let config = ConcurrentConfig {
-        committer: CommitterConfig {
-            write_concurrency: args.write_concurrency,
-            watermark_interval_ms: args.watermark_interval.as_millis() as u64,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    indexer.concurrent_pipeline(KvStorePipeline, config).await?;
+    let mut config = ConcurrentConfig::default();
+    if let Some(v) = args.write_concurrency {
+        config.committer.write_concurrency = v;
+    }
+    if let Some(v) = args.watermark_interval {
+        config.committer.watermark_interval_ms = v.as_millis() as u64;
+    }
 
-    info!("Indexer created");
+    indexer
+        .concurrent_pipeline(BigTableHandler::new(CheckpointsPipeline), config.clone())
+        .await?;
+    indexer
+        .concurrent_pipeline(
+            BigTableHandler::new(CheckpointsByDigestPipeline),
+            config.clone(),
+        )
+        .await?;
+    indexer
+        .concurrent_pipeline(BigTableHandler::new(TransactionsPipeline), config.clone())
+        .await?;
+    indexer
+        .concurrent_pipeline(BigTableHandler::new(ObjectsPipeline), config.clone())
+        .await?;
 
-    // Run the indexer
+    // DEPRECATED. Delete after migrating readers to new columns.
+    // EpochLegacyPipeline has its own Handler impl due to read-modify-write pattern.
+    indexer
+        .concurrent_pipeline(EpochLegacyPipeline, config)
+        .await?;
+
     let metrics_handle = metrics_service.run().await?;
     let service = indexer.run().await?;
-    service.attach(metrics_handle).main().await?;
+
+    match service.attach(metrics_handle).main().await {
+        Ok(()) => {}
+        Err(Error::Terminated) => {
+            if is_bounded {
+                std::process::exit(1);
+            }
+        }
+        Err(Error::Aborted) => {
+            std::process::exit(1);
+        }
+        Err(Error::Task(_)) => {
+            std::process::exit(2);
+        }
+    }
 
     Ok(())
 }

@@ -1,28 +1,43 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-mod bigtable;
-mod handlers;
 
 use anyhow::Result;
 use async_trait::async_trait;
-pub use bigtable::client::BigTableClient;
-pub use bigtable::store::{BigTableConnection, BigTableStore};
-pub use handlers::KvStorePipeline;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::EpochId;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
-use sui_types::digests::{CheckpointDigest, TransactionDigest};
-use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::digests::CheckpointDigest;
+use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
-use sui_types::full_checkpoint_content::CheckpointData;
-use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary,
-};
-use sui_types::messages_consensus::TimestampMs;
+use sui_types::messages_checkpoint::CheckpointContents;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::object::Object;
-use sui_types::storage::{EpochInfo, ObjectKey};
+use sui_types::storage::EpochInfo;
+use sui_types::storage::ObjectKey;
 use sui_types::transaction::Transaction;
+
+pub use crate::bigtable::client::BigTableClient;
+pub use crate::bigtable::store::BigTableConnection;
+pub use crate::bigtable::store::BigTableStore;
+pub use crate::handlers::BIGTABLE_MAX_MUTATIONS;
+pub use crate::handlers::BigTableHandler;
+pub use crate::handlers::CheckpointsByDigestPipeline;
+pub use crate::handlers::CheckpointsPipeline;
+pub use crate::handlers::EpochLegacyBatch;
+pub use crate::handlers::EpochLegacyPipeline;
+pub use crate::handlers::ObjectsPipeline;
+pub use crate::handlers::PrevEpochUpdate;
+pub use crate::handlers::TransactionsPipeline;
+pub use crate::handlers::set_max_mutations;
+
+mod bigtable;
+mod handlers;
+pub mod tables;
 
 #[async_trait]
 pub trait KeyValueStoreReader {
@@ -50,15 +65,6 @@ pub trait KeyValueStoreReader {
     ) -> Result<Vec<(TransactionDigest, TransactionEventsData)>>;
 }
 
-#[async_trait]
-pub trait KeyValueStoreWriter {
-    async fn save_objects(&mut self, objects: &[&Object], timestamp_ms: TimestampMs) -> Result<()>;
-    async fn save_transactions(&mut self, transactions: &[TransactionData]) -> Result<()>;
-    async fn save_checkpoint(&mut self, checkpoint: &CheckpointData) -> Result<()>;
-    async fn save_watermark(&mut self, watermark: CheckpointSequenceNumber) -> Result<()>;
-    async fn save_epoch(&mut self, epoch: EpochInfo) -> Result<()>;
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Checkpoint {
     pub summary: CheckpointSummary,
@@ -80,4 +86,36 @@ pub struct TransactionData {
 pub struct TransactionEventsData {
     pub events: Vec<Event>,
     pub timestamp_ms: u64,
+}
+
+/// Serializable watermark for per-pipeline tracking in BigTable.
+/// Mirrors the framework's CommitterWatermark type.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PipelineWatermark {
+    pub epoch_hi_inclusive: u64,
+    pub checkpoint_hi_inclusive: u64,
+    pub tx_hi: u64,
+    pub timestamp_ms_hi_inclusive: u64,
+}
+
+impl From<sui_indexer_alt_framework_store_traits::CommitterWatermark> for PipelineWatermark {
+    fn from(w: sui_indexer_alt_framework_store_traits::CommitterWatermark) -> Self {
+        Self {
+            epoch_hi_inclusive: w.epoch_hi_inclusive,
+            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            tx_hi: w.tx_hi,
+            timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
+        }
+    }
+}
+
+impl From<PipelineWatermark> for sui_indexer_alt_framework_store_traits::CommitterWatermark {
+    fn from(w: PipelineWatermark) -> Self {
+        Self {
+            epoch_hi_inclusive: w.epoch_hi_inclusive,
+            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            tx_hi: w.tx_hi,
+            timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
+        }
+    }
 }
