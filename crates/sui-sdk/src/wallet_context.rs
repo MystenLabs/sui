@@ -248,17 +248,11 @@ impl WalletContext {
         &self,
         object_id: ObjectID,
     ) -> Result<FullObjectRef, anyhow::Error> {
-        let client = self.get_client().await?;
-        let object = client
-            .read_api()
-            .get_object_with_options(object_id, SuiObjectDataOptions::new().with_owner())
+        Ok(self
+            .grpc_client()?
+            .get_object(object_id)
             .await?
-            .into_object()?;
-        let object_ref = object.object_ref();
-        let owner = object
-            .owner
-            .expect("Owner should be present if `with_owner` is set");
-        Ok(FullObjectRef::from_object_ref_and_owner(object_ref, &owner))
+            .compute_full_object_reference())
     }
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address
