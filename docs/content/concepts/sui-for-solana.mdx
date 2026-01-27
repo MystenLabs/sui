@@ -16,7 +16,7 @@ The biggest difference between Sui and Solana development lies in the programmin
 | Asset and token accessibility | Tokens stored in Program Derived Addresses (PDAs). Access controlled through program logic and signer verification. | Anyone can access shared objects. Owned objects can only be accessed by the object owner. |
 | Access control | Signer-based access control. Programs verify transaction signers and account ownership. PDAs enable program-controlled accounts. | Mostly [capability based access control](https://move-book.com/programmability/capability.html) through owned objects. Identity and role-based access control is possible. |
 | Contract upgrades | Programs can be marked as upgradeable or immutable at deployment. Upgrades replace the program binary but maintain the same program ID. | New contracts must be [layout-compatible](/guides/developer/packages/upgrade#upgrade-requirements) with the old one. You need to consider versioning shared objects. |
-| Mutate contract state | Sending transactions with instruction data. Programs process instructions and modify account data. Can use Anchor's IDL (Interface Definition Language) for type-safe client interaction. | Sending transaction through runtime [programmable transaction block](/concepts/transactions/prog-txn-blocks.mdx) (PTB) construction. |
+| Mutate contract state | Sending transactions with instruction data. Programs process instructions and modify account data. Can use Anchor's IDL (Interface Definition Language) for type-safe client interaction. | Sending transaction through runtime [programmable transaction block](/guides/developer/transactions/prog-txn-blocks.mdx) (PTB) construction. |
 | Type safety | Strongly typed at compile time with Rust's type system. Memory safety enforced by borrow checker. | Resource-oriented with linear types. Assets cannot be copied or dropped unless explicitly allowed. Strong type safety with Move Prover for formal verification. |
 
 ## Object model
@@ -75,7 +75,7 @@ In Move, PTBs solve this problem. PTBs give builders the ability to chain contra
 
 Builders on Sui leverage PTBs to provide experiences that would otherwise be intractable. A good example is a DeFi aggregator that routes token swaps across multiple DeFi protocols with the best price. On Sui, the aggregator would use a single PTB with the guarantee that the transaction would execute at the displayed price or it would revert completely. The PTB is one of the most powerful Sui features. Experience shows builders who are most successful on Sui are the ones who learn to leverage this feature early and often, leaning into it rather than treating it just as a way to batch transactions.
 
-See [Programmable Transaction Blocks](/concepts/transactions/prog-txn-blocks.mdx) for details on PTBs.
+See [Programmable Transaction Blocks](/guides/developer/transactions/prog-txn-blocks.mdx) for details on PTBs.
 
 ## More comparison
 
