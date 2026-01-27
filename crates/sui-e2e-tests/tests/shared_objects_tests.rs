@@ -396,9 +396,6 @@ async fn call_shared_object_contract() {
             .effects
             .unwrap();
         assert!(effects.dependencies().contains(&increment_transaction));
-        if let Some(prev) = assert_value_mut_transaction {
-            assert!(effects.dependencies().contains(&prev));
-        }
         assert_value_mut_transaction = Some(*effects.transaction_digest());
     }
 

@@ -562,8 +562,8 @@ async fn do_test_full_node_sync_flood() {
                     .unwrap();
 
                 let mut coins = context.gas_objects(sender).await.unwrap();
-                let object_to_split = coins.swap_remove(0).1.object_ref();
-                let gas_obj = coins.swap_remove(0).1.object_ref();
+                let object_to_split = coins.swap_remove(0).1.compute_object_reference();
+                let gas_obj = coins.swap_remove(0).1.compute_object_reference();
                 (sender, object_to_split, gas_obj)
             };
 

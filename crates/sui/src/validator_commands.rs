@@ -636,7 +636,7 @@ impl SuiValidatorCommand {
                 let gas_price = context.get_reference_gas_price().await?;
                 let tx_data = build_committee_register_transaction(
                     address,
-                    &gas.object_ref(),
+                    &gas.compute_object_reference(),
                     bridge,
                     ecdsa_keypair.public().as_bytes().to_vec(),
                     &bridge_authority_url,
@@ -715,7 +715,7 @@ impl SuiValidatorCommand {
                 let gas_price = context.get_reference_gas_price().await?;
                 let tx_data = build_committee_update_url_transaction(
                     address,
-                    &gas.object_ref(),
+                    &gas.compute_object_reference(),
                     bridge,
                     &bridge_authority_url,
                     gas_price,

@@ -67,7 +67,7 @@ async fn get_nth_sender_and_all_gas(
         .await
         .unwrap()
         .into_iter()
-        .map(|(_, obj)| obj.object_ref())
+        .map(|(_, obj)| obj.compute_object_reference())
         .collect();
 
     (sender, gas)
@@ -563,7 +563,6 @@ async fn test_withdraw_insufficient_balance() {
 
     let (sender, gas) = test_env.get_sender_and_all_gas(0);
     let gas1 = gas[0];
-    let gas2 = gas[1];
 
     // send 1000 from our gas coin to our balance
     let tx = test_env
@@ -586,19 +585,19 @@ async fn test_withdraw_insufficient_balance() {
     assert!(err.to_string().contains("is less than requested"));
 
     // Refresh gas1 after the failed transaction
-    let gas1 = test_env.get_sender_and_gas(0).1;
+    let (sender, gas) = test_env.get_sender_and_all_gas(0);
 
     // Now exceed the balance with two transactions, each of which can be certified
     // The second one will fail at execution time
     let tx1 = test_env
-        .tx_builder_with_gas(sender, gas1)
+        .tx_builder_with_gas(sender, gas[0])
         .transfer_sui_to_address_balance(
             FundSource::address_fund_with_reservation(500),
             vec![(500, dbg_addr(2))],
         )
         .build();
     let tx2 = test_env
-        .tx_builder_with_gas(sender, gas2)
+        .tx_builder_with_gas(sender, gas[1])
         .transfer_sui_to_address_balance(
             FundSource::address_fund_with_reservation(501),
             vec![(501, dbg_addr(2))],
@@ -3169,7 +3168,7 @@ async fn address_balance_stress_test() {
             .await
             .unwrap()
             .into_iter()
-            .map(|(_, obj)| obj.object_ref())
+            .map(|(_, obj)| obj.compute_object_reference())
             .collect::<Vec<_>>();
         assert!(
             gas_objs.len() >= 2,
