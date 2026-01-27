@@ -243,6 +243,21 @@ impl Client {
             next_page_token: response.next_page_token,
         })
     }
+
+    pub async fn get_reference_gas_price(&self) -> Result<u64> {
+        let request = proto::GetEpochRequest::default()
+            .with_read_mask(FieldMask::from_paths(["epoch", "reference_gas_price"]));
+
+        let response = self
+            .0
+            .clone()
+            .ledger_client()
+            .get_epoch(request)
+            .await?
+            .into_inner();
+
+        Ok(response.epoch().reference_gas_price())
+    }
 }
 
 #[derive(Debug)]
