@@ -1629,6 +1629,24 @@ pub struct ProtocolConfig {
     group_ops_bls12381_uncompressed_g1_sum_cost_per_term: Option<u64>,
     group_ops_bls12381_uncompressed_g1_sum_max_terms: Option<u64>,
 
+    group_ops_ristretto_decode_scalar_cost: Option<u64>,
+    group_ops_ristretto_decode_point_cost: Option<u64>,
+    group_ops_ristretto_scalar_add_cost: Option<u64>,
+    group_ops_ristretto_point_add_cost: Option<u64>,
+    group_ops_ristretto_scalar_sub_cost: Option<u64>,
+    group_ops_ristretto_point_sub_cost: Option<u64>,
+    group_ops_ristretto_scalar_mul_cost: Option<u64>,
+    group_ops_ristretto_point_mul_cost: Option<u64>,
+    group_ops_ristretto_scalar_div_cost: Option<u64>,
+    group_ops_ristretto_point_div_cost: Option<u64>,
+    group_ops_ristretto_scalar_hash_to_base_cost: Option<u64>,
+    group_ops_ristretto_scalar_hash_to_cost_per_byte: Option<u64>,
+    group_ops_ristretto_point_hash_to_base_cost: Option<u64>,
+    group_ops_ristretto_point_hash_to_cost_per_byte: Option<u64>,
+    group_ops_ristretto_msm_base_cost: Option<u64>,
+    group_ops_ristretto_msm_base_cost_per_input: Option<u64>,
+    group_ops_ristretto_msm_max_len: Option<u64>,
+
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
@@ -1682,6 +1700,9 @@ pub struct ProtocolConfig {
     vector_swap_base_cost: Option<u64>,
     debug_print_base_cost: Option<u64>,
     debug_print_stack_trace_base_cost: Option<u64>,
+
+    /// TODO: Should depend on range and batch size
+    verify_bulletproof_ristretto255_cost: Option<u64>,
 
     // ==== Ephemeral (consensus only) params deleted ====
     //
@@ -2999,6 +3020,24 @@ impl ProtocolConfig {
             group_ops_bls12381_uncompressed_g1_sum_cost_per_term: None,
             group_ops_bls12381_uncompressed_g1_sum_max_terms: None,
 
+            group_ops_ristretto_decode_scalar_cost: None,
+            group_ops_ristretto_decode_point_cost: None,
+            group_ops_ristretto_scalar_add_cost: None,
+            group_ops_ristretto_point_add_cost: None,
+            group_ops_ristretto_scalar_sub_cost: None,
+            group_ops_ristretto_point_sub_cost: None,
+            group_ops_ristretto_scalar_mul_cost: None,
+            group_ops_ristretto_point_mul_cost: None,
+            group_ops_ristretto_scalar_div_cost: None,
+            group_ops_ristretto_point_div_cost: None,
+            group_ops_ristretto_scalar_hash_to_base_cost: None,
+            group_ops_ristretto_scalar_hash_to_cost_per_byte: None,
+            group_ops_ristretto_point_hash_to_base_cost: None,
+            group_ops_ristretto_point_hash_to_cost_per_byte: None,
+            group_ops_ristretto_msm_base_cost: None,
+            group_ops_ristretto_msm_base_cost_per_input: None,
+            group_ops_ristretto_msm_max_len: None,
+
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
             // zklogin::check_zklogin_issuer
@@ -3012,6 +3051,8 @@ impl ProtocolConfig {
             nitro_attestation_parse_cost_per_byte: None,
             nitro_attestation_verify_base_cost: None,
             nitro_attestation_verify_cost_per_cert: None,
+
+            verify_bulletproof_ristretto255_cost: None,
 
             bcs_per_byte_serialized_cost: None,
             bcs_legacy_min_output_size_cost: None,
@@ -4504,6 +4545,26 @@ impl ProtocolConfig {
                         cfg.feature_flags.split_checkpoints_in_consensus_handler = false;
                     }
                     cfg.feature_flags.validate_zklogin_public_identifier = true;
+
+                    // TODO: Copied from BLS123-81 Scalars and G1Elements - should update
+                    cfg.group_ops_ristretto_decode_scalar_cost = Some(7);
+                    cfg.group_ops_ristretto_decode_point_cost = Some(2848);
+                    cfg.group_ops_ristretto_scalar_add_cost = Some(10);
+                    cfg.group_ops_ristretto_point_add_cost = Some(1556);
+                    cfg.group_ops_ristretto_scalar_sub_cost = Some(10);
+                    cfg.group_ops_ristretto_point_sub_cost = Some(1550);
+                    cfg.group_ops_ristretto_scalar_mul_cost = Some(11);
+                    cfg.group_ops_ristretto_point_mul_cost = Some(4842);
+                    cfg.group_ops_ristretto_scalar_div_cost = Some(91);
+                    cfg.group_ops_ristretto_point_div_cost = Some(5091);
+                    cfg.group_ops_ristretto_scalar_hash_to_base_cost = Some(100);
+                    cfg.group_ops_ristretto_scalar_hash_to_cost_per_byte = Some(2);
+                    cfg.group_ops_ristretto_point_hash_to_base_cost = Some(2962);
+                    cfg.group_ops_ristretto_point_hash_to_cost_per_byte = Some(2);
+                    cfg.group_ops_ristretto_msm_base_cost = Some(62648);
+                    cfg.group_ops_ristretto_msm_base_cost_per_input = Some(1333);
+                    cfg.group_ops_ristretto_msm_max_len = Some(1200);
+                    cfg.verify_bulletproof_ristretto255_cost = Some(3000);
                 }
                 // Use this template when making changes:
                 //

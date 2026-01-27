@@ -40,10 +40,11 @@ use self::{
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
+use crate::crypto::bulletproofs::VerifyBulletproofRistretto255CostParams;
 use crate::crypto::group_ops::GroupOpsCostParams;
 use crate::crypto::poseidon::PoseidonBN254CostParams;
-use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
+use crate::crypto::{bulletproofs, zklogin};
 use crate::{crypto::group_ops, transfer::PartyTransferInternalCostParams};
 use better_any::{Tid, TidAble};
 use crypto::nitro_attestation::{self, NitroAttestationCostParams};
@@ -197,6 +198,8 @@ pub struct NativesCostTable {
 
     // nitro attestation
     pub nitro_attestation_cost_params: NitroAttestationCostParams,
+
+    pub verify_bulletproof_ristretto255_cost_params: VerifyBulletproofRistretto255CostParams,
 }
 
 impl NativeExtensionMarker<'_> for NativesCostTable {}
@@ -751,6 +754,55 @@ impl NativesCostTable {
                     .map(Into::into),
                 bls12381_uncompressed_g1_sum_max_terms: protocol_config
                     .group_ops_bls12381_uncompressed_g1_sum_max_terms_as_option(),
+                ristretto_decode_scalar_cost: protocol_config
+                    .group_ops_ristretto_decode_scalar_cost_as_option()
+                    .map(Into::into),
+                ristretto_decode_point_cost: protocol_config
+                    .group_ops_ristretto_decode_point_cost_as_option()
+                    .map(Into::into),
+                ristretto_scalar_add_cost: protocol_config
+                    .group_ops_ristretto_scalar_add_cost_as_option()
+                    .map(Into::into),
+                ristretto_point_add_cost: protocol_config
+                    .group_ops_ristretto_point_add_cost_as_option()
+                    .map(Into::into),
+                ristretto_scalar_sub_cost: protocol_config
+                    .group_ops_ristretto_scalar_sub_cost_as_option()
+                    .map(Into::into),
+                ristretto_point_sub_cost: protocol_config
+                    .group_ops_ristretto_point_sub_cost_as_option()
+                    .map(Into::into),
+                ristretto_scalar_mul_cost: protocol_config
+                    .group_ops_ristretto_scalar_mul_cost_as_option()
+                    .map(Into::into),
+                ristretto_point_mul_cost: protocol_config
+                    .group_ops_ristretto_point_mul_cost_as_option()
+                    .map(Into::into),
+                ristretto_scalar_div_cost: protocol_config
+                    .group_ops_ristretto_scalar_div_cost_as_option()
+                    .map(Into::into),
+                ristretto_point_div_cost: protocol_config
+                    .group_ops_ristretto_point_div_cost_as_option()
+                    .map(Into::into),
+                ristretto_scalar_hash_to_base_cost: protocol_config
+                    .group_ops_ristretto_scalar_hash_to_base_cost_as_option()
+                    .map(Into::into),
+                ristretto_scalar_hash_to_cost_per_byte: protocol_config
+                    .group_ops_ristretto_scalar_hash_to_cost_per_byte_as_option()
+                    .map(Into::into),
+                ristretto_point_hash_to_base_cost: protocol_config
+                    .group_ops_ristretto_point_hash_to_base_cost_as_option()
+                    .map(Into::into),
+                ristretto_point_hash_to_cost_per_byte: protocol_config
+                    .group_ops_ristretto_point_hash_to_cost_per_byte_as_option()
+                    .map(Into::into),
+                ristretto_msm_base_cost: protocol_config
+                    .group_ops_ristretto_msm_base_cost_as_option()
+                    .map(Into::into),
+                ristretto_msm_base_cost_per_input: protocol_config
+                    .group_ops_ristretto_msm_base_cost_per_input_as_option()
+                    .map(Into::into),
+                ristretto_msm_max_len: protocol_config.group_ops_ristretto_msm_max_len_as_option(),
             },
             vdf_cost_params: VDFCostParams {
                 vdf_verify_cost: protocol_config
@@ -773,6 +825,11 @@ impl NativesCostTable {
                 verify_cost_per_cert: protocol_config
                     .nitro_attestation_verify_cost_per_cert_as_option()
                     .map(Into::into),
+            },
+            verify_bulletproof_ristretto255_cost_params: VerifyBulletproofRistretto255CostParams {
+                verify_bulletproof_ristretto255_cost: protocol_config
+                    .verify_bulletproof_ristretto255_cost()
+                    .into(),
             },
         }
     }
@@ -1275,6 +1332,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "nitro_attestation",
             "load_nitro_attestation_internal",
             make_native!(nitro_attestation::load_nitro_attestation_internal),
+        ),
+        (
+            "bulletproofs",
+            "verify_bulletproof_ristretto255",
+            make_native!(bulletproofs::verify_bulletproof_ristretto255),
         ),
     ];
     let sui_framework_natives_iter =
