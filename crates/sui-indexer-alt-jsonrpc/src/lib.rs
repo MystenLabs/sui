@@ -26,7 +26,6 @@ use url::Url;
 
 use crate::api::checkpoints::Checkpoints;
 use crate::api::coin::Coins;
-use crate::api::coin::DelegationCoins;
 use crate::api::dynamic_fields::DynamicFields;
 use crate::api::governance::DelegationGovernance;
 use crate::api::governance::Governance;

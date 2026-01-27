@@ -7,23 +7,17 @@ use std::str::FromStr;
 use anyhow::Context as _;
 use futures::future;
 use jsonrpsee::core::RpcResult;
-use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
-use serde::Deserialize;
-use serde::Serialize;
-use sui_indexer_alt_reader::coin_metadata::CoinMetadataKey;
+use sui_indexer_alt_reader::consistent_reader::proto::Balance as ProtoBalance;
 use sui_indexer_alt_reader::consistent_reader::proto::owner::OwnerKind;
-use sui_indexer_alt_schema::objects::StoredCoinOwnerKind;
-use sui_indexer_alt_schema::schema::coin_balance_buckets;
 use sui_json_rpc_types::Balance;
 use sui_json_rpc_types::Coin;
 use sui_json_rpc_types::Page as PageResponse;
 use sui_json_rpc_types::SuiCoinMetadata;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_sql_macro::sql;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
@@ -40,7 +34,6 @@ use crate::context::Context;
 use crate::data::load_live;
 use crate::error::InternalContext;
 use crate::error::RpcError;
-use crate::error::client_error_to_error_object;
 use crate::error::invalid_params;
 use crate::paginate::BcsCursor;
 use crate::paginate::Cursor as _;
@@ -157,7 +150,8 @@ impl CoinsApiServer for Coins {
                 true,
             )
             .await
-            .context("Failed to list owned coin objects")?;
+            .context("Failed to list owned coin objects")
+            .map_err(RpcError::<Error>::from)?;
 
         let coin_ids: Vec<_> = results
             .results
@@ -170,7 +164,8 @@ impl CoinsApiServer for Coins {
             .last()
             .map(|edge| BcsCursor(edge.token.clone()).encode())
             .transpose()
-            .context("Failed to encode cursor")?;
+            .context("Failed to encode cursor")
+            .map_err(RpcError::<Error>::from)?;
 
         let coin_futures = coin_ids.iter().map(|id| coin_response(ctx, *id));
 
@@ -227,21 +222,11 @@ impl CoinsApiServer for Coins {
                     true,
                 )
                 .await
-                .context("Failed to get all balances")?;
+                .context("Failed to get all balances")
+                .map_err(RpcError::<Error>::from)?;
 
             for edge in &page.results {
-                all_balances.push(Balance {
-                    coin_type: edge
-                        .value
-                        .coin_type
-                        .to_canonical_string(/* with_prefix */ true),
-                    total_balance: edge.value.total_balance.unwrap_or(0) as u128,
-                    // The Consistent Store does not track coin object counts, so the rpc will
-                    // always return 1.
-                    coin_object_count: 1,
-                    locked_balance: HashMap::new(),
-                    funds_in_address_balance: edge.value.address_balance.unwrap_or(0) as u128,
-                });
+                all_balances.push(try_from_proto(edge.value.clone())?);
             }
 
             if page.has_next_page {
@@ -276,16 +261,10 @@ impl CoinsApiServer for Coins {
                 inner_coin_type.to_canonical_string(/* with_prefix */ true),
             )
             .await
-            .context("Failed to get balance")?;
+            .context("Failed to get balance")
+            .map_err(RpcError::<Error>::from)?;
 
-        Ok(Balance {
-            coin_type: inner_coin_type.to_canonical_string(/* with_prefix */ true),
-            total_balance: response.total_balance.unwrap_or(0) as u128,
-            // Hard coded value since the Consistent Store does not track coin object counts.
-            coin_object_count: 1,
-            locked_balance: HashMap::new(),
-            funds_in_address_balance: response.address_balance.unwrap_or(0) as u128,
-        })
+        Ok(try_from_proto(response)?)
     }
 }
 
@@ -297,6 +276,23 @@ impl RpcModule for Coins {
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
     }
+}
+
+fn try_from_proto(proto: ProtoBalance) -> Result<Balance, RpcError<Error>> {
+    let coin_type: TypeTag = proto
+        .coin_type
+        .context("coin type missing")?
+        .parse()
+        .context("invalid coin type")?;
+    Ok(Balance {
+        coin_type: coin_type.to_canonical_string(/* with_prefix */ true),
+        total_balance: proto.total_balance.unwrap_or(0) as u128,
+        // The Consistent Store does not track coin object counts, so the rpc will
+        // always return 1.
+        coin_object_count: 1,
+        locked_balance: HashMap::new(),
+        funds_in_address_balance: proto.address_balance.unwrap_or(0) as u128,
+    })
 }
 
 async fn coin_response(ctx: &Context, id: ObjectID) -> Result<Coin, RpcError<Error>> {
