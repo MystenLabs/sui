@@ -1,15 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::serde_helpers::ToFromByteArray;
-use std::collections::VecDeque;
+use crate::{NativesCostTable, get_extension};
 use fastcrypto::bulletproofs::{Range, RangeProof};
 use fastcrypto::error::FastCryptoError::InvalidInput;
 use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::ristretto255::RistrettoPoint;
 use fastcrypto::pedersen::PedersenCommitment;
-use rand::thread_rng;
-use smallvec::smallvec;
+use fastcrypto::serde_helpers::ToFromByteArray;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::native_charge_gas_early_exit;
@@ -18,7 +16,9 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use move_vm_types::natives::function::NativeResult;
 use move_vm_types::pop_arg;
 use move_vm_types::values::{Value, VectorRef};
-use crate::{get_extension, NativesCostTable};
+use rand::thread_rng;
+use smallvec::smallvec;
+use std::collections::VecDeque;
 
 pub const INVALID_PROOF: u64 = 0;
 pub const INVALID_COMMITMENT: u64 = 1;
@@ -44,7 +44,7 @@ pub fn verify_bulletproof_ristretto255(
         .clone();
 
     // Charge the base cost for this operation
-/*    native_charge_gas_early_exit!(
+    /*    native_charge_gas_early_exit!(
         context,
         verify_bulletproof_ristretto255_cost_params.verify_bulletproof_ristretto255_cost
     );*/
@@ -61,7 +61,14 @@ pub fn verify_bulletproof_ristretto255(
         return Ok(NativeResult::err(context.gas_used(), INVALID_RANGE));
     };
 
-    let Ok(commitment) = commitment.as_bytes_ref().to_vec().try_into().map_err(|_| InvalidInput).and_then(|b| RistrettoPoint::from_byte_array(&b)).map(PedersenCommitment) else {
+    let Ok(commitment) = commitment
+        .as_bytes_ref()
+        .to_vec()
+        .try_into()
+        .map_err(|_| InvalidInput)
+        .and_then(|b| RistrettoPoint::from_byte_array(&b))
+        .map(PedersenCommitment)
+    else {
         return Ok(NativeResult::err(context.gas_used(), INVALID_COMMITMENT));
     };
 
@@ -69,7 +76,7 @@ pub fn verify_bulletproof_ristretto255(
 
     Ok(NativeResult::ok(
         context.gas_used(),
-        smallvec![Value::bool(result.is_ok())]
+        smallvec![Value::bool(result.is_ok())],
     ))
 }
 

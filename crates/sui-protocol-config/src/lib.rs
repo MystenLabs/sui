@@ -4564,7 +4564,6 @@ impl ProtocolConfig {
                     cfg.group_ops_ristretto_msm_base_cost = Some(62648);
                     cfg.group_ops_ristretto_msm_base_cost_per_input = Some(1333);
                     cfg.group_ops_ristretto_msm_max_len = Some(1200);
-
                 }
                 // Use this template when making changes:
                 //

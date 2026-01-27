@@ -5,8 +5,7 @@ use crate::{NativesCostTable, get_extension};
 use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::groups::{
     FromTrustedByteArray, GroupElement, HashToGroupElement, MultiScalarMul, Pairing,
-    bls12381 as bls,
-    ristretto255 as ristretto,
+    bls12381 as bls, ristretto255 as ristretto,
 };
 use fastcrypto::serde_helpers::ToFromByteArray;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -343,11 +342,19 @@ pub fn internal_add(
         }
         Some(Groups::RistrettoScalar) => {
             native_charge_gas_early_exit_option!(context, cost_params.ristretto_scalar_add_cost);
-            binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(|a, b| Ok(a + b), &e1, &e2)
+            binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(
+                |a, b| Ok(a + b),
+                &e1,
+                &e2,
+            )
         }
         Some(Groups::RistrettoPoint) => {
             native_charge_gas_early_exit_option!(context, cost_params.ristretto_point_add_cost);
-            binary_op::<ristretto::RistrettoPoint, { ristretto::RISTRETTO_POINT_BYTE_LENGTH }>(|a, b| Ok(a + b), &e1, &e2)
+            binary_op::<ristretto::RistrettoPoint, { ristretto::RISTRETTO_POINT_BYTE_LENGTH }>(
+                |a, b| Ok(a + b),
+                &e1,
+                &e2,
+            )
         }
         _ => Err(FastCryptoError::InvalidInput),
     };
@@ -402,11 +409,19 @@ pub fn internal_sub(
         }
         Some(Groups::RistrettoScalar) => {
             native_charge_gas_early_exit_option!(context, cost_params.ristretto_scalar_sub_cost);
-            binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(|a, b| Ok(a - b), &e1, &e2)
+            binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(
+                |a, b| Ok(a - b),
+                &e1,
+                &e2,
+            )
         }
         Some(Groups::RistrettoPoint) => {
             native_charge_gas_early_exit_option!(context, cost_params.ristretto_point_sub_cost);
-            binary_op::<ristretto::RistrettoPoint, { ristretto::RISTRETTO_POINT_BYTE_LENGTH }>(|a, b| Ok(a - b), &e1, &e2)
+            binary_op::<ristretto::RistrettoPoint, { ristretto::RISTRETTO_POINT_BYTE_LENGTH }>(
+                |a, b| Ok(a - b),
+                &e1,
+                &e2,
+            )
         }
         _ => Err(FastCryptoError::InvalidInput),
     };
@@ -476,7 +491,11 @@ pub fn internal_mul(
         }
         Some(Groups::RistrettoScalar) => {
             native_charge_gas_early_exit_option!(context, cost_params.ristretto_scalar_mul_cost);
-            binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(|a, b| Ok(b * a), &e1, &e2)
+            binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(
+                |a, b| Ok(b * a),
+                &e1,
+                &e2,
+            )
         }
         Some(Groups::RistrettoPoint) => {
             native_charge_gas_early_exit_option!(context, cost_params.ristretto_point_mul_cost);
@@ -555,7 +574,11 @@ pub fn internal_div(
         }
         Some(Groups::RistrettoScalar) => {
             native_charge_gas_early_exit_option!(context, cost_params.ristretto_scalar_div_cost);
-            binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(|a, b| Ok(b * a), &e1, &e2)
+            binary_op::<ristretto::RistrettoScalar, { ristretto::RISTRETTO_SCALAR_BYTE_LENGTH }>(
+                |a, b| Ok(b * a),
+                &e1,
+                &e2,
+            )
         }
         Some(Groups::RistrettoPoint) => {
             native_charge_gas_early_exit_option!(context, cost_params.ristretto_point_mul_cost);
