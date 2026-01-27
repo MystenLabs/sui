@@ -368,27 +368,19 @@ impl WalletContext {
 
     pub async fn get_gas_objects_owned_by_address(
         &self,
-        address: SuiAddress,
-        limit: Option<usize>,
+        owner: SuiAddress,
+        page_size: Option<u32>,
     ) -> anyhow::Result<Vec<ObjectRef>> {
-        let client = self.get_client().await?;
-        let results: Vec<_> = client
-            .read_api()
-            .get_owned_objects(
-                address,
-                Some(SuiObjectResponseQuery::new(
-                    Some(SuiObjectDataFilter::StructType(GasCoin::type_())),
-                    Some(SuiObjectDataOptions::full_content()),
-                )),
-                None,
-                limit,
-            )
-            .await?
-            .data
+        let page = self
+            .grpc_client()?
+            .get_owned_objects(owner, Some(GasCoin::type_()), page_size, None)
+            .await?;
+
+        Ok(page
+            .items
             .into_iter()
-            .filter_map(|r| r.data.map(|o| o.object_ref()))
-            .collect();
-        Ok(results)
+            .map(|o| o.compute_object_reference())
+            .collect())
     }
 
     /// Given an address, return one gas object owned by this address.
