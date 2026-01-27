@@ -38,6 +38,7 @@ const INSTANCE_ID: &str = "bigtable_test_instance";
 
 const TABLES: &[&str] = &[
     sui_kvstore::tables::objects::NAME,
+    sui_kvstore::tables::object_types::NAME,
     sui_kvstore::tables::transactions::NAME,
     sui_kvstore::tables::checkpoints::NAME,
     sui_kvstore::tables::checkpoints_by_digest::NAME,

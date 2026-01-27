@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use sui_indexer_alt_framework::pipeline::Processor;
+use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::transaction::Transaction;
 
@@ -26,6 +27,7 @@ impl Processor for TransactionsPipeline {
         let mut entries = Vec::with_capacity(checkpoint.transactions.len());
 
         for tx in &checkpoint.transactions {
+            let balance_changes = derive_balance_changes_2(&tx.effects, &checkpoint.object_set);
             let transaction =
                 Transaction::from_generic_sig_data(tx.transaction.clone(), tx.signatures.clone());
 
@@ -37,6 +39,8 @@ impl Processor for TransactionsPipeline {
                     &tx.events,
                     checkpoint_number,
                     timestamp_ms,
+                    &balance_changes,
+                    &tx.unchanged_loaded_runtime_objects,
                 )?,
                 Some(timestamp_ms),
             );
