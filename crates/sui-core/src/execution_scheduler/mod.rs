@@ -3,6 +3,7 @@
 
 use crate::authority::ExecutionEnv;
 pub use execution_scheduler_impl::ExecutionScheduler;
+pub use funds_withdraw_scheduler::FundsWithdrawSchedulerType;
 use prometheus::IntGauge;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use tokio::time::Instant;

@@ -3529,6 +3529,7 @@ impl AuthorityState {
                 .clone(),
             tx_ready_certificates,
             &epoch_store,
+            config.funds_withdraw_scheduler_type,
             metrics.clone(),
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
