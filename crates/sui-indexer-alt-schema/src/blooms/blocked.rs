@@ -5,7 +5,7 @@
 //!
 //! A blocked bloom filter partitions the filter into fixed-size blocks, where each element
 //! hashes to exactly one block for bits to be set, essentially a hash-indexed array of smaller bloom filters.
-//! Each blocked is stored as a separate row. This allows us to query specific blocks for membership instead of
+//! Each block is stored as a separate row. This allows us to query specific blocks for membership instead of
 //! scanning the entire filter for improved IO.
 //!
 //! 1. **Targeted queries**: When checking membership, only the specific block for that element

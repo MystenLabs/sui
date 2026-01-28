@@ -51,8 +51,8 @@ impl Processor for CpBloomBlocks {
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<Self::Value>> {
         let cp_num = checkpoint.summary.sequence_number;
-        let block_id = cp_block_index(cp_num);
-        let seed = block_id as u128;
+        let block_index = cp_block_index(cp_num);
+        let seed = block_index as u128;
 
         let mut bloom = CpBlockedBloomFilter::new(seed);
         for tx in &checkpoint.transactions {
@@ -89,9 +89,9 @@ impl Handler for CpBloomBlocks {
         values: &mut std::vec::IntoIter<Self::Value>,
     ) -> BatchStatus {
         for cp_bloom in values {
-            let block_id = cp_block_index(cp_bloom.cp_sequence_number as u64);
+            let block_index = cp_block_index(cp_bloom.cp_sequence_number as u64);
 
-            let cp_block = batch.entry(block_id).or_default();
+            let cp_block = batch.entry(block_index).or_default();
 
             for (bloom_idx, bloom_bytes) in cp_bloom.blocks {
                 cp_block
@@ -158,8 +158,8 @@ mod tests {
 
     /// Build a CheckpointBloom from a checkpoint number and list of keys.
     fn make_checkpoint_bloom(cp_num: i64, keys: &[&[u8]]) -> CheckpointBloom {
-        let block_id = cp_block_index(cp_num as u64);
-        let seed = block_id as u128;
+        let block_index = cp_block_index(cp_num as u64);
+        let seed = block_index as u128;
         let mut bloom = CpBlockedBloomFilter::new(seed);
         for key in keys {
             bloom.insert(key);
