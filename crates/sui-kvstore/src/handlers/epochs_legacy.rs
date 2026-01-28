@@ -36,7 +36,6 @@ pub struct PrevEpochUpdate {
 #[async_trait::async_trait]
 impl Processor for EpochLegacyPipeline {
     const NAME: &'static str = "kvstore_epochs_legacy";
-    const FANOUT: usize = 100;
     type Value = EpochLegacyBatch;
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
