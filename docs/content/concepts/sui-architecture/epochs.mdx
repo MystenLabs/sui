@@ -6,7 +6,7 @@ keywords: [ epochs, equivocation, reconfiguration, validators, object versioning
 
 On Sui, an _epoch_ is a period of time defined by the network. During this time, the Sui [validator](/guides/operator/validator/validator-config.mdx) set and their stakes remain unchanged. On both [Mainnet](/concepts/sui-architecture/networks.mdx) and [Testnet](/concepts/sui-architecture/networks.mdx), an epoch is about 24 hours. Epochs on Devnet are 1 hour. This timeframe allows validators to process transactions efficiently without worrying about ad hoc validator changes.
 
-Epoch values are included in the metadata of all [transactions](/concepts/transactions.mdx). A transaction is only valid if executed before a set epoch.
+Epoch values are included in the metadata of all [transactions](/guides/developer/transactions/txn-overview.mdx). A transaction is only valid if executed before a set epoch.
 
 ## Equivocation
 

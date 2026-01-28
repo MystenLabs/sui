@@ -24,6 +24,7 @@ use mysten_metrics::{
     monitored_mpsc::{self, UnboundedReceiver},
     monitored_scope, spawn_monitored_task,
 };
+use nonempty::NonEmpty;
 use parking_lot::RwLockWriteGuard;
 use serde::{Deserialize, Serialize};
 use sui_macros::{fail_point, fail_point_arg, fail_point_if};
@@ -2935,7 +2936,26 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         }
                         ConsensusTransactionKind::UserTransactionV2(tx) => {
                             // Extract the aliases claim (required) from the claims
-                            let used_alias_versions = tx.aliases();
+                            let used_alias_versions = if self
+                                .epoch_store
+                                .protocol_config()
+                                .fix_checkpoint_signature_mapping()
+                            {
+                                tx.aliases()
+                            } else {
+                                // Convert V1 to V2 format using dummy signature indices
+                                // which will be ignored with `fix_checkpoint_signature_mapping`
+                                // disabled.
+                                tx.aliases_v1().map(|a| {
+                                    NonEmpty::from_vec(
+                                        a.into_iter()
+                                            .enumerate()
+                                            .map(|(idx, (_, seq))| (idx as u8, seq))
+                                            .collect(),
+                                    )
+                                    .unwrap()
+                                })
+                            };
                             let inner_tx = tx.into_tx();
                             // Safe because transactions are certified by consensus.
                             let tx = VerifiedTransaction::new_unchecked(inner_tx);

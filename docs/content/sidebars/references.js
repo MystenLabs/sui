@@ -127,6 +127,7 @@ const references = [
 			},
 		],
 	},
+	'references/ptb-commands',
 	{
 		type: 'category',
 		label: 'Move',

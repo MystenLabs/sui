@@ -3997,12 +3997,24 @@ impl<T> TransactionWithClaims<T> {
         self.tx
     }
 
-    /// Get the address aliases claim. Differentiate between empty and not present for validation.
+    /// Get the address aliases V2 claim. Differentiate between empty and not present for validation.
     pub fn aliases(&self) -> Option<NonEmpty<(u8, Option<SequenceNumber>)>> {
         self.claims
             .iter()
             .find_map(|c| match c {
                 TransactionClaim::AddressAliasesV2(aliases) => Some(aliases),
+                _ => None,
+            })
+            .cloned()
+    }
+
+    // TODO: Remove once `fix_checkpoint_signature_mapping` flag is enabled in testnet.
+    #[allow(deprecated)]
+    pub fn aliases_v1(&self) -> Option<NonEmpty<(SuiAddress, Option<SequenceNumber>)>> {
+        self.claims
+            .iter()
+            .find_map(|c| match c {
+                TransactionClaim::AddressAliases(aliases) => Some(aliases),
                 _ => None,
             })
             .cloned()

@@ -8,7 +8,7 @@ Sui is designed to provide high security guarantees to asset owners. Assets on S
 
 Sui's security features guarantee certain properties for objects:
 
-1. Only the owner of an object can authorize a [transaction](/concepts/transactions.mdx) that operates on the object. Authorization is performed through the use of a private signature key that is known only to the object owner.
+1. Only the owner of an object can authorize a [transaction](/guides/developer/transactions/txn-overview.mdx) that operates on the object. Authorization is performed through the use of a private signature key that is known only to the object owner.
 
 1. Everyone can operate on [shared](/guides/developer/objects/object-ownership/shared.mdx) objects or [immutable](/guides/developer/objects/object-ownership/immutable.mdx) objects, but additional access control logic can be implemented by a smart contract.
 
@@ -20,7 +20,7 @@ Sui's security features guarantee certain properties for objects:
 
 ## Security architecture {#security-architecture}
 
-The Sui network is operated by a [set of validators](/concepts/sui-architecture/consensus.mdx) that process [transactions](/concepts/transactions.mdx). They reach agreement on which transactions submitted and processed on the network are valid and should be finalized through [_consensus_](/concepts/sui-architecture/consensus.mdx).
+The Sui network is operated by a [set of validators](/concepts/sui-architecture/consensus.mdx) that process [transactions](/guides/developer/transactions/txn-overview.mdx). They reach agreement on which transactions submitted and processed on the network are valid and should be finalized through [_consensus_](/concepts/sui-architecture/consensus.mdx).
 
 Consensus tolerates a fraction of faulty validators through the use of Byzantine fault tolerant broadcast. Sui maintains all security properties if over 2/3 of all validators operate properly. However, a number of auditing properties are maintained even if this number becomes greater than 2/3.
 

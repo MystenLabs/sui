@@ -76,7 +76,7 @@ Because there is no difference in the result of the object transfer, you can use
 
 ## Receive objects
 
-An object must receive another object before it can use it. To receive the object, use a `Receiving(o: ObjectRef)` argument type in a [programmable transaction block (PTB)](/concepts/transactions/prog-txn-blocks.mdx). This argument takes an object reference containing the object's `ObjectID`, `Version`, and `Digest`, similar to address-owned object arguments. However, `Receiving` PTB arguments are not passed as an owned value or mutable reference within the transaction.
+An object must receive another object before it can use it. To receive the object, use a `Receiving(o: ObjectRef)` argument type in a [programmable transaction block (PTB)](/guides/developer/transactions/prog-txn-blocks.mdx). This argument takes an object reference containing the object's `ObjectID`, `Version`, and `Digest`, similar to address-owned object arguments. However, `Receiving` PTB arguments are not passed as an owned value or mutable reference within the transaction.
 
 The core receiving interface in Move is defined in the [`transfer`](https://docs.sui.io/references/framework/sui_sui/transferx) module in the Sui framework:
 
