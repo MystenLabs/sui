@@ -10,7 +10,10 @@
 //!   greater than positive integers.
 //! - Structs are compared by lexicographically, as a tuple of their fields.
 //! - Collections are first ordered by size, then by their elements in lexicographic order.
-use bincode::{Decode, Encode, error::DecodeError};
+
+use bincode::Decode;
+use bincode::Encode;
+use bincode::error::DecodeError;
 
 pub(crate) fn encode<T: Encode + ?Sized>(x: &T) -> Vec<u8> {
     let config = bincode::config::standard()

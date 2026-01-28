@@ -1,13 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use anyhow::anyhow;
 use diesel::prelude::*;
 use sui_field_count::FieldCount;
-use sui_protocol_config::{Chain, ProtocolVersion};
-use sui_types::digests::{ChainIdentifier, CheckpointDigest};
+use sui_protocol_config::Chain;
+use sui_protocol_config::ProtocolVersion;
+use sui_types::digests::ChainIdentifier;
+use sui_types::digests::CheckpointDigest;
 
-use crate::schema::{kv_checkpoints, kv_genesis};
+use crate::schema::kv_checkpoints;
+use crate::schema::kv_genesis;
 
 #[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = kv_checkpoints)]

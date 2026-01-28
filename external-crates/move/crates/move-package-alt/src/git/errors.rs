@@ -14,7 +14,11 @@ pub type GitResult<T> = std::result::Result<T, GitError>;
 #[derive(Error, Debug)]
 pub enum GitError {
     #[error(
-        "{repo} repo is dirty. Please clean it up before proceeding or pass the `--allow-dirty` flag"
+        "The following cached dependency repository is dirty:
+
+    {repo}
+
+Please clean it up before proceeding or pass the `--allow-dirty` flag to proceed with the modified files."
     )]
     Dirty { repo: String },
 
@@ -52,21 +56,25 @@ pub enum CommandErrorKind {
 }
 
 impl GitError {
-    pub fn dirty(repo: &str) -> Self {
+    pub(crate) fn dirty(repo: &str) -> Self {
         Self::Dirty {
             repo: repo.to_string(),
         }
     }
 
-    pub fn io_error(cmd: &Command, cwd: &Option<&PathBuf>, error: std::io::Error) -> Self {
+    pub(crate) fn io_error(cmd: &Command, cwd: &Option<&PathBuf>, error: std::io::Error) -> Self {
         Self::command_error(cmd, cwd, CommandErrorKind::IoError(error))
     }
 
-    pub fn nonzero_exit_status(cmd: &Command, cwd: &Option<&PathBuf>, code: ExitStatus) -> Self {
+    pub(crate) fn nonzero_exit_status(
+        cmd: &Command,
+        cwd: &Option<&PathBuf>,
+        code: ExitStatus,
+    ) -> Self {
         Self::command_error(cmd, cwd, CommandErrorKind::ErrorCode(code))
     }
 
-    pub fn non_utf_output(cmd: &Command, cwd: &Option<&PathBuf>) -> Self {
+    pub(crate) fn non_utf_output(cmd: &Command, cwd: &Option<&PathBuf>) -> Self {
         Self::command_error(cmd, cwd, CommandErrorKind::NonUtf8)
     }
 
@@ -82,7 +90,7 @@ impl GitError {
     }
 
     /// Construct an error for the case when we can't find a sha for revision `rev` in `repo`
-    pub fn no_sha(repo_url: &str, rev: &str) -> Self {
+    pub(crate) fn no_sha(repo_url: &str, rev: &str) -> Self {
         Self::NoSha {
             repo: repo_url.to_string(),
             rev: rev.to_string(),

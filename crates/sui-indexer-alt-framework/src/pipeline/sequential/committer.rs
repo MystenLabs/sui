@@ -1,23 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
+use std::cmp::Ordering;
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use scoped_futures::ScopedFutureExt;
 use sui_futures::service::Service;
-use tokio::{
-    sync::mpsc,
-    time::{MissedTickBehavior, interval},
-};
-use tracing::{debug, info, warn};
+use tokio::sync::mpsc;
+use tokio::time::MissedTickBehavior;
+use tokio::time::interval;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
-use crate::{
-    metrics::{CheckpointLagMetricReporter, IndexerMetrics},
-    pipeline::{IndexedCheckpoint, WARN_PENDING_WATERMARKS, logging::WatermarkLogger},
-    store::{Connection, TransactionalStore},
-};
-
-use super::{Handler, SequentialConfig};
+use crate::metrics::CheckpointLagMetricReporter;
+use crate::metrics::IndexerMetrics;
+use crate::pipeline::IndexedCheckpoint;
+use crate::pipeline::WARN_PENDING_WATERMARKS;
+use crate::pipeline::logging::WatermarkLogger;
+use crate::pipeline::sequential::Handler;
+use crate::pipeline::sequential::SequentialConfig;
+use crate::store::Connection;
+use crate::store::TransactionalStore;
 
 /// The committer task gathers rows into batches and writes them to the database.
 ///
@@ -388,17 +393,20 @@ fn can_process_pending<T>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        mocks::store::{MockConnection, MockStore},
-        pipeline::{CommitterConfig, Processor},
-    };
+    use std::sync::Arc;
+    use std::time::Duration;
 
-    use super::*;
     use async_trait::async_trait;
     use prometheus::Registry;
-    use std::{sync::Arc, time::Duration};
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::sync::mpsc;
+
+    use crate::mocks::store::MockConnection;
+    use crate::mocks::store::MockStore;
+    use crate::pipeline::CommitterConfig;
+    use crate::pipeline::Processor;
+
+    use super::*;
 
     // Test implementation of Handler
     #[derive(Default)]

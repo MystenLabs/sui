@@ -7,16 +7,12 @@ from collections import defaultdict
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from typing import NamedTuple
 
 RE_NUM = re.compile("[0-9_]+")
-
-RE_PR = re.compile(
-    r"^.*\(#(\d+)\)$",
-    re.MULTILINE,
-)
 
 RE_HEADING = re.compile(
     r"#+ Release notes(.*)",
@@ -36,6 +32,7 @@ RE_NOTE = re.compile(
 # Only commits that affect changes in these directories will be
 # considered when generating release notes.
 INTERESTING_DIRECTORIES = [
+    "consensus",
     "crates",
     "dashboards",
     "doc",
@@ -61,6 +58,56 @@ NOTE_ORDER = [
 ]
 
 
+# GraphQL query to fetch the body of a PR by its number.
+PR_BODY_QUERY = """
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      body
+    }
+  }
+}
+"""
+
+# GraphQL query to fetch `BATCH_SIZE` the associated PRs for a list of commits, by their SHAs.
+BATCH_SIZE = 50
+COMMIT_QUERY = """
+query($owner: String!, $name: String!, {params}) {{
+  repository(owner: $owner, name: $name) {{
+      {bodies}
+  }}
+}}
+""".format(
+    params=",".join(f"$sha{i}: GitObjectID" for i in range(BATCH_SIZE)),
+    bodies="\n".join(
+        f"""
+        commit{i}: object(oid: $sha{i}) {{
+          ... on Commit {{
+            associatedPullRequests(first: 1) {{
+              nodes {{
+                number
+                body
+              }}
+            }}
+          }}
+        }}
+        """
+        for i in range(BATCH_SIZE)
+    ),
+)
+
+# Set up a way to make requests to GitHub's GraphQL API
+GH_TOKEN = os.getenv("GH_TOKEN")
+GH_CLI_PATH = shutil.which("gh")
+if GH_TOKEN:
+    gql = lambda query, variables: gh_api_request(GH_TOKEN, query, variables)
+elif GH_CLI_PATH:
+    gql = lambda query, variables: gh_cli_request(GH_CLI_PATH, query, variables)
+else:
+    print("Error: GH_TOKEN not set and `gh` CLI not found.", file=sys.stderr)
+    sys.exit(1)
+
+
 class Note(NamedTuple):
     checked: bool
     note: str
@@ -72,7 +119,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description=(
             "Extract release notes from git commits. Check help for the "
-            "`generate` and `check` subcommands for more information."
+            "`generate`, `check`, and `list-prs` subcommands for more information."
         ),
     )
 
@@ -109,6 +156,36 @@ def parse_args():
         help="The PR to check.",
     )
 
+    list_prs_p = sub_parser.add_parser(
+        "list-prs",
+        description=(
+            "List PRs with release notes between two commits. "
+            "Outputs JSON with PR numbers and metadata for CI workflows."
+        ),
+    )
+
+    list_prs_p.add_argument(
+        "from",
+        help="The commit to start from (exclusive)",
+    )
+
+    list_prs_p.add_argument(
+        "to",
+        nargs="?",
+        default="HEAD",
+        help="The commit to end at (inclusive), defaults to HEAD.",
+    )
+
+    get_notes_p = sub_parser.add_parser(
+        "get-notes",
+        description="Get release notes for a specific PR, formatted for display.",
+    )
+
+    get_notes_p.add_argument(
+        "pr",
+        help="The PR number to get release notes for.",
+    )
+
     return vars(parser.parse_args())
 
 
@@ -117,12 +194,15 @@ def git(*args):
     return subprocess.check_output(["git"] + list(args)).decode().strip()
 
 
-def parse_notes(pr, notes):
-    # # Find the release notes section
+def parse_notes(notes):
+    """Find the release notes in the PR body"""
     result = {}
+    if not notes:
+        return result
+
     match = RE_HEADING.search(notes)
     if not match:
-        return pr, result
+        return result
 
     start = 0
     notes = match.group(1)
@@ -147,7 +227,63 @@ def parse_notes(pr, notes):
         )
         start = end
 
-    return pr, result
+    return result
+
+
+def gh_api_request(token, query, variables):
+    """Make a GitHub GraphQL API request using curl.
+
+    Requires an authorization token to be supplied.
+    """
+    response = subprocess.run(
+        [
+            "curl",
+            "-s",
+            *("-H", "Content-Type: application/json"),
+            *("-H", f"Authorization: Bearer {token}"),
+            *("-d", json.dumps({"query": query, "variables": variables})),
+            "https://api.github.com/graphql",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=sys.stderr,
+        text=True,
+    )
+
+    body = json.loads(response.stdout.strip())
+    if "errors" in body:
+        print(f"GraphQL Error: {body['errors']}", file=sys.stderr)
+
+    return body
+
+
+def gh_cli_request(cli, query, variables):
+    """Make a GitHub GraphQL API request using the gh CLI.
+
+    Piggybacks off the authorization of the gh CLI to run queries. Assumes the
+    `gh` binary is available in PATH.
+    """
+    command = [cli, "api", "graphql", "-f", f"query={query}"]
+    for key, value in variables.items():
+        if isinstance(value, bool):
+            arg_value = "true" if value else "false"
+        elif value is None:
+            arg_value = "null"
+        else:
+            arg_value = str(value)
+        command.extend(["-F", f"{key}={arg_value}"])
+
+    response = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=sys.stderr,
+        text=True,
+    )
+
+    body = json.loads(response.stdout.strip())
+    if "errors" in body:
+        print(f"GraphQL Error: {body['errors']}", file=sys.stderr)
+
+    return body
 
 
 def extract_notes_for_pr(pr):
@@ -157,45 +293,61 @@ def extract_notes_for_pr(pr):
     extract the notes for each impacted area (area that has been
     ticked).
 
-    Returns a tuple of the PR number and a dictionary of impacted
-    areas mapped to their release note. Each release note indicates
-    whether it has a note and whether it was checked (ticked).
+    Returns a dictionary of impacted areas mapped to their release note.
+    Each release note indicates whether it has a note and whether it was
+    checked (ticked).
 
     """
 
-    url = f"https://api.github.com/repos/MystenLabs/sui/pulls/{pr}"
-    curl_command = [
-        "curl", "-s",
-        "-H", "Accept: application/vnd.github.groot-preview+json",
-        url
-    ]
-
-    # Execute the curl command
-    result = subprocess.run(
-        curl_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    json_data = json.loads(result.stdout)
-    notes = json_data.get("body")
-    return parse_notes(pr, notes)
+    variables = {"owner": "MystenLabs", "name": "sui", "number": int(pr)}
+    data = gql(PR_BODY_QUERY, variables)
+    body = data.get("data", {}).get("repository", {}).get("pullRequest", {}).get("body")
+    return parse_notes(body)
 
 
-def extract_notes_for_commit(commit):
-    """Get release notes from a commit message.
+def fetch_release_notes_for_commits(commits):
+    """Translates a list of commit SHAs into their release notes.
 
-    Find the 'Release notes' section in the commit message, and
-    extract the notes for each impacted area (area that has been
-    ticked).
-
-    Returns a tuple of the PR number and a dictionary of impacted
-    areas mapped to their release note. Each release note indicates
-    whether it has a note and whether it was checked (ticked).
-
+    Returns a dictionary mapping impacted areas to a list of tuples PR Number
+    and Release Note. PRs are de-duplicated.
     """
-    message = git("show", "-s", "--format=%B", commit)
+    seen = set()
+    results = defaultdict(list)
+    for start in range(0, len(commits), BATCH_SIZE):
+        chunk = commits[start : start + BATCH_SIZE]
+        variables = {"owner": "MystenLabs", "name": "sui"}
+        for i, sha in enumerate(chunk):
+            variables[f"sha{i}"] = sha
 
-    # Extract PR number
-    match = RE_PR.match(message)
-    pr = match.group(1) if match else None
-    return parse_notes(pr, message)
+        data = gql(COMMIT_QUERY, variables)
+
+        repo = data.get("data", {}).get("repository", {})
+        for index, sha in enumerate(chunk):
+            key = f"commit{index}"
+            nodes = repo.get(key, {}).get("associatedPullRequests", {}).get("nodes", [])
+
+            if not nodes:
+                print(f"Warning: no PRs found for commit {sha}.", file=sys.stderr)
+                continue
+
+            number = nodes[0].get("number")
+            body = nodes[0].get("body")
+
+            if not number:
+                print(f"Warning: Missing PR number for commit {sha}.", file=sys.stderr)
+                continue
+
+            if number in seen:
+                continue
+
+            seen.add(number)
+
+            notes = parse_notes(body)
+            for impacted, note in notes.items():
+                if note.checked:
+                    results[impacted].append((number, note.note))
+
+    return results
 
 
 def extract_protocol_version(commit):
@@ -234,15 +386,14 @@ def do_check(pr):
 
     """
 
-    pr, notes = extract_notes_for_pr(pr)
+    notes = extract_notes_for_pr(pr)
     issues = []
     for impacted, note in notes.items():
         if impacted not in NOTE_ORDER:
             issues.append(f" - Found unfamiliar impact area '{impacted}'.")
 
         if note.checked and not note.note:
-            issues.append(
-                f" - '{impacted}' is checked but has no release note.")
+            issues.append(f" - '{impacted}' is checked but has no release note.")
 
         if not note.checked and note.note:
             issues.append(
@@ -256,6 +407,84 @@ def do_check(pr):
     for issue in issues:
         print(issue)
     sys.exit(1)
+
+
+def pr_has_release_notes(pr):
+    """Check if a PR has any checked release notes boxes."""
+    variables = {"owner": "MystenLabs", "name": "sui", "number": int(pr)}
+    data = gql(PR_BODY_QUERY, variables)
+    body = data.get("data", {}).get("repository", {}).get("pullRequest", {}).get("body") or ""
+    return bool(re.search(r"^\s*-\s*\[x\]\s*", body, re.MULTILINE | re.IGNORECASE))
+
+
+def do_list_prs(from_, to):
+    """List PRs with release notes between two commits.
+
+    Outputs JSON with PR numbers that have checked release notes,
+    suitable for use in CI workflows.
+    """
+    root = git("rev-parse", "--show-toplevel")
+    os.chdir(root)
+
+    commits = git(
+        "log",
+        "--pretty=format:%H",
+        f"{from_}..{to}",
+        "--",
+        *INTERESTING_DIRECTORIES,
+    ).strip()
+
+    if not commits:
+        print("[]")
+        return
+
+    commit_list = commits.split("\n")
+
+    # Use batched query to get PR info for all commits efficiently
+    seen_prs = set()
+    prs_with_notes = []
+
+    for start in range(0, len(commit_list), BATCH_SIZE):
+        chunk = commit_list[start : start + BATCH_SIZE]
+        variables = {"owner": "MystenLabs", "name": "sui"}
+        for i, sha in enumerate(chunk):
+            variables[f"sha{i}"] = sha
+
+        data = gql(COMMIT_QUERY, variables)
+        repo = data.get("data", {}).get("repository", {})
+
+        for index, sha in enumerate(chunk):
+            key = f"commit{index}"
+            nodes = repo.get(key, {}).get("associatedPullRequests", {}).get("nodes", [])
+
+            if not nodes:
+                continue
+
+            number = nodes[0].get("number")
+            body = nodes[0].get("body") or ""
+
+            if not number or number in seen_prs:
+                continue
+
+            seen_prs.add(number)
+
+            # Check if PR has checked release notes
+            if re.search(r"^\s*-\s*\[x\]\s*", body, re.MULTILINE | re.IGNORECASE):
+                prs_with_notes.append(number)
+
+    print(json.dumps(prs_with_notes))
+
+
+def do_get_notes(pr):
+    """Get formatted release notes for a specific PR."""
+    notes = extract_notes_for_pr(pr)
+
+    output_lines = []
+    for impacted, note in notes.items():
+        if note.checked and note.note:
+            output_lines.append(f"{impacted}: {note.note}")
+
+    print("\n".join(output_lines))
 
 
 def do_generate(from_, to):
@@ -272,8 +501,6 @@ def do_generate(from_, to):
     "Protocol" changelog.
 
     """
-    results = defaultdict(list)
-
     root = git("rev-parse", "--show-toplevel")
     os.chdir(root)
 
@@ -290,11 +517,7 @@ def do_generate(from_, to):
     if not commits:
         return
 
-    for commit in commits.split("\n"):
-        pr, notes = extract_notes_for_commit(commit)
-        for impacted, note in notes.items():
-            if note.checked:
-                results[impacted].append((pr, note.note))
+    results = fetch_release_notes_for_commits(commits.split("\n"))
 
     # Print the impact areas we know about first
     for impacted in NOTE_ORDER:
@@ -320,8 +543,17 @@ def do_generate(from_, to):
             print()
 
 
-args = parse_args()
-if args["command"] == "generate":
-    do_generate(args["from"], args["to"])
-elif args["command"] == "check":
-    do_check(args["pr"])
+if __name__ == "__main__":
+    args = parse_args()
+    if args["command"] is None:
+        print("Error: No command provided.\n", file=sys.stderr)
+        subprocess.run([sys.executable, __file__, "--help"])
+        sys.exit(1)
+    elif args["command"] == "generate":
+        do_generate(args["from"], args["to"])
+    elif args["command"] == "check":
+        do_check(args["pr"])
+    elif args["command"] == "list-prs":
+        do_list_prs(args["from"], args["to"])
+    elif args["command"] == "get-notes":
+        do_get_notes(args["pr"])

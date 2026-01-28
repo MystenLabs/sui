@@ -3,22 +3,24 @@
 
 use filter::SuiObjectResponseQuery;
 use futures::future;
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use sui_json_rpc_types::{
-    Page, SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
-};
+use jsonrpsee::core::RpcResult;
+use jsonrpsee::proc_macros::rpc;
+use sui_json_rpc_types::Page;
+use sui_json_rpc_types::SuiGetPastObjectRequest;
+use sui_json_rpc_types::SuiObjectDataOptions;
+use sui_json_rpc_types::SuiObjectResponse;
+use sui_json_rpc_types::SuiPastObjectResponse;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::SuiAddress;
 
-use crate::{
-    context::Context,
-    error::{InternalContext, invalid_params},
-};
-
-use super::rpc_module::RpcModule;
-
-use self::error::Error;
+use crate::api::objects::error::Error;
+use crate::api::rpc_module::RpcModule;
+use crate::context::Context;
+use crate::error::InternalContext;
+use crate::error::invalid_params;
 
 mod error;
 pub(crate) mod filter;

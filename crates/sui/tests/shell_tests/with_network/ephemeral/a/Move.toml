@@ -1,0 +1,5 @@
+[package]
+name = "a"
+edition = "2024"         # edition = "legacy" to use legacy (pre-2024) Move
+
+[dependencies]

@@ -5,20 +5,21 @@ use crate::SuiClient;
 use crate::sui_client_config::{SuiClientConfig, SuiEnv};
 use anyhow::{anyhow, ensure};
 use futures::future;
+use futures::stream::TryStreamExt;
 use shared_crypto::intent::Intent;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_config::{Config, PersistedConfig};
-use sui_json_rpc_types::{
-    SuiObjectData, SuiObjectDataFilter, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-};
+use sui_json_rpc_types::{SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_keys::key_identity::KeyIdentity;
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::{Signature, SuiKeyPair};
+use sui_types::object::Object;
 
+use std::sync::OnceLock;
+use sui_rpc_api::Client;
 use sui_types::gas_coin::GasCoin;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 use tokio::sync::RwLock;
@@ -28,6 +29,7 @@ pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
     request_timeout: Option<std::time::Duration>,
     client: Arc<RwLock<Option<SuiClient>>>,
+    grpc: OnceLock<Client>,
     max_concurrent_requests: Option<u64>,
     env_override: Option<String>,
 }
@@ -46,6 +48,7 @@ impl WalletContext {
             config,
             request_timeout: None,
             client: Default::default(),
+            grpc: OnceLock::new(),
             max_concurrent_requests: None,
             env_override: None,
         };
@@ -64,6 +67,7 @@ impl WalletContext {
             config,
             request_timeout: None,
             client: Arc::new(Default::default()),
+            grpc: OnceLock::new(),
             max_concurrent_requests: None,
             env_override: None,
         }
@@ -133,15 +137,21 @@ impl WalletContext {
         })
     }
 
+    pub fn grpc_client(&self) -> Result<Client, anyhow::Error> {
+        if let Some(client) = self.grpc.get() {
+            Ok(client.clone())
+        } else {
+            let client = self.get_active_env()?.create_grpc_client()?;
+            Ok(self.grpc.get_or_init(move || client).clone())
+        }
+    }
+
     /// Load the chain ID corresponding to the active environment, or fetch and cache it if not
     /// present.
     ///
     /// The chain ID is cached in the `client.yaml` file to avoid redundant network requests.
-    pub async fn load_or_cache_chain_id(
-        &self,
-        client: &SuiClient,
-    ) -> Result<String, anyhow::Error> {
-        self.internal_load_or_cache_chain_id(client, false).await
+    pub async fn load_or_cache_chain_id(&self) -> Result<String, anyhow::Error> {
+        self.internal_load_or_cache_chain_id(false).await
     }
 
     /// Try to load the cached chain ID for the active environment.
@@ -168,13 +178,12 @@ impl WalletContext {
 
     /// Cache (or recache) chain ID for the active environment by fetching it from the
     /// network
-    pub async fn cache_chain_id(&self, client: &SuiClient) -> Result<String, anyhow::Error> {
-        self.internal_load_or_cache_chain_id(client, true).await
+    pub async fn cache_chain_id(&self) -> Result<String, anyhow::Error> {
+        self.internal_load_or_cache_chain_id(true).await
     }
 
     async fn internal_load_or_cache_chain_id(
         &self,
-        client: &SuiClient,
         force_recache: bool,
     ) -> Result<String, anyhow::Error> {
         let env = self.get_active_env()?;
@@ -183,13 +192,13 @@ impl WalletContext {
             info!("Found cached chain ID for env {}: {}", env.alias, chain_id);
             return Ok(chain_id.clone());
         }
-        let chain_id = client.read_api().get_chain_identifier().await?;
+        let chain_id = self.grpc_client()?.get_chain_identifier().await?;
         let path = self.config.path();
         let mut config_result = SuiClientConfig::load_with_lock(path)?;
 
-        config_result.update_env_chain_id(&env.alias, chain_id.clone())?;
+        config_result.update_env_chain_id(&env.alias, chain_id.to_string())?;
         config_result.save_with_lock(path)?;
-        Ok(chain_id)
+        Ok(chain_id.to_string())
     }
 
     pub fn get_active_env(&self) -> Result<&SuiEnv, anyhow::Error> {
@@ -226,13 +235,11 @@ impl WalletContext {
 
     /// Get the latest object reference given a object id
     pub async fn get_object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, anyhow::Error> {
-        let client = self.get_client().await?;
-        Ok(client
-            .read_api()
-            .get_object_with_options(object_id, SuiObjectDataOptions::new())
+        Ok(self
+            .grpc_client()?
+            .get_object(object_id)
             .await?
-            .into_object()?
-            .object_ref())
+            .compute_object_reference())
     }
 
     /// Get the latest full object reference given a object id
@@ -240,76 +247,39 @@ impl WalletContext {
         &self,
         object_id: ObjectID,
     ) -> Result<FullObjectRef, anyhow::Error> {
-        let client = self.get_client().await?;
-        let object = client
-            .read_api()
-            .get_object_with_options(object_id, SuiObjectDataOptions::new().with_owner())
+        Ok(self
+            .grpc_client()?
+            .get_object(object_id)
             .await?
-            .into_object()?;
-        let object_ref = object.object_ref();
-        let owner = object
-            .owner
-            .expect("Owner should be present if `with_owner` is set");
-        Ok(FullObjectRef::from_object_ref_and_owner(object_ref, &owner))
+            .compute_full_object_reference())
     }
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address
     pub async fn gas_objects(
         &self,
-        address: SuiAddress,
-    ) -> Result<Vec<(u64, SuiObjectData)>, anyhow::Error> {
-        let client = self.get_client().await?;
+        owner: SuiAddress,
+    ) -> Result<Vec<(u64, Object)>, anyhow::Error> {
+        let client = self.grpc_client()?;
 
-        let mut objects: Vec<SuiObjectResponse> = Vec::new();
-        let mut cursor = None;
-        loop {
-            let response = client
-                .read_api()
-                .get_owned_objects(
-                    address,
-                    Some(SuiObjectResponseQuery::new(
-                        Some(SuiObjectDataFilter::StructType(GasCoin::type_())),
-                        Some(SuiObjectDataOptions::full_content()),
-                    )),
-                    cursor,
-                    None,
-                )
-                .await?;
+        client
+            .list_owned_objects(owner, Some(GasCoin::type_()))
+            .map_err(Into::into)
+            .and_then(|object| async move {
+                let gas_coin = GasCoin::try_from(&object)?;
 
-            objects.extend(response.data);
-
-            if response.has_next_page {
-                cursor = response.next_cursor;
-            } else {
-                break;
-            }
-        }
-
-        // TODO: We should ideally fetch the objects from local cache
-        let mut values_objects = Vec::new();
-
-        for object in objects {
-            let o = object.data;
-            if let Some(o) = o {
-                let gas_coin = GasCoin::try_from(&o)?;
-                values_objects.push((gas_coin.value(), o.clone()));
-            }
-        }
-
-        Ok(values_objects)
+                Ok((gas_coin.value(), object))
+            })
+            .try_collect()
+            .await
     }
 
     pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
-        let client = self.get_client().await?;
-        let object = client
-            .read_api()
-            .get_object_with_options(*id, SuiObjectDataOptions::new().with_owner())
+        self.grpc_client()?
+            .get_object(*id)
             .await?
-            .into_object()?;
-        Ok(object
-            .owner
-            .ok_or_else(|| anyhow!("Owner field is None"))?
-            .get_owner_address()?)
+            .owner()
+            .get_owner_address()
+            .map_err(Into::into)
     }
 
     pub async fn try_get_object_owner(
@@ -350,9 +320,9 @@ impl WalletContext {
         address: SuiAddress,
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
-    ) -> Result<(u64, SuiObjectData), anyhow::Error> {
+    ) -> Result<(u64, Object), anyhow::Error> {
         for o in self.gas_objects(address).await? {
-            if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.object_id) {
+            if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
                 return Ok((o.0, o.1));
             }
         }
@@ -370,27 +340,19 @@ impl WalletContext {
 
     pub async fn get_gas_objects_owned_by_address(
         &self,
-        address: SuiAddress,
-        limit: Option<usize>,
+        owner: SuiAddress,
+        page_size: Option<u32>,
     ) -> anyhow::Result<Vec<ObjectRef>> {
-        let client = self.get_client().await?;
-        let results: Vec<_> = client
-            .read_api()
-            .get_owned_objects(
-                address,
-                Some(SuiObjectResponseQuery::new(
-                    Some(SuiObjectDataFilter::StructType(GasCoin::type_())),
-                    Some(SuiObjectDataOptions::full_content()),
-                )),
-                None,
-                limit,
-            )
-            .await?
-            .data
+        let page = self
+            .grpc_client()?
+            .get_owned_objects(owner, Some(GasCoin::type_()), page_size, None)
+            .await?;
+
+        Ok(page
+            .items
             .into_iter()
-            .filter_map(|r| r.data.map(|o| o.object_ref()))
-            .collect();
-        Ok(results)
+            .map(|o| o.compute_object_reference())
+            .collect())
     }
 
     /// Given an address, return one gas object owned by this address.
@@ -434,7 +396,7 @@ impl WalletContext {
                 .gas_objects(address)
                 .await?
                 .into_iter()
-                .map(|(_, o)| o.object_ref())
+                .map(|(_, o)| o.compute_object_reference())
                 .collect();
             result.push((address, objects));
         }
@@ -442,9 +404,10 @@ impl WalletContext {
     }
 
     pub async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
-        let client = self.get_client().await?;
-        let gas_price = client.governance_api().get_reference_gas_price().await?;
-        Ok(gas_price)
+        self.grpc_client()?
+            .get_reference_gas_price()
+            .await
+            .map_err(Into::into)
     }
 
     /// Add an account
@@ -536,8 +499,10 @@ impl WalletContext {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<SuiTransactionBlockResponse> {
+        let digest = tx.digest().to_owned();
         let client = self.get_client().await?;
-        Ok(client
+
+        let response = client
             .quorum_driver_api()
             .execute_transaction_block(
                 tx,
@@ -549,6 +514,10 @@ impl WalletContext {
                     .with_balance_changes(),
                 Some(sui_types::transaction_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
             )
-            .await?)
+            .await?;
+
+        self.grpc_client()?.wait_for_transaction(&digest).await?;
+
+        Ok(response)
     }
 }

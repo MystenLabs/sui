@@ -1,0 +1,25 @@
+---
+source: crates/sui/tests/shell_tests.rs
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# tests also work for the same scenario (one package uses two packages that name themselves `math`)
+sui move --client.config $CONFIG test -p use_math
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+INCLUDING DEPENDENCY MoveStdlib
+INCLUDING DEPENDENCY math
+INCLUDING DEPENDENCY math
+BUILDING use_math
+Running Move unit tests
+[debug] "called math_a (though its real name is `math`)"
+[debug] "called math_b (though its real name is `math`)"
+[ PASS    ] use_math::testing::use_test
+Test result: OK. Total tests: 1; passed: 1; failed: 0
+
+----- stderr -----

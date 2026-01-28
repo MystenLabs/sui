@@ -7,8 +7,7 @@ use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
 
-use move_package_alt::flavor::vanilla::{Vanilla, default_environment};
-use move_package_alt::package::layout::SourcePackageLayout;
+use move_package_alt::{SourcePackageLayout, Vanilla};
 use move_package_alt_compilation::{build_config::BuildConfig, compile_package};
 
 fn create_test_package(dir: &Path) -> std::io::Result<()> {
@@ -57,7 +56,7 @@ async fn test_install_dir_creates_directory() {
         "Package directory contents before build: {}",
         String::from_utf8_lossy(&cmd.stdout)
     );
-    let env = default_environment();
+    let env = Vanilla::default_environment();
 
     let result =
         compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut Vec::new()).await;
@@ -86,12 +85,14 @@ async fn test_install_dir_creates_directory() {
 #[tokio::test]
 async fn test_install_dir_relative_path() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    std::env::set_current_dir(&temp_dir).unwrap();
+
     let package_path = temp_dir.path().join("test_package");
     fs::create_dir(&package_path).expect("Failed to create package dir");
 
     create_test_package(&package_path).expect("Failed to create test package");
 
-    let relative_install_dir = PathBuf::from("../install_output");
+    let relative_install_dir = PathBuf::from("install_output");
 
     let build_config = BuildConfig {
         install_dir: Some(relative_install_dir.clone()),
@@ -99,7 +100,7 @@ async fn test_install_dir_relative_path() {
         ..Default::default()
     };
 
-    let env = default_environment();
+    let env = Vanilla::default_environment();
     let mut output = Cursor::new(Vec::new());
 
     let result =
@@ -111,7 +112,7 @@ async fn test_install_dir_relative_path() {
         result.unwrap_err()
     );
 
-    let expected_install_path = package_path.join("../install_output");
+    let expected_install_path = package_path.join("install_output");
     assert!(
         expected_install_path.exists(),
         "Install dir should be created at relative path"
@@ -139,13 +140,12 @@ async fn test_install_dir_absolute_path() {
         ..Default::default()
     };
 
-    let env = default_environment();
+    let env = Vanilla::default_environment();
     let mut output = Cursor::new(Vec::new());
 
-    let result =
-        compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut output).await;
-
-    assert!(result.is_ok(), "Compilation should succeed");
+    compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut output)
+        .await
+        .expect("compilation succeeds");
 
     assert!(
         absolute_install_dir.exists(),
@@ -177,7 +177,7 @@ async fn test_no_install_dir_uses_default() {
         ..Default::default()
     };
 
-    let env = default_environment();
+    let env = Vanilla::default_environment();
     let mut output = Cursor::new(Vec::new());
 
     let result =
@@ -215,7 +215,7 @@ async fn test_install_dir_existing_directory() {
         ..Default::default()
     };
 
-    let env = default_environment();
+    let env = Vanilla::default_environment();
     let mut output = Cursor::new(Vec::new());
 
     let result =

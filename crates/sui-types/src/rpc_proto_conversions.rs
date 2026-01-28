@@ -130,17 +130,29 @@ impl TryFrom<&Checkpoint> for crate::full_checkpoint_content::Checkpoint {
             summary, signature,
         );
 
-        let contents = checkpoint
+        let contents: crate::messages_checkpoint::CheckpointContents = checkpoint
             .contents()
             .bcs()
             .deserialize()
             .map_err(|e| TryFromProtoError::invalid("contents.bcs", e))?;
 
+        let user_signatures: Vec<_> = contents
+            .clone()
+            .into_iter_with_signatures()
+            .map(|(_, user_signatures)| user_signatures)
+            .collect();
+
         let transactions = checkpoint
             .transactions()
             .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
+            .zip(user_signatures)
+            .map(|(tx, user_signatures)| {
+                let mut executed_tx: crate::full_checkpoint_content::ExecutedTransaction =
+                    tx.try_into()?;
+                executed_tx.signatures = user_signatures;
+                Ok(executed_tx)
+            })
+            .collect::<Result<_, TryFromProtoError>>()?;
 
         let object_set = checkpoint.objects().try_into()?;
 
@@ -2136,10 +2148,9 @@ impl From<crate::transaction::TransactionKind> for TransactionKind {
             K::ConsensusCommitPrologueV4(prologue) => message
                 .with_consensus_commit_prologue(prologue)
                 .with_kind(Kind::ConsensusCommitPrologueV4),
-            K::ProgrammableSystemTransaction(_) => message,
-            // TODO support ProgrammableSystemTransaction
-            // .with_programmable_transaction(ptb)
-            // .with_kind(Kind::ProgrammableSystemTransaction),
+            K::ProgrammableSystemTransaction(ptb) => message
+                .with_programmable_transaction(ptb)
+                .with_kind(Kind::ProgrammableSystemTransaction),
         }
     }
 }
@@ -2411,6 +2422,9 @@ impl From<crate::transaction::EndOfEpochTransactionKind> for EndOfEpochTransacti
             K::CoinRegistryCreate => message.with_kind(Kind::CoinRegistryCreate),
             K::DisplayRegistryCreate => message.with_kind(Kind::DisplayRegistryCreate),
             K::AddressAliasStateCreate => message.with_kind(Kind::AddressAliasStateCreate),
+            K::WriteAccumulatorStorageCost(storage_cost) => message
+                .with_kind(Kind::WriteAccumulatorStorageCost)
+                .with_storage_cost(storage_cost.storage_cost),
         }
     }
 }
@@ -2579,7 +2593,6 @@ impl From<crate::transaction::FundsWithdrawalArg> for FundsWithdrawal {
         let mut message = Self::default();
 
         message.amount = match value.reservation {
-            crate::transaction::Reservation::EntireBalance => None,
             crate::transaction::Reservation::MaxAmountU64(amount) => Some(amount),
         };
         let crate::transaction::WithdrawalTypeArg::Balance(coin_type) = value.type_arg;

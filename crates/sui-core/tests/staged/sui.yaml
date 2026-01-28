@@ -497,6 +497,10 @@ EndOfEpochTransactionKind:
       DisplayRegistryCreate: UNIT
     11:
       AddressAliasStateCreate: UNIT
+    12:
+      WriteAccumulatorStorageCost:
+        NEWTYPE:
+          TYPENAME: WriteAccumulatorStorageCost
 Event:
   STRUCT:
     - package_id:
@@ -823,14 +827,6 @@ MoveObjectType_:
       BalanceAccumulatorField:
         NEWTYPE:
           TYPENAME: TypeTag
-    6:
-      BalanceAccumulatorOwnerField: UNIT
-    7:
-      SuiBalanceAccumulatorMetadataField: UNIT
-    8:
-      BalanceAccumulatorMetadataField:
-        NEWTYPE:
-          TYPENAME: TypeTag
 MovePackage:
   STRUCT:
     - id:
@@ -1060,8 +1056,6 @@ RandomnessStateUpdate:
 Reservation:
   ENUM:
     0:
-      EntireBalance: UNIT
-    1:
       MaxAmountU64:
         NEWTYPE: U64
 SenderSignedData:
@@ -1459,7 +1453,10 @@ WithdrawalTypeArg:
     0:
       Balance:
         NEWTYPE:
-          TYPENAME: TypeInput
+          TYPENAME: TypeTag
+WriteAccumulatorStorageCost:
+  STRUCT:
+    - storage_cost: U64
 ZkLoginAuthenticatorAsBytes:
   NEWTYPESTRUCT:
     SEQ: U8

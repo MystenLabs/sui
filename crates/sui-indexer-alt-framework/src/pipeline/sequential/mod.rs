@@ -3,21 +3,22 @@
 
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
+use async_trait::async_trait;
+use serde::Deserialize;
+use serde::Serialize;
 use sui_futures::service::Service;
 use tokio::sync::mpsc;
 use tracing::info;
 
-use super::{CommitterConfig, PIPELINE_BUFFER, Processor, processor::processor};
-
-use crate::{
-    metrics::IndexerMetrics,
-    store::{Store, TransactionalStore},
-    types::full_checkpoint_content::Checkpoint,
-};
-
-use self::committer::committer;
-use async_trait::async_trait;
+use crate::metrics::IndexerMetrics;
+use crate::pipeline::CommitterConfig;
+use crate::pipeline::PIPELINE_BUFFER;
+use crate::pipeline::Processor;
+use crate::pipeline::processor::processor;
+use crate::pipeline::sequential::committer::committer;
+use crate::store::Store;
+use crate::store::TransactionalStore;
+use crate::types::full_checkpoint_content::Checkpoint;
 
 mod committer;
 

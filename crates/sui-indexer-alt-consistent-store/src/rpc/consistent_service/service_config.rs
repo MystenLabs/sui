@@ -3,9 +3,8 @@
 
 use sui_indexer_alt_consistent_api::proto::rpc::consistent::v1alpha as grpc;
 
+use crate::rpc::consistent_service::State;
 use crate::rpc::error::RpcError;
-
-use super::State;
 
 pub(super) fn service_config(
     state: &State,

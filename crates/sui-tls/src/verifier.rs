@@ -320,8 +320,8 @@ fn pki_error(error: webpki::Error) -> rustls::Error {
             rustls::Error::InvalidCertificate(rustls::CertificateError::BadEncoding)
         }
         InvalidSignatureForPublicKey
-        | UnsupportedSignatureAlgorithm
-        | UnsupportedSignatureAlgorithmForPublicKey => {
+        | UnsupportedSignatureAlgorithmContext(_)
+        | UnsupportedSignatureAlgorithmForPublicKeyContext(_) => {
             rustls::Error::InvalidCertificate(rustls::CertificateError::BadSignature)
         }
         CertNotValidForName(_) => {

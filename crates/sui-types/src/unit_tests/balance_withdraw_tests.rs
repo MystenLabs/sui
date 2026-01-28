@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use move_core_types::language_storage::TypeTag;
 use sui_protocol_config::ProtocolConfig;
 
 use crate::{
@@ -17,7 +18,6 @@ use crate::{
         FundsWithdrawalArg, TransactionData, TransactionDataAPI, TxValidityCheckContext,
         WithdrawalTypeArg,
     },
-    type_input::TypeInput,
 };
 
 fn protocol_config() -> ProtocolConfig {
@@ -40,7 +40,7 @@ impl CoinReservationResolverTrait for NoImpl {
 
 #[test]
 fn test_withdraw_max_amount() {
-    let arg = FundsWithdrawalArg::balance_from_sender(100, TypeInput::from(GAS::type_tag()));
+    let arg = FundsWithdrawalArg::balance_from_sender(100, GAS::type_tag());
     let mut ptb = ProgrammableTransactionBuilder::new();
     ptb.funds_withdrawal(arg.clone()).unwrap();
     let sender = SuiAddress::random_for_testing_only();
@@ -52,9 +52,7 @@ fn test_withdraw_max_amount() {
         .unwrap();
     let account_id = AccumulatorValue::get_field_id(
         sender,
-        &WithdrawalTypeArg::Balance(GAS::type_tag().into())
-            .to_type_tag()
-            .unwrap(),
+        &WithdrawalTypeArg::Balance(GAS::type_tag()).to_type_tag(),
     )
     .unwrap();
     assert_eq!(withdraws, BTreeMap::from([(account_id, 100)]));
@@ -62,8 +60,8 @@ fn test_withdraw_max_amount() {
 
 #[test]
 fn test_multiple_withdraws_same_account() {
-    let arg1 = FundsWithdrawalArg::balance_from_sender(100, TypeInput::from(GAS::type_tag()));
-    let arg2 = FundsWithdrawalArg::balance_from_sender(200, TypeInput::from(GAS::type_tag()));
+    let arg1 = FundsWithdrawalArg::balance_from_sender(100, GAS::type_tag());
+    let arg2 = FundsWithdrawalArg::balance_from_sender(200, GAS::type_tag());
     let mut ptb = ProgrammableTransactionBuilder::new();
     ptb.funds_withdrawal(arg1.clone()).unwrap();
     ptb.funds_withdrawal(arg2.clone()).unwrap();
@@ -76,9 +74,7 @@ fn test_multiple_withdraws_same_account() {
         .unwrap();
     let account_id = AccumulatorValue::get_field_id(
         sender,
-        &WithdrawalTypeArg::Balance(GAS::type_tag().into())
-            .to_type_tag()
-            .unwrap(),
+        &WithdrawalTypeArg::Balance(GAS::type_tag()).to_type_tag(),
     )
     .unwrap();
     assert_eq!(withdraws, BTreeMap::from([(account_id, 300)]));
@@ -86,8 +82,8 @@ fn test_multiple_withdraws_same_account() {
 
 #[test]
 fn test_multiple_withdraws_different_accounts() {
-    let arg1 = FundsWithdrawalArg::balance_from_sender(100, TypeInput::from(GAS::type_tag()));
-    let arg2 = FundsWithdrawalArg::balance_from_sender(200, TypeInput::Bool);
+    let arg1 = FundsWithdrawalArg::balance_from_sender(100, GAS::type_tag());
+    let arg2 = FundsWithdrawalArg::balance_from_sender(200, TypeTag::Bool);
     let mut ptb = ProgrammableTransactionBuilder::new();
     ptb.funds_withdrawal(arg1.clone()).unwrap();
     ptb.funds_withdrawal(arg2.clone()).unwrap();
@@ -100,16 +96,12 @@ fn test_multiple_withdraws_different_accounts() {
         .unwrap();
     let account_id1 = AccumulatorValue::get_field_id(
         sender,
-        &WithdrawalTypeArg::Balance(GAS::type_tag().into())
-            .to_type_tag()
-            .unwrap(),
+        &WithdrawalTypeArg::Balance(GAS::type_tag()).to_type_tag(),
     )
     .unwrap();
     let account_id2 = AccumulatorValue::get_field_id(
         sender,
-        &WithdrawalTypeArg::Balance(TypeInput::Bool)
-            .to_type_tag()
-            .unwrap(),
+        &WithdrawalTypeArg::Balance(TypeTag::Bool).to_type_tag(),
     )
     .unwrap();
     assert_eq!(
@@ -120,7 +112,7 @@ fn test_multiple_withdraws_different_accounts() {
 
 #[test]
 fn test_withdraw_zero_amount() {
-    let arg = FundsWithdrawalArg::balance_from_sender(0, TypeInput::from(GAS::type_tag()));
+    let arg = FundsWithdrawalArg::balance_from_sender(0, GAS::type_tag());
     let mut ptb = ProgrammableTransactionBuilder::new();
     ptb.funds_withdrawal(arg.clone()).unwrap();
     let sender = SuiAddress::random_for_testing_only();
@@ -140,7 +132,7 @@ fn test_withdraw_too_many_withdraws() {
     for _ in 0..11 {
         ptb.funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
             100,
-            TypeInput::from(GAS::type_tag()),
+            GAS::type_tag(),
         ))
         .unwrap();
     }

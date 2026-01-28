@@ -43,4 +43,7 @@ message GetObjectInclusionProofResponse {
 
   // BCS-encoded object data.
   optional bytes object_data = 3;
+
+  // BCS-encoded checkpoint summary needed to verify the proof.
+  optional bytes checkpoint_summary = 4;
 }

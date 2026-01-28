@@ -3,10 +3,11 @@
 
 use std::str::FromStr;
 
-use fastcrypto::encoding::{Base58, Encoding};
+use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Encoding;
 use sui_types::digests::TransactionDigest;
 
-use super::impl_string_input;
+use crate::api::scalars::impl_string_input;
 
 const DIGEST_LENGTH: usize = 32;
 
@@ -56,7 +57,6 @@ impl TryFrom<&[u8]> for Digest {
 
 #[cfg(test)]
 mod tests {
-    use super::Error;
     use super::*;
 
     #[test]

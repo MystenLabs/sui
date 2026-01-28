@@ -1,0 +1,220 @@
+---
+title: Take Profit Stop Loss SDK
+sidebar_label: Take Profit Stop Loss
+description: Learn how to use the DeepBook Margin SDK to manage conditional orders for automated trading.
+keywords:
+  [
+    take profit,
+    stop loss,
+    tpsl,
+    conditional orders,
+    automated trading,
+    trigger orders,
+    margin trading sdk,
+    deepbook margin sdk,
+  ]
+---
+
+The TPSL (Take Profit Stop Loss) SDK provides functions for managing conditional orders that automatically execute when certain price conditions are met.
+
+## TPSL functions
+
+The DeepBook Margin SDK provides the following functions for managing conditional orders.
+
+### `addConditionalOrder`
+
+Use `addConditionalOrder` to add a conditional order that executes when a price condition is met. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `marginManagerKey`: String that identifies the margin manager.
+- `conditionalOrderId`: Number representing the unique ID for this conditional order.
+- `triggerBelowPrice`: Boolean indicating whether to trigger when price falls below the trigger price.
+- `triggerPrice`: Number representing the price at which to trigger the order.
+- `pendingOrder`: Object containing the order details (either `PendingLimitOrderParams` or `PendingMarketOrderParams`).
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="addConditionalOrder" signatureOnly />
+
+### `cancelConditionalOrder`
+
+Use `cancelConditionalOrder` to cancel a specific conditional order. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `marginManagerKey`: String that identifies the margin manager.
+- `conditionalOrderId`: String representing the ID of the conditional order to cancel.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="cancelConditionalOrder" signatureOnly />
+
+### `cancelAllConditionalOrders`
+
+Use `cancelAllConditionalOrders` to cancel all conditional orders for a margin manager. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `marginManagerKey`: String that identifies the margin manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="cancelAllConditionalOrders" signatureOnly />
+
+### `executeConditionalOrders`
+
+Use `executeConditionalOrders` to execute conditional orders that have been triggered. This is a permissionless function that can be called by anyone. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `marginManagerKey`: String that identifies the margin manager.
+- `maxOrdersToExecute`: Number representing the maximum number of orders to execute in this call.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="executeConditionalOrders" signatureOnly />
+
+## Helper functions
+
+These helper functions create conditions and pending orders for conditional orders.
+
+### `newCondition`
+
+Use `newCondition` to create a trigger condition for a conditional order. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `triggerBelowPrice`: Boolean indicating whether to trigger when price falls below the trigger price.
+- `triggerPrice`: Number representing the price at which to trigger.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="newCondition" signatureOnly />
+
+### `newPendingLimitOrder`
+
+Use `newPendingLimitOrder` to create a pending limit order for use in conditional orders. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `params`: `PendingLimitOrderParams` object containing:
+  - `clientOrderId`: Number for client tracking.
+  - `orderType`: Optional order type (default: `NO_RESTRICTION`).
+  - `selfMatchingOption`: Optional self-matching option (default: `SELF_MATCHING_ALLOWED`).
+  - `price`: Number representing the limit price.
+  - `quantity`: Number representing the order quantity.
+  - `isBid`: Boolean indicating if this is a buy order.
+  - `payWithDeep`: Optional boolean for fee payment (default: `true`).
+  - `expireTimestamp`: Optional expiration timestamp.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="newPendingLimitOrder" signatureOnly />
+
+### `newPendingMarketOrder`
+
+Use `newPendingMarketOrder` to create a pending market order for use in conditional orders. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `params`: `PendingMarketOrderParams` object containing:
+  - `clientOrderId`: Number for client tracking.
+  - `selfMatchingOption`: Optional self-matching option (default: `SELF_MATCHING_ALLOWED`).
+  - `quantity`: Number representing the order quantity.
+  - `isBid`: Boolean indicating if this is a buy order.
+  - `payWithDeep`: Optional boolean for fee payment (default: `true`).
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="newPendingMarketOrder" signatureOnly />
+
+## Read-only functions
+
+### `conditionalOrderIds`
+
+Query all conditional order IDs for a margin manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="conditionalOrderIds" signatureOnly />
+
+### `conditionalOrder`
+
+Query a specific conditional order by ID.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="conditionalOrder" signatureOnly />
+
+### `triggerBelowOrders`, `triggerAboveOrders`
+
+Query the lists of conditional orders sorted by trigger price.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="triggerBelowOrders,triggerAboveOrders" signatureOnly />
+
+### `numConditionalOrders`
+
+Query the total number of conditional orders for a margin manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="numConditionalOrders" signatureOnly />
+
+### `lowestTriggerAbovePrice`, `highestTriggerBelowPrice`
+
+Query trigger prices for conditional orders.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/marginTPSL.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="lowestTriggerAbovePrice,highestTriggerBelowPrice" signatureOnly />
+
+## Examples
+
+### Set up a stop loss order
+
+```tsx
+// Example: Create a stop loss order that sells when price drops below 2.0
+const setStopLoss = (tx: Transaction) => {
+	const managerKey = 'MARGIN_MANAGER_1';
+	traderClient.marginTPSL.addConditionalOrder({
+		marginManagerKey: managerKey,
+		conditionalOrderId: 1,
+		triggerBelowPrice: true, // Trigger when price falls below
+		triggerPrice: 2.0,
+		pendingOrder: {
+			clientOrderId: 100,
+			quantity: 50,
+			isBid: false, // Sell order
+			payWithDeep: true,
+		},
+	})(tx);
+};
+```
+
+### Set up a take profit order
+
+```tsx
+// Example: Create a take profit order that sells when price rises above 5.0
+const setTakeProfit = (tx: Transaction) => {
+	const managerKey = 'MARGIN_MANAGER_1';
+	traderClient.marginTPSL.addConditionalOrder({
+		marginManagerKey: managerKey,
+		conditionalOrderId: 2,
+		triggerBelowPrice: false, // Trigger when price rises above
+		triggerPrice: 5.0,
+		pendingOrder: {
+			clientOrderId: 101,
+			price: 5.0, // Limit order at 5.0
+			quantity: 50,
+			isBid: false, // Sell order
+			payWithDeep: true,
+		},
+	})(tx);
+};
+```
+
+### Execute triggered orders (keeper)
+
+```tsx
+// Example: Execute conditional orders as a keeper
+const executeOrders = (tx: Transaction) => {
+	const managerKey = 'MARGIN_MANAGER_1';
+	// Execute up to 10 triggered orders
+	traderClient.marginTPSL.executeConditionalOrders(managerKey, 10)(tx);
+};
+```
+
+## Related links
+
+<RelatedLink
+	href="https://github.com/MystenLabs/deepbookv3/tree/main/packages/deepbook_margin"
+	label="DeepBook Margin package"
+	desc="The DeepBook Margin package on GitHub."
+/>
+<RelatedLink
+	href="https://www.npmjs.com/package/@mysten/deepbook-v3"
+	label="DeepBookV3 SDK node package"
+	desc="The DeepBookV3 SDK node package on NPM."
+/>

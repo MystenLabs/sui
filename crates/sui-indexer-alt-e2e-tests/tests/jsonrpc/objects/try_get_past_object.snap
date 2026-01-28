@@ -40,7 +40,7 @@ Response: {
   "result": {
     "status": "VersionNotFound",
     "details": [
-      "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "0xce9eab63384957b35279af796a1b7658bcbef32fb8fffa9af9a3bb8452e62d5b",
       1
     ]
   }
@@ -54,9 +54,9 @@ Response: {
   "result": {
     "status": "VersionFound",
     "details": {
-      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "objectId": "0xce9eab63384957b35279af796a1b7658bcbef32fb8fffa9af9a3bb8452e62d5b",
       "version": "2",
-      "digest": "4wV3VBJGNaMCv9zfjSna8c4as6EkuYoqTHHjueS6S745"
+      "digest": "2ir2h7W376s15obw3weZxRUF7V9fjw5JyZd1X9NriS7P"
     }
   }
 }
@@ -69,9 +69,9 @@ Response: {
   "result": {
     "status": "VersionFound",
     "details": {
-      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "objectId": "0xce9eab63384957b35279af796a1b7658bcbef32fb8fffa9af9a3bb8452e62d5b",
       "version": "3",
-      "digest": "5p2rFja4CnVp4TWPg2VuRYpDS6d2AUSTQL5mfWBoiVjh"
+      "digest": "JCR6sf2yL1mWaHm3aneLFbQHSUWq8XYUbntKWAgXe8uQ"
     }
   }
 }
@@ -84,7 +84,7 @@ Response: {
   "result": {
     "status": "VersionNotFound",
     "details": [
-      "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "0xce9eab63384957b35279af796a1b7658bcbef32fb8fffa9af9a3bb8452e62d5b",
       4
     ]
   }
@@ -98,7 +98,7 @@ Response: {
   "result": {
     "status": "VersionNotFound",
     "details": [
-      "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "0xce9eab63384957b35279af796a1b7658bcbef32fb8fffa9af9a3bb8452e62d5b",
       1
     ]
   }
@@ -112,14 +112,14 @@ Response: {
   "result": {
     "status": "VersionFound",
     "details": {
-      "objectId": "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "objectId": "0xce9eab63384957b35279af796a1b7658bcbef32fb8fffa9af9a3bb8452e62d5b",
       "version": "2",
-      "digest": "4wV3VBJGNaMCv9zfjSna8c4as6EkuYoqTHHjueS6S745",
+      "digest": "2ir2h7W376s15obw3weZxRUF7V9fjw5JyZd1X9NriS7P",
       "type": "0x2::coin::Coin<0x2::sui::SUI>",
       "owner": {
         "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
       },
-      "previousTransaction": "ABo3jemYqdBWMRYqsaCYUKnGDp64tR7jK2fH1mKCoJLk",
+      "previousTransaction": "J6iVd9qP3eojDsLsxXwvkssRe3N7M1oUZNbscmNwvp4b",
       "storageRebate": "988000"
     }
   }
@@ -133,7 +133,7 @@ Response: {
   "result": {
     "status": "VersionNotFound",
     "details": [
-      "0xc442f9431f789a6c80078a63e707de84c7815c3150e08f1e44be256bd05a2b81",
+      "0xce9eab63384957b35279af796a1b7658bcbef32fb8fffa9af9a3bb8452e62d5b",
       4
     ]
   }

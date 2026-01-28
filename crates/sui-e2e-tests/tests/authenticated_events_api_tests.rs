@@ -5,7 +5,7 @@ use itertools::Itertools;
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use sui_keys::keystore::AccountKeystore;
-use sui_light_client::mmr::apply_stream_updates;
+use sui_light_client::authenticated_events::mmr::apply_stream_updates;
 use sui_light_client::proof::base::{Proof, ProofContents, ProofTarget, ProofVerifier};
 use sui_light_client::proof::committee::extract_new_committee_info;
 use sui_light_client::proof::ocs::{OCSInclusionProof, OCSProof, OCSTarget};
@@ -858,15 +858,15 @@ async fn authenticated_events_backfill_test() {
             cfg
         });
 
-    let rpc_config_without_indexing = sui_config::RpcConfig {
+    let rpc_config = sui_config::RpcConfig {
         authenticated_events_indexing: Some(false),
-        enable_indexing: Some(false),
+        enable_indexing: Some(true),
         ..Default::default()
     };
 
     let mut test_cluster = TestClusterBuilder::new()
         .disable_fullnode_pruning()
-        .with_rpc_config(rpc_config_without_indexing)
+        .with_rpc_config(rpc_config)
         .build()
         .await;
 

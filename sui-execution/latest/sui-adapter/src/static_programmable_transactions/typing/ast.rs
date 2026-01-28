@@ -4,7 +4,7 @@
 use crate::static_programmable_transactions::{
     linkage::resolved_linkage::ResolvedLinkage, loading::ast as L, spanned::Spanned,
 };
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use move_core_types::{account_address::AccountAddress, u256::U256};
 use move_vm_types::values::VectorSpecialization;
 use std::cell::OnceCell;
@@ -26,6 +26,7 @@ pub struct Transaction {
     pub pure: Vec<PureInput>,
     /// All receiving inputs
     pub receiving: Vec<ReceivingInput>,
+    pub withdrawal_compatibility_conversions: IndexMap<Location, WithdrawalCompatibilityConversion>,
     pub commands: Commands,
 }
 
@@ -71,6 +72,14 @@ pub struct WithdrawalInput {
     pub owner: AccountAddress,
     /// This amount is verified to be <= the max for the type described by the `T` in `ty`
     pub amount: U256,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct WithdrawalCompatibilityConversion {
+    // The pure input location of the owner address
+    pub owner: Location,
+    // Result index to conversion call to `sui::coin::redeem_funds`
+    pub conversion_result: u16,
 }
 
 pub type Commands = Vec<Command>;

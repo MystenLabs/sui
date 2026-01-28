@@ -1,43 +1,59 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context as _, anyhow};
-use async_graphql::{Context, Enum, Object, SimpleObject, connection::Connection};
+use anyhow::Context as _;
+use anyhow::anyhow;
+use async_graphql::Context;
+use async_graphql::Enum;
+use async_graphql::Object;
+use async_graphql::SimpleObject;
+use async_graphql::connection::Connection;
 use move_core_types::language_storage::StructTag;
-use sui_types::{
-    SUI_FRAMEWORK_ADDRESS, TypeTag,
-    base_types::SuiAddress as NativeAddress,
-    coin::{
-        COIN_METADATA_STRUCT_NAME, COIN_MODULE_NAME, CoinMetadata as NativeMetadata,
-        RegulatedCoinMetadata, TreasuryCap,
-    },
-    coin_registry::{
-        Currency as NativeCurrency, RegulatedState as NativeRegulated, SupplyState as NativeSupply,
-    },
-    gas_coin::{GAS, TOTAL_SUPPLY_MIST},
-    object::Owner as NativeOwner,
-};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::TypeTag;
+use sui_types::base_types::SuiAddress as NativeAddress;
+use sui_types::coin::COIN_METADATA_STRUCT_NAME;
+use sui_types::coin::COIN_MODULE_NAME;
+use sui_types::coin::CoinMetadata as NativeMetadata;
+use sui_types::coin::RegulatedCoinMetadata;
+use sui_types::coin::TreasuryCap;
+use sui_types::coin_registry::Currency as NativeCurrency;
+use sui_types::coin_registry::RegulatedState as NativeRegulated;
+use sui_types::coin_registry::SupplyState as NativeSupply;
+use sui_types::gas_coin::GAS;
+use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
+use sui_types::object::Owner as NativeOwner;
 use tokio::sync::OnceCell;
 
-use crate::{
-    api::scalars::{
-        base64::Base64, big_int::BigInt, sui_address::SuiAddress, type_filter::TypeInput,
-        uint53::UInt53,
-    },
-    error::{RpcError, upcast},
-    scope::Scope,
-};
-
-use super::{
-    balance::{self, Balance},
-    dynamic_field::{DynamicField, DynamicFieldName},
-    move_object::MoveObject,
-    move_value::MoveValue,
-    object::{self, CLive, CVersion, Object, VersionFilter},
-    object_filter::{ObjectFilter, ObjectFilterValidator as OFValidator},
-    owner::Owner,
-    transaction::{CTransaction, Transaction, filter::TransactionFilter},
-};
+use crate::api::scalars::base64::Base64;
+use crate::api::scalars::big_int::BigInt;
+use crate::api::scalars::sui_address::SuiAddress;
+use crate::api::scalars::type_filter::TypeInput;
+use crate::api::scalars::uint53::UInt53;
+use crate::api::types::address;
+use crate::api::types::address::Address;
+use crate::api::types::balance::Balance;
+use crate::api::types::balance::{self as balance};
+use crate::api::types::dynamic_field;
+use crate::api::types::dynamic_field::DynamicField;
+use crate::api::types::dynamic_field::DynamicFieldName;
+use crate::api::types::move_object::MoveObject;
+use crate::api::types::move_value::MoveValue;
+use crate::api::types::name_record::NameRecord;
+use crate::api::types::object::CLive;
+use crate::api::types::object::CVersion;
+use crate::api::types::object::Object;
+use crate::api::types::object::VersionFilter;
+use crate::api::types::object::{self as object};
+use crate::api::types::object_filter::ObjectFilter;
+use crate::api::types::object_filter::ObjectFilterValidator as OFValidator;
+use crate::api::types::owner::Owner;
+use crate::api::types::transaction::CTransaction;
+use crate::api::types::transaction::Transaction;
+use crate::api::types::transaction::filter::TransactionFilter;
+use crate::error::RpcError;
+use crate::error::upcast;
+use crate::scope::Scope;
 
 pub(crate) struct CoinMetadata {
     pub(crate) super_: MoveObject,
@@ -104,6 +120,21 @@ impl CoinMetadata {
         self.super_.address(ctx).await
     }
 
+    /// Fetch the address as it was at a different root version, or checkpoint.
+    ///
+    /// If no additional bound is provided, the address is fetched at the latest checkpoint known to the RPC.
+    pub(crate) async fn address_at(
+        &self,
+        ctx: &Context<'_>,
+        root_version: Option<UInt53>,
+        checkpoint: Option<UInt53>,
+    ) -> Option<Result<Address, RpcError<address::Error>>> {
+        self.super_
+            .address_at(ctx, root_version, checkpoint)
+            .await
+            .ok()?
+    }
+
     /// The version of this object that this content comes from.
     pub(crate) async fn version(&self, ctx: &Context<'_>) -> Option<Result<UInt53, RpcError>> {
         self.super_.version(ctx).await.ok()?
@@ -121,8 +152,8 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         coin_type: TypeInput,
-    ) -> Result<Option<Balance>, RpcError<balance::Error>> {
-        self.super_.balance(ctx, coin_type).await
+    ) -> Option<Result<Balance, RpcError<balance::Error>>> {
+        self.super_.balance(ctx, coin_type).await.ok()?
     }
 
     /// Total balance across coins owned by this address, grouped by coin type.
@@ -133,8 +164,11 @@ impl CoinMetadata {
         after: Option<balance::Cursor>,
         last: Option<u64>,
         before: Option<balance::Cursor>,
-    ) -> Result<Option<Connection<String, Balance>>, RpcError<balance::Error>> {
-        self.super_.balances(ctx, first, after, last, before).await
+    ) -> Option<Result<Connection<String, Balance>, RpcError<balance::Error>>> {
+        self.super_
+            .balances(ctx, first, after, last, before)
+            .await
+            .ok()?
     }
 
     /// The structured representation of the object's contents.
@@ -154,12 +188,12 @@ impl CoinMetadata {
         }))
     }
 
-    /// The domain explicitly configured as the default SuiNS name for this address.
-    pub(crate) async fn default_suins_name(
+    /// The domain explicitly configured as the default Name Service name for this address.
+    pub(crate) async fn default_name_record(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<String>, RpcError> {
-        self.super_.default_suins_name(ctx).await
+    ) -> Option<Result<NameRecord, RpcError<object::Error>>> {
+        self.super_.default_name_record(ctx).await.ok()?
     }
 
     /// Description of the coin.
@@ -181,7 +215,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
         self.super_.dynamic_field(ctx, name).await
     }
 
@@ -208,7 +242,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         name: DynamicFieldName,
-    ) -> Result<Option<DynamicField>, RpcError> {
+    ) -> Result<Option<DynamicField>, RpcError<dynamic_field::Error>> {
         self.super_.dynamic_object_field(ctx, name).await
     }
 
@@ -241,7 +275,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         self.super_.multi_get_dynamic_fields(ctx, keys).await
     }
 
@@ -252,7 +286,7 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         keys: Vec<DynamicFieldName>,
-    ) -> Result<Vec<Option<DynamicField>>, RpcError> {
+    ) -> Result<Vec<Option<DynamicField>>, RpcError<dynamic_field::Error>> {
         self.super_.multi_get_dynamic_object_fields(ctx, keys).await
     }
 
@@ -271,8 +305,8 @@ impl CoinMetadata {
         &self,
         ctx: &Context<'_>,
         keys: Vec<TypeInput>,
-    ) -> Result<Option<Vec<Balance>>, RpcError<balance::Error>> {
-        self.super_.multi_get_balances(ctx, keys).await
+    ) -> Option<Result<Vec<Balance>, RpcError<balance::Error>>> {
+        self.super_.multi_get_balances(ctx, keys).await.ok()?
     }
 
     /// Name for the coin.
@@ -347,10 +381,11 @@ impl CoinMetadata {
         last: Option<u64>,
         before: Option<CLive>,
         #[graphql(validator(custom = "OFValidator::allows_empty()"))] filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, MoveObject>>, RpcError<object::Error>> {
+    ) -> Option<Result<Connection<String, MoveObject>, RpcError<object::Error>>> {
         self.super_
             .objects(ctx, first, after, last, before, filter)
             .await
+            .ok()?
     }
 
     /// The object's owner kind.
@@ -428,7 +463,7 @@ impl CoinMetadata {
                     regulated_state: Some(RegulatedState::Regulated),
                     allow_global_pause: *allow_global_pause,
                     deny_cap: Some(MoveObject::from_super(Object::with_address(
-                        scope.without_root_version(),
+                        scope.without_root_bound(),
                         (*cap).into(),
                     ))),
                 });
@@ -452,8 +487,7 @@ impl CoinMetadata {
         }
 
         let type_ = RegulatedCoinMetadata::type_(*coin_type.clone());
-        let Some(object) = Object::singleton(ctx, scope.without_root_version(), type_).await?
-        else {
+        let Some(object) = Object::singleton(ctx, scope.without_root_bound(), type_).await? else {
             // If there is no RegulatedCoinMetadata object, the coin is unregulated.
             return Ok(RegulatedFields {
                 regulated_state: Some(RegulatedState::Unregulated),
@@ -484,7 +518,7 @@ impl CoinMetadata {
             regulated_state: Some(RegulatedState::Regulated),
             allow_global_pause: None,
             deny_cap: Some(MoveObject::from_super(Object::with_address(
-                scope.without_root_version(),
+                scope.without_root_bound(),
                 metadata.deny_cap_object.bytes.into(),
             ))),
         })
@@ -539,7 +573,7 @@ impl CoinMetadata {
         }
 
         let type_ = TreasuryCap::type_(*coin_type.clone());
-        let scope = self.super_.super_.super_.scope.without_root_version();
+        let scope = self.super_.super_.super_.scope.without_root_bound();
         let Some(object) = Object::singleton(ctx, scope, type_).await? else {
             return Ok(SupplyFields::default());
         };

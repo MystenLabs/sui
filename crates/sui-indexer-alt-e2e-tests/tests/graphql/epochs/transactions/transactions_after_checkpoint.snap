@@ -11,7 +11,7 @@ task 1, lines 6-14:
 Response: {
   "data": {
     "epoch0AfterCp0NoTx": {
-      "totalTransactions": null,
+      "totalTransactions": 1,
       "transactions": {
         "edges": []
       }
@@ -44,13 +44,13 @@ task 5, lines 26-34:
 Response: {
   "data": {
     "epoch0AfterCp0WithTx": {
-      "totalTransactions": null,
+      "totalTransactions": 4,
       "transactions": {
         "edges": [
           {
             "cursor": "MQ==",
             "node": {
-              "digest": "ABo3jemYqdBWMRYqsaCYUKnGDp64tR7jK2fH1mKCoJLk",
+              "digest": "J6iVd9qP3eojDsLsxXwvkssRe3N7M1oUZNbscmNwvp4b",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 1,
@@ -64,7 +64,21 @@ Response: {
           {
             "cursor": "Mg==",
             "node": {
-              "digest": "3g5WNrMkhLMBuUCKvTrXB1VTqFZHSoSo1zdLV1mCnMJB",
+              "digest": "F9s2RJHc3nxX6quuRYC2m99oKz1z2a7xsZo89eEWw3W2",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 1,
+                  "epoch": {
+                    "epochId": 0
+                  }
+                }
+              }
+            }
+          },
+          {
+            "cursor": "Mw==",
+            "node": {
+              "digest": "FnRLaJFCiQDLmx8HEJsaNfLAnGX1TULDnuLWBhDrLACm",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 1,
@@ -106,13 +120,13 @@ task 9, lines 46-54:
 Response: {
   "data": {
     "epoch0AfterCp1WithTx": {
-      "totalTransactions": null,
+      "totalTransactions": 7,
       "transactions": {
         "edges": [
           {
-            "cursor": "Mw==",
+            "cursor": "NA==",
             "node": {
-              "digest": "8NYkpueXCxhbSrpGKCr6PQtNWioWEVF5uivF9eRb73DR",
+              "digest": "9DGeuvLzYkjYbJwJTt4rQGDE5XA57Z7YshAydfqr5yMP",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,
@@ -124,9 +138,23 @@ Response: {
             }
           },
           {
-            "cursor": "NA==",
+            "cursor": "NQ==",
             "node": {
-              "digest": "A8WhXmaypUncB3KUCZZ46rXMsaRByqxenw6XF8GtPGWy",
+              "digest": "6rqdUBJtb3QSUHtgjebUZsVn5j9zL5NqHCwmgJCm5Yry",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 2,
+                  "epoch": {
+                    "epochId": 0
+                  }
+                }
+              }
+            }
+          },
+          {
+            "cursor": "Ng==",
+            "node": {
+              "digest": "2iEZQGAgJYgzmcNC2eLrbNejeTJHJxY4Xy4yKj7R3D8g",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 2,
@@ -171,13 +199,13 @@ task 14, lines 68-82:
 Response: {
   "data": {
     "epoch1AfterCp2": {
-      "totalTransactions": null,
+      "totalTransactions": 3,
       "transactions": {
         "edges": [
           {
-            "cursor": "Ng==",
+            "cursor": "OA==",
             "node": {
-              "digest": "6XcgDowK3u7P5y71p3BdqEvYwtuQAmBVscR3HA6NzKoe",
+              "digest": "9ntk4uzwjaAUfHCyvmQYuiKwKMtBYm437YL9kBs4XNUy",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 4,
@@ -189,9 +217,23 @@ Response: {
             }
           },
           {
-            "cursor": "Nw==",
+            "cursor": "OQ==",
             "node": {
-              "digest": "FSy2aBj2hQjjQtZXVhpxMJzf8KTDnBrmsv4YZi14Qoyb",
+              "digest": "8ATdKR8LueCqV5mjnXvAcbAztXmB9uGEojCLsCBasymr",
+              "effects": {
+                "checkpoint": {
+                  "sequenceNumber": 4,
+                  "epoch": {
+                    "epochId": 1
+                  }
+                }
+              }
+            }
+          },
+          {
+            "cursor": "MTA=",
+            "node": {
+              "digest": "9Jgpen4tvpn3ZjDhQyZoykZG2VF4bmJ2uZsjV9jWbACU",
               "effects": {
                 "checkpoint": {
                   "sequenceNumber": 4,
@@ -206,7 +248,7 @@ Response: {
       }
     },
     "epoch1AfterNonExistentCp5": {
-      "totalTransactions": null,
+      "totalTransactions": 3,
       "transactions": {
         "edges": []
       }

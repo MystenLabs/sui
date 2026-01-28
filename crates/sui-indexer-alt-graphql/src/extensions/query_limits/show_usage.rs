@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::http::{HeaderName, HeaderValue};
-use headers::{Error, Header};
+use axum::http::HeaderName;
+use axum::http::HeaderValue;
+use headers::Error;
+use headers::Header;
 
 static SHOW_USAGE: HeaderName = HeaderName::from_static("x-sui-rpc-show-usage");
 

@@ -78,7 +78,7 @@ pub trait TransactionBuilder {
     /// 2. accumulate all residual SUI from input coins left and deposit all SUI to the first
     /// input coin, then use the first input coin as the gas coin object.
     /// 3. the balance of the first input coin after tx is sum(input_coins) - sum(amounts) - actual_gas_cost
-    /// 4. all other input coints other than the first one are deleted.
+    /// 4. all other input coins other than the first one are deleted.
     #[method(name = "paySui")]
     async fn pay_sui(
         &self,
@@ -160,7 +160,7 @@ pub trait TransactionBuilder {
         &self,
         /// the transaction signer's Sui address
         signer: SuiAddress,
-        /// the coin object to be spilt
+        /// the coin object to be split
         coin_object_id: ObjectID,
         /// the amounts to split out from the coin
         split_amounts: Vec<BigInt<u64>>,
@@ -176,7 +176,7 @@ pub trait TransactionBuilder {
         &self,
         /// the transaction signer's Sui address
         signer: SuiAddress,
-        /// the coin object to be spilt
+        /// the coin object to be split
         coin_object_id: ObjectID,
         /// the number of coins to split into
         split_count: BigInt<u64>,

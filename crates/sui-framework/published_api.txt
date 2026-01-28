@@ -910,7 +910,16 @@ validators
 validators_mut
 	public(package) fun
 	0x3::sui_system_state_inner
+extra_fields
+	public(package) fun
+	0x3::sui_system_state_inner
+extra_fields_mut
+	public(package) fun
+	0x3::sui_system_state_inner
 SuiSystemState
+	public struct
+	0x3::sui_system
+AccumulatorStorageCostKey
 	public struct
 	0x3::sui_system
 create
@@ -1064,6 +1073,12 @@ store_execution_time_estimates
 	fun
 	0x3::sui_system
 store_execution_time_estimates_v2
+	fun
+	0x3::sui_system
+get_accumulator_storage_fund_amount
+	fun
+	0x3::sui_system
+write_accumulator_storage_cost
 	fun
 	0x3::sui_system
 GenesisValidatorMetadata
@@ -1516,6 +1531,12 @@ root_id
 root_id_mut
 	public(package) fun
 	0x2::accumulator
+accumulator_u128_exists
+	public(package) fun
+	0x2::accumulator
+accumulator_u128_read
+	public(package) fun
+	0x2::accumulator
 create_u128
 	public(package) fun
 	0x2::accumulator
@@ -1541,6 +1562,9 @@ root_add_accumulator
 	public(package) fun
 	0x2::accumulator
 root_borrow_accumulator_mut
+	public(package) fun
+	0x2::accumulator
+root_borrow_accumulator
 	public(package) fun
 	0x2::accumulator
 root_remove_accumulator
@@ -1597,31 +1621,13 @@ MetadataKey
 Metadata
 	public struct
 	0x2::accumulator_metadata
-accumulator_root_owner_exists
+AccumulatorObjectCountKey
+	public struct
+	0x2::accumulator_metadata
+record_accumulator_object_changes
 	fun
 	0x2::accumulator_metadata
-accumulator_root_borrow_owner_mut
-	fun
-	0x2::accumulator_metadata
-accumulator_root_attach_owner
-	fun
-	0x2::accumulator_metadata
-accumulator_root_detach_owner
-	fun
-	0x2::accumulator_metadata
-create_accumulator_metadata
-	public(package) fun
-	0x2::accumulator_metadata
-remove_accumulator_metadata
-	public(package) fun
-	0x2::accumulator_metadata
-accumulator_owner_attach_metadata
-	fun
-	0x2::accumulator_metadata
-accumulator_owner_detach_metadata
-	fun
-	0x2::accumulator_metadata
-accumulator_owner_destroy
+get_accumulator_object_count
 	fun
 	0x2::accumulator_metadata
 blake2b256
@@ -1964,6 +1970,9 @@ redeem_funds
 	public fun
 	0x2::balance
 withdraw_funds_from_object
+	public fun
+	0x2::balance
+settled_funds_value
 	public fun
 	0x2::balance
 create_supply_internal
@@ -4864,102 +4873,6 @@ Permit
 permit
 	public fun
 	0x1::internal
-UQ32_32
-	public struct
-	0x1::uq32_32
-from_quotient
-	public fun
-	0x1::uq32_32
-from_int
-	public fun
-	0x1::uq32_32
-add
-	public fun
-	0x1::uq32_32
-sub
-	public fun
-	0x1::uq32_32
-mul
-	public fun
-	0x1::uq32_32
-div
-	public fun
-	0x1::uq32_32
-to_int
-	public fun
-	0x1::uq32_32
-int_mul
-	public fun
-	0x1::uq32_32
-int_div
-	public fun
-	0x1::uq32_32
-le
-	public fun
-	0x1::uq32_32
-lt
-	public fun
-	0x1::uq32_32
-ge
-	public fun
-	0x1::uq32_32
-gt
-	public fun
-	0x1::uq32_32
-to_raw
-	public fun
-	0x1::uq32_32
-from_raw
-	public fun
-	0x1::uq32_32
-UQ64_64
-	public struct
-	0x1::uq64_64
-from_quotient
-	public fun
-	0x1::uq64_64
-from_int
-	public fun
-	0x1::uq64_64
-add
-	public fun
-	0x1::uq64_64
-sub
-	public fun
-	0x1::uq64_64
-mul
-	public fun
-	0x1::uq64_64
-div
-	public fun
-	0x1::uq64_64
-to_int
-	public fun
-	0x1::uq64_64
-int_mul
-	public fun
-	0x1::uq64_64
-int_div
-	public fun
-	0x1::uq64_64
-le
-	public fun
-	0x1::uq64_64
-lt
-	public fun
-	0x1::uq64_64
-ge
-	public fun
-	0x1::uq64_64
-gt
-	public fun
-	0x1::uq64_64
-to_raw
-	public fun
-	0x1::uq64_64
-from_raw
-	public fun
-	0x1::uq64_64
 empty
 	public fun
 	0x1::vector
@@ -5257,6 +5170,9 @@ address_string
 module_string
 	public fun
 	0x1::type_name
+datatype_string
+	public fun
+	0x1::type_name
 into_string
 	public fun
 	0x1::type_name
@@ -5311,6 +5227,39 @@ try_as_u64
 to_string
 	public fun
 	0x1::u128
+checked_add
+	public fun
+	0x1::u128
+checked_sub
+	public fun
+	0x1::u128
+checked_mul
+	public fun
+	0x1::u128
+checked_div
+	public fun
+	0x1::u128
+saturating_add
+	public fun
+	0x1::u128
+saturating_sub
+	public fun
+	0x1::u128
+saturating_mul
+	public fun
+	0x1::u128
+checked_shl
+	public fun
+	0x1::u128
+checked_shr
+	public fun
+	0x1::u128
+lossless_shl
+	public fun
+	0x1::u128
+lossless_shr
+	public fun
+	0x1::u128
 bitwise_not
 	public fun
 	0x1::u16
@@ -5336,6 +5285,39 @@ try_as_u8
 	public fun
 	0x1::u16
 to_string
+	public fun
+	0x1::u16
+checked_add
+	public fun
+	0x1::u16
+checked_sub
+	public fun
+	0x1::u16
+checked_mul
+	public fun
+	0x1::u16
+checked_div
+	public fun
+	0x1::u16
+saturating_add
+	public fun
+	0x1::u16
+saturating_sub
+	public fun
+	0x1::u16
+saturating_mul
+	public fun
+	0x1::u16
+checked_shl
+	public fun
+	0x1::u16
+checked_shr
+	public fun
+	0x1::u16
+lossless_shl
+	public fun
+	0x1::u16
+lossless_shr
 	public fun
 	0x1::u16
 bitwise_not
@@ -5374,6 +5356,33 @@ try_as_u128
 to_string
 	public fun
 	0x1::u256
+checked_add
+	public fun
+	0x1::u256
+checked_sub
+	public fun
+	0x1::u256
+checked_mul
+	public fun
+	0x1::u256
+checked_div
+	public fun
+	0x1::u256
+saturating_add
+	public fun
+	0x1::u256
+saturating_sub
+	public fun
+	0x1::u256
+saturating_mul
+	public fun
+	0x1::u256
+lossless_shl
+	public fun
+	0x1::u256
+lossless_shr
+	public fun
+	0x1::u256
 bitwise_not
 	public fun
 	0x1::u32
@@ -5402,6 +5411,39 @@ try_as_u16
 	public fun
 	0x1::u32
 to_string
+	public fun
+	0x1::u32
+checked_add
+	public fun
+	0x1::u32
+checked_sub
+	public fun
+	0x1::u32
+checked_mul
+	public fun
+	0x1::u32
+checked_div
+	public fun
+	0x1::u32
+saturating_add
+	public fun
+	0x1::u32
+saturating_sub
+	public fun
+	0x1::u32
+saturating_mul
+	public fun
+	0x1::u32
+checked_shl
+	public fun
+	0x1::u32
+checked_shr
+	public fun
+	0x1::u32
+lossless_shl
+	public fun
+	0x1::u32
+lossless_shr
 	public fun
 	0x1::u32
 bitwise_not
@@ -5437,6 +5479,39 @@ try_as_u32
 to_string
 	public fun
 	0x1::u64
+checked_add
+	public fun
+	0x1::u64
+checked_sub
+	public fun
+	0x1::u64
+checked_mul
+	public fun
+	0x1::u64
+checked_div
+	public fun
+	0x1::u64
+saturating_add
+	public fun
+	0x1::u64
+saturating_sub
+	public fun
+	0x1::u64
+saturating_mul
+	public fun
+	0x1::u64
+checked_shl
+	public fun
+	0x1::u64
+checked_shr
+	public fun
+	0x1::u64
+lossless_shl
+	public fun
+	0x1::u64
+lossless_shr
+	public fun
+	0x1::u64
 bitwise_not
 	public fun
 	0x1::u8
@@ -5461,3 +5536,132 @@ sqrt
 to_string
 	public fun
 	0x1::u8
+checked_add
+	public fun
+	0x1::u8
+checked_sub
+	public fun
+	0x1::u8
+checked_mul
+	public fun
+	0x1::u8
+checked_div
+	public fun
+	0x1::u8
+saturating_add
+	public fun
+	0x1::u8
+saturating_sub
+	public fun
+	0x1::u8
+saturating_mul
+	public fun
+	0x1::u8
+checked_shl
+	public fun
+	0x1::u8
+checked_shr
+	public fun
+	0x1::u8
+lossless_shl
+	public fun
+	0x1::u8
+lossless_shr
+	public fun
+	0x1::u8
+UQ32_32
+	public struct
+	0x1::uq32_32
+from_quotient
+	public fun
+	0x1::uq32_32
+from_int
+	public fun
+	0x1::uq32_32
+add
+	public fun
+	0x1::uq32_32
+sub
+	public fun
+	0x1::uq32_32
+mul
+	public fun
+	0x1::uq32_32
+div
+	public fun
+	0x1::uq32_32
+to_int
+	public fun
+	0x1::uq32_32
+int_mul
+	public fun
+	0x1::uq32_32
+int_div
+	public fun
+	0x1::uq32_32
+le
+	public fun
+	0x1::uq32_32
+lt
+	public fun
+	0x1::uq32_32
+ge
+	public fun
+	0x1::uq32_32
+gt
+	public fun
+	0x1::uq32_32
+to_raw
+	public fun
+	0x1::uq32_32
+from_raw
+	public fun
+	0x1::uq32_32
+UQ64_64
+	public struct
+	0x1::uq64_64
+from_quotient
+	public fun
+	0x1::uq64_64
+from_int
+	public fun
+	0x1::uq64_64
+add
+	public fun
+	0x1::uq64_64
+sub
+	public fun
+	0x1::uq64_64
+mul
+	public fun
+	0x1::uq64_64
+div
+	public fun
+	0x1::uq64_64
+to_int
+	public fun
+	0x1::uq64_64
+int_mul
+	public fun
+	0x1::uq64_64
+int_div
+	public fun
+	0x1::uq64_64
+le
+	public fun
+	0x1::uq64_64
+lt
+	public fun
+	0x1::uq64_64
+ge
+	public fun
+	0x1::uq64_64
+gt
+	public fun
+	0x1::uq64_64
+to_raw
+	public fun
+	0x1::uq64_64
+from_raw
+	public fun
+	0x1::uq64_64

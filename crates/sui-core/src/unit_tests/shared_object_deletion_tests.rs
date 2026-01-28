@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{FullObjectID, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{AccountKeyPair, get_key_pair},
@@ -1016,7 +1017,7 @@ async fn test_shifting_mutate_and_deletes_multiple_objects() {
     // Tx_8
     let tx_8 = runner.mutate_shared_obj_tx(so2, so2_isv).await;
 
-    let txs = vec![tx_1, tx_2, tx_3, tx_4, tx_5, tx_6, tx_7, tx_8];
+    let txs = [tx_1, tx_2, tx_3, tx_4, tx_5, tx_6, tx_7, tx_8];
     let mut certs = vec![];
     for tx in txs.iter() {
         let (cert, assigned_versions) = runner
@@ -1816,6 +1817,14 @@ async fn test_delete_before_two_mutations() {
 
 #[tokio::test]
 async fn test_object_lock_conflict() {
+    // This test requires preconsensus locking to be enabled because it tests ObjectLockConflict
+    // errors which only happen with preconsensus locking.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_disable_preconsensus_locking_for_testing(false);
+        config.set_address_aliases_for_testing(false);
+        config
+    });
+
     let mut user_1 = TestRunner::new("shared_object_deletion").await;
     let effects = user_1.create_shared_object().await;
 

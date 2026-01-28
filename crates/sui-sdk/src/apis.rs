@@ -1,28 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::encoding::Base64;
-use futures::StreamExt;
-use futures::stream;
-use futures_core::Stream;
-use jsonrpsee::core::client::Subscription;
 use std::collections::BTreeMap;
 use std::future;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
-use sui_json_rpc_types::DevInspectArgs;
-use sui_json_rpc_types::SuiData;
-use sui_json_rpc_types::ZkLoginIntentScope;
-use sui_json_rpc_types::ZkLoginVerifyResult;
 
-use crate::RpcClient;
-use crate::error::{Error, SuiRpcResult};
+use fastcrypto::encoding::Base64;
+use futures::StreamExt;
+use futures::stream;
+use futures_core::Stream;
+use jsonrpsee::core::client::Subscription;
 use sui_json_rpc_api::{
     CoinReadApiClient, GovernanceReadApiClient, IndexerApiClient, MoveUtilsClient, ReadApiClient,
     WriteApiClient,
 };
 use sui_json_rpc_types::CheckpointPage;
+use sui_json_rpc_types::DevInspectArgs;
+use sui_json_rpc_types::SuiData;
+use sui_json_rpc_types::ZkLoginIntentScope;
+use sui_json_rpc_types::ZkLoginVerifyResult;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, Coin, CoinPage, DelegatedStake, DevInspectResults,
     DryRunTransactionBlockResponse, DynamicFieldPage, EventFilter, EventPage, ObjectsPage,
@@ -41,6 +39,10 @@ use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::{Transaction, TransactionData, TransactionKind};
 use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
+use tracing::debug;
+
+use crate::RpcClient;
+use crate::error::{Error, SuiRpcResult};
 
 const WAIT_FOR_LOCAL_EXECUTION_MIN_INTERVAL: Duration = Duration::from_millis(100);
 const WAIT_FOR_LOCAL_EXECUTION_MAX_INTERVAL: Duration = Duration::from_secs(2);
@@ -1150,9 +1152,11 @@ impl QuorumDriverApi {
         options: SuiTransactionBlockResponseOptions,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> SuiRpcResult<SuiTransactionBlockResponse> {
+        let tx_digest = *tx.digest();
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
         let request_type = request_type.unwrap_or_else(|| options.default_execution_request_type());
 
+        debug!(?tx_digest, "Submitting a transaction for execution");
         let start = Instant::now();
         let response = self
             .api
@@ -1166,12 +1170,14 @@ impl QuorumDriverApi {
                 None,
             )
             .await?;
+        debug!(?tx_digest, "Transaction executed");
 
         if let ExecuteTransactionRequestType::WaitForEffectsCert = request_type {
             return Ok(response);
         }
 
         // JSON-RPC ignores WaitForLocalExecution, so simulate it by polling for the transaction.
+        debug!(?tx_digest, "Waiting for local execution on full node");
         let wait_for_local_execution_timeout: Duration = if cfg!(msim) {
             // In simtests, fullnodes can stop receiving checkpoints for > 30s.
             Duration::from_secs(120)
@@ -1196,6 +1202,11 @@ impl QuorumDriverApi {
                     .await
                 {
                     break poll_response;
+                } else {
+                    debug!(
+                        ?tx_digest,
+                        "Failed to get transaction content from the full node"
+                    );
                 }
             }
         })

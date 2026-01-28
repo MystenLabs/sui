@@ -3,9 +3,14 @@
 
 use std::str::FromStr;
 
-use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
+use async_graphql::InputValueError;
+use async_graphql::InputValueResult;
+use async_graphql::Scalar;
+use async_graphql::ScalarType;
+use async_graphql::Value;
 use move_core_types::u256::U256;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(transparent)]

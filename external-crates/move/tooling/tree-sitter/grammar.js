@@ -50,6 +50,7 @@ module.exports = grammar({
     [$.module_access],
     [$.break_expression],
     [$.abort_expression],
+    [$.spec_block, $._reserved_identifier],
   ],
 
   rules: {
@@ -478,7 +479,6 @@ module.exports = grammar({
       'bool',
       'address',
       'signer',
-      'bytearray',
     ),
     ret_type: $ => seq(':', $._type),
 
@@ -979,6 +979,7 @@ module.exports = grammar({
       $.num_literal,
       $.hex_string_literal,
       $.byte_string_literal,
+      $.string_literal,
       // $.vector_literal,
     ),
 
@@ -1004,6 +1005,7 @@ module.exports = grammar({
     ),
     hex_string_literal: $ => /x"[0-9a-fA-F]*"/,
     byte_string_literal: $ => /b"(\\.|[^\\"])*"/,
+    string_literal: $ => /"(\\.|[^\\"])*"/,
     _module_identifier: $ => alias($.identifier, $.module_identifier),
     _struct_identifier: $ => alias($.identifier, $.struct_identifier),
     _enum_identifier: $ => alias($.identifier, $.enum_identifier),
@@ -1015,7 +1017,7 @@ module.exports = grammar({
     _type_parameter_identifier: $ => alias($.identifier, $.type_parameter_identifier),
     identifier: $ => /(`)?[a-zA-Z_][0-9a-zA-Z_]*(`)?/,
     macro_identifier: $ => /[a-zA-Z_][0-9a-zA-Z_]*!/,
-    _reserved_identifier: $ => choice($._forall, $._exists),
+    _reserved_identifier: $ => choice($._forall, $._exists, 'spec'),
 
     _forall: $ => 'forall',
     _exists: $ => 'exists',

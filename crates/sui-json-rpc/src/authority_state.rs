@@ -464,6 +464,7 @@ impl StateRead for AuthorityState {
                     total_balance.balance += address_balance as i128;
                     total_balance.num_coins += 1;
                 }
+                total_balance.address_balance = address_balance;
                 Ok(total_balance)
             })
             .await
@@ -484,22 +485,19 @@ impl StateRead for AuthorityState {
                 let indexes = indexes
                     .as_ref()
                     .ok_or(SuiErrorKind::IndexStoreNotAvailable)?;
-                let address_balances = get_all_balances_for_owner(
-                    owner,
-                    child_object_resolver.as_ref(),
-                    indexes.tables(),
-                    usize::MAX,
-                    None,
-                )?;
+                let address_balances =
+                    get_all_balances_for_owner(owner, child_object_resolver.as_ref(), indexes)?;
                 let coin_balances = (*indexes.get_all_coin_object_balances(owner)?).clone();
                 let mut all_balances = coin_balances;
                 for (coin_type, balance) in address_balances {
                     let existing_balance = all_balances.entry(coin_type).or_insert(TotalBalance {
                         balance: 0,
                         num_coins: 0,
+                        address_balance: 0,
                     });
                     existing_balance.balance += balance as i128;
                     existing_balance.num_coins += 1;
+                    existing_balance.address_balance = balance;
                 }
                 Ok(Arc::new(all_balances))
             },

@@ -25,7 +25,7 @@ task 3, lines 53-55:
 Checkpoint created: 1
 
 task 4, lines 56-57:
-//# programmable --sender A --inputs object(1,0) 10  
+//# programmable --sender A --inputs object(1,0) 10
 //> 0: test::simple::add(Input(0), Input(1))
 mutated: object(0,0), object(1,0)
 gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 2317392, non_refundable_storage_fee: 23408
@@ -45,7 +45,7 @@ task 7, lines 66-68:
 Checkpoint created: 3
 
 task 8, lines 69-72:
-//# programmable --sender A --inputs 200u64 @A  
+//# programmable --sender A --inputs 200u64 @A
 // Setup: Create coin and transfer it to A's address for Receiving test
 //> 0: test::simple::new_coin(Input(0));
 //> TransferObjects([Result(0)], Input(1))
@@ -64,8 +64,8 @@ task 10, lines 78-80:
 //# programmable --sender A --inputs object(2,0) receiving(8,0) @A
 //> 0: test::simple::receive_coin(Input(0), Input(1));
 //> TransferObjects([Result(0)], Input(2))
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 12) at offset 0, Abort Code: 3
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 12, instruction: 0, function_name: Some("receive_impl") }, 3), source: Some(VMError { major_status: ABORTED, sub_status: Some(3), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(12), 0)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::receive_impl (function index 15) at offset 0, Abort Code: 3
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 15, instruction: 0, function_name: Some("receive_impl") }, 3), source: Some(VMError { major_status: ABORTED, sub_status: Some(3), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(15), 0)] }), command: Some(0) } }
 
 task 11, line 82:
 //# create-checkpoint
@@ -76,18 +76,18 @@ task 12, lines 84-103:
 Response: {
   "data": {
     "pureInputTest": {
-      "digest": "3vN92ssd7QUH46pRkq3x2nzj8TEYwX1LJPeqH82BCoD8",
+      "digest": "Bttkcbw8wwg8zCEHvvNB7G6E33j6BkdnsN3EZ8V8R69w",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
           "nodes": [
             {
-              "__typename": "Pure",
-              "bytes": "KgAAAAAAAAA="
+              "__typename": "MoveValue",
+              "json": "42"
             },
             {
-              "__typename": "Pure",
-              "bytes": "/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4="
+              "__typename": "MoveValue",
+              "json": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             }
           ]
         }
@@ -97,23 +97,23 @@ Response: {
 }
 
 task 13, lines 105-126:
-//# run-graphql  
+//# run-graphql
 Response: {
   "data": {
     "sharedInputTest": {
-      "digest": "7orny7x5fKU9h9FAfgqxNoSyxHCJ4izRsFPHqBBCDL6w",
+      "digest": "9SPTGEs8zccU9wmKqySDLQ6mNwFp1PXmzeo6TXbvxNcF",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
           "nodes": [
             {
               "__typename": "SharedInput",
-              "address": "0x15f1a98bf64d17ecdc077a0a59848ee92a7e0005f86b67a7bac566c1c7926126",
+              "address": "0xdac85611bd8b757d3f83e856fc3d1b3410efe3564ba6ab2fa1bd5da010ce66bb",
               "initialSharedVersion": 2,
               "mutable": true
             },
             {
-              "__typename": "Pure"
+              "__typename": "MoveValue"
             }
           ]
         }
@@ -127,7 +127,7 @@ task 14, lines 128-151:
 Response: {
   "data": {
     "ownedOrImmutableTest": {
-      "digest": "EpTKN5v4qda3khSqP3osYfN7JsQ7HxPbaYQAm7d1RJte",
+      "digest": "A2nbHCsBb5RHdgMJayftB8LBk95JJ7Aihyw8Tp3dS1t4",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -135,9 +135,9 @@ Response: {
             {
               "__typename": "OwnedOrImmutable",
               "object": {
-                "address": "0xe99fcfc6846da366c584674afc52d37c71ce3bf076adeff83d52c4e3322d12e6",
+                "address": "0xf7ada3a469c1494d73bba789173d5579b2b87259021e5f3b33e081be0b8bc32e",
                 "version": 2,
-                "digest": "Fd5gUnMRjAegAQiJJkLraQCcSeph4XzvbpDiV1eo9w24"
+                "digest": "Aa6EyPZHdjMqLNxFahtvLBhb4UVz1vFVWKkeBJQxqLn2"
               }
             }
           ]
@@ -152,7 +152,7 @@ task 15, lines 153-176:
 Response: {
   "data": {
     "receivingInputTest": {
-      "digest": "AuuQ6MmSz5avpGWLGoFfd4kV4KhNp2PyvBF1VPnfWuBm",
+      "digest": "JBV3ka46ujUGJ9q3K3rC2xexK6iYDdXXApADX7Ktmjpc",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -163,13 +163,13 @@ Response: {
             {
               "__typename": "Receiving",
               "object": {
-                "address": "0xa6f9693563a3a8c260656930577e22bcfd621a2380037a68c99f73cf28235146",
+                "address": "0x9eb4542cc46f70bcd3332b74783e0d0a9e5a41371d664345e5c2a11facc7d9ff",
                 "version": 6,
-                "digest": "5Gh3wL6s5ezhdQi6PWK11PEBgSGh65tb4Mtcyh4eZDDQ"
+                "digest": "C3WBk3KF77FLVSEcQDQxo6rfUs17ziEMXx5o6eXkiTP8"
               }
             },
             {
-              "__typename": "Pure"
+              "__typename": "MoveValue"
             }
           ]
         }

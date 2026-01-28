@@ -5,10 +5,6 @@ use crate::{
     MoveTypeTagTrait, MoveTypeTagTraitGeneric, SUI_ACCUMULATOR_ROOT_ADDRESS,
     SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
     accumulator_event::AccumulatorEvent,
-    accumulator_metadata::{
-        ACCUMULATOR_METADATA_KEY_TYPE, ACCUMULATOR_METADATA_TYPE, ACCUMULATOR_OWNER_KEY_TYPE,
-        ACCUMULATOR_OWNER_TYPE,
-    },
     balance::Balance,
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     digests::{Digest, TransactionDigest},
@@ -367,90 +363,6 @@ pub(crate) fn is_accumulator_u128(t: &TypeTag) -> bool {
     }
 }
 
-// Check if this is a Field<OwnerKey, AccumulatorOwner> type
-pub(crate) fn is_balance_accumulator_owner_field(s: &StructTag) -> bool {
-    s.address == SUI_FRAMEWORK_ADDRESS
-        && s.module.as_ident_str() == DYNAMIC_FIELD_MODULE_NAME
-        && s.name.as_ident_str() == DYNAMIC_FIELD_FIELD_STRUCT_NAME
-        && s.type_params.len() == 2
-        && is_accumulator_owner_key(&s.type_params[0])
-        && is_accumulator_owner(&s.type_params[1])
-}
-
-// If s is Field<MetadataKey<Balance<T>>, Metadata<Balance<T>>>, return Some(T)
-pub(crate) fn accumulator_metadata_balance_type_maybe(s: &StructTag) -> Option<TypeTag> {
-    if s.address == SUI_FRAMEWORK_ADDRESS
-        && s.module.as_ident_str() == DYNAMIC_FIELD_MODULE_NAME
-        && s.name.as_ident_str() == DYNAMIC_FIELD_FIELD_STRUCT_NAME
-        && s.type_params.len() == 2
-        && let Some(metadata_key_type) = accumulator_metadata_key_type_maybe(&s.type_params[0])
-        && let Some(metadata_type) = accumulator_metadata_type_maybe(&s.type_params[1])
-        && type_params_equal(&metadata_key_type, &metadata_type)
-    {
-        Balance::maybe_get_balance_type_param(&metadata_key_type)
-    } else {
-        None
-    }
-}
-
-fn type_params_equal(t1: &TypeTag, t2: &TypeTag) -> bool {
-    if let (TypeTag::Struct(s1), TypeTag::Struct(s2)) = (t1, t2) {
-        s1.type_params == s2.type_params
-    } else {
-        false
-    }
-}
-
-pub(crate) fn is_accumulator_owner_key(t: &TypeTag) -> bool {
-    if let TypeTag::Struct(s) = t {
-        s.address == SUI_FRAMEWORK_ADDRESS
-            && s.module.as_ident_str() == ACCUMULATOR_METADATA_MODULE
-            && s.name.as_ident_str() == ACCUMULATOR_OWNER_KEY_TYPE
-            && s.type_params.is_empty()
-    } else {
-        false
-    }
-}
-
-pub(crate) fn is_accumulator_owner(t: &TypeTag) -> bool {
-    if let TypeTag::Struct(s) = t {
-        s.address == SUI_FRAMEWORK_ADDRESS
-            && s.module.as_ident_str() == ACCUMULATOR_METADATA_MODULE
-            && s.name.as_ident_str() == ACCUMULATOR_OWNER_TYPE
-            && s.type_params.is_empty()
-    } else {
-        false
-    }
-}
-
-/// If `t` is MetadataKey<T>, return Some(T)
-pub(crate) fn accumulator_metadata_key_type_maybe(t: &TypeTag) -> Option<TypeTag> {
-    if let TypeTag::Struct(s) = t
-        && s.address == SUI_FRAMEWORK_ADDRESS
-        && s.module.as_ident_str() == ACCUMULATOR_METADATA_MODULE
-        && s.name.as_ident_str() == ACCUMULATOR_METADATA_KEY_TYPE
-        && s.type_params.len() == 1
-    {
-        Some(s.type_params[0].clone())
-    } else {
-        None
-    }
-}
-
-/// If `t` is Metadata<T>, return Some(T)
-pub(crate) fn accumulator_metadata_type_maybe(t: &TypeTag) -> Option<TypeTag> {
-    if let TypeTag::Struct(s) = t
-        && s.address == SUI_FRAMEWORK_ADDRESS
-        && s.module.as_ident_str() == ACCUMULATOR_METADATA_MODULE
-        && s.name.as_ident_str() == ACCUMULATOR_METADATA_TYPE
-        && s.type_params.len() == 1
-    {
-        Some(s.type_params[0].clone())
-    } else {
-        None
-    }
-}
-
 /// Rust representation of the Move EventStreamHead struct from accumulator_settlement module.
 /// This represents the state of an authenticated event stream head stored on-chain.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -489,6 +401,23 @@ impl EventStreamHead {
     pub fn mmr(&self) -> &Vec<U256> {
         &self.mmr
     }
+}
+
+pub fn derive_event_stream_head_object_id(stream_id: SuiAddress) -> SuiResult<ObjectID> {
+    let key = AccumulatorKey { owner: stream_id };
+
+    let value_type_tag = TypeTag::Struct(Box::new(StructTag {
+        address: SUI_FRAMEWORK_ADDRESS,
+        module: ACCUMULATOR_SETTLEMENT_MODULE.to_owned(),
+        name: ACCUMULATOR_SETTLEMENT_EVENT_STREAM_HEAD.to_owned(),
+        type_params: vec![],
+    }));
+
+    let key_type_tag = AccumulatorKey::get_type_tag(&[value_type_tag]);
+
+    DynamicFieldKey(SUI_ACCUMULATOR_ROOT_OBJECT_ID, key, key_type_tag)
+        .into_unbounded_id()
+        .map(|id| id.as_object_id())
 }
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]

@@ -5,7 +5,7 @@
 
 use move_core_types::{
     account_address::AccountAddress, annotated_value::MoveTypeLayout, annotated_visitor as AV,
-    u256::U256,
+    u256::U256, visitor_default,
 };
 
 use crate::base_types::RESOLVED_STD_OPTION;
@@ -26,6 +26,9 @@ where
 {
     type Value = Option<T::Value>;
     type Error = E;
+
+    visitor_default! { <'b, 'l> u8, u16, u32, u64, u128, u256 = Err(Error.into()) }
+    visitor_default! { <'b, 'l> bool, address, signer, variant = Err(Error.into()) }
 
     fn visit_vector(
         &mut self,
@@ -50,87 +53,6 @@ where
         } else {
             Err(Error.into())
         }
-    }
-
-    // === Empty/default cases ===
-
-    fn visit_u8(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
-        _: u8,
-    ) -> Result<Self::Value, Self::Error> {
-        Err(Error.into())
-    }
-
-    fn visit_u16(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
-        _: u16,
-    ) -> Result<Self::Value, Self::Error> {
-        Err(Error.into())
-    }
-
-    fn visit_u32(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
-        _: u32,
-    ) -> Result<Self::Value, Self::Error> {
-        Err(Error.into())
-    }
-
-    fn visit_u64(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
-        _: u64,
-    ) -> Result<Self::Value, Self::Error> {
-        Err(Error.into())
-    }
-
-    fn visit_u128(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
-        _: u128,
-    ) -> Result<Self::Value, Self::Error> {
-        Err(Error.into())
-    }
-
-    fn visit_u256(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
-        _: U256,
-    ) -> Result<Self::Value, Self::Error> {
-        Err(Error.into())
-    }
-
-    fn visit_bool(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
-        _: bool,
-    ) -> Result<Self::Value, Self::Error> {
-        Err(Error.into())
-    }
-
-    fn visit_address(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
-        _: AccountAddress,
-    ) -> Result<Self::Value, Self::Error> {
-        Err(Error.into())
-    }
-
-    fn visit_signer(
-        &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
-        _: AccountAddress,
-    ) -> Result<Self::Value, Self::Error> {
-        Err(Error.into())
-    }
-
-    fn visit_variant(
-        &mut self,
-        _: &mut AV::VariantDriver<'_, 'b, 'l>,
-    ) -> Result<Self::Value, Self::Error> {
-        Err(Error.into())
     }
 }
 

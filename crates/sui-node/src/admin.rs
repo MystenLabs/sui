@@ -9,13 +9,16 @@ use axum::{
     routing::{get, post},
 };
 use base64::Engine;
+use fastcrypto::encoding::{Encoding, Hex};
 use humantime::parse_duration;
+use mysten_network::Multiaddr;
 use serde::Deserialize;
 use std::sync::Arc;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     str::FromStr,
 };
+use sui_network::endpoint_manager::EndpointId;
 use sui_types::{
     base_types::AuthorityName,
     crypto::{RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
@@ -77,6 +80,10 @@ use tracing::info;
 // Reconfigure traffic control policy
 //
 //  $ curl 'http://127.0.0.1:1337/traffic-control?error_threshold=100&spam_threshold=100&dry_run=true'
+//
+// Update endpoint address(es) for a peer
+//
+//  $ curl -X POST 'http://127.0.0.1:1337/update-endpoint?endpoint_type=p2p&id=<hex_encoded_peer_id>&addresses=<multiaddr1>,<multiaddr2>'
 
 const LOGGING_ROUTE: &str = "/logging";
 const TRACING_ROUTE: &str = "/enable-tracing";
@@ -92,6 +99,7 @@ const RANDOMNESS_INJECT_FULL_SIG_ROUTE: &str = "/randomness-inject-full-sig";
 const GET_TX_COST_ROUTE: &str = "/get-tx-cost";
 const DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE: &str = "/dump-consensus-tx-cost-estimates";
 const TRAFFIC_CONTROL: &str = "/traffic-control";
+const UPDATE_ENDPOINT: &str = "/update-endpoint";
 
 struct AppState {
     node: Arc<SuiNode>,
@@ -137,6 +145,7 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, tracing_handle: Tra
             get(dump_consensus_tx_cost_estimates),
         )
         .route(TRAFFIC_CONTROL, post(traffic_control))
+        .route(UPDATE_ENDPOINT, post(update_endpoint))
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -256,14 +265,8 @@ async fn set_filter(
 async fn capabilities(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
     let epoch_store = state.node.state().load_epoch_store_one_call_per_task();
 
-    // Only one of v1 or v2 will be populated at a time
-    let capabilities = epoch_store.get_capabilities_v1();
-    let mut output = String::new();
-    for capability in capabilities.unwrap_or_default() {
-        output.push_str(&format!("{:?}\n", capability));
-    }
-
     let capabilities = epoch_store.get_capabilities_v2();
+    let mut output = String::new();
     for capability in capabilities.unwrap_or_default() {
         output.push_str(&format!("{:?}\n", capability));
     }
@@ -522,4 +525,90 @@ async fn traffic_control(
         ),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
+}
+
+#[derive(Deserialize)]
+struct UpdateEndpointArgs {
+    endpoint_type: String,
+    id: String,
+    addresses: String,
+}
+
+async fn update_endpoint(
+    State(state): State<Arc<AppState>>,
+    args: Query<UpdateEndpointArgs>,
+) -> (StatusCode, String) {
+    let Query(UpdateEndpointArgs {
+        endpoint_type,
+        id,
+        addresses,
+    }) = args;
+
+    let endpoint_id = match endpoint_type.as_str() {
+        "p2p" => {
+            let peer_id_bytes = match Hex::decode(&id) {
+                Ok(bytes) => bytes,
+                Err(err) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        format!("Invalid id hex encoding: {err}"),
+                    );
+                }
+            };
+
+            let peer_id_bytes: [u8; 32] = match peer_id_bytes.try_into() {
+                Ok(bytes) => bytes,
+                Err(_) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        "p2p id must be 32 bytes".to_string(),
+                    );
+                }
+            };
+
+            EndpointId::P2p(anemo::PeerId(peer_id_bytes))
+        }
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                format!("Unknown endpoint_type: {endpoint_type}"),
+            );
+        }
+    };
+
+    let mut parsed_addresses = Vec::new();
+    for addr_str in addresses.split(',') {
+        let addr_str = addr_str.trim();
+        if addr_str.is_empty() {
+            continue;
+        }
+        match addr_str.parse::<Multiaddr>() {
+            Ok(addr) => parsed_addresses.push(addr),
+            Err(err) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    format!("Invalid address '{addr_str}': {err}"),
+                );
+            }
+        }
+    }
+    if parsed_addresses.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            "At least one address must be provided".to_string(),
+        );
+    }
+
+    state
+        .node
+        .endpoint_manager()
+        .update_endpoint(endpoint_id, parsed_addresses.clone());
+
+    (
+        StatusCode::OK,
+        format!(
+            "Endpoint updated for {endpoint_type} endpoint {id} with {} address(es)\n",
+            parsed_addresses.len(),
+        ),
+    )
 }

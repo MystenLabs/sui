@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 // User logging wrappers for outputting structured messages to the user.
 macro_rules! user_warning {
     ($($arg:tt)*) => {{

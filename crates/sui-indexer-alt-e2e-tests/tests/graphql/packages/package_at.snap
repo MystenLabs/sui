@@ -37,15 +37,15 @@ task 6, lines 25-41:
 Response: {
   "data": {
     "p1": {
-      "address": "0x37c66e5033ffe07f458c76432c64848275451aaeb5d6d4420e14818318b93759",
+      "address": "0x88b35a89f3f9154bea12a982c3997a16be6e788d102b7b3aac778285111a2586",
       "version": 1
     },
     "p2": {
-      "address": "0x57bf7d91755b58a6b82e41e490bd2f03e803d1c081fe85747312eb016f39314e",
+      "address": "0x22a0d7ab729ca0c987a2cc9028028481e6d3074978783673c043dbc2b34b7ce5",
       "version": 2
     },
     "p3": {
-      "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
+      "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
       "version": 3
     }
   }
@@ -56,14 +56,14 @@ task 7, lines 43-59:
 Response: {
   "data": {
     "package": {
-      "address": "0x50592365811b6d08409158a0917066ca3e822a4c49dd6ae4465150f8aeb9a1da",
+      "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
       "version": 3,
       "initial": {
-        "address": "0x37c66e5033ffe07f458c76432c64848275451aaeb5d6d4420e14818318b93759",
+        "address": "0x88b35a89f3f9154bea12a982c3997a16be6e788d102b7b3aac778285111a2586",
         "version": 1
       },
       "byCheckpoint": {
-        "address": "0x57bf7d91755b58a6b82e41e490bd2f03e803d1c081fe85747312eb016f39314e",
+        "address": "0x22a0d7ab729ca0c987a2cc9028028481e6d3074978783673c043dbc2b34b7ce5",
         "version": 2
       }
     }

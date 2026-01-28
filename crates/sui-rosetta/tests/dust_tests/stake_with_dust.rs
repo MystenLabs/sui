@@ -70,12 +70,9 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
 
     // Send rest of the coins to recipient first
     for coin in all_coins_iter {
-        // Get fresh gas object for each transaction
-        let gas_object = test_cluster
-            .wallet
-            .get_one_gas_object_owned_by_address(sender)
+        let gas_object = get_object_ref(&mut client.clone(), gas_for_split_tx_id)
             .await?
-            .unwrap();
+            .as_object_ref();
 
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
@@ -154,17 +151,12 @@ async fn test_stake_with_many_small_coins() -> Result<()> {
 
     // Now send coin previously been used as gas, in order to only have
     // the change coins.
-    let gas_object = test_cluster
-        .wallet
-        .get_one_gas_object_owned_by_address(sender)
+    let gas_object = get_object_ref(&mut client.clone(), gas_for_split_tx.id())
         .await?
-        .unwrap();
+        .as_object_ref();
 
     let mut ptb = ProgrammableTransactionBuilder::new();
-    ptb.transfer_object(
-        recipient,
-        get_object_ref(&mut client.clone(), gas_for_split_tx.id()).await?,
-    )?;
+    ptb.transfer_arg(recipient, sui_types::transaction::Argument::GasCoin);
     let tx_data = TransactionData::new_programmable(
         sender,
         vec![gas_object],
@@ -342,12 +334,9 @@ async fn test_stake_with_multiple_merges() -> Result<()> {
 
     // Send rest of the coins to recipient first
     for coin in all_coins_iter {
-        // Get fresh gas object for each transaction
-        let gas_object = test_cluster
-            .wallet
-            .get_one_gas_object_owned_by_address(sender)
+        let gas_object = get_object_ref(&mut client.clone(), _gas_for_split_tx.id())
             .await?
-            .unwrap();
+            .as_object_ref();
 
         let mut ptb = ProgrammableTransactionBuilder::new();
         ptb.transfer_object(recipient, coin.compute_full_object_reference())?;
@@ -407,17 +396,12 @@ async fn test_stake_with_multiple_merges() -> Result<()> {
 
     // Now send coin previously been used as gas, in order to only have
     // the change coins.
-    let gas_object = test_cluster
-        .wallet
-        .get_one_gas_object_owned_by_address(sender)
+    let gas_object = get_object_ref(&mut client.clone(), gas_for_split_tx.id())
         .await?
-        .unwrap();
+        .as_object_ref();
 
     let mut ptb = ProgrammableTransactionBuilder::new();
-    ptb.transfer_object(
-        recipient,
-        get_object_ref(&mut client.clone(), gas_for_split_tx.id()).await?,
-    )?;
+    ptb.transfer_arg(recipient, sui_types::transaction::Argument::GasCoin);
     let tx_data = TransactionData::new_programmable(
         sender,
         vec![gas_object],
@@ -631,17 +615,12 @@ async fn test_stake_with_coin_limit() -> Result<()> {
 
     // Now send coin previously been used as gas, in order to only have
     // the change coins.
-    let gas_object = test_cluster
-        .wallet
-        .get_one_gas_object_owned_by_address(sender)
+    let gas_object = get_object_ref(&mut client.clone(), gas_for_split_tx.id())
         .await?
-        .unwrap();
+        .as_object_ref();
 
     let mut ptb = ProgrammableTransactionBuilder::new();
-    ptb.transfer_object(
-        recipient,
-        get_object_ref(&mut client.clone(), gas_for_split_tx.id()).await?,
-    )?;
+    ptb.transfer_arg(recipient, sui_types::transaction::Argument::GasCoin);
     let tx_data = TransactionData::new_programmable(
         sender,
         vec![gas_object],

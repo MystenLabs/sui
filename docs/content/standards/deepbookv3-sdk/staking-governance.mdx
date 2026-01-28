@@ -7,7 +7,7 @@ keywords: [ taker fee, maker fee, stake, staking, governance, unstake, submit pr
 
 Examples of interacting with staking and governance. These functions typically require a `balanceManagerKey`, `poolKey`, or both. For details on these keys, see [DeepBookV3 SDK](../deepbookv3-sdk.mdx#keys). The SDK includes some default keys that you can view in the `constants.ts` file. 
 
-See [Staking and Governance](../deepbookv3/staking-governance.mdx) for more information on the staking and governance API.
+See [Staking and Governance](../deepbookv3/contract-information/staking-governance.mdx) for more information on the staking and governance API.
 
 ## Staking and governance functions
 
@@ -63,6 +63,17 @@ Use `vote` to vote on a proposal. The call returns a `Transaction` object.
 ```tsx
 vote(poolKey: string, balanceManagerKey: string, proposal_id: string)
 ```
+
+### `claimRebates`
+
+Use `claimRebates` to claim maker/taker rebates for a balance manager in a specific pool. The call returns a function that takes a `Transaction` object.
+
+**Parameters**
+
+- `poolKey`: String that identifies the pool.
+- `balanceManagerKey`: String that identifies the balance manager.
+
+<ImportContent source="packages/deepbook-v3/src/transactions/deepbook.ts" mode="code" org="MystenLabs" repo="ts-sdks" fun="claimRebates" signatureOnly/>
 
 ## Examples
 

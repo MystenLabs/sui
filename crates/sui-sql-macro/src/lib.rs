@@ -2,18 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use proc_macro::TokenStream;
-use quote::quote;
-use syn::{
-    Error, Expr, LitStr, Result, Token, Type,
-    parse::{Parse, ParseStream},
-    parse_macro_input,
-    punctuated::Punctuated,
-};
 
-use crate::{
-    lexer::Lexer,
-    parser::{Format, Parser},
-};
+use quote::quote;
+use syn::Error;
+use syn::Expr;
+use syn::LitStr;
+use syn::Result;
+use syn::Token;
+use syn::Type;
+use syn::parse::Parse;
+use syn::parse::ParseStream;
+use syn::parse_macro_input;
+use syn::punctuated::Punctuated;
+
+use crate::lexer::Lexer;
+use crate::parser::Format;
+use crate::parser::Parser;
 
 mod lexer;
 mod parser;

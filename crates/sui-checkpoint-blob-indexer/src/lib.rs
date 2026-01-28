@@ -3,12 +3,18 @@
 
 mod handlers;
 
-pub use handlers::{CheckpointBlob, CheckpointBlobPipeline, EpochCheckpoint, EpochsPipeline};
+pub use handlers::BcsCheckpoint;
+pub use handlers::CheckpointBcsPipeline;
+pub use handlers::CheckpointBlob;
+pub use handlers::CheckpointBlobPipeline;
+pub use handlers::EpochCheckpoint;
+pub use handlers::EpochsPipeline;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use bytes::Bytes;
+    use object_store::ObjectStoreExt as _;
     use object_store::memory::InMemory;
     use object_store::path::Path as ObjectPath;
     use std::sync::Arc;

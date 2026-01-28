@@ -93,7 +93,7 @@ Response: {
             },
             "value": {
               "json": {
-                "id": "0xc5581d8a3a00218d5a1c11c5e8c14ace525878ce0871c15c406281653f6d316a",
+                "id": "0x0622ba936cbc3bed80985b80ecd24f782508cf92906a5c74e6d781d92e32d659",
                 "x": "4"
               }
             }
@@ -104,7 +104,7 @@ Response: {
             },
             "value": {
               "json": {
-                "id": "0x5b2a45c7909afc830fcdf3ab9378212daf2ee22a7926b9b7c221ee0e898604c0",
+                "id": "0xa65b85aeba27d77dde5a366ed9a9adcc3b615b9a40506f03cf6bc8f33197b6ae",
                 "x": "8"
               }
             }
@@ -116,7 +116,7 @@ Response: {
             "value": {
               "contents": {
                 "json": {
-                  "id": "0x858c320e55fb43b779aba3924ec3e2b7cdcfb64a92b17ac94c6654678cb6a18a",
+                  "id": "0x00aeee42bd96d47f46bb9c1696a4325517d881125f0f0ae001d05425359c677a",
                   "x": "6"
                 }
               },
@@ -128,7 +128,7 @@ Response: {
                     },
                     "value": {
                       "json": {
-                        "id": "0x294abaf3d927d219f1e7c205788b19754ebeb82f0f3eac65c67b3f6cd3f13dc5",
+                        "id": "0x9a2ae0cd8208edc4274cd24630a288014803c5b57c05c213913bd2be400d5a27",
                         "x": "7"
                       }
                     }
@@ -151,7 +151,7 @@ Response: {
               },
               "value": {
                 "json": {
-                  "id": "0xc5581d8a3a00218d5a1c11c5e8c14ace525878ce0871c15c406281653f6d316a",
+                  "id": "0x0622ba936cbc3bed80985b80ecd24f782508cf92906a5c74e6d781d92e32d659",
                   "x": "4"
                 }
               }
@@ -162,7 +162,7 @@ Response: {
               },
               "value": {
                 "json": {
-                  "id": "0x5b2a45c7909afc830fcdf3ab9378212daf2ee22a7926b9b7c221ee0e898604c0",
+                  "id": "0xa65b85aeba27d77dde5a366ed9a9adcc3b615b9a40506f03cf6bc8f33197b6ae",
                   "x": "8"
                 }
               }
@@ -174,7 +174,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x858c320e55fb43b779aba3924ec3e2b7cdcfb64a92b17ac94c6654678cb6a18a",
+                    "id": "0x00aeee42bd96d47f46bb9c1696a4325517d881125f0f0ae001d05425359c677a",
                     "x": "6"
                   }
                 },
@@ -186,7 +186,7 @@ Response: {
                       },
                       "value": {
                         "json": {
-                          "id": "0x294abaf3d927d219f1e7c205788b19754ebeb82f0f3eac65c67b3f6cd3f13dc5",
+                          "id": "0x9a2ae0cd8208edc4274cd24630a288014803c5b57c05c213913bd2be400d5a27",
                           "x": "7"
                         }
                       }
@@ -208,7 +208,7 @@ Response: {
             },
             "value": {
               "json": {
-                "id": "0xc29d7c3f5cb9e0561d46e3d8178460b76e5f2455115e24959902dcb570fd0d78",
+                "id": "0xab230c0ad310dd6ab9185afee72f95a5da546160103de4eb4d47e605eb76d8af",
                 "x": "5"
               }
             }
@@ -222,7 +222,11 @@ Response: {
 task 12, lines 127-137:
 //# run-graphql
 Response: {
-  "data": null,
+  "data": {
+    "address": {
+      "dynamicFields": null
+    }
+  },
   "errors": [
     {
       "message": "Cannot paginate owned objects for a parent object's address if its version is bounded. Fetch the parent at a checkpoint in the consistent range to list its owned objects.",

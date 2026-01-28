@@ -4,6 +4,7 @@
 
 use crate::accumulators::coin_reservations::CoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
+use crate::accumulators::object_funds_checker::ObjectFundsChecker;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
@@ -21,7 +22,7 @@ use crate::traffic_controller::TrafficController;
 use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::{fix_indexes, verify_indexes};
-use arc_swap::{ArcSwap, Guard};
+use arc_swap::{ArcSwap, ArcSwapOption, Guard};
 use async_trait::async_trait;
 use authority_per_epoch_store::CertLockGuard;
 use fastcrypto::encoding::Base58;
@@ -32,7 +33,7 @@ use move_binary_format::CompiledModule;
 use move_binary_format::binary_config::BinaryConfig;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
-use mysten_common::fatal;
+use mysten_common::{assert_reachable, fatal};
 use mysten_metrics::{TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
 use prometheus::{
@@ -66,7 +67,6 @@ use std::{
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_protocol_config::PerObjectCongestionControlMode;
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
@@ -79,7 +79,7 @@ use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::layout_resolver::into_struct_layout;
-use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
+use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::InputKey;
@@ -89,6 +89,7 @@ use sui_types::traffic_control::{
 };
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::TransactionChecks;
+use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_metadata};
 use tap::TapFallible;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::unbounded_channel;
@@ -960,6 +961,8 @@ pub struct AuthorityState {
 
     /// Notification channel for reconfiguration
     notify_epoch: tokio::sync::watch::Sender<EpochId>,
+
+    pub(crate) object_funds_checker: ArcSwapOption<ObjectFundsChecker>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1025,7 +1028,7 @@ impl AuthorityState {
         )?;
 
         self.execution_cache_trait_pointers
-            .child_object_resolver
+            .account_funds_read
             .check_amounts_available(&withdraws)?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
@@ -1069,8 +1072,6 @@ impl AuthorityState {
                 withdraw
                     .type_arg
                     .get_balance_type_param()
-                    // unwrap safe because we already verified the transaction.
-                    .unwrap()
                     .map(|ty| ty.to_canonical_string(false))
             })
             .collect::<BTreeSet<_>>();
@@ -1127,16 +1128,27 @@ impl AuthorityState {
             None
         };
 
-        // Check and write locks, to signed transaction, into the database
-        // The call to self.set_transaction_lock checks the lock is not conflicting,
-        // and returns ConflictingTransaction error in case there is a lock on a different
-        // existing transaction.
-        self.get_cache_writer().acquire_transaction_locks(
-            epoch_store,
-            &owned_objects,
-            tx_digest,
-            signed_transaction.clone(),
-        )?;
+        if epoch_store.protocol_config().disable_preconsensus_locking() {
+            // When preconsensus locking is disabled, validate owned object versions without
+            // acquiring locks. Locking happens post-consensus in the consensus handler. Validation
+            // still runs to prevent spam transactions with invalid object versions, and is necessary
+            // to handle recently created objects.
+            //
+            // Note: No signed transaction or locks are stored, unlike acquire_transaction_locks().
+            self.get_cache_writer()
+                .validate_owned_object_versions(&owned_objects)?;
+        } else {
+            // Check and write locks and signed transaction, into the epoch store.
+            // The call to acquire_transaction_locks() checks that the locks are not conflicting,
+            // and returns ObjectLockConflict error in case there is a lock from a different
+            // transaction on an object.
+            self.get_cache_writer().acquire_transaction_locks(
+                epoch_store,
+                &owned_objects,
+                tx_digest,
+                signed_transaction.clone(),
+            )?;
+        }
 
         Ok(signed_transaction)
     }
@@ -1182,6 +1194,7 @@ impl AuthorityState {
         if epoch_store.is_recently_finalized(&tx_digest)
             || epoch_store.transactions_executed_in_cur_epoch(&[tx_digest])?[0]
         {
+            assert_reachable!("transaction recently executed");
             return Ok(());
         }
 
@@ -1189,6 +1202,7 @@ impl AuthorityState {
             .get_transaction_cache_reader()
             .transaction_executed_in_last_epoch(transaction.digest(), epoch_store.epoch())
         {
+            assert_reachable!("transaction executed in last epoch");
             return Err(SuiErrorKind::TransactionAlreadyExecuted {
                 digest: (*transaction.digest()),
             }
@@ -1473,10 +1487,16 @@ impl AuthorityState {
 
         self.metrics.total_cert_attempts.inc();
 
-        if !transaction.is_consensus_tx() {
+        if !transaction.is_consensus_tx()
+            && !epoch_store.protocol_config().disable_preconsensus_locking()
+        {
             // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
-            // For owned object transactions, they can be enqueued for execution immediately.
+            //
+            // For owned object transactions, they can be enqueued for execution immediately
+            // ONLY when disable_preconsensus_locking is false (QD/original fastpath mode).
+            // When disable_preconsensus_locking is true (MFP mode), all transactions including
+            // owned object transactions must go through consensus before enqueuing for execution.
             self.execution_scheduler.enqueue(
                 vec![(
                     Schedulable::Transaction(transaction.clone()),
@@ -1592,6 +1612,7 @@ impl AuthorityState {
         }
 
         let scheduling_source = execution_env.scheduling_source;
+        let accumulator_version = execution_env.assigned_versions.accumulator_version;
         let mysticeti_fp_outputs = if epoch_store.protocol_config().mysticeti_fastpath() {
             tx_cache_reader.get_mysticeti_fastpath_outputs(tx_digest)
         } else {
@@ -1684,6 +1705,23 @@ impl AuthorityState {
                 active_jwks.sort();
 
                 assert_eq!(sys_jwks, active_jwks);
+            }
+        }
+
+        // TODO: We should also settle address funds during execution,
+        // instead of from checkpoint builder. It will improve performance
+        // since we will be settling as soon as we can.
+        if certificate
+            .transaction_data()
+            .kind()
+            .is_accumulator_barrier_settle_tx()
+        {
+            let object_funds_checker = self.object_funds_checker.load();
+            if let Some(object_funds_checker) = object_funds_checker.as_ref() {
+                // unwrap safe because we assign accumulator version for every transaction
+                // when accumulator is enabled.
+                let next_accumulator_version = accumulator_version.unwrap().next();
+                object_funds_checker.settle_accumulator_version(next_accumulator_version);
             }
         }
 
@@ -2061,12 +2099,15 @@ impl AuthorityState {
                 &mut None,
             );
 
-        if !self
-            .execution_scheduler
-            .should_commit_object_funds_withdraws(
+        let object_funds_checker = self.object_funds_checker.load();
+        // FIXME: effects contain merged funds changes. But we need the sum of all the withdraws per account.
+        if let Some(object_funds_checker) = object_funds_checker.as_ref()
+            && !object_funds_checker.should_commit_object_funds_withdraws(
                 certificate,
                 &effects,
                 &execution_env,
+                self.get_account_funds_read(),
+                &self.execution_scheduler,
                 epoch_store,
             )
         {
@@ -2468,6 +2509,7 @@ impl AuthorityState {
         &self,
         mut transaction: TransactionData,
         checks: TransactionChecks,
+        allow_mock_gas_coin: bool,
     ) -> SuiResult<SimulateTransactionResult> {
         if transaction.kind().is_system_tx() {
             return Err(SuiErrorKind::UnsupportedFeatureError {
@@ -2508,7 +2550,7 @@ impl AuthorityState {
         )?;
 
         // mock a gas object if one was not provided
-        let mock_gas_id = if transaction.gas().is_empty() {
+        let mock_gas_id = if allow_mock_gas_coin && transaction.gas().is_empty() {
             let mock_gas_object = Object::new_move(
                 MoveObject::new_gas_coin(
                     OBJECT_START_VERSION,
@@ -2920,6 +2962,7 @@ impl AuthorityState {
             digest,
             timestamp_ms,
             tx_coins,
+            effects.accumulator_events(),
         )
     }
 
@@ -3550,7 +3593,7 @@ impl AuthorityState {
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let execution_scheduler = Arc::new(ExecutionScheduler::new(
             execution_cache_trait_pointers.object_cache_reader.clone(),
-            execution_cache_trait_pointers.child_object_resolver.clone(),
+            execution_cache_trait_pointers.account_funds_read.clone(),
             execution_cache_trait_pointers
                 .transaction_cache_reader
                 .clone(),
@@ -3629,7 +3672,9 @@ impl AuthorityState {
             traffic_controller,
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,
+            object_funds_checker: ArcSwapOption::empty(),
         });
+        state.init_object_funds_checker().await;
 
         let state_clone = Arc::downgrade(&state);
         spawn_monitored_task!(fix_indexes(state_clone));
@@ -3674,6 +3719,23 @@ impl AuthorityState {
         state
     }
 
+    async fn init_object_funds_checker(&self) {
+        let epoch_store = self.epoch_store.load();
+        if self.is_validator(&epoch_store)
+            && epoch_store.protocol_config().enable_object_funds_withdraw()
+        {
+            if self.object_funds_checker.load().is_none() {
+                let inner = self
+                    .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                    .await
+                    .map(|o| Arc::new(ObjectFundsChecker::new(o.version())));
+                self.object_funds_checker.store(inner);
+            }
+        } else {
+            self.object_funds_checker.store(None);
+        }
+    }
+
     // TODO: Consolidate our traits to reduce the number of methods here.
     pub fn get_object_cache_reader(&self) -> &Arc<dyn ObjectCacheRead> {
         &self.execution_cache_trait_pointers.object_cache_reader
@@ -3693,6 +3755,10 @@ impl AuthorityState {
 
     pub fn get_child_object_resolver(&self) -> &Arc<dyn ChildObjectResolver + Send + Sync> {
         &self.execution_cache_trait_pointers.child_object_resolver
+    }
+
+    pub(crate) fn get_account_funds_read(&self) -> &Arc<dyn AccountFundsRead> {
+        &self.execution_cache_trait_pointers.account_funds_read
     }
 
     pub fn get_backing_package_store(&self) -> &Arc<dyn BackingPackageStore + Send + Sync> {
@@ -3922,7 +3988,8 @@ impl AuthorityState {
             .await?;
         assert_eq!(new_epoch_store.epoch(), new_epoch);
         self.execution_scheduler
-            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
+            .reconfigure(&new_epoch_store, self.get_account_funds_read());
+        self.init_object_funds_checker().await;
         *execution_lock = new_epoch;
 
         self.notify_epoch(new_epoch);
@@ -4035,10 +4102,12 @@ impl AuthorityState {
         assert!(effects.status().is_ok());
 
         let next_accumulator_version = accumulator_version.next();
-        self.execution_scheduler.settle_funds(FundsSettlement {
-            funds_changes: balance_changes,
-            next_accumulator_version,
-        });
+        self.execution_scheduler
+            .settle_address_funds(FundsSettlement {
+                funds_changes: balance_changes,
+                next_accumulator_version,
+            });
+        // object funds are settled while executing the barrier transaction
     }
 
     /// Advance the epoch store to the next epoch for testing only.
@@ -4067,7 +4136,7 @@ impl AuthorityState {
                 .unwrap_or_default(),
         );
         self.execution_scheduler
-            .reconfigure(&new_epoch_store, self.get_child_object_resolver());
+            .reconfigure(&new_epoch_store, self.get_account_funds_read());
         let new_epoch = new_epoch_store.epoch();
         self.epoch_store.store(new_epoch_store);
         epoch_store.epoch_terminated().await;
@@ -5378,94 +5447,6 @@ impl AuthorityState {
         Some(res)
     }
 
-    // TODO: delete once authority_capabilities_v2 is deployed everywhere
-    fn is_protocol_version_supported_v1(
-        current_protocol_version: ProtocolVersion,
-        proposed_protocol_version: ProtocolVersion,
-        protocol_config: &ProtocolConfig,
-        committee: &Committee,
-        capabilities: Vec<AuthorityCapabilitiesV1>,
-        mut buffer_stake_bps: u64,
-    ) -> Option<(ProtocolVersion, Vec<ObjectRef>)> {
-        if proposed_protocol_version > current_protocol_version + 1
-            && !protocol_config.advance_to_highest_supported_protocol_version()
-        {
-            return None;
-        }
-
-        if buffer_stake_bps > 10000 {
-            warn!("clamping buffer_stake_bps to 10000");
-            buffer_stake_bps = 10000;
-        }
-
-        // For each validator, gather the protocol version and system packages that it would like
-        // to upgrade to in the next epoch.
-        let mut desired_upgrades: Vec<_> = capabilities
-            .into_iter()
-            .filter_map(|mut cap| {
-                // A validator that lists no packages is voting against any change at all.
-                if cap.available_system_packages.is_empty() {
-                    return None;
-                }
-
-                cap.available_system_packages.sort();
-
-                info!(
-                    "validator {:?} supports {:?} with system packages: {:?}",
-                    cap.authority.concise(),
-                    cap.supported_protocol_versions,
-                    cap.available_system_packages,
-                );
-
-                // A validator that only supports the current protocol version is also voting
-                // against any change, because framework upgrades always require a protocol version
-                // bump.
-                cap.supported_protocol_versions
-                    .is_version_supported(proposed_protocol_version)
-                    .then_some((cap.available_system_packages, cap.authority))
-            })
-            .collect();
-
-        // There can only be one set of votes that have a majority, find one if it exists.
-        desired_upgrades.sort();
-        desired_upgrades
-            .into_iter()
-            .chunk_by(|(packages, _authority)| packages.clone())
-            .into_iter()
-            .find_map(|(packages, group)| {
-                // should have been filtered out earlier.
-                assert!(!packages.is_empty());
-
-                let mut stake_aggregator: StakeAggregator<(), true> =
-                    StakeAggregator::new(Arc::new(committee.clone()));
-
-                for (_, authority) in group {
-                    stake_aggregator.insert_generic(authority, ());
-                }
-
-                let total_votes = stake_aggregator.total_votes();
-                let quorum_threshold = committee.quorum_threshold();
-                let f = committee.total_votes() - committee.quorum_threshold();
-
-                // multiple by buffer_stake_bps / 10000, rounded up.
-                let buffer_stake = (f * buffer_stake_bps).div_ceil(10000);
-                let effective_threshold = quorum_threshold + buffer_stake;
-
-                info!(
-                    ?total_votes,
-                    ?quorum_threshold,
-                    ?buffer_stake_bps,
-                    ?effective_threshold,
-                    ?proposed_protocol_version,
-                    ?packages,
-                    "support for upgrade"
-                );
-
-                let has_support = total_votes >= effective_threshold;
-                has_support.then_some((proposed_protocol_version, packages))
-            })
-    }
-
     fn is_protocol_version_supported_v2(
         current_protocol_version: ProtocolVersion,
         proposed_protocol_version: ProtocolVersion,
@@ -5554,32 +5535,6 @@ impl AuthorityState {
             })
     }
 
-    // TODO: delete once authority_capabilities_v2 is deployed everywhere
-    fn choose_protocol_version_and_system_packages_v1(
-        current_protocol_version: ProtocolVersion,
-        protocol_config: &ProtocolConfig,
-        committee: &Committee,
-        capabilities: Vec<AuthorityCapabilitiesV1>,
-        buffer_stake_bps: u64,
-    ) -> (ProtocolVersion, Vec<ObjectRef>) {
-        let mut next_protocol_version = current_protocol_version;
-        let mut system_packages = vec![];
-
-        while let Some((version, packages)) = Self::is_protocol_version_supported_v1(
-            current_protocol_version,
-            next_protocol_version + 1,
-            protocol_config,
-            committee,
-            capabilities.clone(),
-            buffer_stake_bps,
-        ) {
-            next_protocol_version = version;
-            system_packages = packages;
-        }
-
-        (next_protocol_version, system_packages)
-    }
-
     fn choose_protocol_version_and_system_packages_v2(
         current_protocol_version: ProtocolVersion,
         protocol_config: &ProtocolConfig,
@@ -5587,6 +5542,7 @@ impl AuthorityState {
         capabilities: Vec<AuthorityCapabilitiesV2>,
         buffer_stake_bps: u64,
     ) -> (ProtocolVersion, Vec<ObjectRef>) {
+        assert!(protocol_config.authority_capabilities_v2());
         let mut next_protocol_version = current_protocol_version;
         let mut system_packages = vec![];
 
@@ -5679,6 +5635,44 @@ impl AuthorityState {
 
         let tx = EndOfEpochTransactionKind::new_accumulator_root_create();
         info!("Creating AccumulatorRootCreate tx");
+        Some(tx)
+    }
+
+    #[instrument(level = "debug", skip_all)]
+    fn create_write_accumulator_storage_cost_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.accumulator_root_exists() {
+            info!("accumulator root does not exist yet");
+            return None;
+        }
+        if !epoch_store.protocol_config().enable_accumulators() {
+            info!("accumulators not enabled");
+            return None;
+        }
+
+        let object_store = self.get_object_store();
+        let object_count =
+            match accumulator_metadata::get_accumulator_object_count(object_store.as_ref()) {
+                Ok(Some(count)) => count,
+                Ok(None) => return None,
+                Err(e) => {
+                    fatal!("failed to read accumulator object count: {e}");
+                }
+            };
+
+        let storage_cost = object_count.saturating_mul(
+            epoch_store
+                .protocol_config()
+                .accumulator_object_storage_cost(),
+        );
+
+        let tx = EndOfEpochTransactionKind::new_write_accumulator_storage_cost(storage_cost);
+        info!(
+            object_count,
+            storage_cost, "Creating WriteAccumulatorStorageCost tx"
+        );
         Some(tx)
     }
 
@@ -5973,12 +5967,13 @@ impl AuthorityState {
         if let Some(tx) = self.create_coin_registry_tx(epoch_store) {
             txns.push(tx);
         }
-
         if let Some(tx) = self.create_display_registry_tx(epoch_store) {
             txns.push(tx);
         }
-
         if let Some(tx) = self.create_address_alias_state_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.create_write_accumulator_storage_cost_tx(epoch_store) {
             txns.push(tx);
         }
 
@@ -5987,27 +5982,15 @@ impl AuthorityState {
         let buffer_stake_bps = epoch_store.get_effective_buffer_stake_bps();
 
         let (next_epoch_protocol_version, next_epoch_system_packages) =
-            if epoch_store.protocol_config().authority_capabilities_v2() {
-                Self::choose_protocol_version_and_system_packages_v2(
-                    epoch_store.protocol_version(),
-                    epoch_store.protocol_config(),
-                    epoch_store.committee(),
-                    epoch_store
-                        .get_capabilities_v2()
-                        .expect("read capabilities from db cannot fail"),
-                    buffer_stake_bps,
-                )
-            } else {
-                Self::choose_protocol_version_and_system_packages_v1(
-                    epoch_store.protocol_version(),
-                    epoch_store.protocol_config(),
-                    epoch_store.committee(),
-                    epoch_store
-                        .get_capabilities_v1()
-                        .expect("read capabilities from db cannot fail"),
-                    buffer_stake_bps,
-                )
-            };
+            Self::choose_protocol_version_and_system_packages_v2(
+                epoch_store.protocol_version(),
+                epoch_store.protocol_config(),
+                epoch_store.committee(),
+                epoch_store
+                    .get_capabilities_v2()
+                    .expect("read capabilities from db cannot fail"),
+                buffer_stake_bps,
+            );
 
         // since system packages are created during the current epoch, they should abide by the
         // rules of the current epoch, including the current epoch's max Move binary format version
@@ -6318,13 +6301,8 @@ impl RandomnessRoundReceiver {
             let mut effects = match result {
                 Ok(result) => result,
                 Err(_) => {
-                    if cfg!(debug_assertions) {
-                        // Crash on randomness update execution timeout in debug builds.
-                        panic!(
-                            "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
-                        );
-                    }
-                    warn!(
+                    // Crash on randomness update execution timeout in debug builds.
+                    debug_fatal!(
                         "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
                     );
                     // Continue waiting as long as necessary in non-debug builds.

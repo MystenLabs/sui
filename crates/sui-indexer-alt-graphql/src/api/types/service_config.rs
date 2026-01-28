@@ -1,15 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{Context, Object, Result};
+use async_graphql::Context;
+use async_graphql::Object;
+use async_graphql::Result;
 
-use crate::{
-    api::types::available_range::{AvailableRange, AvailableRangeKey, Error},
-    config::Limits,
-    error::RpcError,
-    pagination::{PaginationConfig, is_connection},
-    scope::Scope,
-};
+use crate::api::types::available_range::AvailableRange;
+use crate::api::types::available_range::AvailableRangeKey;
+use crate::api::types::available_range::Error;
+use crate::config::Limits;
+use crate::error::RpcError;
+use crate::pagination::PaginationConfig;
+use crate::pagination::is_connection;
+use crate::scope::Scope;
 
 pub(crate) struct ServiceConfig {
     /// Retention queries will use this scope if it is populated, instead of creating a fresh scope from
@@ -20,27 +23,47 @@ pub(crate) struct ServiceConfig {
 #[Object]
 impl ServiceConfig {
     /// Maximum time in milliseconds spent waiting for a response from fullnode after issuing a transaction to execute. Note that the transaction may still succeed even in the case of a timeout. Transactions are idempotent, so a transaction that times out should be re-submitted until the network returns a definite response (success or failure, not timeout).
-    async fn mutation_timeout_ms(&self, ctx: &Context<'_>) -> Result<Option<u32>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.mutation_timeout_ms))
+    async fn mutation_timeout_ms(&self, ctx: &Context<'_>) -> Option<Result<u32, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.mutation_timeout_ms)
+            }
+            .await,
+        )
     }
 
     /// Maximum time in milliseconds that will be spent to serve one query request.
-    async fn query_timeout_ms(&self, ctx: &Context<'_>) -> Result<Option<u32>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.query_timeout_ms))
+    async fn query_timeout_ms(&self, ctx: &Context<'_>) -> Option<Result<u32, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.query_timeout_ms)
+            }
+            .await,
+        )
     }
 
     /// Maximum depth of a GraphQL query that can be accepted by this service.
-    async fn max_query_depth(&self, ctx: &Context<'_>) -> Result<Option<u32>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_query_depth))
+    async fn max_query_depth(&self, ctx: &Context<'_>) -> Option<Result<u32, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_query_depth)
+            }
+            .await,
+        )
     }
 
     /// The maximum number of nodes (field names) the service will accept in a single query.
-    async fn max_query_nodes(&self, ctx: &Context<'_>) -> Result<Option<u32>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_query_nodes))
+    async fn max_query_nodes(&self, ctx: &Context<'_>) -> Option<Result<u32, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_query_nodes)
+            }
+            .await,
+        )
     }
 
     /// Maximum number of estimated output nodes in a GraphQL response.
@@ -80,9 +103,14 @@ impl ServiceConfig {
     /// | 29:   }
     /// | 30: }
     /// ```
-    async fn max_output_nodes(&self, ctx: &Context<'_>) -> Result<Option<u32>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_output_nodes))
+    async fn max_output_nodes(&self, ctx: &Context<'_>) -> Option<Result<u32, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_output_nodes)
+            }
+            .await,
+        )
     }
 
     /// Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
@@ -91,15 +119,25 @@ impl ServiceConfig {
     async fn max_transaction_payload_size(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<u32>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_tx_payload_size))
+    ) -> Option<Result<u32, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_tx_payload_size)
+            }
+            .await,
+        )
     }
 
     /// Maximum size in bytes of a single GraphQL request, excluding the elements covered by `maxTransactionPayloadSize`.
-    async fn max_query_payload_size(&self, ctx: &Context<'_>) -> Result<Option<u32>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_query_payload_size))
+    async fn max_query_payload_size(&self, ctx: &Context<'_>) -> Option<Result<u32, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_query_payload_size)
+            }
+            .await,
+        )
     }
 
     /// Number of elements a paginated connection will return if a page size is not supplied.
@@ -110,19 +148,23 @@ impl ServiceConfig {
         ctx: &Context<'_>,
         type_: String,
         field: String,
-    ) -> Result<Option<u32>, RpcError> {
-        let registry = &ctx.schema_env.registry;
+    ) -> Option<Result<u32, RpcError>> {
+        async {
+            let registry = &ctx.schema_env.registry;
 
-        if !registry
-            .concrete_type_by_name(&type_)
-            .and_then(|t| t.field_by_name(&field))
-            .is_some_and(is_connection)
-        {
-            return Ok(None);
+            if !registry
+                .concrete_type_by_name(&type_)
+                .and_then(|t| t.field_by_name(&field))
+                .is_some_and(is_connection)
+            {
+                return Ok(None);
+            }
+
+            let config: &PaginationConfig = ctx.data()?;
+            Ok(Some(config.limits(&type_, &field).default))
         }
-
-        let config: &PaginationConfig = ctx.data()?;
-        Ok(Some(config.limits(&type_, &field).default))
+        .await
+        .transpose()
     }
 
     /// Maximum number of elements that can be requested from a paginated connection. A request to fetch more elements will result in an error.
@@ -133,76 +175,158 @@ impl ServiceConfig {
         ctx: &Context<'_>,
         type_: String,
         field: String,
-    ) -> Result<Option<u32>, RpcError> {
-        let registry = &ctx.schema_env.registry;
+    ) -> Option<Result<u32, RpcError>> {
+        async {
+            let registry = &ctx.schema_env.registry;
 
-        if !registry
-            .concrete_type_by_name(&type_)
-            .and_then(|t| t.field_by_name(&field))
-            .is_some_and(is_connection)
-        {
-            return Ok(None);
+            if !registry
+                .concrete_type_by_name(&type_)
+                .and_then(|t| t.field_by_name(&field))
+                .is_some_and(is_connection)
+            {
+                return Ok(None);
+            }
+
+            let config: &PaginationConfig = ctx.data()?;
+            Ok(Some(config.limits(&type_, &field).max))
         }
-
-        let config: &PaginationConfig = ctx.data()?;
-        Ok(Some(config.limits(&type_, &field).max))
+        .await
+        .transpose()
     }
 
     /// Maximum number of elements that can be requested from a multi-get query. A request to fetch more keys will result in an error.
-    async fn max_multi_get_size(&self, ctx: &Context<'_>) -> Result<Option<u32>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_multi_get_size))
+    async fn max_multi_get_size(&self, ctx: &Context<'_>) -> Option<Result<u32, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_multi_get_size)
+            }
+            .await,
+        )
     }
 
     /// Maximum amount of nesting among type arguments (type arguments nest when a type argument is itself generic and has arguments).
-    async fn max_type_argument_depth(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_type_argument_depth))
+    async fn max_type_argument_depth(&self, ctx: &Context<'_>) -> Option<Result<usize, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_type_argument_depth)
+            }
+            .await,
+        )
     }
 
     /// Maximum number of type parameters a type can have.
-    async fn max_type_argument_width(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_type_argument_width))
+    async fn max_type_argument_width(&self, ctx: &Context<'_>) -> Option<Result<usize, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_type_argument_width)
+            }
+            .await,
+        )
     }
 
     /// Maximum number of datatypes that need to be processed when calculating the layout of a single type.
-    async fn max_type_nodes(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_type_nodes))
+    async fn max_type_nodes(&self, ctx: &Context<'_>) -> Option<Result<usize, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_type_nodes)
+            }
+            .await,
+        )
     }
 
     /// Maximum nesting allowed in datatype fields when calculating the layout of a single type.
-    async fn max_move_value_depth(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_move_value_depth))
+    async fn max_move_value_depth(&self, ctx: &Context<'_>) -> Option<Result<usize, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_move_value_depth)
+            }
+            .await,
+        )
     }
 
     /// Maximum budget in bytes to spend when outputting a structured `MoveValue`.
-    async fn max_move_value_bound(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_move_value_bound))
+    async fn max_move_value_bound(&self, ctx: &Context<'_>) -> Option<Result<usize, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_move_value_bound)
+            }
+            .await,
+        )
     }
 
     /// Maximum depth of nested field access supported in display outputs.
-    async fn max_display_field_depth(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_display_field_depth))
+    async fn max_display_field_depth(&self, ctx: &Context<'_>) -> Option<Result<usize, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_display_field_depth)
+            }
+            .await,
+        )
+    }
+
+    /// Maximum number of components in a Display v2 format string.
+    async fn max_display_format_nodes(&self, ctx: &Context<'_>) -> Option<Result<usize, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_display_format_nodes)
+            }
+            .await,
+        )
+    }
+
+    /// Maximum number of objects that can be loaded while evaluating a display.
+    async fn max_display_object_loads(&self, ctx: &Context<'_>) -> Option<Result<usize, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_display_object_loads)
+            }
+            .await,
+        )
     }
 
     /// Maximum output size of a display output.
-    async fn max_display_output_size(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_display_output_size))
+    async fn max_display_output_size(&self, ctx: &Context<'_>) -> Option<Result<usize, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_display_output_size)
+            }
+            .await,
+        )
     }
 
     /// Maximum output size of a disassembled MoveModule, in bytes.
     async fn max_disassembled_module_size(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<usize>, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(Some(limits.max_disassembled_module_size))
+    ) -> Option<Result<usize, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_disassembled_module_size)
+            }
+            .await,
+        )
+    }
+
+    /// Maximum number of paginated fields that can return results in a single request. Queries on paginated fields that exceed this limit will return an error.
+    async fn max_rich_queries(&self, ctx: &Context<'_>) -> Option<Result<usize, RpcError>> {
+        Some(
+            async {
+                let limits: &Limits = ctx.data()?;
+                Ok(limits.max_rich_queries)
+            }
+            .await,
+        )
     }
 
     /// Range of checkpoints for which data is available for a query type, field and optional filter. If filter is not provided, the strictest retention range for the query and type is returned.

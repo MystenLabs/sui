@@ -11,19 +11,21 @@ use crate::{
     is_system_package,
     object::{Data, Object, Owner},
     storage::{BackingPackageStore, ObjectChange},
+    sui_system_state::SUI_SYSTEM_STATE_INNER_MODULE_NAME,
     transaction::{Argument, Command, SharedObjectMutability},
     type_input::TypeInput,
 };
 use move_core_types::{
-    identifier::Identifier,
+    ident_str,
+    identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
-const SUI_SYSTEM_STATE_INNER_MODULE: &str = "sui_system_state_inner";
-const EXECUTION_TIME_OBSERVATION_CHUNK_KEY_STRUCT: &str = "ExecutionTimeObservationChunkKey";
+const EXECUTION_TIME_OBSERVATION_CHUNK_KEY_STRUCT: &IdentStr =
+    ident_str!("ExecutionTimeObservationChunkKey");
 
 /// A type containing all of the information needed to work in execution with an object whose
 /// consensus stream is ended, and when committing the execution effects of the transaction.
@@ -312,8 +314,8 @@ impl MoveTypeTagTrait for ExecutionTimeObservationChunkKey {
     fn get_type_tag() -> TypeTag {
         TypeTag::Struct(Box::new(StructTag {
             address: SUI_SYSTEM_ADDRESS,
-            module: Identifier::new(SUI_SYSTEM_STATE_INNER_MODULE).unwrap(),
-            name: Identifier::new(EXECUTION_TIME_OBSERVATION_CHUNK_KEY_STRUCT).unwrap(),
+            module: SUI_SYSTEM_STATE_INNER_MODULE_NAME.to_owned(),
+            name: EXECUTION_TIME_OBSERVATION_CHUNK_KEY_STRUCT.to_owned(),
             type_params: vec![],
         }))
     }

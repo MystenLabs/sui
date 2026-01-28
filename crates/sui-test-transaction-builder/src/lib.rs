@@ -13,7 +13,9 @@ use sui_sdk::rpc_types::{
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::balance::Balance;
 use sui_types::base_types::{FullObjectRef, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::committee::EpochId;
 use sui_types::crypto::{AccountKeyPair, Signature, Signer, get_key_pair};
+use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionDigest;
 use sui_types::gas_coin::GAS;
 use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
@@ -50,6 +52,14 @@ pub enum FundSource {
 pub enum ObjectFundObject {
     Owned(ObjectRef),
     Shared(ObjectID, SequenceNumber /* init shared version */),
+}
+
+/// Configuration for paying gas from address balance instead of a coin object.
+#[derive(Clone)]
+pub struct AddressBalanceGasConfig {
+    pub chain_identifier: ChainIdentifier,
+    pub current_epoch: EpochId,
+    pub nonce: u32,
 }
 
 impl FundSource {
@@ -89,27 +99,47 @@ impl FundSource {
 pub struct TestTransactionBuilder {
     ptb_builder: ProgrammableTransactionBuilder,
     sender: SuiAddress,
-    gas_object: ObjectRef,
+    gas_object: Option<ObjectRef>,
     gas_price: u64,
     gas_budget: Option<u64>,
+    address_balance_gas: Option<AddressBalanceGasConfig>,
 }
 
 impl TestTransactionBuilder {
     pub fn new(sender: SuiAddress, gas_object: ObjectRef, gas_price: u64) -> Self {
+        Self::new_impl(sender, Some(gas_object), gas_price)
+    }
+
+    fn new_impl(sender: SuiAddress, gas_object: Option<ObjectRef>, gas_price: u64) -> Self {
         Self {
             ptb_builder: ProgrammableTransactionBuilder::new(),
             sender,
             gas_object,
             gas_price,
             gas_budget: None,
+            address_balance_gas: None,
         }
+    }
+
+    pub fn new_with_address_balance_gas(
+        sender: SuiAddress,
+        gas_price: u64,
+        chain_identifier: ChainIdentifier,
+        current_epoch: EpochId,
+        nonce: u32,
+    ) -> Self {
+        Self::new_impl(sender, None, gas_price).with_address_balance_gas(
+            chain_identifier,
+            current_epoch,
+            nonce,
+        )
     }
 
     pub fn sender(&self) -> SuiAddress {
         self.sender
     }
 
-    pub fn gas_object(&self) -> ObjectRef {
+    pub fn gas_object(&self) -> Option<ObjectRef> {
         self.gas_object
     }
 
@@ -150,6 +180,20 @@ impl TestTransactionBuilder {
 
     pub fn with_gas_budget(mut self, gas_budget: u64) -> Self {
         self.gas_budget = Some(gas_budget);
+        self
+    }
+
+    pub fn with_address_balance_gas(
+        mut self,
+        chain_identifier: ChainIdentifier,
+        current_epoch: EpochId,
+        nonce: u32,
+    ) -> Self {
+        self.address_balance_gas = Some(AddressBalanceGasConfig {
+            chain_identifier,
+            current_epoch,
+            nonce,
+        });
         self
     }
 
@@ -396,7 +440,7 @@ impl TestTransactionBuilder {
             .sum::<u64>();
         match fund_source {
             FundSource::Coin(coin) => {
-                let source = if coin == self.gas_object {
+                let source = if Some(coin) == self.gas_object {
                     Argument::GasCoin
                 } else {
                     self.ptb_builder
@@ -428,7 +472,7 @@ impl TestTransactionBuilder {
                     .ptb_builder
                     .funds_withdrawal(FundsWithdrawalArg::balance_from_sender(
                         reservation,
-                        type_arg.clone().into(),
+                        type_arg.clone(),
                     ))
                     .unwrap();
                 for (amount, recipient) in amounts_and_recipients {
@@ -574,14 +618,32 @@ impl TestTransactionBuilder {
 
     pub fn build(self) -> TransactionData {
         let pt = self.ptb_builder.finish();
-        TransactionData::new_programmable(
-            self.sender,
-            vec![self.gas_object],
-            pt,
-            self.gas_budget
-                .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE),
-            self.gas_price,
-        )
+        let gas_budget = self
+            .gas_budget
+            .unwrap_or(self.gas_price * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE);
+
+        if let Some(ab_gas) = self.address_balance_gas {
+            TransactionData::new_programmable_with_address_balance_gas(
+                self.sender,
+                pt,
+                gas_budget,
+                self.gas_price,
+                ab_gas.chain_identifier,
+                ab_gas.current_epoch,
+                ab_gas.nonce,
+            )
+        } else {
+            TransactionData::new_programmable(
+                self.sender,
+                vec![
+                    self.gas_object
+                        .expect("gas_object required when not using address_balance_gas"),
+                ],
+                pt,
+                gas_budget,
+                self.gas_price,
+            )
+        }
     }
 
     pub fn build_and_sign(self, signer: &dyn Signer<Signature>) -> Transaction {
@@ -695,6 +757,25 @@ pub async fn make_transfer_sui_transaction(
         .sign_transaction(
             &TestTransactionBuilder::new(sender, gas_object, gas_price)
                 .transfer_sui(amount, recipient.unwrap_or(sender))
+                .build(),
+        )
+        .await
+}
+
+pub async fn make_transfer_sui_address_balance_transaction(
+    context: &WalletContext,
+    recipient: Option<SuiAddress>,
+    amount: u64,
+) -> Transaction {
+    let (sender, gas_object) = context.get_one_gas_object().await.unwrap().unwrap();
+    let gas_price = context.get_reference_gas_price().await.unwrap();
+    context
+        .sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .transfer_sui_to_address_balance(
+                    FundSource::Coin(gas_object),
+                    vec![(amount, recipient.unwrap_or(sender))],
+                )
                 .build(),
         )
         .await

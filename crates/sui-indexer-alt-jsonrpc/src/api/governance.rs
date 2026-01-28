@@ -2,34 +2,37 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context as _;
-use diesel::{ExpressionMethods, QueryDsl};
+use diesel::ExpressionMethods;
+use diesel::QueryDsl;
 
-use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
+use jsonrpsee::core::RpcResult;
+use jsonrpsee::http_client::HttpClient;
+use jsonrpsee::proc_macros::rpc;
 use sui_indexer_alt_schema::schema::kv_epoch_starts;
 use sui_json_rpc_api::GovernanceReadApiClient;
-use sui_json_rpc_types::{DelegatedStake, ValidatorApys};
+use sui_json_rpc_types::DelegatedStake;
+use sui_json_rpc_types::ValidatorApys;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
-use sui_types::{
-    SUI_SYSTEM_STATE_OBJECT_ID, TypeTag,
-    base_types::{ObjectID, SuiAddress},
-    dynamic_field::{Field, derive_dynamic_field_id},
-    sui_serde::BigInt,
-    sui_system_state::{
-        SuiSystemStateTrait, SuiSystemStateWrapper,
-        sui_system_state_inner_v1::SuiSystemStateInnerV1,
-        sui_system_state_inner_v2::SuiSystemStateInnerV2,
-        sui_system_state_summary::SuiSystemStateSummary,
-    },
-};
+use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
+use sui_types::TypeTag;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress;
+use sui_types::dynamic_field::Field;
+use sui_types::dynamic_field::derive_dynamic_field_id;
+use sui_types::sui_serde::BigInt;
+use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::SuiSystemStateWrapper;
+use sui_types::sui_system_state::sui_system_state_inner_v1::SuiSystemStateInnerV1;
+use sui_types::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV2;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
-use crate::{
-    context::Context,
-    data::load_live_deserialized,
-    error::{RpcError, client_error_to_error_object, rpc_bail},
-};
-
-use super::rpc_module::RpcModule;
+use crate::api::rpc_module::RpcModule;
+use crate::context::Context;
+use crate::data::load_live_deserialized;
+use crate::error::RpcError;
+use crate::error::client_error_to_error_object;
+use crate::error::rpc_bail;
 
 #[open_rpc(namespace = "suix", tag = "Governance API")]
 #[rpc(server, namespace = "suix")]

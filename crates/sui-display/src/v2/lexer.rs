@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
 
 use std::fmt;
 
@@ -93,11 +92,21 @@ pub(crate) enum Token {
 }
 
 impl<'s> Lexer<'s> {
-    pub(crate) fn new(src: &'s str) -> Self {
+    pub(crate) fn new_for_text(src: &'s str) -> Self {
         Self {
             src,
             off: 0,
             level: 0,
+        }
+    }
+
+    pub(crate) fn new_for_expr(src: &'s str) -> Self {
+        Self {
+            src,
+            off: 0,
+            // Set a very high level so no reasonable number of curly braces could put the lexer
+            // back into text mode, or cause it to overflow.
+            level: usize::MAX / 2,
         }
     }
 
@@ -337,7 +346,7 @@ impl fmt::Display for OwnedLexeme {
             }
         }?;
 
-        write!(f, " at offset {}", self.2)
+        write!(f, " at byte offset {}", self.2)
     }
 }
 
@@ -392,38 +401,54 @@ mod tests {
     use Lexeme as L;
     use insta::assert_snapshot;
 
-    fn lexemes(src: &str) -> String {
-        Lexer::new(src)
-            .map(|L(ws, t, o, s)| {
-                // Handle potentially invalid UTF-8 by working at byte level
-                let safe_s: String = s
-                    .bytes()
-                    .map(|b| match b {
-                        b'"' => "\\\"".to_string(),
-                        b'\\' => "\\\\".to_string(),
-                        b'\n' => "\\n".to_string(),
-                        b'\t' => "\\t".to_string(),
-                        b'\r' => "\\r".to_string(),
-                        b if b.is_ascii_graphic() || b == b' ' => (b as char).to_string(),
-                        b => format!("\\x{:02X}", b),
-                    })
-                    .collect();
-                format!("L({ws:?}, {t:?}, {o:?}, \"{}\")", safe_s)
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+    fn text(src: &str) -> String {
+        clean(Lexer::new_for_text(src))
     }
 
-    /// Simple test for a  raw literal string.
+    fn expr(src: &str) -> String {
+        clean(Lexer::new_for_expr(src))
+    }
+
+    fn clean(lex: Lexer) -> String {
+        lex.map(|L(ws, t, o, s)| {
+            // Handle potentially invalid UTF-8 by working at byte level
+            let safe_s: String = s
+                .bytes()
+                .map(|b| match b {
+                    b'"' => "\\\"".to_string(),
+                    b'\\' => "\\\\".to_string(),
+                    b'\n' => "\\n".to_string(),
+                    b'\t' => "\\t".to_string(),
+                    b'\r' => "\\r".to_string(),
+                    b if b.is_ascii_graphic() || b == b' ' => (b as char).to_string(),
+                    b => format!("\\x{:02X}", b),
+                })
+                .collect();
+            format!("L({ws:?}, {t:?}, {o:?}, \"{}\")", safe_s)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+    }
+
+    /// Simple test for a raw literal string.
     #[test]
     fn test_all_text() {
-        assert_snapshot!(lexemes("foo bar"), @r###"L(false, Text, 0, "foo bar")"###);
+        assert_snapshot!(text("foo bar"), @r###"L(false, Text, 0, "foo bar")"###);
+    }
+
+    /// Like the test above but the lexer is in expression mode.
+    #[test]
+    fn test_all_expr() {
+        assert_snapshot!(expr("foo bar"), @r###"
+        L(false, Ident, 0, "foo")
+        L(true, Ident, 4, "bar")
+        "###);
     }
 
     /// Escape sequences are all text, but they will be split into multiple tokens.
     #[test]
     fn test_escapes() {
-        assert_snapshot!(lexemes(r#"foo {{bar}}"#), @r###"
+        assert_snapshot!(text(r#"foo {{bar}}"#), @r###"
         L(false, Text, 0, "foo ")
         L(false, LLBrace, 5, "{")
         L(false, Text, 6, "bar")
@@ -431,10 +456,26 @@ mod tests {
         "###);
     }
 
+    /// If the lexer is in expression mode, double curly braces are not recognised as escapes.
+    #[test]
+    fn test_expression_mode_braces() {
+        assert_snapshot!(expr("} {foo} {{bar}}"), @r###"
+        L(false, RBrace, 0, "}")
+        L(true, LBrace, 2, "{")
+        L(false, Ident, 3, "foo")
+        L(false, RBrace, 6, "}")
+        L(true, LBrace, 8, "{")
+        L(false, LBrace, 9, "{")
+        L(false, Ident, 10, "bar")
+        L(false, RBrace, 13, "}")
+        L(false, RBrace, 14, "}")
+        "###);
+    }
+
     /// Text inside braces is tokenized as if it's an expression.
     #[test]
     fn test_expressions() {
-        assert_snapshot!(lexemes(r#"foo {bar}"#), @r###"
+        assert_snapshot!(text(r#"foo {bar}"#), @r###"
         L(false, Text, 0, "foo ")
         L(false, LBrace, 4, "{")
         L(false, Ident, 5, "bar")
@@ -445,7 +486,7 @@ mod tests {
     /// Expressions are tokenized to ignore whitespace.
     #[test]
     fn test_expression_whitespace() {
-        assert_snapshot!(lexemes(r#"foo {  bar   }"#), @r###"
+        assert_snapshot!(text(r#"foo {  bar   }"#), @r###"
         L(false, Text, 0, "foo ")
         L(false, LBrace, 4, "{")
         L(true, Ident, 7, "bar")
@@ -456,7 +497,7 @@ mod tests {
     /// Field names are separated by dots in an expression.
     #[test]
     fn test_expression_dots() {
-        assert_snapshot!(lexemes(r#"foo {bar. baz  . qux}"#), @r###"
+        assert_snapshot!(text(r#"foo {bar. baz  . qux}"#), @r###"
         L(false, Text, 0, "foo ")
         L(false, LBrace, 4, "{")
         L(false, Ident, 5, "bar")
@@ -471,7 +512,7 @@ mod tests {
     /// Multiple expressions test switching and back and forth between lexer modes.
     #[test]
     fn test_multiple_expressions() {
-        assert_snapshot!(lexemes(r#"foo {bar.baz} qux {quy.quz}"#), @r###"
+        assert_snapshot!(text(r#"foo {bar.baz} qux {quy.quz}"#), @r###"
         L(false, Text, 0, "foo ")
         L(false, LBrace, 4, "{")
         L(false, Ident, 5, "bar")
@@ -491,7 +532,7 @@ mod tests {
     /// brace should not cause the lexer to exit expression mode.
     #[test]
     fn test_nested_curlies() {
-        assert_snapshot!(lexemes(r#"foo {bar {baz} qux}"#), @r###"
+        assert_snapshot!(text(r#"foo {bar {baz} qux}"#), @r###"
         L(false, Text, 0, "foo ")
         L(false, LBrace, 4, "{")
         L(false, Ident, 5, "bar")
@@ -506,7 +547,7 @@ mod tests {
     /// The lexer will still tokenize curlies even if they are not balanced.
     #[test]
     fn test_unbalanced_curlies() {
-        assert_snapshot!(lexemes(r#"foo}{bar{}}"#), @r###"
+        assert_snapshot!(text(r#"foo}{bar{}}"#), @r###"
         L(false, Text, 0, "foo")
         L(false, RBrace, 3, "}")
         L(false, LBrace, 4, "{")
@@ -520,7 +561,7 @@ mod tests {
     /// Unexpected characters are tokenized so that the parser can produce an error.
     #[test]
     fn test_unexpected_characters() {
-        assert_snapshot!(lexemes(r#"anything goes {? % ! 🔥}"#), @r###"
+        assert_snapshot!(text(r#"anything goes {? % ! 🔥}"#), @r###"
         L(false, Text, 0, "anything goes ")
         L(false, LBrace, 14, "{")
         L(false, Unexpected, 15, "?")
@@ -536,7 +577,7 @@ mod tests {
     // exercises these and similar cases.
     #[test]
     fn test_triple_curlies() {
-        assert_snapshot!(lexemes(r#"foo {{{bar} {baz}}} }}} { {{ } qux"#), @r###"
+        assert_snapshot!(text(r#"foo {{{bar} {baz}}} }}} { {{ } qux"#), @r###"
         L(false, Text, 0, "foo ")
         L(false, LLBrace, 5, "{")
         L(false, LBrace, 6, "{")
@@ -563,7 +604,7 @@ mod tests {
     /// text.
     #[test]
     fn test_alternates() {
-        assert_snapshot!(lexemes(r#"foo | {bar | baz.qux} | quy"#), @r###"
+        assert_snapshot!(text(r#"foo | {bar | baz.qux} | quy"#), @r###"
         L(false, Text, 0, "foo | ")
         L(false, LBrace, 6, "{")
         L(false, Ident, 7, "bar")
@@ -580,7 +621,7 @@ mod tests {
     // vector/VecMap, dynamic field, and dynamic object field access respectively.
     #[test]
     fn test_indices() {
-        assert_snapshot!(lexemes(r#"foo {bar[baz].qux=>[quy]->[quz]}"#), @r###"
+        assert_snapshot!(text(r#"foo {bar[baz].qux=>[quy]->[quz]}"#), @r###"
         L(false, Text, 0, "foo ")
         L(false, LBrace, 4, "{")
         L(false, Ident, 5, "bar")
@@ -604,7 +645,7 @@ mod tests {
     /// Numbers can be represented in decimal or hexadecimal (prefixed with 0x).
     #[test]
     fn test_numeric_literals() {
-        assert_snapshot!(lexemes(r#"{123 0x123 def 0xdef}"#), @r###"
+        assert_snapshot!(text(r#"{123 0x123 def 0xdef}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, NumDec, 1, "123")
         L(true, NumHex, 7, "123")
@@ -619,7 +660,7 @@ mod tests {
     /// to be interpreted as an identifier, not a number.
     #[test]
     fn test_numeric_literal_underscores() {
-        assert_snapshot!(lexemes(r#"{123_456 0x12_ab_de _123}"#), @r###"
+        assert_snapshot!(text(r#"{123_456 0x12_ab_de _123}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, NumDec, 1, "123_456")
         L(true, NumHex, 11, "12_ab_de")
@@ -632,7 +673,7 @@ mod tests {
     /// but both kinds are supported.
     #[test]
     fn test_address_literals() {
-        assert_snapshot!(lexemes(r#"{@123 @0x123}"#), @r###"
+        assert_snapshot!(text(r#"{@123 @0x123}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, At, 1, "@")
         L(false, NumDec, 2, "123")
@@ -645,7 +686,7 @@ mod tests {
     /// If the hexadecimal token is incomplete, it is not recognised as a number.
     #[test]
     fn test_incomplete_hexadecimal() {
-        assert_snapshot!(lexemes(r#"{0x}"#), @r###"
+        assert_snapshot!(text(r#"{0x}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, NumDec, 1, "0")
         L(false, Ident, 2, "x")
@@ -657,7 +698,7 @@ mod tests {
     /// type parameter (which is optional for non-empty vectors).
     #[test]
     fn test_vector_literals() {
-        assert_snapshot!(lexemes(r#"{vector[1, 2, 3] vector<u32> vector[4u64]}"#), @r###"
+        assert_snapshot!(text(r#"{vector[1, 2, 3] vector<u32> vector[4u64]}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, Ident, 1, "vector")
         L(false, LBracket, 7, "[")
@@ -683,7 +724,7 @@ mod tests {
     /// Struct types are fully-qualified, with a numerical (hexadecimal) address.
     #[test]
     fn test_types() {
-        assert_snapshot!(lexemes(r#"{0x2::table::Table<address, 0x2::coin::Coin<0x2::sui::SUI>>}"#), @r###"
+        assert_snapshot!(text(r#"{0x2::table::Table<address, 0x2::coin::Coin<0x2::sui::SUI>>}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, NumHex, 3, "2")
         L(false, CColon, 4, "::")
@@ -714,7 +755,7 @@ mod tests {
     /// by commas, surrounded by parentheses.
     #[test]
     fn test_positional_struct_literals() {
-        assert_snapshot!(lexemes(r#"{0x2::balance::Balance<0x2::sui::SUI>(42u64)}"#), @r###"
+        assert_snapshot!(text(r#"{0x2::balance::Balance<0x2::sui::SUI>(42u64)}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, NumHex, 3, "2")
         L(false, CColon, 4, "::")
@@ -740,7 +781,7 @@ mod tests {
     /// affect the encoded output.
     #[test]
     fn test_struct_literals() {
-        assert_snapshot!(lexemes(r#"{0x2::coin::Coin<0x2::sui::SUI> { id: @0x123, value: 42u64 }}"#), @r###"
+        assert_snapshot!(text(r#"{0x2::coin::Coin<0x2::sui::SUI> { id: @0x123, value: 42u64 }}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, NumHex, 3, "2")
         L(false, CColon, 4, "::")
@@ -774,7 +815,7 @@ mod tests {
     /// relevant for documentation purposes (it does not affect the encoding).
     #[test]
     fn test_enum_literals() {
-        assert_snapshot!(lexemes(r#"{0x2::option::Option<u64>::1(42) 0x2::option::Option<u64>::Some#1(43)}"#), @r###"
+        assert_snapshot!(text(r#"{0x2::option::Option<u64>::1(42) 0x2::option::Option<u64>::Some#1(43)}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, NumHex, 3, "2")
         L(false, CColon, 4, "::")
@@ -811,7 +852,7 @@ mod tests {
     /// Tokenizing three kinds of string literals hex, binary, and regular.
     #[test]
     fn string_literals() {
-        assert_snapshot!(lexemes(r#"{x'0f00' b'bar' 'baz'}"#), @r###"
+        assert_snapshot!(text(r#"{x'0f00' b'bar' 'baz'}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, Ident, 1, "x")
         L(false, String, 3, "0f00")
@@ -826,7 +867,7 @@ mod tests {
     /// characters, and an escaped backslash does not eat the closing quote.
     #[test]
     fn test_string_literal_escapes() {
-        assert_snapshot!(lexemes(r#"{'\' \x \\'}"#), @r###"
+        assert_snapshot!(text(r#"{'\' \x \\'}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, String, 2, "\\' \\x \\\\")
         L(false, RBrace, 11, "}")
@@ -837,7 +878,7 @@ mod tests {
     /// token.
     #[test]
     fn test_string_literal_trailing() {
-        assert_snapshot!(lexemes(r#"{'foo bar}"#), @r###"
+        assert_snapshot!(text(r#"{'foo bar}"#), @r###"
         L(false, LBrace, 0, "{")
         L(false, Unexpected, 1, "'foo bar}")
         "###);
@@ -846,7 +887,7 @@ mod tests {
     /// Test handling of single-byte unexpected characters followed by valid tokens.
     #[test]
     fn test_unexpected_single_byte() {
-        assert_snapshot!(lexemes("{$hello}"), @r###"
+        assert_snapshot!(text("{$hello}"), @r###"
         L(false, LBrace, 0, "{")
         L(false, Unexpected, 1, "$")
         L(false, Ident, 2, "hello")
@@ -857,7 +898,7 @@ mod tests {
     /// Test unexpected character followed by multi-byte UTF-8 character.
     #[test]
     fn test_unexpected_before_multibyte() {
-        assert_snapshot!(lexemes("{$é}"), @r###"
+        assert_snapshot!(text("{$é}"), @r###"
         L(false, LBrace, 0, "{")
         L(false, Unexpected, 1, "$")
         L(false, Unexpected, 2, "\xC3\xA9")
@@ -868,7 +909,7 @@ mod tests {
     /// Test handling of various unexpected multi-byte UTF-8 characters in expression mode.
     #[test]
     fn test_unexpected_characters_utf8_safe() {
-        assert_snapshot!(lexemes("{$∑∞}"), @r###"
+        assert_snapshot!(text("{$∑∞}"), @r###"
         L(false, LBrace, 0, "{")
         L(false, Unexpected, 1, "$")
         L(false, Unexpected, 2, "\xE2\x88\x91")
@@ -881,7 +922,7 @@ mod tests {
     /// and non-ASCII whitespace is treated as unexpected.
     #[test]
     fn test_ascii_whitespace_only() {
-        assert_snapshot!(lexemes("{ \t\n\u{00A0}hello}"), @r###"
+        assert_snapshot!(text("{ \t\n\u{00A0}hello}"), @r###"
         L(false, LBrace, 0, "{")
         L(true, Unexpected, 4, "\xC2\xA0")
         L(false, Ident, 6, "hello")
@@ -899,7 +940,7 @@ mod tests {
         let input_str = unsafe { std::str::from_utf8_unchecked(&input) };
 
         // The boundary detection should fall back to src.len() when no boundary is found
-        assert_snapshot!(lexemes(input_str), @r###"
+        assert_snapshot!(text(input_str), @r###"
         L(false, LBrace, 0, "{")
         L(false, Unexpected, 1, "\xC3")
         "###);

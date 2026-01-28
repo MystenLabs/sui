@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use enum_dispatch::enum_dispatch;
-use mysten_common::in_test_configuration;
 use serde::{Deserialize, Serialize};
 use sui_config::NodeConfig;
 use sui_types::accumulator_root::get_accumulator_root_obj_initial_shared_version;
@@ -38,15 +37,6 @@ pub trait EpochStartConfigTrait {
     fn coin_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn display_registry_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn address_alias_state_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
-
-    fn is_data_quarantine_active_from_beginning_of_epoch(&self) -> bool {
-        self.flags()
-            .contains(&EpochFlag::DataQuarantineFromBeginningOfEpoch)
-    }
-
-    fn use_commit_handler_v2(&self) -> bool {
-        self.flags().contains(&EpochFlag::UseCommitHandlerV2)
-    }
 }
 
 // IMPORTANT: Assign explicit values to each variant to ensure that the values are stable.
@@ -71,13 +61,8 @@ pub enum EpochFlag {
     _GlobalStateHashV2EnabledMainnetDeprecated = 6,
     _ExecutedInEpochTableDeprecated = 7,
     _UseVersionAssignmentTablesV3 = 8,
-
-    // This flag indicates whether data quarantining has been enabled from the
-    // beginning of the epoch.
-    DataQuarantineFromBeginningOfEpoch = 9,
-
-    // This flag indicates whether the new commit handler is enabled.
-    UseCommitHandlerV2 = 10,
+    _DataQuarantineFromBeginningOfEpochDeprecated = 9,
+    _UseCommitHandlerV2Deprecated = 10,
 
     // Used for `test_epoch_flag_upgrade`.
     #[cfg(msim)]
@@ -95,7 +80,7 @@ impl EpochFlag {
     // so that `test_epoch_flag_upgrade` can still work correctly even when there are no
     // optional flags.
     pub fn mandatory_flags() -> Vec<Self> {
-        vec![EpochFlag::DataQuarantineFromBeginningOfEpoch]
+        vec![]
     }
 
     /// For situations in which there is no config available (e.g. setting up a downloaded snapshot).
@@ -104,18 +89,14 @@ impl EpochFlag {
     }
 
     fn default_flags_impl() -> Vec<Self> {
-        let mut flags = vec![EpochFlag::DataQuarantineFromBeginningOfEpoch];
-
-        if std::env::var("SUI_USE_NEW_COMMIT_HANDLER").is_ok() || in_test_configuration() {
-            flags.push(EpochFlag::UseCommitHandlerV2);
-        }
-
         #[cfg(msim)]
         {
-            flags.push(EpochFlag::DummyFlag);
+            vec![EpochFlag::DummyFlag]
         }
-
-        flags
+        #[cfg(not(msim))]
+        {
+            vec![]
+        }
     }
 }
 
@@ -150,11 +131,11 @@ impl fmt::Display for EpochFlag {
             EpochFlag::_UseVersionAssignmentTablesV3 => {
                 write!(f, "UseVersionAssignmentTablesV3 (DEPRECATED)")
             }
-            EpochFlag::DataQuarantineFromBeginningOfEpoch => {
-                write!(f, "DataQuarantineFromBeginningOfEpoch")
+            EpochFlag::_DataQuarantineFromBeginningOfEpochDeprecated => {
+                write!(f, "DataQuarantineFromBeginningOfEpoch (DEPRECATED)")
             }
-            EpochFlag::UseCommitHandlerV2 => {
-                write!(f, "UseCommitHandlerV2")
+            EpochFlag::_UseCommitHandlerV2Deprecated => {
+                write!(f, "UseCommitHandlerV2 (DEPRECATED)")
             }
             #[cfg(msim)]
             EpochFlag::DummyFlag => {

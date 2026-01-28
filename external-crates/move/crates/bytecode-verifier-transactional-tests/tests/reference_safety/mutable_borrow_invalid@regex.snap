@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 21-44:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
+    major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
+    sub_status: None,
+    location: 0x1::M2,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 12)],
+}

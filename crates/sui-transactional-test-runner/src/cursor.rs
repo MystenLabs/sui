@@ -8,6 +8,7 @@ use bincode::{
     config::{BigEndian, Fixint},
     serde::BorrowCompat,
 };
+use fastcrypto::encoding::{Base58, Encoding as _};
 use move_core_types::{
     account_address::AccountAddress,
     identifier::Identifier,
@@ -18,7 +19,7 @@ use serde::{
     Serialize,
     ser::{SerializeSeq, SerializeTuple},
 };
-use sui_types::base_types::ObjectID;
+use sui_types::{base_types::ObjectID, digests::Digest};
 use winnow::{
     Parser,
     ascii::{hex_digit1, multispace0},
@@ -31,6 +32,7 @@ use winnow::{
 pub enum Value {
     // Scalars
     Bytes(Vec<u8>),
+    Digest(Digest),
     ObjectId(ObjectID),
     String(String),
     U8(u8),
@@ -69,6 +71,7 @@ impl Serialize for Value {
     {
         match self {
             Value::Bytes(bs) => bs.serialize(serializer),
+            Value::Digest(bs) => bs.serialize(serializer),
             Value::ObjectId(id) => id.serialize(serializer),
             Value::String(s) => s.serialize(serializer),
             Value::U8(n) => n.serialize(serializer),
@@ -105,6 +108,7 @@ impl Serialize for Value {
 /// - Object IDs (e.g., `0x1234`)
 /// - Numbers (e.g., `42`, `1000u16`, `255u8`)
 /// - Strings (e.g., `'hello world'`, `'it\'s working')
+/// - Digests (e.g., `digest(123...xyz)`)
 /// - Struct tags (e.g., `0x2::coin::Coin<0x2::sui::SUI>>`)
 /// - Nested tuples (e.g., `(42, 'hello')`)
 /// - Nested lists (e.g., `[1, 2, 3]`, `[]`)
@@ -135,7 +139,7 @@ fn bincode_config() -> bincode::config::Configuration<BigEndian, Fixint> {
 }
 
 fn encode(input: &mut &str) -> Result<Encoding> {
-    let ident = alt(("bin".map(|_| Encoding::Bin), "bcs".map(|_| Encoding::Bcs)));
+    let ident = alt(("bcs".map(|_| Encoding::Bcs), "bin".map(|_| Encoding::Bin)));
     preceded(multispace0, ident).parse_next(input)
 }
 
@@ -145,7 +149,7 @@ fn value(input: &mut &str) -> Result<Value> {
     // example, `struct_` and `id` both start with an address).
     preceded(
         multispace0,
-        alt((struct_, id, number, string, bytes, tuple, list)),
+        alt((struct_, id, number, string, digest, bytes, tuple, list)),
     )
     .parse_next(input)
 }
@@ -274,6 +278,27 @@ fn string(input: &mut &str) -> Result<Value> {
     Ok(Value::String(content))
 }
 
+fn digest(input: &mut &str) -> Result<Value> {
+    fn is_base58(c: char) -> bool {
+        c.is_ascii_alphanumeric() && !matches!(c, '0' | 'O' | 'I' | 'l')
+    }
+
+    let (_, _, s, _) = seq!(
+        "digest",
+        preceded(multispace0, "("),
+        preceded(multispace0, take_while(0.., is_base58)),
+        preceded(multispace0, ")")
+    )
+    .parse_next(input)?;
+
+    Ok(Value::Digest(
+        Base58::decode(s)
+            .map_err(|e| CE::from_external_error(input, e))?
+            .try_into()
+            .map_err(|e| CE::from_external_error(input, e))?,
+    ))
+}
+
 fn tuple(input: &mut &str) -> Result<Value> {
     let (_, values, _) = seq!(
         preceded(multispace0, "("),
@@ -325,6 +350,7 @@ mod tests {
         assert_eq!(parse("bcs(42)").unwrap(), bcs);
         assert_eq!(parse("bin(42)").unwrap(), bin);
     }
+
     #[test]
     fn test_number_with_suffix() {
         let u8_value = 255u8;
@@ -342,6 +368,7 @@ mod tests {
         assert_eq!(parse("bcs(1000000u128)").unwrap(), bcs_u128);
         assert_eq!(parse("bin(1000000u128)").unwrap(), bin_u128);
     }
+
     #[test]
     fn test_string() {
         let value = "hello world";
@@ -350,6 +377,7 @@ mod tests {
         assert_eq!(parse("bcs('hello world')").unwrap(), bcs);
         assert_eq!(parse("bin('hello world')").unwrap(), bin);
     }
+
     #[test]
     fn test_string_with_escaped_quote() {
         let value = "it's working";
@@ -358,6 +386,20 @@ mod tests {
         assert_eq!(parse("bcs('it\\'s working')").unwrap(), bcs);
         assert_eq!(parse("bin('it\\'s working')").unwrap(), bin);
     }
+
+    #[test]
+    fn test_digest() {
+        // A 32-byte digest (example Base58 encoded)
+        let digest = "11111111111111111111111111111111";
+        let bytes = Base58::decode(digest).unwrap();
+        let array: [u8; 32] = bytes.try_into().unwrap();
+
+        assert_eq!(
+            parse(&format!("bcs(digest({}))", digest)).unwrap(),
+            bcs::to_bytes(&Digest::new(array)).unwrap(),
+        );
+    }
+
     #[test]
     fn test_tuple() {
         let value = (42u64, "hello");
@@ -366,6 +408,7 @@ mod tests {
         assert_eq!(parse("bcs(42, 'hello')").unwrap(), bcs);
         assert_eq!(parse("bin(42, 'hello')").unwrap(), bin);
     }
+
     #[test]
     fn test_list() {
         let value = vec![1u64, 2u64, 3u64];
@@ -374,6 +417,7 @@ mod tests {
         assert_eq!(parse("bcs[1, 2, 3]").unwrap(), bcs);
         assert_eq!(parse("bin[1, 2, 3]").unwrap(), bin);
     }
+
     #[test]
     fn test_empty_list() {
         let value: Vec<u64> = vec![];
@@ -382,6 +426,7 @@ mod tests {
         assert_eq!(parse("bcs[]").unwrap(), bcs);
         assert_eq!(parse("bin[]").unwrap(), bin);
     }
+
     #[test]
     fn test_struct_tag() {
         let tag = StructTag::from_str("0x2::table::Table<address, 0x2::coin::Coin<0x2::sui::SUI>>")

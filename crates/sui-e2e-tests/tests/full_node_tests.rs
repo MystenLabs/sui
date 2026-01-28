@@ -143,7 +143,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     info!("updated obj ref: {:?}", object_ref);
     info!("updated gas ref: {:?}", gas_obj);
 
-    // Construct the sponsored transction
+    // Construct the sponsored transaction
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -562,8 +562,8 @@ async fn do_test_full_node_sync_flood() {
                     .unwrap();
 
                 let mut coins = context.gas_objects(sender).await.unwrap();
-                let object_to_split = coins.swap_remove(0).1.object_ref();
-                let gas_obj = coins.swap_remove(0).1.object_ref();
+                let object_to_split = coins.swap_remove(0).1.compute_object_reference();
+                let gas_obj = coins.swap_remove(0).1.compute_object_reference();
                 (sender, object_to_split, gas_obj)
             };
 
@@ -1213,7 +1213,7 @@ async fn test_access_old_object_pruned() {
     let test_cluster = TestClusterBuilder::new().build().await;
     let tx_builder = test_cluster.test_transaction_builder().await;
     let sender = tx_builder.sender();
-    let gas_object = tx_builder.gas_object();
+    let gas_object = tx_builder.gas_object().unwrap();
     let effects = test_cluster
         .sign_and_execute_transaction(&tx_builder.transfer_sui(None, sender).build())
         .await

@@ -4,17 +4,24 @@
 use std::path::PathBuf;
 
 use fastcrypto::ed25519::Ed25519KeyPair;
-use move_core_types::{ident_str, language_storage::StructTag};
+use move_core_types::ident_str;
+use move_core_types::language_storage::StructTag;
 use sui_move_build::BuildConfig;
-use sui_types::{
-    Identifier, SUI_COIN_REGISTRY_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
-    base_types::{ObjectID, ObjectRef, SuiAddress},
-    effects::TransactionEffects,
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{
-        CallArg, Command, ObjectArg, SharedObjectMutability, Transaction, TransactionData,
-    },
-};
+use sui_types::Identifier;
+use sui_types::SUI_COIN_REGISTRY_OBJECT_ID;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+use sui_types::TypeTag;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SuiAddress;
+use sui_types::effects::TransactionEffects;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::CallArg;
+use sui_types::transaction::Command;
+use sui_types::transaction::ObjectArg;
+use sui_types::transaction::SharedObjectMutability;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
 
 use crate::FullCluster;
 
