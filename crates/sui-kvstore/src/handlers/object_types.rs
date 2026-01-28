@@ -40,5 +40,4 @@ impl Processor for ObjectTypesPipeline {
 
 impl BigTableProcessor for ObjectTypesPipeline {
     const TABLE: &'static str = tables::object_types::NAME;
-    const FANOUT: usize = 100;
 }

@@ -37,6 +37,5 @@ impl Processor for EpochStartPipeline {
 
 impl BigTableProcessor for EpochStartPipeline {
     const TABLE: &'static str = tables::epochs::NAME;
-    const FANOUT: usize = 100;
     const MIN_EAGER_ROWS: usize = 1;
 }
