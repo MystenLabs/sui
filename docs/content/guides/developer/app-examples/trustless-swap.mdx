@@ -2,7 +2,7 @@
 title: Trustless Swap
 description: An app that performs atomic swaps on Sui. Atomic swaps are similar to escrows but without requiring a trusted third party.
 effort: large
-keywords: [ trustless, swap, atomic swaps, shared objects, composability, example app, example dApp, example swap, swap example, how to swap tokens  ]
+keywords: [ trustless, swap, atomic swaps, shared objects, composability, example app, example app, example swap, swap example, how to swap tokens  ]
 ---
 
 This guide demonstrates how to make an app that performs atomic swaps on Sui. Atomic swaps are similar to escrows but without requiring a trusted third party.
@@ -375,7 +375,7 @@ Test result: OK. Total tests: 8; passed: 8; failed: 0
 
 You have written the Move package. 🎉 
 
-To turn this into a complete dApp, you need to create a frontend. However, for the frontend to be updated, it has to listen to the blockchain as escrows are made and swaps are fulfilled.
+To turn this into a complete app, you need to create a frontend. However, for the frontend to be updated, it has to listen to the blockchain as escrows are made and swaps are fulfilled.
 
 To achieve this, in the next step you create an indexing service.
 
@@ -636,8 +636,8 @@ In this final part of the app example, you build a frontend (UI) that allows end
 :::tip Additional resources
 
 - [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript). For basic usage on how to interact with Sui with TypeScript.
-- [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit). To learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
-- [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp). This is used within this project to quickly scaffold a React-based Sui dApp.
+- [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit). To learn basic building blocks for developing an app in the Sui ecosystem with React.js.
+- [`@mysten/dapp`](https://sdk.mystenlabs.com/dapp-kit/create-dapp). This is used within this project to quickly scaffold a React-based Sui app.
 
 :::
 
@@ -673,7 +673,7 @@ $ yarn create @mysten/dapp --template react-client-dapp
 
 </Tabs>
 
-When asked for a name for your dApp, provide one of your liking. The dApp scaffold gets created in a new directory with the name you provide. This is convenient to keep your working code separate from the example source code that might already populate this folder. The codeblocks that follow point to the code in the default example location. Be aware the path to your own code includes the dApp name you provide.
+When asked for a name for your app, provide one of your liking. The app scaffold gets created in a new directory with the name you provide. This is convenient to keep your working code separate from the example source code that might already populate this folder. The codeblocks that follow point to the code in the default example location. Be aware the path to your own code includes the app name you provide.
 
 ### Setting up import aliases
 
@@ -709,7 +709,7 @@ Vite also needs to be aware of the aliasing to resolve imports correctly during 
 
 ### Adding Tailwind CSS
 
-To streamline the styling process and keep the codebase clean and maintainable, this guide uses Tailwind CSS, which provides utility-first CSS classes to rapidly build custom designs. Run the following command from the base of your dApp project to add Tailwind CSS and its dependencies:
+To streamline the styling process and keep the codebase clean and maintainable, this guide uses Tailwind CSS, which provides utility-first CSS classes to rapidly build custom designs. Run the following command from the base of your app project to add Tailwind CSS and its dependencies:
 
 <Tabs groupId="packagemanager">
 <TabItem label="PNPM" value="pnpm">
@@ -776,7 +776,7 @@ Then, create a `src/constants.ts` file and fill it with the following:
 
 :::warning
 
-If you create a dApp using a project name so that your `src` files are in a subfolder of `frontend`, be sure to add another nesting level (`../`) to the import statements.
+If you create an app using a project name so that your `src` files are in a subfolder of `frontend`, be sure to add another nesting level (`../`) to the import statements.
 
 :::
 
@@ -1230,7 +1230,7 @@ Create `src/hooks/useTransactionExecution.ts`:
 
 A `Transaction` is the input. Sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
 
-Use the `useSuiClient()` hook from dApp Kit to retrieve the Sui client instance configured in `src/main.tsx`. The `useSignTransaction()` function is another hook from dApp kit that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, use the `executeTransaction()` on the Sui client instance of the Sui TypeScript SDK.
+Use the `useSuiClient()` hook from dApp Kit to retrieve the Sui client instance configured in `src/main.tsx`. The `useSignTransaction()` function is another hook from dApp Kit that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, use the `executeTransaction()` on the Sui client instance of the Sui TypeScript SDK.
 
 ### Generate demo data
 

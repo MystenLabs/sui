@@ -1,7 +1,7 @@
 ---
 title: Client App with Sui TypeScript SDK
 description: Build a client-side application using the Sui TypeScript SDK.
-keywords: [ typescript, typescript SDK, build app, create app, client app, client-side, client-side application, build client app, build client, dApp kit, dApp-kit ]
+keywords: [ typescript, typescript SDK, build app, create app, client app, client-side, client-side application, build client app, build client, dApp Kit, app-kit ]
 ---
 
 This exercise diverges from the example built in the previous topics in this section. Rather than adding a frontend to the running example, this guide walks you through setting up dApp Kit in a React App. You can connect to wallets and query data from Sui RPC nodes to display in your app. You can use this to create your own frontend for the example used previously, but if you want to get a fully functional app up and running quickly, run the following command in a terminal or console to scaffold a new app with all steps in this exercise already implemented:
@@ -26,7 +26,7 @@ For more information on the Sui TypeScript SDK, see the [Sui TypeScript SDK docu
 
 ## What is dApp Kit?
 
-dApp Kit (@mysten/dapp-kit) is a collection of React hooks, components, and utilities that make building dApps on Sui straightforward. For more information on dApp Kit, see the [dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit).
+dApp Kit (@mysten/dapp-kit) is a collection of React hooks, components, and utilities that make building apps on Sui straightforward. For more information on dApp Kit, see the [dApp Kit documentation](https://sdk.mystenlabs.com/dapp-kit).
 
 ## Installing dependencies
 
@@ -50,7 +50,7 @@ To use all the features of dApp Kit, wrap your app with `Provider` components.
 
 Open the root component that renders your app (the default location the Vite template uses is `src/main.tsx`) and integrate or replace the current code with the following.
 
-The first `Provider` to set up is the `QueryClientProvider` from `@tanstack/react-query`. This `Provider` manages request state for various hooks in dApp kit. If you're already using `@tanstack/react-query`, dApp Kit can share the same `QueryClient` instance.
+The first `Provider` to set up is the `QueryClientProvider` from `@tanstack/react-query`. This `Provider` manages request state for various hooks in dApp Kit. If you're already using `@tanstack/react-query`, dApp Kit can share the same `QueryClient` instance.
 
 ```ts
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -120,7 +120,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
 ## Connecting to a wallet
 
-With all `Providers` set up, you can use dApp Kit hooks and components. To allow users to connect their wallets to your dApp, add a `ConnectButton`.
+With all `Providers` set up, you can use dApp Kit hooks and components. To allow users to connect their wallets to your app, add a `ConnectButton`.
 
 ```ts
 import { ConnectButton } from '@mysten/dapp-kit';
@@ -212,7 +212,7 @@ function OwnedObjects({ address }: { address: string }) {
 }
 ```
 
-You now have a dApp connected to wallets and can query data from RPC nodes.
+You now have an app connected to wallets and can query data from RPC nodes.
 
 ## Related links
 
