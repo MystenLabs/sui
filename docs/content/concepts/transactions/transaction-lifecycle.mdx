@@ -30,9 +30,9 @@ The [Sui Lutris](https://docs.sui.io/paper/sui-lutris.pdf) paper provides additi
 
 ## Transaction submission
 
-All transactions on Sui begin when they are submitted to the network. For example, imagine you want to transfer an NFT that you own in your wallet to your friend. First, you would create a transaction using a wallet or some other dApp. The transaction includes your gas object and a command to transfer the NFT object to your friend's address. Before the wallet or dApp submits the transaction to the network, it must also sign it.
+All transactions on Sui begin when they are submitted to the network. For example, imagine you want to transfer an NFT that you own in your wallet to your friend. First, you would create a transaction using a wallet or some other app. The transaction includes your gas object and a command to transfer the NFT object to your friend's address. Before the wallet or app submits the transaction to the network, it must also sign it.
 
-After the transaction is signed, the wallet or dApp submits the transaction to a Sui full node on behalf of the user.
+After the transaction is signed, the wallet or app submits the transaction to a Sui full node on behalf of the user.
 
 ## Certification
 
@@ -122,9 +122,9 @@ In this case, the transaction certificate does not guarantee finality. In the ne
 
 ## Verifying finality
 
-If a dApp stores the signed transaction locally before sending it to the full node, which is best practice, when the dApp restarts it tries to verify if the transaction has been finalized first. If it has, then no other steps are necessary. If it has not, then the dApp needs to resubmit the transaction.
+If a app stores the signed transaction locally before sending it to the full node, which is best practice, when the app restarts it tries to verify if the transaction has been finalized first. If it has, then no other steps are necessary. If it has not, then the app needs to resubmit the transaction.
 
-The wallet dApp can query the full node with the `getTransactionBlock` method. Assuming the full node is honest:
+The wallet app can query the full node with the `getTransactionBlock` method. Assuming the full node is honest:
 
 - If the response contains transaction details, the transaction must have been finalized. It is either executed with `WaitForLocalExecution` or executed as a checkpointed transaction.
 
@@ -138,7 +138,7 @@ As a real-world example, suppose you want to pay the local coffee shop 10 SUI fo
 
 ### Transaction creation and signing
 
-You open the wallet dApp on your phone and scan the coffee shop's QR code that contains the recipient on-chain address. The wallet dApp constructs a transaction that transfers 10 SUI from your Sui address to the coffee shop's address. You review the transaction details and approve it. The wallet dApp then signs the transaction with your private key and submits it to a full node. The full node broadcasts the transaction to all validators in the network.
+You open the wallet app on your phone and scan the coffee shop's QR code that contains the recipient on-chain address. The wallet app constructs a transaction that transfers 10 SUI from your Sui address to the coffee shop's address. You review the transaction details and approve it. The wallet app then signs the transaction with your private key and submits it to a full node. The full node broadcasts the transaction to all validators in the network.
 
 ### Certification and execution
 
@@ -146,20 +146,20 @@ Validators receive the transaction from the full node and examine its validity. 
 
 After the full node collects a quorum of signatures (2/3 of validators), it forms a transaction certificate and broadcasts it to all validators. Validators verify the certificate, execute the transaction, and unlock the previously locked owned objects. They sign the transaction effects and return them to the full node.
 
-The full node verifies that effects returned from validators are identical. After it collects a supermajority of signatures, it forms an effects certificate. At this point, your wallet dApp receives the effects certificate, which you can share with the coffee shop. The coffee shop can then be sure that the transaction is executed and irreversible.
+The full node verifies that effects returned from validators are identical. After it collects a supermajority of signatures, it forms an effects certificate. At this point, your wallet app receives the effects certificate, which you can share with the coffee shop. The coffee shop can then be sure that the transaction is executed and irreversible.
 
 ### Checkpoint inclusion
 
-If the original full node goes offline before collecting all signatures, your wallet dApp can retry with a different full node. Alternatively, a different full node learns about your transaction through checkpoints.
+If the original full node goes offline before collecting all signatures, your wallet app can retry with a different full node. Alternatively, a different full node learns about your transaction through checkpoints.
 
 A checkpoint contains a list of transactions. If a transaction appears in a certified checkpoint (signed by a supermajority of validators), it is considered finalized. The full node that the coffee shop's terminal connects to knows about your transaction through state sync. As long as one validator receives the transaction certificate from your original full node, the transaction likely finalizes even without an effects certificate. The coffee shop is assured of payment and can give you your coffee.
 
 ### Local execution on full node
 
-Before the full node sends back an effects certificate to your wallet dApp, it might try to execute the transaction locally if the request asks it to.
+Before the full node sends back an effects certificate to your wallet app, it might try to execute the transaction locally if the request asks it to.
 
-The purpose of this extra step is to keep the full node up to date as much as possible, especially when the wallet dApp frequently hits the same full node. For high-frequency applications, such as gaming, this could be important.
+The purpose of this extra step is to keep the full node up to date as much as possible, especially when the wallet app frequently hits the same full node. For high-frequency applications, such as gaming, this could be important.
 
-When a dApp constructs a transaction, it typically requests that the full node choose a gas object for it. Gas objects are owned objects, meaning that if the full node is stale and not aware of the right version of the object, it could lead to invalid transactions, or worse, client equivocation if the client software does not handle it properly. Executing on full node before returning the effects certificate is one way to avoid this situation. A request can ask for such behavior by using the `WaitForLocalExecution` parameter. See [Sponsored Transactions](/concepts/transactions/sponsored-transactions.mdx) for more on client equivocation.
+When a app constructs a transaction, it typically requests that the full node choose a gas object for it. Gas objects are owned objects, meaning that if the full node is stale and not aware of the right version of the object, it could lead to invalid transactions, or worse, client equivocation if the client software does not handle it properly. Executing on full node before returning the effects certificate is one way to avoid this situation. A request can ask for such behavior by using the `WaitForLocalExecution` parameter. See [Sponsored Transactions](/concepts/transactions/sponsored-transactions.mdx) for more on client equivocation.
 
 Using `WaitForLocalExecution` is not always the best choice, however. For this coffee payment, it adds latency without significant benefits. In this case, using the `WaitForEffects` parameter instead provides slightly shorter user-perceived latency.

@@ -207,20 +207,20 @@ tx.setGasPayment([coin1, coin2]);
 
 Gas coins should be objects containing the coins objectId, version, and digest (ie `{ objectId: string, version: string | number, digest: string }`).
 
-### dApp / Wallet integration
+### app / Wallet integration
 
-The Wallet Standard interface now supports the `Transaction` kind directly. All `signTransaction` and `signAndExecuteTransaction` calls from dApps into wallets must provide a `Transaction` class. You can then serialize this PTB class and send it to your wallet for execution.
+The Wallet Standard interface now supports the `Transaction` kind directly. All `signTransaction` and `signAndExecuteTransaction` calls from apps into wallets must provide a `Transaction` class. You can then serialize this PTB class and send it to your wallet for execution.
 
-To serialize a PTB for sending to a wallet, Sui recommends using the `tx.serialize()` function, which returns an opaque string representation of the PTB that can be passed from the Wallet Standard dApp context to your wallet. You can then convert this back into a `Transaction` using `Transaction.from()`.
+To serialize a PTB for sending to a wallet, Sui recommends using the `tx.serialize()` function, which returns an opaque string representation of the PTB that can be passed from the Wallet Standard app context to your wallet. You can then convert this back into a `Transaction` using `Transaction.from()`.
 
 :::tip
 
-You should not build the PTB from bytes in the dApp code. Using `serialize` instead of `build` allows you to build the PTB bytes within the wallet itself. This allows the wallet to perform gas logic and coin selection as needed.
+You should not build the PTB from bytes in the app code. Using `serialize` instead of `build` allows you to build the PTB bytes within the wallet itself. This allows the wallet to perform gas logic and coin selection as needed.
 
 :::
 
 ```ts
-// Within a dApp
+// Within a app
 const tx = new Transaction();
 wallet.signTransaction({ transaction: tx });
 

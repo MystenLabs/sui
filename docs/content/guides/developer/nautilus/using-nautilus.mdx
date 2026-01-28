@@ -12,7 +12,7 @@ The framework also provides an on-chain template that includes the minimal smart
 
 ## Developer workflow 
 
-To use Nautilus in your dApp:
+To use Nautilus in your app:
 
 1. Implement the enclave in Rust with the desired computation logic.
 
@@ -338,7 +338,7 @@ Optionally, you can set up an application load balancer (ALB) for the EC2 instan
 
 ###step Register the enclave on-chain
 
-After finalizing the Rust code, the dApp administrator can register the enclave with the corresponding PCRs and public key.
+After finalizing the Rust code, the app administrator can register the enclave with the corresponding PCRs and public key.
 
 ```sh
 # Optionally
@@ -353,7 +353,7 @@ $ sui client publish
 # Record ENCLAVE_PACKAGE_ID as env var from publish output
 $ ENCLAVE_PACKAGE_ID=0x3b009f952e11f0fa0612d0a8e07461fb69edc355d732e5d6e39267b1b4fd7138
 
-# Deploy your dApp logic
+# Deploy your app logic
 $ cd ../<APP>
 $ sui move build
 $ sui client publish
@@ -367,7 +367,7 @@ $ APP_PACKAGE_ID=0x097b551dec72f0c47e32e5f8114d0d12a98ab31762d21adff295f6d95d353
 # Record the deployed enclave url, for example http://<PUBLIC_IP>:3000
 $ ENCLAVE_URL=<DEPLOYED_URL>
 
-# The module name and otw name used to create the dApp, defined in your Move code `fun init`
+# The module name and otw name used to create the app, defined in your Move code `fun init`
 $ MODULE_NAME=weather
 $ OTW_NAME=WEATHER
 

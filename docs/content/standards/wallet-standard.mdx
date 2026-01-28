@@ -1,11 +1,11 @@
 ---
 title: Wallet Standard
-description: The Wallet Standard defines how dApps can automatically discover and interact with wallets.
+description: The Wallet Standard defines how apps can automatically discover and interact with wallets.
 keywords: [ mysten/wallet-standard, wallet standards, Wallet Standard, browser extensions, exposing accounts, wallet events, register in window, wallet best practices, efficient transaction execution, wallet data, managing wallets, wallet-standard ]
 pagination_prev: null
 ---
 
-Browser extension wallets built for Sui use the [Wallet Standard](https://github.com/wallet-standard/wallet-standard/). This is a cross-chain standard that defines how dApps can automatically discover and interact with wallets.
+Browser extension wallets built for Sui use the [Wallet Standard](https://github.com/wallet-standard/wallet-standard/). This is a cross-chain standard that defines how apps can automatically discover and interact with wallets.
 
 If you are building a wallet, the helper library `@mysten/wallet-standard` provides types and utilities to help get started.
 
@@ -57,18 +57,18 @@ Libraries built on top of the Wallet Standard (like dApp Kit) require transactio
 
 Current methods:
 - `sui:signTransaction` - Use to prompt the user to sign a transaction and return the serialized
-  transaction and signature back to the dApp. This method does not submit the transaction for
+  transaction and signature back to the app. This method does not submit the transaction for
   execution.
 - `sui:signAndExecuteTransaction` - Use to prompt the user to sign a transaction, then submit it
   for execution to the blockchain.
 
 Legacy methods:
-- `sui:signTransactionBlock` - The legacy version of `sui:signTransaction`. Many existing dApps still rely on this method.
-- `sui:signAndExecuteTransactionBlock` - The legacy version of `sui:signAndExecuteTransaction`. Many existing dApps still rely on this method.
+- `sui:signTransactionBlock` - The legacy version of `sui:signTransaction`. Many existing apps still rely on this method.
+- `sui:signAndExecuteTransactionBlock` - The legacy version of `sui:signAndExecuteTransaction`. Many existing apps still rely on this method.
 
 **Personal message signing**
 - `sui:signPersonalMessage` - Use to prompt the user to sign a personal message and return the
-  message signature back to the dApp. This is essential for user verification flows used by many dApps.
+  message signature back to the app. This is essential for user verification flows used by many apps.
 
 Implement these features in your wallet class under the `features` property:
 
@@ -144,7 +144,7 @@ class YourWallet implements Wallet {
 The last requirement of the wallet interface is to expose an `accounts` interface. Wallets that comply with the Wallet Standard should automatically populate this array with any previously authorized accounts when the wallet loads. This means:
 
 - On first visit: The array will be empty until the user authorizes accounts through `standard:connect`
-- On subsequent visits: Previously authorized accounts automatically appear without any dApp action
+- On subsequent visits: Previously authorized accounts automatically appear without any app action
 - After revocation: Accounts that have been revoked won't appear in the array
 
 The accounts use the `ReadonlyWalletAccount` class to construct an account matching the required interface.
@@ -215,11 +215,11 @@ Many wallets choose to omit some non-mandatory features or add some custom featu
 
 ### Authorizing wallet accounts
 
-The Wallet Standard uses a persistent authorization model. Despite the "connect" terminology in the API, wallets should automatically restore previously authorized accounts when they load, without any action from the dApp. The `connect()` method is specifically for prompting users to authorize accounts when needed.
+The Wallet Standard uses a persistent authorization model. Despite the "connect" terminology in the API, wallets should automatically restore previously authorized accounts when they load, without any action from the app. The `connect()` method is specifically for prompting users to authorize accounts when needed.
 
 **How account authorization works:**
 
-1. **Wallets restore accounts automatically**: When a wallet loads, it should automatically populate its `accounts` array with any previously authorized accounts for the current dApp. This happens without any dApp interaction.
+1. **Wallets restore accounts automatically**: When a wallet loads, it should automatically populate its `accounts` array with any previously authorized accounts for the current app. This happens without any app interaction.
 
 2. **Only prompt when necessary**: Call `connect()` only when:
    - The `accounts` array is empty (first-time user or all accounts were revoked)
@@ -236,11 +236,11 @@ The `connect()` method has a `silent` parameter that is intended to retrieve pre
 
 :::
 
-When you do call `connect()`, the wallet will open a pop-up for the user to select and authorize which accounts the dApp can access.
+When you do call `connect()`, the wallet will open a pop-up for the user to select and authorize which accounts the app can access.
 
 ### Revoking account authorization
 
-Similar to the connect (account authorization) feature, the Wallet Standard also includes `standard:disconnect` to revoke a dApp's access to wallet accounts. The following example calls this feature:
+Similar to the connect (account authorization) feature, the Wallet Standard also includes `standard:disconnect` to revoke a app's access to wallet accounts. The following example calls this feature:
 
 ```tsx
 wallet.features['standard:disconnect'].disconnect();
