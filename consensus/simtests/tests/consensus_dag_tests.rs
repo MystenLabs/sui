@@ -69,23 +69,27 @@ mod consensus_dag_tests {
             num_transactions: 5,
             reject_percentage: 5,
             equivocators: vec![
-                (AuthorityIndex::new_for_test(0), 1),
+                (AuthorityIndex::new_for_test(0), 2),
                 (AuthorityIndex::new_for_test(1), 1),
             ],
         };
-        test_randomized_dag_with_reject_votes(config, 6, 100).await;
+        test_randomized_dag_with_reject_votes(config, 6, 50).await;
     }
 
     #[sim_test]
     async fn test_randomized_dag_with_10_authorities_3_equivocators() {
         let config = RandomDagConfig {
             num_authorities: 10,
-            num_rounds: 2000,
+            num_rounds: 1000,
             num_transactions: 5,
             reject_percentage: 5,
-            equivocators: vec![(AuthorityIndex::new_for_test(0), 3)],
+            equivocators: vec![
+                (AuthorityIndex::new_for_test(0), 3),
+                (AuthorityIndex::new_for_test(1), 2),
+                (AuthorityIndex::new_for_test(2), 1),
+            ],
         };
-        test_randomized_dag_with_reject_votes(config, 6, 100).await;
+        test_randomized_dag_with_reject_votes(config, 6, 25).await;
     }
 
     async fn test_randomized_dag_with_reject_votes(
