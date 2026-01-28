@@ -4,6 +4,12 @@
 use crate::blooms::hash::DoubleHasher;
 use crate::blooms::hash::set_bit;
 
+/// Probe for checking membership in a bloom filter.
+pub struct BloomProbe {
+    pub byte_offsets: Vec<usize>,
+    pub bit_masks: Vec<u8>,
+}
+
 /// A standard bloom filter with bits spread across the entire filter.
 #[derive(Debug, Clone)]
 pub struct BloomFilter<const BYTES: usize, const HASHES: u32, const SEED: u128> {
@@ -63,6 +69,22 @@ impl<const BYTES: usize, const HASHES: u32, const SEED: u128> BloomFilter<BYTES,
         DoubleHasher::with_value(value, SEED)
             .take(HASHES as usize)
             .map(move |h| (h as usize) % num_bits)
+    }
+
+    /// Byte offsets and bit masks of values, used for SQL membership checks.
+    pub fn probe(values: impl IntoIterator<Item = impl AsRef<[u8]>>) -> BloomProbe {
+        let mut byte_offsets = Vec::new();
+        let mut bit_masks = Vec::new();
+        for value in values {
+            for b in Self::hash(value.as_ref()) {
+                byte_offsets.push(b / 8);
+                bit_masks.push(1u8 << (b % 8));
+            }
+        }
+        BloomProbe {
+            byte_offsets,
+            bit_masks,
+        }
     }
 }
 
