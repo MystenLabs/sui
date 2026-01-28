@@ -368,8 +368,8 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .map_err(Error::from)?;
             let has_next_page = data.len() > limit;
             data.truncate(limit);
-            let next_cursor = data.last().cloned().and_then(|c| {
-                Some(base64::engine::general_purpose::STANDARD.encode(bcs::to_bytes(&c.0).unwrap()))
+            let next_cursor = data.last().cloned().map(|c| {
+                base64::engine::general_purpose::STANDARD.encode(bcs::to_bytes(&c.0).unwrap())
             });
             self.metrics
                 .get_dynamic_fields_result_size
